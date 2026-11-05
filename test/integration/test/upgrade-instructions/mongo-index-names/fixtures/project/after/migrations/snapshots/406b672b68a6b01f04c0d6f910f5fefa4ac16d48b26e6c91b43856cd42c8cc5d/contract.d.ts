@@ -23,7 +23,7 @@ import type {
 } from '@prisma/orm-mongo/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'396942f6c9ee5f946d7f67b397929bab327fe84dd8f7f80e87b8097f416fb901'>;
+  StorageHashBase<'406b672b68a6b01f04c0d6f910f5fefa4ac16d48b26e6c91b43856cd42c8cc5d'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -47,7 +47,18 @@ type ValueObjectInputTypes = ValueObjectTypesFromStorage<
 >;
 export type AddressOutput = ValueObjectOutputTypes['__unbound__']['Address'];
 export type AddressInput = ValueObjectInputTypes['__unbound__']['Address'];
-type FieldTypeOverrides = {};
+type FieldTypeOverrides = {
+  readonly __unbound__: {
+    readonly models: {
+      readonly User: {
+        readonly role: {
+          readonly output: 'admin' | 'author' | 'reader';
+          readonly input: 'admin' | 'author' | 'reader';
+        };
+      };
+    };
+  };
+};
 export type FieldOutputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
@@ -105,6 +116,7 @@ export namespace Models {
     email: FieldOutputTypes['__unbound__']['User']['email'];
     id: FieldOutputTypes['__unbound__']['User']['id'];
     name: FieldOutputTypes['__unbound__']['User']['name'];
+    role: FieldOutputTypes['__unbound__']['User']['role'];
     posts: unbound_AnyPost[];
     readonly [RelationKeys]?: 'posts';
   };
@@ -134,8 +146,19 @@ type ContractBase = Omit<
             readonly posts: {
               readonly indexes: readonly [
                 {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'authorId' }];
+                  readonly kind: 'mongo-index'; readonly name: 'authorId_1';
+                },
+                {
+                  readonly keys: readonly [
+                    { readonly direction: -1; readonly field: 'createdAt' },
+                    { readonly direction: 1; readonly field: 'authorId' },
+                  ];
+                  readonly kind: 'mongo-index'; readonly name: 'createdAt_-1_authorId_1';
+                },
+                {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'summary' }];
-                  readonly kind: 'mongo-index';
+                  readonly kind: 'mongo-index'; readonly name: 'summary_1';
                   readonly partialFilterExpression: { readonly kind: 'article' };
                   readonly unique: true;
                 },
@@ -222,8 +245,12 @@ type ContractBase = Omit<
                     readonly bio: { readonly bsonType: readonly ['null', 'string'] };
                     readonly email: { readonly bsonType: 'string' };
                     readonly name: { readonly bsonType: 'string' };
+                    readonly role: {
+                      readonly bsonType: 'string';
+                      readonly enum: readonly ['admin', 'author', 'reader'];
+                    };
                   };
-                  readonly required: readonly ['_id', 'email', 'name'];
+                  readonly required: readonly ['_id', 'email', 'name', 'role'];
                 };
                 readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
@@ -403,6 +430,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
+              readonly role: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
             };
             readonly relations: {
               readonly posts: {
@@ -425,9 +456,27 @@ type ContractBase = Omit<
                 readonly email: { readonly field: 'email' };
                 readonly id: { readonly field: '_id' };
                 readonly name: { readonly field: 'name' };
+                readonly role: { readonly field: 'role' };
               };
             };
           };
+        };
+        readonly enum: {
+          readonly UserRole: {
+            readonly codecId: 'mongo/string@1';
+            readonly members: readonly [
+              { readonly name: 'Admin'; readonly value: 'admin' },
+              { readonly name: 'Author'; readonly value: 'author' },
+              { readonly name: 'Reader'; readonly value: 'reader' },
+            ];
+          };
+        };
+        readonly enumMemberTypes?: {
+          readonly UserRole: readonly [
+            { readonly name: 'Admin'; readonly value: 'admin' },
+            { readonly name: 'Author'; readonly value: 'author' },
+            { readonly name: 'Reader'; readonly value: 'reader' },
+          ];
         };
       };
     };

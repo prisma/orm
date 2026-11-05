@@ -23,7 +23,7 @@ import type {
 } from '@prisma/orm-mongo/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467'>;
+  StorageHashBase<'315ba05dd789203ec66ae19c9e637054e1b70d1c1151341f551040cb908c82e4'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -139,13 +139,11 @@ export namespace Models {
     brand: FieldOutputTypes['__unbound__']['Product']['brand'];
     code: FieldOutputTypes['__unbound__']['Product']['code'];
     description: FieldOutputTypes['__unbound__']['Product']['description'];
-    embedding: FieldOutputTypes['__unbound__']['Product']['embedding'];
     id: FieldOutputTypes['__unbound__']['Product']['id'];
     image: FieldOutputTypes['__unbound__']['Product']['image'];
     name: FieldOutputTypes['__unbound__']['Product']['name'];
     price: FieldOutputTypes['__unbound__']['Product']['price'];
     primaryCategory: FieldOutputTypes['__unbound__']['Product']['primaryCategory'];
-    status: FieldOutputTypes['__unbound__']['Product']['status'];
     subCategory: FieldOutputTypes['__unbound__']['Product']['subCategory'];
     readonly [RelationKeys]?: never;
   };
@@ -214,6 +212,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                   readonly unique: true;
                 },
               ];
@@ -277,11 +276,13 @@ type ContractBase = Omit<
                     { readonly direction: -1; readonly field: 'timestamp' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1_timestamp_-1';
                 },
                 {
                   readonly expireAfterSeconds: 7776000;
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'timestamp' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'timestamp_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -349,10 +350,12 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'orderId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'orderId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: -1; readonly field: 'issuedAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'issuedAt_-1';
                   readonly sparse: true;
                 },
               ];
@@ -407,6 +410,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'country' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'city_1_country_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -441,6 +445,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -524,6 +529,7 @@ type ContractBase = Omit<
                     { readonly direction: 'text'; readonly field: 'description' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'name_text_description_text';
                   readonly weights: { readonly description: 1; readonly name: 10 };
                 },
                 {
@@ -532,6 +538,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'subCategory' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'brand_1_subCategory_1';
                 },
                 {
                   readonly keys: readonly [
@@ -539,12 +546,14 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'articleType' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'primaryCategory_1_articleType_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: 'hashed'; readonly field: 'code' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'code_hashed';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -558,10 +567,6 @@ type ContractBase = Omit<
                     readonly brand: { readonly bsonType: 'string' };
                     readonly code: { readonly bsonType: 'string' };
                     readonly description: { readonly bsonType: 'string' };
-                    readonly embedding: {
-                      readonly bsonType: readonly ['null', 'array'];
-                      readonly items: { readonly bsonType: 'double' };
-                    };
                     readonly image: {
                       readonly additionalProperties: false;
                       readonly bsonType: 'object';
@@ -579,7 +584,6 @@ type ContractBase = Omit<
                       readonly required: readonly ['amount', 'currency'];
                     };
                     readonly primaryCategory: { readonly bsonType: 'string' };
-                    readonly status: { readonly bsonType: 'string' };
                     readonly subCategory: { readonly bsonType: 'string' };
                   };
                   readonly required: readonly [
@@ -592,7 +596,6 @@ type ContractBase = Omit<
                     'name',
                     'price',
                     'primaryCategory',
-                    'status',
                     'subCategory',
                   ];
                 };
@@ -606,6 +609,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'email' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'email_1';
                   readonly unique: true;
                 },
               ];
@@ -1153,11 +1157,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
-              readonly embedding: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
-                readonly many: { readonly elementNullable: false };
-              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
@@ -1190,10 +1189,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
-              readonly status: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
               readonly subCategory: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
@@ -1207,13 +1202,11 @@ type ContractBase = Omit<
                 readonly brand: { readonly field: 'brand' };
                 readonly code: { readonly field: 'code' };
                 readonly description: { readonly field: 'description' };
-                readonly embedding: { readonly field: 'embedding' };
                 readonly id: { readonly field: '_id' };
                 readonly image: { readonly field: 'image' };
                 readonly name: { readonly field: 'name' };
                 readonly price: { readonly field: 'price' };
                 readonly primaryCategory: { readonly field: 'primaryCategory' };
-                readonly status: { readonly field: 'status' };
                 readonly subCategory: { readonly field: 'subCategory' };
               };
             };

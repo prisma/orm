@@ -121,7 +121,7 @@ class AddUsersCollection extends Migration {
         validator: { $jsonSchema: { required: ["email"] } },
         validationLevel: "strict",
       }),
-      createIndex("users", [{ field: "email", direction: 1 }], { unique: true }),
+      createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true }),
     ]
   }
 }

@@ -9,7 +9,7 @@ This package defines the in-memory representation of MongoDB collection schemas 
 ## Responsibilities
 
 - **Schema AST nodes**: `MongoSchemaIR` (root), `MongoSchemaCollection`, `MongoSchemaIndex`, `MongoSchemaValidator`, `MongoSchemaCollectionOptions` — frozen, visitable AST nodes representing MongoDB schema elements. `MongoSchemaIR` is the root node holding collections as sorted children with name-based lookup via `collection(name)`.
-- **Index identity**: `MongoSchemaIndex` carries every option in `MONGO_INDEX_OPTION_KEYS`, so `indexLookupKey()` from `@internal/mongo-contract` identifies it as it identifies a contract index. The planner and the verifier match indexes this way.
+- **Index identity**: `MongoSchemaIndex` carries its `name`, which is also its `id`, and every option in `MONGO_INDEX_OPTION_KEYS`, so `indexLookupKey()` from `@internal/mongo-contract` identifies its content as it identifies a contract index. The planner and the verifier pair indexes by content and then compare names.
 - **Deep equality**: `deepEqual()` provides key-order-sensitive structural comparison for MongoDB values. For key-order-independent comparison, use `canonicalize()` from `@internal/mongo-contract`.
 - **Visitor pattern**: `MongoSchemaVisitor<R>` enables extensible traversal without modifying AST nodes.
 
@@ -24,6 +24,7 @@ import {
 import { indexLookupKey } from '@internal/mongo-contract';
 
 const index = new MongoSchemaIndex({
+  name: 'email_1',
   keys: [{ field: 'email', direction: 1 }],
   unique: true,
 });
@@ -39,6 +40,7 @@ ir.collection('users');     // MongoSchemaCollection
 ir.collectionNames;         // ['users']
 ir.collections;             // sorted ReadonlyArray<MongoSchemaCollection>
 
+index.id;              // 'email_1'
 indexLookupKey(index); // '{"keys":[["email",1]],"options":{"unique":true}}'
 ```
 

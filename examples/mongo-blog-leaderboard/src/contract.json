@@ -272,7 +272,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "authorId_1"
                 },
                 {
                   "keys": [
@@ -281,7 +282,8 @@
                       "field": "createdAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_-1"
                 }
               ],
               "kind": "mongo-collection",
@@ -499,7 +501,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "4211584674f0ef61d518d3b24b3380e1760d7e46d6dd7098b1b0b1dc19ff3e30"
+    "storageHash": "395d910a151cb498283db67859cb88f21bff6fc73aeb92e3840d0e981a515359"
   },
   "capabilities": {},
   "extensions": {},

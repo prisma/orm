@@ -1,14 +1,9 @@
-import { defaultMongoIndexName } from '@internal/mongo-contract';
-import { storedIndexKey } from './build-collections';
+import { defaultIndexNameOf } from './build-collections';
 import type { ContractDefinition, IndexNode, ModelNode } from './contract-definition';
 
 function namedIndex(index: IndexNode, model: ModelNode): IndexNode {
   if (index.options?.name !== undefined) return index;
-  const keys = Object.entries(index.fields).map(([field, direction]) => ({
-    field: storedIndexKey(model.fields, field),
-    direction,
-  }));
-  return { ...index, options: { ...index.options, name: defaultMongoIndexName(keys) } };
+  return { ...index, options: { ...index.options, name: defaultIndexNameOf(index, model.fields) } };
 }
 
 /**

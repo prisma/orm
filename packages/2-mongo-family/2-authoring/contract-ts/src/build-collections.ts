@@ -1,6 +1,7 @@
 import {
   type ApplyScopeResult,
   applyPolymorphicScopeToMongoIndex,
+  defaultMongoIndexName,
   indexLookupKey,
   type MongoCollectionInput,
   MongoCollectionOptions,
@@ -19,11 +20,33 @@ import type { BuildRefusal, IndexKey, IndexShapeRule } from './build-refusals';
 import type { FieldNode, IndexNode, ModelNode } from './contract-definition';
 
 /** The stored form of an index key: the field's stored name, with a wildcard scope kept. */
-export function storedIndexKey(fields: readonly FieldNode[], key: string): string {
+function storedIndexKey(fields: readonly FieldNode[], key: string): string {
   const wildcardMatch = key.match(/^(.+)\.\$\*\*$/);
   const scope = wildcardMatch?.[1];
   if (scope !== undefined) return `${storedFieldNameIn(fields, scope)}.$**`;
   return key === '$**' ? key : storedFieldNameIn(fields, key);
+}
+
+/** The name MongoDB gives the index when it is created without one, from its stored keys. */
+export function defaultIndexNameOf(index: IndexNode, fields: readonly FieldNode[]): string {
+  return defaultMongoIndexName(
+    Object.entries(index.fields).map(([field, direction]) => ({
+      field: storedIndexKey(fields, field),
+      direction,
+    })),
+  );
+}
+
+/** The index as its refusals show it: as written, without a name that is only the default. */
+function indexSignature(index: IndexNode, fields: readonly FieldNode[]): string {
+  const name = index.options?.name;
+  if (name === undefined || name !== defaultIndexNameOf(index, fields)) {
+    return canonicalStringify(index);
+  }
+  const { name: _, ...options } = index.options ?? {};
+  return canonicalStringify(
+    Object.keys(options).length === 0 ? { fields: index.fields } : { ...index, options },
+  );
 }
 
 function toStorageIndex(index: IndexNode, fields: readonly FieldNode[]): MongoIndex {
@@ -159,7 +182,7 @@ export function checkModelIndexes(
   const polymorphicScope = resolveVariantScope(model, modelsByName, variantValues);
   return (model.indexes ?? []).map((written, position): CheckedIndex => {
     const key: IndexKey = { kind: 'index', model: model.modelName, position };
-    const signature = canonicalStringify(written);
+    const signature = indexSignature(written, model.fields);
     const missingField = findMissingIndexField(written, model.fields);
     if (missingField !== undefined) {
       return {
@@ -253,7 +276,7 @@ export function buildCollections(input: {
         return;
       }
       const key: IndexKey = { kind: 'index', model: modelName, position };
-      const signature = canonicalStringify(checked.written);
+      const signature = indexSignature(checked.written, model.fields);
       if (isTextIndex(checked.written)) {
         if (textIndexCollections.has(collection)) {
           refusals.push({ kind: 'indexShape', key, rule: 'second-text-index', signature });

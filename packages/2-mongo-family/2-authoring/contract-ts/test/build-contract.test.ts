@@ -733,7 +733,7 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
         collection: 'users',
         firstModel: 'User',
         firstPosition: 0,
-        signature: '{"fields":{"a":1},"options":{"name":"a_1"}}',
+        signature: '{"fields":{"a":1}}',
       },
     ]);
   });
