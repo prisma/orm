@@ -62,4 +62,32 @@ describe('verify pairs each live index with its contract index', () => {
       { name: 'ab_fr', collation: fr },
     ]);
   });
+
+  it('completes written text weights as MongoDB lists them, with 1 for each field not written', () => {
+    const text = [
+      { field: 'title', direction: 'text' as const },
+      { field: 'body', direction: 'text' as const },
+    ];
+    const expected = users([
+      new MongoSchemaIndex({ name: 'title_text_body_text', keys: text, weights: { title: 10 } }),
+    ]);
+    const live = users([
+      new MongoSchemaIndex({
+        name: 'title_text_body_text',
+        keys: [
+          { field: '_fts', direction: 'text' },
+          { field: '_ftsx', direction: 1 },
+        ],
+        weights: { body: 1, title: 10 },
+        default_language: 'english',
+        language_override: 'language',
+      }),
+    ]);
+
+    const canonical = canonicalizeSchemasForVerification(live, expected);
+
+    expect(canonical.expected.collection('users')?.indexes).toEqual(
+      canonical.live.collection('users')?.indexes,
+    );
+  });
 });

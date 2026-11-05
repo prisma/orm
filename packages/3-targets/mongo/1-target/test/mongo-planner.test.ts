@@ -534,6 +534,61 @@ describe('MongoMigrationPlanner', () => {
     });
   });
 
+  describe('an origin read from a database', () => {
+    const slug = [{ field: 'slug', direction: 1 as const }];
+    const text = [
+      { field: 'title', direction: 'text' as const },
+      { field: 'body', direction: 'text' as const },
+    ];
+    const contract = makeContract({
+      posts: {
+        indexes: [
+          { name: 'title_text_body_text', keys: text, weights: { title: 10 } },
+          { name: 'slug_1', keys: slug, collation: { locale: 'en', strength: 2 } },
+        ],
+      },
+    });
+    const live = (fromDatabase: boolean) =>
+      new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'posts',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'title_text_body_text',
+                keys: [
+                  { field: '_fts', direction: 'text' },
+                  { field: '_ftsx', direction: 1 },
+                ],
+                weights: { body: 1, title: 10 },
+                default_language: 'english',
+                language_override: 'language',
+              }),
+              new MongoSchemaIndex({
+                name: 'slug_1',
+                keys: slug,
+                collation: { locale: 'en', strength: 2, caseLevel: false, numericOrdering: false },
+              }),
+            ],
+          }),
+        ],
+        { fromDatabase },
+      );
+
+    it('pairs indexes as the verifier does, so server defaults plan nothing', () => {
+      expect(planSuccess(planner, contract, live(true)).operations).toEqual([]);
+    });
+
+    it('compares a contract origin exactly', () => {
+      expect(planSuccess(planner, contract, live(false)).operations.map((op) => op.id)).toEqual([
+        'index.posts.drop(title_text_body_text)',
+        'index.posts.drop(slug_1)',
+        'index.posts.create(title_text_body_text)',
+        'index.posts.create(slug_1)',
+      ]);
+    });
+  });
+
   describe('operation structure', () => {
     it('createIndex has correct precheck/execute/postcheck', () => {
       const contract = makeContract({

@@ -1,25 +1,63 @@
-import { introspectSchema, MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import { fileURLToPath } from 'node:url';
+import mongoAdapter, {
+  introspectSchema,
+  MongoControlAdapterImpl,
+} from '@internal/adapter-mongo/control';
+import type { ContractSourceContext } from '@internal/cli/config-types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
+import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
-import { type MigrationPlan, planOriginOf } from '@internal/framework-components/control';
+import {
+  createControlStack,
+  type MigrationPlan,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import {
   type AggregateMigrationEdgeRef,
   buildFabricatedMigrationEdge,
 } from '@internal/migration-tools/aggregate';
 import type { MongoContract, MongoIndexInput } from '@internal/mongo-contract';
+import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
+  mongoTargetDescriptor,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import mongoTargetPack from '@internal/target-mongo/pack';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { dirname, join } from 'pathe';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const controlAdapter = new MongoControlAdapterImpl();
+const mongoStack = createControlStack({
+  family: mongoFamilyDescriptor,
+  target: mongoTargetDescriptor,
+  adapter: mongoAdapter,
+});
+
+async function contractFromPsl(fileName: string): Promise<MongoContract> {
+  const path = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', fileName);
+  const context: ContractSourceContext = {
+    composedExtensions: [],
+    defaultNamespaceId: mongoStack.target.defaultNamespaceId,
+    composedExtensionContracts: new Map(),
+    authoringContributions: mongoStack.authoringContributions,
+    codecLookup: mongoStack.codecLookup,
+    dataTypes: mongoStack.dataTypes,
+    controlMutationDefaults: mongoStack.controlMutationDefaults,
+    generatorFunctions: mongoStack.generatorFunctions,
+    resolvedInputs: [path],
+    capabilities: mongoStack.capabilities,
+  };
+  const loaded = await mongoContract(path, { target: mongoTargetPack }).source.load(context);
+  if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure));
+  return loaded.value as unknown as MongoContract;
+}
 
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
@@ -191,6 +229,100 @@ describe('MongoDB indexes by name, against a real database', () => {
         ],
         verify: true,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'creates in one migration two indexes on the same keys that differ only in collation',
+    async () => {
+      const contract = contractWith(
+        {
+          people: [
+            {
+              name: 'name_en',
+              keys: [{ field: 'name', direction: 1 }],
+              collation: { locale: 'en' },
+            },
+            {
+              name: 'name_fr',
+              keys: [{ field: 'name', direction: 1 }],
+              collation: { locale: 'fr', strength: 2 },
+            },
+          ],
+        },
+        'collations',
+      );
+
+      const applied = await apply(contract);
+      const names = (await liveIndexes('people')).map((index) => index.name);
+
+      expect({ applied, names, again: (await apply(contract)).operationIds }).toEqual({
+        applied: {
+          ok: true,
+          operationIds: ['index.people.create(name_en)', 'index.people.create(name_fr)'],
+        },
+        names: ['name_en', 'name_fr'],
+        again: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'creates the PSL pair of a plain and a sparse index on one field when map names the sparse one',
+    async () => {
+      const contract = await contractFromPsl('sparse-pair.prisma');
+
+      const applied = await apply(contract);
+
+      expect({ applied, users: await liveIndexes('users') }).toEqual({
+        applied: {
+          ok: true,
+          operationIds: [
+            'collection.users.create',
+            'index.users.create(email_1)',
+            'index.users.create(email_sparse)',
+          ],
+        },
+        users: [
+          { name: 'email_1', key: { email: 1 } },
+          { name: 'email_sparse', key: { email: 1 }, sparse: true },
+        ],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'plans nothing against a database that holds a text index and an index with a partly written collation',
+    async () => {
+      const contract = contractWith(
+        {
+          posts: [
+            {
+              name: 'title_text_body_text',
+              keys: [
+                { field: 'title', direction: 'text' },
+                { field: 'body', direction: 'text' },
+              ],
+              weights: { title: 10 },
+            },
+            {
+              name: 'slug_1',
+              keys: [{ field: 'slug', direction: 1 }],
+              collation: { locale: 'en', strength: 2 },
+            },
+          ],
+        },
+        'server-defaults',
+      );
+      const created = await apply(contract);
+
+      expect({
+        created: created.ok,
+        again: plan(contract, await introspectSchema(db)).operations.map((op) => op.id),
+      }).toEqual({ created: true, again: [] });
     },
     timeouts.spinUpMongoMemoryServer,
   );

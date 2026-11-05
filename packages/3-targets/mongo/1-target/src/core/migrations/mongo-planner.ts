@@ -4,7 +4,10 @@ import {
   type ContractWithDomain,
   type ControlPolicy,
 } from '@internal/contract/types';
-import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import {
+  canonicalizeSchemasForVerification,
+  contractToMongoSchemaIR,
+} from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   describeMigrationStatement,
@@ -28,13 +31,11 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type {
-  MongoSchemaCollection,
   MongoSchemaCollectionOptions,
   MongoSchemaIndex,
-  MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
-import { deepEqual } from '@internal/mongo-schema-ir';
+import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -395,6 +396,36 @@ function suppressedCallWarning(
   };
 }
 
+function withIndexesOf(schema: MongoSchemaIR, indexesFrom: MongoSchemaIR): MongoSchemaIR {
+  return new MongoSchemaIR(
+    schema.collections.map(
+      (collection) =>
+        new MongoSchemaCollection({
+          name: collection.name,
+          indexes: indexesFrom.collection(collection.name)?.indexes ?? collection.indexes,
+          ...ifDefined('validator', collection.validator),
+          ...ifDefined('options', collection.options),
+        }),
+    ),
+  );
+}
+
+/**
+ * The origin and destination with indexes the planner can pair by content. A database reports a text index's keys as `_fts` and `_ftsx` and fills in its weights and languages and a collation's unwritten fields, so the indexes of a database origin are compared as the verifier compares them. A contract origin is compared exactly.
+ */
+function comparableIndexes(
+  origin: MongoSchemaIR,
+  destination: MongoSchemaIR,
+  fromDatabase: boolean,
+): { readonly origin: MongoSchemaIR; readonly destination: MongoSchemaIR } {
+  if (!fromDatabase) return { origin, destination };
+  const canonical = canonicalizeSchemasForVerification(origin, destination);
+  return {
+    origin: withIndexesOf(origin, canonical.live),
+    destination: withIndexesOf(destination, canonical.expected),
+  };
+}
+
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
     readonly contract: unknown;
@@ -410,13 +441,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       MongoContract,
       'framework planner passes the Mongo contract selected for the mongo target'
     >(options.contract);
-    const originIR =
-      options.statementCalls?.schema ??
-      blindCast<
-        MongoSchemaIR,
-        'framework planner passes the inspected Mongo schema IR selected for the mongo target'
-      >(options.schema);
-    const destinationIR = contractToMongoSchemaIR(contract);
+    const schema = blindCast<
+      MongoSchemaIR,
+      'framework planner passes the inspected Mongo schema IR selected for the mongo target'
+    >(options.schema);
+    const { origin: originIR, destination: destinationIR } = comparableIndexes(
+      options.statementCalls?.schema ?? schema,
+      contractToMongoSchemaIR(contract),
+      schema.fromDatabase,
+    );
 
     const collCreates: OpFactoryCall[] = [];
     const drops: OpFactoryCall[] = [];

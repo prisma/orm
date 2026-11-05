@@ -105,6 +105,16 @@ function canonicalizeExpectedCollection(
   });
 }
 
+/** A text index's weights as MongoDB lists them once some are written: every text field, 1 when not written. */
+function completeTextWeights(
+  keys: MongoSchemaIndex['keys'],
+  weights: MongoSchemaIndex['weights'],
+): MongoSchemaIndex['weights'] {
+  if (weights === undefined) return undefined;
+  const textFields = keys.filter((k) => k.direction === 'text').map((k) => k.field);
+  return Object.fromEntries(textFields.sort().map((field) => [field, weights[field] ?? 1]));
+}
+
 function canonicalizeTextIndexKeyOrder(index: MongoSchemaIndex): MongoSchemaIndex {
   const hasTextKey = index.keys.some((k) => k.direction === 'text');
   if (!hasTextKey) return index;
@@ -117,7 +127,7 @@ function canonicalizeTextIndexKeyOrder(index: MongoSchemaIndex): MongoSchemaInde
     ...ifDefined('partialFilterExpression', index.partialFilterExpression),
     ...ifDefined('wildcardProjection', index.wildcardProjection),
     ...ifDefined('collation', index.collation),
-    ...ifDefined('weights', index.weights),
+    ...ifDefined('weights', completeTextWeights(index.keys, index.weights)),
     ...ifDefined('default_language', index.default_language),
     ...ifDefined('language_override', index.language_override),
   });

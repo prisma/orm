@@ -130,5 +130,5 @@ export async function introspectSchema(db: Db): Promise<MongoSchemaIR> {
     );
   }
 
-  return new MongoSchemaIR(collections);
+  return new MongoSchemaIR(collections, { fromDatabase: true });
 }

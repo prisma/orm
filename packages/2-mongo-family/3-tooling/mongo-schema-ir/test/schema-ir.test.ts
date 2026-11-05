@@ -95,6 +95,15 @@ describe('MongoSchemaIndex', () => {
   });
 });
 
+describe('MongoSchemaIR origin', () => {
+  it('records whether it was read from a database', () => {
+    expect([
+      new MongoSchemaIR([]).fromDatabase,
+      new MongoSchemaIR([], { fromDatabase: true }).fromDatabase,
+    ]).toEqual([false, true]);
+  });
+});
+
 describe('MongoSchemaCollection', () => {
   it('constructs with name only', () => {
     const coll = new MongoSchemaCollection({ name: 'users' });

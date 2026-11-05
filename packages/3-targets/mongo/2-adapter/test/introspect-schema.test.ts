@@ -68,6 +68,7 @@ describe('introspectSchema', () => {
     const ir = await introspectSchema(db);
     const users = ir.collection('users')!;
 
+    expect(ir.fromDatabase).toBe(true);
     expect(users.indexes.map(({ id, name, unique }) => ({ id, name, unique }))).toEqual([
       { id: 'User_email_key', name: 'User_email_key', unique: true },
       { id: 'User_email_idx', name: 'User_email_idx', unique: false },
