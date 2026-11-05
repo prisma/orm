@@ -259,9 +259,14 @@ function algKeyMismatchReason(jwt: string, kind: KeyMaterial['kind']): string | 
   return undefined;
 }
 
+const supabaseBindingKinds: Readonly<Record<SupabaseBinding['kind'], true>> = {
+  url: true,
+  pgPool: true,
+};
+
 const supabaseBindingRules: PostgresBindingRules = {
   extension: 'supabase',
-  kinds: ['url', 'pgPool'] satisfies readonly SupabaseBinding['kind'][],
+  kinds: supabaseBindingKinds,
 };
 
 function givesPgClient(options: SupabaseBindingOptions): boolean {

@@ -93,7 +93,7 @@ describe('resolvePostgresBinding', () => {
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
-  const rules = { extension: 'test-client', kinds: ['url', 'pgPool'] } as const;
+  const rules = { extension: 'test-client', kinds: { url: true, pgPool: true } } as const;
 
   it('refuses a binding of a Postgres kind outside the list, naming only the listed kinds', () => {
     const client = new Client();
@@ -105,6 +105,22 @@ describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
         code: 'RUNTIME.BINDING_INVALID',
         message: "The binding option must have kind 'url' or 'pgPool'",
         fix: "Pass binding: { kind: 'url', url } or { kind: 'pgPool', pool }.",
+        meta: {
+          extension: 'test-client',
+          reason: 'unknown binding kind',
+          receivedKind: 'pgClient',
+        },
+      }),
+    );
+  });
+
+  it('refuses a pg.Client passed as pg when pgClient is not listed', () => {
+    const client = new Client();
+
+    expect(() => resolveOptionalPostgresBinding({ pg: client }, rules)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: "The binding option must have kind 'url' or 'pgPool'",
         meta: {
           extension: 'test-client',
           reason: 'unknown binding kind',

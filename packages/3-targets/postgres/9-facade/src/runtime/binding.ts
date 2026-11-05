@@ -93,12 +93,18 @@ type BindingKind = PostgresBinding['kind'];
 /** The binding kinds a client accepts, and the extension its errors name. A binding of another kind fails with `RUNTIME.BINDING_INVALID`. */
 export interface PostgresBindingRules {
   readonly extension: string;
-  readonly kinds: readonly BindingKind[];
+  readonly kinds: Readonly<Partial<Record<BindingKind, true>>>;
 }
+
+const postgresBindingKinds: Readonly<Record<PostgresBinding['kind'], true>> = {
+  url: true,
+  pgPool: true,
+  pgClient: true,
+};
 
 export const postgresBindingRules: PostgresBindingRules = {
   extension: 'postgres',
-  kinds: ['url', 'pgPool', 'pgClient'] satisfies readonly PostgresBinding['kind'][],
+  kinds: postgresBindingKinds,
 };
 
 const bindingForms: Record<BindingKind, string> = {
@@ -106,6 +112,10 @@ const bindingForms: Record<BindingKind, string> = {
   pgPool: "{ kind: 'pgPool', pool }",
   pgClient: "{ kind: 'pgClient', client }",
 };
+
+function isBindingKind(kind: unknown): kind is BindingKind {
+  return typeof kind === 'string' && Object.hasOwn(bindingForms, kind);
+}
 
 const pgObjectNames: Partial<Record<BindingKind, string>> = {
   pgPool: 'pg.Pool',
@@ -128,12 +138,15 @@ interface BindingWording {
 }
 
 function wordingOf(rules: PostgresBindingRules): BindingWording {
-  const pgKinds = rules.kinds.filter((kind) => pgObjectNames[kind] !== undefined);
+  const kinds = Object.keys(bindingForms)
+    .filter(isBindingKind)
+    .filter((kind) => rules.kinds[kind] === true);
+  const pgKinds = kinds.filter((kind) => pgObjectNames[kind] !== undefined);
   const pgNames = pgKinds.flatMap((kind) => pgObjectNames[kind] ?? []);
   return {
     extension: rules.extension,
-    kinds: orList(rules.kinds.map((kind) => `'${kind}'`)),
-    forms: orList(rules.kinds.map((kind) => bindingForms[kind])),
+    kinds: orList(kinds.map((kind) => `'${kind}'`)),
+    forms: orList(kinds.map((kind) => bindingForms[kind])),
     pgForms: orList(pgKinds.map((kind) => `binding: ${bindingForms[kind]}`)),
     pgObjects: orList(pgNames),
     pgObjectsEach: orList(pgNames.map((name) => `a ${name}`)),
@@ -200,11 +213,7 @@ function unknownKindError(wording: BindingWording, kind: unknown): Error {
   );
 }
 
-function checkInputTypes(
-  options: PostgresBindingFields,
-  rules: PostgresBindingRules,
-  wording: BindingWording,
-): void {
+function checkInputTypes(options: PostgresBindingFields, wording: BindingWording): void {
   const binding: unknown = options.binding;
   const url: unknown = options.url;
   const pg: unknown = options.pg;
@@ -249,7 +258,7 @@ function checkInputTypes(
   }
   if (binding !== undefined) {
     const kind: unknown = 'kind' in binding ? binding.kind : undefined;
-    if (!new Set<unknown>(rules.kinds).has(kind)) throw unknownKindError(wording, kind);
+    if (!isBindingKind(kind)) throw unknownKindError(wording, kind);
   }
 }
 
@@ -295,7 +304,17 @@ function resolveBinding(
   rules: PostgresBindingRules,
 ): PostgresBinding {
   const wording = wordingOf(rules);
-  checkInputTypes(options, rules, wording);
+  checkInputTypes(options, wording);
+  const binding = resolveInput(options, rules, wording);
+  if (rules.kinds[binding.kind] !== true) throw unknownKindError(wording, binding.kind);
+  return binding;
+}
+
+function resolveInput(
+  options: PostgresBindingInput,
+  rules: PostgresBindingRules,
+  wording: BindingWording,
+): PostgresBinding {
   const providedCount =
     Number(options.binding !== undefined) +
     Number(options.url !== undefined) +
