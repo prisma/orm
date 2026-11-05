@@ -1,6 +1,6 @@
 {
   "name": "@repo/prisma-bin",
-  "version": "8.0.0-rc.21",
+  "version": "8.0.0-rc.22",
   "private": true,
   "type": "module",
   "description": "The workspace `prisma` command for examples and apps: runs the CLI from the built @prisma/orm-toolchain, so the CLI and the project load one copy of the framework.",
@@ -11,6 +11,6 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.21"
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.22"
   }
 }

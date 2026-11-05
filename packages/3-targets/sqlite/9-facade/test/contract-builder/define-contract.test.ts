@@ -1,6 +1,6 @@
 import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { SqliteUnboundDatabase } from '@internal/target-sqlite/control';
+import { SqliteUnboundDatabase } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../../src/exports/contract-builder';
 

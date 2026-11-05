@@ -275,7 +275,8 @@ export function refusalDiagnostic(
     }
     case 'indexFieldUnknown':
     case 'indexShape':
-    case 'indexScopeConflict': {
+    case 'indexScopeConflict':
+    case 'indexDuplicate': {
       const { model, position } = refusal.key;
       const site = modelSitesOf(sites, model).indexes[position];
       if (site === undefined)
@@ -300,6 +301,10 @@ export function refusalDiagnostic(
             site,
             'PSL_INVALID_INDEX',
             `Variant "${model}" index conflicts with discriminator scope: ${refusal.reason}`,
+          );
+        case 'indexDuplicate':
+          throw new InternalError(
+            `PSL merges identical indexes before the build, so index ${position} of "${model}" cannot duplicate one of model "${refusal.firstModel}" in collection "${refusal.collection}". This is a defect in the PSL interpreter.`,
           );
       }
       break;

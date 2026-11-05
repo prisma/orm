@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const guide = (audience: 'app' | 'extension') =>
-  `upgrade-instructions/pending/mongo-driver-from-stack/${audience}/instructions.md`;
+  `skills/prisma-8/upgrading/${audience}/upgrades/8.0.0-rc.21-to-8.0.0-rc.22/instructions.md`;
 const rootPackage = ['@internal', 'driver-mongo'].join('/');
 const facadeDriver = ['@prisma', 'orm-mongo', 'driver'].join('/');
 

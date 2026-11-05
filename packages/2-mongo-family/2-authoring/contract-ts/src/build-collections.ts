@@ -1,4 +1,5 @@
 import {
+  type ApplyScopeResult,
   applyPolymorphicScopeToMongoIndex,
   indexLookupKey,
   type MongoCollectionInput,
@@ -7,6 +8,7 @@ import {
   type MongoCollectionOptionsInput,
   MongoIndex,
   type MongoIndexInput,
+  type PolymorphicIndexScope,
 } from '@internal/mongo-contract';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
@@ -38,6 +40,17 @@ function toStorageIndex(index: IndexNode, fields: readonly FieldNode[]): MongoIn
   return new MongoIndex(
     blindCast<MongoIndexInput, 'the keys and options above are the MongoIndex input fields'>(input),
   );
+}
+
+function scopedStorageIndex(
+  written: IndexNode,
+  fields: readonly FieldNode[],
+  polymorphicScope: PolymorphicIndexScope | undefined,
+): ApplyScopeResult {
+  const storageIndex = toStorageIndex(written, fields);
+  return polymorphicScope === undefined
+    ? { kind: 'ok', index: storageIndex }
+    : applyPolymorphicScopeToMongoIndex(storageIndex, polymorphicScope);
 }
 
 function toStorageCollectionOptions(
@@ -109,7 +122,7 @@ function resolveVariantScope(
   model: ModelNode,
   modelsByName: ReadonlyMap<string, ModelNode>,
   variantValues: ReadonlyMap<string, string>,
-): { discriminatorField: string; discriminatorValue: string } | undefined {
+): PolymorphicIndexScope | undefined {
   if (!model.base) return undefined;
   const base = modelsByName.get(model.base.model);
   const discriminatorField = base?.discriminator?.field;
@@ -121,6 +134,48 @@ function resolveVariantScope(
     discriminatorField: storedFieldNameIn(base.fields, discriminatorField),
     discriminatorValue,
   };
+}
+
+/** What the builder makes of one index a model writes, before it compares the index with the others in its collection. */
+export type CheckedIndex =
+  | { readonly kind: 'accepted'; readonly written: IndexNode; readonly index: MongoIndex }
+  | { readonly kind: 'refused'; readonly refusal: BuildRefusal };
+
+/**
+ * Each index the model writes, in order: the storage index, with a variant's discriminator scope applied, or the builder's refusal of it for an unknown field, a shape MongoDB refuses or a scope conflict.
+ */
+export function checkModelIndexes(
+  model: ModelNode,
+  modelsByName: ReadonlyMap<string, ModelNode>,
+  variantValues: ReadonlyMap<string, string>,
+): readonly CheckedIndex[] {
+  const polymorphicScope = resolveVariantScope(model, modelsByName, variantValues);
+  return (model.indexes ?? []).map((written, position): CheckedIndex => {
+    const key: IndexKey = { kind: 'index', model: model.modelName, position };
+    const signature = canonicalStringify(written);
+    const missingField = findMissingIndexField(written, model.fields);
+    if (missingField !== undefined) {
+      return {
+        kind: 'refused',
+        refusal: { kind: 'indexFieldUnknown', key, fieldName: missingField, signature },
+      };
+    }
+    const shapeProblem = indexShapeProblem(written);
+    if (shapeProblem !== undefined) {
+      return {
+        kind: 'refused',
+        refusal: { kind: 'indexShape', key, rule: shapeProblem, signature },
+      };
+    }
+    const scoped = scopedStorageIndex(written, model.fields, polymorphicScope);
+    if (scoped.kind === 'conflict') {
+      return {
+        kind: 'refused',
+        refusal: { kind: 'indexScopeConflict', key, reason: scoped.reason, signature },
+      };
+    }
+    return { kind: 'accepted', written, index: scoped.index };
+  });
 }
 
 function checkNoCollectionSettings(model: ModelNode, refusals: BuildRefusal[]): void {
@@ -148,7 +203,7 @@ export function buildCollections(input: {
 }): Record<string, MongoCollectionInput> {
   const { models, variantValues, refusals } = input;
   const intermediate: Record<string, MongoCollectionInput> = {};
-  const indexesByCollection = new Map<string, MongoIndex[]>();
+  const indexOwnersByCollection = new Map<string, Map<string, IndexKey>>();
   const textIndexCollections = new Set<string>();
   const modelsByName = new Map(models.map((model) => [model.modelName, model]));
 
@@ -160,8 +215,9 @@ export function buildCollections(input: {
     }
     const collectionKey = { kind: 'collectionSettings', model: modelName } as const;
     const existingCollection: MongoCollectionInput = intermediate[collection] ?? {};
-    const collectionIndexes = indexesByCollection.get(collection) ?? [];
-    indexesByCollection.set(collection, collectionIndexes);
+    const existingIndexes = existingCollection.indexes ?? [];
+    const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
+    indexOwnersByCollection.set(collection, indexOwners);
 
     if (existingCollection.options && model.collectionOptions) {
       refusals.push({
@@ -180,66 +236,48 @@ export function buildCollections(input: {
       });
     }
 
-    const polymorphicScope = resolveVariantScope(model, modelsByName, variantValues);
-    let indexesChanged = false;
-    (model.indexes ?? []).forEach((written, position) => {
+    const storageIndexes: MongoIndex[] = [];
+    checkModelIndexes(model, modelsByName, variantValues).forEach((checked, position) => {
+      if (checked.kind === 'refused') {
+        refusals.push(checked.refusal);
+        return;
+      }
       const key: IndexKey = { kind: 'index', model: modelName, position };
-      const signature = canonicalStringify(written);
-      const missingField = findMissingIndexField(written, model.fields);
-      if (missingField !== undefined) {
-        refusals.push({ kind: 'indexFieldUnknown', key, fieldName: missingField, signature });
-        return;
-      }
-      const shapeProblem = indexShapeProblem(written);
-      if (shapeProblem !== undefined) {
-        refusals.push({ kind: 'indexShape', key, rule: shapeProblem, signature });
-        return;
-      }
-      const storageIndex = toStorageIndex(written, model.fields);
-      const scoped =
-        polymorphicScope === undefined
-          ? { kind: 'ok' as const, index: storageIndex }
-          : applyPolymorphicScopeToMongoIndex(storageIndex, polymorphicScope);
-      if (scoped.kind === 'conflict') {
-        refusals.push({ kind: 'indexScopeConflict', key, reason: scoped.reason, signature });
-        return;
-      }
-      const lookupKey = indexLookupKey({ ...scoped.index, unique: undefined });
-      const matchingAt = collectionIndexes.findIndex(
-        (held) => indexLookupKey({ ...held, unique: undefined }) === lookupKey,
-      );
-      const held = collectionIndexes[matchingAt];
-      if (held !== undefined) {
-        if (held.unique === true || scoped.index.unique !== true) return;
-        collectionIndexes.splice(matchingAt, 1);
-      } else if (isTextIndex(written)) {
+      const signature = canonicalStringify(checked.written);
+      if (isTextIndex(checked.written)) {
         if (textIndexCollections.has(collection)) {
           refusals.push({ kind: 'indexShape', key, rule: 'second-text-index', signature });
           return;
         }
         textIndexCollections.add(collection);
       }
-      collectionIndexes.push(scoped.index);
-      indexesChanged = true;
+      const lookupKey = indexLookupKey(checked.index);
+      const first = indexOwners.get(lookupKey);
+      if (first !== undefined) {
+        refusals.push({
+          kind: 'indexDuplicate',
+          key,
+          collection,
+          firstModel: first.model,
+          firstPosition: first.position,
+          signature,
+        });
+        return;
+      }
+      indexOwners.set(lookupKey, key);
+      storageIndexes.push(checked.index);
     });
 
     const storageOptions = model.collectionOptions
       ? toStorageCollectionOptions(model.collectionOptions)
       : undefined;
-    const controlPatch = model.controlPolicy !== undefined ? { control: model.controlPolicy } : {};
 
-    intermediate[collection] = indexesChanged
-      ? {
-          ...existingCollection,
-          indexes: [...collectionIndexes],
-          ...(storageOptions ? { options: storageOptions } : {}),
-          ...controlPatch,
-        }
-      : storageOptions
-        ? { ...existingCollection, options: storageOptions, ...controlPatch }
-        : Object.keys(controlPatch).length > 0
-          ? { ...existingCollection, ...controlPatch }
-          : existingCollection;
+    intermediate[collection] = {
+      ...existingCollection,
+      ...(storageIndexes.length > 0 ? { indexes: [...existingIndexes, ...storageIndexes] } : {}),
+      ...ifDefined('options', storageOptions),
+      ...ifDefined('control', model.controlPolicy),
+    };
   }
 
   return intermediate;

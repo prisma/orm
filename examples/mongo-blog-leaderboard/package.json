@@ -15,13 +15,13 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.21",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.22",
     "mongodb": "catalog:"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.9.0",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.21",
-    "@repo/tsconfig": "workspace:8.0.0-rc.21",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@types/node": "catalog:",
     "mongodb-memory-server": "catalog:",
     "tsx": "catalog:",
@@ -29,5 +29,5 @@
     "vite": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.21"
+  "version": "8.0.0-rc.22"
 }

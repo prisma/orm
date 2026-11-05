@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'5da56ffe117eb468ffdea757f746a1688071e3c6c258db37e0e71ca253424eeb'>;
+  StorageHashBase<'38ba9948da5dd02051336dcd63474c601a073c1e63741d1fcca0e8692e978708'>;
 export type ExecutionHash =
-  ExecutionHashBase<'a6bd95c41e717d2a7dd3d556af8befa35950b61ccf39569e36ab3a357b40457e'>;
+  ExecutionHashBase<'711ee7a9f9952ece816afa0be8a7beb696460439dd0added45acb86d7072b8fe'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -64,6 +64,22 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -72,6 +88,14 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly min: {
@@ -86,6 +110,22 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -94,6 +134,14 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly sum: {
@@ -168,6 +216,15 @@ export type StorageColumnInputTypes = ColumnTypesFromStorage<
 >;
 
 export namespace Models {
+  export type Event = {
+    bookedOn: FieldOutputTypes['__unbound__']['Event']['bookedOn'];
+    day: FieldOutputTypes['__unbound__']['Event']['day'];
+    id: FieldOutputTypes['__unbound__']['Event']['id'];
+    opensAt: FieldOutputTypes['__unbound__']['Event']['opensAt'];
+    startsAt: FieldOutputTypes['__unbound__']['Event']['startsAt'];
+    title: FieldOutputTypes['__unbound__']['Event']['title'];
+    readonly [RelationKeys]?: never;
+  };
   export type Post = {
     createdAt: FieldOutputTypes['__unbound__']['Post']['createdAt'];
     id: FieldOutputTypes['__unbound__']['Post']['id'];
@@ -201,6 +258,7 @@ export namespace Models {
 }
 
 export declare const models: {
+  Event: Models.Event;
   Post: Models.Post;
   PostTag: Models.PostTag;
   Tag: Models.Tag;
@@ -225,6 +283,52 @@ type ContractBase = Omit<
         readonly kind: 'sqlite-namespace';
         readonly entries: {
           readonly table: {
+            readonly event: {
+              columns: {
+                readonly bookedOn: {
+                  readonly dataType: 'sqlite/date';
+                  readonly codecId: 'sqlite/date-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly day: {
+                  readonly dataType: 'sqlite/date';
+                  readonly codecId: 'sqlite/date-string@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/character';
+                  readonly codecId: 'sql/char@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
+                };
+                readonly opensAt: {
+                  readonly dataType: 'sqlite/time';
+                  readonly codecId: 'sqlite/time-string@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly startsAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly post: {
               columns: {
                 readonly createdAt: {
@@ -424,6 +528,7 @@ type ContractBase = Omit<
   readonly target: 'sqlite';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly post_tag: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -436,6 +541,60 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly __unbound__: {
         readonly models: {
+          readonly Event: {
+            readonly fields: {
+              readonly bookedOn: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/date-string@1';
+                };
+              };
+              readonly day: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/date-string@1';
+                };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/char@1';
+                  readonly typeParams: { readonly length: 36 };
+                };
+              };
+              readonly opensAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/time-string@1';
+                };
+              };
+              readonly startsAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'event';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly bookedOn: { readonly column: 'bookedOn' };
+                readonly day: { readonly column: 'day' };
+                readonly id: { readonly column: 'id' };
+                readonly opensAt: { readonly column: 'opensAt' };
+                readonly startsAt: { readonly column: 'startsAt' };
+                readonly title: { readonly column: 'title' };
+              };
+            };
+          };
           readonly Post: {
             readonly fields: {
               readonly createdAt: {
@@ -659,6 +818,14 @@ type ContractBase = Omit<
     readonly executionHash: ExecutionHash;
     readonly mutations: {
       readonly defaults: readonly [
+        {
+          readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'event';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
