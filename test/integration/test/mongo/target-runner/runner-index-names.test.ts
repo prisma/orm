@@ -216,6 +216,23 @@ describe('MongoDB indexes by name, against a real database', () => {
   );
 
   it(
+    'drops a text index the database holds, checking the weights it lists',
+    async () => {
+      await db
+        .collection('posts')
+        .createIndex({ title: 'text', body: 'text' }, { weights: { title: 10 } });
+
+      const applied = await apply(contractWith({ posts: [] }, 'no-text'));
+
+      expect({ applied, posts: await liveIndexes('posts') }).toEqual({
+        applied: { ok: true, operationIds: ['index.posts.drop(title_text_body_text)'] },
+        posts: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'renames an index by dropping it and creating it under the new name',
     async () => {
       await db.collection('users').createIndex({ email: 1 }, { unique: true });

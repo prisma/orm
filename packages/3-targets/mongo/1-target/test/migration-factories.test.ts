@@ -198,6 +198,28 @@ describe('dropIndex', () => {
     });
   });
 
+  it('checks a text index read back from the database by the weights MongoDB lists', () => {
+    const liveKeys = [
+      { field: '_fts', direction: 'text' as const },
+      { field: '_ftsx', direction: 1 as const },
+    ];
+    const op = dropIndex('posts', liveKeys, {
+      name: 'title_text_body_text',
+      weights: { body: 1, title: 10 },
+      default_language: 'english',
+      language_override: 'language',
+    });
+    const content = (op.precheck[0]!.filter as MongoAndExpr).exprs[1] as MongoAndExpr;
+
+    expect(content.exprs).toEqual(
+      expect.arrayContaining([
+        MongoFieldFilter.eq('key', { _fts: 'text', _ftsx: 1 }),
+        MongoFieldFilter.eq('weights', { body: 1, title: 10 }),
+        MongoFieldFilter.eq('default_language', 'english'),
+      ]),
+    );
+  });
+
   it('checks a text index by its text key when the call gives no options', () => {
     const textKeys = [{ field: 'content', direction: 'text' as const }];
     const op = dropIndex('posts', textKeys);

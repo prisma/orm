@@ -336,11 +336,14 @@ function textIndexKeySpec(keys: ReadonlyArray<MongoIndexKey>): Record<string, un
   return spec;
 }
 
-/** MongoDB lists every text field's weight, 1 when none is given, ordered by field name. */
+/**
+ * MongoDB lists every text field's weight, 1 when none is given, ordered by field name. An index read back from the database names its text fields `_fts` and `_ftsx`, and its weights are already that list.
+ */
 function textIndexWeights(
   keys: ReadonlyArray<MongoIndexKey>,
   weights: Readonly<Record<string, number>> | undefined,
 ): Record<string, number> {
+  if (weights !== undefined && keys.some((key) => key.field === '_fts')) return { ...weights };
   const fields = keys.filter((key) => key.direction === 'text').map((key) => key.field);
   return Object.fromEntries(fields.sort().map((field) => [field, weights?.[field] ?? 1]));
 }

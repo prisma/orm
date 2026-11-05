@@ -76,6 +76,8 @@ each index in `contract.json` gains its name:
    - For a project kept with `db init` or `db update`, run `prisma db sign`.
    - For a project with migrations, run `prisma migration plan`. The migration it plans has no operations; apply it with `prisma db migrate`.
 
+For a disposable example or test database whose migration chain is regenerated from its schemas, regenerate the chain with its own tooling instead of steps 3 and 4, and recreate the database. In this repository, `pnpm fixtures:emit` re-emits every contract and regenerates the example migrations, writing their snapshots under the new storage hashes; delete the snapshot directories no migration names any more. This is not a procedure for a production database: keep applied migrations and their snapshots, and follow steps 3 and 4.
+
 A database that a Prisma 6 schema read with `prisma6Schema()` describes holds the names Prisma 6 gave its indexes, not the names after their keys; see `mongo-prisma6-index-names`.
 
 ## `mongo-unnamed-indexes-with-one-name-refused`
