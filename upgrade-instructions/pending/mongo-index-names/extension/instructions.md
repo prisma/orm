@@ -65,7 +65,7 @@ new CreateIndexCall('users', keys, { name: 'email_1', unique: true });
 new DropIndexCall('users', keys, { name: 'email_1', unique: true });
 ```
 
-Give `DropIndexCall` the options the index has, not only its name: its precheck requires an index with that name, keys and options. Code that matches an operation's checks by position reads `createIndex`'s content check at `precheck[1]`; `precheck[0]` checks the name.
+Give `DropIndexCall` every option the index has, not only its name: its precheck requires an index with that name, those keys and exactly those options. Code that matches an operation's checks by position reads `createIndex`'s content check at `precheck[1]`; `precheck[0]` checks the name.
 
 ## `mongo-build-refusal-index-name-duplicate`
 

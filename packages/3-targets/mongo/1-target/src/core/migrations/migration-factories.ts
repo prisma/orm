@@ -499,7 +499,7 @@ export function createIndex(
 }
 
 /**
- * Drops the index named `options.name`, or the name MongoDB would give the keys when the call gives none. The precheck requires an index with that name, keys and options; a call without options checks the keys only. The postcheck requires that no index with that name is left.
+ * Drops the index named `options.name`, or the name MongoDB would give the keys when the call gives none. `options` lists every option the index has, as `migration plan` writes them: the precheck requires an index with that name, those keys and exactly those options, so an option left out must be absent from the index. A call without options checks the keys only. The postcheck requires that no index with that name is left.
  */
 export function dropIndex(
   collectionName: string,

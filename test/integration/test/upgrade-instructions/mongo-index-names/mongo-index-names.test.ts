@@ -19,10 +19,10 @@ afterAll(() => {
   for (const dir of workDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function copyFixture(side: 'before' | 'after'): string {
+function copyFixture(side: 'before' | 'after', project = 'project'): string {
   const root = mkdtempSync(join(tmpdir(), 'mongo-index-names-'));
   workDirs.push(root);
-  cpSync(join(fixtures, 'project', side), root, { recursive: true });
+  cpSync(join(fixtures, project, side), root, { recursive: true });
   return root;
 }
 
@@ -62,5 +62,22 @@ describe('a MongoDB project with a re-emitted contract and a snapshot whose inde
 
   it('changes nothing on a second run', () => {
     expect(run(root)).toEqual({ status: 0, stdout: 'Nothing to change.\n', stderr: '' });
+  });
+});
+
+describe('a project read with prisma6Schema() whose snapshot indexes have no names', () => {
+  const root = copyFixture('before', 'prisma6-project');
+  const result = run(root);
+
+  it('names each snapshot index as the emitted contract names the same index, and after its keys otherwise', () => {
+    expect({ result, tree: readTree(root) }).toEqual({
+      result: {
+        status: 0,
+        stdout:
+          'migrations/snapshots/c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a/contract.json\nRewrote 1 file.\n',
+        stderr: '',
+      },
+      tree: readTree(join(fixtures, 'prisma6-project', 'after')),
+    });
   });
 });

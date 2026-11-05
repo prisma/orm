@@ -63,7 +63,7 @@ Run `tsx migration.ts` to produce `ops.json` and `migration.json` (when `describ
 ### Available factories
 
 - `createIndex(collection, keys, options?)` — create the index named `options.name`, or after its keys without one; checks that neither the name nor the same keys and options are taken
-- `dropIndex(collection, keys, options?)` — drop the index named `options.name`, or after its keys without one; checks its name, keys and options first
+- `dropIndex(collection, keys, options?)` — drop the index named `options.name`, or after its keys without one; checks its name, keys and options first, so `options` lists every option the index has, as `migration plan` writes them
 - `createCollection(collection, options?)` — create a collection
 - `dropCollection(collection)` — drop a collection
 - `setValidation(collection, schema, options?)` — set document validation on a collection

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Names every index of a MongoDB contract written before contracts recorded index names.
-// Each index gets the name MongoDB gave it when earlier releases created it: its keys and directions, such as `email_1`.
+// Each index takes the name an emitted contract under the root gives the index with the same collection, keys and options.
+// When none does, it gets the name earlier releases gave it in the database: its keys and directions, such as `email_1`.
 // Usage: node mongo-index-names.ts [<project root>]
 
 import { readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -52,18 +53,93 @@ function named(index: JsonObject, name: string): JsonObject {
   return Object.fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
+/** An index's collection, keys and options, as a string: what the database tells two indexes apart by. */
+function contentKey(collection: string, index: JsonObject): string {
+  const { name: _name, kind: _kind, ...content } = index;
+  return canonicalJson([collection, content]);
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (!isObject(value)) return JSON.stringify(value);
+  const entries = Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`);
+  return `{${entries.join(',')}}`;
+}
+
+/** Each index of a contract, with the collection it belongs to. */
+function indexesOf(
+  value: unknown,
+  found: { readonly collection: string; readonly index: JsonObject }[],
+  collection = '',
+): void {
+  if (Array.isArray(value)) {
+    for (const item of value) indexesOf(item, found, collection);
+    return;
+  }
+  if (!isObject(value)) return;
+  if (value['kind'] === 'mongo-index') {
+    found.push({ collection, index: value });
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (key === 'collection' && isObject(item)) {
+      for (const [name, entry] of Object.entries(item)) indexesOf(entry, found, name);
+    } else {
+      indexesOf(item, found, collection);
+    }
+  }
+}
+
+/** The names the emitted contracts give indexes, by collection and content; `undefined` where they disagree. */
+type EmittedNames = Map<string, string | undefined>;
+
+function recordEmittedNames(contract: JsonObject, emitted: EmittedNames): void {
+  const found: { readonly collection: string; readonly index: JsonObject }[] = [];
+  indexesOf(contract, found);
+  for (const { collection, index } of found) {
+    const name = index['name'];
+    if (typeof name !== 'string') continue;
+    const key = contentKey(collection, index);
+    emitted.set(key, emitted.has(key) && emitted.get(key) !== name ? undefined : name);
+  }
+}
+
 /** The value with each unnamed index named, and the names given, in the order the JSON lists the indexes. */
-function nameIndexes(value: unknown, names: string[]): unknown {
-  if (Array.isArray(value)) return value.map((item) => nameIndexes(item, names));
+function nameIndexes(
+  value: unknown,
+  names: string[],
+  emitted: EmittedNames,
+  collection = '',
+): unknown {
+  if (Array.isArray(value))
+    return value.map((item) => nameIndexes(item, names, emitted, collection));
   if (!isObject(value)) return value;
   if (isUnnamedIndex(value)) {
-    const name = defaultName(value['keys']);
+    const name = emitted.get(contentKey(collection, value)) ?? defaultName(value['keys']);
     names.push(name);
     return named(value, name);
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, nameIndexes(item, names)]),
+    Object.entries(value).map(([key, item]) => [
+      key,
+      key === 'collection' && isObject(item)
+        ? Object.fromEntries(
+            Object.entries(item).map(([name, entry]) => [
+              name,
+              nameIndexes(entry, names, emitted, name),
+            ]),
+          )
+        : nameIndexes(item, names, emitted, collection),
+    ]),
   );
+}
+
+function hasUnnamedIndex(contract: JsonObject): boolean {
+  const found: { readonly collection: string; readonly index: JsonObject }[] = [];
+  indexesOf(contract, found);
+  return found.some(({ index }) => !('name' in index));
 }
 
 function serializeLike(original: string, value: unknown): string {
@@ -99,8 +175,11 @@ function main(): number {
   const root = resolve(process.argv[2] ?? '.');
   const files: string[] = [];
   walk(root, files);
-  const changed: string[] = [];
-  const warnings: string[] = [];
+  const contracts: {
+    readonly path: string;
+    readonly original: string;
+    readonly contract: JsonObject;
+  }[] = [];
   for (const path of files.sort()) {
     const original = readFileSync(path, 'utf8');
     let contract: unknown;
@@ -109,9 +188,20 @@ function main(): number {
     } catch {
       continue;
     }
-    if (!isObject(contract) || contract['targetFamily'] !== 'mongo') continue;
+    if (isObject(contract) && contract['targetFamily'] === 'mongo') {
+      contracts.push({ path, original, contract });
+    }
+  }
+  const emitted: EmittedNames = new Map();
+  for (const { contract } of contracts) {
+    if (!hasUnnamedIndex(contract)) recordEmittedNames(contract, emitted);
+  }
+
+  const changed: string[] = [];
+  const warnings: string[] = [];
+  for (const { path, original, contract } of contracts) {
     const names: string[] = [];
-    const rewritten = nameIndexes(contract, names);
+    const rewritten = nameIndexes(contract, names, emitted);
     if (names.length === 0) continue;
     writeFile(path, serializeLike(original, rewritten));
     changed.push(path);

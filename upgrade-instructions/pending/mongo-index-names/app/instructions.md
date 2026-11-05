@@ -69,9 +69,9 @@ each index in `contract.json` gains its name:
    node <path-to-this-guide>/scripts/mongo-index-names.ts
    ```
 
-   Node 24 or later runs the TypeScript script directly. It reads and writes files only. It rewrites every `*.json` file under the root that is a MongoDB contract with an index without a name, skipping `node_modules`, `.git`, `dist` and `build`, and the `contract.d.ts` next to it (`<name>.d.ts` next to `<name>.json`). These are the contract snapshots under `migrations/snapshots/<hash>/`, which no command regenerates. Each index gets the name earlier releases gave it in the database: its keys and directions, such as `email_1`. The snapshot directory names stay as they are. A contract that step 2 emitted already has names and is left alone. The script prints each file it rewrote, or that nothing changed. If it cannot match the index types of a `contract.d.ts` with its `contract.json`, it says so and exits 1; add `readonly name: '<name>'` beside `readonly kind: 'mongo-index'` in each index type by hand.
+   Node 24 or later runs the TypeScript script directly. It reads and writes files only. It rewrites every `*.json` file under the root that is a MongoDB contract with an index without a name, skipping `node_modules`, `.git`, `dist` and `build`, and the `contract.d.ts` next to it (`<name>.d.ts` next to `<name>.json`). These are the contract snapshots under `migrations/snapshots/<hash>/`, which no command regenerates. Each index takes the name that a contract step 2 emitted gives the index with the same collection, keys and options, so a project whose contract comes from `prisma6Schema()` gets Prisma 6's names, such as `User_email_key`. An index no emitted contract has gets the name earlier releases gave it in the database: its keys and directions, such as `email_1`. The snapshot directory names stay as they are. A contract that step 2 emitted already has names and is left alone. The script prints each file it rewrote, or that nothing changed. If it cannot match the index types of a `contract.d.ts` with its `contract.json`, it says so and exits 1; add `readonly name: '<name>'` beside `readonly kind: 'mongo-index'` in each index type by hand.
 
-   To rewrite a file by hand instead, add `"name": "<keys and directions>"` to each object whose `kind` is `mongo-index`, such as `"name": "createdAt_-1_authorId_1"` for the keys `createdAt` descending and `authorId` ascending, and the matching type in `contract.d.ts`.
+   To rewrite a file by hand instead, add `"name"` to each object whose `kind` is `mongo-index`: the name the emitted contract gives the same index, or else its keys and directions, such as `"name": "createdAt_-1_authorId_1"` for the keys `createdAt` descending and `authorId` ascending. Add the matching type in `contract.d.ts`.
 4. Bring each database to the new storage hash:
    - For a project kept with `db init` or `db update`, run `prisma db sign`.
    - For a project with migrations, run `prisma migration plan`. The migration it plans has no operations; apply it with `prisma db migrate`.
@@ -125,7 +125,7 @@ model User {
 }
 ```
 
-the contract names the indexes `User_email_key` and `User_email_idx`, as Prisma 6 `db push` named them. Run `prisma contract emit` and `prisma db verify`; a database Prisma 6 built verifies. Then run `prisma db sign` for the new storage hash.
+the contract names the indexes `User_email_key` and `User_email_idx`, as Prisma 6 `db push` named them. Run `prisma contract emit` and `prisma db verify`; a database Prisma 6 built verifies. Then run `prisma db sign` for the new storage hash. Run the script of `mongo-contracts-record-index-names` after the emit: it gives each index of your migration snapshots the Prisma 6 name the emitted contract gives it, so the next `prisma migration plan` does not drop and recreate them.
 
 If the emit reports `PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE`, two indexes of one model get one name, which Prisma 6 refuses too, such as `@@index([name])` beside `@@index([name(sort: Asc)])`, both named `User_name_idx`. Give one a name with `map:`. If it reports `PSL.PRISMA6_MONGO_INDEX_NAME_INVALID`, a `map:` is empty or longer than 127 bytes; give the index a name Prisma 6 accepts.
 
@@ -141,8 +141,10 @@ createIndex('users', [{ field: 'email', direction: 1 }], { unique: true }),
 dropIndex('users', [{ field: 'legacy', direction: 1 }]),
 // after
 createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true }),
-dropIndex('users', [{ field: 'legacy', direction: 1 }], { name: 'legacy_1' }),
+dropIndex('users', [{ field: 'legacy', direction: 1 }], { name: 'legacy_1', unique: true }),
 ```
+
+`dropIndex`'s options must list every option the index has, as `migration plan` writes them: its precheck requires an index with that name, those keys and exactly those options, so `dropIndex('users', keys, { name: 'legacy_1' })` fails for a unique index. A `dropIndex` without options checks the keys only.
 
 Existing migration files need no change: a call without `name` uses the name after the keys, as before, and a `dropIndex` without options checks the index's keys only, as before. An applied migration's `ops.json` is applied as written.
 
