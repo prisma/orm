@@ -43,6 +43,12 @@ import {
   type PlannedTransform,
 } from './mongo-data-transforms';
 import {
+  planFieldFills,
+  sharedCollectionFillRefusals,
+  timeSeriesFillRefusals,
+  uniqueFillRefusals,
+} from './mongo-field-fills';
+import {
   type CollectionControl,
   collectionControlOf,
   collectionOf,
@@ -596,10 +602,20 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       }
       return [];
     });
+    const fills = planFieldFills({
+      fromContract,
+      contract,
+      schema,
+      destination: destinationIR,
+      statements: options.statements,
+    });
     const refusals = [
       ...transforms.flatMap(({ outcome }) =>
         outcome.kind === 'refused' ? [outcome.conflict] : [],
       ),
+      ...uniqueFillRefusals(fills, { contract, destination: destinationIR }),
+      ...timeSeriesFillRefusals(fills, schema),
+      ...sharedCollectionFillRefusals(fills, contract),
       ...noCastRefusals(unconverted, contract),
       ...timeSeriesRemovalRefusals(removals, schema),
       ...timeSeriesCastRefusals(casts, schema),
@@ -629,6 +645,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...fieldRenames,
           ...castCalls,
           ...transformCalls('convert'),
+          ...fills.map((fill) => fill.call),
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
         ],
@@ -678,7 +695,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ...fieldLoss,
       ].sort((a, b) => a.operationIndex - b.operationIndex),
       accessChanges: [],
-      temporaryValues: [],
+      temporaryValues: fills.map((fill) => ({
+        operationIndex: calls.indexOf(fill.call),
+        subject: fill.subject,
+        value: fill.text,
+      })),
       ...(warnings.length > 0 ? { warnings } : {}),
     };
   }

@@ -432,7 +432,7 @@ describe('MongoMigrationPlanner, removed fields', () => {
     });
   });
 
-  it('keeps a variant field its base now stores', () => {
+  it('keeps a variant field its base now stores, and fills it in the documents of the other variants', () => {
     expect(
       planned(
         plan({
@@ -441,7 +441,7 @@ describe('MongoMigrationPlanner, removed fields', () => {
           schema: [schemaCollection('tasks')],
         }),
       ).labels,
-    ).toEqual([]);
+    ).toEqual(['Fill field note in collection tasks where it is missing or null']);
   });
 
   it('unsets nothing without an origin contract when the destination collection has no validator', () => {

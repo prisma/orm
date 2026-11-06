@@ -42,6 +42,7 @@ import { unrewritableFieldNameReason } from './migration-factories';
 import {
   type CastFieldCall,
   type DataTransformCall,
+  type FillFieldCall,
   type OpFactoryCall,
   RenameCollectionCall,
   RenameFieldCall,
@@ -204,6 +205,7 @@ export interface StatementCalls {
     | RenameFieldCall
     | CastFieldCall
     | DataTransformCall
+    | FillFieldCall
     | UnsetFieldCall
   )[];
 }
@@ -745,7 +747,10 @@ function ownStores(model: ContractModel<MongoModelStorage>, storedName: string):
 }
 
 /** The stored names of the documents of the model at `coordinate`: its fields and embed relations, its own and those it inherits. */
-function storedFieldsOf(contract: ContractWithDomain, coordinate: ModelCoordinate): Set<string> {
+export function storedFieldsOf(
+  contract: ContractWithDomain,
+  coordinate: ModelCoordinate,
+): Set<string> {
   const models = mongoModelsOf(contract.domain, coordinate.namespaceId);
   return new Set(
     modelAndBasesOf(models, coordinate.model).flatMap((model) => [

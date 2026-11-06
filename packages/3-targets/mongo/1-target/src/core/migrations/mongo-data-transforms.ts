@@ -80,7 +80,7 @@ export function convertTransform(
   };
 }
 
-function originModelOf(
+export function originModelOf(
   model: ModelCoordinate,
   renames: readonly ResolvedRenameStatement[],
 ): ModelCoordinate {
@@ -93,7 +93,7 @@ function originModelOf(
   return renamed?.entity === 'model' ? renamed.from : model;
 }
 
-function originFieldOf(
+export function originFieldOf(
   field: FieldCoordinate,
   origin: ModelCoordinate,
   renames: readonly ResolvedRenameStatement[],
