@@ -25,7 +25,9 @@ export interface TemporalFallbackTarget {
   readonly entriesThatLoadThePolyfill: readonly string[];
   /** A Temporal codec to decode, from the target package's `./target/codecs` entry. */
   readonly decode: {
-    readonly lookupFactory: string;
+    readonly exportName: string;
+    /** The expression that gives the codec, from the export and the codec id's literal. */
+    readonly codecOf: (codecIdLiteral: string) => string;
     readonly codecId: string;
     readonly contractValue: string;
     readonly decoded: string;
@@ -235,11 +237,11 @@ export function describeTemporalFallbackEntries(target: TemporalFallbackTarget):
 
   const { decode } = target;
   const decodeATimestamp = `
-    const { ${decode.lookupFactory} } = ${importOf(targetPackage, './target/codecs')};
+    const { ${decode.exportName} } = ${importOf(targetPackage, './target/codecs')};
     const before = typeof globalThis.Temporal;
     let decoded;
     try {
-      const codec = ${decode.lookupFactory}().get(${JSON.stringify(decode.codecId)});
+      const codec = ${decode.codecOf(JSON.stringify(decode.codecId))};
       decoded = String(
         codec.fromDataTypeValue(codec.dataType.fromContract(${JSON.stringify(decode.contractValue)}, {})),
       );

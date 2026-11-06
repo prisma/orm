@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import mongoRuntimeAdapterDescriptor from '../src/exports/runtime';
 
+const generators = () => mongoRuntimeAdapterDescriptor.mutationDefaultGenerators?.() ?? [];
+
 describe('the generators the Mongo runtime adapter registers', () => {
   it('are timestampNow and a now generator for each date and time codec, one value per operation', () => {
-    expect(
-      mongoRuntimeAdapterDescriptor
-        .mutationDefaultGenerators()
-        .map(({ id, stability }) => [id, stability]),
-    ).toEqual([
+    expect(generators().map(({ id, stability }) => [id, stability])).toEqual([
       ['timestampNow', 'query'],
       ['instantNow', 'query'],
       ['plainDateNow', 'query'],
@@ -19,11 +17,12 @@ describe('the generators the Mongo runtime adapter registers', () => {
   });
 
   it('generate the values their codecs write, the ones that need no Temporal among them', () => {
-    const generators = mongoRuntimeAdapterDescriptor.mutationDefaultGenerators();
     const generated = Object.fromEntries(
       ['timestampNow', 'dateStringNow', 'timeStringNow'].map((id) => [
         id,
-        generators.find((generator) => generator.id === id)?.generate(),
+        generators()
+          .find((generator) => generator.id === id)
+          ?.generate(),
       ]),
     );
     expect({

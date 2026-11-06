@@ -28,7 +28,8 @@ describeTemporalFallbackEntries({
     '@prisma/orm-mysql ./target/control',
   ],
   decode: {
-    lookupFactory: 'createMysqlBuiltinCodecLookup',
+    exportName: 'createMysqlBuiltinCodecLookup',
+    codecOf: (codecId) => `createMysqlBuiltinCodecLookup().get(${codecId})`,
     codecId: 'mysql/datetime-temporal@1',
     contractValue: '2024-01-01T00:00:00',
     decoded: '2024-01-01T00:00:00Z',

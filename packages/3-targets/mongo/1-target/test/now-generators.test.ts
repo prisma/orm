@@ -1,5 +1,6 @@
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildStandardCodecRegistry } from '../src/core/codecs';
+import { mongoCodecDescriptors } from '../src/core/codecs';
 import {
   instantNow,
   instantStringNow,
@@ -17,7 +18,9 @@ const generate: Readonly<Record<string, () => unknown>> = {
 };
 
 function codecFor(codecId: string) {
-  const codec = buildStandardCodecRegistry().get(codecId);
+  const codec = assembleMongoCodecRegistry([
+    { id: 'mongo', types: { codecTypes: { codecDescriptors: mongoCodecDescriptors } } },
+  ]).get(codecId);
   if (codec === undefined) throw new Error(`no registered codec for '${codecId}'`);
   return codec;
 }

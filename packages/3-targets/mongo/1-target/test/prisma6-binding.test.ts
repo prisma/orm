@@ -110,10 +110,9 @@ describe('prisma6MongoBinding', () => {
   );
 
   it('reads DateTime and DateTime @db.Date as the JavaScript Date of the instant Prisma 6 stored, time of day included', async () => {
-    const registry = buildStandardCodecRegistry();
     const stored = new Date('2024-02-29T10:00:00.123Z');
     const read = (codecId: string | undefined) =>
-      codecId === undefined ? undefined : registry.get(codecId)?.fromWire(stored, {});
+      codecId === undefined ? undefined : standardCodecs.get(codecId)?.fromWire(stored, {});
 
     expect({
       dateTime: await read(codecFor('DateTime', '')),
