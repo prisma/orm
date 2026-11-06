@@ -1813,6 +1813,20 @@ export const scenarios = [
     expect: [],
   },
   {
+    name: 'queryRaw - Json column is returned as an object',
+    up: `
+      create table posts (
+        id int primary key not null,
+        data JSON not null
+      );
+      insert into posts (id, data) values (1, '{"x": 42}');
+    `,
+    do: async (client) => {
+      return await client.$queryRaw`select data from posts`
+    },
+    expect: [{ data: { x: 42 } }],
+  },
+  {
     // todo Incorrect database name 'introspection_find_one_check_typeof_js_object_is_object_for_json_field'
     todo: true,
     name: 'findUnique - check typeof js object is object for Json field',

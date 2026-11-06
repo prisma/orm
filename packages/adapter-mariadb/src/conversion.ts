@@ -82,7 +82,7 @@ export function mapColumnType(field: mariadb.FieldInfo): ColumnType {
     case MariaDbColumnType.LONG_BLOB:
       // Special handling for MariaDB, the database returns JSON columns as BLOB
       // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/1bbbb41e92d2123948c2322a4dbb5021026f2d05/lib/cmd/column-definition.js#L27
-      if (field['dataTypeFormat'] === 'json') {
+      if (field.isDataTypeFormatJson()) {
         return ColumnTypeEnum.Json
       }
       // The Binary flag of column definition applies to both text and binary data. To distinguish them, check if collation == 'binary' instead of checking the flag.
