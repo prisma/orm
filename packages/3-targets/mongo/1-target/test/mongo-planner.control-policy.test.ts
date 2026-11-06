@@ -85,8 +85,10 @@ function planOf(
   });
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
   return {
-    commands: (result.plan.operations as readonly MongoMigrationPlanOperation[]).map(
-      (op) => `${op.execute[0]?.command.kind} ${op.execute[0]?.command.collection}`,
+    commands: (result.plan.operations as readonly MongoMigrationPlanOperation[]).map((op) =>
+      op.execute[0] === undefined
+        ? op.id
+        : `${op.execute[0].command.kind} ${op.execute[0].command.collection}`,
     ),
     warnings: result.warnings ?? [],
   };
@@ -105,7 +107,7 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
         contract,
         new MongoSchemaIR([liveCollection('users')], { fromDatabase: false }),
       ),
-    ).toEqual(['createIndex users', 'collMod users']);
+    ).toEqual(['collection.users.checkDocuments', 'createIndex users', 'collMod users']);
   });
 
   it.each(['external', 'observed'] as const)(

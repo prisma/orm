@@ -63,7 +63,9 @@ const schemaWithPlan = {
 const BY_HAND =
   'The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: "users", updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).';
 const CHECK_DOCUMENTS_FALSE =
-  'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.';
+  'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, and remove the checkDocuments call before the rewrites if the file has one, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.';
+const NO_VALIDATOR_BY_HAND =
+  'Change them with a dataTransform in migration.ts, or with an update in mongosh.';
 
 const usersWithPlan = {
   target: 'mongo',
@@ -183,7 +185,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation validator.users.update stopped: 2 documents in collection users do not fit the new validator',
-        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. To give "name" and "plan" values you choose, plan the change with migration plan --backfill User.name --backfill User.plan. ${BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         meta: {
           databaseUnchanged: true,
           operationId: 'validator.users.update',
@@ -229,7 +231,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. To give "name" and "plan" values you choose, plan the change with migration plan --backfill User.name --backfill User.plan. ${BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
       });
@@ -251,6 +253,69 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
       expect(result.failure.why).toContain(
         'It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan", holds a value of type int in "name", which the new validator does not allow there, and has "legacyScore", a field the new validator does not name.',
       );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names --backfill for a field the collection validator did not require, and says the old validator rejects a fix by hand',
+    async () => {
+      const nameOnly = { ...schemaWithPlan, required: ['_id', 'name'] };
+      await db.createCollection('users', { validator: { $jsonSchema: nameOnly } });
+      await db.collection('users').insertOne({ name: 'Ada' });
+
+      const result = await run([addPlanValidator(true)]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        `To give "plan" values you choose, plan the change with migration plan --backfill User.plan. ${BY_HAND}`,
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names the reasons against the variant whose discriminator value the document holds',
+    async () => {
+      const variants = {
+        bsonType: 'object',
+        required: ['_id', 'kind'],
+        properties: { _id: { bsonType: 'objectId' }, kind: { bsonType: 'string' } },
+        oneOf: [
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              kind: { enum: ['a'] },
+              x: { bsonType: 'string' },
+            },
+            required: ['kind', 'x'],
+            additionalProperties: false,
+          },
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              kind: { enum: ['b'] },
+              y: { bsonType: 'string' },
+              z: { bsonType: 'string' },
+            },
+            required: ['kind', 'y', 'z'],
+            additionalProperties: false,
+          },
+        ],
+      };
+      await db.createCollection('users');
+      await db.collection('users').insertOne({ kind: 'b' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: variants } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain('That document has no "y" and has no "z".');
     },
     timeouts.spinUpMongoMemoryServer,
   );

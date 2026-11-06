@@ -38,6 +38,7 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
+  AnyMongoDdlCommand,
   AnyMongoMigrationOperation,
   MongoDmlCheck,
   MongoDmlOperation,
@@ -48,6 +49,7 @@ import type {
 } from '@internal/mongo-query-ast/control';
 import {
   CollModCommand,
+  CreateIndexCommand,
   isInspectionCheckSource,
   isMongoDmlOperation,
   ListCollectionsCommand,
@@ -228,14 +230,19 @@ function allowedBsonTypes(schema: unknown): ReadonlySet<string> | undefined {
   return new Set(strings.flatMap((name) => (name === 'number' ? NUMBER_TYPES : [name])));
 }
 
+interface DocumentField {
+  readonly type: string;
+  readonly value: unknown;
+}
+
 function problemsAgainst(
-  fields: ReadonlyMap<string, string>,
+  fields: ReadonlyMap<string, DocumentField>,
   shape: ValidatorDocumentShape,
 ): readonly string[] {
   const missing = shape.required
     .filter((field) => !fields.has(field))
     .map((field) => `has no ${JSON.stringify(field)}`);
-  const retyped = [...fields].flatMap(([field, type]) => {
+  const retyped = [...fields].flatMap(([field, { type }]) => {
     const allowed = allowedBsonTypes(shape.properties[field]);
     return allowed === undefined || allowed.has(type)
       ? []
@@ -252,17 +259,23 @@ function problemsAgainst(
 }
 
 /**
- * Why a document does not fit a validator: against the root model or variant it fits best, the
- * required fields it lacks, the fields whose type the validator does not allow, and, for a closed
- * validator, the fields it does not name.
+ * Why a document does not fit a validator: against the variant whose discriminator value the
+ * document holds, or else the root model or variant it fits best, the required fields it lacks, the
+ * fields whose type the validator does not allow, and, for a closed validator, the fields it does not
+ * name.
  */
 function documentProblems(
-  fields: ReadonlyMap<string, string>,
+  fields: ReadonlyMap<string, DocumentField>,
   shapes: readonly ValidatorDocumentShape[],
 ): readonly string[] {
   if (fields.size === 0) return [];
+  const selected = shapes.filter(
+    ({ discriminator }) =>
+      discriminator !== undefined &&
+      canonicalize(fields.get(discriminator.field)?.value) === canonicalize(discriminator.value),
+  );
   return (
-    shapes
+    (selected.length > 0 ? selected : shapes)
       .map((shape) => problemsAgainst(fields, shape))
       .reduce<readonly string[] | undefined>(
         (best, problems) => (best === undefined || problems.length < best.length ? problems : best),
@@ -498,6 +511,38 @@ function rewriteErrorFix(mongoCode: number, reason: string): string | undefined 
 }
 
 /**
+ * The failure when MongoDB cannot build a unique index because two documents hold the same value
+ * of its keys, as documents without the field all hold `null`. The build changes nothing.
+ */
+function indexBuildFailure(
+  op: MongoMigrationPlanOperation,
+  command: AnyMongoDdlCommand,
+  error: unknown,
+): MongoMigrationRunnerResult | undefined {
+  if (!(command instanceof CreateIndexCommand) || typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  if (Reflect.get(error, 'code') !== MONGO_DUPLICATE_KEY) return undefined;
+  const reason = mongoErrorText(error);
+  const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
+  const index = command.name ?? command.keys.map(({ field }) => field).join('_');
+  return runnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${op.id} failed: the unique index ${index} cannot be built, because two documents in collection ${command.collection} hold the same value${duplicate === undefined ? '' : ` ${duplicate}`}`,
+    {
+      why: 'A document without the field counts as holding null. Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped.',
+      meta: {
+        operationId: op.id,
+        mongoCode: MONGO_DUPLICATE_KEY,
+        index,
+        collection: command.collection,
+        ...(duplicate === undefined ? {} : { duplicateKey: duplicate }),
+      },
+    },
+  );
+}
+
+/**
  * The failure when a rewrite fails after MongoDB began it: documents it reached may already be
  * rewritten. A planner cast that meets a value `$convert` cannot cast names the field, which the
  * advice reads to offer `--convert`. A data transform's update is the user's own, so its failure
@@ -679,7 +724,13 @@ export class MongoMigrationRunner {
         }
 
         for (const step of operation.execute) {
-          await executeDdl(step.command);
+          try {
+            await executeDdl(step.command);
+          } catch (error) {
+            const failure = indexBuildFailure(operation, step.command, error);
+            if (failure === undefined) throw error;
+            return failure;
+          }
           wrote();
         }
 
@@ -943,31 +994,31 @@ export class MongoMigrationRunner {
     );
     const one = documents === 1;
     const problems = documentProblems(
-      await this.bsonTypesOfDocument(failed.source, collection, counted?.['documentId']),
+      await this.fieldsOfDocument(failed.source, collection, counted?.['documentId']),
       validatorDocumentShapesOf(Reflect.get(validator, '$jsonSchema')),
     );
+    const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
       `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
       ...(problems.length === 0 ? [] : [`That document ${joinedList(problems)}.`]),
       `Find them all with ${query} in mongosh.`,
     ];
-    const advice = [
-      ...backfillAdvice(apply.contract, collection, touched.requires),
-      byHandAdvice(collection),
-    ];
+    const advice = hadValidator
+      ? [...backfillAdvice(apply.contract, collection, touched.requires), byHandAdvice(collection)]
+      : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const ran = apply.ranOn(collection);
     const why = beforeRewrites
       ? [
           ...found,
           `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
           ...advice,
-          'Under db migrate you can instead remove the checkDocuments call before the rewrites from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'Under db migrate you can instead remove this checkDocuments call from that migration.ts and set checkDocuments to false on the validator change, both, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
           'Once the documents are fixed, run the command again.',
         ].join(' ')
       : [
           ...found,
           ...advice,
-          'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, and remove the checkDocuments call before the rewrites if the file has one, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
           'The validator was not changed.',
           ...(ran.length === 0
             ? []
@@ -1035,12 +1086,12 @@ export class MongoMigrationRunner {
     );
   }
 
-  /** The BSON type of each field of the document with `_id`, read with `$type`. */
-  private async bsonTypesOfDocument(
+  /** Each field of the document with `_id`: its BSON type, read with `$type`, and its value. */
+  private async fieldsOfDocument(
     source: MongoQueryPlan,
     collection: string,
     id: unknown,
-  ): Promise<ReadonlyMap<string, string>> {
+  ): Promise<ReadonlyMap<string, DocumentField>> {
     const row = await this.firstRow({
       ...source,
       command: new RawAggregateCommand(collection, [
@@ -1052,7 +1103,7 @@ export class MongoMigrationRunner {
             fields: {
               $map: {
                 input: { $objectToArray: '$$ROOT' },
-                in: ['$$this.k', { $type: '$$this.v' }],
+                in: ['$$this.k', { $type: '$$this.v' }, '$$this.v'],
               },
             },
           },
@@ -1061,9 +1112,9 @@ export class MongoMigrationRunner {
     });
     const fields: unknown = row?.['fields'];
     return new Map(
-      (Array.isArray(fields) ? fields : []).flatMap((entry): [string, string][] =>
+      (Array.isArray(fields) ? fields : []).flatMap((entry): [string, DocumentField][] =>
         Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string'
-          ? [[entry[0], entry[1]]]
+          ? [[entry[0], { type: entry[1], value: entry[2] }]]
           : [],
       ),
     );

@@ -491,24 +491,26 @@ function documentChecksOf(
   );
 }
 
-function rewriteCollection(call: StatementCalls['rewrites'][number]): string {
-  return call instanceof FillFieldCall ? call.options.collection : call.collection;
+function callCollection(call: OpFactoryCall): string | undefined {
+  if (call instanceof FillFieldCall) return call.options.collection;
+  return 'collection' in call && typeof call.collection === 'string' ? call.collection : undefined;
 }
 
 /**
- * The rewrites, each collection's preceded by a check that its documents can fit the validator the
- * plan sets on it, once the fields the rewrites change are left out. Without it a rewrite could run
- * and leave documents that neither the old validator nor the new one accepts.
+ * The rewrites and index creates, each collection's first one preceded by a check that its
+ * documents can fit the validator the plan sets on it, once the fields the rewrites change are left
+ * out. Without it a rewrite could leave documents that neither the old validator nor the new one
+ * accepts, and a unique index build could fail on documents that lack the field.
  */
 function withDocumentChecks(
-  statementCalls: StatementCalls | undefined,
+  calls: readonly OpFactoryCall[],
+  documentChecks: ReadonlyMap<string, DocumentCheckFields>,
   validatorOps: readonly OpFactoryCall[],
 ): readonly OpFactoryCall[] {
-  if (statementCalls === undefined) return [];
   const checked = new Set<string>();
-  return statementCalls.rewrites.flatMap((call): OpFactoryCall[] => {
-    const collection = rewriteCollection(call);
-    if (checked.has(collection)) return [call];
+  return calls.flatMap((call): OpFactoryCall[] => {
+    const collection = callCollection(call);
+    if (collection === undefined || checked.has(collection)) return [call];
     checked.add(collection);
     const validatorOp = validatorOps.find(
       (op): op is CollModCall =>
@@ -517,14 +519,14 @@ function withDocumentChecks(
         op.meta?.checkDocuments === true,
     );
     const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
-    const fields = statementCalls.documentChecks.get(collection);
-    if (!isDocument(validator) || fields === undefined) return [call];
+    if (!isDocument(validator)) return [call];
+    const fields = documentChecks.get(collection);
     return [
       new CheckDocumentsCall({
         collection,
         validator,
-        rewrittenFields: fields.rewrittenFields,
-        ...(Object.keys(fields.renamedFields).length === 0
+        rewrittenFields: fields?.rewrittenFields ?? [],
+        ...(fields === undefined || Object.keys(fields.renamedFields).length === 0
           ? {}
           : { renamedFields: fields.renamedFields }),
       }),
@@ -605,8 +607,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
       ...drops,
-      ...withDocumentChecks(options.statementCalls, validatorOps),
-      ...creates,
+      ...withDocumentChecks(
+        [...(options.statementCalls?.rewrites ?? []), ...creates],
+        options.statementCalls?.documentChecks ?? new Map(),
+        validatorOps,
+      ),
       ...validatorOps,
       ...mutableOptionOps,
       ...collDrops,

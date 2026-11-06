@@ -18,7 +18,7 @@ changes:
 Every validator change a new plan writes is `collMod(..., { ..., checkDocuments: true })`. When `db migrate` or `db update` stops with `MIGRATION.PRECHECK_FAILED` because documents do not fit:
 
 1. Find them with the `mongosh` query the error prints, and change them so they fit the new validator. The old validator is still in place and rejects a document changed to the new shape, so an update that fixes one must skip document validation: write a `dataTransform` in `migration.ts`, or in `mongosh` run an update command with `bypassDocumentValidation: true`, such as `db.runCommand({ update: "users", updates: [{ q: { _id: … }, u: { $set: { … } } }], bypassDocumentValidation: true })`. Run the command again. For a field the change makes required, `migration plan --backfill Model.field` writes a step to fill it instead.
-2. Or, under `db migrate`, to apply the validator over them as before, set `checkDocuments` to `false` on that `collMod` in the migration's `migration.ts`, run the file with `node`, and run `db migrate` again. Those documents then fail their next update until they fit. `db update` writes no `migration.ts`, so there the documents must be fixed first.
+2. Or, under `db migrate`, to apply the validator over them as before, set `checkDocuments` to `false` on that `collMod` in the migration's `migration.ts` and remove the `checkDocuments(...)` call before the rewrites if the file has one, run the file with `node`, and run `db migrate` again. Those documents then fail their next update until they fit. `db update` writes no `migration.ts`, so there the documents must be fixed first.
 
 A database adopted from Prisma 6 has no validator, so its first plan adds one and checks every collection.
 
