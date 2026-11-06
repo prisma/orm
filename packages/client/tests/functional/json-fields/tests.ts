@@ -24,6 +24,18 @@ testMatrix.setupTestSuite(
       })
     })
 
+    // Regression test for https://github.com/prisma/prisma/issues/30859
+    test('primitive values', async () => {
+      const values = ['some string', 'another string', 42, 1.5, true]
+
+      for (const json of values) {
+        const result = await prisma.entry.create({
+          data: { json },
+        })
+        expect(result).toMatchObject({ json })
+      }
+    })
+
     // Regression test for https://github.com/prisma/prisma/issues/14274
     // and https://github.com/prisma/prisma/issues/14342
     test('object with no prototype', async () => {

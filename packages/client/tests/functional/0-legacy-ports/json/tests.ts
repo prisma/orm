@@ -102,6 +102,39 @@ testMatrix.setupTestSuite(
       },
     )
 
+    testIf(['mysql', 'postgresql'].includes(suiteConfig.provider))(
+      'select required json with where path gt',
+      async () => {
+        let result
+
+        if (suiteConfig.provider === Providers.MYSQL) {
+          result = await prisma.resource.findMany({
+            where: {
+              requiredJson: {
+                // @ts-test-if: provider === Providers.MYSQL
+                path: '$.foo',
+                gt: 'a',
+              },
+            },
+          })
+        }
+
+        if (suiteConfig.provider === Providers.POSTGRESQL) {
+          result = await prisma.resource.findMany({
+            where: {
+              requiredJson: {
+                // @ts-test-if: provider === Providers.POSTGRESQL
+                path: ['foo'],
+                gt: 'a',
+              },
+            },
+          })
+        }
+
+        expect(result).toHaveLength(1)
+      },
+    )
+
     test('select required json with where equals', async () => {
       const result = await prisma.resource.findMany({
         where: {
