@@ -186,17 +186,10 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
     ]);
   });
 
-  it('refuses a new required field under a unique index, naming --backfill', () => {
+  it('gives a new required field under a unique index no temporary value, leaving it to the document check', () => {
     expect(
-      refusal(plan({ from: origin, to: users('to', { code: STRING }, ['code']), schema: live })),
-    ).toEqual([
-      {
-        kind: 'fieldFillRefused',
-        summary:
-          'Cannot fill new required field "User.code" in collection "users" with a temporary value: a unique index covers it',
-        why: 'Every document would get the same value, which the unique index refuses. Plan the change with migration plan and --backfill User.code, and write a value for each document in migration.ts.',
-      },
-    ]);
+      fills(plan({ from: origin, to: users('to', { code: STRING }, ['code']), schema: live })),
+    ).toEqual([]);
   });
 
   it('refuses a fill in a time-series collection, and in a collection another root model shares', () => {

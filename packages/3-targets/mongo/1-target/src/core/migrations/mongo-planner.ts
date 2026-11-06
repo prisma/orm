@@ -44,7 +44,7 @@ import {
   type PlannedTransform,
 } from './mongo-data-transforms';
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
-import { planFieldFills, uniqueFillRefusals } from './mongo-field-fills';
+import { planFieldFills } from './mongo-field-fills';
 import {
   type PlannedRewrite,
   sharedCollectionRefusals,
@@ -762,7 +762,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...transforms.flatMap(({ outcome }) =>
         outcome.kind === 'refused' ? [outcome.conflict] : [],
       ),
-      ...uniqueFillRefusals(fills, { contract, destination: destinationIR }),
       ...noCastRefusals(unconverted, contract),
       ...timeSeriesRefusals(rewrites, schema),
       ...sharedCollectionRefusals(rewrites, contract, schema),

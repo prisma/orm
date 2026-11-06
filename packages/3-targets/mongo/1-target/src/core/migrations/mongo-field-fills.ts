@@ -1,11 +1,9 @@
-import type { ContractField, ContractWithDomain } from '@internal/contract/types';
+import type { ContractField } from '@internal/contract/types';
 import type { TypeLookups } from '@internal/framework-components/codec';
-import {
-  type FieldCoordinate,
-  fieldStatementText,
-  type MigrationPlannerConflict,
-  type MigrationSubject,
-  type ResolvedMigrationStatement,
+import type {
+  FieldCoordinate,
+  MigrationSubject,
+  ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import {
   type MongoContract,
@@ -96,10 +94,21 @@ function inOrigin(
   );
 }
 
+/** Whether a unique index covers the field, so that one value in every document would break it. */
+function underUniqueIndex(
+  destination: MongoSchemaIR,
+  collection: string,
+  storedName: string,
+): boolean {
+  return (destination.collection(collection)?.indexes ?? []).some(
+    (index) => index.unique && index.keys.some((key) => key.field === storedName),
+  );
+}
+
 /**
  * Each required field of the destination that is new on a collection the plan keeps, with the
  * temporary value its type declares, unless a `--backfill` statement names it. A field whose type
- * declares none is left to the validator change's document check.
+ * declares none, or that a unique index covers, is left to the validator change's document check.
  */
 export function planFieldFills(input: FillInput): readonly FieldFill[] {
   return modelCoordinates(input.contract).flatMap((model) => {
@@ -124,6 +133,7 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         }
         if (backfilled(input.statements, coordinate)) return [];
         if (inOrigin(input, coordinate, collection, storedName)) return [];
+        if (underUniqueIndex(input.destination, collection, storedName)) return [];
         const value = temporaryValueOf(contractField, input.lookups);
         if (value === undefined) return [];
         const filter = variantFilter(input.contract, model);
@@ -141,31 +151,4 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         ];
       });
   });
-}
-
-function fieldText(fill: FieldFill, contract: ContractWithDomain): string {
-  return fill.subject.kind === 'field'
-    ? fieldStatementText(contract, fill.subject)
-    : fill.call.options.field;
-}
-
-/** A fill under a unique index: every document would get the same value, which the index refuses. */
-export function uniqueFillRefusals(
-  fills: readonly FieldFill[],
-  input: Pick<FillInput, 'contract' | 'destination'>,
-): readonly MigrationPlannerConflict[] {
-  return fills
-    .filter(({ call }) =>
-      (input.destination.collection(call.options.collection)?.indexes ?? []).some(
-        (index) => index.unique && index.keys.some((key) => key.field === call.options.field),
-      ),
-    )
-    .map((fill) => {
-      const field = fieldText(fill, input.contract);
-      return {
-        kind: 'fieldFillRefused',
-        summary: `Cannot fill new required field "${field}" in collection "${fill.call.options.collection}" with a temporary value: a unique index covers it`,
-        why: `Every document would get the same value, which the unique index refuses. Plan the change with migration plan and --backfill ${field}, and write a value for each document in migration.ts.`,
-      };
-    });
 }
