@@ -7,7 +7,7 @@ changes:
       glob: "**/*.{ts,mts,cts,prisma}"
       matches:
         - '\bextension\((?![^)]*namespace:\s*unbound\b)[^)]*\)'
-        - '(?:^|\n)extension\s+[A-Za-z_][\w-]*\s*\{'
+        - '^(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
         - '\bnamespace\s+(?!unbound\b)[A-Za-z_][\w-]*\s*\{(?:[^{}]|\{[^{}]*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
 ---
 
