@@ -1,5 +1,4 @@
 import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
-import { asNamespaceId } from '@internal/contract/types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import type {
   MigrationOperationPolicy,
