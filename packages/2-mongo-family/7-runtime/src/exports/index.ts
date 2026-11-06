@@ -33,3 +33,13 @@ export {
   createMongoParamRefMutator,
   flattenMongoParamRefs,
 } from '../param-ref-mutator';
+export type {
+  MongoCodecTypesBase,
+  MongoDeclaration,
+  MongoParamSpec,
+  MongoParamsFromDeclaration,
+  MongoPlaceholders,
+  MongoPreparedExecution,
+  MongoPreparedFor,
+  MongoPreparedStatement,
+} from '../prepared/types';
