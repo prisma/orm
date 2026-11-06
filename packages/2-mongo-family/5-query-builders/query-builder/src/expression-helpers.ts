@@ -4,6 +4,7 @@ import {
   MongoAggLiteral,
   MongoAggOperator,
 } from '@internal/mongo-query-ast/execution';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 import type {
   ArrayField,
   BooleanField,
@@ -127,6 +128,9 @@ function literal(value: string): TypedAggExpr<StringField>;
 function literal(value: number): TypedAggExpr<NumericField>;
 function literal(value: boolean): TypedAggExpr<BooleanField>;
 function literal(value: Date): TypedAggExpr<DateField>;
+function literal<C extends string, N extends boolean>(
+  value: MongoPreparedParamRef<C, N>,
+): TypedAggExpr<{ readonly codecId: C; readonly nullable: N }>;
 function literal<F extends DocField>(value: LiteralValue<F>): TypedAggExpr<F>;
 function literal(value: unknown): TypedAggExpr<DocField> {
   return { _field: undefined as never, node: MongoAggLiteral.of(value) };
