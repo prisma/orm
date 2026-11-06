@@ -82,7 +82,7 @@ export function bindPlaceholders(
     if (!Object.hasOwn(params, placeholder.name)) {
       throw runtimeError(
         'RUNTIME.PREPARE_MISSING_PARAM',
-        `Prepared statement query is missing parameter '${placeholder.name}'`,
+        `Prepared statement is missing parameter '${placeholder.name}'`,
         { name: placeholder.name },
       );
     }

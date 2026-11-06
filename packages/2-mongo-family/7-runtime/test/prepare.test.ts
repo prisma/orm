@@ -228,7 +228,11 @@ describe('running a prepared statement', () => {
     });
     const statement = await runtime.prepare({ email: 'test/string@1' }, byEmail);
     await expect(statement.query(runtime, {} as { email: string }).toArray()).rejects.toMatchObject(
-      { code: 'RUNTIME.PREPARE_MISSING_PARAM', details: { name: 'email' } },
+      {
+        code: 'RUNTIME.PREPARE_MISSING_PARAM',
+        message: "Prepared statement is missing parameter 'email'",
+        details: { name: 'email' },
+      },
     );
     expect(activityStarted).not.toHaveBeenCalled();
     expect(driver.execute).not.toHaveBeenCalled();
@@ -400,6 +404,7 @@ describe('running a prepared statement', () => {
       const { runtime, driver, update } = await preparedUpdate();
       await expect(update.execute(runtime, {} as { status: string })).rejects.toMatchObject({
         code: 'RUNTIME.PREPARE_MISSING_PARAM',
+        message: "Prepared statement is missing parameter 'status'",
         details: { name: 'status' },
       });
       expect(driver.execute).not.toHaveBeenCalled();
