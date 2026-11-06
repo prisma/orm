@@ -33,7 +33,7 @@ import {
   canonicalize,
   type MongoContract,
   modelFieldStoredAs,
-  validatorRootShapesOf,
+  validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -255,44 +255,16 @@ interface DocumentShape {
   readonly properties: ReadonlyMap<string, string>;
 }
 
-/** The discriminator value a variant branch names: its one property whose schema allows exactly one value. */
-function variantKey(properties: Readonly<Record<string, unknown>>): string | undefined {
-  const named = Object.entries(properties).flatMap(([field, schema]) => {
-    const values: unknown =
-      typeof schema === 'object' && schema !== null ? Reflect.get(schema, 'enum') : undefined;
-    return Array.isArray(values) && values.length === 1 ? [[field, values[0]]] : [];
-  });
-  return named.length === 1 ? JSON.stringify(named[0]) : undefined;
-}
-
-/**
- * Each kind of document a validator's `$jsonSchema` describes: each root model, or, where a root has
- * variants, each variant with the root's own required fields and properties.
- */
 function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
-  return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex) => {
-    const shape = (
-      key: string,
-      required: readonly string[],
-      properties: Readonly<Record<string, unknown>>,
-    ): DocumentShape => ({
-      key,
-      required: new Set([...root.required, ...required]),
-      properties: new Map(
-        Object.entries({ ...root.properties, ...properties }).map(
-          ([field, schema]) => [field, canonicalize(schema)] as const,
-        ),
+  return validatorDocumentShapesOf(jsonSchema).map((shape) => ({
+    key: shape.key,
+    required: new Set(shape.required),
+    properties: new Map(
+      Object.entries(shape.properties).map(
+        ([field, schema]) => [field, canonicalize(schema)] as const,
       ),
-    });
-    if (root.variants.length === 0) return [shape(`${rootIndex}`, [], {})];
-    return root.variants.map((variant, variantIndex) =>
-      shape(
-        `${rootIndex}:${variantKey(variant.properties) ?? variantIndex}`,
-        variant.required,
-        variant.properties,
-      ),
-    );
-  });
+    ),
+  }));
 }
 
 const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };

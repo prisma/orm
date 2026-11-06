@@ -10,7 +10,7 @@ import {
 import {
   type MongoContract,
   ownStoredNameOf,
-  validatorRootShapesOf,
+  validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -175,32 +175,68 @@ export function planValidatorTypeChanges(input: {
   readonly contract: MongoContract;
 }): readonly TypeChange[] {
   return input.origin.collections.flatMap((originCollection) => {
-    if (collectionControlPolicy(input.contract, originCollection.name) !== 'managed') return [];
-    const destination = input.destination.collection(originCollection.name);
+    const collection = originCollection.name;
+    if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
+    const destination = input.destination.collection(collection);
     if (destination?.validator === undefined || originCollection.validator === undefined) return [];
-    const propertiesOf = (jsonSchema: unknown) =>
-      validatorRootShapesOf(jsonSchema).flatMap((root) => Object.entries(root.properties));
-    const before = new Map(propertiesOf(originCollection.validator.jsonSchema));
-    const after = new Map(propertiesOf(destination.validator.jsonSchema));
-    return [...before.keys()]
-      .filter((field) => after.has(field) && unrewritableFieldNameReason(field) === undefined)
-      .sort()
-      .flatMap((field): TypeChange[] => {
-        const from = propertyShapeOf(before.get(field));
-        const to = propertyShapeOf(after.get(field));
-        if (from === undefined || to === undefined || takesEveryValue(from, to)) return [];
-        return [
-          typeChange({
-            subject: { kind: 'storage', name: `${originCollection.name}.${field}` },
-            destination: undefined,
-            collection: originCollection.name,
-            field,
-            from,
-            to,
-            filter: undefined,
-          }),
-        ];
-      });
+    const before = validatorDocumentShapesOf(originCollection.validator.jsonSchema);
+    const changes = validatorDocumentShapesOf(destination.validator.jsonSchema).flatMap((after) => {
+      const matched = before.find(({ key }) => key === after.key);
+      if (matched === undefined) return [];
+      return Object.keys(after.properties)
+        .filter(
+          (field) =>
+            Object.hasOwn(matched.properties, field) &&
+            unrewritableFieldNameReason(field) === undefined,
+        )
+        .flatMap((field) => {
+          const from = propertyShapeOf(matched.properties[field]);
+          const to = propertyShapeOf(after.properties[field]);
+          if (from === undefined || to === undefined || takesEveryValue(from, to)) return [];
+          return [{ shape: after, field, from, to }];
+        });
+    });
+    const sameEverywhere = (field: string, rootIndex: number) => {
+      const shapes = validatorDocumentShapesOf(destination.validator?.jsonSchema).filter(
+        (shape) => shape.rootIndex === rootIndex,
+      );
+      const found = changes.filter(
+        (change) => change.field === field && change.shape.rootIndex === rootIndex,
+      );
+      return (
+        found.length === shapes.length &&
+        found.every(
+          (change) =>
+            JSON.stringify([change.from, change.to]) ===
+            JSON.stringify([found[0]?.from, found[0]?.to]),
+        )
+      );
+    };
+    const planned = new Map<string, TypeChange>();
+    for (const { shape, field, from, to } of changes) {
+      const whole = shape.discriminator === undefined || sameEverywhere(field, shape.rootIndex);
+      const filter =
+        whole || shape.discriminator === undefined
+          ? undefined
+          : { [shape.discriminator.field]: shape.discriminator.value };
+      const key = JSON.stringify([shape.rootIndex, field, filter ?? null]);
+      if (planned.has(key)) continue;
+      planned.set(
+        key,
+        typeChange({
+          subject: { kind: 'storage', name: `${collection}.${field}` },
+          destination: undefined,
+          collection,
+          field,
+          from,
+          to,
+          filter,
+        }),
+      );
+    }
+    return [...planned.values()].sort((a, b) =>
+      a.field < b.field ? -1 : a.field > b.field ? 1 : 0,
+    );
   });
 }
 

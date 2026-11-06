@@ -10,7 +10,7 @@ import {
 import {
   type MongoContract,
   ownStoredNameOf,
-  validatorRootShapesOf,
+  validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
@@ -106,9 +106,10 @@ function requiredInOrigin(
   storedName: string,
 ): boolean {
   if (input.match === undefined) {
-    return validatorRootShapesOf(input.schema.collection(collection)?.validator?.jsonSchema).some(
-      (root) => root.required.includes(storedName),
-    );
+    const declaring = validatorDocumentShapesOf(
+      input.schema.collection(collection)?.validator?.jsonSchema,
+    ).filter((shape) => Object.hasOwn(shape.properties, storedName));
+    return declaring.length > 0 && declaring.every((shape) => shape.required.includes(storedName));
   }
   const origin = originModelOf(field, input.match);
   const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);

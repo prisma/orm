@@ -147,5 +147,14 @@ export {
   validatorEnumMemberRefusalOf,
   validatorEnumRefusalOf,
 } from '../validator-enum-refusal';
-export type { ValidatorRootShape, ValidatorShape } from '../validator-shapes';
-export { validatorFieldNamesOf, validatorRootShapesOf } from '../validator-shapes';
+export type {
+  ValidatorDiscriminator,
+  ValidatorDocumentShape,
+  ValidatorRootShape,
+  ValidatorShape,
+} from '../validator-shapes';
+export {
+  validatorDocumentShapesOf,
+  validatorFieldNamesOf,
+  validatorRootShapesOf,
+} from '../validator-shapes';

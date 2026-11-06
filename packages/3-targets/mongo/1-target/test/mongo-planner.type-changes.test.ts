@@ -328,6 +328,84 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it('refuses a cast in a collection two root models share, whichever order the validator lists them in', () => {
+      const root = (age: string) => closedSchema({ age: { bsonType: age } });
+      const other = closedSchema({ age: { bsonType: 'string' }, name: { bsonType: 'string' } });
+      const sharedSchema = (order: 'changed first' | 'changed last', age: string) => ({
+        bsonType: 'object',
+        anyOf: order === 'changed first' ? [root(age), other] : [other, root(age)],
+      });
+      const destination = (order: 'changed first' | 'changed last') =>
+        contract(
+          'to',
+          {
+            User: { collection: 'users', fields: ['_id', 'age'], types: { _id: OBJECT_ID } },
+            Admin: {
+              collection: 'users',
+              fields: ['_id', 'age', 'name'],
+              types: { _id: OBJECT_ID },
+            },
+          },
+          { users: { jsonSchema: sharedSchema(order, 'int') } },
+        );
+
+      expect(
+        (['changed first', 'changed last'] as const).map((order) =>
+          refusal(
+            plan({
+              from: null,
+              to: destination(order),
+              schema: [schemaCollection('users', { jsonSchema: sharedSchema(order, 'string') })],
+            }),
+          ).map(({ summary }) => summary),
+        ),
+      ).toEqual([
+        [
+          'Cannot cast field "age" in collection "users": the collection stores several root models',
+        ],
+        [
+          'Cannot cast field "age" in collection "users": the collection stores several root models',
+        ],
+      ]);
+    });
+
+    it("casts a variant's field in that variant's documents only, read from the validator's variants", () => {
+      const tasks = (severity: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'type'],
+        properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' } },
+        oneOf: [
+          {
+            required: ['type', 'severity'],
+            properties: { type: { enum: ['bug'] }, severity: { bsonType: severity } },
+            additionalProperties: false,
+          },
+          {
+            required: ['type'],
+            properties: { type: { enum: ['task'] } },
+            additionalProperties: false,
+          },
+        ],
+      });
+      const destination = contract(
+        'to',
+        { Task: { collection: 'tasks', fields: ['_id', 'type'], types: { _id: OBJECT_ID } } },
+        { tasks: { jsonSchema: tasks('long') } },
+      );
+
+      expect(
+        planned(
+          plan({
+            from: null,
+            to: destination,
+            schema: [schemaCollection('tasks', { jsonSchema: tasks('int') })],
+          }),
+        ).labels[0],
+      ).toBe(
+        'Cast field severity in collection tasks from int to long in documents whose type is "bug"',
+      );
+    });
+
     it('reads null as allowed on both sides, an empty set as any value, and a list through its items', () => {
       const live = schemaCollection('users', {
         jsonSchema: closedSchema({

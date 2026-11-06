@@ -49,3 +49,62 @@ export function validatorFieldNamesOf(jsonSchema: unknown): ReadonlySet<string> 
     ]),
   );
 }
+
+/** The discriminator a variant branch selects on: its one property whose schema allows exactly one value. */
+export interface ValidatorDiscriminator {
+  readonly field: string;
+  readonly value: unknown;
+}
+
+/**
+ * One kind of document a collection validator describes: a root model with no variants, or a
+ * variant with its root's required fields and properties. `key` names the same kind of document in
+ * another validator of the collection: the root's position in `anyOf`, and the variant's
+ * discriminator value, or its position when it has none. Roots are matched by position because
+ * `deriveCollectionValidators` writes them in the same order every time.
+ */
+export interface ValidatorDocumentShape {
+  readonly key: string;
+  readonly rootIndex: number;
+  readonly discriminator: ValidatorDiscriminator | undefined;
+  readonly required: readonly string[];
+  readonly properties: Readonly<Record<string, unknown>>;
+}
+
+function discriminatorOf(
+  properties: Readonly<Record<string, unknown>>,
+): ValidatorDiscriminator | undefined {
+  const named = Object.entries(properties).flatMap(([field, schema]) => {
+    const values = isRecord(schema) ? schema['enum'] : undefined;
+    return Array.isArray(values) && values.length === 1 ? [{ field, value: values[0] }] : [];
+  });
+  const [only, ...others] = named;
+  return others.length === 0 ? only : undefined;
+}
+
+/** Each kind of document a collection validator's `$jsonSchema` describes. */
+export function validatorDocumentShapesOf(jsonSchema: unknown): readonly ValidatorDocumentShape[] {
+  return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex): ValidatorDocumentShape[] => {
+    if (root.variants.length === 0) {
+      return [
+        {
+          key: `${rootIndex}`,
+          rootIndex,
+          discriminator: undefined,
+          required: root.required,
+          properties: root.properties,
+        },
+      ];
+    }
+    return root.variants.map((variant, variantIndex) => {
+      const discriminator = discriminatorOf(variant.properties);
+      return {
+        key: `${rootIndex}:${discriminator === undefined ? variantIndex : JSON.stringify([discriminator.field, discriminator.value])}`,
+        rootIndex,
+        discriminator,
+        required: [...new Set([...root.required, ...variant.required])],
+        properties: { ...root.properties, ...variant.properties },
+      };
+    });
+  });
+}

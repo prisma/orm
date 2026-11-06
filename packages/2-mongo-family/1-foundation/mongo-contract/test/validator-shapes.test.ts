@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { validatorFieldNamesOf, validatorRootShapesOf } from '../src/validator-shapes';
+import {
+  validatorDocumentShapesOf,
+  validatorFieldNamesOf,
+  validatorRootShapesOf,
+} from '../src/validator-shapes';
 
 const user = {
   bsonType: 'object',
@@ -56,5 +60,35 @@ describe('validatorFieldNamesOf', () => {
 
   it('lists nothing for a schema that is not an object', () => {
     expect([...validatorFieldNamesOf(undefined)]).toEqual([]);
+  });
+});
+
+describe('validatorDocumentShapesOf', () => {
+  it('reads each root model, or each of its variants with the root fields, keyed by root and discriminator value', () => {
+    expect(validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] })).toEqual([
+      {
+        key: '0',
+        rootIndex: 0,
+        discriminator: undefined,
+        required: ['_id', 'email'],
+        properties: user.properties,
+      },
+      {
+        key: '1:["type","bug"]',
+        rootIndex: 1,
+        discriminator: { field: 'type', value: 'bug' },
+        required: ['_id', 'type', 'severity'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          type: { enum: ['bug'] },
+          severity: { bsonType: 'int' },
+        },
+      },
+    ]);
+  });
+
+  it('keys a variant with no single-valued field by its position', () => {
+    const unnamed = { ...task, oneOf: [{ required: [], properties: {} }] };
+    expect(validatorDocumentShapesOf(unnamed).map(({ key }) => key)).toEqual(['0:0']);
   });
 });
