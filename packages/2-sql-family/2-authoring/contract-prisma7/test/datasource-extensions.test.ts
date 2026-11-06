@@ -154,16 +154,18 @@ generator other {
       ).toEqual({ vector: { kind: 'extension', name: 'vector' } });
     });
 
-    it('checks the schema of a composed pack the binding does not name', () => {
+    it('leaves an extension to a composed pack the binding does not name, whatever schema the entry names', () => {
       const result = interpretSchemaTextResult(
         schemaListing('[vector(schema: "extensions")]'),
         packless,
         pgvectorDeclaringIn('public'),
       );
-      if (result.ok) throw new Error('The schema interpreted to a contract');
-      expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
-        'PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH',
-      ]);
+      if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+      expect(
+        serializedNamespaces(result.value as Contract<SqlStorage>)['extensions']?.entries[
+          'extension'
+        ],
+      ).toBeUndefined();
     });
   });
 
@@ -204,29 +206,20 @@ generator other {
       expect(result.ok).toBe(true);
     });
 
-    it('refuses schema: naming another schema', () => {
-      expect(
-        diagnosticsOf(
-          schemaListing('[vector(schema: "extensions")]'),
-          pgvectorDeclaringIn('public'),
-        ),
-      ).toEqual([
-        {
-          code: 'PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH',
-          message:
-            'Extension "vector": the "pgvector" extension pack declares it in schema "public", so Prisma 8 expects it there, but this entry puts it in schema "extensions". Moving it is a database change the pack does not make: move it with ALTER EXTENSION "vector" SET SCHEMA "public", then remove schema: "extensions".',
-        },
-      ]);
-    });
-
-    it('refuses an entry without schema: when the pack declares it elsewhere', () => {
-      expect(diagnosticsOf(schemaListing('[vector]'), pgvectorDeclaringIn('extensions'))).toEqual([
-        {
-          code: 'PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH',
-          message:
-            'Extension "vector": the "pgvector" extension pack declares it in schema "extensions", so Prisma 8 expects it there, but this entry puts it in schema "public". Moving it is a database change the pack does not make: move it with ALTER EXTENSION "vector" SET SCHEMA "extensions", then write vector(schema: "extensions").',
-        },
-      ]);
-    });
+    it.each([
+      ['names another schema', '[vector(schema: "public")]'],
+      ['names no schema', '[vector]'],
+    ])(
+      'is read without a finding when the entry %s, since verification checks where it is',
+      (_, listing) => {
+        expect(
+          interpretSchemaTextResult(
+            schemaListing(listing),
+            prisma7PostgresBinding,
+            pgvectorDeclaringIn('extensions'),
+          ).ok,
+        ).toBe(true);
+      },
+    );
   });
 });
