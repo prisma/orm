@@ -6,7 +6,7 @@ Accepted (TML-2397). Supersedes the schema-contribution half of [ADR 154 — Com
 
 ## The CipherStash example is historical
 
-This ADR uses CipherStash as its worked example, as it worked on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. CipherStash's current Prisma integration, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
+This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. CipherStash's current Prisma integration, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
 
 ## At a glance
 
@@ -43,7 +43,7 @@ Before this work, the framework had two parallel mental models for "schema":
 
 Two band-aids accumulated. `strictVerification: false` globally relaxed the verifier so extension-installed objects no longer failed it — at the cost of also hiding hand-edited drift the user *did* want flagged. A per-extension allowlist on `ComponentDatabaseDependency.installs.{tables,schemas}` let extensions declare *what tables they install* but not *what shape those tables have*, so the verifier could only check existence, not structure. Both papered over the underlying gap: the contract layer had no seam through which a non-application party could say "I own these structures; manage them with the same machinery you manage the application's."
 
-The cipherstash extension forced the conversation. It contributes ~5,750 lines of SQL: 1 schema, 1 table, several composite types and domains user `Encrypted<String>` columns reference via `nativeType`, plus 169 functions, 46 operators, 4 casts, and 9 operator classes. None of it was describable in any artifact the framework consumed; all of it was visible to the verifier. Monorepo aggregator packages (multiple internal contract owners composed by an aggregator) exhibit the same shape independently.
+The cipherstash extension forced the conversation. On EQL v2 it contributed ~5,750 lines of SQL: 1 schema, 1 table, several composite types and domains user `Encrypted<String>` columns reference via `nativeType`, plus 169 functions, 46 operators, 4 casts, and 9 operator classes. None of it was describable in any artifact the framework consumed; all of it was visible to the verifier. Monorepo aggregator packages (multiple internal contract owners composed by an aggregator) exhibit the same shape independently.
 
 ## Decision
 
@@ -154,7 +154,7 @@ The build pipeline emits the contract artefacts under `src/contract.{json,d.ts}`
 
 #### Two authoring paths: planner-emitted (A) vs hand-scaffolded (B)
 
-Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migration directory from the contract diff (cipherstash + the audit / feature-flags monorepo packages all follow this), and the resulting `migration.ts` is hand-edited to carry the extension's stable invariantIds and any non-derivable ops (e.g. cipherstash's `installEqlBundle` op + structural `cipherstash:create-*-v1` no-ops). `pnpm tsx migrations/<dirName>/migration.ts` then re-emits `ops.json` + `migration.json` deterministically.
+Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migration directory from the contract diff (cipherstash on EQL v2 and the audit / feature-flags monorepo packages all followed this), and the resulting `migration.ts` is hand-edited to carry the extension's stable invariantIds and any non-derivable ops (e.g. cipherstash's `installEqlBundle` op + structural `cipherstash:create-*-v1` no-ops). `pnpm tsx migrations/<dirName>/migration.ts` then re-emits `ops.json` + `migration.json` deterministically.
 
 A handful of extensions need **Path B** — hand-scaffolding the migration directory — when the contract declares only `storage.types` (no tables / models). For such contracts the planner returns no operations and `migration plan` refuses with `MIGRATION.PLANNING_FAILED`: "This contract describes nothing migration plan can create, so there is no first migration to plan." The author instead:
 

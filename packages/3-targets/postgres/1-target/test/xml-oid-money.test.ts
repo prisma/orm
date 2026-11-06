@@ -168,13 +168,7 @@ describe('pg/money', () => {
         code: 'RUNTIME.LC_MONETARY_NOT_C',
         meta: { codecId: 'pg/money@1', received: wire },
         fix: expect.stringContaining('lc_monetary'),
-      });
-    });
-
-    it('says a write outside a transaction that returns its row is already committed', async () => {
-      await expect(codec.fromWire('1.234,56 €', callCtx)).rejects.toMatchObject({
-        code: 'RUNTIME.LC_MONETARY_NOT_C',
-        why: expect.stringContaining('the write is already committed'),
+        why: expect.stringContaining('already committed'),
       });
     });
 
