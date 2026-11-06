@@ -112,7 +112,7 @@ class FakePool extends EventEmitter {
 
 const state = vi.hoisted(() => ({
   pools: [] as unknown[],
-  cancels: [] as string[],
+  cancels: [] as unknown[][],
   cancel: 'answers' as 'answers' | 'refuses' | 'cannot-connect',
   cancelConnectTimeouts: [] as unknown[],
   /** Runs when the fake `KILL QUERY` reaches the server, before its reply comes back. */
@@ -122,8 +122,8 @@ const state = vi.hoisted(() => ({
 /** The canceller's own connection: it records each statement, and answers or refuses it as the test sets. */
 function cancelConnection() {
   return {
-    query: async (sql: string) => {
-      state.cancels.push(sql);
+    query: async (sql: string, values: unknown[]) => {
+      state.cancels.push([sql, ...values]);
       state.beforeKillReply?.();
       await new Promise((resolve) => setTimeout(resolve, 10));
       if (state.cancel === 'refuses') throw new Error('KILL refused');
@@ -464,7 +464,10 @@ describe('MySQL runtime driver and its pool', () => {
       released: 2,
       drained: 2,
       sentOnPool: 0,
-      cancels: ['KILL QUERY 1', 'KILL QUERY 1'],
+      cancels: [
+        ['KILL QUERY ?', 1],
+        ['KILL QUERY ?', 1],
+      ],
     });
   });
 
@@ -653,7 +656,7 @@ describe('MySQL runtime driver and its pool', () => {
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
       drained: connection.streamClosed.mock.calls.length,
-    }).toEqual({ cancels: ['KILL QUERY 1'], destroyed: 0, released: 1, drained: 1 });
+    }).toEqual({ cancels: [['KILL QUERY ?', 1]], destroyed: 0, released: 1, drained: 1 });
   });
 
   it('drops the rest of a stream on a held connection the caller stops early, and keeps the connection', async () => {

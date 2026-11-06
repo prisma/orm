@@ -25,7 +25,7 @@ export class Canceller {
   readonly #url: string;
   readonly #idleTimeoutMillis: number;
   #connection: Promise<Connection | undefined> | undefined;
-  #pending = 0;
+  readonly #pending = new WeakMap<Connection, number>();
   #closed = false;
   #idleTimer: NodeJS.Timeout | undefined;
 
@@ -49,13 +49,13 @@ export class Canceller {
       this.#setAside(opening);
       return replaced ? 'unsent' : this.cancel(threadId, true);
     }
-    this.#pending += 1;
-    const killing = connection.query(`KILL QUERY ${Number(threadId)}`).then(
+    this.#pending.set(connection, this.#pendingOn(connection) + 1);
+    const killing = connection.query('KILL QUERY ?', [threadId]).then(
       () => 'sent' as const,
       (error: unknown) => (isFatal(error) ? ('unconfirmed' as const) : ('unsent' as const)),
     );
     void killing.then(() => {
-      this.#pending -= 1;
+      this.#pending.set(connection, this.#pendingOn(connection) - 1);
       this.#idleLater(opening, connection);
     });
     const limit = timeout(CANCEL_TIMEOUT_MILLIS);
@@ -67,7 +67,7 @@ export class Canceller {
     return 'unconfirmed';
   }
 
-  /** Ends the connection: `end()` sends `QUIT` once any `KILL QUERY` on it settles. Waits for that only when none is pending, so a connection that stopped answering cannot hold `close()` up. */
+  /** Ends the connection: `end()` sends `QUIT` once any `KILL QUERY` on it settles. Waits for that only when no `KILL QUERY` is pending on it, so a connection that stopped answering cannot hold `close()` up. */
   async close(): Promise<void> {
     this.#closed = true;
     clearTimeout(this.#idleTimer);
@@ -75,18 +75,27 @@ export class Canceller {
     this.#connection = undefined;
     if (connection === undefined) return;
     const ending = connection.end().catch(() => undefined);
-    if (this.#pending === 0) await ending;
+    if (this.#pendingOn(connection) === 0) await ending;
   }
 
   #idleLater(opening: Promise<Connection | undefined>, connection: Connection): void {
-    if (this.#idleTimeoutMillis === 0 || this.#pending > 0 || this.#connection !== opening) return;
+    if (
+      this.#idleTimeoutMillis === 0 ||
+      this.#pendingOn(connection) > 0 ||
+      this.#connection !== opening
+    )
+      return;
     clearTimeout(this.#idleTimer);
     this.#idleTimer = setTimeout(() => {
-      if (this.#pending > 0 || this.#connection !== opening) return;
+      if (this.#pendingOn(connection) > 0 || this.#connection !== opening) return;
       this.#connection = undefined;
       void connection.end().catch(() => undefined);
     }, this.#idleTimeoutMillis);
     this.#idleTimer.unref();
+  }
+
+  #pendingOn(connection: Connection): number {
+    return this.#pending.get(connection) ?? 0;
   }
 
   #setAside(opening: Promise<Connection | undefined>): void {

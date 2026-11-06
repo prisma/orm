@@ -68,8 +68,14 @@ describe('Canceller', () => {
     ]).toEqual(['sent', 'sent', 'unsent']);
     expect({
       opened: state.opened.length,
-      sent: opened(0).query.mock.calls.map(([sql]) => sql),
-    }).toEqual({ opened: 1, sent: ['KILL QUERY 41', 'KILL QUERY 42'] });
+      sent: opened(0).query.mock.calls,
+    }).toEqual({
+      opened: 1,
+      sent: [
+        ['KILL QUERY ?', [41]],
+        ['KILL QUERY ?', [42]],
+      ],
+    });
   });
 
   it('reports no cancel when its connection cannot be opened, and tries again next time', async () => {
@@ -173,6 +179,31 @@ describe('Canceller', () => {
         opened: 2,
       },
     );
+  });
+
+  it('ends the connection that replaced one whose KILL QUERY never answered once it has been idle, and waits for it on close', async () => {
+    vi.useFakeTimers();
+    const canceller = new Canceller(url, 1000);
+    state.answer = () => new Promise(() => {});
+    const unanswered = canceller.cancel(1);
+    await vi.advanceTimersByTimeAsync(2000);
+    await unanswered;
+    state.answer = () => Promise.resolve({});
+    await canceller.cancel(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    const idleEnded = opened(1).end.mock.calls.length;
+    await canceller.cancel(3);
+    let ending: () => void = () => {};
+    opened(2).end.mockImplementation(() => new Promise<void>((resolve) => (ending = resolve)));
+    let closed = false;
+    const closing = canceller.close().then(() => {
+      closed = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const closedBeforeEnd = closed;
+    ending();
+    await closing;
+    expect({ idleEnded, closedBeforeEnd }).toEqual({ idleEnded: 1, closedBeforeEnd: false });
   });
 
   it('keeps its idle connection open when the idle timeout is 0, as the pool keeps its own', async () => {
