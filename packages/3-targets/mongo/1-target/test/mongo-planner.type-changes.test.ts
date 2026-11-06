@@ -148,7 +148,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       expect(planned(result)).toMatchObject({
         labels: [
           CHECK_USERS,
-          'Cast field scores in collection users from int to double',
+          'Cast field scores in collection users from list of int to list of double',
           'Update validator on users (changed: scores)',
         ],
         classes: ['widening', 'widening', 'widening'],
@@ -464,7 +464,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       expect(planned(plan({ from: null, to: destination, schema: [live] })).labels).toEqual([
         CHECK_USERS,
         'Cast field age in collection users from int to long',
-        'Cast field scores in collection users from int to long',
+        'Cast field scores in collection users from list of int to list of long',
         'Update validator on users (changed: age, scores, meta)',
       ]);
     });

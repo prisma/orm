@@ -383,11 +383,12 @@ export function castField(options: CastFieldOptions): MongoDmlOperation {
       { meta: { context: 'castField', collection: collectionName, field, to } },
     );
   }
+  const listOf = (types: string) => (options.list === true ? `list of ${types}` : types);
   const id = `field.${collectionName}.${field}.cast(${to})${idSuffix(filter)}`;
   const toCast = documentsToCast(field, to, options);
   return {
     id,
-    label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${options.from.join(', ')}`} to ${to}${labelSuffix(filter)}`,
+    label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${listOf(options.from.join(', '))}`} to ${listOf(to)}${labelSuffix(filter)}`,
     operationClass:
       options.from.length > 0 && options.from.every((from) => convertKeepsEveryValue(from, to))
         ? 'widening'
