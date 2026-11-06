@@ -159,9 +159,9 @@ interface MongoDmlCheck {
 }
 ```
 
-The only difference is the `source` type: `MongoQueryPlan` (an aggregation or raw command) instead of `AnyMongoInspectionCommand`. Both use `MongoFilterExpr` for `filter` and `'exists' | 'notExists'` for `expect`. Both are evaluated by the same `FilterEvaluator` path in the runner — run the source query, apply the filter client-side, check against the expectation.
+`MongoDmlCheck` is a subset of `MongoMigrationCheck`: its `source` is only a `MongoQueryPlan` (an aggregation or raw command), while a DDL check's source is an inspection command or a `MongoQueryPlan`. So every DML check is also a valid DDL check, but not the other way round. Both use `MongoFilterExpr` for `filter` and `'exists' | 'notExists'` for `expect`. Both are evaluated by the same `FilterEvaluator` path in the runner — run the source query, apply the filter client-side, check against the expectation.
 
-The two types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>` because the source types need different executors — DDL checks dispatch through `MongoInspectionCommandVisitor`, DML checks dispatch through `MongoAdapter.lower()` → `MongoDriver.execute()`. Two concrete types with a shared shape let the runner dispatch internally based on which operation type it's processing.
+The two sources need different executors: an inspection command dispatches through `MongoInspectionCommandVisitor`, and a `MongoQueryPlan` through `MongoAdapter.lower()` → `MongoDriver.execute()`. The runner tells them apart by shape, with `isInspectionCheckSource`: a `MongoQueryPlan` carries its wire command in `command`, and an inspection command has no such property. A DML check needs no test, since its source is always a `MongoQueryPlan`. The types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>`, so that a DML operation's type says its checks never use an inspection command.
 
 #### One factory derives both precheck and postcheck
 
@@ -203,7 +203,7 @@ dataTransform('User.age', {
 })
 ```
 
-The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites are DML operations of the same envelope, classed by their effect like `renameField`. `castField({ collection, field, from, to, list?, filter? })` takes its class from `from` and `to`: it is `widening` when `$convert` keeps every value of every type in `from`, as from `int` to `long`, and `destructive` otherwise. `fillField({ collection, field, value, filter? })` sets the field only where it is missing or `null`, so it is always `widening`.
+`rawAggregate` and `rawUpdateMany` exist beside `mongoRaw(...)` because a migration needs what `mongoRaw` does not give: they address a collection by its stored name rather than through a root of the contract, need no execution context, and `rawUpdateMany` can skip document validation. The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites are DML operations of the same envelope, classed by their effect like `renameField`. `castField({ collection, field, from, to, list?, filter? })` takes its class from `from` and `to`: it is `widening` when `$convert` keeps every value of every type in `from`, as from `int` to `long`, and `destructive` otherwise. `fillField({ collection, field, value, filter? })` sets the field only where it is missing or `null`, so it is always `widening`.
 
 #### DML execution
 
