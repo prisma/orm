@@ -2,6 +2,7 @@ import { ArgType, ColumnType, ColumnTypeEnum, ResultValue } from '@prisma/driver
 import * as mariadb from 'mariadb'
 
 const UNSIGNED_FLAG = 1 << 5
+const SET_FLAG = 1 << 11
 // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/be72ebf9fee6e0bd153b6ff6e0bb252f794dbf0e/lib/const/collations.js#L150
 const BINARY_COLLATION_INDEX = 63
 
@@ -94,6 +95,10 @@ export function mapColumnType(field: mariadb.FieldInfo): ColumnType {
       }
     case MariaDbColumnType.ENUM:
       return ColumnTypeEnum.Enum
+    case MariaDbColumnType.SET:
+      // Defensive: servers send SET columns as STRING with the SET flag in
+      // practice, which the STRING case above maps to Text already.
+      return ColumnTypeEnum.Text
     case MariaDbColumnType.JSON:
       return ColumnTypeEnum.Json
     case MariaDbColumnType.BIT:
@@ -144,6 +149,13 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | stri
   return arg
 }
 
+function isSetField(field: mariadb.FieldInfo | undefined): boolean {
+  return (
+    field !== undefined &&
+    ((field.type as unknown as MariaDbColumnType) === MariaDbColumnType.SET || (Number(field.flags) & SET_FLAG) !== 0)
+  )
+}
+
 export function mapRow<A>(row: A[] | Record<string, A>, fields?: mariadb.FieldInfo[]): (A | ResultValue)[] {
   const values = Array.isArray(row) ? row : Object.values(row)
 
@@ -160,6 +172,14 @@ export function mapRow<A>(row: A[] | Record<string, A>, fields?: mariadb.FieldIn
       case MariaDbColumnType.DATETIME:
       case MariaDbColumnType.DATETIME2:
         return new Date(`${value}Z`).toISOString().replace(/(\.000)?Z$/, '+00:00')
+    }
+
+    // Servers send SET columns as STRING with the SET flag, and the driver
+    // decodes them into arrays of strings. Join them back into the
+    // comma-separated string representation to match the Text column type
+    // returned by mapColumnType. See https://github.com/prisma/prisma/issues/29398.
+    if (Array.isArray(value) && isSetField(fields?.[i])) {
+      return value.join(',')
     }
 
     if (typeof value === 'bigint') {
