@@ -8,17 +8,9 @@ import type {
 } from '@internal/mongo-wire';
 
 /**
- * Intermediate state produced by structural lowering. `MongoParamRef` and
- * `MongoPreparedParamRef` leaves remain in place — they have not yet been
- * resolved through codecs. A prepared run replaces each `MongoPreparedParamRef`
- * with a `MongoParamRef` holding the run's value. The runtime defers value
- * resolution past the `beforeEncode` middleware chain so middleware can walk
- * and rewrite `MongoParamRef` nodes before encoding.
+ * Intermediate state produced by structural lowering. `MongoParamRef` and `MongoPreparedParamRef` leaves remain in place; codecs have not run yet. A prepared run replaces each `MongoPreparedParamRef` with a `MongoParamRef` holding the run's value. The runtime resolves values after the `beforeEncode` middleware chain, so middleware can read and replace `MongoParamRef` values before encoding.
  *
- * All document/filter/update slots that may carry `MongoParamRef` nodes are
- * typed as `Record<string, unknown>` to allow heterogeneous values. Raw
- * command variants carry already-resolved `Record<string, unknown>` values
- * and pass through unchanged.
+ * Document, filter and update slots are typed `Record<string, unknown>` to allow mixed values. Raw command variants hold the user's documents; `resolveParams` sends them to the driver without encoding, but the runtime still walks them, for example to refuse a placeholder in a raw command.
  */
 export type MongoLoweredDraft =
   | {

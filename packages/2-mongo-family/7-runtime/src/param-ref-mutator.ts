@@ -99,15 +99,7 @@ export interface MongoParamRefMutatorInternal<
 type AnyMongoHandle = MongoParamRefHandle<string | undefined>;
 
 /**
- * Flat walk over a `MongoLoweredDraft` yielding every `MongoParamRef` leaf
- * regardless of nesting — object values, array elements, filter predicate
- * values, update operator values, and pipeline stage values. Raw command
- * variants carry no `MongoParamRef` nodes so they yield zero entries.
- * Placeholders (`MongoPreparedParamRef`) are skipped.
- *
- * **Walk parity:** slot traversal is {@link flattenMongoDraftLeaves}, which
- * matches `resolveDraftSlot` / `resolveParams`, so middleware sees every ref
- * the resolve pass will encode.
+ * Yields every `MongoParamRef` in a draft, at any depth, once per position. Placeholders (`MongoPreparedParamRef`) are skipped. The walk is {@link flattenMongoDraftLeaves}, which visits raw drafts too and matches `resolveDraftSlot`, so middleware sees every parameter the resolve pass will encode.
  */
 export function* flattenMongoParamRefs(draft: MongoLoweredDraft): Generator<MongoParamRef> {
   for (const leaf of flattenMongoDraftLeaves(draft)) {
