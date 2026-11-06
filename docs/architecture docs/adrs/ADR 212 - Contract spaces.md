@@ -4,6 +4,10 @@
 
 Accepted (TML-2397). Supersedes the schema-contribution half of [ADR 154 — Component-owned database dependencies](./ADR%20154%20-%20Component-owned%20database%20dependencies.md). The `databaseDependencies` mechanism described there is removed from the framework as part of this work.
 
+## The CipherStash example is historical
+
+This ADR uses CipherStash as its worked example, as it worked on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. CipherStash's current Prisma integration, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
+
 ## At a glance
 
 A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the database depends on, so apply-time and verify-time flows never need to read an extension package from `node_modules`.
@@ -361,7 +365,7 @@ The asymmetry between `migrate` (authoring) and the apply/verify path is what ma
 
 ### Trade-offs
 
-- **Extension authors must ship a contract + migration graph**, not just an init-SQL string. The contract-space package layout convention reuses the same CLI pipeline app authors use, so the authoring story is symmetrical: write a TS or PSL schema, run `prisma-next contract emit` + `prisma-next migration plan`, and the descriptor module JSON-imports the resulting artefacts. The framework helpers `emitContractSpaceArtifacts` / `materialiseExtensionMigrationPackageIfMissing` cover the consuming application's repo half; cipherstash, pgvector, and paradedb all ship this convention.
+- **Extension authors must ship a contract + migration graph**, not just an init-SQL string. The contract-space package layout convention reuses the same CLI pipeline app authors use, so the authoring story is symmetrical: write a TS or PSL schema, run `prisma-next contract emit` + `prisma-next migration plan`, and the descriptor module JSON-imports the resulting artefacts. The framework helpers `emitContractSpaceArtifacts` / `materialiseExtensionMigrationPackageIfMissing` cover the consuming application's repo half; pgvector, PostGIS, ParadeDB and citext ship this convention.
 - **`migrate` becomes the canonical way to materialise extension bumps.** Bumping an extension in `node_modules` without running `migrate` produces stale pinned artefacts; the drift-detection helper surfaces a non-fatal warning at the next `migrate` invocation.
 - **One outer transaction across spaces**, on a target whose DDL is transactional, is a stronger correctness guarantee than the per-extension `databaseDependencies.init` path provided. Such a target inherits the constraint that all SQL across all spaces in a single emit must be transactionally compatible (which is already true of the existing single-space path). A target whose DDL is not transactional gives a resumable apply instead.
 
