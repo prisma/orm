@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
+  expectMigrationTsReproducesOps,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
@@ -143,6 +144,7 @@ describe('Journeys (MongoDB): --convert and --backfill write a data transform to
       ctx.configPath,
     ]);
     expect(emitted.exitCode, `node migration.ts: ${emitted.stdout}\n${emitted.stderr}`).toBe(0);
+    await expectMigrationTsReproducesOps(ctx, migrationDir, 'the filled migration.ts');
     const applied = await runMigrate(ctx);
     expect(applied.exitCode, `db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
     return scaffold;
@@ -240,6 +242,11 @@ describe('Journeys (MongoDB): --convert and --backfill write a data transform to
     );
     expect(migrationTs.replace(/\s+/g, ''), 'D4.04: migration.ts fills the field').toContain(
       "fillField({collection:'users',field:'visits',value:{$toLong:0}})",
+    );
+    await expectMigrationTsReproducesOps(
+      ctx,
+      join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx)),
+      'D4.04',
     );
 
     const applied = await runMigrate(ctx);

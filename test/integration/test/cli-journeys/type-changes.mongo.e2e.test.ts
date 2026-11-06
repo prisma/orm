@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
+  expectMigrationTsReproducesOps,
   type JourneyContext,
   latestMigrationDirName,
   runContractEmit,
@@ -147,7 +148,12 @@ describe('Journeys (MongoDB): a field whose type changes', {
       'utf-8',
     );
     expect(migrationTs, 'T1.04: migration.ts casts the field').toMatch(
-      /castField\(\s*['"]users['"],\s*['"]age['"],\s*\{\s*from: \[['"]string['"]\],\s*to: ['"]int['"]\s*\}\s*\)/,
+      /castField\(\{\s*collection: ['"]users['"],\s*field: ['"]age['"],\s*from: \[['"]string['"]\],\s*to: ['"]int['"]\s*\}\)/,
+    );
+    await expectMigrationTsReproducesOps(
+      ctx,
+      join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx)),
+      'T1.04',
     );
 
     const applied = await runMigrate(ctx);
@@ -179,6 +185,11 @@ describe('Journeys (MongoDB): a field whose type changes', {
     ]);
     expect(planned.exitCode, `T4.02: plan with --delete User.age: ${planned.stderr}`).toBe(0);
     const failedDir = latestMigrationDirName(ctx);
+    await expectMigrationTsReproducesOps(
+      ctx,
+      join(ctx.testDir, 'migrations/app', failedDir),
+      'T4.02',
+    );
 
     const applied = await runMigrate(ctx, ['--json']);
     const error = engineError(applied);

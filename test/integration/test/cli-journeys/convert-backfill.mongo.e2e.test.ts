@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
+  expectMigrationTsReproducesOps,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
@@ -161,6 +162,7 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
       ]);
       expect(emitted.exitCode, `${label}.06: node migration.ts: ${emitted.stderr}`).toBe(0);
     }
+    await expectMigrationTsReproducesOps(ctx, migrationDir, `${label}.06`);
     const applied = await runMigrate(ctx);
     expect(applied.exitCode, `${label}.07: db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(
       0,
