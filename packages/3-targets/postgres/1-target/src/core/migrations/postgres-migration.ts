@@ -1,11 +1,13 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import { errorMigrationOperationOptionRemoved } from '@internal/errors/migration';
 import {
   type ColumnRenameRequest,
   resolveColumnRenameAgainst,
   resolveTableRenameAgainst,
   type SqlMigrationPlanOperation,
+  type StoredKeyFillField,
   type StoredValueCodec,
+  scalarTypeNamesOf,
   sqlTypeLookupsOf,
   type TableRenameRequest,
   unmatchedColumnRename,
@@ -47,6 +49,7 @@ import {
   CreatePostgresRlsPolicyCall,
   CreateSchemaCall,
   CreateTableCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropCheckConstraintCall,
   DropColumnCall,
@@ -60,11 +63,14 @@ import {
   DropSchemaCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  FillStoredKeyCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
   RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameSchemaCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
   SetDefaultCall,
   SetExtensionSchemaCall,
@@ -161,6 +167,26 @@ export abstract class PostgresMigration<
       ...(stack.adapter === undefined ? [] : [stack.adapter]),
       ...stack.extensions,
     ];
+  }
+
+  /** The value object field a key fill fills, checked against the end contract with the stack's codecs, data types and type names; a check needs a stack. */
+  private storedKeyFillField(
+    operation: string,
+    text: string | undefined,
+  ): StoredKeyFillField | undefined {
+    if (text === undefined) return undefined;
+    this.controlAdapterFor(operation);
+    const typeNamespace = this.stack?.authoringContributions.type ?? {};
+    return {
+      text,
+      check: {
+        contract: this.endContract,
+        types: {
+          ...sqlTypeLookupsOf(this.frameworkComponents()),
+          scalarTypeName: scalarTypeNamesOf(typeNamespace),
+        },
+      },
+    };
   }
 
   /** The codec `codecRef` names, built from the stack's codecs; a codec needs a stack. */
@@ -308,6 +334,8 @@ export abstract class PostgresMigration<
     readonly many?: boolean;
     /** The column's codec: the values are then written as the contract stores them, and the codec writes them as the database does. */
     readonly codecRef?: CodecRef;
+    /** A JSON path inside the column, written as for `renameStoredKey`, that ends at a member name or at a wildcard (`[*]`, `.*`), which selects the elements of a list and the member values of an object: the value there is replaced, compared as a JSON value. It takes neither `many` nor `codecRef`. */
+    readonly path?: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new ReplaceStoredValueCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
@@ -317,6 +345,7 @@ export abstract class PostgresMigration<
       options.to,
       options.many === true,
       this.storedValueCodec('replaceStoredValue', options.codecRef),
+      options.path,
     ).toOp();
   }
 
@@ -333,6 +362,10 @@ export abstract class PostgresMigration<
     readonly codecRef?: CodecRef;
     /** The enum value the stored value belongs to: the check that fails while rows of a required column hold the value then names it. */
     readonly enumValue?: EnumValueCoordinateJson;
+    /** A JSON path inside the column, as for `replaceStoredValue`: the value is taken out of a list, or its member removed from an object, when the path ends at a wildcard, else the member is set to JSON `null`. */
+    readonly path?: string;
+    /** Whether the member at `path` takes JSON `null`. When it does not, the check fails while a row holds the value. */
+    readonly nullable?: boolean;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new RemoveStoredValueCall(
       options.schema ?? UNBOUND_NAMESPACE_ID,
@@ -342,6 +375,92 @@ export abstract class PostgresMigration<
       options.many === true,
       this.storedValueCodec('removeStoredValue', options.codecRef),
       options.enumValue,
+      options.path,
+      options.nullable,
+    ).toOp();
+  }
+
+  /**
+   * Emit an `UPDATE` operation that renames the key at the end of `path` to `to`, in every object of `column` the path reaches. `path` is an RFC 9535 JSONPath of member names (`.lat`, `['lat']`) and wildcards (`[*]`, `.*`, each selecting the elements of a list and the member values of an object) from the column's value, `$`, and ends at the key: `'$[*].lat'` renames `lat` in each object of a list. Only rows that hold the key are written. Its check fails, and nothing changes, while an object holds both keys.
+   */
+  protected renameStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+    readonly to: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new RenameStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
+        options.to,
+      ).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that removes the key at the end of `path` from every object of `column` the path reaches. `path` is written as for `renameStoredKey`. Only rows that hold the key are written. The operation is destructive.
+   */
+  protected removeStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new RemoveStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
+      ).toOp(),
+    );
+  }
+
+  /**
+   * Emit an `UPDATE` operation that sets the key at the end of `path` to `value`, in every object of `column` the path reaches that lacks the key or holds JSON `null` there. `path` is written as for `renameStoredKey`; `value` is a JSON value, passed as a parameter. Only rows with such an object are written.
+   */
+  protected fillStoredKey(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly path: string;
+    readonly value: JsonValue;
+    /** The value object field the key holds, as a statement names it, such as `Address.country`: the value is refused, before any operation is written, unless the field takes it. */
+    readonly field?: string;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return Promise.resolve(
+      new FillStoredKeyCall(
+        options.schema ?? UNBOUND_NAMESPACE_ID,
+        options.table,
+        options.column,
+        options.path,
+        options.value,
+        this.storedKeyFillField('fillStoredKey', options.field),
+      ).toOp(),
+    );
+  }
+
+  /**
+   * Emit a `DELETE` operation that deletes the rows whose `column` holds the stored value `value`. The value is a stored value, as for `replaceStoredValue`, and is passed as a parameter. Foreign keys that reference the rows act as they do for any `DELETE`. The operation is destructive.
+   */
+  protected deleteRows(options: {
+    readonly schema?: string;
+    readonly table: string;
+    readonly column: string;
+    readonly value: string | number;
+    /** The column's codec, as for `replaceStoredValue`. */
+    readonly codecRef?: CodecRef;
+  }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
+    return new DeleteRowsCall(
+      options.schema ?? UNBOUND_NAMESPACE_ID,
+      options.table,
+      options.column,
+      options.value,
+      this.storedValueCodec('deleteRows', options.codecRef),
     ).toOp();
   }
 
