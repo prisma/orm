@@ -317,15 +317,31 @@ function rewriteFailure(
   const mongoCode: unknown = Reflect.get(error, 'code');
   if (typeof mongoCode !== 'number') return undefined;
   const reason = mongoErrorText(error);
-  const cast = castFieldOf(op);
-  if (cast === undefined || mongoCode !== MONGO_CONVERSION_FAILURE) {
+  if (mongoCode !== MONGO_CONVERSION_FAILURE) {
     return runnerFailure('MIGRATION.EXECUTION_FAILED', `Operation ${op.id} failed: ${reason}`, {
       why: 'Documents the rewrite changed before the error stay changed, and a re-run rewrites the rest.',
       meta: { operationId: op.id, mongoCode },
     });
   }
-  const field = fieldStoredAt(position.contract, cast.collection, cast.field);
-  const named = field.kind === 'field' ? fieldStatementText(position.contract, field) : cast.field;
+  const field = fieldStoredAt(position.contract, rewrite.collection, rewrite.field);
+  const named =
+    field.kind === 'field' ? fieldStatementText(position.contract, field) : rewrite.field;
+  const { operationIndex } = position;
+  const cast = castFieldOf(op);
+  if (op.operationClass === 'data' || cast === undefined) {
+    return runnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      `Operation ${op.id} failed: the conversion of field "${named}" met a value it cannot convert`,
+      {
+        why: `MongoDB stopped the conversion's update: ${reason}. Documents converted before that value stay converted, and a re-run converts the rest.`,
+        meta: {
+          operationId: op.id,
+          mongoCode,
+          failedTypeChange: { field, by: 'conversion', reason: 'value', operationIndex },
+        },
+      },
+    );
+  }
   return runnerFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
@@ -334,12 +350,7 @@ function rewriteFailure(
       meta: {
         operationId: op.id,
         mongoCode,
-        failedTypeChange: {
-          field,
-          by: 'cast',
-          reason: 'value',
-          operationIndex: position.operationIndex,
-        },
+        failedTypeChange: { field, by: 'cast', reason: 'value', operationIndex },
       },
     },
   );

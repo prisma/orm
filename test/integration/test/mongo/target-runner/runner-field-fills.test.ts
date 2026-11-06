@@ -243,3 +243,40 @@ describe('MongoMigrationRunner, a fill of a new required field', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a fill of a list field', () => {
+  it(
+    'leaves a list holding null as it is, and fills only a missing or null list',
+    async () => {
+      await db.createCollection('users');
+      await db
+        .collection('users')
+        .insertMany([
+          { name: 'Ada', tags: ['a', null] },
+          { name: 'Bo', tags: [null] },
+          { name: 'Cy', tags: null },
+          { name: 'Dee' },
+        ]);
+
+      const properties = { name: { bsonType: 'string' }, tags: { bsonType: 'array' } };
+      const result = await run(
+        [fillField({ collection: 'users', field: 'tags', value: [] }), validatorChange(properties)],
+        usersContract(properties),
+      );
+
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(2);
+      expect(
+        await db
+          .collection('users')
+          .find({}, { projection: { _id: 0 }, sort: { name: 1 } })
+          .toArray(),
+      ).toEqual([
+        { name: 'Ada', tags: ['a', null] },
+        { name: 'Bo', tags: [null] },
+        { name: 'Cy', tags: [] },
+        { name: 'Dee', tags: [] },
+      ]);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

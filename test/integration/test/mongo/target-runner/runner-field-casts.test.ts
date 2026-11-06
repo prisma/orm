@@ -321,3 +321,53 @@ describe('MongoMigrationRunner, a data transform filled in by the user', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a data transform whose conversion fails', () => {
+  it(
+    "reports the user's conversion, not a cast, when its $convert meets a value it cannot convert",
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([{ name: 'Ada', age: 'forty' }]);
+      const properties = { name: { bsonType: 'string' }, age: { bsonType: 'int' } };
+      const notInt = { age: { $ne: null, $not: { $type: ['int'] } } };
+
+      const result = await run(
+        [
+          dataTransform('User.age', {
+            check: { source: () => rawAggregate('users', [{ $match: notInt }, { $limit: 1 }]) },
+            run: () =>
+              rawUpdateMany(
+                'users',
+                notInt,
+                [{ $set: { age: { $convert: { input: '$age', to: 'int' } } } }],
+                { bypassDocumentValidation: true },
+              ),
+          }),
+          validatorChange(properties),
+        ],
+        usersContract(properties),
+      );
+
+      if (result.ok) throw new Error('Expected the conversion to fail on "forty"');
+      expect({
+        message: result.failure.message,
+        failedTypeChange: result.failure.meta.failedTypeChange,
+      }).toEqual({
+        message:
+          'Operation data_transform.User.age failed: the conversion of field "User.age" met a value it cannot convert',
+        failedTypeChange: {
+          field: {
+            kind: 'field',
+            namespaceId: asNamespaceId('__unbound__'),
+            model: 'User',
+            field: 'age',
+          },
+          by: 'conversion',
+          reason: 'value',
+          operationIndex: 0,
+        },
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
