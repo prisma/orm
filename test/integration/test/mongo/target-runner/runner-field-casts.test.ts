@@ -322,17 +322,32 @@ describe('MongoMigrationRunner, a data transform filled in by the user', () => {
   );
 });
 
-describe('MongoMigrationRunner, a data transform whose conversion fails', () => {
+describe('MongoMigrationRunner, a data transform whose update MongoDB cannot convert', () => {
+  const failureOf = async (
+    transform: AnyMongoMigrationOperation,
+    properties: Record<string, unknown>,
+  ) => {
+    const result = await run([transform, validatorChange(properties)], usersContract(properties));
+    if (result.ok) throw new Error('Expected the data transform to fail');
+    return {
+      message: result.failure.message,
+      why: result.failure.why,
+      failedTypeChange: result.failure.meta.failedTypeChange,
+    };
+  };
+  const conversionWhy = (reason: string) =>
+    `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again. The operations that ran before the failure stay applied.`;
+
   it(
-    "reports the user's conversion, not a cast, when its $convert meets a value it cannot convert",
+    "reports the user's update failing, not a type change, for a filled --convert",
     async () => {
       await db.createCollection('users');
       await db.collection('users').insertMany([{ name: 'Ada', age: 'forty' }]);
       const properties = { name: { bsonType: 'string' }, age: { bsonType: 'int' } };
       const notInt = { age: { $ne: null, $not: { $type: ['int'] } } };
 
-      const result = await run(
-        [
+      expect(
+        await failureOf(
           dataTransform('User.age', {
             check: { source: () => rawAggregate('users', [{ $match: notInt }, { $limit: 1 }]) },
             run: () =>
@@ -343,29 +358,49 @@ describe('MongoMigrationRunner, a data transform whose conversion fails', () => 
                 { bypassDocumentValidation: true },
               ),
           }),
-          validatorChange(properties),
-        ],
-        usersContract(properties),
-      );
-
-      if (result.ok) throw new Error('Expected the conversion to fail on "forty"');
-      expect({
-        message: result.failure.message,
-        failedTypeChange: result.failure.meta.failedTypeChange,
-      }).toEqual({
+          properties,
+        ),
+      ).toEqual({
         message:
-          'Operation data_transform.User.age failed: the conversion of field "User.age" met a value it cannot convert',
-        failedTypeChange: {
-          field: {
-            kind: 'field',
-            namespaceId: asNamespaceId('__unbound__'),
-            model: 'User',
-            field: 'age',
-          },
-          by: 'conversion',
-          reason: 'value',
-          operationIndex: 0,
-        },
+          'Operation data_transform.User.age failed: its update met a value MongoDB cannot convert',
+        why: conversionWhy(
+          "Failed to parse number 'forty' in $convert with no onError value: Did not consume whole string",
+        ),
+        failedTypeChange: undefined,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    "reports the user's update failing, not a type change, for a filled --backfill",
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([{ name: 'Ada' }]);
+      const properties = { name: { bsonType: 'string' }, plan: { bsonType: 'int' } };
+      const missing = { $or: [{ plan: { $exists: false } }, { plan: null }] };
+
+      expect(
+        await failureOf(
+          dataTransform('User.plan', {
+            check: { source: () => rawAggregate('users', [{ $match: missing }, { $limit: 1 }]) },
+            run: () =>
+              rawUpdateMany(
+                'users',
+                missing,
+                [{ $set: { plan: { $convert: { input: '$name', to: 'int' } } } }],
+                { bypassDocumentValidation: true },
+              ),
+          }),
+          properties,
+        ),
+      ).toEqual({
+        message:
+          'Operation data_transform.User.plan failed: its update met a value MongoDB cannot convert',
+        why: conversionWhy(
+          "Failed to parse number 'Ada' in $convert with no onError value: Did not consume whole string",
+        ),
+        failedTypeChange: undefined,
       });
     },
     timeouts.spinUpMongoMemoryServer,

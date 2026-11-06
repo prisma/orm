@@ -371,10 +371,21 @@ function fieldStoredAt(
     : { kind: 'field', ...field, namespaceId: asNamespaceId(field.namespaceId) };
 }
 
+const MONGO_DUPLICATE_KEY = 11000;
+
+/** What a user can do about a MongoDB error that stopped a rewrite, when the error says. */
+function rewriteErrorFix(mongoCode: number, reason: string): string | undefined {
+  if (mongoCode !== MONGO_DUPLICATE_KEY) return undefined;
+  const index = /index: (\S+)/.exec(reason)?.[1];
+  const named = index === undefined ? 'a unique index' : `unique index ${JSON.stringify(index)}`;
+  return `The rewrite would give two documents the same value under ${named}. Change or remove the documents that would collide, then run the command again; operations that already ran are skipped.`;
+}
+
 /**
- * The failure when a planner rewrite fails after MongoDB began it: documents it reached may already
- * be rewritten. A cast that meets a value `$convert` cannot cast names the field, which the advice
- * reads to offer `--convert`.
+ * The failure when a rewrite fails after MongoDB began it: documents it reached may already be
+ * rewritten. A planner cast that meets a value `$convert` cannot cast names the field, which the
+ * advice reads to offer `--convert`. A data transform's update is the user's own, so its failure
+ * never names a type change.
  */
 function rewriteFailure(
   op: MongoDmlOperation,
@@ -385,32 +396,41 @@ function rewriteFailure(
   if (rewrite === undefined || typeof error !== 'object' || error === null) return undefined;
   const mongoCode: unknown = Reflect.get(error, 'code');
   if (typeof mongoCode !== 'number') return undefined;
+  const codeName: unknown = Reflect.get(error, 'codeName');
   const reason = mongoErrorText(error);
-  if (mongoCode !== MONGO_CONVERSION_FAILURE) {
-    return runnerFailure('MIGRATION.EXECUTION_FAILED', `Operation ${op.id} failed: ${reason}`, {
-      why: 'Documents the rewrite changed before the error stay changed, and a re-run rewrites the rest.',
-      meta: { operationId: op.id, mongoCode },
-    });
-  }
-  const field = fieldStoredAt(position.contract, rewrite.collection, rewrite.field);
-  const named =
-    field.kind === 'field' ? fieldStatementText(position.contract, field) : rewrite.field;
-  const { operationIndex } = position;
-  const cast = castFieldOf(op);
-  if (op.operationClass === 'data' || cast === undefined) {
+  const cast = op.operationClass === 'data' ? undefined : castFieldOf(op);
+  if (mongoCode === MONGO_CONVERSION_FAILURE && op.operationClass === 'data') {
     return runnerFailure(
       'MIGRATION.EXECUTION_FAILED',
-      `Operation ${op.id} failed: the conversion of field "${named}" met a value it cannot convert`,
+      `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
       {
-        why: `MongoDB stopped the conversion's update: ${reason}. Documents converted before that value stay converted, and a re-run converts the rest.`,
+        why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
+        meta: { operationId: op.id, mongoCode },
+      },
+    );
+  }
+  if (mongoCode !== MONGO_CONVERSION_FAILURE || cast === undefined) {
+    const named = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
+    const fix = rewriteErrorFix(mongoCode, reason);
+    return runnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      `Operation ${op.id} failed: MongoDB error ${named}: ${reason}`,
+      {
+        why: [
+          'Documents the rewrite changed before the error stay changed.',
+          ...(fix === undefined ? [] : [fix]),
+        ].join(' '),
         meta: {
           operationId: op.id,
           mongoCode,
-          failedTypeChange: { field, by: 'conversion', reason: 'value', operationIndex },
+          ...(typeof codeName === 'string' ? { codeName } : {}),
         },
       },
     );
   }
+  const field = fieldStoredAt(position.contract, rewrite.collection, rewrite.field);
+  const named =
+    field.kind === 'field' ? fieldStatementText(position.contract, field) : rewrite.field;
   return runnerFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
@@ -419,7 +439,12 @@ function rewriteFailure(
       meta: {
         operationId: op.id,
         mongoCode,
-        failedTypeChange: { field, by: 'cast', reason: 'value', operationIndex },
+        failedTypeChange: {
+          field,
+          by: 'cast',
+          reason: 'value',
+          operationIndex: position.operationIndex,
+        },
       },
     },
   );

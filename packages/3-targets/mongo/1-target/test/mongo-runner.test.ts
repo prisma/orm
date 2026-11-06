@@ -913,7 +913,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     });
   });
 
-  it('fails a rewrite that MongoDB stops partway, saying the database may have changed', async () => {
+  it('fails a rewrite that MongoDB stops partway on a duplicate key, naming the index to resolve', async () => {
     const harness = makeHarness();
     harness.driver.queueResponse([{ _id: 1 }]);
     harness.driver.failUpdateManyWith(
@@ -921,7 +921,8 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
         ok: 0,
         code: 11000,
         codeName: 'DuplicateKey',
-        errmsg: 'Plan executor error during update :: caused by :: E11000 duplicate key error',
+        errmsg:
+          'Plan executor error during update :: caused by :: E11000 duplicate key error collection: app.users index: code_1 dup key: { code: 1 }',
       }),
     );
 
@@ -931,11 +932,43 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
 
     expect(failureFields(result.assertNotOk())).toEqual({
       code: 'MIGRATION.EXECUTION_FAILED',
-      message: 'Operation field.users.code.cast(int) failed: E11000 duplicate key error',
-      why: 'Documents the rewrite changed before the error stay changed, and a re-run rewrites the rest. The operations that ran before the failure stay applied.',
+      message:
+        'Operation field.users.code.cast(int) failed: MongoDB error 11000 (DuplicateKey): E11000 duplicate key error collection: app.users index: code_1 dup key: { code: 1 }',
+      why: 'Documents the rewrite changed before the error stay changed. The rewrite would give two documents the same value under unique index "code_1". Change or remove the documents that would collide, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.',
       meta: {
         operationId: 'field.users.code.cast(int)',
         mongoCode: 11000,
+        codeName: 'DuplicateKey',
+        databaseUnchanged: false,
+      },
+    });
+  });
+
+  it('fails a rewrite that MongoDB stops partway for another reason, without claiming a re-run finishes it', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.failUpdateManyWith(
+      new MongoServerError({
+        ok: 0,
+        code: 50,
+        codeName: 'MaxTimeMSExpired',
+        errmsg: 'operation exceeded time limit',
+      }),
+    );
+
+    const result = await execute(harness, [
+      castField('users', 'code', { from: ['string'], to: 'int' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message:
+        'Operation field.users.code.cast(int) failed: MongoDB error 50 (MaxTimeMSExpired): operation exceeded time limit',
+      why: 'Documents the rewrite changed before the error stay changed. The operations that ran before the failure stay applied.',
+      meta: {
+        operationId: 'field.users.code.cast(int)',
+        mongoCode: 50,
+        codeName: 'MaxTimeMSExpired',
         databaseUnchanged: false,
       },
     });
