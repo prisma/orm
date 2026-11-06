@@ -195,3 +195,75 @@ describe('MongoMigrationPlanner and runner - statements on variants', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationPlanner and runner - a renamed discriminator', () => {
+  const validator = (discriminator: string) => ({
+    bsonType: 'object',
+    required: ['_id', discriminator],
+    properties: { _id: { bsonType: 'objectId' }, [discriminator]: { bsonType: 'string' } },
+    oneOf: ['bug', 'feature'].map((value) => ({
+      properties: { _id: { bsonType: 'objectId' }, [discriminator]: { enum: [value] } },
+      required: [discriminator],
+      additionalProperties: false,
+    })),
+  });
+  const withDiscriminator = (storageHash: string, discriminator: string) =>
+    contract(
+      storageHash,
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', discriminator],
+          variants: { Bug: 'bug', Feature: 'feature' },
+          discriminator,
+        },
+        Bug: { collection: 'tasks', fields: [], base: 'Task' },
+        Feature: { collection: 'tasks', fields: [], base: 'Task' },
+      },
+      {
+        tasks: new MongoCollection({
+          validator: {
+            jsonSchema: validator(discriminator),
+            validationLevel: 'strict',
+            validationAction: 'error',
+          },
+        }),
+      },
+    );
+
+  it(
+    'renames it in documents that hold only the discriminator, and a further plan is empty',
+    async () => {
+      await live.db().createCollection('tasks', {
+        validator: { $jsonSchema: validator('type') },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+      await live
+        .db()
+        .collection('tasks')
+        .insertMany([{ type: 'bug' }, { type: 'feature' }]);
+      const to = withDiscriminator('to', 'kind');
+
+      const { result } = await live.planAndRun(withDiscriminator('from', 'type'), to, [
+        {
+          kind: 'rename',
+          entity: 'field',
+          from: { namespaceId: NS, model: 'Task', field: 'type' },
+          to: { namespaceId: NS, model: 'Task', field: 'kind' },
+        },
+      ]);
+
+      expect({
+        failure: result.ok ? undefined : result.failure.message,
+        tasks: await live.documents('tasks'),
+        further: await live.furtherPlanLabels(to),
+      }).toEqual({
+        failure: undefined,
+        tasks: [{ kind: 'bug' }, { kind: 'feature' }],
+        further: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

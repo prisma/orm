@@ -47,6 +47,8 @@ export interface ModelSpec {
   /** The codec of each field that is not a string. */
   readonly codecs?: Readonly<Record<string, string>>;
   readonly variants?: Readonly<Record<string, string>>;
+  /** The discriminator field of a model with variants; `type` when left out. */
+  readonly discriminator?: string;
 }
 
 export function contract(
@@ -90,7 +92,7 @@ export function contract(
                 ...(spec.variants === undefined
                   ? {}
                   : {
-                      discriminator: { field: 'type' },
+                      discriminator: { field: spec.discriminator ?? 'type' },
                       variants: Object.fromEntries(
                         Object.entries(spec.variants).map(([variant, value]) => [
                           value,

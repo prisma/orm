@@ -54,6 +54,7 @@ import {
   type CollectionControl,
   collectionControlOf,
   collectionOf,
+  type DocumentCheckFields,
   type FieldRemoval,
   keepCollectionByHandAdvice,
   type ModelMatchInput,
@@ -461,19 +462,33 @@ function isDocument(value: unknown): value is Readonly<Record<string, unknown>> 
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function rewrittenFieldsOf(
+function documentChecksOf(
   rewrites: readonly PlannedRewrite[],
   fieldRenames: readonly RenameFieldCall[],
-): ReadonlyMap<string, readonly string[]> {
-  const fields = new Map<string, Set<string>>();
-  const add = (collection: string, field: string) =>
-    fields.set(collection, (fields.get(collection) ?? new Set()).add(field));
-  for (const rewrite of rewrites) add(rewrite.collection, rewrite.field);
-  for (const rename of fieldRenames) {
-    add(rename.collection, rename.from);
-    add(rename.collection, rename.to);
-  }
-  return new Map([...fields].map(([collection, names]) => [collection, [...names].sort()]));
+): ReadonlyMap<string, DocumentCheckFields> {
+  const collections = new Set([
+    ...rewrites.map(({ collection }) => collection),
+    ...fieldRenames.map(({ collection }) => collection),
+  ]);
+  return new Map(
+    [...collections].map((collection) => [
+      collection,
+      {
+        rewrittenFields: [
+          ...new Set(
+            rewrites
+              .filter((rewrite) => rewrite.collection === collection)
+              .map(({ field }) => field),
+          ),
+        ].sort(),
+        renamedFields: Object.fromEntries(
+          fieldRenames
+            .filter((rename) => rename.collection === collection)
+            .map((rename) => [rename.from, rename.to]),
+        ),
+      },
+    ]),
+  );
 }
 
 function rewriteCollection(call: StatementCalls['rewrites'][number]): string {
@@ -502,9 +517,19 @@ function withDocumentChecks(
         op.meta?.checkDocuments === true,
     );
     const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
-    const rewrittenFields = statementCalls.rewrittenFields.get(collection) ?? [];
-    if (!isDocument(validator) || rewrittenFields.length === 0) return [call];
-    return [new CheckDocumentsCall({ collection, validator, rewrittenFields }), call];
+    const fields = statementCalls.documentChecks.get(collection);
+    if (!isDocument(validator) || fields === undefined) return [call];
+    return [
+      new CheckDocumentsCall({
+        collection,
+        validator,
+        rewrittenFields: fields.rewrittenFields,
+        ...(Object.keys(fields.renamedFields).length === 0
+          ? {}
+          : { renamedFields: fields.renamedFields }),
+      }),
+      call,
+    ];
   });
 }
 
@@ -793,7 +818,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
         ],
-        rewrittenFields: rewrittenFieldsOf(rewrites, fieldRenames),
+        documentChecks: documentChecksOf(rewrites, fieldRenames),
       },
     });
     if (result.kind === 'failure') return result;

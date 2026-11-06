@@ -213,6 +213,14 @@ function storedField(
  * the origin with each renamed collection under its new name, so the diff does not drop and
  * create it again.
  */
+/** The fields of a collection the plan's rewrites change, as the check before them leaves them out. */
+export interface DocumentCheckFields {
+  /** The stored names whose values the rewrites change, removed ones included. */
+  readonly rewrittenFields: readonly string[];
+  /** Each renamed field's old stored name, with its new one. */
+  readonly renamedFields: Readonly<Record<string, string>>;
+}
+
 export interface StatementCalls {
   readonly schema: MongoSchemaIR;
   /** Run first. */
@@ -225,8 +233,8 @@ export interface StatementCalls {
     | FillFieldCall
     | UnsetFieldCall
   )[];
-  /** For each collection, the stored names its rewrites change, a renamed field's old and new name both. */
-  readonly rewrittenFields: ReadonlyMap<string, readonly string[]>;
+  /** For each collection, the fields its rewrites change and the fields they rename. */
+  readonly documentChecks: ReadonlyMap<string, DocumentCheckFields>;
 }
 
 export interface StatementPlan {

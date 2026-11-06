@@ -91,6 +91,46 @@ describe('checkDocuments', () => {
   });
 });
 
+describe('checkDocuments with a renamed field', () => {
+  it("allows the old name with the new name's schema, and drops a required list left empty", () => {
+    const op = checkDocuments({
+      collection: 'tasks',
+      validator: {
+        bsonType: 'object',
+        required: ['_id', 'kind'],
+        oneOf: [
+          {
+            properties: { kind: { enum: ['bug'] } },
+            required: ['kind'],
+            additionalProperties: false,
+          },
+        ],
+      },
+      rewrittenFields: [],
+      renamedFields: { type: 'kind' },
+    });
+
+    expect(matchedValidator(op)).toEqual({
+      $match: {
+        $nor: [
+          {
+            $jsonSchema: {
+              bsonType: 'object',
+              required: ['_id'],
+              oneOf: [
+                {
+                  properties: { kind: { enum: ['bug'] }, type: { enum: ['bug'] } },
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+  });
+});
+
 describe('CheckDocumentsCall', () => {
   it('renders the call migration.ts writes, and lowers to checkDocuments', () => {
     const options = {

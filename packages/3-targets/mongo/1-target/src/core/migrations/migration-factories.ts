@@ -863,24 +863,43 @@ function isSchemaNode(value: unknown): value is Readonly<Record<string, unknown>
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface RelaxedFields {
+  readonly rewritten: readonly string[];
+  readonly renamed: Readonly<Record<string, string>>;
+}
+
 /**
- * `schema` with each of `fields` optional and allowed to hold any value, at the top of the document
- * and in each root model and variant branch.
+ * `schema` at the top of the document and in each root model and variant branch, with each rewritten
+ * field optional and allowed to hold any value, and each renamed field optional under its new name and
+ * allowed under its old name with the new name's schema, so that a discriminator's `enum` still
+ * selects one branch under either name. MongoDB refuses an empty `required`, so one left empty is
+ * dropped.
  */
 function relaxedSchema(
   schema: Readonly<Record<string, unknown>>,
-  fields: readonly string[],
+  fields: RelaxedFields,
 ): Record<string, unknown> {
-  const relaxed: Record<string, unknown> = { ...schema };
-  const required = schema['required'];
+  const { required, properties, ...rest } = schema;
+  const relaxed: Record<string, unknown> = { ...rest };
+  const renamedTo = new Set(Object.values(fields.renamed));
   if (Array.isArray(required)) {
-    relaxed['required'] = required.filter((field) => !fields.includes(field));
+    const stillRequired = required.filter(
+      (field) => !fields.rewritten.includes(field) && !renamedTo.has(field),
+    );
+    if (stillRequired.length > 0) relaxed['required'] = stillRequired;
   }
-  const properties = schema['properties'];
   if (isSchemaNode(properties) || schema['additionalProperties'] === false) {
-    relaxed['properties'] = {
+    const declared: Record<string, unknown> = {
       ...(isSchemaNode(properties) ? properties : {}),
-      ...Object.fromEntries(fields.map((field) => [field, {}])),
+      ...Object.fromEntries(fields.rewritten.map((field) => [field, {}])),
+    };
+    relaxed['properties'] = {
+      ...declared,
+      ...Object.fromEntries(
+        Object.entries(fields.renamed).flatMap(([from, to]) =>
+          Object.hasOwn(declared, to) ? [[from, declared[to]]] : [],
+        ),
+      ),
     };
   }
   for (const branches of ['anyOf', 'oneOf']) {
@@ -898,8 +917,10 @@ export interface CheckDocumentsOptions {
   readonly collection: string;
   /** The `$jsonSchema` of the validator the plan sets on the collection. */
   readonly validator: Readonly<Record<string, unknown>>;
-  /** The stored names the plan's rewrites change on the collection, a renamed field's old and new name both. */
+  /** The stored names whose values the plan's rewrites change on the collection, removed ones included. */
   readonly rewrittenFields: readonly string[];
+  /** Each field the plan renames on the collection: its old stored name, with its new one. */
+  readonly renamedFields?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -915,7 +936,10 @@ export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPl
     operationClass: 'widening',
     precheck: [
       documentsFitValidator(collection, {
-        $jsonSchema: relaxedSchema(options.validator, options.rewrittenFields),
+        $jsonSchema: relaxedSchema(options.validator, {
+          rewritten: options.rewrittenFields,
+          renamed: options.renamedFields ?? {},
+        }),
       }),
     ],
     execute: [],
