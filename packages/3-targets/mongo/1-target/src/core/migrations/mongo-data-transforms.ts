@@ -16,7 +16,12 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
-import { collectionOf, modelAt, variantFilter } from './mongo-statement-planning';
+import {
+  collectionOf,
+  modelAt,
+  noCollectionReason,
+  variantFilter,
+} from './mongo-statement-planning';
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';
 
@@ -170,6 +175,14 @@ export function backfillTransform(
     );
   }
   const collection = collectionOf(input.contract, statement.field);
+  if (collection === undefined) {
+    return refuse(
+      statement,
+      noCollectionReason(statement.field),
+      'Leave out this statement.',
+      contracts,
+    );
+  }
   if (input.schema.collection(collection) === undefined) {
     return refuse(
       statement,

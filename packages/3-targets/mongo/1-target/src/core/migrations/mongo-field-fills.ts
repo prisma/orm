@@ -115,7 +115,9 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
   return modelCoordinates(input.contract).flatMap((model) => {
     const definition = modelAt(input.contract, model);
     const collection = collectionOf(input.contract, model);
-    if (definition === undefined || typeof definition.storage['collection'] !== 'string') return [];
+    if (definition === undefined || collection === undefined || definition.owner !== undefined) {
+      return [];
+    }
     if (input.schema.collection(collection) === undefined) return [];
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
     return Object.entries(definition.fields)

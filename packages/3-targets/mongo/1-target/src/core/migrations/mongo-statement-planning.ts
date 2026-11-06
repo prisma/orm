@@ -22,6 +22,7 @@ import {
 import {
   collectionControlPoliciesOf,
   collectionControlPolicyOf,
+  collectionOfModel,
   collectionRootModelsOf,
   hasOwnFieldStoredAs,
   MongoCollection,
@@ -51,16 +52,17 @@ import {
 
 type Document = Record<string, unknown>;
 
-/** The collection a model stores its documents in; a model without `@@map` names it verbatim. */
+/** The collection of the model at `coordinate`: its own, its base's or its owner's. */
 export function collectionOf(
-  contract: ContractWithDomain | null,
+  contract: ContractWithDomain,
   coordinate: ModelCoordinate,
-): string {
-  const collection =
-    contract?.domain.namespaces[coordinate.namespaceId]?.models[coordinate.model]?.storage[
-      'collection'
-    ];
-  return typeof collection === 'string' ? collection : coordinate.model;
+): string | undefined {
+  return collectionOfModel(contract.domain, coordinate);
+}
+
+/** Why a statement on `model` cannot be planned when no collection holds its documents. */
+export function noCollectionReason(model: ModelCoordinate): string {
+  return `model "${modelDisplayName(model)}" names no collection, and neither does a base or an owner`;
 }
 
 export function modelAt(
@@ -518,6 +520,17 @@ function planModelStatement(
   }
   const from = collectionOf(input.fromContract, statement.from);
   const to = collectionOf(input.contract, statement.to);
+  if (from === undefined || to === undefined) {
+    return {
+      kind: 'refused',
+      conflict: refused(
+        statement,
+        label,
+        noCollectionReason(from === undefined ? statement.from : statement.to),
+        `A statement renames the documents of a model in its collection. Give the model a collection, then run this command again, or ${LEAVE_OUT.toLowerCase()}`,
+      ),
+    };
+  }
   if (from === to) return { kind: 'unchanged' };
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, to);
   if (policyRefusal !== undefined) return policyRefusal;
@@ -587,8 +600,14 @@ function planFieldStatement(
   const fromStored = resolvedStoredNameAt(input.fromContract, statement.from);
   const toStored = resolvedStoredNameAt(input.contract, statement.to);
   const originCollection = collectionOf(input.fromContract, statement.from);
-  const collection = renamedCollections.get(originCollection) ?? originCollection;
   const destinationCollection = collectionOf(input.contract, statement.to);
+  if (originCollection === undefined || destinationCollection === undefined) {
+    return refuse(
+      noCollectionReason(originCollection === undefined ? statement.from : statement.to),
+      `A statement renames a field in the documents of its model's collection. ${LEAVE_OUT}`,
+    );
+  }
+  const collection = renamedCollections.get(originCollection) ?? originCollection;
   if (fromStored === toStored && collection === destinationCollection) {
     return { kind: 'unchanged' };
   }
@@ -713,7 +732,9 @@ export function destinationModelOf(
   );
   if (renamed !== undefined) return renamed.to;
   if (modelAt(input.contract, origin) !== undefined) return origin;
-  const collection = input.collectionAfterRenames(collectionOf(input.fromContract, origin));
+  const originCollection = collectionOf(input.fromContract, origin);
+  if (originCollection === undefined) return undefined;
+  const collection = input.collectionAfterRenames(originCollection);
   const filter = JSON.stringify(variantFilter(input.fromContract, origin) ?? null);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
@@ -799,7 +820,9 @@ function rootDocumentsLosing(
  */
 export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemoval[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
-    const collection = input.collectionAfterRenames(collectionOf(input.fromContract, origin));
+    const originCollection = collectionOf(input.fromContract, origin);
+    if (originCollection === undefined) return [];
+    const collection = input.collectionAfterRenames(originCollection);
     if (!input.keptCollections.has(collection)) return [];
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
     const destination = destinationModelOf(origin, input);

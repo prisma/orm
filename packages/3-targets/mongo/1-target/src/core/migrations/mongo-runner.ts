@@ -32,8 +32,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import {
   canonicalize,
   type MongoContract,
-  mongoModelsOf,
-  ownStoredNamesOf,
+  modelFieldStoredAs,
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
@@ -66,7 +65,6 @@ import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-t
 import { FilterEvaluator } from './filter-evaluator';
 import { castFieldOf } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
-import { collectionOf } from './mongo-statement-planning';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -395,18 +393,10 @@ function fieldStoredAt(
   collection: string,
   storedName: string,
 ): MigrationSubject {
-  for (const namespaceId of Object.keys(contract.domain?.namespaces ?? {})) {
-    const models = mongoModelsOf(contract.domain, asNamespaceId(namespaceId));
-    for (const [model, definition] of Object.entries(models)) {
-      const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-      if (collectionOf(contract, coordinate) !== collection) continue;
-      const field = Object.entries(ownStoredNamesOf(definition)).find(
-        ([, stored]) => stored === storedName,
-      )?.[0];
-      if (field !== undefined) return { kind: 'field', ...coordinate, field };
-    }
-  }
-  return { kind: 'storage', name: `${collection}.${storedName}` };
+  const field = modelFieldStoredAs(contract.domain, collection, storedName);
+  return field === undefined
+    ? { kind: 'storage', name: `${collection}.${storedName}` }
+    : { kind: 'field', ...field, namespaceId: asNamespaceId(field.namespaceId) };
 }
 
 /**

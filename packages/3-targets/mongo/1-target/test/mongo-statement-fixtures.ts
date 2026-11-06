@@ -35,7 +35,8 @@ export interface FieldTypeSpec {
 }
 
 export interface ModelSpec {
-  readonly collection: string;
+  /** Left out for a model whose documents live in another model's collection, or in none. */
+  readonly collection?: string;
   readonly fields: readonly string[];
   readonly types?: Readonly<Record<string, FieldTypeSpec>>;
   /** The stored name of each field stored under a name other than its own. */
@@ -144,7 +145,7 @@ export function contract(
                   ]),
                 ]),
                 storage: {
-                  collection: spec.collection,
+                  ...(spec.collection === undefined ? {} : { collection: spec.collection }),
                   fields: Object.fromEntries(
                     spec.fields.map((field) => [field, { field: spec.storedAs?.[field] ?? field }]),
                   ),

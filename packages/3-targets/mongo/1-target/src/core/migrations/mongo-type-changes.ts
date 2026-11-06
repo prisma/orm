@@ -147,13 +147,13 @@ function renamedFieldOf(input: FieldRemovalInput, field: FieldCoordinate): strin
 export function planFieldTypeChanges(input: FieldRemovalInput): readonly TypeChange[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
     const model = modelAt(input.fromContract, origin);
-    if (model === undefined || typeof model.storage['collection'] !== 'string') return [];
+    if (model === undefined || model.owner !== undefined) return [];
     const destination = destinationModelOf(origin, input);
     const destinationModel =
       destination === undefined ? undefined : modelAt(input.contract, destination);
     if (destination === undefined || destinationModel === undefined) return [];
     const collection = collectionOf(input.contract, destination);
-    if (!input.keptCollections.has(collection)) return [];
+    if (collection === undefined || !input.keptCollections.has(collection)) return [];
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
     return Object.keys(model.fields)
       .sort()
