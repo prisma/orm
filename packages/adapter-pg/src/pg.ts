@@ -98,7 +98,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
     const { sql, args } = query
     const values = args.map((arg, i) => mapArg(arg, query.argTypes[i]))
 
@@ -132,6 +132,9 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  private queryQueue: Promise<unknown> = Promise.resolve()
+  private closing = false
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -141,9 +144,24 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     super(client, pgOptions)
   }
 
+  protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    if (this.closing) {
+      throw new DriverAdapterError({ kind: 'TransactionAlreadyClosed', cause: 'Transaction is closing' })
+    }
+    const execute = () => super.performIO(query)
+    const result = this.queryQueue.then(execute, execute)
+    this.queryQueue = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
+    this.closing = true
+    await this.queryQueue
     this.cleanup?.()
     this.client.release()
   }
@@ -151,6 +169,8 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
+    this.closing = true
+    await this.queryQueue
     this.cleanup?.()
     this.client.release()
   }
