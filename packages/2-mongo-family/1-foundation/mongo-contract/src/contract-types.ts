@@ -118,6 +118,11 @@ export type ExtractMongoCodecTypes<T> =
       : Record<string, never>
     : Record<string, never>;
 
+/** The type a codec accepts as a value: its `input` type, or `unknown` when the codec types do not declare one. */
+export type MongoCodecInput<CT, Id extends keyof CT> = CT[Id] extends { readonly input: infer I }
+  ? I
+  : unknown;
+
 export type ExtractMongoFieldOutputTypes<T> =
   ExtractMongoTypeMaps<T> extends { fieldOutputTypes: infer F }
     ? F extends Record<string, Record<string, unknown>>

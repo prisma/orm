@@ -32,6 +32,7 @@ export type {
   ExtractMongoFieldOutputTypes,
   ExtractMongoTypeMaps,
   InferModelRow,
+  MongoCodecInput,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoIndexAuthoringInput,
