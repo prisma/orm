@@ -109,7 +109,7 @@ The second handle has both methods because a MongoDB update or delete plan suppo
 
 Handles type `target` as `MongoQueryExecutor { query(plan); execute(plan) }`, which `@internal/mongo-query-ast/execution` declares beside `MongoQueryPlan`. SQL types its target the same way, as `RuntimeScope`. `MongoRuntime` extends it. At run time the handle looks for an internal bridge symbol on the target; `MongoRuntimeImpl` installs it, and no public entry point exports it. A target without it throws an invariant error: `'MongoQueryExecutor is missing the prepared statement query bridge'` (or `execute bridge`).
 
-MongoDB has no connections or transactions, so its only target is the runtime. The `mongo()` client is not a target: `db.query` is the query builder, so the client has no `query(plan)`.
+The MongoDB runtime has no connections or transactions to run a handle on, so its only target is the runtime. The `mongo()` client is not a target: `db.query` is the query builder, so the client has no `query(plan)`.
 
 ## Declaration types
 

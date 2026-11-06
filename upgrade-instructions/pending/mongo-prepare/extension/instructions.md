@@ -7,7 +7,6 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - ':\s{0,20}(?:MongoRuntime|MongoClient<[^<>]{0,200}>)\s{0,20}=\s{0,20}\{'
-        - '\bas\s{1,20}(?:unknown\s{1,20}as\s{1,20})?MongoRuntime\b'
         - '\bimplements\s{1,20}MongoRuntime\b'
   - id: mongo-limit-skip-take-placeholders
     summary: |
