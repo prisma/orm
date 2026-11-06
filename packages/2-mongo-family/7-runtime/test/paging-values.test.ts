@@ -40,6 +40,25 @@ const positions: ReadonlyArray<
 ];
 
 describe('assertPagingValues', () => {
+  it('names the stage and the parameter in the refusal', () => {
+    expect(() => assertPagingValues(aggregate({ $skip: bad() }))).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: "skip must be a non-negative integer; parameter 'take' holds -1",
+        meta: { stage: 'skip', name: 'take' },
+      }),
+    );
+  });
+
+  it('names the stage alone for a value with no parameter name', () => {
+    expect(() => assertPagingValues(aggregate({ $limit: new MongoParamRef(-2) }))).toThrow(
+      expect.objectContaining({
+        message: 'limit must be a non-negative integer; the value is -2',
+        meta: { stage: 'limit' },
+      }),
+    );
+  });
+
   it.each(positions)('refuses a negative value in %s', (_label, stage) => {
     expect(() => assertPagingValues(aggregate(stage(bad())))).toThrow(
       expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }),

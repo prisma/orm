@@ -1,17 +1,26 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { MongoLoweredDraft } from '@internal/mongo-lowering';
 import { MongoParamRef } from '@internal/mongo-value';
+import { ifDefined } from '@internal/utils/defined';
 import { ormError } from '../orm-errors';
+
+function describeValue(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+}
 
 function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void {
   if (!(value instanceof MongoParamRef)) return;
   const n = value.value;
-  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
-    throw ormError(
-      'ORM.ARGUMENT_INVALID',
-      `${stageName === '$limit' ? 'limit' : 'skip'} must be a non-negative integer`,
-    );
-  }
+  if (typeof n === 'number' && Number.isInteger(n) && n >= 0) return;
+  const stage = stageName === '$limit' ? 'limit' : 'skip';
+  const holder =
+    value.name === undefined
+      ? `the value is ${describeValue(n)}`
+      : `parameter '${value.name}' holds ${describeValue(n)}`;
+  throw ormError('ORM.ARGUMENT_INVALID', `${stage} must be a non-negative integer; ${holder}`, {
+    stage,
+    ...ifDefined('name', value.name),
+  });
 }
 
 function subPipelines(stageName: string, body: unknown): ReadonlyArray<unknown> {
