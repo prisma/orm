@@ -1253,7 +1253,7 @@ A codec descriptor handed to a target codec-descriptor registry (Postgres, SQLit
 
 ### RUNTIME.CODEC_DESCRIPTOR_MISSING
 
-A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, also when `mongoOrm()` builds the accessors it checks written enum values against), or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
+A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, also when `mongoOrm()` builds the accessors it checks written enum values against), or lazily when the AST codec resolver materializes a codec at query time. On MongoDB, `prepare` also raises it, before calling the callback, for a declaration that names a codec id the runtime has no codec for. Payload: `codecId`; on the column path also `table`, `column`.
 
 ### RUNTIME.CODEC_MISSING
 
@@ -1418,15 +1418,19 @@ The Postgres SQL renderer reached lowering with a ParamRef that carries no bound
 
 ### RUNTIME.PREPARE_BIND_ON_ADHOC
 
-An AST containing a prepared-statement bind-site reference (`PreparedParamRef`) was submitted to the ad-hoc `execute()` path. Bind-site references are only valid inside `runtime.prepare(...)`. Payload: `name`.
+A plan holding a prepared-statement placeholder was run without `prepare`: on SQL, an AST containing a bind-site reference (`PreparedParamRef`) submitted to the ad-hoc `query()` or `execute()` path; on MongoDB, a plan holding a `MongoPreparedParamRef` run through `runtime.query()` or `runtime.execute()`. Placeholders are only valid inside `prepare(...)`. Payload: `name`.
 
 ### RUNTIME.PREPARE_MISSING_PARAM
 
-Executing a prepared statement without supplying a value for one of its declared parameters: the lookup fails rather than silently binding `undefined`. Payload: `name`.
+Running a prepared statement without supplying a value for one of its declared parameters: the lookup fails rather than silently binding `undefined`. Raised on SQL and MongoDB. Also raised, with no payload, when the params argument is not an object, because no single name is missing. On MongoDB the check runs before the statement activity starts. Payload: `name`.
+
+### RUNTIME.PREPARE_RAW_PLACEHOLDER
+
+On MongoDB, `prepare(declaration, callback)` found a placeholder in a raw command. Raw commands are sent to the driver as written, so they cannot take prepared parameters; use the query builder for a prepared statement, or put the value into the raw command directly. Payload: `name`.
 
 ### RUNTIME.PREPARE_UNUSED_PARAM
 
-`runtime.prepare(declaration, callback)` found declared parameter names that the callback's plan never references. Remove the unused declarations or reference them in the plan. Payload: `unused`.
+`prepare(declaration, callback)` found declared parameter names that the callback's plan never references, on SQL or MongoDB. Remove the unused declarations or reference them in the plan. Payload: `unused`.
 
 ### RUNTIME.RAW_ROW_COLUMN_MISSING
 
