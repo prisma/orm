@@ -490,6 +490,20 @@ function planModelStatement(
   schema: MongoSchemaIR,
   input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementOutcome {
+  const embedded =
+    embeddedModelReason(input.fromContract, statement.from) ??
+    embeddedModelReason(input.contract, statement.to);
+  if (embedded !== undefined) {
+    return {
+      kind: 'refused',
+      conflict: refused(
+        statement,
+        label,
+        embedded,
+        `Embedded models are not renamed in this release. ${LEAVE_OUT}`,
+      ),
+    };
+  }
   const discriminatorChange = discriminatorValueChange(statement, input);
   if (discriminatorChange !== undefined) {
     return { kind: 'refused', conflict: refused(statement, label, ...discriminatorChange) };

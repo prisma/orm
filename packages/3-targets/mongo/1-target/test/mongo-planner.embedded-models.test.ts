@@ -9,6 +9,7 @@ import {
   plan,
   refusal,
   renameField,
+  renameModel,
   schemaCollection,
 } from './mongo-statement-fixtures';
 
@@ -178,6 +179,41 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           why,
         },
       ],
+    ]);
+  });
+
+  it('refuses a rename of the embedded model', () => {
+    const named = (seed: string, embedded: string) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'email'],
+            types: { _id: OBJECT_ID, email: STRING },
+            embeds: { addresses: 'addresses' },
+          },
+          [embedded]: { owner: 'User', fields: ['street'], types: { street: STRING } },
+        },
+        { users: {} },
+      );
+
+    expect(
+      refusal(
+        plan({
+          from: named('from', 'Address'),
+          to: named('to', 'Location'),
+          schema: live,
+          statements: [renameModel('Address', 'Location')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename model "Address" to "Location": model "Address" is embedded in the documents of model "User"',
+        why: 'Embedded models are not renamed in this release. Leave out this statement.',
+      },
     ]);
   });
 });
