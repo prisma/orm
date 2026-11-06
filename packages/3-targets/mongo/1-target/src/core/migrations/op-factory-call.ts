@@ -49,6 +49,8 @@ import {
   createIndex,
   dropCollection,
   dropIndex,
+  type FillFieldOptions,
+  fillField,
   renameCollection,
   renameField,
   unsetField,
@@ -370,6 +372,28 @@ export class DataTransformCall extends OpFactoryCallNode {
   }
 }
 
+export class FillFieldCall extends OpFactoryCallNode {
+  readonly factoryName = 'fillField' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: FillFieldOptions;
+  readonly label: string;
+
+  constructor(options: FillFieldOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return fillField(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `fillField(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -409,6 +433,7 @@ export type OpFactoryCall =
   | UnsetFieldCall
   | CastFieldCall
   | DataTransformCall
+  | FillFieldCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): CreateIndexOptions {

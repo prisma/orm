@@ -373,6 +373,31 @@ describe('migration file E2E', () => {
       );
     });
 
+    it('reproduces a fillField with a typed value and a filter', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { FillFieldCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const call = new FillFieldCall({
+        collection: 'tasks',
+        field: 'severity',
+        value: { $toLong: 0 },
+        filter: { type: 'bug' },
+      });
+
+      const tsSource = renderCallsToTypeScript([call], defaultMeta);
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        tsSource.replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(serializeMongoOps([call.toOp()])),
+      );
+    });
+
     it('reproduces the renameCollection operation in ops.json', async () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { RenameCollectionCall } = await import('../src/core/migrations/op-factory-call');

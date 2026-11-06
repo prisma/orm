@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import { fieldRewriteOf } from '@internal/family-mongo/control';
 import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-contract';
 import type {
@@ -397,6 +398,46 @@ export function castField(
           collectionName,
           new RawAggregateCommand(collectionName, [{ $match: toCast }, { $limit: 1 }]),
         ),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
+  };
+}
+
+export interface FillFieldOptions {
+  readonly collection: string;
+  readonly field: string;
+  /** An aggregation expression for the value, so it is stored with its BSON type: `{ $toLong: 0 }` stores a long. */
+  readonly value: JsonValue;
+  readonly filter?: Document;
+}
+
+/**
+ * Sets a field to `value` in the documents where it is missing or `null`, skipping document
+ * validation, as a migration fills a new required field with a temporary value.
+ */
+export function fillField(options: FillFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, value, filter } = options;
+  assertRewritableField(collectionName, field);
+  const id = `field.${collectionName}.${field}.fill${idSuffix(filter)}`;
+  const unfilled = { [field]: null };
+  const toFill = filter === undefined ? unfilled : { $and: [filter, unfilled] };
+  return {
+    id,
+    label: `Fill field ${field} in collection ${collectionName} where it is missing or null${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      rawUpdateMany(collectionName, toFill, [{ $set: { [field]: value } }], {
+        bypassDocumentValidation: true,
+      }),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} has ${field} missing or null`,
+        source: rawAggregate(collectionName, [{ $match: toFill }, { $limit: 1 }]),
         filter: MATCH_ALL_FILTER,
         expect: 'notExists',
       },
