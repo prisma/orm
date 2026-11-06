@@ -25,8 +25,7 @@ export class GenericArgsInfo {
     return this._cache.getOrCreate(topLevelType, () => {
       const toVisit: ToVisitItem[] = [{ type: topLevelType }]
       const visited = new Set<DMMF.InputType>()
-      let item: ToVisitItem | undefined
-      while ((item = toVisit.shift())) {
+      for (const item of toVisit) {
         const { type: currentType } = item
         const cached = this._cache.get(currentType)
         if (cached === true) {
