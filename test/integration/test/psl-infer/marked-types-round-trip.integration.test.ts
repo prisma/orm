@@ -57,7 +57,7 @@ const AUTHORED_TYPES = [
   'NumericString',
   'NumericString(10)',
   'NumericString(10, 2)',
-  'Json',
+  'PlainJson',
   'Jsonb',
   'Bytes',
   'Int2',
