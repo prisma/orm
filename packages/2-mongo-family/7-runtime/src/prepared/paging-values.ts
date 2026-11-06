@@ -4,22 +4,15 @@ import { MongoParamRef } from '@internal/mongo-value';
 import { ifDefined } from '@internal/utils/defined';
 import { ormError } from '../orm-errors';
 
-function describeValue(value: unknown): string {
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
-}
-
 function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void {
   if (!(value instanceof MongoParamRef)) return;
   const n = value.value;
   const stage = stageName === '$limit' ? 'limit' : 'skip';
   const lowest = stage === 'limit' ? 1 : 0;
   if (typeof n === 'number' && Number.isInteger(n) && n >= lowest) return;
-  const holder =
-    value.name === undefined
-      ? `the value is ${describeValue(n)}`
-      : `parameter '${value.name}' holds ${describeValue(n)}`;
   const rule = stage === 'limit' ? 'a positive integer' : 'a non-negative integer';
-  throw ormError('ORM.ARGUMENT_INVALID', `${stage} must be ${rule}; ${holder}`, {
+  const source = value.name === undefined ? '' : `, and parameter '${value.name}' is not`;
+  throw ormError('ORM.ARGUMENT_INVALID', `${stage} must be ${rule}${source}`, {
     stage,
     ...ifDefined('name', value.name),
   });

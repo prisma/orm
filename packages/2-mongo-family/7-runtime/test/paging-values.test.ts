@@ -44,7 +44,7 @@ describe('assertPagingValues', () => {
     expect(() => assertPagingValues(aggregate({ $skip: bad() }))).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
-        message: "skip must be a non-negative integer; parameter 'take' holds -1",
+        message: "skip must be a non-negative integer, and parameter 'take' is not",
         meta: { stage: 'skip', name: 'take' },
       }),
     );
@@ -53,7 +53,7 @@ describe('assertPagingValues', () => {
   it('names the stage alone for a value with no parameter name', () => {
     expect(() => assertPagingValues(aggregate({ $limit: new MongoParamRef(-2) }))).toThrow(
       expect.objectContaining({
-        message: 'limit must be a positive integer; the value is -2',
+        message: 'limit must be a positive integer',
         meta: { stage: 'limit' },
       }),
     );
@@ -69,11 +69,18 @@ describe('assertPagingValues', () => {
     expect(() => assertPagingValues(aggregate(stage(good())))).not.toThrow();
   });
 
+  it('leaves the refused value out of the message', () => {
+    const secret = new MongoParamRef('s3cret-token', { name: 'take', codecId: 'mongo/string@1' });
+    expect(() => assertPagingValues(aggregate({ $limit: secret }))).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining('s3cret-token') }),
+    );
+  });
+
   it('refuses a limit of zero and accepts a skip of zero', () => {
     const zero = () => new MongoParamRef(0, { name: 'n', codecId: 'mongo/int32@1' });
     expect(() => assertPagingValues(aggregate({ $limit: zero() }))).toThrow(
       expect.objectContaining({
-        message: "limit must be a positive integer; parameter 'n' holds 0",
+        message: "limit must be a positive integer, and parameter 'n' is not",
         meta: { stage: 'limit', name: 'n' },
       }),
     );
