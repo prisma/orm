@@ -82,7 +82,7 @@ const varbit = {
 } as const;
 
 /**
- * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316). `Json` keeps its name until the `Json` convenience type is decided.
+ * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316).
  */
 export const postgresExplicitTypes = {
   Int2: { ...int2, inferred: true },
@@ -140,10 +140,10 @@ export const postgresExplicitTypes = {
     documentation: 'Binary data stored as PostgreSQL bytea and represented as a Uint8Array.',
     output: { codecId: 'pg/bytea@1' },
   },
-  Json: {
+  PlainJson: {
     kind: 'typeConstructor',
     inferred: true,
-    documentation: 'A JSON value stored as PostgreSQL json.',
+    documentation: 'A JSON value stored as plain PostgreSQL json, not jsonb.',
     output: { codecId: 'pg/json@1' },
   },
   Jsonb: {
@@ -594,6 +594,23 @@ export const postgresConvenienceScalarTypes = {
       },
     ],
     choices: [{ when: { storage: 'bytea' }, type: 'Bytea' }],
+  },
+  Json: {
+    kind: 'typeChoice',
+    documentation: 'A JSON value. `storage` is jsonb or json.',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['jsonb', 'json'],
+        default: 'jsonb',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { storage: 'jsonb' }, type: 'Jsonb' },
+      { when: { storage: 'json' }, type: 'PlainJson' },
+    ],
   },
 } as const satisfies AuthoringTypeNamespace;
 

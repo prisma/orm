@@ -322,16 +322,16 @@ export function intervalStringColumn(precision?: number): ColumnTypeDescriptor<
 }
 
 /**
- * Postgres `json` column descriptor — untyped raw JSON.
+ * Postgres plain `json` column descriptor, not `jsonb` — untyped raw JSON.
  *
  * For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` ships `arktypeJson(schema)` for arktype). The schema-accepting `json(schema)` / `jsonb(schema)` overloads previously shipped from this module retired in Phase C of the codec-registry-unification project — see spec § AC-7.
  */
-export const jsonColumn = {
+export const plainJsonColumn = {
   codecId: PG_JSON_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
 /**
- * Postgres `jsonb` column descriptor — untyped raw JSONB. Same retirement note as {@link jsonColumn}.
+ * Postgres `jsonb` column descriptor — untyped raw JSONB. Same retirement note as {@link plainJsonColumn}.
  */
 export const jsonbColumn = {
   codecId: PG_JSONB_CODEC_ID,

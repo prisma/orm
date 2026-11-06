@@ -19,6 +19,8 @@ test('each scalar convenience call has the type of the explicit type helper it c
     expectTypeOf(type.String({ storage: 'char', length: 3 })).toEqualTypeOf(type.Char(3));
     expectTypeOf(type.Boolean()).toEqualTypeOf(type.Bool());
     expectTypeOf(type.Bytes()).toEqualTypeOf(type.Bytea());
+    expectTypeOf(type.Json()).toEqualTypeOf(type.Jsonb());
+    expectTypeOf(type.Json({ storage: 'json' })).toEqualTypeOf(type.PlainJson());
     return { models: {} };
   });
 });

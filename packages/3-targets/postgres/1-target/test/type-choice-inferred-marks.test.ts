@@ -54,7 +54,7 @@ function markedFor(constructorName: string) {
   return { dataType, marked };
 }
 
-describe('the explicit type contract infer writes for an integer, decimal, float, text, boolean or binary column', () => {
+describe('the explicit type contract infer writes for an integer, decimal, float, text, boolean, binary or JSON column', () => {
   const expected = [
     ['pg/int2', 'Int2'],
     ['pg/int4', 'Int4'],
@@ -67,6 +67,8 @@ describe('the explicit type contract infer writes for an integer, decimal, float
     ['pg/char', 'Char'],
     ['pg/bool', 'Bool'],
     ['pg/bytea', 'Bytea'],
+    ['pg/json', 'PlainJson'],
+    ['pg/jsonb', 'Jsonb'],
   ] as const;
 
   it.each(expected)('for %s is %s, and no other type is marked', (dataType, constructorName) => {
