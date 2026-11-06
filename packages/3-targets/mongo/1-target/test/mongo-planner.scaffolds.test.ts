@@ -335,3 +335,53 @@ describe('MongoMigrationPlanner, a scaffold where a cast or fill would be refuse
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, a scaffold on a field the plan cannot rewrite', () => {
+  const stored = (
+    seed: string,
+    field: FieldTypeSpec,
+    options: { storedAs?: string; control?: 'external' },
+  ) =>
+    contract(
+      seed,
+      {
+        User: {
+          collection: 'users',
+          fields: ['_id', 'age'],
+          types: { _id: OBJECT_ID, age: field },
+          ...(options.storedAs === undefined ? {} : { storedAs: { age: options.storedAs } }),
+        },
+      },
+      { users: options.control === undefined ? {} : { control: options.control } },
+    );
+  const reasons = (
+    statement: 'convert' | 'backfill',
+    options: { storedAs?: string; control?: 'external' },
+  ) =>
+    refusal(
+      plan({
+        from: stored('from', statement === 'convert' ? STRING : OPTIONAL_STRING, options),
+        to: stored('to', statement === 'convert' ? INT : STRING, options),
+        schema: [schemaCollection('users')],
+        statements: [fieldStatement(statement, 'age')],
+      }),
+    ).map(({ summary }) => summary);
+
+  it('refuses a stored name MongoDB reads as a path, and a collection the plan does not manage, with the real reason', () => {
+    expect([
+      reasons('convert', { storedAs: 'a.b' }),
+      reasons('backfill', { storedAs: 'a.b' }),
+      reasons('convert', { control: 'external' }),
+      reasons('backfill', { control: 'external' }),
+    ]).toEqual([
+      [
+        'Cannot convert field "User.age": its stored name "a.b" cannot be rewritten: MongoDB reads a name containing "." as a path into embedded documents',
+      ],
+      [
+        'Cannot backfill field "User.age": its stored name "a.b" cannot be rewritten: MongoDB reads a name containing "." as a path into embedded documents',
+      ],
+      ['Cannot convert field "User.age": collection "users" has control policy "external"'],
+      ['Cannot backfill field "User.age": collection "users" has control policy "external"'],
+    ]);
+  });
+});

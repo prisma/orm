@@ -13,9 +13,14 @@ import {
   validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
+import {
+  documentsMissingOrNull,
+  documentsNotOfType,
+  unrewritableFieldNameReason,
+} from './migration-factories';
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
+  collectionControlPolicy,
   collectionOf,
   type ModelMatchInput,
   modelAt,
@@ -65,6 +70,23 @@ function withFilter(filter: Document | undefined, condition: Document): Document
   return filter === undefined ? condition : { $and: [filter, condition] };
 }
 
+/** Why the plan cannot rewrite a field of the destination contract, if it cannot. */
+function unrewritableReason(contract: MongoContract, field: FieldCoordinate): string | undefined {
+  const model = modelAt(contract, field);
+  if (model === undefined || !Object.hasOwn(model.fields, field.field)) return undefined;
+  const collection = collectionOf(contract, field);
+  if (collection === undefined) return noCollectionReason(field);
+  const storedName = ownStoredNameOf(model, field.field);
+  const nameReason = unrewritableFieldNameReason(storedName);
+  if (nameReason !== undefined) {
+    return `its stored name ${JSON.stringify(storedName)} cannot be rewritten: ${nameReason}`;
+  }
+  const policy = collectionControlPolicy(contract, collection);
+  return policy === 'managed'
+    ? undefined
+    : `collection ${JSON.stringify(collection)} has control policy ${JSON.stringify(policy)}`;
+}
+
 /**
  * The data transform of `--convert`: its check and its run select the documents whose field holds
  * a type the new field does not allow, and the user writes the update.
@@ -74,6 +96,10 @@ export function convertTransform(
   change: TypeChange | undefined,
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementTransform {
+  const unrewritable = unrewritableReason(contracts.contract, statement.field);
+  if (unrewritable !== undefined) {
+    return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
+  }
   if (change === undefined) {
     return refuse(statement, 'its type does not change', 'Leave out this statement.', contracts);
   }
@@ -157,6 +183,10 @@ export function backfillTransform(
       'Only a required field needs a value in every document. Leave out this statement.',
       contracts,
     );
+  }
+  const unrewritable = unrewritableReason(input.contract, statement.field);
+  if (unrewritable !== undefined) {
+    return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
   }
   const collection = collectionOf(input.contract, statement.field);
   if (collection === undefined) {
