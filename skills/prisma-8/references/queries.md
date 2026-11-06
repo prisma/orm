@@ -147,7 +147,9 @@ Every read terminal (`.all()`, and `db.query(plan)` for a SQL-builder plan) retu
 
 There is no `.stream()` method on a client or on a connection.
 
-## Prepared statements (Postgres, SQLite)
+## Prepared statements (Postgres, SQLite, MySQL, MongoDB)
+
+This section covers the SQL clients. MongoDB's `db.prepare` has the same shape and runs against `await db.runtime()`; see *Workflow — Prepared statements* in [`queries-mongo.md`](queries-mongo.md).
 
 `db.prepare(declaration, (params) => plan)` builds a statement once and binds it per call. The declaration names each parameter's codec (`{ email: 'pg/text@1' }`); the callback receives typed `params`, builds the plan with `db.sql` (or an ORM `.prepared` description), and returns it. A row-returning plan gives a `PreparedStatement` you run with `ps.query(target, params)`; a plan whose result is an affected count gives a `PreparedExecution` you run with `ps.execute(target, params)`. A prepared statement runs on what it is given: the runtime, a connection, a transaction's `tx`, or a Supabase role-bound client, which runs it under its role. `ps.query(tx, params)` runs inside the transaction. Preparing sends nothing to the database. Inside a transaction, `tx.prepare(...)` prepares without the outer client. Declaring a parameter the plan never references throws `RUNTIME.PREPARE_UNUSED_PARAM`. `runtime.prepare(declaration, (params) => plan)` is the same thing on a `Runtime`.
 
