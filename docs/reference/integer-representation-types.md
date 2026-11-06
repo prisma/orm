@@ -4,8 +4,6 @@ Prisma 8 SQL contracts can choose how integer columns appear in application code
 
 ## Choose a representation
 
-| Type | Targets | Codec | Storage | Application value | Stored and projected as | Choose when |
-| --- | --- | --- | --- | --- | --- | --- |
 | PostgreSQL / SQLite | Codec | Storage | Application value | Stored and projected as | Choose when |
 | --- | --- | --- | --- | --- | --- |
 | `BigInt` (`Int8BigInt`) / `BigInt` | `pg/int8@1` / `sqlite/bigint@1` | `int8` / INTEGER | `bigint` | decimal text | The database's integer range is sufficient and application code can use `bigint`. |
