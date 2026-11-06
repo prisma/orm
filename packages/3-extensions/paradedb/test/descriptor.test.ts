@@ -4,6 +4,9 @@ import { findPathWithDecision, reconstructGraph } from '@internal/migration-tool
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { describe, expect, it } from 'vitest';
+import searchPathInstallOps from '../migrations/20261106T1401_install_pg_search_on_search_path/ops.json' with {
+  type: 'json',
+};
 import {
   PARADEDB_BASELINE_MIGRATION_NAME,
   PARADEDB_INSTALL_MIGRATION_NAME,
@@ -74,7 +77,8 @@ describe('paradedb extension descriptor', () => {
   it('builds a new database at the head in one migration that names no schema for the extension', () => {
     const install = migration(PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME);
     expect(install.metadata).toMatchObject({ from: null, to: headHash, providedInvariants: [] });
-    expect(install.ops.map((op) => [op.id, op.execute.map((step) => step.sql)])).toEqual([
+    expect(install.ops.map((op) => op.id)).toEqual(['schema.public', 'extension.pg_search']);
+    expect(searchPathInstallOps.map((op) => [op.id, op.execute.map((step) => step.sql)])).toEqual([
       ['schema.public', ['CREATE SCHEMA IF NOT EXISTS "public"']],
       ['extension.pg_search', ['CREATE EXTENSION IF NOT EXISTS "pg_search"']],
     ]);
