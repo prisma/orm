@@ -14,7 +14,7 @@ import {
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { hasCast, isCastTarget } from './bson-casts';
+import { convertsFrom, isConvertTarget } from './bson-convert';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
@@ -105,7 +105,7 @@ function castOptions(
 ): Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined {
   const [target, ...others] = to.types;
   if (from.list !== to.list || target === undefined || others.length > 0) return undefined;
-  if (!isCastTarget(target) || !from.types.every((type) => hasCast(type, target))) {
+  if (!isConvertTarget(target) || !from.types.every((type) => convertsFrom(type, target))) {
     return undefined;
   }
   return { from: from.types, to: target, ...(to.list ? { list: true } : {}) };

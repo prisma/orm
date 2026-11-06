@@ -21,16 +21,16 @@ const KEEPS_EVERY_VALUE: Readonly<Record<string, ReadonlySet<string>>> = {
   long: new Set(['decimal']),
 };
 
-export function isCastTarget(to: string): boolean {
+export function isConvertTarget(to: string): boolean {
   return Object.hasOwn(CONVERT_SOURCES, to);
 }
 
 /** Whether `$convert` casts a value of BSON type `from` to `to`, at least for some values. */
-export function hasCast(from: string, to: string): boolean {
+export function convertsFrom(from: string, to: string): boolean {
   return from === to || (CONVERT_SOURCES[to]?.has(from) ?? false);
 }
 
 /** Whether casting a value of BSON type `from` to `to` keeps every value as it was. */
-export function castKeepsEveryValue(from: string, to: string): boolean {
+export function convertKeepsEveryValue(from: string, to: string): boolean {
   return from === to || (KEEPS_EVERY_VALUE[from]?.has(to) ?? false);
 }

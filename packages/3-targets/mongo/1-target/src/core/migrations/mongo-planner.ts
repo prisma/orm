@@ -43,6 +43,7 @@ import {
   convertTransform,
   type PlannedTransform,
 } from './mongo-data-transforms';
+import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planFieldFills, uniqueFillRefusals } from './mongo-field-fills';
 import {
   type PlannedRewrite,
@@ -61,7 +62,6 @@ import {
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
-import { structureChangeWarnings } from './mongo-structure-warnings';
 import {
   noCastRefusals,
   planFieldTypeChanges,
@@ -746,7 +746,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const { calls, warnings } = result;
     const allWarnings = [
       ...warnings,
-      ...(match === undefined ? [] : structureChangeWarnings(match)),
+      ...(match === undefined ? [] : documentsNotRewrittenWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
       ...removals.map((removal) => ({

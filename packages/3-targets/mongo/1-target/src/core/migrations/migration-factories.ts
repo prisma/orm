@@ -41,7 +41,7 @@ import type { Document, MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
-import { castKeepsEveryValue, isCastTarget } from './bson-casts';
+import { convertKeepsEveryValue, isConvertTarget } from './bson-convert';
 import type { CollModMeta } from './op-factory-call';
 
 type StringField = { readonly codecId: 'mongo/string@1'; readonly nullable: false };
@@ -376,7 +376,7 @@ function castExpression(field: string, to: string, list: boolean): Document {
 export function castField(options: CastFieldOptions): MongoDmlOperation {
   const { collection: collectionName, field, to, filter } = options;
   assertRewritableField(collectionName, field);
-  if (!isCastTarget(to)) {
+  if (!isConvertTarget(to)) {
     throw mongoTargetError(
       'MIGRATION.INVALID_OPERATION_ENTRY',
       `castField casts field "${field}" in collection ${collectionName} to "${to}", which $convert cannot cast to.`,
@@ -389,7 +389,7 @@ export function castField(options: CastFieldOptions): MongoDmlOperation {
     id,
     label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${options.from.join(', ')}`} to ${to}${labelSuffix(filter)}`,
     operationClass:
-      options.from.length > 0 && options.from.every((from) => castKeepsEveryValue(from, to))
+      options.from.length > 0 && options.from.every((from) => convertKeepsEveryValue(from, to))
         ? 'widening'
         : 'destructive',
     name: id,

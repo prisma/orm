@@ -73,7 +73,7 @@ function untouchedChange(name: string, before: AnyField, after: AnyField): strin
  * and a value object, and a field that gains an enum or changes enum. Each is a warning that names the field; the validator change's
  * document check then fails the apply until the documents fit.
  */
-export function structureChangeWarnings(
+export function documentsNotRewrittenWarnings(
   input: ModelMatchInput,
 ): readonly MigrationPlannerConflict[] {
   const modelFields = modelCoordinates(input.contract).flatMap((model) => {
