@@ -77,6 +77,8 @@ flowchart LR
 
 The migration planner pairs an index of the starting state with an index of the target state by content: keys and options, with the name left out. `indexLookupKey` in `@internal/mongo-contract` computes this content key. Between two contracts, both sides hold indexes as they were written, so the content compares exactly. A schema read from a database needs one more step, described in the next section.
 
+This is why a MongoDB index name holds no content hash, unlike the SQL family's index names ([ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md)). SQL puts a hash of an index's content into its name because Postgres rewrites expression text, so SQL cannot compare two indexes' content directly and compares their names instead. MongoDB index content can be compared for equality exactly, so the planner compares the content itself, and the name only has to be the name the database holds.
+
 A pair whose content matches but whose names differ is planned as a drop and then a create, because MongoDB cannot rename an index. A pair with the same name and the same content plans nothing. Drops run before creates in every plan, which MongoDB needs: it refuses an index with the content of one it already holds.
 
 ## Schemas read from a database
@@ -111,6 +113,6 @@ Both factories accept a call without a name. Then the index is named after its k
 
 ## Alternatives considered
 
-- **Content-hashed names, as SQL's [ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md) does (`email_1_<8 hex>`).** SQL needs the hash because Postgres reprints expression text, so index content cannot be compared. MongoDB index content is plain data, so it compares exactly once the values the database filled in are removed. And MongoDB cannot rename an index, so moving existing databases to hashed names would rebuild every index.
+- **Content-hashed names, as SQL's [ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md) does (`email_1_<8 hex>`).** The hash is not needed, because MongoDB index content compares exactly, as described under "How the planner pairs indexes". And MongoDB cannot rename an index, so moving existing databases to hashed names would rebuild every index.
 - **No names in the contract, with drops that look an index up by content when the migration runs.** This needs a new runner command that finds an index by content and drops it. It leaves names unchecked. And it cannot describe the names Prisma 6 gives.
 - **An optional name, where a missing one means the key-derived default.** This keeps storage hashes unchanged, but the contract would not state what the database holds, and every reader of the contract would have to know the default rule.
