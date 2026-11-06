@@ -133,7 +133,7 @@ function makeDependencies(
     driver: {} as MongoDriver,
     executeDdl,
     markerOps: store.ops,
-    introspectSchema: async () => new MongoSchemaIR([]),
+    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
 }
 

@@ -24,11 +24,11 @@ import {
 } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 import { postgresDataTypeSupport } from '../fixtures/postgres-data-type-support';
 import { printPslFromFlat } from './fixtures';
 
-const authoringTypes: AuthoringTypeNamespace = postgresScalarAndNativeTypeConstructors;
+const authoringTypes: AuthoringTypeNamespace = postgresScalarTypes;
 
 const assembled = assembleAuthoringContributions([
   {
@@ -120,16 +120,15 @@ describe('Postgres PSL inference round trip', () => {
     expect(inferred).not.toContain('types {');
     expect(inferred).toMatch(/uuidValue\s+Uuid/);
     expect(inferred).toMatch(/ipAddress\s+Inet/);
-    expect(inferred).toMatch(/amount\s+Numeric\(10, 2\)/);
-    expect(inferred).toMatch(/bareAmount\s+Numeric/);
-    expect(inferred).not.toContain('bareAmount Numeric()');
+    expect(inferred).toMatch(/amount\s+Decimal\(precision: 10, scale: 2\)/);
+    expect(inferred).toMatch(/bareAmount\s+Decimal\s/);
     expect(inferred).toMatch(/jsonValue\s+Json/);
     expect(inferred).toMatch(/jsonbValue\s+Jsonb/);
     expect(inferred).toMatch(/occurredAt\s+DateTime\(precision: 6\)\s/);
     expect(inferred).toMatch(/loggedAt\s+DateTime\(storage: timestamp\)\s/);
     expect(inferred).toMatch(/dueOn\s+Date\s/);
     expect(inferred).toMatch(/opensAt\s+Time\s/);
-    expect(inferred).toMatch(/label\s+VarChar\(191\)/);
+    expect(inferred).toMatch(/label\s+String\(storage: varchar, length: 191\)/);
 
     const emitted = parseAndEmit(inferred);
     if (!emitted.ok) {

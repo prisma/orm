@@ -151,6 +151,8 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       new CreateExtensionCall('public', 'citext'),
       new SetExtensionSchemaCall('citext', 'app'),
       new DropExtensionCall('app', 'citext'),
+      new CreateExtensionCall(undefined, 'vector'),
+      new DropExtensionCall(undefined, 'vector'),
       new CreateSchemaCall('app'),
       new CreateTableCall(
         'public',

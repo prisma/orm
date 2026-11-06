@@ -207,7 +207,7 @@ model Widget {
         text: `// use prisma-8
 model Widget {
   id Int @id @default(autoincrement())
-  label VarChar(length: )
+  label Varchar(length: )
 }`,
         exitCode: 2,
         diagnosticCodes: ['PSL_INVALID_ATTRIBUTE_ARGUMENT'],

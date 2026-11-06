@@ -21,9 +21,7 @@ import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
-import postgresControl, {
-  postgresScalarAndNativeTypeConstructors,
-} from '@internal/target-postgres/control';
+import postgresControl, { postgresScalarTypes } from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import sqliteControl, { sqliteScalarTypeConstructors } from '@internal/target-sqlite/control';
@@ -74,7 +72,7 @@ function constructorCalls(
   constructors: AuthoringTypeNamespace,
 ): readonly { readonly column: string; readonly name: string; readonly args: readonly number[] }[] {
   return Object.entries(constructors).flatMap(([name, descriptor]) => {
-    if (!isAuthoringTypeConstructorDescriptor(descriptor)) return [];
+    if (!isAuthoringTypeConstructorDescriptor(descriptor) || descriptor.deprecated) return [];
     const declared = descriptor.args ?? [];
     const sampled = declared.map((arg) => {
       const value = arg.name === undefined ? undefined : SAMPLE_ARGUMENTS[arg.name];
@@ -180,7 +178,7 @@ model Document {
             Post: model('Post', {
               fields: {
                 id: field.column(type.String()).id().onCreate(gen.uuid()),
-                slug: field.column(type.VarChar(64)),
+                slug: field.column(type.Varchar(64)),
                 updatedAt: UpdatedAt.default(now()),
               },
             }).sql({ table: 'Post' }),
@@ -190,7 +188,7 @@ model Document {
     );
 
     const interpreted = interpretWithRealPacks(`types {
-  Slug      = VarChar(64)
+  Slug      = Varchar(64)
   UpdatedAt = TimestampString(3) @onCreate(now()) @onUpdate(now())
 }
 
@@ -319,7 +317,7 @@ model Post {
 
 describe('type.* helpers and PSL type constructors', () => {
   it('give the same column for every Postgres constructor and the same arguments', () => {
-    const calls = constructorCalls(postgresScalarAndNativeTypeConstructors);
+    const calls = constructorCalls(postgresScalarTypes);
     const tsContract = defineContract(
       { extensions: { pgvector: pgvectorPack } },
       ({ type, field, model }) => ({

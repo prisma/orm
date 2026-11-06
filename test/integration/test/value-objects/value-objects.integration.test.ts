@@ -137,7 +137,7 @@ function interpretMongoPsl(schema: string) {
   );
 }
 
-const postgresScalarAuthoringTypes = Object.fromEntries(
+const scalarTypeNamespace = Object.fromEntries(
   [...postgresScalarTypeDescriptors].map(([name, { codecId }]) => [
     name,
     {
@@ -157,7 +157,7 @@ function interpretSqlPsl(schema: string) {
       composedExtensionContracts: new Map(),
       // Mirrors the real postgres adapter declaration.
       authoringContributions: {
-        type: postgresScalarAuthoringTypes,
+        type: scalarTypeNamespace,
         entityTypes: {},
         pslBlockDescriptors: {},
         modelAttributes: {},

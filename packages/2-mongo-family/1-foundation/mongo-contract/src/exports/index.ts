@@ -57,6 +57,7 @@ export type {
 } from '../contract-types';
 export type { MongoContractAccessors, MongoContractView } from '../contract-view';
 export { buildMongoContractView } from '../contract-view';
+export { defaultMongoIndexName } from '../default-index-name';
 export {
   defaultMongoDomainNamespaceId,
   defaultMongoStorageNamespaceId,

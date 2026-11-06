@@ -33,6 +33,7 @@ import type {
   AuthoredColumnDefault,
   EnumTypeHandle,
 } from '@internal/sql-contract-ts/contract-builder';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
   type ColumnDescriptor,
@@ -77,6 +78,7 @@ export interface ResolveNamedTypeDeclarationsInput {
   readonly diagnostics: PslDiagnosticCollector;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
   readonly renamedTypeConstructors: Readonly<Record<string, string>> | undefined;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 function describeUnsupportedSqlAliasAttribute(
@@ -107,6 +109,7 @@ function aliasDescriptor(
     });
   }
   if (base.kind === 'typeConstructor') {
+    input.warnDeprecated(symbol, alias.baseName, base.descriptor);
     if (base.call === undefined) return instantiateAuthoringTypeConstructor(base.descriptor, []);
     return instantiatePslTypeConstructor({
       call: base.call,

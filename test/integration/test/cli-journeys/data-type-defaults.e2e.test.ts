@@ -27,7 +27,7 @@ const SCHEMA = `// use prisma-8
 model Account {
   id      Int      @id @default(autoincrement())
   name    String   @default("anonymous")
-  small   SmallInt @default(100)
+  small   Int2 @default(100)
   count   Int      @default(100000)
   balance BigInt   @default(100000000000000099)
   price   Decimal  @default(1.50)

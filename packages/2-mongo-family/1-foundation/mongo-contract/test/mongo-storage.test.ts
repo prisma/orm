@@ -44,7 +44,7 @@ describe('MongoStorage', () => {
           entries: {
             collection: {
               events: new MongoCollection({
-                indexes: [new MongoIndex({ keys: [{ field: 'ts', direction: 1 }] })],
+                indexes: [new MongoIndex({ name: 'ts_1', keys: [{ field: 'ts', direction: 1 }] })],
               }),
             },
           },

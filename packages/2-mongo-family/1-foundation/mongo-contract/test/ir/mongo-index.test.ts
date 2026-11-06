@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { MongoIndex } from '../../src/ir/mongo-index';
 
 describe('MongoIndex', () => {
-  it('constructs from a minimal keys-only input', () => {
-    const idx = new MongoIndex({ keys: [{ field: 'email', direction: 1 }] });
+  it('constructs from a name and keys', () => {
+    const idx = new MongoIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] });
     expect(idx.kind).toBe('mongo-index');
+    expect(idx.name).toBe('email_1');
     expect(idx.keys).toEqual([{ field: 'email', direction: 1 }]);
     expect(idx.unique).toBeUndefined();
   });
 
   it('carries optional storage fields when provided', () => {
     const idx = new MongoIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
       sparse: true,
@@ -35,16 +37,21 @@ describe('MongoIndex', () => {
   });
 
   it('extends IRNodeBase and freezes', () => {
-    const idx = new MongoIndex({ keys: [{ field: 'email', direction: 1 }] });
+    const idx = new MongoIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] });
     expect(idx).toBeInstanceOf(IRNodeBase);
     expect(idx).toBeInstanceOf(MongoIndex);
     expect(Object.isFrozen(idx)).toBe(true);
   });
 
   it('omits undeclared optional fields from canonical JSON', () => {
-    const idx = new MongoIndex({ keys: [{ field: 'email', direction: 1 }], unique: true });
+    const idx = new MongoIndex({
+      name: 'User_email_key',
+      keys: [{ field: 'email', direction: 1 }],
+      unique: true,
+    });
     expect(JSON.parse(JSON.stringify(idx))).toEqual({
       kind: 'mongo-index',
+      name: 'User_email_key',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
     });

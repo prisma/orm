@@ -138,7 +138,7 @@ const CELLS: ReadonlyArray<{
     target: 'mongo',
     authoring: 'psl',
     hashes: {
-      storageHash: '1b32cdae5987d45006e4c8a26db4f87732e4c164ea47402253364582b1818b73',
+      storageHash: 'bdf84c83adcc796638599553a64e4fc95ddda80ce50f4cc0d34c348404705ac3',
       profileHash: MONGO_PROFILE_HASH,
     },
   },

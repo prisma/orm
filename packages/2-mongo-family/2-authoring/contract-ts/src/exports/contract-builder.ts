@@ -48,3 +48,4 @@ export type { BoundEnumType, CodecTypeMap, EnumMember, EnumTypeHandle } from '..
 export { bindEnumType, enumType, isEnumTypeHandle, member } from '../enum-type';
 export type { MergedIndexes, RemovedIndex } from '../merge-redundant-indexes';
 export { mergeRedundantIndexes } from '../merge-redundant-indexes';
+export { nameIndexes } from '../name-indexes';

@@ -94,7 +94,7 @@ Treat the rendered import lines as framework-managed on both targets:
 | A database that changes only through migrations, such as production | `migration plan` + `db migrate` | It must run a reviewed, hashed migration. |
 | A deploy says there is no migration path, or `MIGRATION.MARKER_MISMATCH` | See *A database whose marker is not in the migration graph* | Never reset the database. |
 | Adding a column that needs a backfill | `migration plan --backfill Model.field` (writes `placeholder`), edit `migration.ts`, self-emit, then `db migrate` | `db update` does not author data transforms; the formal path does. Without `--backfill`, existing rows get a temporary value. |
-| Changing a field's type so values may not survive | `migration plan --convert Model.field`, fill `using`, self-emit, `db migrate` | Or `--delete Model.field` to let the database cast; the cast may cut or round values (Postgres cuts a longer text to a shorter `VarChar`), and a value it cannot cast fails the apply. |
+| Changing a field's type so values may not survive | `migration plan --convert Model.field`, fill `using`, self-emit, `db migrate` | Or `--delete Model.field` to let the database cast; the cast may cut or round values (Postgres cuts a longer text to a shorter `varchar`), and a value it cannot cast fails the apply. |
 | Recovering from drift (DB diverged from contract) | `db sign` after manual fix, *or* `migration plan` if PN can plan the fix | Depends on which side is right. See *Recover from drift* below. |
 
 ## Dev → ship transition (the `db` ref pattern)

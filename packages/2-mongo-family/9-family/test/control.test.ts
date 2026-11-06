@@ -89,7 +89,7 @@ describe('createMongoFamilyInstance', () => {
     expect(() =>
       instance.verifySchema({
         contract: {},
-        schema: new MongoSchemaIR([]),
+        schema: new MongoSchemaIR([], { fromDatabase: false }),
         strict: false,
         frameworkComponents: [],
       }),
@@ -487,7 +487,7 @@ describe('toSchemaView', () => {
 
   it('returns an empty root for an empty schema', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
 
     const view = instance.toSchemaView(ir);
 
@@ -499,10 +499,10 @@ describe('toSchemaView', () => {
 
   it('maps collections to collection nodes', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'users' }),
-      new MongoSchemaCollection({ name: 'posts' }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [new MongoSchemaCollection({ name: 'users' }), new MongoSchemaCollection({ name: 'posts' })],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -515,23 +515,28 @@ describe('toSchemaView', () => {
 
   it('maps ascending indexes omitting direction', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [{ field: 'email', direction: 1 }],
-            unique: true,
-          }),
-          new MongoSchemaIndex({
-            keys: [
-              { field: 'lastName', direction: 1 },
-              { field: 'firstName', direction: 1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'email_1',
+              keys: [{ field: 'email', direction: 1 }],
+              unique: true,
+            }),
+            new MongoSchemaIndex({
+              name: 'lastName_1_firstName_1',
+              keys: [
+                { field: 'lastName', direction: 1 },
+                { field: 'firstName', direction: 1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -549,19 +554,23 @@ describe('toSchemaView', () => {
 
   it('shows descending direction as "desc"', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'events',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [
-              { field: 'userId', direction: 1 },
-              { field: 'timestamp', direction: -1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'events',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'userId_1_timestamp_-1',
+              keys: [
+                { field: 'userId', direction: 1 },
+                { field: 'timestamp', direction: -1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -571,22 +580,27 @@ describe('toSchemaView', () => {
 
   it('shows special index types as-is', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'products',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [{ field: 'code', direction: 'hashed' }],
-          }),
-          new MongoSchemaIndex({
-            keys: [
-              { field: '_fts', direction: 'text' },
-              { field: '_ftsx', direction: 1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'products',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'code_hashed',
+              keys: [{ field: 'code', direction: 'hashed' }],
+            }),
+            new MongoSchemaIndex({
+              name: 'description_text',
+              keys: [
+                { field: '_fts', direction: 'text' },
+                { field: '_ftsx', direction: 1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -597,16 +611,19 @@ describe('toSchemaView', () => {
 
   it('maps validator with labeled level and action', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'products',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { bsonType: 'object' },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'products',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { bsonType: 'object' },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -618,25 +635,28 @@ describe('toSchemaView', () => {
 
   it('expands validator properties as child nodes', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: {
-            bsonType: 'object',
-            required: ['_id', 'email'],
-            properties: {
-              _id: { bsonType: 'objectId' },
-              email: { bsonType: 'string' },
-              name: { bsonType: 'string' },
-              age: { bsonType: 'int' },
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['_id', 'email'],
+              properties: {
+                _id: { bsonType: 'objectId' },
+                email: { bsonType: 'string' },
+                name: { bsonType: 'string' },
+                age: { bsonType: 'int' },
+              },
             },
-          },
-          validationLevel: 'strict',
-          validationAction: 'error',
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -652,20 +672,23 @@ describe('toSchemaView', () => {
 
   it('labels a property the validator does not constrain as any', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'posts',
-        validator: new MongoSchemaValidator({
-          jsonSchema: {
-            bsonType: 'object',
-            required: ['meta'],
-            properties: { meta: {}, notes: {} },
-          },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'posts',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['meta'],
+              properties: { meta: {}, notes: {} },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -680,14 +703,17 @@ describe('toSchemaView', () => {
 
   it('maps collection options to a child node', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'logs',
-        options: new MongoSchemaCollectionOptions({
-          capped: { size: 1048576, max: 1000 },
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'logs',
+          options: new MongoSchemaCollectionOptions({
+            capped: { size: 1048576, max: 1000 },
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 

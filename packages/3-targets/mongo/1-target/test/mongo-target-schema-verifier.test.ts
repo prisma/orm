@@ -68,7 +68,7 @@ describe('MongoTargetSchemaVerifier', () => {
       domain: applicationDomainOf({ models: {}, namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID }),
     };
     const contract = new MongoTargetContractSerializer().deserializeContract(json);
-    const schema = new MongoSchemaIR([]);
+    const schema = new MongoSchemaIR([], { fromDatabase: false });
 
     const result = verifier.verifySchema({ contract, schema });
 
@@ -79,7 +79,7 @@ describe('MongoTargetSchemaVerifier', () => {
   it('flags a missing collection against a contract that declares one', () => {
     const verifier = new MongoTargetSchemaVerifier();
     const contract = deserializedContract();
-    const schema = new MongoSchemaIR([]);
+    const schema = new MongoSchemaIR([], { fromDatabase: false });
 
     const result = verifier.verifySchema({ contract, schema });
 
@@ -109,12 +109,17 @@ describe('MongoTargetSchemaVerifier', () => {
       domain: applicationDomainOf({ models: {}, namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID }),
     };
     const contract = new MongoTargetContractSerializer().deserializeContract(json);
-    const schema = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'items',
-        indexes: [new MongoSchemaIndex({ keys: [{ field: 'extra', direction: 1 }] })],
-      }),
-    ]);
+    const schema = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'items',
+          indexes: [
+            new MongoSchemaIndex({ name: 'extra_1', keys: [{ field: 'extra', direction: 1 }] }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     expect(new MongoTargetSchemaVerifier().verifySchema({ contract, schema })).toEqual({
       ok: true,
