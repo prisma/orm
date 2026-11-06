@@ -152,7 +152,6 @@ function mockAdapterDescriptor(adapter: MongoAdapter): MongoRuntimeAdapterDescri
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => mongoRuntimeTarget.codecs(),
     create: () => ({
       familyId: 'mongo',
       targetId: 'mongo',

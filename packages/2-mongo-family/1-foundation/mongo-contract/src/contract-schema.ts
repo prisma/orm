@@ -430,7 +430,7 @@ export function createMongoContractSchema(
     '+': 'reject',
     targetFamily: "'mongo'",
     'schemaVersion?': 'string',
-    'target?': 'string',
+    target: 'string',
     'storageHash?': 'string',
     'profileHash?': 'string',
     roots: type({ '[string]': CrossReferenceSchema }),

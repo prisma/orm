@@ -11,11 +11,11 @@ import {
 } from '../src/core/codec-ids';
 import {
   mongoBinaryCodec,
+  mongoCodecDescriptors,
   mongoDecimal128Codec,
   mongoDescriptorById,
   mongoInt64Codec,
   mongoJsonCodec,
-  mongoStandardCodecs,
 } from '../src/core/codecs';
 import { mongoDataTypes } from '../src/core/data-types';
 import { fromContractJson, toContractJson } from './contract-json';
@@ -289,7 +289,7 @@ describe('BSON scalar descriptors', () => {
   });
 
   it('registers each codec in the standard set', () => {
-    expect(mongoStandardCodecs.map((codec) => codec.id)).toEqual(
+    expect(mongoCodecDescriptors.map((descriptor) => descriptor.codecId)).toEqual(
       expect.arrayContaining([
         MONGO_INT64_CODEC_ID,
         MONGO_DECIMAL128_CODEC_ID,

@@ -145,7 +145,7 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 
 ### `@internal/mongo/contract-builder`
 
-TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields.
+TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields. Pass `extensions: { [id]: pack }` with the extension packs whose codecs the contract uses, as the Postgres `defineContract` takes them; the contract records them, and `mongo()` requires their runtime descriptors.
 
 ```typescript
 import { defineContract, field, model } from '@internal/mongo/contract-builder';
@@ -196,6 +196,56 @@ Exports: `Binary`, `Decimal128`, `Long`, `MongoClient`, `ObjectId`, `Timestamp`.
 ### `@internal/mongo/runtime`
 
 The default export is `mongo({ contract, ... })`, a lazy MongoDB client. It builds an execution stack from the MongoDB target, adapter and runtime driver descriptor (`@internal/driver-mongo/runtime`), as `postgres()` does. On the first query or `connect()` it creates the driver with `stack.driver.create()` and connects it to the binding resolved from `url`, `uri` + `dbName`, `mongoClient` + `dbName` or `binding`. `close()` closes the driver: a `MongoClient` the driver created from a URL is closed, and a `mongoClient` the caller passed stays open.
+
+Options besides the binding:
+
+- `extensions`: the runtime descriptors of the extension packs the contract was built with, as `postgres()` takes them. Their codecs encode and decode the fields that use them. A contract that requires a pack missing from `extensions` fails the factory call with `RUNTIME.MISSING_EXTENSION_PACK`. `mongoStatic()` takes the same option.
+- `middleware`: a middleware chain applied to every MongoDB execution.
+- `mode`: the runtime mode.
+
+#### Writing a MongoDB extension
+
+A MongoDB extension declares each codec once, as a codec descriptor, and its pack and its runtime descriptor share that declaration:
+
+```ts
+import { mongoCodec, mongoCodecDescriptor } from '@prisma/orm-family-mongo/codec';
+import { mongoDataType } from '@prisma/orm-family-mongo/contract/data-type';
+import type { MongoRuntimeExtensionDescriptor } from '@prisma/orm-mongo/family-runtime';
+
+const shoutText = mongoDataType('shout/text', { bsonTypes: ['string'], read: (json) => json });
+
+const shoutCodec = mongoCodec({
+  typeId: 'shout/text@1',
+  dataType: shoutText,
+  toWire: (value: string) => value.toUpperCase(),
+  fromWire: (wire: string) => wire.toLowerCase(),
+  fromDataTypeValue: (value) => String(value.value),
+});
+
+const shoutMeta = {
+  kind: 'extension',
+  id: 'shout',
+  familyId: 'mongo',
+  targetId: 'mongo',
+  version: '0.0.1',
+  dataTypes: [shoutText],
+  types: { codecTypes: { codecDescriptors: [mongoCodecDescriptor(shoutCodec, { traits: ['equality'] })] } },
+} as const;
+
+export const shoutPack: typeof shoutMeta & {
+  readonly __codecTypes?: { readonly 'shout/text@1': { readonly input: string; readonly output: string } };
+} = shoutMeta;
+
+export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
+  ...shoutMeta,
+  create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+};
+```
+
+- `dataTypes`: the data types the extension's codecs represent, built with `mongoDataType`, which names the BSON types a value is stored as.
+- `types.codecTypes.codecDescriptors`: one `mongoCodecDescriptor(codec, { traits })` per codec. Contract authoring reads the metadata; the runtime and the migration runner take the codec from it, to encode writes and decode reads. A codec whose data type has parameters is registered once, as its descriptor builds it without parameters, so it never sees a field's parameters; per-field parameterised codecs are follow-up work (Linear TML-3793).
+- `__codecTypes`: a type-only field that gives each codec id its TypeScript input and output types, so fields that use the codec are typed in the contract and in `db.orm` results.
+- The pack goes in `defineContract({ extensions: { shout: shoutPack } })`, and the runtime descriptor in `mongo({ extensions: [shoutRuntime] })` and `mongoStatic({ extensions: [shoutRuntime] })`. The control descriptor for `extensions` in `prisma.config.ts` spreads the same metadata and adds `create()`, as the runtime descriptor does.
 
 Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptions` and `MongoTargetId` types.
 
