@@ -25,7 +25,6 @@ import {
   RawSqlCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import { schemaOfDetails } from './planner-target-details';
 import type { StoredValueSubject } from './stored-value-calls';
 
 interface Locator {
@@ -70,9 +69,9 @@ function rawSqlTarget(locator: Locator, call: RawSqlCall): SubjectStorage {
   const details = call.op.target.details;
   if (details === undefined) return { storageName: call.op.id, table: undefined };
   if (details.objectType === 'table')
-    return target(locator, schemaOfDetails(details), details.name, undefined);
+    return target(locator, details.schema, details.name, undefined);
   if (details.objectType === 'column' && details.table !== undefined) {
-    return target(locator, schemaOfDetails(details), details.table, details.name);
+    return target(locator, details.schema, details.table, details.name);
   }
   return { storageName: storageNameOfOperation(call.op), table: undefined };
 }

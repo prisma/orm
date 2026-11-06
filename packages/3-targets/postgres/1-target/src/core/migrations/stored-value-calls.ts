@@ -21,7 +21,7 @@ import {
   ReplaceStoredValueCall,
 } from './op-factory-call';
 import type { CallMigrationStrategy } from './planner-strategies';
-import { type PostgresPlanTargetDetails, schemaOfDetails } from './planner-target-details';
+import type { PostgresPlanTargetDetails } from './planner-target-details';
 import { emissionSchemaForNamespace } from './resolve-ddl-schema';
 
 /** What a planned stored value call is about, for its data-loss question. */
@@ -140,7 +140,7 @@ export function keepRowsEdit(
       : { codecRef: mark.codecRef, codecs: RENDER_ONLY_CODECS };
   return keepDataEdit(
     new RemoveStoredValueCall(
-      schemaOfDetails(details),
+      details.schema,
       details.table,
       details.name,
       mark.value,

@@ -40,11 +40,19 @@ export function step(
 export function targetDetails(
   objectType: OperationClass,
   name: string,
-  schema: string | undefined,
+  schema: string,
   table?: string,
 ): { readonly id: 'postgres'; readonly details: PostgresPlanTargetDetails } {
   return {
     id: 'postgres',
-    details: { ...ifDefined('schema', schema), objectType, name, ...ifDefined('table', table) },
+    details: { schema, objectType, name, ...ifDefined('table', table) },
   };
+}
+
+/** The target of creating or dropping an extension the contract leaves to the search path, which names no schema. */
+export function searchPathExtensionTarget(name: string): {
+  readonly id: 'postgres';
+  readonly details: PostgresPlanTargetDetails;
+} {
+  return { id: 'postgres', details: { objectType: 'dependency', name } };
 }

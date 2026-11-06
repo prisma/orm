@@ -1,5 +1,5 @@
 import type { BlockingObject } from '@internal/framework-components/control';
-import { type PostgresPlanTargetDetails, schemaOfDetails } from './planner-target-details';
+import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 /** Postgres's error code for a statement that would remove an object others depend on. */
 export const DEPENDENT_OBJECTS_STILL_EXIST = '2BP01';
@@ -29,6 +29,6 @@ export function dependentsSummary(
   const named = listed(dependents.map(({ kind, name }) => `${kind} ${name}`));
   const depend = dependents.length === 1 ? 'depends' : 'depend';
   return details.objectType === 'table' && details.table === undefined
-    ? `Table "${schemaOfDetails(details)}"."${details.name}" cannot be dropped while ${named} ${depend} on it.`
+    ? `Table "${details.schema}"."${details.name}" cannot be dropped while ${named} ${depend} on it.`
     : `${label} cannot run while ${named} ${depend} on what it changes.`;
 }

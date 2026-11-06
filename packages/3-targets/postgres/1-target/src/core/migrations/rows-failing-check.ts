@@ -5,7 +5,7 @@ import { CHECK_KINDS, composeCheckWirePrefix, parseWireName } from '@internal/sq
 import { ifDefined } from '@internal/utils/defined';
 import { dropCheckConstraintId } from './operations/constraints';
 import { qualifyTableName } from './planner-sql-checks';
-import { type PostgresPlanTargetDetails, schemaOfDetails } from './planner-target-details';
+import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 /** SQLSTATE `check_violation`: a row fails a check. */
 export const CHECK_VIOLATION = '23514';
@@ -53,7 +53,7 @@ export function rowsFailingCheckOf(input: {
               dropped.id === dropCheckConstraintId(table, dropped.name) &&
               parseWireName(dropped.name)?.prefix === prefix,
           )?.name;
-  const query = `SELECT * FROM ${qualifyTableName(schemaOfDetails(details), table)} WHERE NOT (${expression})`;
+  const query = `SELECT * FROM ${qualifyTableName(details.schema, table)} WHERE NOT (${expression})`;
   const onColumn = column === undefined ? '' : ` on column "${column}"`;
   return {
     summary: `Rows of table "${table}" fail check "${details.name}"${onColumn}, so the check cannot be added.`,
