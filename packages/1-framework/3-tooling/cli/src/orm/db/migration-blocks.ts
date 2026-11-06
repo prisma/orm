@@ -1,6 +1,7 @@
 import type { OperationPreview } from '@internal/framework-components/control';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
+import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 import {
@@ -162,20 +163,54 @@ function applySummaryText(result: MigrationCommandResult): string {
   const executed = result.execution?.operationsExecuted ?? 0;
   const spaces = result.perSpace?.length ?? 0;
   const across = spaces > 0 ? ` across ${spaces} contract space${spaces === 1 ? '' : 's'}` : '';
+  if (result.changedStorageEntities !== undefined) return result.summary;
   if (executed === 0) {
     return `Database already matches contract${across}`;
   }
   return `Applied ${executed} operation(s)${across}`;
 }
 
+/** For each namespace the plan removes, the answers that answer all of its questions. */
+function namespaceAnswerLines(result: MigrationCommandResult): readonly { label: string }[] {
+  const added = result.addedNamespaces ?? [];
+  return (result.removedNamespaces ?? []).map(({ namespaceId, answeredBy }) => {
+    const deleteFlag = statementFlag({ verb: 'delete', text: namespaceId });
+    const rename =
+      added.length === 0
+        ? ''
+        : `, or ${added.map((target) => statementFlag({ verb: 'rename', text: `${namespaceId}:${target}` })).join(' or ')} if it was renamed`;
+    return {
+      label: `every question about namespace "${namespaceId}": ${deleteFlag}${rename}${answeredBy === undefined ? '' : ' (answered)'}`,
+    };
+  });
+}
+
+/** The entries a dry run lists, one group per answer: a `--delete` answers every operation of its subject, an `--allow` one operation. */
+function answerGroups<TEntry extends { readonly text: string; readonly operationIndex: number }>(
+  entries: readonly { readonly entry: TEntry; readonly verb: 'delete' | 'allow' }[],
+): readonly {
+  readonly verb: 'delete' | 'allow';
+  readonly text: string;
+  readonly entries: readonly TEntry[];
+}[] {
+  const groups = new Map<string, { verb: 'delete' | 'allow'; text: string; entries: TEntry[] }>();
+  entries.forEach(({ entry, verb }, index) => {
+    const key = verb === 'delete' ? `delete ${entry.text}` : `allow ${index}`;
+    const group = groups.get(key) ?? { verb, text: entry.text, entries: [] };
+    group.entries.push(entry);
+    groups.set(key, group);
+  });
+  return [...groups.values()];
+}
+
 /**
  * The questions an apply would ask, as a dry run lists them: each operation that would lose data,
- * answered by `--delete` or `--rename`, and each that would widen access, answered by `--allow`.
+ * answered by `--delete` or `--rename`, and each that would change access, answered by `--allow`.
  */
 function questionBlocks(result: MigrationCommandResult): readonly Block[] {
   const entries = [
     ...(result.dataLoss ?? []).map((entry) => ({ entry, verb: 'delete' as const })),
-    ...(result.accessWidening ?? []).map((entry) => ({ entry, verb: 'allow' as const })),
+    ...(result.accessChanges ?? []).map((entry) => ({ entry, verb: 'allow' as const })),
   ];
   if (entries.length === 0) {
     return [];
@@ -186,9 +221,12 @@ function questionBlocks(result: MigrationCommandResult): readonly Block[] {
       roots: [
         {
           label: 'An apply asks about',
-          children: entries.map(({ entry, verb }) => ({
-            label: `${result.plan.operations[entry.operationIndex]?.label ?? 'an operation'}: ${statementFlag({ verb, text: entry.text })}${entry.answered ? ' (answered)' : ''}`,
-          })),
+          children: [
+            ...answerGroups(entries).map(({ entries: answered, verb, text }) => ({
+              label: `${labelsText(answered.map((entry) => result.plan.operations[entry.operationIndex]?.label ?? 'an operation'))}: ${statementFlag({ verb, text })}${answered.some((entry) => entry.answered) ? ' (answered)' : ''}`,
+            })),
+            ...namespaceAnswerLines(result),
+          ],
         },
       ],
     },

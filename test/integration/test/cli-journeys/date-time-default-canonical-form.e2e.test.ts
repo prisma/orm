@@ -124,14 +124,14 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${output(infer)}`).toBe(0);
         expect(printedDefaultFields(ctx)).toEqual([
-          'a TimestamptzString @default(timestamptz`2024-01-01T00:00:00Z`)',
-          'b TimestamptzString @default(timestamptz`2024-01-01T00:00:00Z`)',
-          'c TimestamptzString @default(timestamptz`2024-01-01T00:00:00Z`)',
-          'clock TimeString @default(time`12:34:00`)',
-          'day DateString @default(date`2024-01-01`)',
-          'history TimestamptzString[] @default([timestamptz`2024-01-01T00:00:00Z`, timestamptz`2024-06-30T12:34:56Z`])',
-          'localAt TimestampString(3) @default(timestamp`2024-01-01T12:34:56.5`)',
-          'zoned Timetz @default(timetz`12:34:56+02:00`)',
+          'a DateTime(precision: 6) @default(timestamptz`2024-01-01T00:00:00Z`)',
+          'b DateTime(precision: 6) @default(timestamptz`2024-01-01T00:00:00Z`)',
+          'c DateTime(precision: 6) @default(timestamptz`2024-01-01T00:00:00Z`)',
+          'clock Time @default(time`12:34:00`)',
+          'day Date @default(date`2024-01-01`)',
+          'history DateTime(precision: 6)[] @default([timestamptz`2024-01-01T00:00:00Z`, timestamptz`2024-06-30T12:34:56Z`])',
+          'localAt DateTime(storage: timestamp) @default(timestamp`2024-01-01T12:34:56.5`)',
+          'zoned Time(storage: timetz) @default(timetz`12:34:56+02:00`)',
         ]);
 
         const emitInferred = await runContractEmit(ctx);
@@ -178,18 +178,18 @@ withTempDir(({ createTempDir }) => {
 
 model Created {
   id      Int       @id
-  instant DateTime  @default(timestamptz\`0044-03-15 00:00:00+00 BC\`)
-  day     Date      @default(date\`0044-03-15 BC\`)
-  local   Timestamp @default(timestamp\`-000043-03-15T12:00:00\`)
+  instant TimestamptzTemporal  @default(timestamptz\`0044-03-15 00:00:00+00 BC\`)
+  day     DateTemporal      @default(date\`0044-03-15 BC\`)
+  local   TimestampTemporal @default(timestamp\`-000043-03-15T12:00:00\`)
 
   @@map("created")
 }
 `;
     const altered = (defaults: boolean) => `model Altered {
   id      Int       @id
-  instant DateTime  ${defaults ? '@default(timestamptz`-000043-03-15T00:00:00Z`)' : ''}
-  day     Date      ${defaults ? '@default(date`-000043-03-15`)' : ''}
-  local   Timestamp ${defaults ? '@default(timestamp`0044-03-15 12:00:00 BC`)' : ''}
+  instant TimestamptzTemporal  ${defaults ? '@default(timestamptz`-000043-03-15T00:00:00Z`)' : ''}
+  day     DateTemporal      ${defaults ? '@default(date`-000043-03-15`)' : ''}
+  local   TimestampTemporal ${defaults ? '@default(timestamp`0044-03-15 12:00:00 BC`)' : ''}
 
   @@map("altered")
 }

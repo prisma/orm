@@ -41,13 +41,11 @@ function interpret(schema: string) {
       defaultNamespaceId: 'public',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
         modelAttributes: {},
         attributeSpecs: sqlAttributeSpecs,
-        textDataTypes: [],
         dataTypes: {},
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },

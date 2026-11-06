@@ -52,8 +52,8 @@ Legend:
 | `dropNotNull` (nullability) | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`relaxes NOT NULL to nullable`) |
 | `setDefault` | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`changes a column default`) |
 | `dropDefault` | 🟡 | 🟡 | — | |
-| Column change preserves data | ✅ | ✅ | — | `packages/3-targets/6-adapters/postgres/test/migrations/planner.reconciliation.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` (`preserves data`) |
-| Convert scalar column to array (Postgres) | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-array-columns.integration.test.ts` |
+| Column change preserves data | ✅ | ✅ | — | `packages/3-targets/postgres/2-adapter/test/migrations/planner.reconciliation.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` (`preserves data`) |
+| Convert scalar column to array (Postgres) | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-array-columns.integration.test.ts` |
 | JSON column (typed jsonb/json round-trip) | ✅ | ✅ | — | `test/e2e/framework/test/dml.test.ts` (`typed jsonb/json`); `test/e2e/framework/test/sqlite/sql-builder.test.ts` (`json survives insert and select`) |
 | SQLite table rebuild (`recreateTable`) | — | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts`; `test/e2e/framework/test/sqlite/migrations/fk-preservation.test.ts` |
 | Descending index column ordering | ❌ | ❌ | — | |
@@ -76,13 +76,13 @@ Legend:
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
-| `addForeignKey` | ✅ | ✅ | — | `packages/3-targets/6-adapters/postgres/test/migrations/cross-namespace-fk.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE CASCADE`) |
+| `addForeignKey` | ✅ | ✅ | — | `packages/3-targets/postgres/2-adapter/test/migrations/cross-namespace-fk.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE CASCADE`) |
 | Referential action `cascade` | ✅ | ✅ | — | `test/integration/test/referential-actions.integration.test.ts` (`ON DELETE CASCADE removes child rows`); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE CASCADE`) |
 | Referential action `restrict` | ✅ | 🟡 | — | `test/integration/test/referential-actions.integration.test.ts` (`ON DELETE RESTRICT blocks parent deletion`) |
 | Referential action `setNull` | ✅ | ✅ | — | `test/integration/test/referential-actions.integration.test.ts` (`ON DELETE SET NULL sets child FK to NULL`); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE SET NULL`) |
 | Referential action `setDefault` | ✅ | 🟡 | — | `test/integration/test/referential-actions.integration.test.ts` (`ON DELETE SET DEFAULT sets child FK to default value`) |
 | Referential action `noAction` | 🟡 | 🟡 | — | |
-| Cross-namespace / cross-space FK | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/cross-namespace-fk.integration.test.ts` |
+| Cross-namespace / cross-space FK | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/cross-namespace-fk.integration.test.ts` |
 | FK preserved through SQLite rebuild | — | ✅ | — | `test/e2e/framework/test/sqlite/migrations/fk-preservation.test.ts` |
 | Drop FK | 🟡 | 🟡 | — | |
 | Change FK | 🟡 | 🟡 | — | |
@@ -95,7 +95,7 @@ Legend:
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
-| `createIndex` | ✅ | ✅ | ✅ | `packages/3-targets/6-adapters/postgres/test/migrations/index-introspection.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`indexes`); `test/integration/test/mongo/migration-e2e.test.ts` (`applies createIndex and verifies the index exists`) |
+| `createIndex` | ✅ | ✅ | ✅ | `packages/3-targets/postgres/2-adapter/test/migrations/index-introspection.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`indexes`); `test/integration/test/mongo/migration-e2e.test.ts` (`applies createIndex and verifies the index exists`) |
 | `dropIndex` | 🟡 | ✅ | ✅ | `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` (`drops an index`); `test/integration/test/mongo/migration-e2e.test.ts` (`drops an index when the destination contract removes it`) |
 | Replace index (drop old + create new) | 🟡 | ✅ | 🟡 | `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` (`replaces an index`) |
 | `addUnique` | 🟡 | ✅ | ✅ | `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`unique constraints`); `test/integration/test/mongo/migration-authoring-e2e.test.ts` (`creates a unique index`) |
@@ -120,11 +120,11 @@ Legend:
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
-| `createNativeEnumType` | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`create: CREATE TYPE is planned before the table, applies cleanly`) |
-| `dropNativeEnumType` | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`drop: DROP TYPE is planned after the dependent column is gone`) |
-| `addNativeEnumValue` | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-enum-add-value.real-postgres.integration.test.ts` |
-| Enum via CHECK constraint | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/enum-check-constraint.integration.test.ts` |
-| Enum value-set change re-plans drop + recreate | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/enum-check-constraint.integration.test.ts` (`re-plans drop+recreate when enum members change`) |
+| `createNativeEnumType` | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`create: CREATE TYPE is planned before the table, applies cleanly`) |
+| `dropNativeEnumType` | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`drop: DROP TYPE is planned after the dependent column is gone`) |
+| `addNativeEnumValue` | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-enum-add-value.real-postgres.integration.test.ts` |
+| Enum via CHECK constraint | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/enum-check-constraint.integration.test.ts` |
+| Enum value-set change re-plans drop + recreate | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/enum-check-constraint.integration.test.ts` (`re-plans drop+recreate when enum members change`) |
 | Enum authoring (Mongo) | — | — | 🟡 | |
 | SQLite text-as-enum | — | 🟡 | — | |
 
@@ -134,19 +134,19 @@ Legend:
 | --- | --- | --- | --- | --- |
 | Literal defaults migrated | ✅ | ✅ | — | `test/e2e/framework/test/dml.test.ts` (`applies literal defaults` — schema provisioned via `db init` migration apply, defaults filled by the database); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`default values`) |
 | `now()` / current-timestamp default | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`round-trips a now() default`) |
-| `uuid()` default (no drift) | ✅ | 🟡 | — | `packages/3-targets/6-adapters/postgres/test/migrations/planner.uuid.integration.test.ts` |
+| `uuid()` default (no drift) | ✅ | 🟡 | — | `packages/3-targets/postgres/2-adapter/test/migrations/planner.uuid.integration.test.ts` |
 | Integer default (no drift) | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/default-drift.test.ts` (`verifies an integer @default(42) without drift`) |
 | Change / drop default | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`changes a column default`) |
 | Escaped-string default idempotency | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`round-trips a string default with an apostrophe`) |
 | Postgres array / json / bigint defaults | 🟡 | — | — | |
-| `dbgenerated(...)` defaults | ❌ | ❌ | — | Removed; raw SQL defaults are `` sql`...` `` tagged literals and render as `DEFAULT (<expression>)` (`packages/3-targets/6-adapters/postgres/test/migrations/authored-default-rendering.test.ts`, `packages/3-targets/6-adapters/sqlite/test/plan-diff-defaults.test.ts`). |
+| `dbgenerated(...)` defaults | ❌ | ❌ | — | Removed; raw SQL defaults are `` sql`...` `` tagged literals and render as `DEFAULT (<expression>)` (`packages/3-targets/postgres/2-adapter/test/migrations/authored-default-rendering.test.ts`, `packages/3-targets/sqlite/2-adapter/test/plan-diff-defaults.test.ts`). |
 
 ## Migrations — native types
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Create native `@db.*`-typed columns (non-array, e.g. `@db.VarChar`, `@db.Uuid`) | 🟡 | — | — | |
-| Native array columns | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-array-columns.integration.test.ts` |
+| Native array columns | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-array-columns.integration.test.ts` |
 | SQLite rejects native `@db.*` types | — | 🟡 | — | |
 | Safe type-change classification | ❌ | ❌ | — | |
 | Risky type-change classification | ❌ | ❌ | — | |
@@ -158,9 +158,11 @@ Legend:
 
 | Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
-| `installExtension` | ✅ | — | — | `test/integration/test/extension-pgvector-scenario-a.e2e.integration.test.ts` |
-| `createExtension` | 🟡 | — | — | |
-| Extension version / schema / relocation management | ❌ | — | — | |
+| `installExtension` | ✅ | — | — | Kept in each pack's first migration; `packages/3-targets/postgres/1-target/test/postgres-migration-op-builders.test.ts` |
+| `createExtension`, `dropExtension`, `setExtensionSchema` planned from an `extension` entity | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/extension-lifecycle.integration.test.ts` |
+| Adopting a database with extensions by `db sign` | ✅ | — | — | `test/integration/test/cli-journeys/extensions-adoption.e2e.test.ts`, `test/integration/test/extension-packs.db-sign-migrate.e2e.test.ts` |
+| Extension schema and relocation | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/extension-lifecycle.integration.test.ts` |
+| Extension version management | ❌ | — | — | Not recorded by design (ADR 312) |
 | Extension-type modifier diffing | ❌ | — | — | |
 
 ## Migrations — views

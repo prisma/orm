@@ -515,6 +515,27 @@ type VOContractBase = Omit<
         id: '__unbound__';
         kind: 'schema';
         entries: {
+          valueObject: {
+            readonly Address: {
+              readonly fields: {
+                readonly street: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+                readonly city: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+                readonly zip: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+              };
+            };
+          };
           table: {
             users: {
               columns: {
@@ -586,37 +607,28 @@ type VOContractBase = Omit<
               };
               readonly homeAddress: {
                 readonly many: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
                 readonly nullable: true;
               };
               readonly workAddress: {
                 readonly many: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
                 readonly nullable: false;
               };
             };
             readonly relations: Record<string, never>;
-          };
-        };
-        readonly valueObjects: {
-          readonly Address: {
-            readonly fields: {
-              readonly street: {
-                readonly many: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-              readonly city: {
-                readonly many: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-              readonly zip: {
-                readonly many: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-            };
           };
         };
       };

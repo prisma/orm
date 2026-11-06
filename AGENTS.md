@@ -42,6 +42,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ## Golden Rules
 
+- **Never change the framework domain** (`packages/1-framework`). If a design needs to, stop and tell the operator: `.agents/rules/never-change-the-framework-domain.mdc`.
 - **Node.js version**: Use the shell's Node — do not run `nvm`/`fnm` or any version switcher. Source of truth is the root `package.json` `engines.node`. If the shell's `node -v` doesn't satisfy that, report that the shell is misconfigured (e.g. user should set their default Node in their version manager, or use Volta) — don't try to switch it yourself.
 - Use `pnpm`, not `npm`. Never use `npx`.
 - Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run that package's `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript.
@@ -113,6 +114,10 @@ See `architecture.config.json` for the complete mapping and `pnpm lint:deps` to 
 - Day-to-day playbook (add SQL operation, split monolith, fix import violation, etc.): [Common Tasks Playbook](docs/onboarding/Common-Tasks-Playbook.md)
 - Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [`prisma/ignite docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
 - Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` (policy in [`docs/oss/versioning.md`](docs/oss/versioning.md))
+
+## Check requests and proposals against the vision
+
+Before you judge a feature request or pull request, or propose a feature or solution, read the [project intent](docs/design/00-purpose/project-intent.md), the [vision](docs/design/00-purpose/vision.md#how-to-use-this-page) and the [steering list](docs/architecture%20docs/ADR-INDEX.md#steering-list).
 
 ## Subsystem Deep Dives
 

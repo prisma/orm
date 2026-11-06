@@ -1,4 +1,5 @@
 export type { ImportRequirement } from '@internal/ts-render';
+export { expectAbsent, expectPresent } from '../control/check-expectation';
 export type { ContractSerializer } from '../control/contract-serializer';
 export {
   CONTRACT_SNAPSHOTS_DIRNAME,
@@ -42,6 +43,8 @@ export type {
   ControlTargetInstance,
 } from '../control/control-instances';
 export type {
+  BlockingObject,
+  CheckExpectation,
   FailedCast,
   FailedCheck,
   FailedConversion,
@@ -68,6 +71,8 @@ export type {
   MigrationScaffoldContext,
   OpFactoryCall,
   PlanOrigin,
+  RowsFailingCheck,
+  RowsHoldingValue,
   RowsWithoutValue,
   SchemaEntityCoordinate,
   SchemaOwnership,
@@ -76,6 +81,7 @@ export type {
 export {
   migrationRunnerFailure,
   planOriginOf,
+  withDatabaseUnchanged,
   withFailingSpace,
 } from '../control/control-migration-types';
 export type {
@@ -103,6 +109,8 @@ export {
 } from '../control/control-operation-results';
 export type {
   CoreSchemaView,
+  SchemaLabelPart,
+  SchemaLabelPartRole,
   SchemaTreeNodeOptions,
   SchemaTreeVisitor,
   SchemaViewNodeKind,
@@ -118,16 +126,15 @@ export type {
   AssembledAuthoringContributions,
   ControlStack,
   CreateControlStackInput,
-  DataTypeInvariantInput,
+  HelperCodecInvariantInput,
 } from '../control/control-stack';
 export {
   assembleAuthoringContributions,
-  assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
-  enforceDataTypeInvariants,
+  enforceHelperCodecInvariants,
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,
@@ -136,12 +143,16 @@ export {
 } from '../control/control-stack';
 export type {
   AppliedMigrationStatement,
+  EnumValueCoordinate,
+  EnumValueCoordinateJson,
   FieldCoordinate,
   FieldCoordinateJson,
+  KeepDataEdit,
   MigrationAccessChange,
   MigrationDataLoss,
   MigrationDataLossKind,
   MigrationOperationSubject,
+  MigrationPlanNamespaces,
   MigrationPlanSubjects,
   MigrationStatementJson,
   MigrationSubject,
@@ -149,15 +160,25 @@ export type {
   MigrationTemporaryValue,
   ModelCoordinate,
   ModelCoordinateJson,
+  ResolvedEnumValueRenameStatement,
   ResolvedFieldBackfillStatement,
   ResolvedFieldConvertStatement,
   ResolvedFieldRenameStatement,
   ResolvedMigrationStatement,
   ResolvedModelRenameStatement,
+  ResolvedNamespaceRenameStatement,
   ResolvedRenameStatement,
+  ResolvedValueObjectFieldBackfillStatement,
+  ResolvedValueObjectFieldRenameStatement,
+  ResolvedVariantConvertStatement,
+  ValueObjectFieldCoordinate,
+  ValueObjectFieldCoordinateJson,
 } from '../control/migration-statements';
 export {
   describeMigrationStatement,
+  enumValueCoordinateFromJson,
+  enumValueCoordinateJson,
+  enumValueStatementText,
   fieldStatementText,
   isRenameStatement,
   migrationStatementJson,
@@ -165,9 +186,11 @@ export {
   migrationSubjectKey,
   modelDisplayName,
   modelStatementText,
+  valueObjectFieldStatementText,
 } from '../control/migration-statements';
 export { orderIssuesByDependencies } from '../control/order-issues-by-dependencies';
 export {
+  failedPostcheckWhy,
   failedPrecheckWhy,
   issueLabel,
   schemaCheckWhy,
@@ -212,4 +235,4 @@ export {
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
 } from '../shared/tagged-literal';
-export { timestampNowControlDescriptor } from '../shared/temporal-presets';
+export { timestampNowControlDescriptor } from '../shared/temporal-type-aliases';

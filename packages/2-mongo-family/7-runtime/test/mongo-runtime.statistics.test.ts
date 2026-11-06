@@ -10,14 +10,14 @@ import {
   createMockAdapter,
   createMockDriver,
   createPlan,
-  makeContext,
+  makeExecution,
 } from './mongo-middleware-fixtures';
 
 describe('MongoRuntime statement statistics', () => {
   it('maps updateOne modifiedCount to affectedRows', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(
+      ...makeExecution(
         adapter,
         new UpdateOneWireCommand('users', { id: 1 }, { $set: { active: true } }),
       ),
@@ -30,10 +30,7 @@ describe('MongoRuntime statement statistics', () => {
   it('maps update modifiedCount to affectedRows', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(
-        adapter,
-        new UpdateManyWireCommand('users', {}, { $set: { active: true } }),
-      ),
+      ...makeExecution(adapter, new UpdateManyWireCommand('users', {}, { $set: { active: true } })),
       driver: createMockDriver([{ matchedCount: 6, modifiedCount: 4 }]),
     });
 
@@ -43,7 +40,7 @@ describe('MongoRuntime statement statistics', () => {
   it('maps deleteOne deletedCount to affectedRows', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(adapter, new DeleteOneWireCommand('users', { id: 1 })),
+      ...makeExecution(adapter, new DeleteOneWireCommand('users', { id: 1 })),
       driver: createMockDriver([{ deletedCount: 1 }]),
     });
 
@@ -53,7 +50,7 @@ describe('MongoRuntime statement statistics', () => {
   it('maps delete deletedCount to affectedRows', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(adapter, new DeleteManyWireCommand('users', {})),
+      ...makeExecution(adapter, new DeleteManyWireCommand('users', {})),
       driver: createMockDriver([{ deletedCount: 3 }]),
     });
 
@@ -64,7 +61,7 @@ describe('MongoRuntime statement statistics', () => {
     const adapter = createMockAdapter();
     const driver = createMockDriver([{ count: 5 }]);
     const runtime = createMongoRuntime({
-      context: makeContext(adapter),
+      ...makeExecution(adapter),
       driver,
     });
 
@@ -76,7 +73,7 @@ describe('MongoRuntime statement statistics', () => {
   it('rejects zero statistics results', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(adapter, new DeleteOneWireCommand('users', { id: 1 })),
+      ...makeExecution(adapter, new DeleteOneWireCommand('users', { id: 1 })),
       driver: createMockDriver([]),
     });
 
@@ -88,7 +85,7 @@ describe('MongoRuntime statement statistics', () => {
   it('rejects multiple statistics results', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(
+      ...makeExecution(
         adapter,
         new UpdateOneWireCommand('users', { id: 1 }, { $set: { active: true } }),
       ),
@@ -103,10 +100,7 @@ describe('MongoRuntime statement statistics', () => {
   it('rejects update statistics without modifiedCount', async () => {
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
-      context: makeContext(
-        adapter,
-        new UpdateManyWireCommand('users', {}, { $set: { active: true } }),
-      ),
+      ...makeExecution(adapter, new UpdateManyWireCommand('users', {}, { $set: { active: true } })),
       driver: createMockDriver([{ matchedCount: 2 }]),
     });
 

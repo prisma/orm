@@ -21,7 +21,7 @@ import { createContract, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
-import type { ControlProgressEvent } from '../../src/control-api/types';
+import type { ControlProgressEvent, EmitResult } from '../../src/control-api/types';
 
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
@@ -592,6 +592,76 @@ describe('ControlClient progress emission', () => {
       });
     });
 
+    describe('a source that reports a warning', () => {
+      const warning = {
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
+        sourceId: 'schema.prisma',
+        severity: 'warning' as const,
+      };
+
+      async function emitWarningThen(
+        outcome: () => ReturnType<ContractSourceProvider['load']>,
+      ): Promise<EmitResult> {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+        const result = await client.emit({
+          contractConfig: {
+            source: createSourceProvider(async (context) => {
+              context.reportWarning?.(warning);
+              return outcome();
+            }),
+            output: '/tmp/contract.json',
+          },
+        });
+        await client.close();
+        return result;
+      }
+
+      it('returns it with the emitted contract', async () => {
+        const result = await emitWarningThen(async () => ok(emittableContract()));
+
+        expect(result.ok ? result.value.sourceWarnings : undefined).toEqual([warning]);
+      });
+
+      it.each([
+        {
+          label: 'returns diagnostics',
+          code: 'CONTRACT_SOURCE_INVALID',
+          outcome: async () =>
+            notOk({
+              summary: 'Provider failed',
+              diagnostics: [
+                { code: 'PSL_INVALID_MODEL', message: 'bad', sourceId: 'schema.prisma' },
+              ],
+            }),
+        },
+        {
+          label: 'throws a structured error',
+          code: 'CONTRACT_SOURCE_INVALID',
+          outcome: async () => {
+            throw structuredError('CONTRACT.DEFAULT_INVALID', 'Default refused');
+          },
+        },
+        {
+          label: 'returns a contract that cannot be emitted',
+          code: 'EMIT_FAILED',
+          outcome: async () => ok({} as Contract),
+        },
+      ])('returns it with the failure when the source then $label', async ({ code, outcome }) => {
+        const result = await emitWarningThen(outcome);
+
+        expect(result.ok ? undefined : result.failure).toMatchObject({
+          code,
+          sourceWarnings: [warning],
+        });
+      });
+    });
+
     it('returns provider diagnostics when source provider fails', async () => {
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
       const client = createControlClient({
@@ -695,7 +765,9 @@ describe('ControlClient progress emission', () => {
   });
 
   describe('dbUpdate()', () => {
-    function createMockComponentsWithMigrations() {
+    function createMockComponentsWithMigrations(
+      subjects: { readonly dataLoss?: unknown[]; readonly accessChanges?: unknown[] } = {},
+    ) {
       const { mockDriver, mockAdapter, mockDriverDescriptor } = createMockComponents();
 
       // Override family instance to return a marker (db update works with or without one)
@@ -717,8 +789,8 @@ describe('ControlClient progress emission', () => {
           plan: () => ({
             kind: 'success',
             appliedStatements: [],
-            dataLoss: [],
-            accessWidening: [],
+            dataLoss: subjects.dataLoss ?? [],
+            accessChanges: subjects.accessChanges ?? [],
             temporaryValues: [],
             plan: {
               targetId: 'postgres',
@@ -815,6 +887,68 @@ describe('ControlClient progress emission', () => {
       for (const event of events) {
         expect(event.action).toBe('dbUpdate');
       }
+    });
+
+    describe('consent options', () => {
+      const USER = { kind: 'storage', name: 'user' } as const;
+
+      async function questionsAsked(
+        subjects: Parameters<typeof createMockComponentsWithMigrations>[0],
+        consent: { readonly acceptDataLoss?: boolean; readonly acceptAccessChanges?: boolean },
+      ) {
+        const {
+          mockFamilyWithMarker,
+          mockTargetWithMigrations,
+          mockAdapter,
+          mockDriverDescriptor,
+        } = createMockComponentsWithMigrations(subjects);
+        const client = createControlClient({
+          family: mockFamilyWithMarker,
+          target: mockTargetWithMigrations,
+          adapter: mockAdapter,
+          driver: mockDriverDescriptor,
+        });
+        const asked: string[][] = [];
+        const result = await client.dbUpdate({
+          contract: {
+            target: 'postgres',
+            storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
+          },
+          mode: 'apply',
+          connection: 'postgres://test',
+          migrationsDir: '/tmp/__test-client-migrations',
+          invocation: TEST_INVOCATION,
+          ...consent,
+          answerQuestions: async (questions) => {
+            asked.push(questions.map(({ question }) => question));
+            return questions.map(({ verbs, subject }) => ({
+              verb: verbs[0] ?? 'delete',
+              text: subject,
+            }));
+          },
+        });
+        await client.close();
+        expect(result.ok).toBe(true);
+        return asked;
+      }
+
+      it('forwards acceptDataLoss, so a data-loss question is not asked', async () => {
+        const asked = await questionsAsked(
+          { dataLoss: [{ operationIndex: 0, subject: USER, loss: 'drop', label: 'Test op' }] },
+          { acceptDataLoss: true },
+        );
+
+        expect(asked).toEqual([[]]);
+      });
+
+      it('forwards acceptAccessChanges, so an access question is not asked', async () => {
+        const asked = await questionsAsked(
+          { accessChanges: [{ operationIndex: 0, subject: USER, widens: true }] },
+          { acceptAccessChanges: true },
+        );
+
+        expect(asked).toEqual([[]]);
+      });
     });
 
     it('does not fail when marker is missing', async () => {

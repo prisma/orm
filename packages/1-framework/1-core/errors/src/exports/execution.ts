@@ -5,7 +5,6 @@ export {
   errorMarkerRequired,
   errorMarkerRowCorrupt,
   errorRuntime,
-  errorSchemaVerificationFailed,
   errorTargetMismatch,
   parseMarkerRowSafely,
   rethrowMarkerReadError,

@@ -565,6 +565,39 @@ describe('migration plan', () => {
       expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
     });
 
+    it('advises the plan without a rename typed at the prompt once its plan is refused, keeping the given delete', async () => {
+      const project = await losingProject();
+      const result = await executeMigrationPlanCommand(
+        {
+          config: {
+            ...offlineConfig({
+              project,
+              script: {
+                operations: [ADDITIVE_OP, DESTRUCTIVE_OP, DROP_AUDIT_OP],
+                dataLoss: [LEGACY_LOSS, AUDIT_LOSS],
+                leaveOutStatements: true,
+              },
+            }),
+            baseDir: project.dir,
+          } as unknown as PrismaNextConfig,
+          cwd: project.dir,
+          projectDir: project.dir,
+          statements: [{ verb: 'delete', text: 'audit_log' }],
+          answerQuestions: async (questions) =>
+            questions.map(() => ({ verb: 'rename', text: 'Legacy:Archive' })),
+          client: { renderContractDts: renderContractDtsMock },
+        },
+        Date.now(),
+      );
+
+      expect(!result.ok && result.failure.toEnvelope().nextActions).toEqual([
+        {
+          kind: 'user-choice',
+          label: `To write the rewrites by hand, plan the change without --rename Legacy:Archive with \`{bin} migration plan --from ${HASH_FROM} --delete audit_log\`, add the rewrites the message describes to the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\``,
+        },
+      ]);
+    });
+
     it('refuses where nobody can answer, listing every operation with the flags that answer it', async () => {
       const project = await losingProject();
 
@@ -1076,6 +1109,7 @@ describe('migration plan', () => {
       block.kind === 'fields' ? block.rows : [],
     );
     expect(fieldRows).toContainEqual({ label: 'space cipherstash', value: extensionDir });
+    expect(run.stdout.trimEnd().split('\n').at(-1)).toBe(extensionDir);
     expect(run.presented?.presentation.next?.at(0)).toMatchObject({
       kind: 'edit-file',
       label: expect.stringContaining(extensionDir),
@@ -1094,16 +1128,45 @@ describe('migration plan', () => {
     });
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('prints the directory it wrote', async () => {
     const project = await plannableProject();
 
-    const run = await harness(project).run(['migration', 'plan'], {
-      cwd: project.dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(project).run(['migration', 'plan'], { cwd: project.dir });
+    const dirs = await plannedDirs(project);
 
-    expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirs.at(-1) ?? '')}\n`);
+  });
+
+  it('prints the baseline directory before the delta directory', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
+    await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+
+    const run = await harness(project).run(['migration', 'plan', '--name', 'delta'], {
+      cwd: project.dir,
+    });
+    const dirs = await plannedDirs(project);
+
+    expect(run.stdout).toBe(
+      `${join('migrations', 'app', dirs[0] ?? '')}\n${join('migrations', 'app', dirs[1] ?? '')}\n`,
+    );
+  });
+
+  it('prints a baseline with placeholders and no delta once', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_TO });
+    await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
+
+    const run = await harness(project, {
+      script: {
+        operations: [ADDITIVE_OP],
+        throwOnOperations: errorUnfilledPlaceholder('backfill'),
+      },
+    }).run(['migration', 'plan'], { cwd: project.dir });
+    const dirs = await plannedDirs(project);
+
+    expect(dirs).toHaveLength(1);
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirs[0] ?? '')}\n`);
   });
 
   it('errors when the contract has not been emitted', async () => {

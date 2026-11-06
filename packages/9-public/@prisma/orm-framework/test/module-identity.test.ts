@@ -28,7 +28,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..',
 /**
  * The module the assertions are made about: `@internal/contract`, which
  * every family and every target depends on, published inside
- * `@prisma/orm-framework` and republished by all three facades.
+ * `@prisma/orm-framework` and republished by every facade.
  *
  * `ContractValidationError` is the witness. An error class is checked with
  * `instanceof`, so a second copy of the module does not throw or fail to
@@ -40,6 +40,7 @@ const witness = {
   perFacade: [
     '@prisma/orm-postgres/contract/contract-validation-error',
     '@prisma/orm-sqlite/contract/contract-validation-error',
+    '@prisma/orm-mysql/contract/contract-validation-error',
     '@prisma/orm-mongo/contract/contract-validation-error',
   ],
 } as const;
@@ -51,9 +52,11 @@ const shells: ShellName[] = [
   '@prisma/orm-family-mongo',
   '@prisma/orm-target-postgres',
   '@prisma/orm-target-sqlite',
+  '@prisma/orm-target-mysql',
   '@prisma/orm-target-mongo',
   '@prisma/orm-postgres',
   '@prisma/orm-sqlite',
+  '@prisma/orm-mysql',
   '@prisma/orm-mongo',
 ];
 
@@ -79,7 +82,7 @@ describe('module identity across import roots', () => {
   // The published surface is one graph. Postgres, SQLite and Mongo each reach
   // the framework's error class, and it is the same class every time, so an
   // application can combine them and `instanceof` still holds.
-  it('gives all three facades the framework shell’s own class', () => {
+  it('gives every facade the framework shell’s own class', () => {
     const script = [
       "import { strict as assert } from 'node:assert';",
       `const platform = await import('${witness.platform}');`,

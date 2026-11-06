@@ -1,23 +1,27 @@
 /**
  * The ADR 254 cast rule for one written value: the authoring entry for the syntax it is written in
  * reads it into a value of a data type, and the receiving type takes that value directly or
- * through a cast it declares. Family-blind; list casts stay with the family that reads lists.
+ * through a cast it declares. Family-blind.
  */
 
 import type { JsonValue } from '@internal/contract/types';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { CodecLookupWithDescriptors, CodecRef } from './codec-types';
 import {
   type DataTypeId,
   type DataTypeLookup,
   type DataTypeParams,
   type DataTypeValue,
   dataTypeId,
+  dataTypeParams,
 } from './data-type';
 import type { DataTypeAuthoringEntry } from './framework-authoring';
+import { numeralText } from './numeral-text';
+import { codecForRef } from './resolve-codec';
 import { printedTaggedLiteralReadsBack, printTaggedLiteral } from './tagged-literal';
 
-/** One written value, in the syntax a contract source wrote it in. The framework defines the list shape, and the family's default reader is the only reader of it. ADR 254. */
+/** One written value, in the syntax a contract source wrote it in. ADR 254. */
 export type WrittenValue =
   | { readonly kind: 'tag'; readonly tag: string; readonly text: string }
   | { readonly kind: 'string'; readonly text: string }
@@ -32,6 +36,8 @@ export interface DataTypeSupport {
   readonly entries: Readonly<Record<string, DataTypeAuthoringEntry>>;
   readonly lookup: DataTypeLookup;
   readonly dataTypeOfCodec: (codecId: string) => DataTypeId | undefined;
+  /** Every component's {@link AuthoringContributions.textDataTypes}, each once: the data types whose values are text. None when the stack names none. */
+  readonly textDataTypes?: readonly DataTypeId[];
 }
 
 export type ReadRefusal =
@@ -58,7 +64,11 @@ export type CastRefusal =
 
 /** A cast-rule refusal worded for a diagnostic. */
 export interface RefusalDescription {
-  readonly code: 'PSL_UNKNOWN_LITERAL_TAG' | 'PSL_VALUE_TYPE_INCOMPATIBLE' | 'PSL_INVALID_LITERAL';
+  readonly code:
+    | 'PSL_UNKNOWN_LITERAL_TAG'
+    | 'PSL_VALUE_TYPE_INCOMPATIBLE'
+    | 'PSL_INVALID_LITERAL'
+    | 'PSL_VALUE_REFUSED';
   readonly message: string;
 }
 
@@ -133,8 +143,31 @@ function isSameForm(a: WrittenForm, b: WrittenForm): boolean {
 /** Text a contract source reads as a number literal. */
 const NUMBER_TEXT = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$|^[+-]?(?:NaN|Infinity)$/;
 
+const DECIMAL_TEXT = /^([+-]?)0*(\d*?)(?:\.(\d*?))?0*$/;
+
+/** A decimal numeral in one form: no plus sign, no leading or trailing zeros, the sign of zero kept. Other text is itself. */
+function canonicalNumber(text: string): string {
+  const match = text.includes('.') ? DECIMAL_TEXT.exec(text) : /^([+-]?)0*(\d*)$/.exec(text);
+  if (match === null) return text;
+  const [, sign = '', whole = '', fraction = ''] = match;
+  return `${sign === '-' ? '-' : ''}${whole === '' ? '0' : whole}${fraction === '' ? '' : `.${fraction}`}`;
+}
+
+/** Whether a stored value is the number `text` writes, digit for digit and with its sign, so writing the text unquoted stores what it says. */
+function sameNumber(text: string, stored: JsonValue): boolean {
+  const storedText =
+    typeof stored === 'number'
+      ? Object.is(stored, -0)
+        ? '-0'
+        : numeralText(stored)
+      : typeof stored === 'string'
+        ? stored
+        : undefined;
+  return storedText !== undefined && canonicalNumber(storedText) === canonicalNumber(text);
+}
+
 /**
- * The literal to write in place of a quoted string that `receivingType` refuses under `receivingParams`: the string as a literal of the first tag the type admits, or else the string's text unquoted, as a number or a boolean. `undefined` when the value is not a quoted string, no such literal reads back as the same text, or the type would refuse each of them too.
+ * The literal to write in place of a quoted string that `receivingType` refuses under `receivingParams`: the string as a literal of the first tag the type admits, or else the string's text unquoted, as a number or a boolean. `undefined` when the value is not a quoted string, no such literal reads back as the same text, the type would refuse each of them too, or the number the text writes would be stored as another number, as `-0` is stored without its sign or `9007199254740993` as the nearest double.
  */
 export function exactRewrite(
   support: DataTypeSupport,
@@ -142,13 +175,18 @@ export function exactRewrite(
   written: WrittenScalar,
 ): string | undefined {
   if (written.kind !== 'string') return undefined;
-  const admits = (candidate: WrittenScalar): boolean => {
+  const castOf = (candidate: WrittenScalar): DataTypeValue | undefined => {
     const read = readWrittenValue(support, candidate);
-    return (
-      read.ok &&
-      castTypedValue(support, receiving.receivingType, receiving.receivingParams, read.value).ok
+    if (!read.ok) return undefined;
+    const cast = castTypedValue(
+      support,
+      receiving.receivingType,
+      receiving.receivingParams,
+      read.value,
     );
+    return cast.ok ? cast.value : undefined;
   };
+  const admits = (candidate: WrittenScalar): boolean => castOf(candidate) !== undefined;
   const [tag] = admittedTags(support, receiving.receivingType);
   if (
     tag !== undefined &&
@@ -157,8 +195,9 @@ export function exactRewrite(
   ) {
     return printTaggedLiteral(tag, written.text);
   }
-  if (NUMBER_TEXT.test(written.text) && admits({ kind: 'number', text: written.text })) {
-    return written.text;
+  if (NUMBER_TEXT.test(written.text)) {
+    const stored = castOf({ kind: 'number', text: written.text });
+    if (stored !== undefined && sameNumber(written.text, stored.value)) return written.text;
   }
   if (
     (written.text === 'true' || written.text === 'false') &&
@@ -301,6 +340,124 @@ export function castTypedValue(
     return notOk({ kind: 'unreadable', message: messageOf(error) });
   }
   return valueOfType(support, receivingType, () => json, receivingParams, refusedByType);
+}
+
+/**
+ * Reads `written` as a value of `receivingType`: through the authoring entry for its syntax, then into `receivingType` directly or through a cast it declares. A refusal is worded for a diagnostic at the written value. The read every value of a fixed receiving type takes: an attribute argument, a type-constructor argument, and its TypeScript counterpart. ADR 254.
+ */
+export function readWrittenValueAs(
+  support: DataTypeSupport,
+  receivingType: DataTypeId,
+  written: WrittenScalar,
+): Result<DataTypeValue, RefusalDescription> {
+  const forms = admittedForms(support, [receivingType]);
+  const read = readWrittenValue(support, written);
+  if (!read.ok) {
+    return notOk(describeRefusal(read.failure, support, { forms, rewrite: undefined }));
+  }
+  const cast = castTypedValue(support, receivingType, {}, read.value);
+  if (cast.ok) return cast;
+  const rewrite = exactRewrite(support, { receivingType, receivingParams: {} }, written);
+  return notOk(describeRefusal(cast.failure, support, { forms, rewrite }));
+}
+
+/**
+ * Reads `written` into the codec `ref` names, built with `ref`'s type parameters: the authoring entry for its syntax reads it, the codec's data type takes it directly or through a cast, the data type constructs it under the type parameters, and the codec checks it. Returns the value as the data type stores it. A written list is read element by element into the element types of the data type's list cast, then through the list cast.
+ *
+ * A refusal is worded for a diagnostic, after `subject` and the element it is about, as in `enum "Ratio" member "Half" at element 2: Expected a number`: syntax no entry reads or a cast refuses is `PSL_INVALID_LITERAL`, a value of a type the data type neither is nor casts from is `PSL_VALUE_TYPE_INCOMPATIBLE`, and a value the data type under the type parameters or the codec refuses is `PSL_VALUE_REFUSED`. ADR 254.
+ */
+export function readWrittenValueIntoCodec(input: {
+  readonly support: DataTypeSupport;
+  readonly codecLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>;
+  readonly ref: CodecRef;
+  readonly written: WrittenValue;
+  readonly subject: string;
+}): Result<JsonValue, RefusalDescription> {
+  const { support, ref, written, subject } = input;
+  const codec = codecForRef(input.codecLookup, ref);
+  if (codec === undefined) {
+    throw new InternalError(
+      `${subject}: no codec descriptor is registered for "${ref.codecId}", but the value was read for it.`,
+    );
+  }
+  const receivingType = codec.dataType.id;
+  const receivingParams = dataTypeParams(codec.dataType, ref.typeParams);
+  const refused = (
+    elementIndex: number | undefined,
+    { code, message }: RefusalDescription,
+  ): Result<JsonValue, RefusalDescription> =>
+    notOk({
+      code,
+      message: `${elementIndex === undefined ? subject : `${subject} at element ${elementIndex + 1}`}: ${message}`,
+    });
+  const stored = (json: JsonValue): Result<JsonValue, RefusalDescription> => {
+    try {
+      const value = codec.dataType.valueFrom(json, receivingParams);
+      codec.fromDataTypeValue(value);
+      return ok(codec.dataType.toContract(value));
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return refused(undefined, { code: 'PSL_VALUE_REFUSED', message: messageOf(error) });
+    }
+  };
+  const forms = admittedForms(support, [receivingType]);
+
+  if (written.kind === 'list') {
+    const listCast = support.lookup.get(receivingType)?.listCast;
+    if (listCast === undefined) {
+      return refused(undefined, {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: `${describeExpected(forms)}; got a list`,
+      });
+    }
+    const elementGuidance = { forms: admittedForms(support, listCast.of), rewrite: undefined };
+    const elements: JsonValue[] = [];
+    for (const [index, element] of written.elements.entries()) {
+      if (element.kind === 'list') {
+        return refused(index, {
+          code: 'PSL_INVALID_LITERAL',
+          message: 'a list holds values, not other lists',
+        });
+      }
+      const read = readWrittenValue(support, element);
+      if (!read.ok) return refused(index, describeRefusal(read.failure, support, elementGuidance));
+      if (!listCast.of.includes(read.value.type)) {
+        return refused(index, {
+          code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+          message: describeRefusedValueType(
+            { receivingType, valueType: read.value.type },
+            support,
+            elementGuidance,
+          ),
+        });
+      }
+      elements.push(read.value.value);
+    }
+    let json: JsonValue;
+    try {
+      json = listCast.cast(elements);
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return refused(undefined, { code: 'PSL_INVALID_LITERAL', message: messageOf(error) });
+    }
+    return stored(json);
+  }
+
+  const read = readWrittenValue(support, written);
+  if (!read.ok) {
+    return refused(
+      undefined,
+      describeRefusal(read.failure, support, { forms, rewrite: undefined }),
+    );
+  }
+  const cast = castTypedValue(support, receivingType, receivingParams, read.value);
+  if (cast.ok) return stored(cast.value.value);
+  const { failure } = cast;
+  if (failure.kind === 'refused-by-type') {
+    return refused(undefined, { code: 'PSL_VALUE_REFUSED', message: failure.message });
+  }
+  const rewrite = failure.kind === 'no-cast' ? exactRewrite(support, failure, written) : undefined;
+  return refused(undefined, describeRefusal(failure, support, { forms, rewrite }));
 }
 
 /** The type itself, then each type it casts from, in key order. */

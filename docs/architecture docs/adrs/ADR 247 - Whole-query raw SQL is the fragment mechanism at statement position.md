@@ -119,7 +119,7 @@ A mutation without `RETURNING` terminates with `.affectedCount()`, which is a pl
 
 - **Lane (`@internal/sql-relational-core`)** owns the node, the terminators, spec normalization (a bare codec id becomes `{ codecId, nullable: false }`), and the splice.
 - **Contract-typed lane (`@internal/sql-builder`)** owns the lane type and its factory (`createRawLane`, which each facade composes as `db.raw`), the table proxy's `columns` accessor, and the resolution of spec entries to TypeScript row types.
-- **Adapters** render the node by walking its parts through the same expression renderer that serves `RawExpr`, emitting each target's placeholder form (`$N` for Postgres, `?` for SQLite).
+- **Adapters** render the node by walking its parts through the same expression renderer that serves `RawExpr`, emitting each target's placeholder form (`$N` for Postgres, `?N` for SQLite).
 - **Runtime** reads the node's `result` twice: where it decodes, a row spec becomes the decode context's aliases and per-column codecs; where it prepares, the declared result picks which prepared handle the statement earns. Which runtime operation a plan belongs to needs no raw-specific code — a row-returning statement is run through `runtime.query(plan)`, which streams decoded rows, and a statement declaring an affected-row count through `runtime.execute(plan)`, which resolves to `SqlStatementStats`. Guardrails run over the SQL text via `evaluateRawGuardrails`, because a raw statement has no structural shape for the AST lints to inspect.
 
 ## Result semantics

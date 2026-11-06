@@ -24,8 +24,8 @@ model Post {
   title     String
   views     Int
   userId    Int       @map("user_id")
-  createdAt DateTime  @default(now()) @map("created_at")
-  deletedAt DateTime? @map("deleted_at")
+  createdAt TimestamptzTemporal  @default(now()) @map("created_at")
+  deletedAt TimestamptzTemporal? @map("deleted_at")
 
   user     User      @relation(fields: [userId], references: [id])
   comments Comment[]
@@ -37,7 +37,7 @@ model Comment {
   id        Int       @id @default(autoincrement())
   body      String
   postId    Int       @map("post_id")
-  deletedAt DateTime? @map("deleted_at")
+  deletedAt TimestamptzTemporal? @map("deleted_at")
 
   post Post @relation(fields: [postId], references: [id])
 

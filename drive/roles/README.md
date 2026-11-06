@@ -74,7 +74,7 @@ The key distinction: an Orchestrator holds a **broad view** across an entire pro
 **The same workflow, incorrect:**
 1. Reads `projects/my-project/plan.md`. *(Still OK.)*
 2. Reads `docs/drive/principles/decomposition-and-cost.md` to understand dispatch sizing. *(Execution drift begins — now the Orchestrator's context contains implementation detail about how slices are sized.)*
-3. Reads `packages/2-sql/5-runtime/src/codecs/encoding.ts` to understand what the slice will need to implement. *(Deep context pollution — the Orchestrator is now doing reconnaissance that the Implementer should do.)*
+3. Reads `packages/2-sql-family/5-runtime/src/codecs/encoding.ts` to understand what the slice will need to implement. *(Deep context pollution — the Orchestrator is now doing reconnaissance that the Implementer should do.)*
 4. Writes the slice spec itself. *(Full execution — the Orchestrator has collapsed into an Implementer.)*
 
 The incorrect version is not hypothetical. It is the default failure mode: each step feels locally justified ("I need to understand X to write a good brief for Y"), and the cumulative effect is an Orchestrator whose context window is full of implementation detail before the first Executor has been spawned.

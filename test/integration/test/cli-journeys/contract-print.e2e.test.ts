@@ -23,7 +23,7 @@ const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtu
 const REPO_ROOT = join(__dirname, '../../../..');
 const READMES_WITH_POLICY_CONFIG = [
   join(REPO_ROOT, 'packages/1-framework/3-tooling/cli/README.md'),
-  join(REPO_ROOT, 'packages/3-extensions/postgres/README.md'),
+  join(REPO_ROOT, 'packages/3-targets/postgres/9-facade/README.md'),
 ];
 
 /** The published import paths the READMEs use, and the workspace packages that back them. */

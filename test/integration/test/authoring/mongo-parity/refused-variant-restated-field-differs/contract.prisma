@@ -1,0 +1,18 @@
+// use prisma-8
+
+model Task {
+  id    ObjectId @id @map("_id")
+  type  String
+  title String
+  note  String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  title Int32   @map("t")
+  note  String?
+
+  @@base(Task, "bug")
+}

@@ -25,7 +25,7 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import { descriptorsFromCodecs } from '@internal/sql-runtime/test/utils';
 import { applicationDomainOf } from '@repo/test-utils';
 import { vi } from 'vitest';
-import { createTestSqlNamespace } from '../../../2-sql/1-core/contract/test/test-support';
+import { createTestSqlNamespace } from '../../../2-sql-family/1-core/contract/test/test-support';
 import { SupabaseRuntimeImpl } from '../src/runtime/supabase-runtime';
 
 export const testContract: Contract<SqlStorage> = {

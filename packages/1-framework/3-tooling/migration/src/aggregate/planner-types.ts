@@ -6,6 +6,7 @@ import type {
   ControlFamilyInstance,
   MigrationOperationPolicy,
   MigrationPlan,
+  MigrationPlanNamespaces,
   MigrationPlannerConflict,
   MigrationPlanOperation,
   MigrationPlanSubjects,
@@ -149,11 +150,11 @@ export interface AggregateMigrationEdgeRef {
  *   migration packages at all; the aggregate declares the no-op directly
  *   without invoking either). Surfaced for diagnostics; not consumed by
  *   the runner.
- * - `dataLoss` and `accessWidening`: what the operations of `plan` lose
- *   and whose access they widen. A recorded path names each destructive
+ * - `dataLoss` and `accessChanges`: what the operations of `plan` lose
+ *   and whose access they change. A recorded path names each destructive
  *   operation by its storage name, since no planner mapped it to a model,
  *   lists each as a `drop`, since a recorded operation does not say whether
- *   it drops or changes a type, and lists no widening: a written migration is
+ *   it drops or changes a type, and lists no access change: a written migration is
  *   reviewed before it runs.
  * - `temporaryValues`: the new required fields whose existing rows the plan
  *   gives a temporary value. A recorded path lists none.
@@ -166,6 +167,8 @@ export interface PerSpacePlan extends MigrationPlanSubjects {
   readonly warnings?: readonly MigrationPlannerConflict[];
   /** The statements the plan applied; empty for a space planned without statements. */
   readonly appliedStatements: readonly AppliedMigrationStatement[];
+  /** The namespaces a `plan-from-diff` plan removes and adds, when its planner reports them. */
+  readonly namespaces?: MigrationPlanNamespaces;
   /**
    * Per-edge breakdown of the chain. `resolve-recorded-path` plans carry
    * one entry per authored edge; `plan-from-diff` and `declared-state`

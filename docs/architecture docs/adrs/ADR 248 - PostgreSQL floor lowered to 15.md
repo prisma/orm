@@ -56,7 +56,7 @@ If any of these becomes worth emitting, the path is per-server capability gating
 
 ## Enforcement
 
-- Source of truth: `packages/3-targets/3-targets/postgres/package.json` → `prismaNext.minServerVersion: "15"`.
+- Source of truth: `packages/3-targets/postgres/1-target/package.json` → `prismaNext.minServerVersion: "15"`.
 - CLI mirror: `MIN_SERVER_VERSION.postgres` in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts`; the drift test in `tsconfig-env.test.ts` asserts the two match.
 - CI proves the floor: the `postgres:15` service containers in `.github/workflows/ci.yml`. **When bumping the floor, update these image tags** — this replaces ADR 222's step 3, which pointed only at `docker-compose.yaml`.
 - Local dev (`docker-compose.yaml`) also runs the floor version (`postgres:15-alpine`).

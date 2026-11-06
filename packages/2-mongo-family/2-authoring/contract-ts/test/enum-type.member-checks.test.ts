@@ -45,6 +45,7 @@ const target = {
   targetId: 'mongo',
   version: '0.0.1',
   defaultNamespaceId: '__unbound__',
+  dataTypes: [fixtureType],
   types: {
     codecTypes: {
       codecDescriptors: [

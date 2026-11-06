@@ -64,7 +64,7 @@ A chain of N migrations previously stored roughly 2N copies of N+1 distinct cont
 
 The store is keyed by `storage.storageHash`, not a hash over the full contract. Because `migration.json` already carries `from` / `to` as storage hashes (ADR 199), every reader that already has a hash in hand — a migration manifest, a ref pointer, a `--to <hash>` argument — resolves the store entry directly, with no secondary index to maintain.
 
-The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
+The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
 
 ## Write-if-absent, made sound by canonicalization
 
@@ -120,4 +120,4 @@ Store entries could be written as `contract.json.gz`, with readers tolerating ei
 - [ADR 232 — A migration is authored against its start and end contract snapshots](ADR%20232%20-%20A%20migration%20is%20authored%20against%20its%20start%20and%20end%20contract%20snapshots.md) (amended — its file-layout claims describe the pre-store sibling-copy shape)
 - [Migration System subsystem doc](../subsystems/7.%20Migration%20System.md)
 - Store implementation: `packages/1-framework/1-core/framework-components/src/control/contract-snapshot-layout.ts`, `packages/1-framework/3-tooling/migration/src/contract-snapshot-store.ts`
-- Postgres content-addressed contract table: `packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`
+- Postgres content-addressed contract table: `packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`

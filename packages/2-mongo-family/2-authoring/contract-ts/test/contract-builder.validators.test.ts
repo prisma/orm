@@ -210,7 +210,11 @@ describe('mongo defineContract collection validators', () => {
       validationAction: 'error',
     });
     expect(contract.storage.storageHash).toBe(
-      buildMongoStorage({ collections: { users: { validator } }, valueSets: {} }).storageHash,
+      buildMongoStorage({
+        namespaceId: UNBOUND_NAMESPACE_ID,
+        collections: { users: { validator } },
+        valueSets: {},
+      }).storageHash,
     );
   });
 });

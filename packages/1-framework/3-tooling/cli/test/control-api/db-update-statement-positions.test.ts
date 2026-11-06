@@ -118,7 +118,7 @@ const migrations = {
         operationIndexes: [0],
       })),
       dataLoss: [{ operationIndex: 0, subject: LOST, loss: 'drop', label: 'Drop table audit_log' }],
-      accessWidening: [{ operationIndex: 0, subject: LOST, widens: true }],
+      accessChanges: [{ operationIndex: 0, subject: LOST, widens: true }],
       temporaryValues: [],
       plan: {
         targetId: 'postgres',
@@ -219,7 +219,7 @@ describe('executeDbUpdate statement positions', () => {
       ),
     ).toEqual([[RENAME_OP.id]]);
     expect(
-      [result.value.dataLoss, result.value.accessWidening].map((entries) =>
+      [result.value.dataLoss, result.value.accessChanges].map((entries) =>
         entries.map(({ operationIndex, subject }) => ({
           operation: operations[operationIndex]?.id,
           subject,

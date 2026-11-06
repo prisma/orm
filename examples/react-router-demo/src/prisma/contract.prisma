@@ -3,7 +3,7 @@
 model User {
   id        Char(36) @id @onCreate(uuid())
   email     String
-  createdAt DateTime @default(now())
+  createdAt DateTime(as: temporal) @default(now())
   posts     Post[]
 
   @@map("user")
@@ -13,7 +13,7 @@ model Post {
   id        Char(36) @id @onCreate(uuid())
   title     String
   userId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 

@@ -1,6 +1,7 @@
 import {
   type ArgType,
   type Binder,
+  EMPTY_DATA_TYPES,
   isNamespaceLike,
   memberEntries,
   type Scope,
@@ -212,6 +213,7 @@ function entityItems(
   return scopeCompletionItems(
     entries,
     input.binder,
+    EMPTY_DATA_TYPES,
     {
       start: input.sourceFile.positionAt(input.context.replacementStartOffset),
       end: input.sourceFile.positionAt(input.context.replacementEndOffset),

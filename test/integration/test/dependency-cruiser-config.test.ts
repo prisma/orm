@@ -22,7 +22,7 @@ function regexesContaining(fragment: string): RegExp[] {
 
 describe('dependency-cruiser config glob normalization', () => {
   it('matches file-specific glob targets', () => {
-    const target = 'packages/2-sql/9-family/src/exports/control.ts';
+    const target = 'packages/2-sql-family/9-family/src/exports/control.ts';
     const regexes = regexesContaining(target);
 
     expect(regexes.length).toBeGreaterThan(0);
@@ -30,8 +30,8 @@ describe('dependency-cruiser config glob normalization', () => {
   });
 
   it('matches directory globs against child files', () => {
-    const fragment = 'packages/3-extensions/postgres/src/exports';
-    const target = 'packages/3-extensions/postgres/src/exports/runtime.ts';
+    const fragment = 'packages/3-targets/postgres/9-facade/src/exports';
+    const target = 'packages/3-targets/postgres/9-facade/src/exports/runtime.ts';
     const regexes = regexesContaining(fragment);
 
     expect(regexes.length).toBeGreaterThan(0);

@@ -17,7 +17,7 @@ import {
 import { isPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer } from '../../../../packages/2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer } from '../../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 import {
   planContract,
   representativePlans,

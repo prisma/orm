@@ -185,7 +185,9 @@
                   "codecId": "pg/geometry@1",
                   "dataType": "postgis/geometry",
                   "nullable": false,
-                  "typeRef": "WgsGeometry"
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 },
                 "name": {
                   "codecId": "pg/text@1",
@@ -208,7 +210,9 @@
                   "codecId": "pg/geometry@1",
                   "dataType": "postgis/geometry",
                   "nullable": false,
-                  "typeRef": "WgsGeometry"
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 },
                 "id": {
                   "codecId": "sql/char@1",
@@ -252,7 +256,9 @@
                   "codecId": "pg/geometry@1",
                   "dataType": "postgis/geometry",
                   "nullable": false,
-                  "typeRef": "WgsGeometry"
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 }
               },
               "foreignKeys": [],
@@ -270,17 +276,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "254e34b6bf4a1f74980cfdfb8c038a58e2c06fdc73c1b19bd6f4019373e3ca58",
-    "types": {
-      "WgsGeometry": {
-        "codecId": "pg/geometry@1",
-        "dataType": "postgis/geometry",
-        "kind": "codec-instance",
-        "typeParams": {
-          "srid": 4326
-        }
-      }
-    }
+    "storageHash": "28b5e5f98ce0e148f03e345518c9c53cb7a04a82e8e58de74a87c1b4ae08cf65"
   },
   "execution": {
     "executionHash": "73426d737fd7fe88107a86f2a5602ff842560bf4a193aaf5ae7355b79f511658",
@@ -341,6 +337,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

@@ -251,7 +251,7 @@ type ErroredEnvelope = {
 
 ## Banning bare throws
 
-A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-throws.mjs`, modeled on the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
+A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-ratchets.mjs`, shared with the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
 
 Scope of the ban:
 
@@ -315,7 +315,7 @@ The 46 numeric codes. Grouped by destination namespace; a `↦ merges` note mark
 | PN-RUN-3001 | `errorMarkerMissing` | `CONTRACT.MARKER_MISSING` ↦ merges with existing runtime code |
 | PN-RUN-3002 | `errorHashMismatch` | `CONTRACT.MARKER_MISMATCH` ↦ merges with existing runtime code |
 | PN-RUN-3003 | `errorTargetMismatch` | `CONTRACT.TARGET_MISMATCH` |
-| PN-RUN-3004 | `errorSchemaVerificationFailed` | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
+| PN-RUN-3004 | `errorSchemaVerificationFailed` (since removed; `db verify` and `db sign` raise the code as a diagnostic) | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
 | PN-RUN-3005 | `errorMarkerRowCorrupt` | `CONTRACT.MARKER_ROW_CORRUPT` |
 | PN-RUN-3006 | `errorMarkerReadFailed` | `CONTRACT.MARKER_READ_FAILED` |
 | PN-RUN-3010 | `errorMarkerRequired` | `CONTRACT.MARKER_REQUIRED` |

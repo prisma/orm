@@ -17,13 +17,16 @@ import type {
   FailedCast,
   FailedConversion,
   FailedTypeChange,
+  KeepDataEdit,
   MigrationAccessChange,
   MigrationDataLoss,
   MigrationOperationSubject,
+  MigrationPlanNamespaces,
   MigrationPlannerConflict,
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -32,6 +35,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
+import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -235,8 +239,8 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   readonly connection?: unknown;
   /** Consents to every operation that would lose data, without asking. */
   readonly acceptDataLoss?: boolean;
-  /** Consents to every operation that would widen who can read or write rows, without asking. */
-  readonly acceptAccessWidening?: boolean;
+  /** Consents to every operation that would change who can read or write data, without asking. */
+  readonly acceptAccessChanges?: boolean;
   /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
@@ -253,7 +257,7 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   readonly statements?: readonly StatementText[];
   /**
    * Asks, before an apply, what each operation that would lose data means and
-   * whether each that would widen who can read or write rows may run, for the
+   * whether each that would change who can read or write data may run, for the
    * questions no statement answered. The `db update` command asks through its
    * prompt.
    */
@@ -438,12 +442,14 @@ export type DbInitResult = Result<DbInitSuccess, CliStructuredError>;
 /** An operation an apply asks about, with its subject written as the question writes it: `User.nickname`. */
 export interface AskedSubject extends MigrationOperationSubject {
   readonly text: string;
+  /** The subject's namespace when the destination removed it: a `--delete` of it answers the question. */
+  readonly removedNamespace?: string;
 }
 
 /** An operation an apply asks about because it loses its subject's data. */
 export interface AskedDataLoss extends AskedSubject, MigrationDataLoss {}
 
-/** An operation an apply asks about because it changes who can read or write its subject's rows. */
+/** An operation an apply asks about because it changes who can read or write its subject's data. */
 export interface AskedAccessChange extends AskedSubject, MigrationAccessChange {}
 
 /**
@@ -452,6 +458,8 @@ export interface AskedAccessChange extends AskedSubject, MigrationAccessChange {
 export interface DbUpdateSuccess
   extends MigrationPlanSubjects<AskedDataLoss, AskedAccessChange, TemporaryValueReport> {
   readonly mode: 'plan' | 'apply';
+  /** The namespaces the application space's plan removes and adds, when its planner reports them. */
+  readonly namespaces?: MigrationPlanNamespaces;
   readonly plan: {
     readonly operations: ReadonlyArray<{
       readonly id: string;
@@ -491,6 +499,8 @@ export interface DbUpdateSuccess
    * graph ends at it: the origin a `migration plan` for this database starts from.
    */
   readonly databaseStorageHash?: string;
+  /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
 }
 
@@ -521,8 +531,29 @@ export interface RunnerFailureFacts {
   readonly rowsWithoutValue?: readonly RowsWithoutValueReport[];
   /** The check that failed before its operation ran. */
   readonly failedPrecheck?: FailedPrecheckReport;
+  /** The data that still holds stored enum values whose removal its storage cannot take; the failed one first. */
+  readonly rowsHoldingValue?: readonly RowsHoldingValueReport[];
+  /** The existing rows that a check the failed operation adds refuses. */
+  readonly rowsFailingCheck?: RowsFailingCheckReport;
   /** The written migration of the failed operation, when the runner named the operation, or the last one applied when the schema check after apply failed. */
   readonly failedMigration?: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef };
+}
+
+/** The existing rows that a check the failed operation adds refuses, as the advice names them. */
+export type RowsFailingCheckReport = Omit<RowsFailingCheck, 'operationIndex'>;
+
+/** The data that still holds the stored value of an enum value the plan removes from storage that cannot do without it. */
+export interface RowsHoldingValueReport {
+  /** The enum value, as a statement names it, such as `Status.ARCHIVED`. */
+  readonly enumValue: string;
+  /** The enum, as a statement names it, such as `Status`. */
+  readonly enumName: string;
+  /** The stored value, as the database stores it. */
+  readonly value: string | number;
+  /** How many rows hold it. */
+  readonly rows: number;
+  /** The edit to the migration.ts that keeps the data, when the target gives one. */
+  readonly keepDataEdit?: KeepDataEdit;
 }
 
 /** A field that was to become required while rows had no value for it, as the advice names it. */
@@ -534,6 +565,8 @@ export interface RowsWithoutValueReport {
    * rows. `backfillMissedRows`: the migration's backfill step for the field left rows without a value.
    */
   readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
+  /** How many rows have no value. */
+  readonly rows: number;
 }
 
 /** The result of `db update`: a failure is the structured error the command reports. */
@@ -576,6 +609,8 @@ export interface EmitFailure {
   /** For `CONTRACT_SOURCE_INVALID` from a structured error the source threw, such as `CONTRACT.DEFAULT_INVALID` from a TypeScript builder, `meta` holds that error's `code` and its own `meta`, `reason` included. */
   readonly meta: Record<string, unknown> | undefined;
   readonly diagnostics?: ContractSourceDiagnostics;
+  /** Warnings the contract source reported before the emit failed. Undefined when there were none. */
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
 }
 
 /**
@@ -797,6 +832,8 @@ export interface ContractEmitResult {
     /** Path to the emitted contract.d.ts file */
     readonly dts: string;
   };
+  /** Each file or directory written under the migrations directory for a composed extension pack's space, with that space's id. Empty when nothing there changed or the contract went to an output path of its own. */
+  readonly pinnedFiles: readonly { readonly spaceId: string; readonly path: string }[];
   /**
    * Warning surfaced by `validateContractDeps` after a successful publication.
    * Callers (CLI, Vite plugin) decide how to render this; the operation does
@@ -936,9 +973,9 @@ export interface ControlClient {
   readLedger(space?: string): Promise<readonly LedgerEntryRecord[]>;
 
   /**
-   * Advances the database along the migration graph to the target contract.
-   * Each migration runs in its own transaction with full execution checks.
-   * Resume-safe: re-running after failure picks up from the last run migration.
+   * Advances the database along the migration graph to the target contract, with full execution checks.
+   * On a target whose DDL is transactional a failure rolls back every space; otherwise the operations that already ran stay applied.
+   * Resume-safe: re-running after failure picks up from the marker of each space.
    *
    * @param options.contract - The target contract to migrate to
    * @param options.migrationsDir - Root migrations directory (`migrations/` under the project)

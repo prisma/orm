@@ -1,68 +1,26 @@
 # @internal/ids
 
-ID generator helpers for Prisma 8 contracts. This package provides ergonomic helpers that
-produce contract-safe, JSON-serializable execution defaults for client-generated IDs, plus
-runtime generation utilities that Prisma 8 uses before sending data to adapters.
+ID generators for Prisma 8 contracts: the built-in generator ids, the limits of their arguments, how many characters each writes, and the runtime that generates the values before Prisma 8 sends data to adapters.
 
-Each helper owns the column descriptor metadata associated with that generator, so callers only
-pass options supported by the underlying `uniku` generator.
+A contract does not import this package to declare a generated id. It writes the column type, usually the identifier's type alias, and the generator call: `field.column(type.sql.Ulid()).id().onCreate(gen.ulid())` in TypeScript or `sql.Ulid @id @onCreate(ulid())` in PSL.
 
 ## Responsibilities
 
-- Provide ID helper functions (`ulid`, `nanoid`, `uuidv7`, `uuidv4`, `cuid2`, `ksuid`) for contract authoring.
-- Emit contract-safe execution defaults (no executable code stored in the contract).
+- Name the built-in generators (`builtinGeneratorIds`: `ulid`, `nanoid`, `uuidv7`, `uuidv4`, `cuid2`, `ksuid`).
+- Write the generator argument limits once: `UUID_VERSIONS` (4 and 7), `CUID_VERSION` (2) and `NANOID_SIZE` (2 to 255). The generator function signatures import them.
+- `generatedLength(id, params)` gives the number of characters a built-in generator writes, which the SQL family's generator function bindings check a column's length against.
 - Generate values at runtime using `uniku` when mutation defaults require them.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Authoring[ContractAuthoring] --> IdsHelpers[ids_helpers]
-  IdsHelpers --> ContractJson[contract_json]
+  Bindings[generator_function_bindings] --> Ids[ids_limits_and_lengths]
   Runtime[orm_lane] --> IdsRuntime[ids_runtime]
   IdsRuntime --> Uniku[uniku_generators]
 ```
 
 ## Usage
-
-```ts
-import { textColumn } from '@internal/adapter-postgres/column-types';
-import sqlFamily from '@internal/family-sql/pack';
-import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model } from '@internal/sql-contract-ts/contract-builder';
-import postgresPack from '@internal/target-postgres/pack';
-
-export const contract = defineContract({
-  family: sqlFamily,
-  target: postgresPack,
-  models: {
-    User: model('User', {
-      fields: {
-        id: field.generated(uuidv4()).id(),
-        email: field.column(textColumn),
-      },
-    }).sql({ table: 'user' }),
-  },
-});
-```
-
-Pass generator options directly (for helpers whose `uniku` implementation supports them):
-
-```ts
-import { nanoid } from '@internal/ids';
-
-const idSpec = nanoid({ size: 12 });
-```
-
-## Generator-owned codec mapping
-
-- Each helper binds its own descriptor internally (char-based SQL descriptors today).
-- Different helpers can move to different codecs independently (for example `ulid` binary and `nanoid` char/varchar).
-- `nanoid({ size })` also sets descriptor metadata to `character(size)` so contract shape matches generator output length.
-- The default function argument limits are written once, here: `UUID_VERSIONS` (4 and 7), `CUID_VERSION` (2) and `NANOID_SIZE` (2 to 255). The `nanoid` helper, the SQL family's field presets and generator function signatures import them.
-- `generatedLength(id, params)` gives the number of characters a built-in generator writes, which the SQL family's generator function bindings check a column's length against.
-
-Runtime usage:
 
 ```ts
 import { generateId } from '@internal/ids/runtime';

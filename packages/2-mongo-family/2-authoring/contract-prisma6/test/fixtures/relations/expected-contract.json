@@ -208,7 +208,7 @@
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "7e2f23ac6ee6027cc787d4ea8ec7e40d7cc950ec891a4e0edec81e7f73315f4b",
+    "storageHash": "1f9627f7b4b1f564e1a141ae9a59068771907656768dc33918bef27d9b5f99d9",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -220,6 +220,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "User_email_key",
                   "keys": [
                     {
                       "field": "email",
@@ -238,6 +239,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "Profile_userId_key",
                   "keys": [
                     {
                       "field": "userId",

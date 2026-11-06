@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_NAME_INVALID",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "@unique on field \"User.email\": Prisma 6 refuses this name: \"The `map` argument cannot be an empty string.\" Give the index another name with `map`."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_NAME_INVALID",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "@@index([name]) on model \"User\": Prisma 6 refuses this name: \"The constraint name 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii' specified in the `map` argument is too long for your chosen provider. The maximum allowed length is 127 bytes.\" Give the index another name with `map`."
+  }
+]

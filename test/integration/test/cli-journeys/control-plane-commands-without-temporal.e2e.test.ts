@@ -43,7 +43,7 @@ const EMIT_SCHEMA = `// use prisma-8
 
 model Event {
   id        Int      @id
-  createdAt DateTime @default(timestamptz\`2024-01-01T00:00:00Z\`)
+  createdAt TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00Z\`)
 }
 `;
 
@@ -51,9 +51,9 @@ const ONE_INSTANT_SCHEMA = `// use prisma-8
 
 model Event {
   id Int      @id
-  a  DateTime @default(timestamptz\`2024-01-01T00:00:00Z\`)
-  b  DateTime @default(timestamptz\`2024-01-01T00:00:00.000Z\`)
-  c  DateTime @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
+  a  TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00Z\`)
+  b  TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00.000Z\`)
+  c  TimestamptzTemporal @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
 }
 `;
 
@@ -61,9 +61,9 @@ const DEFAULTS_SCHEMA = `// use prisma-8
 
 model Event {
   id        Int            @id
-  localAt   Timestamp(3)   @default(timestamp\`2024-01-01 00:00:00\`)
-  instantAt Timestamptz    @default(timestamptz\`2024-01-01T00:00:00Z\`)
-  history   Timestamp(3)[] @default([timestamp\`2024-01-01 00:00:00\`, timestamp\`2024-06-30 12:34:56.789\`])
+  localAt   TimestampTemporal(3)   @default(timestamp\`2024-01-01 00:00:00\`)
+  instantAt TimestamptzTemporal    @default(timestamptz\`2024-01-01T00:00:00Z\`)
+  history   TimestampTemporal(3)[] @default([timestamp\`2024-01-01 00:00:00\`, timestamp\`2024-06-30 12:34:56.789\`])
 
   @@map("event")
 }
@@ -372,11 +372,9 @@ withTempDir(({ createTempDir }) => {
           const field = readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8')
             .split('\n')
             .find((line) => line.trim().startsWith('localAt'));
-          expect(field?.trim().split(/\s+/)).toEqual([
-            'localAt',
-            'TimestampString(3)',
-            '@default(timestamp`2024-01-01T00:00:00`)',
-          ]);
+          expect(field?.trim().replace(/\s+/g, ' ')).toBe(
+            'localAt DateTime(storage: timestamp) @default(timestamp`2024-01-01T00:00:00`)',
+          );
         },
         timeouts.spinUpPpgDev,
       );

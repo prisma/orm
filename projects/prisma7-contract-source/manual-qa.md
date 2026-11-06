@@ -1,66 +1,54 @@
-# Manual QA: slice 7, generated values
+# Manual QA: slice 8, migrations after the handover
 
-Run against branch `tml-3267-generated-values` after merging `origin/main` and running `pnpm build`. Use the real CLI (the workspace `prisma` bin), a scratch project under `wip/qa/`, and an in-process Postgres from `@prisma/dev` as `examples/prisma7-adoption` does. Record each step's command, output and verdict in `manual-qa-reports/<YYYY-MM-DD>-<runner>.md`.
+Run against branch `tml-3457-migrations-after-handover` after `pnpm build`. Use the real CLI the way a user would: the workspace `prisma` bin for Prisma 8 and the `prisma7` bin (Prisma 7.10.0) that `examples/prisma7-adoption` depends on. Put scratch projects under `wip/qa-b/`, with `node_modules` linked to the example's. Use an in-process Postgres from `@prisma/dev` (`tsx scripts/db-start.ts`, as the example does); never a user database. Record each step's command, trimmed output and verdict in `manual-qa-reports/<YYYY-MM-DD>-pr-b.md`. If a step fails, record the evidence and keep going.
 
-## 1. A Prisma 7 schema with every new shape loads, signs and verifies
+## 1. A Prisma 7 project after the handover
 
-Write `prisma/schema.prisma`:
+Copy the example's `prisma/`, `scripts/`, `src/`, `prisma.config.ts`, `prisma7.config.ts` and `package.json` to `wip/qa-b/p7/`. Start the database with `tsx scripts/db-start.ts`, which writes `.env`.
 
-```prisma
-datasource db {
-  provider = "postgresql"
-}
+Hand the project over:
 
-generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma7"
-}
+- `prisma7 migrate deploy --config prisma7.config.ts` applies both Prisma 7 migrations.
+- `prisma7 generate --config prisma7.config.ts`, then `tsx scripts/seed.ts` writes rows.
+- `prisma contract emit`, `prisma db sign`, then `prisma db verify --strict` report no findings.
 
-model Post {
-  id        String    @id @default(uuid())
-  token     String?   @default(uuid())
-  updatedAt DateTime  @default(now()) @updatedAt
-  editedAt  DateTime? @updatedAt
-  day       DateTime  @updatedAt @db.Date
-  at        DateTime  @updatedAt @db.Time(0)
-  atz       DateTime  @updatedAt @db.Timetz(3)
-}
-```
+### 1a. A changed `onDelete`
 
-- Prisma 7.10.0 creates the database: `prisma7 migrate dev --name init` (or apply the SQL from `prisma7 migrate diff --from-empty --to-schema prisma/schema.prisma --script`).
-- `prisma contract emit` with `contract: prisma7Schema('prisma/schema.prisma')` succeeds.
-- `prisma db sign`, then `prisma db verify --strict` report no findings.
+- Edit `prisma/schema.prisma`: `Post.author` gets `onDelete: Cascade`.
+- `prisma contract emit`, then `prisma migration plan --name author-cascade`. Read the SQL: the change package drops `Post_authorId_fkey` and adds it back with `ON DELETE CASCADE`. The plan asks no question and needs no flag.
+- `prisma db migrate --advance-ref db`, then `prisma db verify --strict`: no findings, nothing unclaimed.
+- In the database, `pg_constraint.confdeltype` for `Post_authorId_fkey` is `c` (it was `r`).
+- `prisma migration plan --name again` plans nothing.
 
-## 2. The ORM writes what Prisma 7 would
+### 1b. A primary key moved while another table's foreign key references it
 
-With the emitted contract, through the Prisma 8 ORM:
+- Edit `User`: `id Int @default(autoincrement()) @unique` and `@@id([id, email])`. `Post.authorId` still references `User.id`.
+- `prisma contract emit`, `prisma migration plan --name user-composite-key`. Read the SQL order: drop `Post_authorId_fkey`, drop `User_pkey`, add `User_pkey PRIMARY KEY ("id", "email")`, create `User_id_key`, add `Post_authorId_fkey` back, unchanged (`ON DELETE CASCADE`).
+- `prisma db migrate --advance-ref db`, `prisma db verify --strict`: no findings.
+- In the database: `User_pkey` covers `(id, email)`; `Post_authorId_fkey` exists; inserting a `Post` with an `authorId` that has no user fails with a foreign key violation.
+- `prisma7 migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma7.config.ts` prints an empty migration.
 
-- Create a `Post` with no fields given: `id`, `token`, `updatedAt`, `editedAt`, `day`, `at`, `atz` are all filled.
-- Create a `Post` with `token: null` and `editedAt: null`: both are stored as `NULL`.
-- Update a `Post` changing nothing but one field: `updatedAt`, `day`, `at`, `atz` and `editedAt` change; with `editedAt: null` it stays `NULL`.
-- At a time just before midnight (fake the clock in a script, or run near 23:59:59), `at` (`time(0)`) is read back without an error.
-- Read the same rows through the Prisma 7 client: the values agree.
+### 1c. A primary key change blocked by a foreign key on an external table
 
-## 3. `contract print` writes it and reads it back
+A Prisma 7 schema cannot mark one table external, so first move the contract source to Prisma 8 PSL, as phase 5 of the example describes:
 
-- `prisma contract print` prints the model. Check by eye that it uses `@default(now())` beside a `temporal.*` preset, `?` on the optional preset fields, and the new date and time presets.
-- `prisma contract print --output src/prisma/contract.prisma`, switch `contract:` to that file, `prisma contract emit`: the contract's storage hash equals the one from step 1, and `prisma db verify --strict` has no findings.
+- `prisma contract print --output prisma/contract.prisma`, point `contract` in `prisma.config.ts` at it, `prisma contract emit`: the storage hash does not change.
+- `Post` and `Tag` keep their keys: the implicit many-to-many junction `_PostToTag` must reference their `@id` (`PSL_JUNCTION_TARGET_FK_NOT_ID`). So add a `Profile` model whose relation references `User`'s composite key `(id, email)` from 1b. Plan and apply it, and insert a profile row for each user.
+- Mark `Profile` `@@control(external)`. Move `User`'s key back to `id` (`@id`), and keep a unique index on `(id, email)` so the `Profile` foreign key still has a target. `prisma contract emit`.
+- `prisma migration plan --name user-key-back` is refused with `foreignKeyConflict`. The message names `User_pkey`, `Profile_userId_userEmail_fkey` and `Profile`, and gives advice for `migration plan` and for `db update`.
+- Follow the `db update` advice on a second database built with `prisma db migrate --to db`: `prisma db update` is refused the same way. Drop the foreign key by hand and remove the relation from the contract, emit, run `prisma db update`, then add the foreign key back to the database and the contract. `prisma db verify --strict` has no findings.
+- Follow the `migration plan` advice on the first database: `prisma migration new --name user-key-back`, write the drop of the foreign key, the key change and the re-add into `migration.ts`, run it with `node`, then `prisma db migrate --advance-ref db`. `prisma db verify --strict` has no findings and the foreign key is enforced.
+- Check the other `migration plan` advice offline: remove `@@control(external)`, emit, and `prisma migration plan --from <hash before the change>` plans the same five operations. Delete that package and put `@@control(external)` back.
 
-## 4. Refusals that must remain, with messages a user can act on
+## 2. Prisma 7 `migrate` commands
 
-Each must fail `contract emit` with one diagnostic naming the file, line and fix:
+In the same project, type each of `prisma migrate dev`, `prisma migrate deploy`, `prisma migrate status`, `prisma migrate diff`, `prisma migrate reset` and `prisma migrate resolve`, in a terminal and with `--json`.
 
-- `title String @updatedAt` → `PSL.PRISMA7_UPDATED_AT_FIELD_INVALID`.
-- `tags DateTime[] @updatedAt` → the same code, with Prisma 7's own message about lists.
-- `stamp DateTime @updatedAt @db.Text` → the same code, at the `@db.Text` attribute.
-- Prisma 8 PSL: a preset that makes the field the primary key, written with `?`, such as `id id.uuidv4Native()?`, → `PSL_PRESET_NOT_OPTIONAL`. A preset with an `onCreate` generator, written with a generating `@default(...)`, such as `id id.uuidv4Native() @default(uuid())`, → `PSL_PRESET_AND_DEFAULT_CONFLICT`, and the first fix it offers is to remove `@default(...)`. Read each message and check it says what to change.
-- No Postgres preset sets its own database default today, so the other case of `PSL_PRESET_AND_DEFAULT_CONFLICT` cannot be reached from a real preset.
+- Each exits 2 with `CLI.COMMAND_MOVED`, a reason, and one replacement command with the binary name filled in.
+- Run each replacement (with placeholders filled in). It exists, and it does what the reason says: after a contract edit, `contract emit` then `migration plan` then `db migrate --advance-ref db` apply it; `db update --dry-run` prints the change and applies nothing; `migration status` lists a pending migration on a database that is behind and `db migrate` applies it; on a new empty database `db migrate` applies every migration; `db sign <migration>` refuses while the database lacks that migration's schema and signs once it has it.
 
-## 5. An extension's default function prints
+## 3. Strict verify reports the cross-schema foreign key `contract infer` leaves out
 
-- In a Prisma 8 PSL project that composes the slugid test pack from `test/integration/test/authoring/parity/default-pack-slugid/`, a field `@default(slugid())` emits, and `prisma contract print` writes `@default(slugid())` back.
+On a fresh database, create `secure.owners (id int4 PRIMARY KEY)` and `public.sessions (id int4 PRIMARY KEY, owner_ref int4 REFERENCES secure.owners(id))`. In a Prisma 8 project, `prisma contract infer`, point the config at the inferred PSL, `prisma contract emit`.
 
-## 6. Upgrade instructions are right
-
-- Follow `upgrade-instructions/pending/now-generators-for-every-date-time-type/app/instructions.md` on `examples/prisma7-adoption` as it was on `main`: re-emit only, no `db sign`, and the app still starts and writes `updatedAt`.
-- Read `upgrade-instructions/pending/contract-print-generated-values/extension/instructions.md` as a pack author: could you add `printArguments` to your own default function from it alone?
+- `prisma db verify --schema-only --strict --json` exits non-zero with `ok: false`, `meta.strict: true`, and exactly one issue: path `database / public / sessions / foreign-key:owner_ref->secure.owners(id)`, node kind `sql-foreign-key`, outcome `not-expected` (no `expected`, one `actual`). No warnings.

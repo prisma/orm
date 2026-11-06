@@ -10,8 +10,9 @@ import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -71,10 +72,10 @@ async function author(
 
 describe('a generator on a Postgres column with a length', () => {
   it.each([
-    ['VarChar(5) @onCreate(uuid())', '', 'uuid()', 36, '5 characters'],
+    ['Varchar(5) @onCreate(uuid())', '', 'uuid()', 36, '5 characters'],
     [
       'Short @onCreate(cuid(2))',
-      'types {\n  Short = VarChar(3)\n}\n\n',
+      'types {\n  Short = Varchar(3)\n}\n\n',
       'cuid(2)',
       24,
       '3 characters',
@@ -83,7 +84,7 @@ describe('a generator on a Postgres column with a length', () => {
     ['Char(10) @onCreate(nanoid(20))', '', 'nanoid(20)', 20, '10 characters'],
     ['Char @onCreate(uuid(7))', '', 'uuid(7)', 36, '1 character'],
     ['Char(25) @onCreate(ulid())', '', 'ulid()', 26, '25 characters'],
-    ['VarChar(26) @onCreate(ksuid())', '', 'ksuid()', 27, '26 characters'],
+    ['Varchar(26) @onCreate(ksuid())', '', 'ksuid()', 27, '26 characters'],
   ])(
     'refuses %s, which is too short for what the generator writes',
     async (field, blocks, call, written, held) => {
@@ -100,11 +101,11 @@ describe('a generator on a Postgres column with a length', () => {
   );
 
   it.each([
-    ['VarChar(36) @onCreate(uuid())', { kind: 'generator', id: 'uuidv4' }],
+    ['Varchar(36) @onCreate(uuid())', { kind: 'generator', id: 'uuidv4' }],
     ['Char(36) @onCreate(uuid(7))', { kind: 'generator', id: 'uuidv7' }],
     ['Char(21) @onCreate(nanoid())', { kind: 'generator', id: 'nanoid' }],
     ['Char(26) @onCreate(ulid())', { kind: 'generator', id: 'ulid' }],
-    ['VarChar @onCreate(uuid())', { kind: 'generator', id: 'uuidv4' }],
+    ['Varchar @onCreate(uuid())', { kind: 'generator', id: 'uuidv4' }],
     ['String @onCreate(ksuid())', { kind: 'generator', id: 'ksuid' }],
   ])('takes %s', async (field, onCreate) => {
     expect(await author('postgres', field)).toEqual({ ok: true, onCreate });

@@ -31,6 +31,7 @@ describe('defineConfig', () => {
       emission: mockHook,
       create: () => ({
         familyId: 'sql',
+        markerLocation: 'prisma_contract.marker',
         deserializeContract: (contract: unknown) => contract as Contract,
         storageNameOf: (operation) => operation.id,
         verify: async () => ({

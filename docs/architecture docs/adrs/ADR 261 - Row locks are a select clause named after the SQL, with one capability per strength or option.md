@@ -123,9 +123,9 @@ Each lock strength and each option has its own boolean capability:
 
 A capability is in the `sql` group when databases outside the Postgres family have the feature. It is in the `postgres` group when only Postgres and databases that speak its dialect have it.
 
-The adapter reports its capabilities, and the emitted contract records them. The typed SQL builder and the ORM client read them from the contract to decide which methods and options exist. The Postgres adapter declares its list once, in [`postgres/src/core/capabilities.ts`](../../../packages/3-targets/6-adapters/postgres/src/core/capabilities.ts), and both its runtime profile and its descriptor use that list.
+The adapter reports its capabilities, and the emitted contract records them. The typed SQL builder and the ORM client read them from the contract to decide which methods and options exist. The Postgres adapter declares its list once, in [`postgres/src/core/capabilities.ts`](../../../packages/3-targets/postgres/2-adapter/src/core/capabilities.ts), and both its runtime profile and its descriptor use that list.
 
-Which capabilities each strength and option needs is declared once, in [`relational-core/src/ast/locking.ts`](../../../packages/2-sql/4-lanes/relational-core/src/ast/locking.ts). The typed SQL builder, the ORM client and the Postgres renderer all read it:
+Which capabilities each strength and option needs is declared once, in [`relational-core/src/ast/locking.ts`](../../../packages/2-sql-family/4-lanes/relational-core/src/ast/locking.ts). The typed SQL builder, the ORM client and the Postgres renderer all read it:
 
 ```ts
 export const lockStrengthCapabilities = {

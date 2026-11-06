@@ -64,12 +64,12 @@ withTempDir(({ createTempDir }) => {
 
           namespace public {
             model BraceDefaults {
-              id    Int               @id(map: "brace_defaults_pkey")
-              words String?[]?        @default(["a", "b"])
-              flags Boolean?[]?       @default([true, false])
-              roles pg.enum(Role)?[]? @default(["USER"])
-              names VarChar?[]?       @default(["x"])
-              days  DateString?[]?    @default([date\`2024-01-01\`])
+              id    Int                          @id(map: "brace_defaults_pkey")
+              words String?[]?                   @default(["a", "b"])
+              flags Boolean?[]?                  @default([true, false])
+              roles pg.enum(Role)?[]?            @default(["USER"])
+              names String(storage: varchar)?[]? @default(["x"])
+              days  Date?[]?                     @default([date\`2024-01-01\`])
 
               @@map("brace_defaults")
             }

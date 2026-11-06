@@ -100,7 +100,7 @@ describe('executeDbInit', () => {
           kind: 'success',
           appliedStatements: [],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
           plan: {
             targetId: 'postgres',

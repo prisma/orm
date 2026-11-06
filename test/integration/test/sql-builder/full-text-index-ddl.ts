@@ -9,7 +9,7 @@ import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/d
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
 import { blindCast } from '@internal/utils/casts';
-import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
 /** An index of the fixture contract, as the migration planner sees it and creates it. */
 export interface PlannedIndex {

@@ -79,7 +79,9 @@ describe('the Prisma 7 result document', () => {
     async () => {
       copyFixture();
 
-      const run = await harness().run(prisma7Argv('--skip-install'), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv('--skip-install'), '--json'], {
+        cwd: projectDir,
+      });
 
       expect(run.exitCode).toBe(0);
       expect(run.presented?.presentation.json).toEqual({

@@ -13,6 +13,7 @@ import {
   HASH_PREVIOUS,
   harness,
   MASKED_CONNECTION,
+  MISSING_COLUMN,
   mocks,
   ormConfig,
   PROFILE_HASH,
@@ -123,8 +124,26 @@ describe('db sign', () => {
           text: 'Left ref "db" untouched (--no-advance-ref)',
         },
       ]);
-      expect(run.presented?.presentation.stdout).toEqual([]);
-      expect(run.stdout).toBe('');
+    });
+
+    it('prints one data line per space: space, status and the contract storage hash', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            signedSpace('app', HASH_A),
+            {
+              space: 'pgvector',
+              status: 'unchanged',
+              contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tupdated\t${HASH_A}\npgvector\tunchanged\t${HASH_EXT}\n`);
     });
 
     it('says when a space had no marker before', async () => {
@@ -185,6 +204,15 @@ describe('db sign', () => {
       });
     });
 
+    it('prints a failed space with status failed', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tfailed\t${HASH_A}\npgvector\tupdated\t${HASH_EXT}\n`);
+    });
+
     it('says nothing was signed when no space verified', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
@@ -209,14 +237,14 @@ describe('db sign', () => {
           code: entry.code,
           severity: entry.severity,
           summary: entry.summary,
-          space: entry.meta?.['space'],
+          meta: entry.meta,
         })),
       ).toEqual([
         {
           code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
           severity: 'error',
           summary: 'Database schema does not satisfy contract',
-          space: 'app',
+          meta: { space: 'app', schemaIssues: [MISSING_COLUMN] },
         },
       ]);
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual([

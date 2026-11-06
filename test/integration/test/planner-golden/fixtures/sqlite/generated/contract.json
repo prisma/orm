@@ -265,7 +265,9 @@
                   "codecId": "sql/varchar@1",
                   "dataType": "sqlite/character-varying",
                   "nullable": false,
-                  "typeRef": "ShortText"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "sqlFloat": {
                   "codecId": "sql/float@1",
@@ -310,22 +312,13 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "79b20e2c4ed3decb2dd7e26a3380f65f3d70711c9421d72f4e3e683f5bf4143c",
-    "types": {
-      "ShortText": {
-        "codecId": "sql/varchar@1",
-        "dataType": "sqlite/character-varying",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 255
-        }
-      }
-    }
+    "storageHash": "65449fc3c32073124545aa03d9f5643e0f9343f6574e4256e5d66b718786f47f"
   },
   "capabilities": {
     "sql": {
       "foreignKeys": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
       "limit": true,

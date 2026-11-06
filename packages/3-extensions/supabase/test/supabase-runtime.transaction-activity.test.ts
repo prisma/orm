@@ -185,8 +185,8 @@ describe('role session transaction end and close()', () => {
 
     settle();
     await ending;
+    await session.release();
     await closing;
     expect(closed).toBe(true);
-    await session.release();
   });
 });

@@ -111,7 +111,7 @@ export interface OrmClientRootMembers<TContract extends Contract<SqlStorage>> {
    *
    * ```ts
    * const notDeleted = db.orm.fragment(
-   *   { deletedAt: field.temporal.timestamptz().optional() },
+   *   { deletedAt: field.column(type.TimestamptzTemporal()).optional() },
    *   (rows) => rows.where((r) => r.deletedAt.isNull()),
    * );
    * db.orm.public.Post.with(notDeleted).deleteAll();

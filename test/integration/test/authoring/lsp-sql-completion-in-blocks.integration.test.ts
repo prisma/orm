@@ -10,7 +10,7 @@ import { setupJourney } from '../utils/journey-test-helpers';
 
 const configPath = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity/prisma.config.ts',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages/prisma.config.ts',
 );
 
 interface LspResponse {

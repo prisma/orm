@@ -2,8 +2,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { timeouts } from '@repo/test-utils';
-import { describe, expect, it } from 'vitest';
+import { build } from 'esbuild';
+import { describe, expect, it, vi } from 'vitest';
 import { loadContractFromTs } from '../src/load-ts-contract';
+
+vi.mock('esbuild', async (importOriginal) => {
+  const esbuild = await importOriginal<typeof import('esbuild')>();
+  return { ...esbuild, build: vi.fn(esbuild.build) };
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, 'fixtures');
@@ -20,6 +26,20 @@ describe('loadContractFromTs', () => {
       expect(contract.target).toBe('postgres');
       expect(contract.storage).toBeDefined();
       expect(contract.domain.namespaces['public']?.models).toBeDefined();
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'imports the framework the contract uses from where it is installed instead of bundling a copy',
+    async () => {
+      vi.mocked(build).mockClear();
+      await loadContractFromTs(join(fixturesDir, 'valid-contract.ts'));
+
+      const bundled = await vi.mocked(build).mock.results[0]?.value;
+      const bundle: string = bundled?.outputFiles?.[0]?.text ?? '';
+      expect(bundle).toMatch(/from "file:\/\/[^"]*\/framework-components\/[^"]*"/);
+      expect(bundle).not.toContain('function defineContract(');
     },
     timeouts.typeScriptCompilation,
   );
@@ -219,6 +239,42 @@ describe('loadContractFromTs structured error codes', () => {
       const error = await capture(join(fixturesDir, 'function-in-object.ts'));
       expect(isStructuredError(error)).toBe(true);
       expect(error).toMatchObject({ code: 'CONTRACT.EXPORT_INVALID' });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it.each([
+    ['non-serializable.ts', 'getter'],
+    ['function-in-object.ts', 'function'],
+    ['circular-reference.ts', 'circular'],
+  ])(
+    'reports the purity check on %s once, with its own reason and no wrapping',
+    async (fixture, reason) => {
+      const error = await capture(join(fixturesDir, fixture));
+      expect(error).toMatchObject({ code: 'CONTRACT.EXPORT_INVALID', meta: { reason } });
+      expect(error).not.toHaveProperty('cause');
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    "checks only the export's own properties, as JSON.stringify serializes them, and never runs an inherited getter",
+    async () => {
+      const contract = await loadContractFromTs(join(fixturesDir, 'inherited-throwing-getter.ts'));
+      expect(Object.keys(contract)).toEqual(['foo']);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    "wraps V8's circular-structure error from JSON.stringify as a serialization failure",
+    async () => {
+      const error = await capture(join(fixturesDir, 'to-json-circular.ts'));
+      expect(error).toMatchObject({
+        code: 'CONTRACT.EXPORT_INVALID',
+        meta: { reason: 'not-json-serializable' },
+        cause: expect.any(TypeError),
+      });
     },
     timeouts.typeScriptCompilation,
   );

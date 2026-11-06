@@ -1,6 +1,6 @@
 import { defineContract, field, model } from '@internal/sql-contract-ts/contract-builder';
-import { createTestSqlNamespace } from '../../../../../2-sql/1-core/contract/test/test-support';
-import { testTypeLookups } from '../../../../../2-sql/1-core/contract/test/test-type-lookups';
+import { createTestSqlNamespace } from '../../../../../2-sql-family/1-core/contract/test/test-support';
+import { testTypeLookups } from '../../../../../2-sql-family/1-core/contract/test/test-type-lookups';
 import { int4Column, textColumn } from '../helpers/column-descriptors';
 import { postgresPack } from '../helpers/postgres-pack';
 import { sqlFamilyPack } from '../helpers/sql-family-pack';

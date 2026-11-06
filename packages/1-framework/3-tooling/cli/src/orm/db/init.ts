@@ -3,7 +3,7 @@ import type { MigrationPlannerConflict } from '@internal/framework-components/co
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
+import { flag, noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
@@ -39,7 +39,9 @@ function initPresentations(inputs: {
 }): Presentations {
   const { document, database, dryRun } = inputs;
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'Data lines are not defined: this command applies a plan, not migrations, so the db migrate fields do not fit. --json carries the plan and what ran.',
+    ),
     human: (): readonly Block[] => [
       {
         kind: 'fields',

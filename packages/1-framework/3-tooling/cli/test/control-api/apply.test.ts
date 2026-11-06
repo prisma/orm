@@ -265,3 +265,67 @@ describe('runMigration, a type change that failed', () => {
     });
   });
 });
+
+describe('runnerFailureFacts, rows that hold a removed stored value', () => {
+  it('reports each enum value, its stored value and the rows, with the migration of the failed operation, the first', () => {
+    const migrationEdges = [
+      { migrationHash: 'sha256:first', dirName: 'first', from: 'h0', to: 'h1', operationCount: 2 },
+      {
+        migrationHash: 'sha256:second',
+        dirName: 'second',
+        from: 'h1',
+        to: 'h2',
+        operationCount: 1,
+      },
+    ];
+    const perSpacePlans = new Map([
+      [
+        'app',
+        {
+          ...makePerSpacePlan(),
+          destinationContract: { domain: { namespaces: { app: { models: {} } } } },
+          migrationEdges,
+        } as unknown as PerSpacePlan,
+      ],
+    ]);
+    const failure = migrationRunnerFailure('MIGRATION.PRECHECK_FAILED', 'rows hold it', {
+      meta: {
+        failingSpace: 'app',
+        rowsHoldingValue: [
+          {
+            enumValue: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'ARCHIVED' },
+            value: 'archived',
+            rows: 2,
+            operationIndex: 2,
+            keepDataEdit: { remove: 'this.remove()', replaceWith: 'this.replace()' },
+          },
+          {
+            enumValue: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'ARCHIVED' },
+            value: 'archived',
+            rows: 5,
+            operationIndex: 0,
+          },
+        ],
+      },
+    });
+
+    const facts = runnerFailureFacts(failure, collectOrdered(['app'], perSpacePlans));
+
+    expect({
+      rowsHoldingValue: facts.rowsHoldingValue,
+      failedMigration: facts.failedMigration,
+    }).toEqual({
+      rowsHoldingValue: [
+        {
+          enumValue: 'Status.ARCHIVED',
+          enumName: 'Status',
+          value: 'archived',
+          rows: 2,
+          keepDataEdit: { remove: 'this.remove()', replaceWith: 'this.replace()' },
+        },
+        { enumValue: 'Status.ARCHIVED', enumName: 'Status', value: 'archived', rows: 5 },
+      ],
+      failedMigration: { spaceId: 'app', edge: migrationEdges[1] },
+    });
+  });
+});

@@ -9,7 +9,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { Collection } from '../src/collection';
 import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';

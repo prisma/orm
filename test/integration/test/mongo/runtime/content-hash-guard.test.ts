@@ -13,6 +13,7 @@ import { MongoParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const baseMeta: PlanMeta = {
   target: 'mongo',
@@ -34,7 +35,7 @@ describe('Mongo runtime content hash before param resolution', () => {
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
     });
-    const context = createMongoExecutionContext({ contract: {}, stack });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
     const driver = {
       execute: vi.fn(async function* (_command: AnyMongoWireCommand) {
         yield { insertedId: 'x' };
@@ -43,6 +44,7 @@ describe('Mongo runtime content hash before param resolution', () => {
     } as unknown as MongoDriver;
     const runtime = createMongoRuntime({
       context,
+      adapter: stack.adapter.create(stack),
       driver,
       middleware: [middleware],
     });

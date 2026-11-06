@@ -173,12 +173,12 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       if (!database) throw new Error('database not initialised');
 
       const authored = await authorSqlContractFromPsl(`types {
-  Amount = Numeric(30, 10)
+  Amount = NumericString(30, 10)
 }
 
 model Reading {
   id       Int        @id
-  dates    DateTime[]
+  dates    TimestamptzTemporal[]
   payloads Bytes[]
   amounts  Amount[]
 }`);

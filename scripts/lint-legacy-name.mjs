@@ -46,10 +46,9 @@ const COMPATIBILITY_SITES = new Set([
   'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
   'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
   'docs/Telemetry.md',
-  'upgrade-instructions/pending/default-generators-to-on-create/app/instructions.md',
-  'upgrade-instructions/pending/default-generators-to-on-create/app/scripts/rewrite-default-generators.mjs',
   'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/before/older-header.prisma',
   'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/after/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/detection.test.ts',
 ]);
 
 /**

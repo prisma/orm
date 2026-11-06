@@ -86,12 +86,11 @@ model Job {
 /** Interprets `SCHEMA` with an enum factory that returns `handle`, as a factory that reads the block its own way would. */
 function interpretWithEnum(handle: EnumTypeHandle) {
   return interpretMongoContract(SCHEMA, {
-    scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
+    scalarTypes: new Map([['ObjectId', 'mongo/objectId@1']]),
     defaultFunctionRegistry: new Map(),
     codecLookup,
     dataTypes: { entries: {}, lookup: dataTypeLookup, dataTypeOfCodec: () => undefined },
     authoringContributions: {
-      field: {},
       type: {},
       modelAttributes: {},
       entityTypes: {

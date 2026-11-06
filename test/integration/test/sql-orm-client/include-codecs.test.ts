@@ -73,11 +73,14 @@ class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
  * column reaches JSON, since the renderer asks the descriptor rather than
  * assuming. This one stores and projects text unchanged.
  */
-const includedTextDescriptor = postgresCodec(new IncludedTextDescriptor(), {
-  dataType: pgText,
-  jsonProjection: (expression) => expression,
-  factory: (descriptor, dataType) => () => new IncludedTextCodec(descriptor, dataType),
-});
+const includedTextDescriptor = postgresCodec(
+  Object.assign(new IncludedTextDescriptor(), { jsonType: 'any' as const }),
+  {
+    dataType: pgText,
+    jsonProjection: (expression) => expression,
+    factory: (descriptor, dataType) => () => new IncludedTextCodec(descriptor, dataType),
+  },
+);
 const includedTextColumn = {
   codecId: TEST_INCLUDED_TEXT_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;

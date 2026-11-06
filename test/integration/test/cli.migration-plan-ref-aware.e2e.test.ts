@@ -25,29 +25,6 @@ const JOURNEY_FIXTURES_DIR = join(
   'fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys',
 );
 
-function writeCompositePkContract(ctx: JourneyContext): void {
-  writeFileSync(
-    join(ctx.testDir, 'contract.ts'),
-    `import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
-
-const User = model('User', {
-  fields: {
-    id: field.column(int4Column),
-    email: field.column(textColumn),
-  },
-})
-  .attributes(({ fields, constraints }) => ({
-    id: constraints.id([fields.id, fields.email]),
-  }))
-  .sql({ table: 'user' });
-
-export const contract = defineContract({ models: { User } });
-`,
-    'utf-8',
-  );
-}
-
 interface MigrationManifest {
   readonly from: string | null;
   readonly to: string;
@@ -406,19 +383,21 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'auto-baseline with extension pack seeds extension space separately from app bundles (pgvector)',
+      'auto-baseline with extension pack keeps the extension space emit pinned apart from app bundles (pgvector)',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const ctx = setupExtensionJourney(connectionString, createTempDir);
           expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector', 'refs', 'head.json'))).toBe(
+            true,
+          );
 
           const plan = await runMigrationPlan(ctx, ['--name', 'initial', '--json']);
           expect(plan.exitCode).toBe(0);
           const planJson = parseJsonOutput<PlanJsonResult & { emittedExtensionDirs?: unknown[] }>(
             plan,
           );
-          expect(planJson.emittedExtensionDirs?.length).toBeGreaterThan(0);
-          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector'))).toBe(true);
+          expect(planJson.emittedExtensionDirs).toEqual([]);
           expect(listAppMigrationBundleDirs(ctx)).toHaveLength(1);
         });
       },
@@ -433,7 +412,7 @@ withTempDir(({ createTempDir }) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await runDbInit(ctx)).exitCode).toBe(0);
 
-            writeCompositePkContract(ctx);
+            swapContract(ctx, 'contract-destructive');
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
             const plan = await runMigrationPlan(ctx, ['--name', 'blocked-delta', '--json']);

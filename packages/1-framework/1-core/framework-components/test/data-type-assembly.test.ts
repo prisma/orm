@@ -2,12 +2,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { type Type, type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import type { CreateControlStackInput } from '../src/control/control-stack';
-import {
-  assembleAuthoringDataTypes,
-  type ContributedConstructor,
-  createControlStack,
-  enforceDataTypeInvariants,
-} from '../src/control/control-stack';
+import { createControlStack, enforceHelperCodecInvariants } from '../src/control/control-stack';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
 import {
   assembleDataTypes,
@@ -16,6 +11,14 @@ import {
   dataType,
   dataTypeId,
 } from '../src/shared/data-type';
+import {
+  assembleAuthoringDataTypes,
+  assembleDataTypeSupport,
+  type ContributedHelper,
+  type DataTypeComponent,
+  enforceDataTypeAssemblyInvariants,
+} from '../src/shared/data-type-support';
+import type { AuthoringTypeConstructorDescriptor } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 const int2 = dataType('demo/int2', { read: (json) => json });
@@ -65,19 +68,13 @@ const constructorNamed = (
     ...(options.typeParamKey === undefined
       ? { output: { codecId } }
       : {
-          args: [{ kind: 'number' as const, name: 'n', optional: true }],
+          args: [{ kind: 'value' as const, dataType: 'demo/int2', name: 'n', optional: true }],
           output: {
             codecId,
             typeParams: { [options.typeParamKey]: { kind: 'arg' as const, index: 0 } },
           },
         }),
   },
-});
-
-const presetNamed = (path: string, codecId: string) => ({
-  path,
-  contributedBy: 'x-pack',
-  descriptor: { kind: 'fieldPreset' as const, output: { codecId } },
 });
 
 const contributor = (id: string, dataTypes: readonly DataType[]) => ({ id, dataTypes });
@@ -103,14 +100,15 @@ const tagEntry = (tag: string) =>
 
 const codec = (codecId: string, type: DataType) => ({ codecId, dataType: type.id });
 
-const invariants = (overrides: Partial<Parameters<typeof enforceDataTypeInvariants>[0]>) =>
-  enforceDataTypeInvariants({
-    lookup: assembleDataTypes([contributor('demo', [int2, int8, text, sized])]).lookup,
+const demoLookup = assembleDataTypes([contributor('demo', [int2, int8, text, sized])]).lookup;
+
+const invariants = (overrides: Partial<Parameters<typeof enforceDataTypeAssemblyInvariants>[0]>) =>
+  enforceDataTypeAssemblyInvariants({
+    lookup: demoLookup,
     declaredTypes: [{ type: int2, contributedBy: 'demo' }],
     codecs: [],
     authoringEntries: [],
-    constructors: [],
-    codecDescriptorFor: () => undefined,
+    textDataTypes: [],
     ...overrides,
   });
 
@@ -149,7 +147,7 @@ describe('assembleDataTypes', () => {
   });
 });
 
-describe('enforceDataTypeInvariants', () => {
+describe('enforceDataTypeAssemblyInvariants', () => {
   it('refuses a codec whose data type nobody registered, naming the contributor and the id', () => {
     expect(() =>
       invariants({
@@ -265,9 +263,9 @@ describe('enforceDataTypeInvariants', () => {
   });
 });
 
-describe('enforceDataTypeInvariants on type constructors and field presets', () => {
-  const check = (constructors: readonly ContributedConstructor[]) => () =>
-    invariants({ constructors, codecDescriptorFor });
+describe('enforceHelperCodecInvariants on type constructors', () => {
+  const check = (helpers: readonly ContributedHelper[]) => () =>
+    enforceHelperCodecInvariants({ lookup: demoLookup, helpers, codecDescriptorFor });
 
   it('refuses a type constructor naming a codec nobody registered, naming the contributor and the id', () => {
     expect(check([constructorNamed('Gone', 'demo/gone@1')])).toThrow(InternalError);
@@ -276,16 +274,8 @@ describe('enforceDataTypeInvariants on type constructors and field presets', () 
     );
   });
 
-  it('refuses a field preset naming a codec nobody registered', () => {
-    expect(check([presetNamed('id.gone', 'demo/gone@1')])).toThrow(
-      /x-pack.*demo\/gone@1|demo\/gone@1.*x-pack/s,
-    );
-  });
-
-  it('passes constructors and presets whose codecs are registered', () => {
-    expect(
-      check([constructorNamed('Text', 'demo/text@1'), presetNamed('id.text', 'demo/text@1')]),
-    ).not.toThrow();
+  it('passes constructors whose codecs are registered', () => {
+    expect(check([constructorNamed('Text', 'demo/text@1')])).not.toThrow();
   });
 
   it('refuses a constructor mapping an argument onto a key neither the data type nor the codec declares', () => {
@@ -337,6 +327,207 @@ describe('enforceDataTypeInvariants on type constructors and field presets', () 
         constructorNamed('AlsoText', 'demo/also-text@1'),
         constructorNamed('Sized', 'demo/sized@1', { inferred: true }),
       ]),
+    ).not.toThrow();
+  });
+});
+
+describe('assembleDataTypeSupport', () => {
+  const sizedConstructor = (dataTypeOfArgument: string) => ({
+    kind: 'typeConstructor' as const,
+    args: [{ kind: 'value' as const, dataType: dataTypeOfArgument, name: 'length' }],
+    output: {
+      codecId: 'demo/sized@1',
+      typeParams: { length: { kind: 'arg' as const, index: 0 } },
+    },
+  });
+  const demo: DataTypeComponent = {
+    id: 'demo',
+    dataTypes: [int2, int8, text, sized],
+    authoring: { dataTypes: { [int2.id]: numberEntry() } },
+  };
+  const assemble =
+    (...components: readonly DataTypeComponent[]) =>
+    () =>
+      assembleDataTypeSupport([demo, ...components], () => undefined);
+  const thrownBy = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      return isRuntimeError(error) ? { code: error.code, message: error.message } : error;
+    }
+    return undefined;
+  };
+
+  it('holds every component’s data types and authoring entries', () => {
+    const { support, declared } = assembleDataTypeSupport(
+      [demo, { id: 'other', authoring: { dataTypes: { [text.id]: tagEntry('sql') } } }],
+      (codecId) => (codecId === 'demo/text@1' ? text.id : undefined),
+    );
+    expect({
+      entries: Object.keys(support.entries),
+      types: declared.map(({ type, contributedBy }) => [type.id, contributedBy]),
+      codecDataType: support.dataTypeOfCodec('demo/text@1'),
+    }).toEqual({
+      entries: [int2.id, text.id],
+      types: [
+        [int2.id, 'demo'],
+        [int8.id, 'demo'],
+        [text.id, 'demo'],
+        [sized.id, 'demo'],
+      ],
+      codecDataType: text.id,
+    });
+  });
+
+  it('refuses two registrations of one data type', () => {
+    expect(thrownBy(assemble({ id: 'other', dataTypes: [int2] }))).toMatchObject({
+      code: 'CONTRACT.DATA_TYPE_DUPLICATE',
+    });
+  });
+
+  it('refuses two entries for one data type, instead of keeping the last', () => {
+    expect(
+      thrownBy(assemble({ id: 'other', authoring: { dataTypes: { [int2.id]: numberEntry() } } })),
+    ).toEqual({
+      code: 'CONTRACT.DATA_TYPE_ENTRY_DUPLICATE',
+      message:
+        'Duplicate authoring entry for "demo/int2". Component "other" conflicts with "demo".',
+    });
+  });
+
+  it('refuses a codec whose data type no component registers', () => {
+    expect(
+      thrownBy(
+        assemble({
+          id: 'x-pack',
+          types: {
+            codecTypes: {
+              codecDescriptors: [{ codecId: 'x/gone@1', dataType: dataTypeId('demo/gone') }],
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      code: 'CONTRACT.DATA_TYPE_UNREGISTERED',
+      message:
+        'Codec "x/gone@1" names data type "demo/gone", which no component registers. Contributed by "x-pack".',
+    });
+  });
+
+  it('holds every component’s text data types, each once', () => {
+    const { support } = assembleDataTypeSupport(
+      [
+        { ...demo, authoring: { ...demo.authoring, textDataTypes: [text.id] } },
+        { id: 'other', authoring: { textDataTypes: [text.id, sized.id] } },
+      ],
+      () => undefined,
+    );
+    expect(support.textDataTypes).toEqual([text.id, sized.id]);
+  });
+
+  it('refuses a text data type no component registers, naming the contributor', () => {
+    expect(
+      thrownBy(assemble({ id: 'x-pack', authoring: { textDataTypes: [dataTypeId('demo/gone')] } })),
+    ).toEqual({
+      code: 'CONTRACT.DATA_TYPE_UNREGISTERED',
+      message:
+        'The text data types names data type "demo/gone", which no component registers. Contributed by "x-pack".',
+    });
+  });
+
+  it('refuses two entries claiming one written form', () => {
+    expect(
+      thrownBy(assemble({ id: 'x-pack', authoring: { dataTypes: { [int8.id]: numberEntry() } } })),
+    ).toMatchObject({ code: 'CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE' });
+  });
+
+  it('refuses a value argument of a data type no component registers, naming the constructor and the contributor', () => {
+    expect(
+      thrownBy(
+        assemble({ id: 'x-pack', authoring: { type: { Sized: sizedConstructor('demo/gone') } } }),
+      ),
+    ).toEqual({
+      code: 'CONTRACT.DATA_TYPE_UNREGISTERED',
+      message:
+        'Argument "length" of type constructor "Sized" names data type "demo/gone", which no component registers. Contributed by "x-pack".',
+    });
+  });
+
+  it('refuses a type constructor argument that is not a value argument, saying how to declare it', () => {
+    const numberArgument = {
+      kind: 'typeConstructor',
+      args: [{ kind: 'number', name: 'size', integer: true }],
+      output: {
+        codecId: 'demo/sized@1',
+        typeParams: { length: { kind: 'arg', index: 0 } },
+      },
+    } as unknown as AuthoringTypeConstructorDescriptor;
+    expect(
+      thrownBy(
+        assemble({
+          id: 'x-pack',
+          authoring: {
+            type: {
+              x: { Thing: numberArgument },
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      message:
+        'Argument "size" of type constructor "x.Thing" contributed by "x-pack" is an argument of kind "number", but a type constructor\'s argument is a value of a data type. Declare it as { kind: \'value\', dataType: ... }, naming the data type its value belongs to.',
+    });
+  });
+
+  it('refuses an unnamed type constructor argument by its position, with the documented payload', () => {
+    const run = assemble({
+      id: 'x-pack',
+      authoring: {
+        type: {
+          Thing: {
+            kind: 'typeConstructor',
+            args: [{ kind: 'option', values: ['a'] }],
+            output: { codecId: 'demo/sized@1' },
+          } as unknown as AuthoringTypeConstructorDescriptor,
+        },
+      },
+    });
+    expect(run).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message: expect.stringMatching(
+          /^Argument #1 of type constructor "Thing" contributed by "x-pack" is an argument of kind "option"/,
+        ),
+        details: {
+          packId: 'x-pack',
+          contribution: 'Thing',
+          reason: 'type-constructor-argument-not-a-value',
+        },
+      }),
+    );
+  });
+
+  it('refuses a value argument of a data type nothing in the components writes', () => {
+    expect(
+      thrownBy(
+        assemble({ id: 'x-pack', authoring: { type: { Sized: sizedConstructor(text.id) } } }),
+      ),
+    ).toEqual({
+      code: 'CONTRACT.DATA_TYPE_NOT_WRITABLE',
+      message:
+        'Argument "length" of type constructor "Sized" contributed by "x-pack" takes a value of data type "demo/text", which no contract source can write.',
+    });
+  });
+
+  it('passes a value argument of a type that is written, or that casts from a type that is written', () => {
+    expect(
+      assemble({
+        id: 'x-pack',
+        authoring: {
+          type: { Small: sizedConstructor(int2.id), Large: { nested: sizedConstructor(int8.id) } },
+        },
+      }),
     ).not.toThrow();
   });
 });
@@ -400,5 +591,31 @@ describe('createControlStack', () => {
     expect(stack.dataTypes.entries).toBe(stack.authoringContributions.dataTypes);
     expect(stack.dataTypes.lookup.get(int2.id)).toBe(int2);
     expect(Object.keys(stack.dataTypes.entries)).toEqual([int2.id]);
+  });
+
+  it('refuses a value argument of a data type no component registers', () => {
+    const input = {
+      family: { kind: 'family', id: 'fam', version: '0.0.1', dataTypes: [int2] },
+      target: {
+        kind: 'target',
+        id: 'tgt',
+        version: '0.0.1',
+        authoring: {
+          dataTypes: { [int2.id]: numberEntry() },
+          type: {
+            Sized: {
+              kind: 'typeConstructor',
+              args: [{ kind: 'value', dataType: 'demo/gone', name: 'length' }],
+              output: { codecId: 'demo/sized@1' },
+            },
+          },
+        },
+      },
+      extensions: [],
+    } as unknown as CreateControlStackInput;
+
+    expect(() => createControlStack(input)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.DATA_TYPE_UNREGISTERED' }),
+    );
   });
 });

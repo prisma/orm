@@ -30,7 +30,7 @@ const SCHEMA = `// use prisma-8
 
 model Event {
   id        Int      @id
-  createdAt DateTime @default(timestamptz\`2024-01-01T00:00:00Z\`)
+  createdAt TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00Z\`)
 
   @@map("event")
 }

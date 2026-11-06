@@ -65,16 +65,15 @@ describe('ref set', () => {
     ]);
   });
 
-  it('leaves stdout empty in human mode, having no machine-consumable lines', async () => {
+  it('prints the contract hash the ref now points at', async () => {
     const { dir } = await seedRefProject();
+    await writeRef(refsDirIn(dir), 'production', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_A], {
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', 'production'], {
       cwd: dir,
-      isTty: { stdout: true },
     });
 
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+    expect(run.stdout).toBe(`${HASH_A}\n`);
   });
 
   it('resolves another ref name to its hash', async () => {

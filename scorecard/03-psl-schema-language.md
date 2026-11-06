@@ -17,9 +17,9 @@ Legend:
 | `type` (`@@type`) composite block | 🟡 | 🟡 | ✅ | `test/integration/test/value-objects/value-objects.integration.test.ts` (embedded value-object round-trip against Mongo) |
 | `@id` (field-level primary key) | 🟡 | ✅ | ✅ | `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`single table with PK`); `test/integration/test/mongo/migration-psl-authoring.test.ts` |
 | `@@id` (composite primary key) | 🟡 | 🟡 | 🟡 | |
-| `@unique` (field-level unique) | ✅ | ✅ | ✅ | `packages/3-targets/6-adapters/postgres/test/migrations/enum-check-constraint.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`unique constraints`); `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@unique … single-field unique index`) |
+| `@unique` (field-level unique) | ✅ | ✅ | ✅ | `packages/3-targets/postgres/2-adapter/test/migrations/enum-check-constraint.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`unique constraints`); `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@unique … single-field unique index`) |
 | `@@unique` (model-level composite unique) | 🟡 | ✅ | ✅ | `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`unique constraints`); `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@@unique([name])`) |
-| `@@index([...], type?, options?)` | ✅ | ✅ | ✅ | `packages/3-targets/6-adapters/postgres/test/migrations/index-introspection.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`indexes`); `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@@index produces indexes`) |
+| `@@index([...], type?, options?)` | ✅ | ✅ | ✅ | `packages/3-targets/postgres/2-adapter/test/migrations/index-introspection.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`indexes`); `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@@index produces indexes`) |
 | `@map` (field rename) | 🟡 | 🟡 | ✅ | `test/integration/test/mongo/migration-psl-authoring.test.ts` (`@map respects mapped names`) |
 | `@@map` (model rename) | 🟡 | 🟡 | 🟡 | |
 | `@relation(...)` wiring | ✅ | ✅ | ✅ | `test/integration/test/referential-actions.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (FK tables); `test/integration/test/mongo/orm.test.ts` (`include() on a reference relation`) |
@@ -34,18 +34,18 @@ Legend:
 | RLS `role` block | ✅ | — | — | `test/integration/test/rls-ts-walking-skeleton.integration.test.ts` |
 | RLS `rls` block | ✅ | — | — | `test/integration/test/rls-ts-walking-skeleton.integration.test.ts` |
 | RLS `policy` block | ✅ | — | — | `test/integration/test/rls-ts-walking-skeleton.integration.test.ts` |
-| Native `@db.*` types (SQLite: mapped via type affinity) | ✅ | 🟡 | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-array-columns.integration.test.ts` |
+| Native `@db.*` types (SQLite: mapped via type affinity) | ✅ | 🟡 | — | `packages/3-targets/postgres/2-adapter/test/migrations/native-array-columns.integration.test.ts` |
 | `@default(autoincrement())` | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`INTEGER PRIMARY KEY`) |
 | `@default(now())` | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`round-trips a now() default`) |
-| `@onCreate(uuid())` | ✅ | 🟡 | — | `packages/3-targets/6-adapters/postgres/test/migrations/planner.uuid.integration.test.ts` |
+| `@onCreate(uuid())` | ✅ | 🟡 | — | `packages/3-targets/postgres/2-adapter/test/migrations/planner.uuid.integration.test.ts` |
 | `@onCreate(uuid(7))` | ✅ | 🟡 | — | `test/e2e/framework/test/dml.test.ts` (`UUIDv7 client-generated IDs`) |
 | `@onCreate(cuid(2))` | 🟡 | 🟡 | — | |
 | `@onCreate(ulid())` | 🟡 | 🟡 | — | |
 | `@onCreate(nanoid())` | 🟡 | 🟡 | — | |
 | `@onCreate(ksuid())` | 🟡 | 🟡 | — | |
-| `@onCreate(now())` / `@onUpdate(now())` | ✅ | 🟡 | 🟡 | `test/integration/test/temporal-defaults/generator-attributes-parity.test.ts`; `test/integration/test/mongo/temporal-presets/generator-attributes-parity.test.ts` |
-| `@default(uuid())` and other client functions in `@default` | ❌ | ❌ | — | Refused with `PSL_GENERATOR_IN_DEFAULT`, naming `@onCreate(...)` (`packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.functions.test.ts`). |
-| `@default(dbgenerated("..."))` | ❌ | ❌ | — | Removed; a raw SQL default is `` @default(sql`...`) `` (`packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts`). A `dbgenerated(...)` call is `PSL_UNKNOWN_DEFAULT_FUNCTION` naming the replacement (`test/integration/test/authoring/diagnostics/removed-dbgenerated/`). |
+| `@onCreate(now())` / `@onUpdate(now())` | ✅ | 🟡 | 🟡 | `test/integration/test/temporal-defaults/generator-attributes-parity.test.ts`; `test/integration/test/mongo/temporal-generators/generator-attributes-parity.test.ts` |
+| `@default(uuid())` and other client functions in `@default` | ❌ | ❌ | — | Refused with `PSL_GENERATOR_IN_DEFAULT`, naming `@onCreate(...)` (`packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.functions.test.ts`). |
+| `@default(dbgenerated("..."))` | ❌ | ❌ | — | Removed; a raw SQL default is `` @default(sql`...`) `` (`packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts`). A `dbgenerated(...)` call is `PSL_UNKNOWN_DEFAULT_FUNCTION` naming the replacement (`test/integration/test/authoring/diagnostics/removed-dbgenerated/`). |
 | TS ID generator `ulid` | 🟡 | 🟡 | — | |
 | TS ID generator `nanoid` | 🟡 | 🟡 | — | |
 | TS ID generator `uuidv7` | ✅ | 🟡 | — | `test/e2e/framework/test/dml.test.ts` (`auto-generates a valid UUIDv7 id on insert`) |
@@ -54,7 +54,7 @@ Legend:
 | TS ID generator `ksuid` | 🟡 | 🟡 | — | |
 | Literal `@default(...)` values | ✅ | ✅ | 🟡 | `test/e2e/framework/test/dml.test.ts` (`applies literal defaults for every supported type`); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`default values`) |
 | `@onCreate(cuid())` (cuid v1) | ❌ | ❌ | — | |
-| `Unsupported("...")` | ❌ | ❌ | ❌ | Not a Prisma 8 type: `contract emit` refuses a field typed `Unsupported("x")`, and `contract infer` fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED` on a column type no data type in the stack claims, instead of printing it. Write such a column as `Raw("x")` (ADR 273). |
+| `Unsupported("...")` | ❌ | ❌ | ❌ | Not a Prisma 8 type: `contract emit` refuses a field typed `Unsupported("x")`, and `contract infer` fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED` on a column type no data type in the stack claims, instead of printing it. Write such a column as ``Raw(sql`x`)`` (ADR 273). |
 | `@ignore` | ❌ | ❌ | ❌ | |
 | `@@ignore` | ❌ | ❌ | ❌ | |
 | `@shardKey` | ❌ | ❌ | ❌ | |

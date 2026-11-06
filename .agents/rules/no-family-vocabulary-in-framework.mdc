@@ -1,5 +1,5 @@
 ---
-description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and, outside the CLI and the PSL parser's grammar names, no Prisma version name before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
+description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and, outside the CLI and the PSL parser's grammar names, no Prisma version name before 8. Enforced by the no-family-vocabulary Biome plugin plus the lint:ratchets ratchet.
 globs: ["packages/1-framework/**"]
 alwaysApply: false
 ---
@@ -14,7 +14,7 @@ The framework also must not know which Prisma version wrote a document: code for
 
 ## How it is enforced
 
-The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …) or, outside the CLI, the name of a Prisma version before 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …). `Prisma 8` is never flagged. It emits `info` diagnostics; `pnpm lint:framework-vocabulary` is the ratchet that counts them, deduplicated by file and line, against the `threshold` in `scripts/lint-framework-vocabulary.config.json`. The count may only shrink, and the threshold must be lowered whenever it does.
+The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …) or, outside the CLI, the name of a Prisma version before 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …). `Prisma 8` is never flagged. It emits `info` diagnostics; `pnpm lint:ratchets` counts them, deduplicated by file and line, against the `threshold` in `scripts/framework-vocabulary-thresholds.json`. The count may only shrink, and the threshold must be lowered whenever it does. The same command also runs the cast and throw ratchets, so it needs `origin/main` and exits 1 without it.
 
 **Comments and JSDoc are deliberately not counted.** Prose that documents family-blind code correctly ("family-parameterized (SQL, Mongo, …)") is good documentation, and the previous line-scanning checker taxed it — the majority of what it flagged was prose, not surface. A leak that matters is a real type, field, identifier, string, or import path, and the plugin only sees those.
 
@@ -36,7 +36,7 @@ The forbidden terms live in the plugin, not the config — GritQL cannot read JS
 - Keep framework mechanisms family-blind: registries, opaque payloads (`object | undefined` narrowed by the consuming family), merge/collision plumbing.
 - Put family vocabulary (`nativeType`, CHECK constraints, schema qualification, dialect names) in the owning family layer; targets implement family interfaces structurally.
 - Express strategies as **codec-owned hooks/behavior** on the strategy owner's descriptor — never as string-enum fields threaded through shared types (see `storage-type-hooks.mdc`).
-- Run `pnpm lint:framework-vocabulary` (`--list` prints every current site as `file:line`).
+- Run `pnpm lint:ratchets` (`--list` prints every current site as `file:line`).
 
 ## Don't
 

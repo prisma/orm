@@ -71,12 +71,21 @@ function modelEntry(model: FixtureModel): readonly [string, Record<string, unkno
   ];
 }
 
+/** The storage namespaces of a fixture contract, as `contract.json` holds them. */
+export type FixtureStorageNamespaces = Readonly<Record<string, unknown>>;
+
 export function contractJson(
   storageHash: string,
   models?: readonly FixtureModel[],
+  storageNamespaces: FixtureStorageNamespaces = {},
+  storageTypes?: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   return {
-    storage: { storageHash, namespaces: {} },
+    storage: {
+      storageHash,
+      namespaces: storageNamespaces,
+      ...(storageTypes === undefined ? {} : { types: storageTypes }),
+    },
     schemaVersion: '1.0.0',
     target: 'postgres',
     targetFamily: 'sql',
@@ -98,6 +107,8 @@ export function contractJson(
 export async function createOfflineProject(options: {
   readonly storageHash: string;
   readonly models?: readonly FixtureModel[];
+  readonly storageNamespaces?: FixtureStorageNamespaces;
+  readonly storageTypes?: Readonly<Record<string, unknown>>;
 }): Promise<OfflineProject> {
   const dir = createTestProjectDir('orm-offline');
   created.push(dir);
@@ -105,7 +116,14 @@ export async function createOfflineProject(options: {
   await mkdir(join(dir, 'output'), { recursive: true });
   await writeFile(
     contractPath,
-    JSON.stringify(contractJson(options.storageHash, options.models)),
+    JSON.stringify(
+      contractJson(
+        options.storageHash,
+        options.models,
+        options.storageNamespaces,
+        options.storageTypes,
+      ),
+    ),
     'utf-8',
   );
   await writeFile(
@@ -173,9 +191,10 @@ export async function seedContractSnapshot(options: {
   readonly migrationsDir: string;
   readonly storageHash: string;
   readonly models?: readonly FixtureModel[];
+  readonly storageNamespaces?: FixtureStorageNamespaces;
 }): Promise<void> {
   await writeContractSnapshot(options.migrationsDir, options.storageHash, {
-    contractJson: contractJson(options.storageHash, options.models),
+    contractJson: contractJson(options.storageHash, options.models, options.storageNamespaces),
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -209,6 +228,8 @@ export interface FakePlannerScript {
   readonly statementsReceived?: unknown[][];
   /** Fails every `plan` call that is given statements, as a planner that refuses them does. */
   readonly refuseStatements?: boolean;
+  /** Fails every `plan` call that is given statements with a conflict that leaves them out, to be written by hand. */
+  readonly leaveOutStatements?: boolean;
   /** What every `plan` call reports would lose data. */
   readonly dataLoss?: readonly ScriptedDataLoss[];
   /** What each successive `plan` call reports would lose data; overrides `dataLoss`. */
@@ -221,6 +242,8 @@ export interface FakePlannerScript {
   readonly throwOnOperationsFromPlan?: number;
   /** Where in the operations the placeholder that `throwOnOperations` rejects sits; last by default. */
   readonly placeholderAt?: number;
+  /** Another operation, after the one `throwOnOperations` rejects, rejects with this. */
+  readonly alsoThrowOnOperations?: unknown;
   /** Makes the plan's `operations` accessor throw this synchronously. */
   readonly operationsAccessorThrows?: unknown;
   /** The new required fields every `plan` call reports it gives a temporary value. */
@@ -271,6 +294,14 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
           conflicts: [{ kind: 'statementRefused', summary: 'Refused', refusedStatement: refused }],
         };
       }
+      if (script.leaveOutStatements === true && options.statements.length > 0) {
+        return {
+          kind: 'failure',
+          conflicts: [
+            { kind: 'writeByHand', summary: 'Write by hand', leaveOut: options.statements },
+          ],
+        };
+      }
       return script.conflicts === undefined
         ? {
             kind: 'success',
@@ -279,7 +310,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
               label: (operations ?? [ADDITIVE_OP])[entry.operationIndex]?.label,
               ...entry,
             })),
-            accessWidening: [],
+            accessChanges: [],
             temporaryValues: script.temporaryValues ?? [],
             appliedStatements: options.statements.map((statement) => ({
               statement,
@@ -297,7 +328,12 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                 const placeholder = Promise.reject(throwOnOperations);
                 placeholder.catch(() => undefined);
                 const at = script.placeholderAt ?? resolved.length;
-                return [...resolved.slice(0, at), placeholder, ...resolved.slice(at)];
+                const others =
+                  script.alsoThrowOnOperations === undefined
+                    ? []
+                    : [Promise.reject(script.alsoThrowOnOperations)];
+                for (const other of others) other.catch(() => undefined);
+                return [...resolved.slice(0, at), placeholder, ...others, ...resolved.slice(at)];
               },
               renderTypeScript: () => '// planned migration\n',
             },
@@ -310,10 +346,27 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
 
 const SQL_POSTGRES = { familyId: 'sql', targetId: 'postgres', version: '1.0.0' };
 
+/** Storage hydrated into a class instance, as a real family's `deserializeContract` returns it. */
+class HydratedFixtureStorage {
+  constructor(json: object) {
+    Object.assign(this, json);
+  }
+}
+
+function deserializeIntoStorageInstance(json: unknown): unknown {
+  if (json === null || typeof json !== 'object' || !('storage' in json)) return json;
+  const { storage } = json;
+  return storage === null || typeof storage !== 'object'
+    ? json
+    : { ...json, storage: new HydratedFixtureStorage(storage) };
+}
+
 export function offlineConfig(options: {
   readonly project: OfflineProject;
   readonly script?: FakePlannerScript;
   readonly targetSupportsMigrations?: boolean;
+  /** Hydrate storage into a class instance, as real families do, instead of returning the JSON. */
+  readonly storageAsClassInstance?: boolean;
 }): Record<string, unknown> {
   const migrations = {
     contractToSchema: () => ({}),
@@ -325,7 +378,11 @@ export function offlineConfig(options: {
       kind: 'family',
       id: 'sql',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: options.storageAsClassInstance
+          ? deserializeIntoStorageInstance
+          : (json: unknown) => json,
+      }),
     },
     target: {
       ...SQL_POSTGRES,

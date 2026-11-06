@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-extension-pgvector",
-  "version": "8.0.0-rc.18",
+  "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "description": "pgvector embedding columns, distance operators, and indexes for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],
@@ -14,22 +17,22 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.18",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.18",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.18",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.22",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.22",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2"
   },
   "devDependencies": {
-    "@internal/extension-pgvector": "workspace:8.0.0-rc.18",
-    "@repo/tsconfig": "workspace:8.0.0-rc.18",
-    "@repo/tsdown": "workspace:8.0.0-rc.18",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.18",
+    "@internal/extension-pgvector": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.22",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.18",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.22",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

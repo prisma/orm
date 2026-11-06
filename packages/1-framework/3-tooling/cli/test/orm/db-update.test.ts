@@ -114,7 +114,7 @@ function applySuccess(): Record<string, unknown> {
     mode: 'apply',
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [
@@ -144,7 +144,7 @@ function planSuccess(): Record<string, unknown> {
     mode: 'plan',
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [{ id: 'op-2', label: 'drop relation legacy', operationClass: 'destructive' }],
@@ -315,7 +315,52 @@ describe('db update --rename', () => {
           answered: false,
         },
       ],
-      accessWidening: [],
+      accessChanges: [],
+    });
+  });
+
+  it('lists one line per answer on a dry run, naming every operation it answers', async () => {
+    const archived = { kind: 'enumValue', namespaceId: 'app', enum: 'Status', member: 'ARCHIVED' };
+    const operations = [
+      {
+        id: 'op-1',
+        label: 'Remove value "archived" from column "status" of "task"',
+        operationClass: 'destructive',
+      },
+      {
+        id: 'op-2',
+        label: 'Remove value "archived" from column "tags" of "task"',
+        operationClass: 'destructive',
+      },
+    ];
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        plan: { operations },
+        dataLoss: [
+          { operationIndex: 0, subject: archived, text: 'Status.ARCHIVED', loss: 'drop' },
+          { operationIndex: 1, subject: archived, text: 'Status.ARCHIVED', loss: 'drop' },
+        ],
+      }),
+    );
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            {
+              label:
+                'Remove value "archived" from column "status" of "task" and remove value "archived" from column "tags" of "task": --delete Status.ARCHIVED',
+            },
+          ],
+        },
+      ],
     });
   });
 
@@ -324,7 +369,7 @@ describe('db update --rename', () => {
     mocks.dbUpdate.mockResolvedValue(
       ok({
         ...planSuccess(),
-        accessWidening: [{ operationIndex: 0, subject: user, text: 'User' }],
+        accessChanges: [{ operationIndex: 0, subject: user, text: 'User' }],
       }),
     );
 
@@ -333,7 +378,7 @@ describe('db update --rename', () => {
     });
 
     expect(run.presented?.data).toMatchObject({
-      accessWidening: [{ operationIndex: 0, subject: user, text: 'User', answered: true }],
+      accessChanges: [{ operationIndex: 0, subject: user, text: 'User', answered: true }],
     });
   });
 
@@ -373,6 +418,115 @@ describe('db update --rename', () => {
         command: 'prisma-test db update --rename Profile:User --delete Legacy',
       },
     ]);
+  });
+
+  it('marks every question about a model of a namespace a dry run --delete names as answered', async () => {
+    const invoice = { kind: 'model', namespaceId: 'billing', model: 'Invoice' } as const;
+    const receipt = { kind: 'model', namespaceId: 'billing', model: 'Receipt' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        dataLoss: [
+          {
+            operationIndex: 0,
+            subject: invoice,
+            text: 'billing.Invoice',
+            removedNamespace: 'billing',
+          },
+          {
+            operationIndex: 0,
+            subject: receipt,
+            text: 'billing.Receipt',
+            removedNamespace: 'billing',
+          },
+        ],
+        namespaces: { removed: ['billing'], added: [] },
+      }),
+    );
+    const args = ['db', 'update', '--dry-run', '--delete', 'billing'];
+
+    const human = await harness().run(args, { cwd: projectDir, isTty: { stdout: true } });
+    const json = await harness().run([...args, '--json'], { cwd: projectDir });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            { label: 'drop relation legacy: --delete billing.Invoice (answered)' },
+            { label: 'drop relation legacy: --delete billing.Receipt (answered)' },
+            { label: 'every question about namespace "billing": --delete billing (answered)' },
+          ],
+        },
+      ],
+    });
+    expect(json.presented?.data).toMatchObject({
+      dataLoss: [
+        {
+          answered: true,
+          answeredBy: { verb: 'delete', text: 'billing' },
+          removedNamespace: 'billing',
+        },
+        {
+          answered: true,
+          answeredBy: { verb: 'delete', text: 'billing' },
+          removedNamespace: 'billing',
+        },
+      ],
+      removedNamespaces: [
+        { namespaceId: 'billing', answeredBy: { verb: 'delete', text: 'billing' } },
+      ],
+      addedNamespaces: [],
+    });
+  });
+
+  it('lists the namespace answers of a removed namespace, with the rename to a namespace the destination adds', async () => {
+    const invoice = { kind: 'model', namespaceId: 'billing', model: 'Invoice' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        dataLoss: [
+          {
+            operationIndex: 0,
+            subject: invoice,
+            text: 'billing.Invoice',
+            removedNamespace: 'billing',
+          },
+        ],
+        namespaces: { removed: ['billing'], added: ['finance'] },
+      }),
+    );
+
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const json = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+
+    expect(json.presented?.data).toMatchObject({
+      removedNamespaces: [{ namespaceId: 'billing' }],
+      addedNamespaces: ['finance'],
+    });
+    expect(json.presented?.data).toMatchObject({
+      dataLoss: [expect.not.objectContaining({ addedNamespaces: expect.anything() })],
+    });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            { label: 'drop relation legacy: --delete billing.Invoice' },
+            {
+              label:
+                'every question about namespace "billing": --delete billing, or --rename billing:finance if it was renamed',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('suggests the apply with the database as a placeholder and the ref it advances', async () => {
@@ -781,6 +935,39 @@ describe('db update', () => {
     expect(stripAnsi(run.stderr)).toContain('control policy suppressed: table "auth.x"');
   });
 
+  it('repeats the statements of the run in the re-run it advises after a view blocks a drop', async () => {
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) =>
+      notOk(
+        dbUpdateRunnerFailureError(
+          migrationRunnerFailure(
+            'MIGRATION.EXECUTION_FAILED',
+            'Table "billing"."Invoice" cannot be dropped while view billing.v_paid depends on it.',
+            { meta: { blockingObjects: [{ kind: 'view', name: 'billing.v_paid' }] } },
+          ),
+          {},
+          { databaseStorageHash: undefined, invocation: options.invocation },
+        ),
+      ),
+    );
+
+    const run = await harness().run(['db', 'update', '--delete', 'billing', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.EXECUTION_FAILED',
+        nextActions: [
+          {
+            label:
+              'Drop or change view billing.v_paid in the database yourself, then re-run `prisma-test db update --delete billing`',
+          },
+        ],
+      },
+    });
+  });
+
   it('lists the planner`s warnings in the --json result of a successful run', async () => {
     mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
       options.onPlannerWarnings?.([WARNING]);
@@ -896,9 +1083,9 @@ describe('db update', () => {
         why: 'The schema check after apply found: missing: public/event/id.',
         nextActions: [
           {
-            kind: 'user-choice',
+            kind: 'edit-file',
             label:
-              'Change the contract source to resolve the issues listed, re-run `prisma-test contract emit`, then re-run `prisma-test db update`.',
+              'Change the contract source to resolve the issues listed, re-run `prisma-test contract emit`, then re-run `prisma-test db update`',
           },
         ],
         meta: { schemaIssues: [{ path: ['public', 'event', 'id'] }], failingSpace: 'app' },
@@ -907,7 +1094,13 @@ describe('db update', () => {
     expect(stdoutErrorMeta(run.stdout)).toEqual(JSON.parse(JSON.stringify(runnerFailure.meta)));
     expect(mocks.dbUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+        invocation: {
+          cwd: projectDir,
+          configPath: undefined,
+          dbGiven: false,
+          rerunArgs: [],
+          statementArgs: [],
+        },
       }),
     );
   });

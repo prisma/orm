@@ -7,5 +7,5 @@ import { db } from '../prisma/db';
  */
 export async function deleteWithoutWhere() {
   const plan = db.sql.public.user.delete().build();
-  await db.runtime().execute(plan);
+  await db.execute(plan);
 }

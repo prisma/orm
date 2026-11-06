@@ -36,6 +36,7 @@ import {
   resolveAppTargetPath,
 } from '../../utils/migration-path-target';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { dataLine, fieldLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
@@ -108,7 +109,19 @@ function showPresentations(inputs: {
 }): Presentations {
   const migration = inputs.document.migration;
   return {
-    stdout: () => [],
+    stdout: () => [
+      ...fieldLines([
+        ['name', migration.name],
+        ['space', migration.space],
+        ['from', migration.fromContract],
+        ['to', migration.toContract],
+        ['hash', migration.hash],
+        ['created', migration.createdAt],
+      ]),
+      ...migration.operations.map((operation) =>
+        dataLine(['operation', operation.id, operation.operationClass, operation.label]),
+      ),
+    ],
     next: () => [],
     human: (): readonly Block[] => [
       {

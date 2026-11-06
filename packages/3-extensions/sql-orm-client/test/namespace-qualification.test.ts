@@ -6,9 +6,9 @@ import { SqlStorage, type SqlStorageInput, StorageTable } from '@internal/sql-co
 import type { TableSource } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { PostgresSchema } from '../../../3-targets/3-targets/postgres/src/core/postgres-schema';
-import { SqliteDatabase } from '../../../3-targets/3-targets/sqlite/src/core/sqlite-unbound-database';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import { PostgresSchema } from '../../../3-targets/postgres/1-target/src/core/postgres-schema';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
+import { SqliteDatabase } from '../../../3-targets/sqlite/1-target/src/core/sqlite-unbound-database';
 import { compileDeleteCount, compileInsertReturning, compileSelect } from '../src/query-plan';
 import { emptyTableState, tablesForTable } from './helpers';
 

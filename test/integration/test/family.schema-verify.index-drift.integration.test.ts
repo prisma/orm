@@ -7,7 +7,7 @@
  * object was created from exactly the authored text (Postgres reprints
  * `lower(email || 'x')` as `lower((email || 'x'::text))`). The authoring-time
  * warning half of this behavior is pinned in
- * packages/2-sql/1-core/contract/test/index-naming.test.ts.
+ * packages/2-sql-family/1-core/contract/test/index-naming.test.ts.
  *
  * An out-of-band `ALTER INDEX … SET (fillfactor = 70)` on a
  * wire-named index is real drift: the live options bag no longer matches the

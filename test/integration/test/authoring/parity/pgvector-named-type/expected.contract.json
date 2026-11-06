@@ -62,7 +62,9 @@
                   "codecId": "pg/vector@1",
                   "dataType": "pgvector/vector",
                   "nullable": false,
-                  "typeRef": "Embedding1536"
+                  "typeParams": {
+                    "length": 1536
+                  }
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -86,17 +88,7 @@
         "id": "public"
       }
     },
-    "storageHash": "54b62b0ce6cfc50c5e3fc60e985f777882f4d67650cd4dc69a78b0070adc6941",
-    "types": {
-      "Embedding1536": {
-        "codecId": "pg/vector@1",
-        "dataType": "pgvector/vector",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 1536
-        }
-      }
-    }
+    "storageHash": "084c472e63d273902d43260cd846aef6073503c23c714cde281f37cda4b97d59"
   },
   "capabilities": {
     "postgres": {
@@ -117,6 +109,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

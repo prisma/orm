@@ -1,4 +1,4 @@
-import type { Contract, ContractModel, StorageBase } from '@internal/contract/types';
+import type { Contract, StorageBase } from '@internal/contract/types';
 import type { Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoIndexOptionsInput } from './ir/mongo-index-options';
 
@@ -41,8 +41,6 @@ export type MongoModelStorage = {
   readonly fields: Readonly<Record<string, MongoModelFieldStorage>>;
   readonly relations?: Record<string, { readonly field: string }>;
 };
-
-export type MongoModelDefinition = ContractModel<MongoModelStorage>;
 
 /**
  * Data-shape constraint for the Mongo family's storage block. The

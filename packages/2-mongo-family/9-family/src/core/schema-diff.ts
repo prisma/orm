@@ -1,11 +1,12 @@
 import type { ControlPolicy } from '@internal/contract/types';
 import type { SchemaDiffIssue, VerifierOutcome } from '@internal/framework-components/control';
-import type {
-  MongoSchemaCollection,
-  MongoSchemaIndex,
-  MongoSchemaIR,
+import { canonicalize, indexLookupKey } from '@internal/mongo-contract';
+import {
+  deepEqual,
+  type MongoSchemaCollection,
+  type MongoSchemaIndex,
+  type MongoSchemaIR,
 } from '@internal/mongo-schema-ir';
-import { canonicalize, deepEqual, indexLookupKey } from '@internal/mongo-schema-ir';
 import { ifDefined } from '@internal/utils/defined';
 import { verifierDisposition } from './schema-verify/verifier-disposition';
 
@@ -119,10 +120,6 @@ export function diffMongoSchemas(
   return { failures, warnings };
 }
 
-function formatIndexName(index: MongoSchemaIndex): string {
-  return index.keys.map((k) => `${k.field}:${k.direction}`).join(', ');
-}
-
 function diffIndexes(
   collName: string,
   live: MongoSchemaCollection,
@@ -139,12 +136,14 @@ function diffIndexes(
   for (const idx of expected.indexes) expectedLookup.set(indexLookupKey(idx), idx);
 
   for (const [key, idx] of expectedLookup) {
-    if (!liveLookup.has(key)) {
+    const liveIdx = liveLookup.get(key);
+    if (liveIdx === undefined || liveIdx.name !== idx.name) {
       emitMongoIssueUnderControlPolicy(
         collectionControlPolicy,
         {
-          path: [collName, `index:${formatIndexName(idx)}`],
+          path: [collName, `index:${idx.name}`],
           expected: idx,
+          ...ifDefined('actual', liveIdx),
         },
         'fail',
         failures,
@@ -158,7 +157,7 @@ function diffIndexes(
       emitMongoIssueUnderControlPolicy(
         collectionControlPolicy,
         {
-          path: [collName, `index:${formatIndexName(idx)}`],
+          path: [collName, `index:${idx.name}`],
           actual: idx,
         },
         strict ? 'fail' : 'warn',

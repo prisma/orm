@@ -88,7 +88,13 @@ describe('generateContractDts field type maps', () => {
               },
               address: {
                 nullable: true,
-                type: { kind: 'valueObject', name: 'Address' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: 'shared',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
                 many: false,
               },
             },
@@ -96,10 +102,19 @@ describe('generateContractDts field type maps', () => {
             storage: {},
           },
         },
-        valueObjects: {
-          Address: {
-            fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'demo/text@1' } },
+      },
+    },
+    storage: {
+      namespaces: {
+        shared: {
+          id: 'shared',
+          entries: {
+            valueObject: {
+              Address: {
+                fields: {
+                  street: { nullable: false, type: { kind: 'scalar', codecId: 'demo/text@1' } },
+                },
+              },
             },
           },
         },
@@ -107,27 +122,74 @@ describe('generateContractDts field type maps', () => {
     },
   });
 
-  it('applies the shared generic to the contract domain, with no override for fields the generic types itself', () => {
+  it('applies the shared generic to the contract domain and storage, with no override for fields the generic types itself', () => {
     const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
 
     expect(dts).toContain('type FieldTypeOverrides = {  };');
     expect(dts).not.toContain('ValueObjectFieldTypeOverrides');
     expect(dts).toContain(
-      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
     );
     expect(dts).toContain(
-      "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
+      "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\", ContractBase['storage']['namespaces']>;",
     );
     expect(dts).toMatch(/\n {2}FieldTypesFromDomain,\n/);
   });
 
-  it('types each value object alias through the shared generic', () => {
+  it('passes the storage namespaces to the shared generic for a contract without value objects too', () => {
+    const dts = generateContractDts(createTestContract(), createMockSpi(), [CODEC_TYPES], HASHES);
+
+    expect(dts).toContain(
+      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
+    );
+    expect(dts).not.toContain('ValueObjectTypesFromStorage');
+  });
+
+  it('types each value object alias through the shared generic, at the storage namespace that holds it', () => {
     const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
 
     expect(dts).toContain(
-      'export type AddressOutput = ValueObjectOutputTypes["public"]["Address"];',
+      'export type AddressOutput = ValueObjectOutputTypes["shared"]["Address"];',
     );
-    expect(dts).toMatch(/\n {2}ValueObjectTypesFromDomain,\n/);
+    expect(dts).toMatch(/\n {2}ValueObjectTypesFromStorage,\n/);
+  });
+
+  it('writes one alias for a value object name that two storage namespaces hold, from the first', () => {
+    const address = {
+      fields: { street: { nullable: false, type: { kind: 'scalar', codecId: 'demo/text@1' } } },
+    };
+    const dts = generateContractDts(
+      createTestContract({
+        storage: {
+          namespaces: {
+            first: { id: 'first', entries: { valueObject: { Address: address } } },
+            second: { id: 'second', entries: { valueObject: { Address: address } } },
+          },
+        },
+      }),
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+    );
+
+    expect(dts.match(/export type AddressOutput =/g)).toHaveLength(1);
+    expect(dts).toContain(
+      'export type AddressOutput = ValueObjectOutputTypes["first"]["Address"];',
+    );
+  });
+
+  it('renders a value object field as the coordinate of its storage value object', () => {
+    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+
+    expect(dts).toContain(
+      'readonly address: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "shared"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
+    );
+  });
+
+  it('describes value objects only in storage, not in the domain or at the top level', () => {
+    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+
+    expect(dts).not.toContain('readonly valueObjects:');
   });
 
   it('types the fields of a Models member by indexing FieldOutputTypes', () => {

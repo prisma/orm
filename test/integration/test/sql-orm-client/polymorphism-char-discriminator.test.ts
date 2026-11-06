@@ -16,9 +16,10 @@ import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
-import sqliteTargetControl, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqliteTargetControl from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import sqliteTarget from '@internal/target-sqlite/runtime';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { InternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -109,7 +110,7 @@ describe('integration/polymorphism with a fixed-length character discriminator',
     try {
       const { contract, namespaceId } = await authorSqliteContract(
         directory,
-        shapesSchema('uuidString()'),
+        shapesSchema('sql.Char(36)'),
       );
       const path = join(directory, 'test.db');
       const database = new DatabaseSync(path);
