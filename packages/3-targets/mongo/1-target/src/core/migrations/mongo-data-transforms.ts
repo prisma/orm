@@ -14,6 +14,7 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
+import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   collectionOf,
   type ModelMatchInput,
@@ -30,7 +31,11 @@ type Document = Record<string, unknown>;
 
 /** A statement a data transform carries out, or the conflict that refuses it. */
 export type StatementTransform =
-  | { readonly kind: 'transform'; readonly call: DataTransformCall }
+  | {
+      readonly kind: 'transform';
+      readonly call: DataTransformCall;
+      readonly rewrite: PlannedRewrite;
+    }
   | { readonly kind: 'refused'; readonly conflict: MigrationPlannerConflict };
 
 /** A convert or backfill statement of a field, with what the plan does for it. */
@@ -83,6 +88,13 @@ export function convertTransform(
       change.collection,
       withFilter(change.filter, notOfType),
     ),
+    rewrite: {
+      kind: 'conversion',
+      collection: change.collection,
+      field: change.field,
+      filter: change.filter,
+      model: change.destination,
+    },
   };
 }
 
@@ -171,15 +183,20 @@ export function backfillTransform(
       contracts,
     );
   }
+  const variant = variantFilter(input.contract, statement.field);
   return {
     kind: 'transform',
     call: new DataTransformCall(
       fieldStatementText(input.contract, statement.field),
       collection,
-      withFilter(
-        variantFilter(input.contract, statement.field),
-        documentsMissingOrNull(storedName),
-      ),
+      withFilter(variant, documentsMissingOrNull(storedName)),
     ),
+    rewrite: {
+      kind: 'backfill',
+      collection,
+      field: storedName,
+      filter: variant,
+      model: statement.field,
+    },
   };
 }

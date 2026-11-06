@@ -24,10 +24,6 @@ import {
   type FieldRemovalInput,
   modelAt,
   modelCoordinates,
-  otherModelsReached,
-  SEPARATE_THE_MODELS,
-  sharedCollectionWhy,
-  TIME_SERIES_UPDATES,
   variantFilter,
 } from './mongo-statement-planning';
 import { CastFieldCall } from './op-factory-call';
@@ -239,47 +235,6 @@ export function noCastRefusals(
             : `Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan and --convert ${field}, and write the conversion in migration.ts.`,
       };
     });
-}
-
-/** A cast in a time-series collection, whose documents MongoDB does not let an update change except through the metaField. */
-export function timeSeriesCastRefusals(
-  changes: readonly TypeChange[],
-  schema: MongoSchemaIR,
-): readonly MigrationPlannerConflict[] {
-  return changes
-    .filter((change) => schema.collection(change.collection)?.options?.timeseries !== undefined)
-    .map((change) => ({
-      kind: 'typeChangeRefused',
-      summary: `Cannot cast field ${JSON.stringify(change.field)} in collection ${JSON.stringify(change.collection)}: it is a time-series collection`,
-      why: `${TIME_SERIES_UPDATES}, so the values of the field cannot be cast. Keep the field's type in the contract, then run this command again.`,
-    }));
-}
-
-/** A cast of one root model's field in a collection another root model shares, where no discriminator selects its documents. */
-export function sharedCollectionCastRefusals(
-  changes: readonly TypeChange[],
-  contract: ContractWithDomain,
-): readonly MigrationPlannerConflict[] {
-  return changes.flatMap((change): MigrationPlannerConflict[] => {
-    const { subject } = change;
-    if (subject.kind !== 'field' || change.destination === undefined) return [];
-    const others = otherModelsReached(
-      contract,
-      change.destination,
-      change.collection,
-      change.filter,
-      change.field,
-    );
-    if (others.length === 0) return [];
-    const named = others.map((name) => JSON.stringify(name)).join(', ');
-    return [
-      {
-        kind: 'typeChangeRefused',
-        summary: `Cannot cast field ${JSON.stringify(change.field)} of model ${JSON.stringify(subject.model)} in collection ${JSON.stringify(change.collection)}: model ${named} stores it in the same collection`,
-        why: `${sharedCollectionWhy(change.collection, others, 'casting the field would cast it in the documents')} To change it in ${JSON.stringify(subject.model)} documents only, ${SEPARATE_THE_MODELS}.`,
-      },
-    ];
-  });
 }
 
 function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {

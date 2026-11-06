@@ -310,49 +310,8 @@ export function sharedCollectionWhy(
   return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
 }
 
-/**
- * A removal the plan cannot carry out because another root model stored in the same collection still stores the field, and no discriminator selects the documents of the model that loses it.
- */
-export function sharedCollectionRemovalRefusals(
-  removals: readonly FieldRemoval[],
-  contract: ContractWithDomain,
-): readonly MigrationPlannerConflict[] {
-  return removals.flatMap((removal): MigrationPlannerConflict[] => {
-    const { subject, call } = removal;
-    if (subject.kind !== 'field') return [];
-    const others = otherModelsReached(contract, subject, call.collection, call.filter, call.field);
-    if (others.length === 0) return [];
-    return [
-      {
-        kind: 'fieldRemovalRefused',
-        summary: `Cannot remove field ${JSON.stringify(call.field)} of model ${JSON.stringify(subject.model)} from collection ${JSON.stringify(call.collection)}: model ${others.map((name) => JSON.stringify(name)).join(', ')} stores it in the same collection`,
-        why: `${sharedCollectionWhy(call.collection, others, 'removing the field would remove it from the documents')} To keep it in ${others.map((name) => JSON.stringify(name)).join(', ')} documents only, ${SEPARATE_THE_MODELS}.`,
-      },
-    ];
-  });
-}
-
 export const TIME_SERIES_UPDATES =
   'MongoDB updates the documents of a time-series collection only through its metaField';
-
-/**
- * A removal the plan cannot carry out because its collection is a time-series collection, whose
- * documents MongoDB does not let an update change except through the metaField.
- */
-export function timeSeriesRemovalRefusals(
-  removals: readonly FieldRemoval[],
-  schema: MongoSchemaIR,
-): readonly MigrationPlannerConflict[] {
-  return removals
-    .filter(
-      (removal) => schema.collection(removal.call.collection)?.options?.timeseries !== undefined,
-    )
-    .map((removal) => ({
-      kind: 'fieldRemovalRefused',
-      summary: `Cannot remove field ${JSON.stringify(removal.call.field)} from collection ${JSON.stringify(removal.call.collection)}: it is a time-series collection`,
-      why: `${TIME_SERIES_UPDATES}, so the field cannot be removed from the documents that hold it. Keep the field in the contract, as an optional field if new documents leave it out, then run this command again.`,
-    }));
-}
 
 /**
  * Plans the rename each statement states, in order: a model statement whose collection changes renames the

@@ -26,11 +26,7 @@ import {
   modelCoordinates,
   originFieldOf,
   originModelOf,
-  otherModelsReached,
-  SEPARATE_THE_MODELS,
-  sharedCollectionWhy,
   storedFieldsOf,
-  TIME_SERIES_UPDATES,
   variantFilter,
 } from './mongo-statement-planning';
 import { FillFieldCall } from './op-factory-call';
@@ -167,51 +163,4 @@ export function uniqueFillRefusals(
         why: `Every document would get the same value, which the unique index refuses. Plan the change with migration plan and --backfill ${field}, and write a value for each document in migration.ts.`,
       };
     });
-}
-
-/** A fill in a time-series collection, whose documents MongoDB does not let an update change except through the metaField. */
-export function timeSeriesFillRefusals(
-  fills: readonly FieldFill[],
-  schema: MongoSchemaIR,
-): readonly MigrationPlannerConflict[] {
-  return fills
-    .filter(
-      ({ call }) => schema.collection(call.options.collection)?.options?.timeseries !== undefined,
-    )
-    .map(({ call }) => ({
-      kind: 'fieldFillRefused',
-      summary: `Cannot fill field ${JSON.stringify(call.options.field)} in collection ${JSON.stringify(call.options.collection)}: it is a time-series collection`,
-      why: `${TIME_SERIES_UPDATES}, so the field cannot be filled in the documents. Make the field optional in the contract, then run this command again.`,
-    }));
-}
-
-/**
- * A fill whose documents another model stored in the same collection shares: another root model
- * when the fill has no discriminator filter, or a variant of another root model with the same
- * discriminator field and value. Its documents would get the field too.
- */
-export function sharedCollectionFillRefusals(
-  fills: readonly FieldFill[],
-  contract: ContractWithDomain,
-): readonly MigrationPlannerConflict[] {
-  return fills.flatMap((fill): MigrationPlannerConflict[] => {
-    const { subject, call } = fill;
-    if (subject.kind !== 'field') return [];
-    const others = otherModelsReached(
-      contract,
-      subject,
-      call.options.collection,
-      call.options.filter,
-      undefined,
-    );
-    if (others.length === 0) return [];
-    const named = others.map((name) => JSON.stringify(name)).join(', ');
-    return [
-      {
-        kind: 'fieldFillRefused',
-        summary: `Cannot fill field ${JSON.stringify(call.options.field)} of model ${JSON.stringify(subject.model)} in collection ${JSON.stringify(call.options.collection)}: model ${named} is stored in the same collection`,
-        why: `${sharedCollectionWhy(call.options.collection, others, 'filling the field would add it to the documents')} To fill it in ${JSON.stringify(subject.model)} documents only, ${SEPARATE_THE_MODELS}.`,
-      },
-    ];
-  });
 }

@@ -247,3 +247,91 @@ describe('MongoMigrationPlanner, --backfill of a required field', () => {
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, a scaffold where a cast or fill would be refused', () => {
+  const shared = (seed: string, user: Record<string, FieldTypeSpec>) =>
+    contract(
+      seed,
+      {
+        User: {
+          collection: 'people',
+          fields: ['_id', ...Object.keys(user)],
+          types: { _id: OBJECT_ID, ...user },
+        },
+        Admin: {
+          collection: 'people',
+          fields: ['_id', 'age'],
+          types: { _id: OBJECT_ID, age: STRING },
+        },
+      },
+      { people: {} },
+    );
+  const readings = (seed: string, fields: Record<string, FieldTypeSpec>) =>
+    contract(
+      seed,
+      {
+        User: {
+          collection: 'readings',
+          fields: ['_id', 'at', ...Object.keys(fields)],
+          types: { _id: OBJECT_ID, ...fields },
+        },
+      },
+      { readings: { timeField: 'at' } },
+    );
+  const summaries = (result: ReturnType<typeof plan>) =>
+    refusal(result).map(({ summary }) => summary);
+
+  it('refuses --convert and --backfill in a collection another root model shares', () => {
+    expect([
+      summaries(
+        plan({
+          from: shared('from', { age: STRING }),
+          to: shared('to', { age: INT }),
+          schema: [schemaCollection('people')],
+          statements: [fieldStatement('convert', 'age')],
+        }),
+      ),
+      summaries(
+        plan({
+          from: shared('from', {}),
+          to: shared('to', { plan: STRING }),
+          schema: [schemaCollection('people')],
+          statements: [fieldStatement('backfill', 'plan')],
+        }),
+      ),
+    ]).toEqual([
+      [
+        'Cannot convert field "age" of model "User" in collection "people": model "Admin" stores it in the same collection',
+      ],
+      [
+        'Cannot backfill field "plan" of model "User" in collection "people": model "Admin" is stored in the same collection',
+      ],
+    ]);
+  });
+
+  it('refuses --convert and --backfill in a time-series collection', () => {
+    const live = [schemaCollection('readings', { timeseries: true })];
+
+    expect([
+      summaries(
+        plan({
+          from: readings('from', { age: STRING }),
+          to: readings('to', { age: INT }),
+          schema: live,
+          statements: [fieldStatement('convert', 'age')],
+        }),
+      ),
+      summaries(
+        plan({
+          from: readings('from', {}),
+          to: readings('to', { plan: STRING }),
+          schema: live,
+          statements: [fieldStatement('backfill', 'plan')],
+        }),
+      ),
+    ]).toEqual([
+      ['Cannot convert field "age" in collection "readings": it is a time-series collection'],
+      ['Cannot backfill field "plan" in collection "readings": it is a time-series collection'],
+    ]);
+  });
+});

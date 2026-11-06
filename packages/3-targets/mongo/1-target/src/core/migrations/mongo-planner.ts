@@ -43,12 +43,12 @@ import {
   convertTransform,
   type PlannedTransform,
 } from './mongo-data-transforms';
+import { planFieldFills, uniqueFillRefusals } from './mongo-field-fills';
 import {
-  planFieldFills,
-  sharedCollectionFillRefusals,
-  timeSeriesFillRefusals,
-  uniqueFillRefusals,
-} from './mongo-field-fills';
+  type PlannedRewrite,
+  sharedCollectionRefusals,
+  timeSeriesRefusals,
+} from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
   collectionControlOf,
@@ -60,17 +60,13 @@ import {
   planStatements,
   planValidatorFieldRemovals,
   type StatementCalls,
-  sharedCollectionRemovalRefusals,
-  timeSeriesRemovalRefusals,
 } from './mongo-statement-planning';
 import { structureChangeWarnings } from './mongo-structure-warnings';
 import {
   noCastRefusals,
   planFieldTypeChanges,
   planValidatorTypeChanges,
-  sharedCollectionCastRefusals,
   type TypeChange,
-  timeSeriesCastRefusals,
   typeChangeConverted,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
@@ -676,18 +672,46 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       destination: destinationIR,
       statements: options.statements,
     });
+    const rewrites: readonly PlannedRewrite[] = [
+      ...removals.map(
+        ({ call, subject }): PlannedRewrite => ({
+          kind: 'removal',
+          collection: call.collection,
+          field: call.field,
+          filter: call.filter,
+          model: subject.kind === 'field' ? subject : undefined,
+        }),
+      ),
+      ...casts.map(
+        (change): PlannedRewrite => ({
+          kind: 'cast',
+          collection: change.collection,
+          field: change.field,
+          filter: change.filter,
+          model: change.destination,
+        }),
+      ),
+      ...transforms.flatMap(({ outcome }) =>
+        outcome.kind === 'transform' ? [outcome.rewrite] : [],
+      ),
+      ...fills.map(
+        ({ call, subject }): PlannedRewrite => ({
+          kind: 'fill',
+          collection: call.options.collection,
+          field: call.options.field,
+          filter: call.options.filter,
+          model: subject.kind === 'field' ? subject : undefined,
+        }),
+      ),
+    ];
     const refusals = [
       ...transforms.flatMap(({ outcome }) =>
         outcome.kind === 'refused' ? [outcome.conflict] : [],
       ),
       ...uniqueFillRefusals(fills, { contract, destination: destinationIR }),
-      ...timeSeriesFillRefusals(fills, schema),
-      ...sharedCollectionFillRefusals(fills, contract),
       ...noCastRefusals(unconverted, contract),
-      ...timeSeriesRemovalRefusals(removals, schema),
-      ...timeSeriesCastRefusals(casts, schema),
-      ...sharedCollectionRemovalRefusals(removals, contract),
-      ...sharedCollectionCastRefusals(casts, contract),
+      ...timeSeriesRefusals(rewrites, schema),
+      ...sharedCollectionRefusals(rewrites, contract, schema),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
     const castCalls = casts.flatMap((change) => (change.cast === undefined ? [] : [change.cast]));
