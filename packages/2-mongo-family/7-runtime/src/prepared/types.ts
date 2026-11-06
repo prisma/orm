@@ -6,9 +6,11 @@ import type {
 } from '@internal/framework-components/runtime';
 import type { MongoCodecInput } from '@internal/mongo-contract';
 import type {
+  AnyMongoCommand,
   DeleteManyCommand,
   DeleteOneCommand,
   MongoQueryExecutor,
+  MongoQueryPlan,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
@@ -77,3 +79,23 @@ export type MongoPreparedFor<Params, Row, Command> = [Command] extends [never]
   : [Command] extends [MongoStatisticsCommand]
     ? MongoPreparedExecution<Params, Row>
     : MongoPreparedStatement<Params, Row>;
+
+/** The `prepare` method of a runtime or client. `DefaultCodecTypes` is the codec types a declaration is checked against: a client binds them to its contract's. */
+export interface MongoPrepareMember<
+  DefaultCodecTypes extends MongoCodecTypesBase = MongoCodecTypesBase,
+> {
+  /**
+   * Builds a reusable prepared statement. The callback runs once with one placeholder per declared name, and the plan it returns is lowered once. Each run of the handle fills in the values, runs `beforeEncode`, encodes with the declared codecs and sends the command. Does no I/O.
+   *
+   * Refuses an unknown codec id with `RUNTIME.CODEC_DESCRIPTOR_MISSING`, a placeholder in a raw command with `RUNTIME.PREPARE_RAW_PLACEHOLDER`, and a declared name the plan does not use with `RUNTIME.PREPARE_UNUSED_PARAM`.
+   */
+  prepare<
+    D extends MongoDeclaration<CT>,
+    Row,
+    Command extends AnyMongoCommand,
+    CT extends MongoCodecTypesBase = DefaultCodecTypes,
+  >(
+    declaration: D,
+    callback: (placeholders: MongoPlaceholders<D>) => MongoQueryPlan<Row, Command>,
+  ): Promise<MongoPreparedFor<MongoParamsFromDeclaration<D, CT>, Row, Command>>;
+}

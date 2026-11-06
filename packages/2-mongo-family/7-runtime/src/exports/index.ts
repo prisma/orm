@@ -1,6 +1,7 @@
 export type { RuntimeTargetInstance } from '@internal/framework-components/execution';
 export type { MongoCodecLookup, MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 export { enumMemberCodecFor } from '@internal/mongo-query-ast/execution';
+export type { MongoPreparedParamRef } from '@internal/mongo-value';
 export type { MongoDraftLeaf } from '../draft-leaves';
 export { flattenMongoDraftLeaves } from '../draft-leaves';
 export type { MongoExecutionPlan } from '../mongo-execution-plan';
@@ -42,4 +43,5 @@ export type {
   MongoPreparedExecution,
   MongoPreparedFor,
   MongoPreparedStatement,
+  MongoPrepareMember,
 } from '../prepared/types';
