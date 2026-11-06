@@ -1,5 +1,8 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
-import type { MigrationOperationPolicy } from '@internal/family-sql/control';
+import {
+  type MigrationOperationPolicy,
+  storageNameOfOperation,
+} from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
@@ -198,7 +201,7 @@ describe('planning an unbound extension', () => {
         id: 'extension.vector',
         target: {
           id: 'postgres',
-          details: { schema: 'public', objectType: 'dependency', name: 'vector' },
+          details: { objectType: 'dependency', name: 'vector' },
         },
         execute: ['CREATE EXTENSION IF NOT EXISTS "vector"'],
       },
@@ -216,6 +219,33 @@ describe('planning an unbound extension', () => {
       schema: offlineSchemaOf(fromContract),
     });
     expect(operations).toEqual([]);
+  });
+
+  it('plans nothing offline when the origin declared it in a named namespace', async () => {
+    const fromContract = contractDeclaring({ vector: 'extensions' });
+    const { operations } = await plannedOperations({
+      contract,
+      fromContract,
+      schema: offlineSchemaOf(fromContract),
+    });
+    expect(operations).toEqual([]);
+  });
+
+  it('names an unbound create and drop by the extension name alone', async () => {
+    const fromContract = contractDeclaring({ vector: UNBOUND });
+    const dropped = plan({
+      contract: contractDeclaring({}),
+      fromContract,
+      schema: offlineSchemaOf(fromContract),
+    });
+    const created = plan({ contract, schema: liveDatabase({}, undefined) });
+    if (dropped.kind !== 'success' || created.kind !== 'success') throw new Error('plan failed');
+    const operations = await Promise.all([...created.plan.operations, ...dropped.plan.operations]);
+    expect(operations.map((op) => op.target.details)).toEqual([
+      { objectType: 'dependency', name: 'vector' },
+      { objectType: 'dependency', name: 'vector' },
+    ]);
+    expect(operations.map(storageNameOfOperation)).toEqual(['vector', 'vector']);
   });
 
   it('plans nothing offline when the origin also declared it unbound', async () => {

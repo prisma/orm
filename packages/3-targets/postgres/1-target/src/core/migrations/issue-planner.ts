@@ -632,10 +632,14 @@ function mapExtensionNodeIssue(
     }
     PostgresExtensionSchemaNode.assert(actual);
     if (expected.schemaName === undefined) {
+      invariant(
+        actual.searchPath !== undefined,
+        'an unbound extension differs only from a live extension, which carries its search path',
+      );
       return notOk(
         nodeConflict(
           'unsupportedOperation',
-          `Extension "${actual.name}" ${offSearchPathText(actual)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actual.installedSchemaName()}" to the search path, or reinstall the extension in a schema on the search path.`,
+          `Extension "${actual.name}" ${offSearchPathText(actual.installedSchemaName(), actual.searchPath)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actual.installedSchemaName()}" to the search path, or reinstall the extension in a schema on the search path.`,
         ),
       );
     }

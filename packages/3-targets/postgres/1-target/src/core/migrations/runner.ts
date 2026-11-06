@@ -54,7 +54,7 @@ import {
 } from './dependent-objects';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
 import { qualifyTableName } from './planner-sql-checks';
-import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { type PostgresPlanTargetDetails, schemaOfDetails } from './planner-target-details';
 import { CHECK_VIOLATION, rowsFailingCheckOf } from './rows-failing-check';
 import {
   SCHEMA_OBJECTS_SQL,
@@ -492,7 +492,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     let rows: number;
     try {
       const counted = await driver.query<{ rows: number }>(
-        `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(details.schema, table)} WHERE ${quoteIdentifier(details.name)} = $1`,
+        `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schemaOfDetails(details), table)} WHERE ${quoteIdentifier(details.name)} = $1`,
         [stored],
       );
       rows = counted.rows[0]?.rows ?? 0;

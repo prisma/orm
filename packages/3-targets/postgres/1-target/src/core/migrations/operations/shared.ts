@@ -40,11 +40,11 @@ export function step(
 export function targetDetails(
   objectType: OperationClass,
   name: string,
-  schema: string,
+  schema: string | undefined,
   table?: string,
 ): { readonly id: 'postgres'; readonly details: PostgresPlanTargetDetails } {
   return {
     id: 'postgres',
-    details: { schema, objectType, name, ...ifDefined('table', table) },
+    details: { ...ifDefined('schema', schema), objectType, name, ...ifDefined('table', table) },
   };
 }

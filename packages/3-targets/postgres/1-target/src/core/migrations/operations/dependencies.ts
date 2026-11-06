@@ -20,7 +20,7 @@ export async function createExtension(
     id: `extension.${extension}`,
     label: `Create extension "${extension}"`,
     operationClass: 'additive',
-    target: targetDetails('dependency', extension, schema ?? DEFAULT_NAMESPACE_ID),
+    target: targetDetails('dependency', extension, schema),
     precheck: [
       step(
         `verify extension "${extension}" is not installed`,
@@ -61,7 +61,7 @@ export async function dropExtension(
     id: `dropExtension.${extension}`,
     label: `Drop extension "${extension}"`,
     operationClass: 'destructive',
-    target: targetDetails('dependency', extension, schema ?? DEFAULT_NAMESPACE_ID),
+    target: targetDetails('dependency', extension, schema),
     precheck: [
       step(
         `verify extension "${extension}" is installed`,

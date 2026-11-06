@@ -1,3 +1,4 @@
+import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 
 export type OperationClass =
@@ -14,7 +15,8 @@ export type OperationClass =
   | 'rowLevelSecurity';
 
 export interface PostgresPlanTargetDetails {
-  readonly schema: string;
+  /** Absent for an extension in the unbound namespace, which names no schema. */
+  readonly schema?: string;
   readonly objectType: OperationClass;
   readonly name: string;
   readonly table?: string;
@@ -32,4 +34,10 @@ export function buildTargetDetails(
     name,
     ...ifDefined('table', table),
   };
+}
+
+/** The schema of an operation on a table, column or constraint, which always names one; only an unbound extension's operation omits it. */
+export function schemaOfDetails(details: PostgresPlanTargetDetails): string {
+  invariant(details.schema !== undefined, `operation target "${details.name}" names no schema`);
+  return details.schema;
 }

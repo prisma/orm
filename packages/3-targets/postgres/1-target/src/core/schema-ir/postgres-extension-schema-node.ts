@@ -6,9 +6,6 @@ import { blindCast } from '@internal/utils/casts';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresSchemaNodeKind } from './schema-node-kinds';
 
-/** The search path assumed when no connection supplies one, as in offline planning. */
-const OFFLINE_SEARCH_PATH: readonly string[] = Object.freeze([DEFAULT_NAMESPACE_ID]);
-
 export interface PostgresExtensionSchemaNodeInput {
   readonly name: string;
   /** The schema that holds the extension's objects (`pg_extension.extnamespace`); `undefined` for an extension the contract declares in the unbound namespace, which the search path locates. */
@@ -20,7 +17,7 @@ export interface PostgresExtensionSchemaNodeInput {
 }
 
 /**
- * Schema-diff node for an installed Postgres extension. An extension's name is unique in the whole database, so the node sits on the database root and pairs by name alone; the schema holding its objects is compared, so an extension in another schema is one mismatch rather than a missing and an extra extension. An expected node with no schema, declared in the unbound namespace, matches a live extension in any schema on the live node's search path.
+ * Schema-diff node for an installed Postgres extension. An extension's name is unique in the whole database, so the node sits on the database root and pairs by name alone; the schema holding its objects is compared, so an extension in another schema is one mismatch rather than a missing and an extra extension. An expected node with no schema, declared in the unbound namespace, matches a live extension in any schema on the live node's search path, and any node read with no connection, since only a connection decides where it is.
  */
 export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements DiffableNode {
   override readonly nodeKind = PostgresSchemaNodeKind.extension;
@@ -54,22 +51,15 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
     >(other);
     PostgresExtensionSchemaNode.assert(node);
     if (this.name !== node.name) return false;
-    if (this.schemaName === undefined) return node.isOnSearchPath();
+    if (this.schemaName === undefined) {
+      return node.searchPath === undefined || node.searchPath.includes(node.installedSchemaName());
+    }
     return this.schemaName === node.installedSchemaName();
   }
 
-  /** The schema the extension is in. An unbound declaration, compared with no connection, is taken to be in `public`, where `CREATE EXTENSION` with no schema puts it under the offline search path. */
+  /** The schema the extension is in. An unbound declaration, compared with no connection, is taken to be in `public`, where `CREATE EXTENSION` with no schema puts it under the default search path. */
   installedSchemaName(): string {
     return this.schemaName ?? DEFAULT_NAMESPACE_ID;
-  }
-
-  /** The search path of this node's connection, or {@link OFFLINE_SEARCH_PATH} when there is none. */
-  effectiveSearchPath(): readonly string[] {
-    return this.searchPath ?? OFFLINE_SEARCH_PATH;
-  }
-
-  isOnSearchPath(): boolean {
-    return this.effectiveSearchPath().includes(this.installedSchemaName());
   }
 
   explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
@@ -78,8 +68,11 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
       actual,
     );
     if (!PostgresExtensionSchemaNode.is(node)) return undefined;
-    if (this.schemaName === undefined) {
-      return { text: `extension "${this.name}" ${offSearchPathText(node)}`, cause: 'differs' };
+    if (this.schemaName === undefined && node.searchPath !== undefined) {
+      return {
+        text: `extension "${this.name}" ${offSearchPathText(node.installedSchemaName(), node.searchPath)}`,
+        cause: 'differs',
+      };
     }
     return {
       text: `extension "${this.name}" is installed in schema "${node.installedSchemaName()}", and the contract declares it in schema "${this.schemaName}"`,
@@ -97,6 +90,6 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
 }
 
 /** Names the schema an extension is installed in and the search path that does not include it. */
-export function offSearchPathText(installed: PostgresExtensionSchemaNode): string {
-  return `is installed in schema "${installed.installedSchemaName()}", which is not on the search path (${installed.effectiveSearchPath().join(', ')})`;
+export function offSearchPathText(schemaName: string, searchPath: readonly string[]): string {
+  return `is installed in schema "${schemaName}", which is not on the search path (${searchPath.join(', ')})`;
 }
