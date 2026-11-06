@@ -5,6 +5,7 @@ import { MongoContractSchema } from '../src/contract-schema';
 function contractWithField(kind: 'model' | 'storage value object', field: Record<string, unknown>) {
   return kind === 'model'
     ? {
+        target: 'mongo',
         targetFamily: 'mongo',
         roots: {},
         domain: {
@@ -19,6 +20,7 @@ function contractWithField(kind: 'model' | 'storage value object', field: Record
         storage: { namespaces: {} },
       }
     : {
+        target: 'mongo',
         targetFamily: 'mongo',
         roots: {},
         domain: { namespaces: { app: { models: {} } } },

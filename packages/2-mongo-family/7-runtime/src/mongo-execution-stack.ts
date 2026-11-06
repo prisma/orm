@@ -1,3 +1,4 @@
+import { checkContractComponentRequirements } from '@internal/framework-components/components';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -17,21 +18,16 @@ import {
   type MutationDefaultsOptions,
   runtimeError,
 } from '@internal/framework-components/runtime';
-import type { MongoCodec } from '@internal/mongo-codec';
-import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { assembleMongoCodecRegistry, type MongoCodecContributor } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 
 /**
- * Mongo-specific static contributions a runtime descriptor declares.
- *
- * Mirrors `SqlStaticContributions` in shape: a `codecs()` getter that yields a `MongoCodecRegistry` populated with this contributor's codecs. The registry is then walked by `createMongoExecutionContext` and folded into the single per-execution registry the runtime reads from at decode time.
+ * Mongo-specific static contributions a runtime descriptor declares. Codecs are not among them: a descriptor declares its codecs once, as codec descriptors in `types.codecTypes.codecDescriptors`, which `createMongoExecutionContext` and the adapter both read with `assembleMongoCodecRegistry`.
  */
 export interface MongoStaticContributions
-  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {
-  readonly codecs: () => MongoCodecRegistry;
-}
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {}
 
 export interface MongoRuntimeTargetDescriptor<
   TTargetId extends string = 'mongo',
@@ -129,10 +125,9 @@ export function createMongoExecutionContext<
   readonly contract: TContract;
   readonly stack: MongoExecutionStack<TTargetId>;
 }): MongoExecutionContext<TContract> {
-  const registry = newMongoCodecRegistry();
-  const owners = new Map<string, string>();
+  assertMongoExecutionStackContractRequirements(options.contract, options.stack);
 
-  const contributors: ReadonlyArray<MongoStaticContributions & { readonly id: string }> = [
+  const contributors: ReadonlyArray<MongoStaticContributions & MongoCodecContributor> = [
     options.stack.target,
     options.stack.adapter,
     ...options.stack.extensions,
@@ -142,21 +137,7 @@ export function createMongoExecutionContext<
   const execution = options.contract.execution;
   assertMutationDefaultGeneratorsAvailable(execution, generators);
 
-  for (const contributor of contributors) {
-    const contributed = contributor.codecs();
-    for (const codec of iterateCodecs(contributed)) {
-      const existingOwner = owners.get(codec.id);
-      if (existingOwner !== undefined) {
-        throw runtimeError(
-          'RUNTIME.DUPLICATE_CODEC',
-          `Duplicate Mongo codec id '${codec.id}' contributed by '${contributor.id}' (already registered by '${existingOwner}').`,
-          { codecId: codec.id, existingOwner, incomingOwner: contributor.id },
-        );
-      }
-      registry.register(codec);
-      owners.set(codec.id, contributor.id);
-    }
-  }
+  const registry = assembleMongoCodecRegistry(contributors);
 
   return Object.freeze({
     contract: options.contract,
@@ -166,6 +147,44 @@ export function createMongoExecutionContext<
   });
 }
 
-function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {
-  yield* registry.values();
+function assertMongoExecutionStackContractRequirements<TTargetId extends string>(
+  contract: MongoContract,
+  stack: MongoExecutionStack<TTargetId>,
+): void {
+  const result = checkContractComponentRequirements({
+    contract,
+    expectedTargetFamily: 'mongo',
+    expectedTargetId: stack.target.targetId,
+    providedComponentIds: [
+      stack.target.id,
+      stack.adapter.id,
+      ...stack.extensions.map((pack) => pack.id),
+    ],
+  });
+
+  if (result.familyMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_FAMILY_MISMATCH',
+      `Contract target family '${result.familyMismatch.actual}' does not match runtime family '${result.familyMismatch.expected}'.`,
+      { actual: result.familyMismatch.actual, expected: result.familyMismatch.expected },
+    );
+  }
+
+  if (result.targetMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_TARGET_MISMATCH',
+      `Contract target '${result.targetMismatch.actual}' does not match runtime target descriptor '${result.targetMismatch.expected}'.`,
+      { actual: result.targetMismatch.actual, expected: result.targetMismatch.expected },
+    );
+  }
+
+  if (result.missingExtensionPackIds.length > 0) {
+    const packIds = result.missingExtensionPackIds;
+    const packList = packIds.map((id) => `'${id}'`).join(', ');
+    throw runtimeError(
+      'RUNTIME.MISSING_EXTENSION_PACK',
+      `Contract requires extension pack(s) ${packList}, but runtime descriptors do not provide matching component(s).`,
+      { packIds },
+    );
+  }
 }
