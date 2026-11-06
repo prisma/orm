@@ -28,15 +28,14 @@ test('the control target factory keeps the target id of the meta it is given', (
   >();
 });
 
-test('the planner and its plans carry the target id they are given, and MySQL by default', () => {
+test('the planner and its plans carry the target id they are given, which is required', () => {
   const mariadb = createMysqlMigrationPlanner(lowerer, {
     targetId: 'mariadb',
     migrationModule: '@internal/mariadb/migration',
   });
   expectTypeOf(mariadb).toEqualTypeOf<MysqlMigrationPlanner<'mariadb'>>();
-  expectTypeOf(createMysqlMigrationPlanner(lowerer)).toEqualTypeOf<
-    MysqlMigrationPlanner<'mysql'>
-  >();
+  // @ts-expect-error the planner has no default target
+  createMysqlMigrationPlanner(lowerer);
   expectTypeOf(mariadb.emptyMigration).returns.toEqualTypeOf<
     TypeScriptRenderableMysqlMigration<'mariadb'>
   >();

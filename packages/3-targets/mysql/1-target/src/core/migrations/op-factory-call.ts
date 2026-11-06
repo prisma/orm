@@ -36,8 +36,6 @@ export const MYSQL_MIGRATION_MODULE = '@internal/mysql/migration';
 /** The module call nodes name in their import requirements. `renderCallsToTypeScript` replaces it with the migration module of the target the scaffold is for. */
 export const MIGRATION_MODULE_PLACEHOLDER = MYSQL_MIGRATION_MODULE;
 
-export const MYSQL_TARGET_ID = 'mysql';
-
 /** The refusal of a `MysqlMigration` operation that needs the control adapter, on an instance built without a control stack. */
 export function mysqlMigrationStackMissing(operation: string) {
   return mysqlError(

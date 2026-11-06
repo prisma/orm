@@ -37,8 +37,6 @@ import { coalesceSubtreeIssues, issueNode, planIssues } from './issue-planner';
 import {
   DropColumnCall,
   DropTableCall,
-  MYSQL_MIGRATION_MODULE,
-  MYSQL_TARGET_ID,
   type MysqlOpFactoryCall,
   RawSqlCall,
   renameTableByHandOp,
@@ -59,11 +57,6 @@ export type MysqlPlanResult<TargetId extends string = 'mysql'> =
       readonly temporaryValues: readonly MigrationTemporaryValue[];
     }
   | SqlPlannerFailureResult;
-
-const MYSQL_MIGRATION_TARGET: MysqlMigrationTarget<'mysql'> = {
-  targetId: MYSQL_TARGET_ID,
-  migrationModule: MYSQL_MIGRATION_MODULE,
-};
 
 function tableRenameByHand(targetId: string): TableRenameByHand {
   return {
@@ -231,16 +224,9 @@ function statementNotYetSupported(statement: ResolvedMigrationStatement): SqlPla
   };
 }
 
-export function createMysqlMigrationPlanner(
-  lowerer: ExecuteRequestLowerer,
-): MysqlMigrationPlanner<'mysql'>;
 export function createMysqlMigrationPlanner<TargetId extends string>(
   lowerer: ExecuteRequestLowerer,
   target: MysqlMigrationTarget<TargetId>,
-): MysqlMigrationPlanner<TargetId>;
-export function createMysqlMigrationPlanner(
-  lowerer: ExecuteRequestLowerer,
-  target: MysqlMigrationTarget<string> = MYSQL_MIGRATION_TARGET,
-): MysqlMigrationPlanner<string> {
+): MysqlMigrationPlanner<TargetId> {
   return new MysqlMigrationPlanner(lowerer, target);
 }
