@@ -1,0 +1,4 @@
+# Deferred
+
+- **The MongoDB query builder does not encode literal values.** `f._id.eq('65f…')` sends a string, and no codec runs. Prepared values are encoded with their declared codec, so the same query encodes differently when prepared. Follow-up: encode query-builder literals with the field's codec. Found while designing `prepare` (spec D4).
+- **A Postgres client type-checks as a prepared target but fails at run time.** `PreparedStatement.query(target, …)` types `target` as `RuntimeScope { query; execute }`. The `postgres()` client has both methods, so `ps.query(db, params)` compiles, then throws the "missing the prepared statement query bridge" invariant. Either the type should refuse the client, or clients should become targets on every family. Found by the design review of MongoDB `prepare` (spec D7).
