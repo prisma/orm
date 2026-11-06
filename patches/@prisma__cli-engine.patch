@@ -1,0 +1,36 @@
+diff --git a/dist/engine-BBuDSD7p.js b/dist/engine-BBuDSD7p.js
+index cdf5f1fb39d3f5ca56f907689a9215bb75b81982..6363598ca7614241fffdbe5dda0d5d0fba936254 100644
+--- a/dist/engine-BBuDSD7p.js
++++ b/dist/engine-BBuDSD7p.js
+@@ -5639,8 +5639,10 @@ function emitErrored(invocation, raw) {
+ *  version travels as the run's single result frame. */
+ function settleVersion(spec, invocation) {
+ 	const { runtime, state } = invocation;
++	const binPath = currentBinPath();
+ 	if (state.format !== "json") {
+ 		runtime.stdout.write(`${spec.version}\n`);
++		if (binPath !== void 0) runtime.stdout.write(`Path: ${binPath}\n`);
+ 		return 0;
+ 	}
+ 	emitFrame(invocation, {
+@@ -5648,7 +5650,7 @@ function settleVersion(spec, invocation) {
+ 		envelope: {
+ 			ok: true,
+ 			commandId: "version",
+-			result: { version: spec.version },
++			result: { version: spec.version, ...(binPath !== void 0 ? { path: binPath } : {}) },
+ 			exitCode: 0,
+ 			diagnostics: [],
+ 			nextActions: []
+@@ -5658,6 +5660,11 @@ function settleVersion(spec, invocation) {
+ 	});
+ 	return 0;
+ }
++function currentBinPath() {
++	const entry = process.argv[1];
++	if (entry === void 0) return void 0;
++	return realpathOr(entry);
++}
+ /** What the user typed that no longer exists: a retired path, or a
+ *  retired flag on a command that still exists. */
+ function retiredInvocation(redirect) {
