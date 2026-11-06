@@ -10,7 +10,7 @@ This page lists the projects in priority order, by stream. Work the streams in p
 
 **Progress column:** one symbol, then done/total where the row has countable units. ✅ done · 🟡 code done, waiting on review or docs · 🔄 in progress · ⏳ not started · ❓ needs a decision from Will. The units are the slices, pull requests, tickets or items the Status column names; a row with no units yet has no count.
 
-States were last checked against GitHub and Linear on 2026-11-02.
+States were last checked against GitHub and Linear on 2026-11-06.
 
 ## How far from GA
 
@@ -23,8 +23,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 8 of 11 (73%) | `███████░░░` | 1 | 2 |
 | Docs and the new user's first hour | 1 of 5 (20%) | `██░░░░░░░░` | 3 | 1 |
-| Work found along the way | 1 of 5 (20%) | `██░░░░░░░░` | 2 | 2 |
-| **All streams** | **25 of 42 (60%)** | `██████░░░░` | **9** | **8** |
+| Work found along the way | 1 of 6 (17%) | `██░░░░░░░░` | 3 | 2 |
+| **All streams** | **25 of 43 (58%)** | `██████░░░░` | **10** | **8** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -36,11 +36,11 @@ GA is the last chance to make breaking changes, so this stream decides the date.
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 6/6 | Finish ADR 254: data types own column types | Must | Will | Done 2026-10-20. The cast rule (TML-3389) merged last. Bugs found along the way stay in the project's backlog |  |
 | 2 | ✅ 2/2 | One CLI and one config file | Must | Will | Done 2026-10-08 |  |
-| 3 | 🔄 4/6 | Early MySQL attempt, to find shared code that assumes PostgreSQL | Must | Will | 6 slices. Merged 2026-10-22: every database's packages in one folder, and a MySQL target that emits a contract and reads a MySQL database's structure. MySQL migrations, `db verify` and `db sign` merged 2026-10-23. ORM reads merged 2026-10-28. Both MySQL drivers moved onto the `mariadb` package, with every value sent in a prepared statement, merged 2026-10-29. Sending each statement in one round trip, with the `mariadb` package writing the values into the SQL, merged 2026-10-30. ORM writes without `RETURNING` (TML-3696) are in review. Left: MariaDB (TML-3697) | Review ORM writes (TML-3696) |
+| 3 | 🔄 5/6 | Early MySQL attempt, to find shared code that assumes PostgreSQL | Must | Will | 6 slices. Merged 2026-10-22: every database's packages in one folder, and a MySQL target that emits a contract and reads a MySQL database's structure. MySQL migrations, `db verify` and `db sign` merged 2026-10-23. ORM reads merged 2026-10-28. Both MySQL drivers moved onto the `mariadb` package, with every value sent in a prepared statement, merged 2026-10-29. Sending each statement in one round trip, with the `mariadb` package writing the values into the SQL, merged 2026-10-30. ORM writes without `RETURNING` (TML-3696) merged 2026-11-06. Left: MariaDB (TML-3697) | Build MariaDB (TML-3697) |
 | 4 | ✅ 6/6 | SQL expression literals | Must | Will | Done 2026-10-12 |  |
 | 5 | ✅ 5/5 | PSL mixins, then remove field presets; generated values become `@onCreate` and `@onUpdate`, and type aliases become an authoring shorthand | Must | Serhii (mixins), Will (TML-3607) | Done 2026-10-27. Mixins done 2026-10-14. ADR 275 merged 2026-10-19. TML-3607's 3 slices merged 2026-10-20, 2026-10-22 and 2026-10-27; the last removed field presets |  |
 | 6 | ✅ 1/1 | Remove `@noCheck` and `.noCheck()` | Must | Will | Done 2026-10-16 |  |
-| 7 | 🔄 5/7 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Must | Will | 5 of 7 slices merged. The TypeScript MongoDB validator slice merged 2026-10-20, with a MongoDB field keeping its own name in code. Left: the rest of TML-3537 (enum values, value object fields and variants on Postgres and SQLite), and convert and backfill on MongoDB (TML-3538, backlog). TML-3537's first PR, renames, moves and deletes of Postgres namespaces, merged 2026-10-22. Its second, renames and deletes of enum values, merged 2026-10-23. Its third, value object fields and variants, merged 2026-10-28. Its fourth, renaming, removing and filling value object fields and converting and deleting variants, is in review | Review TML-3537's fourth PR, then TML-3538 |
+| 7 | 🔄 6/7 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Must | Will | 5 of 7 slices merged. The TypeScript MongoDB validator slice merged 2026-10-20, with a MongoDB field keeping its own name in code. Left: the rest of TML-3537 (enum values, value object fields and variants on Postgres and SQLite), and convert and backfill on MongoDB (TML-3538, backlog). TML-3537's first PR, renames, moves and deletes of Postgres namespaces, merged 2026-10-22. Its second, renames and deletes of enum values, merged 2026-10-23. Its third, value object fields and variants, merged 2026-10-28. Its fourth, renaming, removing and filling value object fields and converting and deleting variants, merged 2026-11-06, and TML-3537 is done. Left: convert and backfill on MongoDB (TML-3538) | Write the spec for TML-3538 |
 | 8 | ✅ 4/4 | Client surfaces: a client takes a typed contract value, custom collections on every client and transaction | Must | Will | Slice 1 merged 2026-10-19; it is breaking: `postgres<Contract>({ contractJson })` became `postgres({ contract: contractFromJson<Contract>(json) })`. Slice 2, custom collections on every SQL client, merged 2026-10-20. Slice 3, a transaction offers the client's query members, merged 2026-10-20. Slice 4, a client loads without a database and renders plans as SQL, merged 2026-10-21. Done 2026-10-21 (Will). The close-out merged 2026-10-21 |  |
 
 ## Stream 2: Upgrade path from Prisma 7
@@ -117,7 +117,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 1 of 5 Must projects done (20%). 2 in progress, 2 not started.
+**GA readiness:** 1 of 6 Must projects done (17%). 3 in progress, 2 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -129,7 +129,8 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 3 | ✅ 6/6 | Date and time usability: `DateTime`, `Date`, `Time` and `Duration` convenience types over the explicit database types; string codecs return ISO strings; a Prisma 7 `@default(now())` keeps filling the value on create | Must | Will | Started 2026-10-21. The design (ADR 279) and slices TML-3418, TML-3711, TML-3713 and TML-3719 merged 2026-10-23. TML-3710 was cancelled. The convenience types (TML-3712) merged 2026-10-28. Done 2026-10-29; the close-out merged that day |  |
 | 4 | ⏳ | Maturity per package: design the policy and document it publicly. The framework and each database package have their own maturity level, and a package's public API is its public exports | Must | Will | Decided 2026-10-30. Not started. The design decides how a package's version number relates to its maturity, since every package shares one version today. The docs to update: `docs/oss/versioning.md`, and in prisma/web `orm/release-status.mdx` and `orm/supported-databases.mdx` |  |
 | 5 | 🔄 1/5 | Database change policies: a database records whether `db update` may change it and whether a change may lose data, and the commands obey it | Must | Will | Started 2026-10-27. Slice 1 merged. Slice 3, the policy recorded in the database and obeyed by `db migrate`, `db update` and `db sign`, is in review. Left: slice 4 and two Composer slices | Review slice 3 (TML-3727) |
-| 6 | 🔄 0/4 | Convenience date and time types (`DateTime`, `Date`, `Time`, `Duration`) on SQLite, MySQL and MongoDB, as PostgreSQL has them | Must | Will | Started 2026-10-29. Slice 1, SQLite, is approved. Slices 2 to 4, MySQL and two for MongoDB, are built and pushed, with no PRs yet | Merge the SQLite slice |
+| 6 | 🔄 1/4 | Convenience date and time types (`DateTime`, `Date`, `Time`, `Duration`) on SQLite, MySQL and MongoDB, as PostgreSQL has them | Must | Will | Started 2026-10-29. Slice 1, SQLite, merged 2026-11-02. Slice 2, MySQL, is approved. The two MongoDB slices are built and pushed, with no PRs yet | Merge the MySQL slice |
+| 7 | 🔄 1/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Started 2026-11-05. Dropping the old plan to deprecate these names merged 2026-11-05. The convenience types themselves are approved. Later, not in this row: `Json` (TML-3789) and the other databases (TML-3790) | Merge TML-3715 |
 
 ## Databases
 
