@@ -196,7 +196,7 @@ export const contract = defineContract(
 );
 ```
 
-Then `pnpm prisma contract emit`. On Postgres, `@prisma/orm-postgres/contract-builder` exports `field`, `type` and `gen`, the same helpers the callback receives, without the ones an extension adds (such as pgvector's `type.pgvector.Vector`); for those, use the callback's helpers. On other targets `type` and `gen` are only available inside the callback overload.
+Then `pnpm prisma contract emit`. On Postgres, `@prisma/orm-postgres/contract-builder` exports `field`, `type` and `gen`, the same helpers the callback receives, without the ones an extension adds (such as pgvector's `type.pgvector.Vector`); for those, use the callback's helpers. MongoDB's `@prisma/orm-mongo/contract-builder` exports them too, with the same limit. On other targets `type` and `gen` are only available inside the callback overload.
 
 For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The Mongo builder also exposes `index` and `valueObject`.
 

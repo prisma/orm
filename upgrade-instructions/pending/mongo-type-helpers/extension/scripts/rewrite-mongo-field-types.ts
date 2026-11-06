@@ -19,6 +19,8 @@ const BUILDER_MODULE =
   /^(?:@prisma\/orm-mongo|@prisma\/orm-family-mongo\/contract-ts|@internal\/mongo|@internal\/mongo-contract-ts)\/contract-builder$/;
 const TYPE_EXPORTING_MODULE = /^(?:@prisma\/orm-mongo|@internal\/mongo)\/contract-builder$/;
 const WRITE_BY_HAND = 'write it as field.scalar(type.X(...))';
+const WRITE_BY_HAND_IF_MONGO =
+  'if it is, write it as field.scalar(type.X(...)), and if not, leave it';
 const UNKNOWN: Origin = {
   kind: 'unknown',
   reason: "the script cannot tell this field is the MongoDB builder's",
@@ -163,11 +165,11 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     );
   let rewritten = 0;
 
-  const report = (node: TypeScript.Node, why: string) => {
+  const report = (node: TypeScript.Node, why: string, advice = WRITE_BY_HAND) => {
     const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
     const call = node.getText(file).replace(/\s+/g, ' ');
     reports.push(
-      `line ${line}: ${call.length > 100 ? `${call.slice(0, 97)}...` : call}: not rewritten, as ${why}; ${WRITE_BY_HAND}.`,
+      `line ${line}: ${call.length > 100 ? `${call.slice(0, 97)}...` : call}: not rewritten, as ${why}; ${advice}.`,
     );
   };
   const contains = (scope: TypeScript.Node, node: TypeScript.Node) =>
@@ -505,7 +507,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       const typeCall = origin === undefined ? 'keep' : typeCallOf(callee.name.text, node.arguments);
       if (origin !== undefined && typeCall !== 'keep' && origin.kind !== 'other') {
         if (origin.kind === 'unknown') {
-          report(node, origin.reason);
+          report(node, origin.reason, origin === UNKNOWN ? WRITE_BY_HAND_IF_MONGO : WRITE_BY_HAND);
         } else if (typeof typeCall === 'string') {
           report(node, typeCall);
         } else if (holdsComment(callee.expression.end, node.end)) {

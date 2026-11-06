@@ -49,7 +49,7 @@ Commit your work first. The script reads your code with the TypeScript compiler,
 node scripts/rewrite-mongo-field-types.ts
 ```
 
-Pass files or directories to limit it. Fix by hand each line the script reports, then type-check the project.
+Pass files or directories to limit it. The script prints a line for each call it leaves. Rewrite each one by hand, except where the line says the script cannot tell the `field` is the MongoDB builder's and it is not. Then type-check the project.
 
 A field typed by your extension's own codec, written `field.scalar('shout/text@1')` before, needs a type constructor in your extension descriptor's `authoring.type`, under your namespace. The contract then writes `field.scalar(type.shout.Text())`:
 
