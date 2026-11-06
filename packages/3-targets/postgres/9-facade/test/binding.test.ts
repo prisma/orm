@@ -5,6 +5,7 @@ import {
   isPgPool,
   resolveOptionalPostgresBinding,
   resolvePostgresBinding,
+  validatePostgresUrl,
 } from '../src/runtime/binding';
 
 function duckPool() {
@@ -170,5 +171,57 @@ describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
         rules,
       ),
     ).toEqual({ kind: 'url', url: 'postgres://localhost/db' });
+  });
+});
+
+describe('validatePostgresUrl', () => {
+  it('accepts connection string with blank user and host', () => {
+    expect(validatePostgresUrl('postgresql:///mydb')).toBe('postgresql:///mydb');
+    expect(validatePostgresUrl('postgres:///mydb')).toBe('postgres:///mydb');
+  });
+
+  it('accepts connection string with blank user and explicit host', () => {
+    expect(validatePostgresUrl('postgresql://localhost/mydb')).toBe('postgresql://localhost/mydb');
+    expect(validatePostgresUrl('postgresql://@localhost/mydb')).toBe(
+      'postgresql://@localhost/mydb',
+    );
+  });
+
+  it('accepts connection string with blank host and explicit user', () => {
+    expect(validatePostgresUrl('postgresql://user@/mydb')).toBe('postgresql://user@/mydb');
+    expect(validatePostgresUrl('postgresql://user:pass@/mydb')).toBe(
+      'postgresql://user:pass@/mydb',
+    );
+  });
+
+  it('accepts connection string with blank user and host but explicit port', () => {
+    expect(validatePostgresUrl('postgresql://:5432/mydb')).toBe('postgresql://:5432/mydb');
+    expect(validatePostgresUrl('postgresql://user@:5432/mydb')).toBe(
+      'postgresql://user@:5432/mydb',
+    );
+    expect(validatePostgresUrl('postgresql://:5432/mydb?host=/var/run/postgresql')).toBe(
+      'postgresql://:5432/mydb?host=/var/run/postgresql',
+    );
+  });
+
+  it('rejects multi-host connection string', () => {
+    expect(() => validatePostgresUrl('postgresql://h1:5432,h2:5432/mydb')).toThrow(
+      'Postgres URL must be a valid URL',
+    );
+    expect(() => validatePostgresUrl('postgresql://h1,h2/mydb')).toThrow(
+      'Postgres URL must be a valid URL',
+    );
+    expect(() => validatePostgresUrl('postgresql://h1,h2:5432/mydb')).toThrow(
+      'Postgres URL must be a valid URL',
+    );
+    expect(() => validatePostgresUrl('postgresql://user:pass@h1,h2/mydb')).toThrow(
+      'Postgres URL must be a valid URL',
+    );
+  });
+
+  it('rejects connection string without authority slashes', () => {
+    expect(() => validatePostgresUrl('postgresql:mydb')).toThrow(
+      'Postgres URL must be a valid URL',
+    );
   });
 });

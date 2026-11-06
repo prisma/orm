@@ -222,6 +222,27 @@ describe('postgresServerless connect()', () => {
     expect(recorded.poolCount).toBe(0);
   });
 
+  it('allows connection strings with blank user and host', async () => {
+    const serverless = postgresServerless({ contract });
+    const conn = await serverless.connect({ url: 'postgresql:///mydb' });
+    expect(conn).toBeDefined();
+    await conn.close();
+  });
+
+  it('allows connection strings with blank host and explicit user', async () => {
+    const serverless = postgresServerless({ contract });
+    const conn = await serverless.connect({ url: 'postgresql://user@/mydb' });
+    expect(conn).toBeDefined();
+    await conn.close();
+  });
+
+  it('allows connection strings with blank user and host but explicit port', async () => {
+    const serverless = postgresServerless({ contract });
+    const conn = await serverless.connect({ url: 'postgresql://:5432/mydb' });
+    expect(conn).toBeDefined();
+    await conn.close();
+  });
+
   it('rejects an empty URL without opening a pg.Client', async () => {
     const serverless = postgresServerless({ contract });
 

@@ -45,6 +45,21 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+function normalizePostgresUrlForParsing(url: string): string {
+  return url.replace(
+    /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#]*)/,
+    (_match, scheme: string, authority: string) => {
+      const atIndex = authority.lastIndexOf('@');
+      const userinfo = atIndex !== -1 ? authority.slice(0, atIndex + 1) : '';
+      let hostpart = atIndex !== -1 ? authority.slice(atIndex + 1) : authority;
+      if (!hostpart.includes(',') && (hostpart === '' || hostpart.startsWith(':'))) {
+        hostpart = `dummy-host${hostpart}`;
+      }
+      return `${scheme}${userinfo}${hostpart}`;
+    },
+  );
+}
+
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -57,9 +72,13 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension, reason: 'unparseable url' },
-    });
+    try {
+      parsed = new URL(normalizePostgresUrlForParsing(trimmed));
+    } catch {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
@@ -75,6 +94,17 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
         },
       },
     );
+  }
+
+  if (!/^postgres(?:ql)?:\/\//i.test(trimmed)) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
+  }
+  if (parsed.host.includes(',') || parsed.hostname.includes(',')) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
   }
 
   return trimmed;
