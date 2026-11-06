@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { join, relative } from 'pathe';
 import {
   errorContractSnapshotContentMismatch,
@@ -93,19 +94,51 @@ export interface ContractSnapshotInput {
 
 /**
  * `text` on one line ending in a newline: leading `//` comment lines become one block comment, and every other line
- * break with the indentation that follows it becomes one space.
+ * break with the indentation that follows it becomes one space. Throws `InternalError` for text it cannot join
+ * without changing its meaning.
  */
 export function singleLineDeclarations(text: string): string {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
-  const firstCodeLine = lines.findIndex((line) => !line.startsWith('//'));
+  const firstCodeLine = lines.findIndex((line) => line !== '' && !line.startsWith('//'));
   const headerLength = firstCodeLine === -1 ? lines.length : firstCodeLine;
-  const header = lines
-    .slice(0, headerLength)
+  const headerLines = lines.slice(0, headerLength).filter((line) => line !== '');
+  const codeLines = lines.slice(headerLength).filter((line) => line !== '');
+
+  const directive = headerLines.find((line) => line.startsWith('///'));
+  if (directive !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the triple-slash directive "${directive}" would become a comment`,
+    );
+  }
+  const closingHeaderLine = headerLines.find((line) => line.includes('*/'));
+  if (closingHeaderLine !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the header line "${closingHeaderLine}" contains "*/"`,
+    );
+  }
+  const lineComment = codeLines.find((line) => line.startsWith('//'));
+  if (lineComment !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the line comment "${lineComment}" after the header would hide the code after it`,
+    );
+  }
+
+  const header = headerLines
     .map((line) => line.slice('//'.length).trim())
     .filter((line) => line !== '');
-  const code = lines.slice(headerLength).filter((line) => line !== '');
-  const parts = header.length > 0 ? [`/* ${header.join(' ')} */`, ...code] : code;
+  const parts = header.length > 0 ? [`/* ${header.join(' ')} */`, ...codeLines] : codeLines;
   return `${parts.join(' ')}\n`;
+}
+
+/** The bytes the store writes for `input`: `contract.json` and `contract.d.ts`. */
+export function contractSnapshotFiles(input: ContractSnapshotInput): {
+  readonly contractJson: string;
+  readonly contractDts: string;
+} {
+  return {
+    contractJson: `${canonicalizeJson(input.contractJson)}\n`,
+    contractDts: singleLineDeclarations(input.contractDts),
+  };
 }
 
 export async function writeContractSnapshot(
@@ -141,12 +174,11 @@ export async function writeContractSnapshot(
   );
   await mkdir(tmpDir, { recursive: true });
 
-  const jsonContent = `${canonicalizeJson(input.contractJson)}\n`;
-  const dtsContent = singleLineDeclarations(input.contractDts);
+  const files = contractSnapshotFiles(input);
 
   try {
-    await writeFile(join(tmpDir, CONTRACT_JSON_FILE), jsonContent);
-    await writeFile(join(tmpDir, CONTRACT_DTS_FILE), dtsContent);
+    await writeFile(join(tmpDir, CONTRACT_JSON_FILE), files.contractJson);
+    await writeFile(join(tmpDir, CONTRACT_DTS_FILE), files.contractDts);
     await rename(tmpDir, dir);
   } catch (error) {
     await rm(tmpDir, { recursive: true, force: true });

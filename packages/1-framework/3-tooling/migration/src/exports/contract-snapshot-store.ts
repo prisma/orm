@@ -1,6 +1,7 @@
 export {
   type ContractSnapshotInput,
   contractSnapshotDir,
+  contractSnapshotFiles,
   createSnapshotContentVerifier,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,

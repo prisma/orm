@@ -1,6 +1,6 @@
 import { format } from 'prettier';
 import { describe, expect, it } from 'vitest';
-import { singleLineDeclarations } from '../src/contract-snapshot-store';
+import { contractSnapshotFiles, singleLineDeclarations } from '../src/contract-snapshot-store';
 
 const GENERATED_HEADER = [
   '// ⚠️  GENERATED FILE - DO NOT EDIT',
@@ -101,9 +101,72 @@ describe('singleLineDeclarations', () => {
     expect(singleLine.indexOf('\n')).toBe(singleLine.length - 1);
   });
 
+  it('leaves its own output unchanged', () => {
+    const once = singleLineDeclarations(`${GENERATED_HEADER}\n${FORMATTED_DECLARATIONS}`);
+
+    expect(singleLineDeclarations(once)).toBe(once);
+  });
+
+  it('skips blank lines before the header', () => {
+    expect(singleLineDeclarations('\n// header\nexport type A = 1;\n')).toBe(
+      '/* header */ export type A = 1;\n',
+    );
+  });
+
+  it('joins CRLF line breaks', () => {
+    expect(singleLineDeclarations('// header\r\nexport type A = {\r\n  a: 1;\r\n};\r\n')).toBe(
+      '/* header */ export type A = { a: 1; };\n',
+    );
+  });
+
+  it('refuses a header line that closes a block comment', () => {
+    expect(() => singleLineDeclarations('// a */ b\nexport type A = 1;\n')).toThrow(
+      expect.objectContaining({ name: 'InternalError', message: expect.stringContaining('*/') }),
+    );
+  });
+
+  it('refuses a triple-slash directive in the header', () => {
+    expect(() =>
+      singleLineDeclarations('/// <reference types="node" />\nexport type A = 1;\n'),
+    ).toThrow(
+      expect.objectContaining({ name: 'InternalError', message: expect.stringContaining('///') }),
+    );
+  });
+
+  it('refuses a line comment after the header', () => {
+    expect(() =>
+      singleLineDeclarations('// header\nexport type A = 1;\n// note\nexport type B = 2;\n'),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'InternalError',
+        message: expect.stringContaining('// note'),
+      }),
+    );
+  });
+
+  it('refuses a triple-slash directive after the header', () => {
+    expect(() =>
+      singleLineDeclarations('export type A = 1;\n/// <reference types="node" />\n'),
+    ).toThrow(expect.objectContaining({ name: 'InternalError' }));
+  });
+
   it('joins an existing block comment', () => {
     expect(singleLineDeclarations('/**\n * Placeholder.\n */\nexport {};\n')).toBe(
       '/** * Placeholder. */ export {};\n',
     );
+  });
+});
+
+describe('contractSnapshotFiles', () => {
+  it('returns the canonical JSON and the single-line declarations', () => {
+    expect(
+      contractSnapshotFiles({
+        contractJson: { target: 'postgres', storage: { storageHash: 'h' } },
+        contractDts: '// header\nexport type Contract = {\n  a: 1;\n};\n',
+      }),
+    ).toEqual({
+      contractJson: '{"storage":{"storageHash":"h"},"target":"postgres"}\n',
+      contractDts: '/* header */ export type Contract = { a: 1; };\n',
+    });
   });
 });

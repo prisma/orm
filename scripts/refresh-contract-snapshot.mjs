@@ -8,10 +8,9 @@
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { canonicalizeJson } from '@internal/framework-components/utils';
 import {
   contractSnapshotDir,
-  singleLineDeclarations,
+  contractSnapshotFiles,
   writeContractSnapshot,
 } from '@internal/migration-tools/contract-snapshot-store';
 
@@ -22,11 +21,10 @@ function readIfPresent(path) {
 export async function refreshContractSnapshot(migrationsDir, storageHash, input) {
   const dir = contractSnapshotDir(migrationsDir, storageHash);
   if (existsSync(dir)) {
-    const freshJson = `${canonicalizeJson(input.contractJson)}\n`;
-    const freshDts = singleLineDeclarations(input.contractDts);
+    const fresh = contractSnapshotFiles(input);
     const upToDate =
-      readIfPresent(join(dir, 'contract.json')) === freshJson &&
-      readIfPresent(join(dir, 'contract.d.ts')) === freshDts;
+      readIfPresent(join(dir, 'contract.json')) === fresh.contractJson &&
+      readIfPresent(join(dir, 'contract.d.ts')) === fresh.contractDts;
     if (upToDate) return { written: false, dir };
     rmSync(dir, { recursive: true, force: true });
   }
