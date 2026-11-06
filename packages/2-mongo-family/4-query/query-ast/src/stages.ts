@@ -1,3 +1,4 @@
+import { isMongoPreparedParamRef, type MongoPreparedParamRef } from '@internal/mongo-value';
 import type { MongoAggAccumulator, MongoAggExpr } from './aggregation-expressions';
 import { MongoAstNode } from './ast-node';
 import type { MongoFilterExpr } from './filter-expressions';
@@ -134,13 +135,17 @@ export class MongoSortStage extends MongoStageNode {
   }
 }
 
+function isNonNegativeInteger(value: number): boolean {
+  return Number.isInteger(value) && value >= 0;
+}
+
 export class MongoLimitStage extends MongoStageNode {
   readonly kind = 'limit' as const;
-  readonly limit: number;
+  readonly limit: number | MongoPreparedParamRef;
 
-  constructor(limit: number) {
+  constructor(limit: number | MongoPreparedParamRef) {
     super();
-    if (!Number.isInteger(limit) || limit < 0) {
+    if (!isMongoPreparedParamRef(limit) && !isNonNegativeInteger(limit)) {
       throw ormError('ORM.ARGUMENT_INVALID', 'limit must be a non-negative integer');
     }
     this.limit = limit;
@@ -158,11 +163,11 @@ export class MongoLimitStage extends MongoStageNode {
 
 export class MongoSkipStage extends MongoStageNode {
   readonly kind = 'skip' as const;
-  readonly skip: number;
+  readonly skip: number | MongoPreparedParamRef;
 
-  constructor(skip: number) {
+  constructor(skip: number | MongoPreparedParamRef) {
     super();
-    if (!Number.isInteger(skip) || skip < 0) {
+    if (!isMongoPreparedParamRef(skip) && !isNonNegativeInteger(skip)) {
       throw ormError('ORM.ARGUMENT_INVALID', 'skip must be a non-negative integer');
     }
     this.skip = skip;

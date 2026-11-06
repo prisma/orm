@@ -1,3 +1,4 @@
+import { MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import {
   MongoAggFieldRef,
@@ -15,6 +16,8 @@ import {
   MongoUnwindStage,
 } from '../src/stages';
 import type { MongoAggExprRewriter, MongoFilterRewriter } from '../src/visitors';
+
+const takePlaceholder = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
 
 describe('MongoMatchStage', () => {
   it('wraps a filter expression', () => {
@@ -120,6 +123,10 @@ describe('MongoLimitStage', () => {
     expect(() => new MongoLimitStage(1.5)).toThrow('limit must be a non-negative integer');
   });
 
+  it('accepts a placeholder', () => {
+    expect(new MongoLimitStage(takePlaceholder).limit).toBe(takePlaceholder);
+  });
+
   it('is frozen', () => {
     expect(Object.isFrozen(new MongoLimitStage(5))).toBe(true);
   });
@@ -147,6 +154,10 @@ describe('MongoSkipStage', () => {
 
   it('rejects non-integer values', () => {
     expect(() => new MongoSkipStage(2.5)).toThrow('skip must be a non-negative integer');
+  });
+
+  it('accepts a placeholder', () => {
+    expect(new MongoSkipStage(takePlaceholder).skip).toBe(takePlaceholder);
   });
 
   it('is frozen', () => {
