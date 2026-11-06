@@ -133,6 +133,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
   private queryQueue: Promise<unknown> = Promise.resolve()
+  private closing = false
 
   constructor(
     client: pg.PoolClient,
@@ -144,15 +145,22 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   }
 
   protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    if (this.closing) {
+      throw new DriverAdapterError({ kind: 'TransactionAlreadyClosed', cause: 'Transaction is closing' })
+    }
     const execute = () => super.performIO(query)
     const result = this.queryQueue.then(execute, execute)
-    this.queryQueue = result.catch(() => {})
+    this.queryQueue = result.then(
+      () => undefined,
+      () => undefined,
+    )
     return result
   }
 
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
+    this.closing = true
     await this.queryQueue
     this.cleanup?.()
     this.client.release()
@@ -161,6 +169,7 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
+    this.closing = true
     await this.queryQueue
     this.cleanup?.()
     this.client.release()

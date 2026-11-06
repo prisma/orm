@@ -192,4 +192,41 @@ describe('PrismaPgAdapterFactory', () => {
     await transaction.commit()
     await adapter.dispose()
   })
+
+  it('should reject queries submitted after transaction begins closing', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return { rows: [], fields: [], rowCount: 0 }
+      }),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    const q1: SqlQuery = { sql: 'SELECT 1', args: [], argTypes: [] }
+    const q2: SqlQuery = { sql: 'SELECT 2', args: [], argTypes: [] }
+
+    const pendingQuery = transaction.queryRaw(q1)
+    const commitPromise = transaction.commit()
+
+    await expect(transaction.queryRaw(q2)).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: {
+        kind: 'TransactionAlreadyClosed',
+      },
+    })
+
+    await pendingQuery
+    await commitPromise
+    await adapter.dispose()
+  })
 })
