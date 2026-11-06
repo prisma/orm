@@ -237,7 +237,8 @@ export class PrismaMariaDbAdapterFactory implements SqlDriverAdapterFactory {
   /**
    * Accepts either connection settings for a pool the adapter creates and owns, or an existing
    * pool. Settings the adapter would normally apply to its own pool (such as defaulting
-   * `prepareCacheLength` to 0) are not applied to an externally created pool.
+   * `prepareCacheLength` to 0 and forcing `timezone` to UTC) are not applied to an externally
+   * created pool.
    */
   constructor(poolOrConfig: mariadb.Pool | mariadb.PoolConfig | string, options?: PrismaMariadbOptions) {
     this.#poolOrConfig = isPool(poolOrConfig)
@@ -295,6 +296,11 @@ function normalizeConfig(config: mariadb.PoolConfig | string): mariadb.PoolConfi
       if (!url.searchParams.has('prepareCacheLength')) {
         url.searchParams.set('prepareCacheLength', '0')
       }
+      // Force UTC so TIMESTAMP strings the driver returns with `dateStrings: true` are in UTC,
+      // which `mapRow` relies on when it appends 'Z' to treat them as UTC. A user-supplied
+      // value is overridden, since a non-UTC session would silently corrupt those reads.
+      // See: https://github.com/prisma/prisma/issues/29096
+      url.searchParams.set('timezone', 'UTC')
       return rewriteConnectionString(url).toString()
     } catch {
       // The error is deliberately not logged: `ERR_INVALID_URL` carries the rejected string in
@@ -307,10 +313,11 @@ function normalizeConfig(config: mariadb.PoolConfig | string): mariadb.PoolConfi
     }
   }
 
-  if (config.prepareCacheLength === undefined) {
-    return { ...config, prepareCacheLength: 0 }
-  }
-  return config
+  // `timezone` is placed after the spread so it always wins: `mapRow` treats TIMESTAMP strings
+  // as UTC, so a non-UTC session would silently corrupt those reads. `prepareCacheLength`
+  // defaults to 0 but keeps any user-supplied value.
+  // See: https://github.com/prisma/prisma/issues/29096
+  return { ...config, prepareCacheLength: config.prepareCacheLength ?? 0, timezone: 'UTC' }
 }
 
 function createPool(config: mariadb.PoolConfig | string): mariadb.Pool {
