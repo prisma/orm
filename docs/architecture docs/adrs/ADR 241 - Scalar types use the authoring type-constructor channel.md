@@ -8,19 +8,19 @@ Related: [ADR 171 — Parameterized native types in contracts](ADR%20171%20-%20P
 
 ## At a glance
 
-Every PSL storage type comes from one contributed authoring namespace. A scalar is a type constructor that can be called with no arguments, so bare `String` means `String()`. Parameterized storage types such as `VarChar(191)` use the same constructor descriptor and the same resolution path. Both forms are contributed through `AuthoringContributions.type`. A SQL target contributes every constructor of its stack, the base scalars and native types included, and each is also a TypeScript `type.*` helper. (Amended by ADR 275, 2026-10-21: until then the target's adapter contributed the base scalars and native types, so that they stayed PSL-only.) An extension pack contributes its own. There is no separate scalar-descriptor map or database-attribute channel.
+Every PSL storage type comes from one contributed authoring namespace. A scalar is a type constructor that can be called with no arguments, so bare `Text` means `Text()`. Parameterized storage types such as `Varchar(191)` use the same constructor descriptor and the same resolution path. A convenience type such as PostgreSQL's `String` is a type choice in the same namespace: its arguments choose one of these constructors ([ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md), [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). Both forms are contributed through `AuthoringContributions.type`. A SQL target contributes every constructor of its stack, the base scalars and native types included, and each is also a TypeScript `type.*` helper. (Amended by ADR 275, 2026-10-21: until then the target's adapter contributed the base scalars and native types, so that they stayed PSL-only.) An extension pack contributes its own. There is no separate scalar-descriptor map or database-attribute channel.
 
 ## Grounding example
 
 A SQL target defines its ordinary scalars and parameterized storage types with the same descriptor shape, and contributes them:
 
 ```ts
-const postgresScalarAndNativeTypeConstructors = {
-  String: {
+const postgresExplicitTypes = {
+  Text: {
     kind: 'typeConstructor',
     output: { codecId: 'pg/text@1' },
   },
-  VarChar: {
+  Varchar: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'pg/int4', name: 'length', optional: true }],
     output: {
@@ -35,7 +35,7 @@ PSL resolves both through the type position:
 
 ```prisma
 types {
-  Slug = VarChar(191)
+  Slug = Varchar(191)
 }
 
 model User {
@@ -44,7 +44,7 @@ model User {
 }
 ```
 
-`String`, `Uuid`, and bare `VarChar` are zero-argument instantiations. `VarChar(191)` uses the same contribution with one argument, producing structured `typeParams`. A constructor names only the codec; the database type, its name and the bounds of its parameters come from the data type the codec represents ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)), so the `length` argument carries no `minimum` of its own.
+`Text`, `Uuid`, and bare `Varchar` are zero-argument instantiations. `Varchar(191)` uses the same contribution with one argument, producing structured `typeParams`. A constructor names only the codec; the database type, its name and the bounds of its parameters come from the data type the codec represents ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)), so the `length` argument carries no `minimum` of its own.
 
 > **Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) (2026-10-21).** The contract no longer stores the alias. The two JSON blocks below show the earlier form. Today the column stores the parameters inline, `{ "codecId": "sql/varchar@1", "dataType": "pg/varchar", "nullable": false, "typeParams": { "length": 191 } }`, and `storage.types` has no `Slug` entry.
 
@@ -82,7 +82,7 @@ A bare type name `T` is semantically the zero-argument instantiation `T()`. The 
 
 Parameterized storage types use the same descriptor and resolver. Their argument declarations validate the authoring call, and their output templates place resolved values in structured `typeParams`. The data type the codec represents writes the type's name from those parameters and bounds them, as decided by [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which supersedes ADR 171's expansion hooks.
 
-Storage-type ownership follows the component boundary. For a SQL target the rule has two parts. The target defines its base scalars and native types next to the codecs they name, as one set (`postgresScalarAndNativeTypeConstructors`, `sqliteScalarTypeConstructors`), and contributes that set together with its other constructors, such as PostgreSQL's `BigIntNumber`, `UnboundedInt` and `pg.enum`. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.String()` and `type.VarChar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
+Storage-type ownership follows the component boundary. For a SQL target the rule has two parts. The target defines its scalar types next to the codecs they name, as one set (`postgresScalarTypes`, `sqliteScalarTypeConstructors`). On PostgreSQL that set holds the explicit types, the convenience types and the deprecated aliases ([ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). The target contributes the set together with its other constructors, such as PostgreSQL's `pg.enum` and the namespaced `sql.*` and `temporal.*` aliases. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.Text()` and `type.Varchar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
 
 PSL storage is selected only in type position. The former `@db.X(args)` channel is removed. Remaining source using that spelling fails with actionable migration guidance: rewrite `@db.X` as `X` and `@db.X(args)` as `X(args)` in type position.
 
@@ -130,4 +130,4 @@ The namespace could contain a scalar leaf kind alongside a constructor leaf kind
 - [Ecosystem Extensions & Packs subsystem](../subsystems/6.%20Ecosystem%20Extensions%20&%20Packs.md) — component contribution and extension authoring boundaries.
 - Constructor and contribution types: [`framework-authoring.ts`](../../../packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts).
 - Namespace assembly and derived scalar view: [`control-stack.ts`](../../../packages/1-framework/1-core/framework-components/src/control/control-stack.ts).
-- PostgreSQL scalar and native-type constructors: defined as `postgresScalarAndNativeTypeConstructors` in [`type-constructors.ts`](../../../packages/3-targets/postgres/1-target/src/core/type-constructors.ts) in the target, next to the codecs they name, and contributed by the target in [`descriptor-meta.ts`](../../../packages/3-targets/postgres/1-target/src/core/descriptor-meta.ts), so they are also TypeScript `type.*` helpers.
+- PostgreSQL scalar types: defined as `postgresScalarTypes` in [`type-constructors.ts`](../../../packages/3-targets/postgres/1-target/src/core/type-constructors.ts) in the target, next to the codecs they name, and contributed by the target with its other constructors in [`descriptor-meta.ts`](../../../packages/3-targets/postgres/1-target/src/core/descriptor-meta.ts), so they are also TypeScript `type.*` helpers.

@@ -1,6 +1,7 @@
 import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { indexLookupKey } from '@internal/mongo-contract';
+import { blindCast } from '@internal/utils/casts';
 import { checkModelIndexes } from './build-collections';
 import { buildEnums } from './build-enums';
 import { decidePolymorphism, inheritVariantCollections } from './build-polymorphism';
@@ -21,6 +22,7 @@ export interface MergedIndexes {
 
 interface HeldIndex extends RemovedIndex {
   readonly lookupKey: string;
+  readonly name: string;
   readonly unique: boolean;
 }
 
@@ -29,7 +31,7 @@ function positionKey({ model, position }: RemovedIndex): string {
 }
 
 /**
- * Removes each identical or redundant index in a collection, for the Prisma 8 authoring sources to call before the builder. Two indexes match when their storage indexes, variant scope applied, have the same `indexLookupKey` with `unique` left out. Of a matching pair the first is kept, unless only the later one is unique; then the later one is kept and the earlier removed. Indexes the builder refuses are left for it to refuse. A source that reports the builder's refusals by index position maps them back through `removedIndexes`.
+ * Removes each identical or redundant index in a collection, for the Prisma 8 authoring sources to call after `nameIndexes` and before the builder. Two indexes match when they have the same name and their storage indexes, variant scope applied, have the same `indexLookupKey` with `unique` left out. Indexes with different names are both kept: the user named them apart, and the builder refuses two identical ones. Of a matching pair the first is kept, unless only the later one is unique; then the later one is kept and the earlier removed. Indexes the builder refuses are left for it to refuse. A source that reports the builder's refusals by index position maps them back through `removedIndexes`.
  */
 export function mergeRedundantIndexes(
   definition: ContractDefinition,
@@ -60,9 +62,12 @@ export function mergeRedundantIndexes(
         model: model.modelName,
         position,
         lookupKey: indexLookupKey({ ...checked.index, unique: undefined }),
+        name: checked.index.name,
         unique: checked.index.unique === true,
       };
-      const matchingAt = held.findIndex((candidate) => candidate.lookupKey === index.lookupKey);
+      const matchingAt = held.findIndex(
+        (candidate) => candidate.lookupKey === index.lookupKey && candidate.name === index.name,
+      );
       const match = held[matchingAt];
       if (match !== undefined) {
         if (match.unique || !index.unique) {
@@ -91,4 +96,51 @@ export function mergeRedundantIndexes(
     definition: { ...definition, models: definition.models.map(withoutRemoved) },
     removedIndexes,
   };
+}
+
+/** The position a model wrote an index at, from its position in the model's indexes after the merge. */
+export function writtenIndexPosition(
+  removedIndexes: readonly RemovedIndex[],
+  model: string,
+  mergedPosition: number,
+): number {
+  const removed = removedIndexes
+    .filter((index) => index.model === model)
+    .map((index) => index.position)
+    .sort((a, b) => a - b);
+  let position = mergedPosition;
+  for (const removedPosition of removed) {
+    if (removedPosition <= position) position++;
+  }
+  return position;
+}
+
+/** The refusal with its index positions counted as the source wrote them, before the merge. */
+export function refusalAtWrittenPositions(
+  refusal: BuildRefusal,
+  removedIndexes: readonly RemovedIndex[],
+): BuildRefusal {
+  if (refusal.key.kind !== 'index' || removedIndexes.length === 0) return refusal;
+  const key = {
+    ...refusal.key,
+    position: writtenIndexPosition(removedIndexes, refusal.key.model, refusal.key.position),
+  };
+  switch (refusal.kind) {
+    case 'indexDuplicate':
+    case 'indexNameDuplicate':
+      return {
+        ...refusal,
+        key,
+        firstPosition: writtenIndexPosition(
+          removedIndexes,
+          refusal.firstModel,
+          refusal.firstPosition,
+        ),
+      };
+    default:
+      return blindCast<BuildRefusal, 'only the index key of an index refusal changes'>({
+        ...refusal,
+        key,
+      });
+  }
 }

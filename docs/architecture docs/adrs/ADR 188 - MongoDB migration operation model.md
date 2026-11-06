@@ -18,14 +18,14 @@ Here is what the operation looks like:
 
 ```ts
 const op: MongoMigrationPlanOperation = {
-  id: 'index.users.create(email:1)',
-  label: 'Create index on users (email ascending)',
+  id: 'index.users.create(email_1)',
+  label: 'Create index email_1 on users (email:1)',
   operationClass: 'additive',
   precheck: [
     {
-      description: 'index does not already exist',
+      description: 'no index named email_1 exists on users',
       source: new ListIndexesCommand('users'),
-      filter: MongoFieldFilter.eq('key', { email: 1 }),
+      filter: MongoFieldFilter.eq('name', 'email_1'),
       expect: 'notExists',
     },
   ],
@@ -40,9 +40,10 @@ const op: MongoMigrationPlanOperation = {
   ],
   postcheck: [
     {
-      description: 'unique index exists',
+      description: 'index email_1 exists on users',
       source: new ListIndexesCommand('users'),
       filter: MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'email_1'),
         MongoFieldFilter.eq('key', { email: 1 }),
         MongoFieldFilter.eq('unique', true),
       ]),

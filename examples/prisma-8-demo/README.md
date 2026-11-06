@@ -120,7 +120,7 @@ The demo includes ORM client examples under `src/orm-client/`. `src/prisma/db.ts
 - `ormClientGetLatestUserPerKind(orm)` — `distinctOn()` with deterministic ordering
 - `ormClientGetUserInsights(limit, orm)` — `include().combine()` metrics and latest related row
 - `ormClientGetUserKindBreakdown(minUsers, orm)` — `groupBy().having().aggregate()` breakdown
-- `ormClientGetPostEngagement(limit, orm)` — the three engagement counters side by side, one per integer representation (`BigIntNumber`, `BigInt`, `UnboundedInt`)
+- `ormClientGetPostEngagement(limit, orm)` — the three engagement counters side by side, one per integer representation (`BigInt(as: number)`, `BigInt`, `BigInt(storage: numeric)`)
 - `ormClientGetEngagementPrecision(orm)` — `count`/`sum`/`avg` beside `countBigInt`/`sumBigInt`/`avgDecimal`, including the bare `sum` that raises rather than rounding
 - `ormClientGetEngagementSpread(orm)` — an extension-contributed `stddev` aggregate, called like a built-in
 - `ormClientUpsertUser(data, orm)` — `upsert()` for create-or-update by primary key
@@ -270,9 +270,9 @@ in application code as a different JavaScript value.
 
 | Column | Type | Codec | Storage | Reads as |
 | --- | --- | --- | --- | --- |
-| `viewCount` | `BigIntNumber` | `pg/int8number@1` | `int8` | `number`, throwing outside ±(2^53 − 1) |
+| `viewCount` | `BigInt(as: number)` | `pg/int8number@1` | `int8` | `number`, throwing outside ±(2^53 − 1) |
 | `impressionCount` | `BigInt` | `pg/int8@1` | `int8` | `bigint` |
-| `reachScore` | `UnboundedInt` | `pg/unboundedint@1` | unconstrained `numeric` | `bigint`, exact at any magnitude |
+| `reachScore` | `BigInt(storage: numeric)` | `pg/unboundedint@1` | unconstrained `numeric` | `bigint`, exact at any magnitude |
 
 ```bash
 pnpm start -- integer-representations
@@ -309,7 +309,7 @@ impressionCount — BigInt, and the total is 2^53 + 1000:
     than rounding. Reach for the lossless variant instead:
   sumBigInt('impressionCount')  9007199254741992n (bigint)
 
-reachScore — UnboundedInt, so even the bare sum is exact:
+reachScore — BigInt(storage: numeric), so even the bare sum is exact:
   sum('reachScore')             27670116110564327467n (bigint)
   sumBigInt('reachScore')       27670116110564327467n (bigint)
 ```

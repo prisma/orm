@@ -1,6 +1,6 @@
 import {
   int4Column,
-  numericColumn,
+  numericStringColumn,
   rawColumn as postgresRawColumn,
   varcharColumn,
 } from '@internal/adapter-postgres/column-types';
@@ -115,14 +115,14 @@ function thrownMessage(build: () => unknown): string | undefined {
 }
 
 describe('type-constructor value arguments give the same contract from PSL and TypeScript', () => {
-  it('on Postgres: sql.String and Raw through TypeScript helpers that read value arguments, and VarChar and Numeric, which TypeScript writes with fixed column helpers', () => {
+  it('on Postgres: sql.String and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
     const tsContract = definePostgresContract({}, ({ field, model, type }) => ({
       models: {
         Account: model('Account', {
           fields: {
             id: field.column(int4Column).id(),
             name: field.column(varcharColumn(255)),
-            price: field.column(numericColumn(10, 2)),
+            price: field.column(numericStringColumn(10, 2)),
             label: field.column(type.sql.String(50)),
             kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
             shape: field.column(postgresRawColumn(sql`"MyType"[]`)).optional(),
@@ -133,8 +133,8 @@ describe('type-constructor value arguments give the same contract from PSL and T
 
     const interpreted = interpretPostgres(`model Account {
   id    Int @id
-  name  VarChar(255)
-  price Numeric(10, 2)
+  name  Varchar(255)
+  price NumericString(10, 2)
   label sql.String(50)
   kind  Raw(sql\`"MyType"[]\`)?
   shape Raw(sql\`"MyType"[]\`)?
@@ -200,10 +200,10 @@ describe('type-constructor value arguments give the same contract from PSL and T
 });
 
 describe('a value its argument’s data type cannot hold is refused with the same message', () => {
-  it('on Postgres, from PSL VarChar(3000000000) and TypeScript type.sql.String(3000000000)', () => {
+  it('on Postgres, from PSL Varchar(3000000000) and TypeScript type.sql.String(3000000000)', () => {
     const interpreted = interpretPostgres(`model Account {
   id   Int @id
-  name VarChar(3000000000)
+  name Varchar(3000000000)
 }
 `);
     const pslMessages = interpreted.ok

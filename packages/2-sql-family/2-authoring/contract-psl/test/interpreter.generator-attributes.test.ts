@@ -1,7 +1,7 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { fixtureGeneratorFunctions } from './fixture-generator-functions';
-import { postgresNativeScalarTypeDescriptors, postgresScalarAuthoringTypes } from './fixtures';
+import { fixturePostgresTypeNamespace, postgresNativeScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
@@ -13,7 +13,7 @@ const authoringContributions = {
   entityTypes: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
-  type: postgresScalarAuthoringTypes,
+  type: fixturePostgresTypeNamespace,
 } satisfies AuthoringContributions;
 
 function interpret(schema: string) {

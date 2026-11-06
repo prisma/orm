@@ -44,6 +44,7 @@ import type {
 } from '@internal/framework-components/control';
 import { isRenameStatement, issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { namingOf, parseWireName } from '@internal/sql-schema-ir/naming';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
@@ -269,6 +270,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) {
       return policyResult;
+    }
+    const packExtensions = extensionsDeclaredByPacks(options);
+    if (packExtensions.length > 0) {
+      return plannerFailure(packExtensions);
     }
 
     // The one combined tree diff drives the whole plan: relational findings
@@ -1164,12 +1169,49 @@ function retainUnownedExtras(
     if (node === undefined) return true;
     const coordinate = postgresNodeStorageCoordinate(node);
     if (coordinate === undefined) return true;
-    const ddlSchemaName = PostgresExtensionSchemaNode.is(node)
-      ? node.schemaName
-      : issueSchemaName(issue);
+    if (PostgresExtensionSchemaNode.is(node)) {
+      if (ownership.declaresEntity({ namespaceId: UNBOUND_NAMESPACE_ID, ...coordinate })) {
+        return false;
+      }
+      if (node.location.kind === 'searchPath') return true;
+      return !ownership.declaresEntity({
+        namespaceId: namespaceIdOf(node.location.schemaName),
+        ...coordinate,
+      });
+    }
+    const ddlSchemaName = issueSchemaName(issue);
     if (ddlSchemaName === undefined) return true;
     return !ownership.declaresEntity({ namespaceId: namespaceIdOf(ddlSchemaName), ...coordinate });
   });
+}
+
+/**
+ * Refuses each extension this contract declares in a named namespace that another contract space declares in the unbound namespace: an extension is declared once, and the pack that declares it installs it.
+ */
+function extensionsDeclaredByPacks(
+  options: SqlMigrationPlannerPlanOptions,
+): readonly SqlPlannerConflict[] {
+  const { ownership } = options;
+  if (ownership === undefined) return [];
+  return Object.values(options.contract.storage.namespaces).flatMap((namespace) =>
+    namespace.id === UNBOUND_NAMESPACE_ID
+      ? []
+      : Object.keys(namespace.entries['extension'] ?? {})
+          .filter((name) =>
+            ownership.declaresEntity({
+              namespaceId: UNBOUND_NAMESPACE_ID,
+              entityKind: 'extension',
+              entityName: name,
+            }),
+          )
+          .map(
+            (name): SqlPlannerConflict => ({
+              kind: 'unsupportedOperation',
+              summary: `Extension "${name}" is declared in namespace "${namespace.id}" by this contract, and an extension pack declares it in namespace "${UNBOUND_PSL_NAMESPACE_NAME}".`,
+              why: 'Remove this declaration from the contract; the pack installs the extension.',
+            }),
+          ),
+  );
 }
 
 /**

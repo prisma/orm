@@ -5,8 +5,8 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresTarget,
   sqliteScalarAuthoringTypes,
   sqliteTarget,
@@ -100,7 +100,7 @@ const convenienceTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 const postgresTypes: AuthoringTypeNamespace = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   ...convenienceTypes,
   Char: char,
   ...generatedIdAliases,

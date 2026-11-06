@@ -10,5 +10,5 @@ model User {
 
   @@unique([email])
   @@index([name(sort: Asc)])
-  @@index([name])
+  @@index([name], map: "User_name_plain")
 }

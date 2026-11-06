@@ -10,10 +10,10 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   modelsOf,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   sqliteScalarColumnDescriptors,
@@ -26,7 +26,7 @@ const baseInput = {
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
-    type: postgresScalarAuthoringTypes,
+    type: fixturePostgresTypeNamespace,
     dataTypes: fixtureDataTypeSupport.entries,
   },
   ...fixtureInterpreterTypes,

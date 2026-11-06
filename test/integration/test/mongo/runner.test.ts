@@ -116,6 +116,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -126,6 +127,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'slug_1',
                     keys: [{ field: 'slug', direction: 1 as const }],
                     unique: true,
                   },
@@ -192,6 +194,7 @@ function buildAppContractMissingPosts(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -228,6 +231,7 @@ function buildExtContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'tenantId_1',
                     keys: [{ field: 'tenantId', direction: 1 as const }],
                     unique: true,
                   },

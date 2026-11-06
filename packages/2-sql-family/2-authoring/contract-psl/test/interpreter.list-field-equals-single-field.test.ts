@@ -5,10 +5,10 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   modelsOf,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   testEnumEntityContributions,
@@ -23,7 +23,7 @@ const numeric = {
 } as const;
 
 const varCharishTypes = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   VarCharish: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
@@ -83,7 +83,7 @@ namespace public {
         target: postgresTarget,
         scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
         authoringContributions: {
-          type: postgresScalarAuthoringTypes,
+          type: fixturePostgresTypeNamespace,
           dataTypes: fixtureDataTypeSupport.entries,
         },
         ...fixtureInterpreterTypes,
@@ -130,7 +130,7 @@ model Product {
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         authoringContributions: {
-          type: postgresScalarAuthoringTypes,
+          type: fixturePostgresTypeNamespace,
           valueObjectStorageType: 'Jsonb',
         },
         ...fixtureInterpreterTypes,

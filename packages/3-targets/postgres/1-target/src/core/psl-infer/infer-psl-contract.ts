@@ -21,6 +21,7 @@ import {
 } from '@internal/framework-components/psl-ast';
 import { isPslIdentifier } from '@internal/psl-parser';
 import { type SqlColumnIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { invariant } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { buildExtensionBlock } from '../psl-build/extension-block';
@@ -289,9 +290,14 @@ function inferredExtensionBlocks(
         { meta: { extensionName: extension.name } },
       );
     }
-    const blocks = blocksBySchema.get(extension.schemaName) ?? [];
+    invariant(
+      extension.location.kind === 'installed',
+      `contract infer reads extension "${extension.name}" from the database, so it has an installed schema`,
+    );
+    const { schemaName } = extension.location;
+    const blocks = blocksBySchema.get(schemaName) ?? [];
     blocks.push(buildExtensionBlock(extension.name));
-    blocksBySchema.set(extension.schemaName, blocks);
+    blocksBySchema.set(schemaName, blocks);
   }
   return blocksBySchema;
 }
