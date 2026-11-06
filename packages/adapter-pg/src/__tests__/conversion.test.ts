@@ -1,6 +1,7 @@
+import { ColumnTypeEnum } from '@prisma/driver-adapter-utils'
 import { describe, expect, it } from 'vitest'
 
-import { mapArg } from '../conversion'
+import { customParsers, fieldToColumnType, mapArg } from '../conversion'
 
 describe('mapArg', () => {
   it('converts a date with a 4-digit year (value >= 1000-01-01) to the correct date', () => {
@@ -37,5 +38,18 @@ describe('mapArg', () => {
     const date = new Date('0099-12-31T23:59:59.999Z')
     const result = mapArg(date, { dbType: 'DATETIME', scalarType: 'datetime', arity: 'scalar' })
     expect(result).toBe('0099-12-31 23:59:59.999')
+  })
+})
+
+describe('fieldToColumnType', () => {
+  it('maps timetz[] (OID 1270) to TimeArray', () => {
+    expect(fieldToColumnType(1270)).toBe(ColumnTypeEnum.TimeArray)
+  })
+})
+
+describe('customParsers', () => {
+  it('parses timetz[] (OID 1270) elements and strips timezone offsets', () => {
+    const parse = customParsers[1270]
+    expect(parse('{12:00:00+00,13:00:00-05,08:30:00+05:30,NULL}')).toEqual(['12:00:00', '13:00:00', '08:30:00', null])
   })
 })
