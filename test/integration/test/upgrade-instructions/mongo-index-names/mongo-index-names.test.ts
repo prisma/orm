@@ -107,18 +107,18 @@ describe('projects whose snapshots hold an index on a collection of the same nam
 });
 
 describe('a monorepo project whose contract was never re-emitted, beside a project that names the same index', () => {
+  const packageFolders = ['.', 'apps/web', 'apps/admin'];
+  const packageJsonFiles = Object.fromEntries(
+    packageFolders.map((folder) => [join(folder, 'package.json'), '{ "private": true }\n']),
+  );
   const root = copyFixture('before', 'monorepo');
-  for (const folder of ['.', 'apps/web', 'apps/admin']) {
-    writeFileSync(join(root, folder, 'package.json'), '{ "private": true }\n');
-  }
+  for (const [path, content] of Object.entries(packageJsonFiles))
+    writeFileSync(join(root, path), content);
   const result = run(root);
   const snapshot = 'apps/web/migrations/snapshots/wwww/contract.json';
 
   it("names the snapshot's index after its keys and says so, not taking the other project's name", () => {
-    expect({
-      result,
-      snapshot: readFileSync(join(root, snapshot), 'utf8'),
-    }).toEqual({
+    expect({ result, tree: readTree(root) }).toEqual({
       result: {
         status: 0,
         stdout:
@@ -127,7 +127,7 @@ describe('a monorepo project whose contract was never re-emitted, beside a proje
           'Rewrote 1 file.\n',
         stderr: '',
       },
-      snapshot: readFileSync(join(fixtures, 'monorepo', 'after', snapshot), 'utf8'),
+      tree: { ...readTree(join(fixtures, 'monorepo', 'after')), ...packageJsonFiles },
     });
   });
 });
