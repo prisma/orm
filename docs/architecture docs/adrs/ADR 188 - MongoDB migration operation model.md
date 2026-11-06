@@ -181,12 +181,24 @@ The factory resolves this into a precheck with `expect: 'exists'` (violations fo
 
 #### The planner writes the check of a transform it scaffolds
 
-For `--convert` and `--backfill`, the planner knows which documents still need the change, so it writes the check and the filter and leaves only the update to the user:
+For `--convert` and `--backfill`, the planner knows which documents still need the change, so it writes the check and the filter and leaves only the update to the user. For `--convert User.age` from `String` to `Int`, the filter selects the documents whose `age` holds a value of another type than `int`, read with `$expr` so that a list is read as one value:
 
 ```ts
 dataTransform('User.age', {
-  check: { source: () => rawAggregate('users', [{ $match: AGE_NOT_INT }, { $limit: 1 }]) },
-  run: () => rawUpdateMany('users', AGE_NOT_INT, placeholder('User.age:update'), { bypassDocumentValidation: true }),
+  check: {
+    source: () =>
+      rawAggregate('users', [
+        { $match: { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'int']] } } } },
+        { $limit: 1 },
+      ]),
+  },
+  run: () =>
+    rawUpdateMany(
+      'users',
+      { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'int']] } } },
+      placeholder('User.age:update'),
+      { bypassDocumentValidation: true },
+    ),
 })
 ```
 

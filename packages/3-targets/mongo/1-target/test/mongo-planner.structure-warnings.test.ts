@@ -83,6 +83,29 @@ describe('MongoMigrationPlanner, a change the plan does not rewrite the document
     ]);
   });
 
+  it('warns when a field changes between a scalar and a value object', () => {
+    const address = { codecId: '', valueObject: 'Address' };
+    const valueObjects = { Address: { zip: INT } };
+
+    expect(
+      [
+        [STRING, address],
+        [address, STRING],
+      ].map(([before, after]) =>
+        warnings(
+          plan({
+            from: users('from', { address: before ?? STRING }, valueObjects),
+            to: users('to', { address: after ?? STRING }, valueObjects),
+            schema: live,
+          }),
+        ).map(({ summary }) => summary),
+      ),
+    ).toEqual([
+      ['Field "User.address" changes from a scalar to value object "Address"'],
+      ['Field "User.address" changes from value object "Address" to a scalar'],
+    ]);
+  });
+
   it('warns when a field gains an enum or changes enum', () => {
     expect(
       [

@@ -56,13 +56,19 @@ function untouchedChange(name: string, before: AnyField, after: AnyField): strin
   if (objectBefore !== undefined && objectAfter !== undefined && objectBefore !== objectAfter) {
     return `Field "${name}" moves from value object "${objectBefore}" to value object "${objectAfter}"`;
   }
+  if (objectBefore === undefined && objectAfter !== undefined && before.type.kind === 'scalar') {
+    return `Field "${name}" changes from a scalar to value object "${objectAfter}"`;
+  }
+  if (objectBefore !== undefined && objectAfter === undefined && after.type.kind === 'scalar') {
+    return `Field "${name}" changes from value object "${objectBefore}" to a scalar`;
+  }
   return undefined;
 }
 
 /**
  * The changes the plan does not rewrite the documents for, and that are not statements: a field of
- * a value object whose type changes, a field that moves to another value object, and a field that
- * gains an enum or changes enum. Each is a warning that names the field; the validator change's
+ * a value object whose type changes, a field that moves to another value object or between a scalar
+ * and a value object, and a field that gains an enum or changes enum. Each is a warning that names the field; the validator change's
  * document check then fails the apply until the documents fit.
  */
 export function structureChangeWarnings(input: {

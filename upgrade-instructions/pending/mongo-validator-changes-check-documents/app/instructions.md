@@ -28,4 +28,4 @@ Where a plan now asks about a field, answer with `--delete Model.field`, which c
 
 ## `mongo-new-required-field-gets-temporary-value`
 
-Nothing to do. Plan with `--backfill Model.field` to write your own value instead. A field under a unique index needs `--backfill`.
+To write your own value instead of the temporary one, plan the change with `migration plan --backfill Model.field` and write the update in the `placeholder('Model.field:update')` slot of the data transform it writes. A new required field under a unique index needs this, since every document would get the same temporary value.
