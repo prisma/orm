@@ -6,7 +6,7 @@ import { LEDGER_TABLE_NAME, MARKER_TABLE_NAME } from '@internal/target-mysql/con
 import { quoteIdentifier } from '@internal/target-mysql/sql-utils';
 import { parseJsonColumn, tableExists } from '../marker-read';
 
-type Driver = SqlControlDriverInstance<'mysql'>;
+type Driver = SqlControlDriverInstance<string>;
 
 const LEDGER_COLUMNS =
   'space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations, created_at';
@@ -80,15 +80,16 @@ export async function insertMarkerRow(
   await driver.query(MARKER_INSERT, markerInsertParams(space, destination));
 }
 
-/** Writes the marker row of `space`, replacing the row the space already has. */
+/** Writes the marker row of `space`, replacing the row the space already has. The update binds the values again instead of naming a row alias, which MariaDB does not accept, or `VALUES()`, which MySQL deprecates. */
 export async function upsertMarkerRow(
   driver: Driver,
   space: string,
   destination: MarkerDestination,
 ): Promise<void> {
+  const [, ...updated] = markerInsertParams(space, destination);
   await driver.query(
-    `${MARKER_INSERT} AS incoming ON DUPLICATE KEY UPDATE core_hash = incoming.core_hash, profile_hash = incoming.profile_hash, contract_json = incoming.contract_json, canonical_version = incoming.canonical_version, updated_at = CURRENT_TIMESTAMP(3), app_tag = incoming.app_tag, meta = incoming.meta, invariants = incoming.invariants`,
-    markerInsertParams(space, destination),
+    `${MARKER_INSERT} ON DUPLICATE KEY UPDATE core_hash = ?, profile_hash = ?, contract_json = NULL, canonical_version = NULL, updated_at = CURRENT_TIMESTAMP(3), app_tag = NULL, meta = '{}', invariants = ?`,
+    [...markerInsertParams(space, destination), ...updated],
   );
 }
 

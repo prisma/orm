@@ -3,7 +3,7 @@ import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/err
 import { contractColumns, readColumnDefault } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { codecForRef, type DataType } from '@internal/framework-components/codec';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, type ControlStack } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
@@ -14,7 +14,7 @@ import {
   type SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import type { MysqlCodecRegistry } from '@internal/target-mysql/codecs';
+import { assembleMysqlCodecRegistry, type MysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
@@ -23,11 +23,12 @@ import { LEDGER_TABLE_NAME, MARKER_TABLE_NAME } from '@internal/target-mysql/con
 import type { MysqlCreateTable, MysqlDdlNode, MysqlDdlVisitor } from '@internal/target-mysql/ddl';
 import { mysqlQueryNotYetSupported } from '@internal/target-mysql/errors';
 import { withMarkerLock } from '@internal/target-mysql/marker-lock';
+import { blindCast } from '@internal/utils/casts';
 import { structuredError } from '@internal/utils/structured-error';
 import { decodeMysqlMarkerRow, readMarkerResult, readMarkerRows } from '../marker-read';
 import { renderMysqlColumnDefault, renderMysqlCreateTable } from './ddl-renderer';
 import { declaredIndexes } from './declared-indexes';
-import { buildMysqlSchemaIR } from './introspection';
+import { buildMysqlSchemaIR, type MysqlCatalogRows } from './introspection';
 import { readMysqlCatalog } from './introspection-queries';
 import {
   compareAndSwapMarkerRow,
@@ -38,7 +39,21 @@ import {
   upsertMarkerRow,
 } from './marker-ledger';
 
-type Driver = SqlControlDriverInstance<'mysql'>;
+/** Reads the catalog of the driver's database as MySQL reports it. A target that extends MySQL reads its own catalog and converts its rows to MySQL's form, so MySQL's introspection reads them unchanged. */
+export type MysqlCatalogReader = (
+  driver: SqlControlDriverInstance<string>,
+) => Promise<MysqlCatalogRows>;
+
+/** What a target that extends MySQL gives the MySQL control adapter. */
+export interface MysqlControlAdapterOptions<TargetId extends string> {
+  readonly targetId: TargetId;
+  readonly readCatalog: MysqlCatalogReader;
+}
+
+const MYSQL_CONTROL_ADAPTER_OPTIONS: MysqlControlAdapterOptions<'mysql'> = {
+  targetId: 'mysql',
+  readCatalog: readMysqlCatalog,
+};
 
 /** A DDL node MySQL does not build, such as one another target's visitor accepts. */
 function unsupportedDdl(ast: DdlNode): Error {
@@ -50,18 +65,28 @@ function unsupportedDdl(ast: DdlNode): Error {
 }
 
 /**
- * The MySQL control adapter. It introspects the connection's database from `information_schema`, creates, reads and writes the marker and ledger tables, takes the marker lock, and runs work in a transaction. Query lowering refuses with `RUNTIME.AST_UNSUPPORTED`.
+ * The MySQL control adapter, for MySQL or a target that extends it. It introspects the connection's database from `information_schema`, creates, reads and writes the marker and ledger tables, takes the marker lock, and runs work in a transaction. Query lowering refuses with `RUNTIME.AST_UNSUPPORTED`.
  */
-export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
+export class MysqlControlAdapter<TargetId extends string = 'mysql'>
+  implements SqlControlAdapter<TargetId>
+{
   readonly familyId = 'sql' as const;
-  readonly targetId = 'mysql' as const;
+  readonly targetId: TargetId;
   readonly markerLocation = MARKER_TABLE_NAME;
+  readonly #readCatalog: MysqlCatalogReader;
 
   /** `declaredDataTypes` are the stack's data types, which introspection resolves each column's reported type over. */
   constructor(
     private readonly codecRegistry: MysqlCodecRegistry,
     private readonly declaredDataTypes: readonly DataType[],
-  ) {}
+    options: MysqlControlAdapterOptions<TargetId> = blindCast<
+      MysqlControlAdapterOptions<TargetId>,
+      'without options the adapter is MySQL, the default of TargetId'
+    >(MYSQL_CONTROL_ADAPTER_OPTIONS),
+  ) {
+    this.targetId = options.targetId;
+    this.#readCatalog = options.readCatalog;
+  }
 
   bootstrapControlTableQueries(): readonly MysqlDdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -110,12 +135,17 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
     );
   }
 
-  async readMarker(driver: Driver, space: string): Promise<ContractMarkerRecord | null> {
+  async readMarker(
+    driver: SqlControlDriverInstance<TargetId>,
+    space: string,
+  ): Promise<ContractMarkerRecord | null> {
     const result = await readMarkerResult(driver, space);
     return result.kind === 'present' ? result.record : null;
   }
 
-  async readAllMarkers(driver: Driver): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
+  async readAllMarkers(
+    driver: SqlControlDriverInstance<TargetId>,
+  ): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
     return withMarkerReadErrorHandling(
       async () => {
         const markers = new Map<string, ContractMarkerRecord>();
@@ -135,23 +165,34 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
     );
   }
 
-  async readLedger(driver: Driver, space?: string): Promise<readonly LedgerEntryRecord[]> {
+  async readLedger(
+    driver: SqlControlDriverInstance<TargetId>,
+    space?: string,
+  ): Promise<readonly LedgerEntryRecord[]> {
     return withMarkerReadErrorHandling(() => readLedgerEntries(driver, space), {
       space: space ?? '*',
       markerLocation: LEDGER_TABLE_NAME,
     });
   }
 
-  async insertMarker(driver: Driver, space: string, destination: MarkerDestination): Promise<void> {
+  async insertMarker(
+    driver: SqlControlDriverInstance<TargetId>,
+    space: string,
+    destination: MarkerDestination,
+  ): Promise<void> {
     await insertMarkerRow(driver, space, destination);
   }
 
-  async initMarker(driver: Driver, space: string, destination: MarkerDestination): Promise<void> {
+  async initMarker(
+    driver: SqlControlDriverInstance<TargetId>,
+    space: string,
+    destination: MarkerDestination,
+  ): Promise<void> {
     await upsertMarkerRow(driver, space, destination);
   }
 
   async updateMarker(
-    driver: Driver,
+    driver: SqlControlDriverInstance<TargetId>,
     space: string,
     expectedFrom: string,
     destination: MarkerDestination,
@@ -160,7 +201,7 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
   }
 
   async writeLedgerEntry(
-    driver: Driver,
+    driver: SqlControlDriverInstance<TargetId>,
     space: string,
     entry: {
       readonly edgeId: string;
@@ -175,18 +216,27 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
   }
 
   /** Takes no lock: MySQL's `GET_LOCK` lives for the session, not the transaction, so {@link holdMarkerLock} takes it around the transaction instead. */
-  async lockMarker(_driver: Driver): Promise<void> {}
+  async lockMarker(_driver: SqlControlDriverInstance<TargetId>): Promise<void> {}
 
   /** Takes `GET_LOCK` before `work` runs and releases it when `work` ends, so `db sign` creates the marker table, whose DDL would end a transaction, under the lock. */
-  async holdMarkerLock<T>(driver: Driver, work: () => Promise<T>): Promise<T> {
+  async holdMarkerLock<T>(
+    driver: SqlControlDriverInstance<TargetId>,
+    work: () => Promise<T>,
+  ): Promise<T> {
     return withMarkerLock(driver, work);
   }
 
-  async withTransaction<T>(driver: Driver, fn: () => Promise<T>): Promise<T> {
+  async withTransaction<T>(
+    driver: SqlControlDriverInstance<TargetId>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     return this.#inTransaction(driver, fn);
   }
 
-  async #inTransaction<T>(driver: Driver, fn: () => Promise<T>): Promise<T> {
+  async #inTransaction<T>(
+    driver: SqlControlDriverInstance<TargetId>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     await driver.query('START TRANSACTION');
     let result: T;
     try {
@@ -203,10 +253,13 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
     return result;
   }
 
-  async introspect(driver: Driver, contract?: unknown): Promise<SqlSchemaIR> {
+  async introspect(
+    driver: SqlControlDriverInstance<TargetId>,
+    contract?: unknown,
+  ): Promise<SqlSchemaIR> {
     const columns = contractColumns(contract);
     return buildMysqlSchemaIR(
-      await readMysqlCatalog(driver),
+      await this.#readCatalog(driver),
       this.declaredDataTypes,
       async (tableName, columnName, rawDefault) => {
         const column = columns.columnOf(undefined, tableName, columnName);
@@ -222,4 +275,16 @@ export class MysqlControlAdapter implements SqlControlAdapter<'mysql'> {
       declaredIndexes(contract),
     );
   }
+}
+
+/** The control adapter of MySQL, or of a target that extends it, for the stack the adapter descriptor is given. */
+export function createMysqlControlAdapter<TargetId extends string = 'mysql'>(
+  stack: ControlStack<'sql', TargetId>,
+  options: MysqlControlAdapterOptions<NoInfer<TargetId>>,
+): SqlControlAdapter<TargetId> {
+  return new MysqlControlAdapter(
+    assembleMysqlCodecRegistry(stack.target, stack.extensions),
+    stack.declaredDataTypes.map(({ type }) => type),
+    options,
+  );
 }
