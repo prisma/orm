@@ -154,7 +154,11 @@ export interface RecordingRun extends Run {
   readonly executed: StatementAst[];
 }
 
-export function recordingRun(rows: readonly StorageRow[] = [], affectedRows = 0): RecordingRun {
+export function recordingRun(
+  rows: readonly StorageRow[] = [],
+  affectedRows = 0,
+  insertId?: string,
+): RecordingRun {
   const queried: StatementAst[] = [];
   const executed: StatementAst[] = [];
   return {
@@ -169,7 +173,7 @@ export function recordingRun(rows: readonly StorageRow[] = [], affectedRows = 0)
     },
     async execute(ast) {
       executed.push(ast);
-      return affectedRows;
+      return insertId === undefined ? { affectedRows } : { affectedRows, insertId };
     },
   };
 }
