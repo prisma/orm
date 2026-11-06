@@ -147,3 +147,52 @@ describe('the harness checks that a value comes back from the application value'
     });
   });
 });
+
+// Every two Temporal values of a kind are deep-equal, whatever they hold, so only a case's own
+// equality can tell the value a codec read from another.
+describe('the harness compares a value that is not deep-equal to its copy by the case', () => {
+  let database: DatabaseSync | undefined;
+  let connection: ConformanceConnection | undefined;
+
+  beforeAll(() => {
+    database = new DatabaseSync(':memory:');
+    connection = {
+      query: async (sql, params) =>
+        database!.prepare(sql).all(...((params ?? []) as SQLInputValue[])),
+    };
+  });
+
+  afterAll(() => {
+    database?.close();
+  });
+
+  it("fails a row that the case's valueEquality does not accept", async () => {
+    const outcome = await runSqliteCodecProjection(connection!, {
+      codecId: 'sqlite/date-temporal@1',
+      label: 'a date compared with another date',
+      value: Temporal.PlainDate.from('2026-01-02'),
+      storageType: 'TEXT',
+      valueEquality: (left) =>
+        left instanceof Temporal.PlainDate && left.equals(Temporal.PlainDate.from('1999-12-31')),
+    });
+
+    expect(outcome.failure?.kind).toBe('lossy-round-trip');
+  });
+
+  it("fails a projection that the case's projectionEquality does not accept", async () => {
+    const outcome = await runSqliteCodecProjection(connection!, {
+      codecId: 'sqlite/date-temporal@1',
+      label: 'a projection compared with another date',
+      value: Temporal.PlainDate.from('2026-01-02'),
+      storageType: 'TEXT',
+      valueEquality: (left, right) =>
+        left instanceof Temporal.PlainDate &&
+        right instanceof Temporal.PlainDate &&
+        left.equals(right),
+      projectionEquality: (left) =>
+        left instanceof Temporal.PlainDate && left.equals(Temporal.PlainDate.from('1999-12-31')),
+    });
+
+    expect(outcome.failure?.kind).toBe('mismatch');
+  });
+});

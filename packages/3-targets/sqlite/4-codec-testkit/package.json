@@ -27,6 +27,7 @@
   "devDependencies": {
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
