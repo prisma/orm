@@ -37,9 +37,9 @@ prisma db sign --db "$DATABASE_URL"
 ## Decision
 
 1. **A pack declares its extension in the unbound namespace.** A pack that declares an extension in a named namespace is refused when a command loads the configuration. An application contract may also declare an extension in the unbound namespace. A top-level `extension` declaration still means schema `public`.
-2. **Postgres checks an unbound extension against the search path.** The extension passes verification when its schema is on the connection's search path, as `current_schemas(true)` reports it. Otherwise it fails, and the message names the extension's schema and the search path. When there is no connection, as in offline planning, the search path is taken to be `public`.
+2. **Postgres checks an unbound extension against the search path.** The extension passes verification when its schema is on the connection's search path, as `current_schemas(true)` reports it. Otherwise it fails, and the message names the extension's schema and the search path. Offline planning has no connection and no search path, so it accepts an unbound extension wherever the contract it plans from puts it. When the contract it plans from declares the extension in the unbound namespace and the new contract names a schema, the extension is taken to be in `public`.
 3. **Postgres installs an unbound extension without naming a schema.** The planner plans `CREATE EXTENSION IF NOT EXISTS "vector"` with no `WITH SCHEMA`, so PostgreSQL creates it in the connection's current schema. The planner never plans `ALTER EXTENSION … SET SCHEMA` for an unbound extension. Which schema it belongs in is the user's choice, so a failed check comes with advice instead: add the schema to the search path, or reinstall the extension in a schema that is on it.
-4. **Each extension is declared once across all contract spaces.** Two packs that declare the same extension are refused when a command loads the configuration. An application contract that declares an extension a pack declares is refused when it is planned, and when it is emitted from PSL. The message names both declarations and tells the user to remove their own.
+4. **Each extension is declared once across all contract spaces.** Two packs that declare the same extension are refused when a command loads the configuration. An application contract that declares an extension a pack declares is refused when it is planned, and when it is emitted from PSL. The message tells the user to remove their own declaration. At emit it names the pack. At plan time it says an extension pack declares the extension, because the planner can ask whether some contract space declares an entity, but not which one.
 
 ## What a pack's contract depends on
 
@@ -71,7 +71,7 @@ The namespace must also be the same in every project. A pack's contract is pinne
 
 PostgreSQL installs each extension once per database, in one schema. Two declarations of `vector` can only both pass if they agree, and two contract spaces cannot see each other's choices when they are written. A second declaration is also a hazard: if the application declares `vector` and later removes the declaration, its plan would drop the extension the pack needs.
 
-The checks run where both declarations are visible. Pack contracts are all visible when the configuration loads. The application's contract meets the packs' contracts in the planner, which already asks which contract space declares an entity before it drops one, and in the PSL interpreter, which reads the composed packs.
+The checks run where both declarations are visible. Pack contracts are all visible when the configuration loads. The application's contract meets the packs' contracts in the planner, which already asks whether another contract space declares an entity before it drops one, and in the PSL interpreter, which reads the composed packs.
 
 ## Consequences
 
