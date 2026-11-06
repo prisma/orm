@@ -124,6 +124,24 @@ function planSuccess(
   return result.plan as PlannerProducedMongoMigration;
 }
 
+function planCallsSuccess(
+  p: MongoMigrationPlanner,
+  contract: MongoContract,
+  schema: MongoSchemaIR,
+  policy = ALL_CLASSES_POLICY,
+) {
+  const result = p.planCalls({
+    contract,
+    schema,
+    policy,
+    fromContract: null,
+    frameworkComponents: [],
+  });
+  expect(result.kind).toBe('success');
+  if (result.kind !== 'success') throw new Error('Expected success');
+  return result.calls;
+}
+
 describe('MongoMigrationPlanner', () => {
   const planner = new MongoMigrationPlanner();
 
@@ -632,6 +650,86 @@ describe('MongoMigrationPlanner', () => {
       expect(collModOps[0]!.operationClass).toBe('widening');
     });
 
+    describe('the document check', () => {
+      const validator = {
+        jsonSchema: { bsonType: 'object', required: ['email'] },
+        validationLevel: 'strict' as const,
+        validationAction: 'error' as const,
+      };
+
+      function plannedValidatorMeta(
+        origin: MongoSchemaIR,
+        contract = makeContract({ users: { validator } }),
+      ) {
+        return planCallsSuccess(planner, contract, origin)
+          .filter((call): call is CollModCall => call instanceof CollModCall)
+          .map((call) => call.meta);
+      }
+
+      it('is asked for when a validator is added', () => {
+        expect(plannedValidatorMeta(irWithCollection('users', []))).toEqual([
+          {
+            id: 'validator.users.add',
+            label: 'Add validator on users',
+            operationClass: 'widening',
+            checkDocuments: true,
+          },
+        ]);
+      });
+
+      it('is asked for when a validator is updated', () => {
+        const origin = new MongoSchemaIR([
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              ...validator,
+              jsonSchema: { bsonType: 'object' },
+            }),
+          }),
+        ]);
+
+        expect(plannedValidatorMeta(origin)).toEqual([
+          expect.objectContaining({ id: 'validator.users.update', checkDocuments: true }),
+        ]);
+      });
+
+      it('is not asked for when a validator is removed', () => {
+        const origin = new MongoSchemaIR([
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator(validator),
+          }),
+        ]);
+
+        expect(plannedValidatorMeta(origin, makeContract({ users: {} }))).toEqual([
+          {
+            id: 'validator.users.remove',
+            label: 'Remove validator on users',
+            operationClass: 'widening',
+          },
+        ]);
+      });
+
+      it('is not asked for on a collection the plan creates', () => {
+        const ops = planSuccess(planner, makeContract({ users: { validator } }), emptyIR())
+          .operations as MongoMigrationPlanOperation[];
+
+        expect(
+          ops.flatMap((op) => op.precheck.map(({ description }) => description)),
+        ).not.toContain('every document in users fits the new validator');
+      });
+
+      it('is written into migration.ts', () => {
+        const [call] = planCallsSuccess(
+          planner,
+          makeContract({ users: { validator } }),
+          irWithCollection('users', []),
+        );
+
+        expect(call?.renderTypeScript()).toContain('checkDocuments: true');
+      });
+    });
+
     it('validator add has precheck (collection exists) and postcheck (validator applied)', () => {
       const contract = makeContract({
         users: {
@@ -648,9 +746,10 @@ describe('MongoMigrationPlanner', () => {
         (o) => o.execute[0]?.command.kind === 'collMod',
       )!;
 
-      expect(op.precheck).toHaveLength(1);
+      expect(op.precheck).toHaveLength(2);
       expect(op.precheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
+      expect(op.precheck[1]!.description).toBe('every document in users fits the new validator');
 
       expect(op.postcheck).toHaveLength(1);
       expect(op.postcheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
@@ -1579,24 +1678,6 @@ describe('MongoMigrationPlanner', () => {
   });
 
   describe('planCalls', () => {
-    function planCallsSuccess(
-      p: MongoMigrationPlanner,
-      contract: MongoContract,
-      schema: MongoSchemaIR,
-      policy = ALL_CLASSES_POLICY,
-    ) {
-      const result = p.planCalls({
-        contract,
-        schema,
-        policy,
-        fromContract: null,
-        frameworkComponents: [],
-      });
-      expect(result.kind).toBe('success');
-      if (result.kind !== 'success') throw new Error('Expected success');
-      return result.calls;
-    }
-
     it('returns OpFactoryCall[] for index creation', () => {
       const contract = makeContract({
         users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },

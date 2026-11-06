@@ -645,6 +645,7 @@ function planValidatorDiffCall(
           ? validatorUpdateLabel(collName, originValidator, destValidator)
           : `Add validator on ${collName}`,
         operationClass: 'widening',
+        checkDocuments: true,
       },
     );
   }
