@@ -23,7 +23,7 @@ Before this slice there is no `mariadb` target. Pointed at MariaDB, the MySQL ta
 ## Chosen design
 
 1. **`mariadb` is a target of its own that extends MySQL** (project decision 4), in `packages/3-targets/mariadb/{1-target,2-adapter,3-driver,9-facade}`. `3-driver` is thin: it builds MySQL's driver with the target id `'mariadb'` and copies no driver code.
-2. **MySQL takes the target id and the differing parts as parameters, without changing its behaviour.** Defaults are MySQL's values; types take a target-id parameter that defaults to `'mysql'`. The places:
+2. **MySQL takes the target id and the differing parts as parameters, without changing its behaviour.** The target id is a required argument everywhere, so a missed call site fails instead of silently writing `'mysql'`; MySQL passes its own id from its descriptor meta. The places:
    - the control target factory, with the target id and the migration module path (`@internal/mysql/migration` today, `render-typescript.ts:29-30`);
    - the planner's operations (`target.id`), `MysqlMigration.targetId` (`mysql-migration.ts:32`) and the operation renderer's id check (`render-ops.ts:14`);
    - the control adapter factory, with one options object: the target id and a catalog reader. The class stays private (`interface-factory-pattern.mdc`);
