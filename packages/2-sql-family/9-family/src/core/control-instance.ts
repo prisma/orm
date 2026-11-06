@@ -340,7 +340,8 @@ export interface SqlControlFamilyInstance
 
 export type SqlFamilyInstance = SqlControlFamilyInstance;
 
-interface CrossSpaceFkView {
+/** A composed extension pack's id and the JSON of its contract space, as the configuration-load checks read them. */
+interface ComposedPackView {
   readonly id: string;
   readonly contractSpace?: {
     readonly contractJson?: {
@@ -358,7 +359,7 @@ interface CrossSpaceFkView {
  * `buildExtensionLoadOrder` in control-stack uses.
  */
 function buildTransitiveDependsOnMap(
-  extensions: readonly CrossSpaceFkView[],
+  extensions: readonly ComposedPackView[],
 ): Map<string, Set<string>> {
   const directDeps = new Map<string, readonly string[]>();
   for (const ext of extensions) {
@@ -409,7 +410,7 @@ function isObjectRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export function assertNoCrossSpaceFkReverseReferences(
-  extensions: readonly CrossSpaceFkView[],
+  extensions: readonly ComposedPackView[],
 ): void {
   const dependsOnMap = buildTransitiveDependsOnMap(extensions);
 
@@ -465,7 +466,7 @@ function entityKindsNamedOnce(entityTypes: AuthoringEntityTypeNamespace): readon
  * Checks the packs' entities of a kind whose names are unique across namespaces, such as a Postgres extension: each must be in the unbound namespace, and no two packs may declare the same one.
  */
 export function assertPackEntitiesDeclaredOnce(
-  extensions: readonly CrossSpaceFkView[],
+  extensions: readonly ComposedPackView[],
   entityTypes: AuthoringEntityTypeNamespace,
 ): void {
   for (const kind of entityKindsNamedOnce(entityTypes)) {
@@ -482,7 +483,7 @@ export function assertPackEntitiesDeclaredOnce(
             throw sqlFamilyError(
               'CONTRACT.PACK_CONTRIBUTION_INVALID',
               `Extension pack "${ext.id}" declares ${kind} "${name}" in namespace "${namespaceId}". A pack declares each ${kind} in namespace "${UNBOUND_PSL_NAMESPACE_NAME}", so the connection's search path finds it.`,
-              { meta: { entityKind: kind, entityName: name, extensionId: ext.id, namespaceId } },
+              { meta: { entityKind: kind, entityName: name, packId: ext.id, namespaceId } },
             );
           }
           const earlier = declaringPack.get(name);
@@ -490,7 +491,7 @@ export function assertPackEntitiesDeclaredOnce(
             throw sqlFamilyError(
               'CONTRACT.PACK_CONTRIBUTION_INVALID',
               `Extension packs "${earlier}" and "${ext.id}" both declare ${kind} "${name}". Each ${kind} can be declared by one contract space only; compose only one of these packs.`,
-              { meta: { entityKind: kind, entityName: name, extensionIds: [earlier, ext.id] } },
+              { meta: { entityKind: kind, entityName: name, packIds: [earlier, ext.id] } },
             );
           }
           declaringPack.set(name, ext.id);

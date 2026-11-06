@@ -153,6 +153,34 @@ describe('loading packs that declare entities unique across namespaces', () => {
     );
   });
 
+  it('names the pack, the entity and the namespace in its meta', () => {
+    expect(() => load([pack('pgvector', { extensions: { extension: ['vector'] } })])).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        meta: {
+          entityKind: 'extension',
+          entityName: 'vector',
+          packId: 'pgvector',
+          namespaceId: 'extensions',
+        },
+      }),
+    );
+    expect(() =>
+      load([
+        pack('pgvector', { [UNBOUND_NAMESPACE_ID]: { extension: ['vector'] } }),
+        pack('vector-copy', { [UNBOUND_NAMESPACE_ID]: { extension: ['vector'] } }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        meta: {
+          entityKind: 'extension',
+          entityName: 'vector',
+          packIds: ['pgvector', 'vector-copy'],
+        },
+      }),
+    );
+  });
+
   it('refuses two packs that declare the same extension', () => {
     expect(() =>
       load([

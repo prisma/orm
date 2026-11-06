@@ -6,7 +6,7 @@ import { quoteIdentifier } from '../../sql-utils';
 import { type Op, searchPathExtensionTarget, step, targetDetails } from './shared';
 
 /**
- * `CREATE EXTENSION … WITH SCHEMA …` for an extension the contract declares; without `schema`, PostgreSQL creates it in the connection's current schema. The precheck states the extension is absent and the postcheck that it is present, so a run that finds it installed skips the operation.
+ * `CREATE EXTENSION … WITH SCHEMA …` for an extension the contract declares; without `schema`, PostgreSQL creates it in the connection's current schema, unless the extension's control file names a schema. The precheck states the extension is absent and the postcheck that it is present, so a run that finds it installed skips the operation.
  */
 export async function createExtension(
   options: { readonly schema?: string; readonly extension: string },

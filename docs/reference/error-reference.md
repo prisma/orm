@@ -557,6 +557,8 @@ A contributed type choice (`kind: 'typeChoice'`, such as PostgreSQL's `DateTime`
 
 A contributed type alias (`kind: 'typeAlias'`, such as `temporal.CreatedAt`) is refused when the stack is assembled, by the control stack and by the TypeScript builders, so PSL and TypeScript refuse the same packs. Its type params may not reference an argument, because a type alias takes none: `Invalid authoring type alias "<path>" contributed by descriptor "<id>". output.type.typeParams.<key> references an argument, but a type alias takes none. Write the value itself.` Each generator call must resolve for the alias's codec: `Type alias "<path>" calls now() on create, which does not apply to its codec "<codecId>".`, `…, which its codec "<codecId>" refuses: <reason>`, or `…, but no component declares the generator function "<name>".` Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
 
+When a command loads the configuration, it is raised for a composed pack that declares an entity whose name is unique in the whole database, such as a Postgres extension, outside the unbound namespace: `Extension pack "<packId>" declares extension "<name>" in namespace "<namespace>". A pack declares each extension in namespace "unbound", so the connection's search path finds it.` It is also raised for two composed packs that declare the same such entity, in any namespaces: `Extension packs "<packId>" and "<packId>" both declare extension "<name>". Each extension can be declared by one contract space only; compose only one of these packs.` Payload (meta): `entityKind`, `entityName`, and `packId` and `namespaceId`, or `packIds`.
+
 The Mongo `defineContract` builder raises it for a model field, a value object field or an enum whose codec represents a data type that is not a MongoDB data type (`reason: 'data-type-not-mongo'`): the pack declared the data type without `mongoDataType`, so its BSON type is unknown and the contract cannot describe the field. The Mongo PSL interpreter reports the same case at the field as `PSL_UNSUPPORTED_FIELD_TYPE`. Payload (meta): `modelName`, `valueObjectName` or `enumName`, `fieldName` for a field, `codecId`, `dataType`, `reason`.
 
 An extension pack's index type whose `accessMethod` differs from its type name is refused with this code when the registry is assembled, at the same points. Only the target converts such a type into an index of its access method, so an extension pack's index type must be an access method itself. Message: `Index type "<type>" registered by extension pack "<packId>" declares the access method "<accessMethod>", but an extension pack's index type must be an access method itself.` `fix`: register the access method under its own name, or leave `accessMethod` out. Payload: `indexType`, `accessMethod`, and `packId` when the pack is known.
@@ -1028,6 +1030,10 @@ The same code reports a discriminator the discriminator rule refuses, in SQL and
 ### PSL_UNSUPPORTED_FIELD_ATTRIBUTE
 
 A field carries an attribute the schema's family does not take. For `@updatedAt`, which Prisma 8 PSL does not take, the message names the replacement: `Field "<Model>.<field>" uses unsupported attribute "@updatedAt". Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.` The hint is left out when the field already writes `@onUpdate`. Reported at the attribute, in SQL and Mongo schemas.
+
+### PSL_ENTITY_DECLARED_BY_PACK
+
+The application's PSL declares an entity whose name is unique in the whole database, such as a Postgres extension, that a composed extension pack's contract already declares: `extension "<name>" is declared in namespace "<namespace>", and extension pack "<packId>" declares it in namespace "unbound". Remove this declaration; the pack installs the extension.` Each such entity is declared by one contract space only. Remove the application's declaration. Reported at the application's block during `contract emit`.
 
 ## ORM
 
