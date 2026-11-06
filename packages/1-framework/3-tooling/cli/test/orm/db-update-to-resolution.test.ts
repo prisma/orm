@@ -187,6 +187,11 @@ describe('db update --to bundle resolution', () => {
     { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
     { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
     {
+      flags: ['--permit-policy-change'],
+      command: 'db update',
+      after: ' --permit-policy-change',
+    },
+    {
       flags: ['--rename', 'Profile:User', '--rename', 'User.name:User.fullName'],
       command: 'db update',
       after: ' --rename Profile:User --rename User.name:User.fullName',

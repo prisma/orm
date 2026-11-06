@@ -357,6 +357,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           commandName: 'db migrate',
           to: args.flags.to,
           advanceRef: args.flags.advanceRef,
+          permitPolicyChange: args.flags.permitPolicyChange,
           canRunOffline: false,
         }),
       });

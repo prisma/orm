@@ -74,6 +74,7 @@ function updatePresentations(inputs: {
   readonly to: string | undefined;
   readonly dryRun: boolean;
   readonly advanceRef: string | undefined;
+  readonly permitPolicyChange: boolean;
   readonly statements: readonly StatementText[];
 }): Presentations {
   const { document, database, dryRun } = inputs;
@@ -104,6 +105,7 @@ function updatePresentations(inputs: {
           ...(inputs.advanceRef === undefined
             ? []
             : ['--advance-ref', shellQuoted(inputs.advanceRef)]),
+          ...(inputs.permitPolicyChange ? ['--permit-policy-change'] : []),
           ...inputs.statements.map(statementFlag),
         ]),
       ),
@@ -359,6 +361,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
             to: args.flags.to,
             advanceRef: args.flags.advanceRef,
+            permitPolicyChange: args.flags.permitPolicyChange,
             statements: [...planned, ...previewConsents, ...unansweredConsents(ctx.statements)],
             canRunOffline: false,
           }),
@@ -505,6 +508,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             to: args.flags.to,
             dryRun: args.flags.dryRun,
             advanceRef: args.flags.advanceRef,
+            permitPolicyChange: args.flags.permitPolicyChange === true,
             statements: [...planned, ...previewConsents],
           }),
         ),
