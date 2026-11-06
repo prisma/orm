@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,prisma}"
       matches:
-        - '\bextension\(\s*[A-Za-z_$''"][^,()]*\)'
+        - '\bextension\((?![^)]*namespace:\s*unbound\b)[^)]*\)'
         - '(?<![\s\S])(?![\s\S]*namespace\s+unbound\s*\{)[\s\S]*\bextension\s+[A-Za-z_][\w-]*\s*\{'
 ---
 
@@ -24,5 +24,10 @@ export const contract = defineContract({
 
 1. In the pack's contract source, pass `{ namespace: unbound }` to `extension(...)`, importing `unbound` from `@prisma/orm-postgres/contract-builder`. In a PSL contract, move the `extension` block into `namespace unbound { ... }`.
 2. Run `prisma contract emit` in the pack.
-3. Run `prisma migration plan --from <old head hash>` in the pack. The planned migration has no operations, because the extension a database already has is found through the search path.
-4. Add the new migration to the migrations the pack's control descriptor lists, and point the head ref at the new contract hash.
+3. Plan one migration from the old head to the new one. The planned migration has no operations, because the extension a database already has is found through the search path. Today `prisma migration plan` reads and writes the migrations of a project's own space under `migrations/app/`, while a pack keeps its migrations directly under `migrations/`, so plan through a temporary copy. Issue TML-3473 tracks removing these steps:
+   1. Copy the pack's migration directories and `migrations/refs/` into a new `migrations/app/` directory.
+   2. Run `prisma migration plan --from <old head hash> --name <name>`, where the old head hash is the `hash` in `migrations/refs/head.json`. It writes the new migration to `migrations/app/<timestamp>_<name>/` and the new contract snapshot to `migrations/snapshots/<new hash>/`.
+   3. Move `migrations/app/<timestamp>_<name>/` to `migrations/<timestamp>_<name>/`, then delete `migrations/app/`.
+   4. In the moved `migration.ts`, change each import of `../../snapshots/` to `../snapshots/`.
+   5. Set `hash` in `migrations/refs/head.json` to the new contract hash, the `to` of the new `migration.json`, and keep its `invariants`.
+4. Add the new migration's `migration.json` and `ops.json` to the migrations the pack's control descriptor lists.

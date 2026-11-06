@@ -30,7 +30,7 @@ The pack's contract declares the `vector` extension. When the pack is composed i
 CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
 ```
 
-A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
+The pack declares the extension in the unbound namespace, so it is found through the connection's search path: `prisma db sign` and `prisma db verify` accept `vector` in any schema on that path, such as the `extensions` schema of a Supabase project, and fail naming the schema and the search path when it is elsewhere. A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
 
 ## Configuration
 
