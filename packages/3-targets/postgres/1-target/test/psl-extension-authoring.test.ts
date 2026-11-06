@@ -20,6 +20,7 @@ import {
   postgresAuthoringPslBlockDescriptors,
 } from '../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-registry';
+import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
 import { PostgresExtension } from '../src/core/postgres-extension';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { buildPostgresPslContract } from '../src/core/psl-print/psl-contract';
@@ -117,6 +118,47 @@ model User {
 `);
     expect(extensionsOf(result, 'extensions')).toEqual({
       postgis: new PostgresExtension({ name: 'postgis' }),
+    });
+  });
+
+  it('files an extension declared in namespace unbound under the unbound namespace', () => {
+    const result = interpret(`
+namespace unbound {
+  extension pg_trgm {}
+}
+
+model User {
+  id Int @id
+}
+`);
+    expect(extensionsOf(result, '__unbound__')).toEqual({
+      pg_trgm: new PostgresExtension({ name: 'pg_trgm' }),
+    });
+    expect(extensionsOf(result, 'public')).toEqual({});
+  });
+
+  it('serializes an unbound extension under __unbound__ in contract JSON', () => {
+    const result = interpret(`
+namespace unbound {
+  extension pg_trgm {}
+}
+
+model User {
+  id Int @id
+}
+`);
+    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+    const json = JSON.parse(
+      JSON.stringify(
+        new PostgresContractSerializer().serializeContract(
+          blindCast<Contract<SqlStorage>, 'the PSL interpreter yields a SQL contract'>(
+            result.value,
+          ),
+        ),
+      ),
+    );
+    expect(json.storage.namespaces.__unbound__.entries.extension).toEqual({
+      pg_trgm: { kind: 'extension', name: 'pg_trgm' },
     });
   });
 

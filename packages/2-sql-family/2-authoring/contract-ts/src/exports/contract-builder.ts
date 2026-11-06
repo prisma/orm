@@ -68,3 +68,4 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
+export { unbound } from '../unbound';
