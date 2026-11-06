@@ -1,16 +1,15 @@
-import { mysqlCodecRegistry } from '@internal/target-mysql/codecs';
+import { mysqlAdapterDescriptorMeta } from '@internal/adapter-mysql/adapter';
 import { mariadbAdapterCapabilities } from './capabilities';
 
 export const mariadbAdapterDescriptorMeta = {
-  kind: 'adapter',
-  familyId: 'sql',
+  ...mysqlAdapterDescriptorMeta,
   targetId: 'mariadb',
   id: 'mariadb',
-  version: '0.0.1',
   capabilities: mariadbAdapterCapabilities,
   types: {
+    ...mysqlAdapterDescriptorMeta.types,
     codecTypes: {
-      codecDescriptors: Array.from(mysqlCodecRegistry.values()),
+      ...mysqlAdapterDescriptorMeta.types.codecTypes,
       import: {
         package: '@internal/adapter-mariadb/codec-types',
         named: 'CodecTypes',

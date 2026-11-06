@@ -23,5 +23,5 @@ A contract built for `mariadb` has different hashes from a MySQL contract with t
 ## Exports
 
 - `./pack`: the descriptor metadata, the pack ref for the PSL interpreter
-- `./control`: the control target descriptor and `MARIADB_MIGRATION_MODULE`
-- `./migration`: `MariadbMigration`, also as `Migration`
+- `./control`: the control target descriptor
+- `./migration`: `Migration`, which is `MariadbMigration`

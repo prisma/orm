@@ -1,4 +1,4 @@
-import { MariadbMigration } from '@internal/target-mariadb/migration';
+import { Migration as MariadbMigration } from '@internal/target-mariadb/migration';
 import { describe, expect, it } from 'vitest';
 import { col, Migration, MigrationCLI, MysqlMigrationBase } from '../src/exports/migration';
 

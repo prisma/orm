@@ -1,14 +1,18 @@
 import { mysqlAdapterCapabilities } from '@internal/adapter-mysql/adapter';
 import mysqlAdapter from '@internal/adapter-mysql/control';
-import type { ControlStack } from '@internal/framework-components/control';
+import mariadbDriver from '@internal/driver-mariadb/control';
+import sql from '@internal/family-sql/control';
+import { createControlStack } from '@internal/framework-components/control';
+import mariadbTarget from '@internal/target-mariadb/control';
 import { describe, expect, it } from 'vitest';
 import mariadbAdapter from '../src/exports/control';
 
-const stack = {
-  target: {},
-  extensions: [],
-  declaredDataTypes: [],
-} as unknown as ControlStack<'sql', 'mariadb'>;
+const stack = createControlStack({
+  family: sql,
+  target: mariadbTarget,
+  adapter: mariadbAdapter,
+  driver: mariadbDriver,
+});
 
 describe('the MariaDB control adapter descriptor', () => {
   it('names MariaDB, its own codec types module, and MySQL capabilities with returning off', () => {
