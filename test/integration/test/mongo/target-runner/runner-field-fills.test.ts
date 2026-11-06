@@ -8,7 +8,14 @@ import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregat
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/control';
-import { collMod, fillField } from '@internal/target-mongo/migration';
+import {
+  castField,
+  collMod,
+  dataTransform,
+  fillField,
+  rawAggregate,
+  rawUpdateMany,
+} from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -276,6 +283,59 @@ describe('MongoMigrationRunner, a fill of a list field', () => {
         { name: 'Cy', tags: [] },
         { name: 'Dee', tags: [] },
       ]);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, every kind of rewrite on an empty collection', () => {
+  function scaffold(
+    name: string,
+    filter: Record<string, unknown>,
+    update: Record<string, unknown>,
+  ) {
+    return dataTransform(name, {
+      check: { source: () => rawAggregate('users', [{ $match: filter }, { $limit: 1 }]) },
+      run: () => rawUpdateMany('users', filter, [update], { bypassDocumentValidation: true }),
+    });
+  }
+
+  it(
+    'skips each rewrite on its postcheck before its precheck can ask for documents to change',
+    async () => {
+      await db.createCollection('users');
+      const properties = {
+        visits: { bsonType: 'long' },
+        code: { bsonType: 'int' },
+        score: { bsonType: 'int' },
+        plan: { bsonType: 'string' },
+        nickname: { bsonType: 'string' },
+      };
+
+      const result = await run(
+        [
+          castField({ collection: 'users', field: 'visits', from: ['int'], to: 'long' }),
+          castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
+          scaffold(
+            'User.score',
+            { $expr: { $not: { $in: [{ $type: '$score' }, ['missing', 'null', 'int']] } } },
+            { $set: { score: { $toInt: '$score' } } },
+          ),
+          scaffold(
+            'User.plan',
+            { $expr: { $in: [{ $type: '$plan' }, ['missing', 'null']] } },
+            { $set: { plan: 'free' } },
+          ),
+          fillField({ collection: 'users', field: 'nickname', value: { $literal: '' } }),
+          validatorChange(properties),
+        ],
+        usersContract(properties),
+      );
+
+      expect({
+        executed: result.ok ? result.value.operationsExecuted : result.failure,
+        documents: await db.collection('users').countDocuments(),
+      }).toEqual({ executed: 1, documents: 0 });
     },
     timeouts.spinUpMongoMemoryServer,
   );
