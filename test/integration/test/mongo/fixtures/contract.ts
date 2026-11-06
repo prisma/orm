@@ -4,6 +4,7 @@
 // Tracked at https://linear.app/prisma-company/issue/TML-2633 — migrate to the facade form
 // once TML-2633 lands.
 import mongoFamily from '@internal/family-mongo/pack';
+import { type } from '@internal/mongo/contract-builder';
 import {
   defineContract,
   field,
@@ -19,9 +20,9 @@ const User = model('User', {
     addresses: { field: 'addresses' },
   },
   fields: {
-    _id: field.objectId(),
-    name: field.string(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    name: field.scalar(type.String()),
+    email: field.scalar(type.String()),
   },
   indexes: [index({ email: 1 }, { unique: true })],
   collectionOptions: {
@@ -38,10 +39,10 @@ const Task = model('Task', {
     comments: { field: 'comments' },
   },
   fields: {
-    _id: field.objectId(),
-    title: field.string(),
-    type: field.string(),
-    assigneeId: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
+    title: field.scalar(type.String()),
+    type: field.scalar(type.String()),
+    assigneeId: field.scalar(type.ObjectId()),
   },
   relations: {
     assignee: rel.belongsTo(User, {
@@ -63,7 +64,7 @@ const Bug = model('Bug', {
   collection: 'tasks',
   base: Task,
   fields: {
-    severity: field.string(),
+    severity: field.scalar(type.String()),
   },
 });
 
@@ -71,26 +72,26 @@ const Feature = model('Feature', {
   collection: 'tasks',
   base: Task,
   fields: {
-    priority: field.string(),
-    targetRelease: field.string(),
+    priority: field.scalar(type.String()),
+    targetRelease: field.scalar(type.String()),
   },
 });
 
 const Address = model('Address', {
   owner: User,
   fields: {
-    street: field.string(),
-    city: field.string(),
-    zip: field.string(),
+    street: field.scalar(type.String()),
+    city: field.scalar(type.String()),
+    zip: field.scalar(type.String()),
   },
 });
 
 const Comment = model('Comment', {
   owner: Task,
   fields: {
-    _id: field.objectId(),
-    text: field.string(),
-    createdAt: field.date(),
+    _id: field.scalar(type.ObjectId()),
+    text: field.scalar(type.String()),
+    createdAt: field.scalar(type.Date()),
   },
 });
 

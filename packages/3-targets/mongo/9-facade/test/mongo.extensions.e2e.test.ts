@@ -6,11 +6,11 @@ import { defineContract } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 import { shoutPack, shoutRuntime } from './fixtures/shout-extension';
 
-const contract = defineContract({ extensions: { shout: shoutPack } }, ({ field, model }) => ({
+const contract = defineContract({ extensions: { shout: shoutPack } }, ({ field, model, type }) => ({
   models: {
     Greeting: model('Greeting', {
       collection: 'greetings',
-      fields: { _id: field.objectId(), text: field.scalar('shout/text@1') },
+      fields: { _id: field.scalar(type.ObjectId()), text: field.scalar(type.shout.Text()) },
     }),
   },
   roots: { greetings: 'Greeting' },

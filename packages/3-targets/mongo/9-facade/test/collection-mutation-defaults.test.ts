@@ -8,14 +8,14 @@ import { describe, expect, it } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
 
-const contract = defineContract({}, ({ field, model, gen }) => ({
+const contract = defineContract({}, ({ field, model, gen, type }) => ({
   models: {
     Post: model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        title: field.string(),
-        createdAt: field.date().onCreate(gen.now()),
+        _id: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
+        createdAt: field.scalar(type.Date()).onCreate(gen.now()),
       },
     }),
   },

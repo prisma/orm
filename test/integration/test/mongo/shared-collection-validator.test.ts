@@ -4,15 +4,15 @@ import { ObjectId } from 'mongodb';
 import { expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, type }) => ({
   models: {
     User: model('User', {
       collection: 'users',
-      fields: { _id: field.objectId(), email: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), email: field.scalar(type.String()) },
     }),
     Admin: model('Admin', {
       collection: 'users',
-      fields: { _id: field.objectId(), level: field.int32() },
+      fields: { _id: field.scalar(type.ObjectId()), level: field.scalar(type.Int32()) },
     }),
   },
 }));
