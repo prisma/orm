@@ -220,10 +220,28 @@ function foldComparable<T>(value: AnyExpression, folder: ExpressionFolder<T>): T
   }
 }
 
+/**
+ * `combineAll` only passes its own running result as `a`, so appending in place keeps ref
+ * collection linear; copying `a` on every step made large `IN` lists and `OR` chains quadratic.
+ * While `a` is still `folder.empty`, `b` is copied instead of pushed into it.
+ */
+function appendRefs<T>(a: T[], b: T[]): T[] {
+  if (b.length === 0) {
+    return a;
+  }
+  if (a.length === 0) {
+    return b.slice();
+  }
+  for (const ref of b) {
+    a.push(ref);
+  }
+  return a;
+}
+
 function collectColumnRefsWith<TNode extends Expression>(node: TNode): ColumnRef[] {
   return node.fold<ColumnRef[]>({
     empty: [],
-    combine: (a, b) => [...a, ...b],
+    combine: appendRefs,
     columnRef: (columnRef) => [columnRef],
     select: (ast) => ast.collectColumnRefs(),
   });
@@ -232,7 +250,7 @@ function collectColumnRefsWith<TNode extends Expression>(node: TNode): ColumnRef
 function collectParamRefsWith<TNode extends Expression>(node: TNode): AnyParamRef[] {
   return node.fold<AnyParamRef[]>({
     empty: [],
-    combine: (a, b) => [...a, ...b],
+    combine: appendRefs,
     paramRef: (paramRef) => [paramRef],
     preparedParamRef: (paramRef) => [paramRef],
     select: (ast) => ast.collectParamRefs(),
