@@ -36,6 +36,7 @@ import type { Document, MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
+import { castKeepsEveryValue, isCastTarget } from './bson-casts';
 import type { CollModMeta } from './op-factory-call';
 
 type StringField = { readonly codecId: 'mongo/string@1'; readonly nullable: false };
@@ -282,6 +283,89 @@ export function unsetField(
     precheck: [],
     run: [rewriteUpdate(collectionName, field, filter, { $unset: { [field]: '' } })],
     postcheck: [noDocumentHolds(collectionName, [field], filter)],
+  };
+}
+
+export interface CastFieldOptions {
+  /** The BSON types the field held before, which say whether the cast keeps every value. */
+  readonly from: readonly string[];
+  /** The BSON type `$convert` casts the field to. */
+  readonly to: string;
+  /** Whether the field is a list, whose elements are cast one by one. */
+  readonly list?: boolean;
+  readonly filter?: Document;
+}
+
+function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
+  const another = { $ne: null, $not: { $type: [to] } };
+  const condition = { [field]: options.list === true ? { $elemMatch: another } : another };
+  return options.filter === undefined ? condition : { $and: [options.filter, condition] };
+}
+
+function castExpression(field: string, to: string, list: boolean): Document {
+  return list
+    ? {
+        $map: {
+          input: `$${field}`,
+          as: 'value',
+          in: { $convert: { input: '$$value', to } },
+        },
+      }
+    : { $convert: { input: `$${field}`, to } };
+}
+
+/**
+ * Casts a field to the BSON type `to` with `$convert`, in the documents where it holds another
+ * type. A value `$convert` cannot cast fails the update. Widening when every type in `from` casts
+ * to `to` keeping its value, destructive otherwise.
+ */
+export function castField(
+  collectionName: string,
+  field: string,
+  options: CastFieldOptions,
+): MongoDmlOperation {
+  assertRewritableField(collectionName, field);
+  const { to, filter } = options;
+  if (!isCastTarget(to)) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `castField casts field "${field}" in collection ${collectionName} to "${to}", which $convert cannot cast to.`,
+      { meta: { context: 'castField', collection: collectionName, field, to } },
+    );
+  }
+  const id = `field.${collectionName}.${field}.cast(${to})${idSuffix(filter)}`;
+  const toCast = documentsToCast(field, to, options);
+  return {
+    id,
+    label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${options.from.join(', ')}`} to ${to}${labelSuffix(filter)}`,
+    operationClass:
+      options.from.length > 0 && options.from.every((from) => castKeepsEveryValue(from, to))
+        ? 'widening'
+        : 'destructive',
+    name: id,
+    precheck: [],
+    run: [
+      rewritePlan(
+        collectionName,
+        new RawUpdateManyCommand(
+          collectionName,
+          toCast,
+          [{ $set: { [field]: castExpression(field, to, options.list === true) } }],
+          { bypassDocumentValidation: true },
+        ),
+      ),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} holds ${field} as another type than ${to}`,
+        source: rewritePlan(
+          collectionName,
+          new RawAggregateCommand(collectionName, [{ $match: toCast }, { $limit: 1 }]),
+        ),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
   };
 }
 

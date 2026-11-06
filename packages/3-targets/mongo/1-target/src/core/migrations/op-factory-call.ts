@@ -26,6 +26,7 @@ import type {
   CollModOptions,
   CreateCollectionOptions,
   CreateIndexOptions,
+  MongoDmlOperation,
   MongoIndexKey,
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
@@ -39,6 +40,8 @@ import type { Document } from '@internal/mongo-value';
 import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  type CastFieldOptions,
+  castField,
   collMod,
   createCollection,
   createIndex,
@@ -271,6 +274,34 @@ export class UnsetFieldCall extends OpFactoryCallNode {
   }
 }
 
+export class CastFieldCall extends OpFactoryCallNode {
+  readonly factoryName = 'castField' as const;
+  readonly collection: string;
+  readonly field: string;
+  readonly options: CastFieldOptions;
+  readonly operationClass: MigrationOperationClass;
+  readonly label: string;
+
+  constructor(collection: string, field: string, options: CastFieldOptions) {
+    super();
+    this.collection = collection;
+    this.field = field;
+    this.options = options;
+    const op = this.toOp();
+    this.operationClass = op.operationClass;
+    this.label = op.label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return castField(this.collection, this.field, this.options);
+  }
+
+  renderTypeScript(): string {
+    return `castField(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.field)}, ${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -308,6 +339,7 @@ export type OpFactoryCall =
   | RenameCollectionCall
   | RenameFieldCall
   | UnsetFieldCall
+  | CastFieldCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): CreateIndexOptions {
