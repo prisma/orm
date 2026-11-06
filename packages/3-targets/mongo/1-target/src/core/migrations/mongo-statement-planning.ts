@@ -255,14 +255,14 @@ function discriminatorValueOf(
 }
 
 /**
- * The other models stored in `collection`, root models and their variants, whose documents a change of `storedName` with `filter` reaches, and which store the field themselves or through their base. No discriminator tells the documents of several root models apart, so without a filter, or with a base model's filter, every other root model's documents are reached. A variant's filter, one discriminator value, reaches a model only when its documents can hold that value: a variant of another root model with the same discriminator field and value, or a model that declares the discriminator field itself.
+ * The other models stored in `collection`, root models and their variants, whose documents a change of `storedName` with `filter` reaches, and which store the field themselves or through their base; with no `storedName`, every such model, whether it stores the field or not. No discriminator tells the documents of several root models apart, so without a filter, or with a base model's filter, every other root model's documents are reached. A variant's filter, one discriminator value, reaches a model only when its documents can hold that value: a variant of another root model with the same discriminator field and value, or a model that declares the discriminator field itself.
  */
 export function otherModelsReached(
   contract: ContractWithDomain,
   model: ModelCoordinate,
   collection: string,
   filter: Document | undefined,
-  storedName: string,
+  storedName: string | undefined,
 ): readonly string[] {
   const models = mongoModelsOf(contract.domain, model.namespaceId);
   const baseOf = (name: string) => {
@@ -294,7 +294,9 @@ export function otherModelsReached(
       name,
       ...Object.values(models[name]?.variants ?? {}).map((variant) => variant.model),
     ])
-    .filter((name) => canHold(name) && storesOrInherits(name, storedName));
+    .filter(
+      (name) => canHold(name) && (storedName === undefined || storesOrInherits(name, storedName)),
+    );
 }
 
 export function sharedCollectionWhy(

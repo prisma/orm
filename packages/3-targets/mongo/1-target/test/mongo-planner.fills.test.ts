@@ -227,4 +227,95 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
       ['Cannot fill field "note" in collection "readings": it is a time-series collection'],
     ]);
   });
+
+  describe('beside renames', () => {
+    const renamedModel = (seed: string, model: string, fields: readonly string[]) =>
+      contract(
+        seed,
+        { [model]: { collection: 'users', fields: ['_id', ...fields], types: { _id: OBJECT_ID } } },
+        { users: {} },
+      );
+
+    it('fills no field a rename gives its new name', () => {
+      expect(
+        fills(
+          plan({
+            from: users('from', { nickname: STRING }),
+            to: users('to', { plan: STRING }),
+            schema: live,
+            statements: [
+              {
+                kind: 'rename',
+                entity: 'field',
+                from: { namespaceId: NS, model: 'User', field: 'nickname' },
+                to: { namespaceId: NS, model: 'User', field: 'plan' },
+              },
+            ],
+          }),
+        ),
+      ).toEqual([]);
+    });
+
+    it("fills none of a renamed model's fields, and only the field that is new beside the rename", () => {
+      const renameModel: ResolvedMigrationStatement = {
+        kind: 'rename',
+        entity: 'model',
+        from: { namespaceId: NS, model: 'Profile' },
+        to: { namespaceId: NS, model: 'User' },
+      };
+
+      expect([
+        fills(
+          plan({
+            from: renamedModel('from', 'Profile', ['name']),
+            to: renamedModel('to', 'User', ['name']),
+            schema: live,
+            statements: [renameModel],
+          }),
+        ),
+        fills(
+          plan({
+            from: renamedModel('from', 'Profile', ['name']),
+            to: renamedModel('to', 'User', ['name', 'plan']),
+            schema: live,
+            statements: [renameModel],
+          }),
+        ).map(({ label }) => label),
+      ]).toEqual([[], ['Fill field plan in collection users where it is missing or null']]);
+    });
+  });
+
+  it("refuses a variant's fill whose discriminator value another root model's variant also has", () => {
+    const models = (superFields: readonly string[]) =>
+      contract(
+        'seed-' + superFields.join(','),
+        {
+          Admin: {
+            collection: 'users',
+            fields: ['_id', 'kind'],
+            types: { _id: OBJECT_ID },
+            discriminator: 'kind',
+            variants: { SuperAdmin: 'super' },
+          },
+          SuperAdmin: { collection: 'users', fields: [...superFields], base: 'Admin' },
+          Member: {
+            collection: 'users',
+            fields: ['_id', 'kind'],
+            types: { _id: OBJECT_ID },
+            discriminator: 'kind',
+            variants: { SuperMember: 'super' },
+          },
+          SuperMember: { collection: 'users', fields: [], base: 'Member' },
+        },
+        { users: {} },
+      );
+
+    expect(
+      refusal(plan({ from: models([]), to: models(['level']), schema: live })).map(
+        ({ summary }) => summary,
+      ),
+    ).toEqual([
+      'Cannot fill field "level" of model "SuperAdmin" in collection "users": model "Member", "SuperMember" is stored in the same collection',
+    ]);
+  });
 });

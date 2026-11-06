@@ -9,9 +9,7 @@ import {
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
-  collectionRootModelsOf,
   type MongoContract,
-  mongoModelsOf,
   ownStoredNameOf,
   validatorFieldNamesOf,
 } from '@internal/mongo-contract';
@@ -29,6 +27,7 @@ import {
   collectionOf,
   modelAt,
   modelCoordinates,
+  otherModelsReached,
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
   storedFieldsOf,
@@ -191,17 +190,24 @@ export function timeSeriesFillRefusals(
     }));
 }
 
-/** A fill of one root model's field in a collection another root model shares, where no discriminator selects its documents. */
+/**
+ * A fill whose documents another model stored in the same collection shares: another root model
+ * when the fill has no discriminator filter, or a variant of another root model with the same
+ * discriminator field and value. Its documents would get the field too.
+ */
 export function sharedCollectionFillRefusals(
   fills: readonly FieldFill[],
   contract: ContractWithDomain,
 ): readonly MigrationPlannerConflict[] {
   return fills.flatMap((fill): MigrationPlannerConflict[] => {
     const { subject, call } = fill;
-    if (subject.kind !== 'field' || call.options.filter !== undefined) return [];
-    const models = mongoModelsOf(contract.domain, subject.namespaceId);
-    const others = (collectionRootModelsOf(models)[call.options.collection] ?? []).filter(
-      (name) => name !== subject.model,
+    if (subject.kind !== 'field') return [];
+    const others = otherModelsReached(
+      contract,
+      subject,
+      call.options.collection,
+      call.options.filter,
+      undefined,
     );
     if (others.length === 0) return [];
     const named = others.map((name) => JSON.stringify(name)).join(', ');
