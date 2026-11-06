@@ -1,2 +1,2 @@
-export type { MysqlConfigOptions } from '../config/define-config';
-export { defineConfig } from '../config/define-config';
+export type { MysqlConfigOptions, MysqlConfigParts } from '../config/define-config';
+export { createMysqlDefineConfig, defineConfig } from '../config/define-config';

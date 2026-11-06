@@ -14,7 +14,7 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 
 ## Responsibilities
 
-- **`defineConfig`** (`./config`): a MySQL project's configuration. A `.prisma` contract types a text `enum` block as a native MySQL enum (`mysql/enum@1`) and an integer one as `int`.
+- **`defineConfig`** (`./config`): a MySQL project's configuration. A `.prisma` contract types a text `enum` block as a native MySQL enum (`mysql/enum@1`) and an integer one as `int`. `createMysqlDefineConfig` builds the same function from a target's pack, control target, adapter and driver, so a target that extends MySQL, such as MariaDB, gets its own `defineConfig` without a copy.
 - **`defineContract`** (`./contract-builder`): the TypeScript contract builder bound to the MySQL packs.
 - **`createMysqlControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MySQL `migration.ts` imports: `Migration`, `MigrationCLI` and the column and constraint helpers.
