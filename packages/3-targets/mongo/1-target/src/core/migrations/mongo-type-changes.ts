@@ -99,7 +99,10 @@ function takesEveryValue(from: FieldShape, to: FieldShape): boolean {
   return from.types.length > 0 && from.types.every((type) => to.types.includes(type));
 }
 
-function castOptions(from: FieldShape, to: FieldShape): CastFieldOptions | undefined {
+function castOptions(
+  from: FieldShape,
+  to: FieldShape,
+): Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined {
   const [target, ...others] = to.types;
   if (from.list !== to.list || target === undefined || others.length > 0) return undefined;
   if (!isCastTarget(target) || !from.types.every((type) => hasCast(type, target))) {
@@ -115,7 +118,9 @@ function typeChange(input: Omit<TypeChange, 'cast'>): TypeChange {
     cast:
       options === undefined
         ? undefined
-        : new CastFieldCall(input.collection, input.field, {
+        : new CastFieldCall({
+            collection: input.collection,
+            field: input.field,
             ...options,
             ...(input.filter === undefined ? {} : { filter: input.filter }),
           }),

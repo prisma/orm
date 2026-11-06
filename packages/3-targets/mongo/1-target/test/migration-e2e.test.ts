@@ -355,7 +355,9 @@ describe('migration file E2E', () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { CastFieldCall } = await import('../src/core/migrations/op-factory-call');
       const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
-      const call = new CastFieldCall('tasks', 'scores', {
+      const call = new CastFieldCall({
+        collection: 'tasks',
+        field: 'scores',
         from: ['int'],
         to: 'long',
         list: true,

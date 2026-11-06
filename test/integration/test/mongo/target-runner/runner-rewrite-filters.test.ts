@@ -61,7 +61,9 @@ describe('the documents a MongoDB rewrite selects', () => {
     async () => {
       expect(
         await selected(
-          postcheckPipeline(castField('users', 'age', { from: ['string'], to: 'int' })),
+          postcheckPipeline(
+            castField({ collection: 'users', field: 'age', from: ['string'], to: 'int' }),
+          ),
         ),
       ).toEqual(
         [
@@ -81,7 +83,15 @@ describe('the documents a MongoDB rewrite selects', () => {
     async () => {
       expect(
         await selected(
-          postcheckPipeline(castField('users', 'age', { from: ['string'], to: 'int', list: true })),
+          postcheckPipeline(
+            castField({
+              collection: 'users',
+              field: 'age',
+              from: ['string'],
+              to: 'int',
+              list: true,
+            }),
+          ),
         ),
       ).toEqual(['list of an int and a string']);
     },

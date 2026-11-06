@@ -124,7 +124,7 @@ This gives checks the same expressive power as MongoDB query filters, without in
 
 ### A validator change can check the documents
 
-A validator change is a `collMod`. Left alone, MongoDB applies it over documents that no longer fit, and each of them then fails its next update. So a validator change can check the documents first. `setValidation(collection, schema, { checkDocuments: true })`, or `collMod` with `checkDocuments: true` in its meta, adds a precheck that aggregates over the collection:
+A validator change is a `collMod`. Left alone, MongoDB applies it over documents that no longer fit, and each of them then fails its next update. So a validator change can check the documents first, with the option `checkDocuments: true`. On `setValidation` it sits in the options, beside `validationLevel` and `validationAction`: `setValidation(collection, schema, { checkDocuments: true })`. `collMod(collection, options, meta)` passes its second argument to MongoDB's `collMod` command unchanged, so the option sits in the third, the meta, beside `id` and `label`: `collMod(collection, { validator }, { checkDocuments: true })`. A `collMod` whose options set no validator has nothing to check the documents against, so `checkDocuments: true` on it is refused with `MIGRATION.INVALID_OPERATION_ENTRY` when the operation is built. The option adds a precheck that aggregates over the collection:
 
 ```ts
 { $match: { $nor: [{ $jsonSchema: schema }] } }, { $limit: 1 }
@@ -203,7 +203,7 @@ dataTransform('User.age', {
 })
 ```
 
-The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites, `castField` and `fillField`, are DML operations of the same envelope, classed by their effect like `renameField`.
+The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites are DML operations of the same envelope, classed by their effect like `renameField`. `castField({ collection, field, from, to, list?, filter? })` takes its class from `from` and `to`: it is `widening` when `$convert` keeps every value of every type in `from`, as from `int` to `long`, and `destructive` otherwise. `fillField({ collection, field, value, filter? })` sets the field only where it is missing or `null`, so it is always `widening`.
 
 #### DML execution
 

@@ -486,6 +486,14 @@ describe('setValidation, checking the documents first', () => {
     ]);
   });
 
+  it('refuses checkDocuments on a collMod that sets no validator', () => {
+    expect(() =>
+      collMod('users', { validationLevel: 'moderate' }, { checkDocuments: true }),
+    ).toThrow(
+      'collMod of collection users checks the documents, but sets no validator to check them against.',
+    );
+  });
+
   it('collMod without checkDocuments is the operation of today', () => {
     expect(
       collMod('users', { validator: { $jsonSchema: schema } }, { checkDocuments: false }),

@@ -318,6 +318,8 @@ export function unsetField(
 }
 
 export interface CastFieldOptions {
+  readonly collection: string;
+  readonly field: string;
   /** The BSON types the field held before, which say whether the cast keeps every value. */
   readonly from: readonly string[];
   /** The BSON type `$convert` casts the field to. */
@@ -371,13 +373,9 @@ function castExpression(field: string, to: string, list: boolean): Document {
  * type. A value `$convert` cannot cast fails the update. Widening when every type in `from` casts
  * to `to` keeping its value, destructive otherwise.
  */
-export function castField(
-  collectionName: string,
-  field: string,
-  options: CastFieldOptions,
-): MongoDmlOperation {
+export function castField(options: CastFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, to, filter } = options;
   assertRewritableField(collectionName, field);
-  const { to, filter } = options;
   if (!isCastTarget(to)) {
     throw mongoTargetError(
       'MIGRATION.INVALID_OPERATION_ENTRY',
@@ -876,6 +874,13 @@ export function collMod(
   meta?: CollModMeta,
 ): MongoMigrationPlanOperation {
   const hasValidator = options.validator != null && Object.keys(options.validator).length > 0;
+  if (meta?.checkDocuments === true && !hasValidator) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `collMod of collection ${collectionName} checks the documents, but sets no validator to check them against.`,
+      { meta: { context: 'collMod', collection: collectionName } },
+    );
+  }
 
   return {
     id: meta?.id ?? `collection.${collectionName}.collMod`,

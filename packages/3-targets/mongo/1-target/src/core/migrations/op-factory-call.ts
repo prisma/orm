@@ -285,10 +285,10 @@ export class CastFieldCall extends OpFactoryCallNode {
   readonly operationClass: MigrationOperationClass;
   readonly label: string;
 
-  constructor(collection: string, field: string, options: CastFieldOptions) {
+  constructor(options: CastFieldOptions) {
     super();
-    this.collection = collection;
-    this.field = field;
+    this.collection = options.collection;
+    this.field = options.field;
     this.options = options;
     const op = this.toOp();
     this.operationClass = op.operationClass;
@@ -297,11 +297,11 @@ export class CastFieldCall extends OpFactoryCallNode {
   }
 
   toOp(): MongoDmlOperation {
-    return castField(this.collection, this.field, this.options);
+    return castField(this.options);
   }
 
   renderTypeScript(): string {
-    return `castField(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.field)}, ${jsonToTsSource(this.options)})`;
+    return `castField(${jsonToTsSource(this.options)})`;
   }
 }
 

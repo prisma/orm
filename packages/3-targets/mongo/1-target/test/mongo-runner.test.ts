@@ -927,7 +927,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     );
 
     const result = await execute(harness, [
-      castField('users', 'code', { from: ['string'], to: 'int' }),
+      castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
     ]);
 
     expect(failureFields(result.assertNotOk())).toEqual({
@@ -957,7 +957,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     );
 
     const result = await execute(harness, [
-      castField('users', 'code', { from: ['string'], to: 'int' }),
+      castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
     ]);
 
     expect(failureFields(result.assertNotOk())).toEqual({

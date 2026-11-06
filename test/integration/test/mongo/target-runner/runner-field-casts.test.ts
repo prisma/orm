@@ -177,7 +177,7 @@ describe('MongoMigrationRunner, a cast of a field', () => {
 
       const result = await run(
         [
-          castField('users', 'age', { from: ['int'], to: 'long' }),
+          castField({ collection: 'users', field: 'age', from: ['int'], to: 'long' }),
           validatorChange({ name: { bsonType: 'string' }, age: { bsonType: 'long' } }),
         ],
         contract,
@@ -201,7 +201,7 @@ describe('MongoMigrationRunner, a cast of a field', () => {
 
       const result = await run(
         [
-          castField('users', 'age', { from: ['string'], to: 'int' }),
+          castField({ collection: 'users', field: 'age', from: ['string'], to: 'int' }),
           validatorChange({ name: { bsonType: 'string' }, age: { bsonType: 'int' } }),
         ],
         contract,
@@ -253,8 +253,8 @@ describe('MongoMigrationRunner, a cast of a field', () => {
         code: { bsonType: 'int' },
       };
       const operations = [
-        castField('users', 'age', { from: ['int'], to: 'long' }),
-        castField('users', 'code', { from: ['string'], to: 'int' }),
+        castField({ collection: 'users', field: 'age', from: ['int'], to: 'long' }),
+        castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
         validatorChange(properties),
       ];
       const contract = usersContract(properties);
@@ -325,7 +325,7 @@ describe('MongoMigrationRunner, a data transform filled in by the user', () => {
 describe('MongoMigrationRunner, a data transform whose update MongoDB cannot convert', () => {
   const failureOf = async (
     transform: AnyMongoMigrationOperation,
-    properties: Record<string, unknown>,
+    properties: Record<string, Record<string, unknown>>,
   ) => {
     const result = await run([transform, validatorChange(properties)], usersContract(properties));
     if (result.ok) throw new Error('Expected the data transform to fail');
