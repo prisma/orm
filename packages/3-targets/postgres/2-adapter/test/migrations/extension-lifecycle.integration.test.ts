@@ -379,4 +379,61 @@ describe('Postgres extensions in the unbound namespace against a live database',
     await driver.query('SET search_path TO public');
     expect((await verify(contractFromPsl(UNBOUND_PLPGSQL))).ok).toBe(true);
   });
+
+  it('skips the offline unbound-to-named move when the extension is already in the named schema', {
+    timeout: testTimeout,
+  }, async () => {
+    const fromContract = contractFromPsl(UNBOUND_VECTOR);
+    const contract = contractFromPsl(IN_EXTENSIONS_SCHEMA);
+    const offlineSchema = postgresTargetDescriptor.migrations.contractToSchema(
+      fromContract,
+      frameworkComponents,
+    ) as SqlSchemaIRNode;
+    PostgresDatabaseSchemaNode.assert(offlineSchema);
+    const planned = postgresTargetDescriptor.createPlanner(controlAdapter).plan({
+      contract,
+      schema: offlineSchema,
+      policy: ALLOW_DESTRUCTIVE,
+      fromContract,
+      origin: null,
+      statements: [],
+      frameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
+    const operations = await Promise.all(planned.plan.operations);
+    expect(operations.find((op) => op.id === 'setExtensionSchema.vector')?.execute).toEqual([
+      expect.objectContaining({ sql: 'ALTER EXTENSION "vector" SET SCHEMA "extensions"' }),
+    ]);
+    expect((await vectorNode())?.schemaName).toBe('extensions');
+
+    const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
+      driver,
+      perSpaceOptions: [
+        {
+          space: APP_SPACE_ID,
+          plan: planned.plan,
+          migrationEdges: synthEdges(planned.plan),
+          driver,
+          destinationContract: contract,
+          policy: ALLOW_DESTRUCTIVE,
+          frameworkComponents,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(`Runner failed:\n${formatRunnerFailure(result.failure)}`);
+    expect((await vectorNode())?.schemaName).toBe('extensions');
+  });
+
+  it('runs a move to the schema the extension is already in as a no-op in PostgreSQL', {
+    timeout: testTimeout,
+  }, async () => {
+    const outcome = await driver.query('ALTER EXTENSION vector SET SCHEMA extensions').then(
+      () => 'no-op',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(outcome).toBe('no-op');
+    expect((await vectorNode())?.schemaName).toBe('extensions');
+  });
 });
