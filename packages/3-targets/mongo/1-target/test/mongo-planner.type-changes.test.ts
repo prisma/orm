@@ -427,10 +427,12 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
             to: destination,
             schema: [schemaCollection('tasks', { jsonSchema: tasks('int') })],
           }),
-        ).labels[1],
-      ).toBe(
+        ).labels,
+      ).toEqual([
+        'Check that the documents in tasks can fit the new validator',
         'Cast field severity in collection tasks from int to long in documents whose type is "bug"',
-      );
+        'Update validator on tasks (changed: severity)',
+      ]);
     });
 
     it('reads null as allowed on both sides, an empty set as any value, and a list through its items', () => {

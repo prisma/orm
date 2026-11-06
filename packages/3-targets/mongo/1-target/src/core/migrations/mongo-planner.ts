@@ -28,7 +28,7 @@ import {
   canonicalize,
   indexLookupKey,
   type MongoContract,
-  validatorRootShapesOf,
+  validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type {
   MongoSchemaCollectionOptions,
@@ -102,11 +102,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Each field a root model of the validator declares, with the distinct schemas the root models give it, in canonical form. */
+/** Each field a root model or variant of the validator declares, with the distinct schemas they give it, in canonical form. */
 function propertiesOf(schema: Record<string, unknown>): Record<string, string> {
   const schemas = new Map<string, Set<string>>();
-  for (const root of validatorRootShapesOf(schema)) {
-    for (const [field, fieldSchema] of Object.entries(root.properties)) {
+  for (const shape of validatorDocumentShapesOf(schema)) {
+    for (const [field, fieldSchema] of Object.entries(shape.properties)) {
       schemas.set(field, (schemas.get(field) ?? new Set()).add(canonicalize(fieldSchema)));
     }
   }
