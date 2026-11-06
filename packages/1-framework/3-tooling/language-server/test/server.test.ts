@@ -4275,7 +4275,7 @@ describe('language server config failure surfacing', {
     ]);
   });
 
-  it('publishes the cause and the fix of a structured config failure', async () => {
+  it('publishes the why and fix of a plain structured error that is not a CLI error', async () => {
     harness = startHarness(async () => {
       throw structuredError('CONFIG.LOAD_FAILED', 'Config failed', {
         why: 'The adapter package is missing',
