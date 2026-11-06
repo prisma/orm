@@ -58,9 +58,7 @@ async function loadPrisma7(schema: string) {
   });
 }
 
-describe('PSL block comments', () => {
-  it('emits a schema with /* */ comments', async () => {
-    const result = await load(`// use prisma-8
+const prisma8Commented = `// use prisma-8
 
 /* A comment that belongs to no declaration. */
 
@@ -78,21 +76,23 @@ model Event {
   id   Int  @id @default(autoincrement())
   kind Kind /* trailing */
 }
-`);
-    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+`;
 
-    await expect(
-      emit(
-        enrichContract(result.value, [postgres, postgresAdapter]),
-        stack,
-        sqlEmission,
-        sqlContractCanonicalizationHooks,
-      ),
-    ).resolves.not.toThrow();
-  });
+const prisma8Plain = `// use prisma-8
 
-  it('emits the same schema through prisma7Schema()', async () => {
-    const result = await loadPrisma7(`/* A comment that belongs to no declaration. */
+enum Kind {
+  @@type("pg/text@1")
+  A
+  B
+}
+
+model Event {
+  id   Int  @id @default(autoincrement())
+  kind Kind
+}
+`;
+
+const prisma7Commented = `/* A comment that belongs to no declaration. */
 
 datasource db {
   provider = "postgresql"
@@ -111,16 +111,43 @@ model Event {
   id   Int  @id @default(autoincrement())
   kind Kind /* trailing */
 }
-`);
-    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+`;
 
-    await expect(
-      emit(
-        enrichContract(result.value, [postgres, postgresAdapter]),
-        stack,
-        sqlEmission,
-        sqlContractCanonicalizationHooks,
-      ),
-    ).resolves.not.toThrow();
+const prisma7Plain = `datasource db {
+  provider = "postgresql"
+}
+
+enum Kind {
+  A
+  B
+}
+
+model Event {
+  id   Int  @id @default(autoincrement())
+  kind Kind
+}
+`;
+
+async function emitted(loaded: Awaited<ReturnType<typeof load>>) {
+  if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure.diagnostics));
+  return emit(
+    enrichContract(loaded.value, [postgres, postgresAdapter]),
+    stack,
+    sqlEmission,
+    sqlContractCanonicalizationHooks,
+  );
+}
+
+describe('PSL block comments', () => {
+  it('emits the same contract as the schema without /* */ comments', async () => {
+    const commented = await emitted(await load(prisma8Commented));
+    const plain = await emitted(await load(prisma8Plain));
+    expect(commented).toEqual(plain);
+  });
+
+  it('emits the same contract as the schema without /* */ comments through prisma7Schema()', async () => {
+    const commented = await emitted(await loadPrisma7(prisma7Commented));
+    const plain = await emitted(await loadPrisma7(prisma7Plain));
+    expect(commented).toEqual(plain);
   });
 });
