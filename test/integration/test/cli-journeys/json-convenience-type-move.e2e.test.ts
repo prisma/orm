@@ -63,7 +63,9 @@ withTempDir(({ createTempDir }) => {
         expect(jsonb).not.toBe(plain);
         const drifted = await runDbVerify(ctx, ['--schema-only']);
         expect(drifted.exitCode).not.toBe(0);
-        expect(output(drifted)).toContain('payload');
+        expect(output(drifted)).toContain(
+          'mismatch: database/public/event/column:payload. The contract column is "jsonb" and the database column is "json".',
+        );
 
         const unconsented = await runMigrationPlan(ctx, ['--from', plain, '--name', 'jsonb']);
         expect(unconsented.exitCode).toBe(2);
