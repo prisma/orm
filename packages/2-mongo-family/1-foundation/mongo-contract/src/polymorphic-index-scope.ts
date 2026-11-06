@@ -51,6 +51,7 @@ export function applyPolymorphicScopeToMongoIndex(
   };
 
   const cloned: MongoIndexInput = {
+    name: index.name,
     keys: index.keys,
     ...(index.unique !== undefined && { unique: index.unique }),
     ...(index.sparse !== undefined && { sparse: index.sparse }),

@@ -322,14 +322,14 @@ describe('a failure the default checks do not expect', () => {
   const { readsBack } = inferredColumnDefaults(brokenContext);
 
   it('passes an internal error through instead of printing the default as raw SQL', async () => {
-    expect(() => readsBack('abc', { path: ['String'] }, false, false)).toThrow(
+    expect(() => readsBack('abc', { path: ['Text'] }, false, false)).toThrow(
       'a codec pack broke an invariant',
     );
   });
 
   it('still reads a structured refusal as a default the codec does not take', async () => {
     expect(
-      inferredColumnDefaults(inferBuildContext).readsBack(1, { path: ['String'] }, false, false),
+      inferredColumnDefaults(inferBuildContext).readsBack(1, { path: ['Text'] }, false, false),
     ).toBe(false);
   });
 });

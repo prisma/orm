@@ -4,7 +4,7 @@ to: "8.0.0-rc.22"
 changes:
   - id: one-orm-version
     summary: |
-      Every `@prisma/orm-*` package and the `prisma` CLI must run one version of Prisma ORM. With more than one copy installed, commands and clients stop with `RUNTIME.MULTIPLE_ORM_COPIES`.
+      Every `@prisma/orm-*` package and the `prisma` CLI must run one version of Prisma ORM. In 8.0.0-rc.22, commands and clients stop with `RUNTIME.MULTIPLE_ORM_COPIES` when more than one copy is installed; later releases remove that check, but a second copy still breaks values that cross between copies.
     detection:
       glob: "package.json"
       matches:
@@ -175,7 +175,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 
 ## One version of Prisma ORM
 
-Commands and clients now refuse to start when Prisma ORM is loaded from more than one folder. Before, a project with mismatched versions could fail later with an internal error, for example on the first literal `@default` in `prisma contract emit`.
+In 8.0.0-rc.22, commands and clients refuse to start when Prisma ORM is loaded from more than one folder. Later releases remove that check, because a host that loads the ORM in two module instances cannot satisfy it. A project with mismatched versions can still fail with an internal error, for example on the first literal `@default` in `prisma contract emit`.
 
 After upgrading, check that one copy is installed:
 

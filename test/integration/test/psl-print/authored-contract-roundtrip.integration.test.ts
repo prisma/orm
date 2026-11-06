@@ -164,8 +164,8 @@ model Pair {
   zoned TimestamptzString(3)
   js    TimestamptzJsDate(3)
   time  TimeString(3)
-  big   BigIntNumber
-  huge  UnboundedInt
+  big   Int8Number
+  huge  NumericBigInt
 }
 `,
   },
@@ -307,8 +307,8 @@ model Person {
   {
     name: 'value-object members with type parameters, single and list',
     schema: `type Price {
-  amount  Numeric(65, 30)
-  history Numeric(65, 30)[]
+  amount  NumericString(65, 30)
+  history NumericString(65, 30)[]
 }
 
 model Product {
@@ -526,7 +526,7 @@ describe('a value-object member typed by a named type', () => {
     async () => {
       const authored = await readPsl(`// use prisma-8
 types {
-  Short = VarChar(10)
+  Short = Varchar(10)
 }
 
 type Label {
@@ -543,7 +543,7 @@ model Product {
       const printed = await printAndReadBack(authored);
 
       expect(printContract(authored).text).toMatch(
-        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+        /type Label \{\s+code\s+String\(storage: varchar, length: 10\)\s+codes\s+String\(storage: varchar, length: 10\)\[\]/,
       );
       expect(serializedWithoutCapabilities(printed)).toEqual(
         serializedWithoutCapabilities(authored),

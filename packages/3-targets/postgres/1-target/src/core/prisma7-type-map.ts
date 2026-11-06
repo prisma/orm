@@ -32,7 +32,7 @@ import {
   postgresDataTypes,
 } from './data-types';
 import { postgresCodecDescriptorRegistry } from './registry';
-import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
+import { postgresScalarTypes } from './type-constructors';
 
 /** A Prisma 8 constructor call: its path and the values of its arguments. */
 export interface ConstructorCall {
@@ -96,7 +96,7 @@ export const prisma7PostgresTypes = {
 } as const;
 
 const marked = inferredTypeConstructors({
-  authoringTypes: postgresScalarAndNativeTypeConstructors,
+  authoringTypes: postgresScalarTypes,
   codecLookup: postgresCodecDescriptorRegistry,
   dataTypeLookup: createDataTypeLookup(postgresDataTypes),
 });

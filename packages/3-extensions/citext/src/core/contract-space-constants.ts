@@ -9,3 +9,9 @@ export const CITEXT_EXTENSION_NAME = 'citext' as const;
 export const CITEXT_NATIVE_TYPE = 'citext' as const;
 
 export const CITEXT_INSTALL_MIGRATION_NAME = '20261029T1520_create_citext_extension' as const;
+
+export const CITEXT_SEARCH_PATH_MIGRATION_NAME =
+  '20261106T1036_find_citext_on_search_path' as const;
+
+export const CITEXT_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_citext_on_search_path' as const;

@@ -118,8 +118,8 @@
  *                              `@default(Low)` in the emitted contract), read it back, and
  *                              confirm the database supplied 0 (Low)
  * - integer-representations [limit]
- *                              The three Post engagement counters side by side: `BigIntNumber`
- *                              reads as a JS number, `BigInt` as a bigint, and `UnboundedInt`
+ *                              The three Post engagement counters side by side: `BigInt(as: number)`
+ *                              reads as a JS number, `BigInt` as a bigint, and `BigInt(storage: numeric)`
  *                              as a bigint that stays exact past 2^63
  * - aggregate-precision        count/sum/avg beside countBigInt/sumBigInt/avgDecimal. Includes
  *                              the case the split exists for: a bare sum() whose total passes
@@ -820,10 +820,14 @@ async function main() {
       const posts = await ormClientGetPostEngagement(limit, orm);
 
       console.log('Post engagement counters, one column per integer representation:\n');
-      console.log('  viewCount        BigIntNumber   pg/int8number@1     int8 read as a number');
-      console.log('  impressionCount  BigInt         pg/int8@1           int8 read as a bigint');
       console.log(
-        '  reachScore       UnboundedInt   pg/unboundedint@1   numeric read as a bigint\n',
+        '  viewCount        BigInt(as: number)         pg/int8number@1     int8 read as a number',
+      );
+      console.log(
+        '  impressionCount  BigInt                     pg/int8@1           int8 read as a bigint',
+      );
+      console.log(
+        '  reachScore       BigInt(storage: numeric)   pg/unboundedint@1   numeric read as a bigint\n',
       );
       for (const post of posts) {
         console.log(post.title);
@@ -841,7 +845,7 @@ async function main() {
       console.log(`  count()                       ${describe(report.posts.count)}`);
       console.log(`  countBigInt()                 ${describe(report.posts.countBigInt)}\n`);
 
-      console.log('viewCount — BigIntNumber, and the total stays inside the safe range:');
+      console.log('viewCount — BigInt(as: number), and the total stays inside the safe range:');
       console.log(`  sum('viewCount')              ${describe(report.views.sum)}`);
       console.log(`  sumBigInt('viewCount')        ${describe(report.views.sumBigInt)}`);
       console.log(`  avg('viewCount')              ${describe(report.views.avg)}`);
@@ -860,7 +864,7 @@ async function main() {
       }
       console.log(`  sumBigInt('impressionCount')  ${describe(report.impressions.sumBigInt)}\n`);
 
-      console.log('reachScore — UnboundedInt, so even the bare sum is exact:');
+      console.log('reachScore — BigInt(storage: numeric), so even the bare sum is exact:');
       console.log(`  sum('reachScore')             ${describe(report.reach.sum)}`);
       console.log(`  sumBigInt('reachScore')       ${describe(report.reach.sumBigInt)}`);
     } else if (cmd === 'aggregate-stddev') {

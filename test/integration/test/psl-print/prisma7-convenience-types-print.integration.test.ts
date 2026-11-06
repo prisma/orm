@@ -75,3 +75,45 @@ describe('a Prisma 7 schema printed after prisma7Schema reads it', () => {
     expect(printed.storage.storageHash).toBe(contract.storage.storageHash);
   });
 });
+
+const PRISMA7_SCALARS_SCHEMA = `datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id       Int     @id
+  visits   Int     @db.SmallInt
+  balance  BigInt
+  price    Decimal
+  priced   Decimal @db.Decimal(10, 2)
+  name     String
+  code     String  @db.VarChar(12)
+  initials String  @db.Char(3)
+  ratio    Float
+  small    Float   @db.Real
+  active   Boolean
+  avatar   Bytes
+}
+`;
+
+describe('a Prisma 7 schema of other scalars printed after prisma7Schema reads it', () => {
+  it('writes each field as the convenience type its column becomes, with only the arguments that differ from the defaults', async () => {
+    const contract = await readPrisma7(PRISMA7_SCALARS_SCHEMA);
+    expect(fieldLines(printContract(contract).text)).toMatchObject({
+      id: 'Int @id',
+      visits: 'Int(storage: int2)',
+      balance: 'BigInt',
+      price: 'Decimal(precision: 65, scale: 30)',
+      priced: 'Decimal(precision: 10, scale: 2)',
+      name: 'String',
+      code: 'String(storage: varchar, length: 12)',
+      initials: 'String(storage: char, length: 3)',
+      ratio: 'Float',
+      small: 'Float(storage: float4)',
+      active: 'Boolean',
+      avatar: 'Bytes',
+    });
+    const printed = await printAndReadBack(contract);
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(contract));
+  });
+});

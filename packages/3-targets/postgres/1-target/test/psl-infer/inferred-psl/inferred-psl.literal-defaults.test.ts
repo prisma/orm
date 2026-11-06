@@ -71,23 +71,23 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model NumberDefaults {
-          id                  Int             @id
-          negInt              Int             @default(-1)
-          negSmallInt         SmallInt        @default(-2)
-          negFloat            Float           @default(-1.5)
-          tinyFloat           Float           @default(0.0000001)
-          negReal             Real            @default(-2.5)
-          negDecimal          Numeric(65, 30) @default(-0.5)
-          longDecimal         Numeric(65, 30) @default(12345678901234567890.123456789)
-          tinyDecimal         Numeric(65, 30) @default(0.000000000000000001)
-          scaleDecimal        Numeric(65, 30) @default(1.5)
-          scaledDecimal       Numeric(10, 2)  @default(-1.25)
-          trailingZeroDecimal Numeric(10, 2)  @default(1.5)
-          wholeDecimal        Numeric(65, 30) @default(10)
-          safeBigInt          BigInt          @default(5)
-          negSafeBigInt       BigInt          @default(-5)
-          negBigInt           BigInt          @default(-9007199254740993)
-          hugeBigInt          BigInt          @default(9007199254740993)
+          id                  Int                               @id
+          negInt              Int                               @default(-1)
+          negSmallInt         Int(storage: int2)                @default(-2)
+          negFloat            Float                             @default(-1.5)
+          tinyFloat           Float                             @default(0.0000001)
+          negReal             Float(storage: float4)            @default(-2.5)
+          negDecimal          Decimal(precision: 65, scale: 30) @default(-0.5)
+          longDecimal         Decimal(precision: 65, scale: 30) @default(12345678901234567890.123456789)
+          tinyDecimal         Decimal(precision: 65, scale: 30) @default(0.000000000000000001)
+          scaleDecimal        Decimal(precision: 65, scale: 30) @default(1.5)
+          scaledDecimal       Decimal(precision: 10, scale: 2)  @default(-1.25)
+          trailingZeroDecimal Decimal(precision: 10, scale: 2)  @default(1.5)
+          wholeDecimal        Decimal(precision: 65, scale: 30) @default(10)
+          safeBigInt          BigInt                            @default(5)
+          negSafeBigInt       BigInt                            @default(-5)
+          negBigInt           BigInt                            @default(-9007199254740993)
+          hugeBigInt          BigInt                            @default(9007199254740993)
 
           @@map("number_defaults")
         }
@@ -110,11 +110,11 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawDefaults {
-          id       Int                          @id
-          stamp    DateTime(storage: timestamp) @default(timestamp\`2024-01-01T00:00:00\`)
-          day      Date                         @default(date\`2024-01-01\`)
-          jsonNull Jsonb?                       @default(json\`null\`)
-          textNull VarChar(32)?                 @default(sql\`NULL::character varying\`)
+          id       Int                                   @id
+          stamp    DateTime(storage: timestamp)          @default(timestamp\`2024-01-01T00:00:00\`)
+          day      Date                                  @default(date\`2024-01-01\`)
+          jsonNull Jsonb?                                @default(json\`null\`)
+          textNull String(storage: varchar, length: 32)? @default(sql\`NULL::character varying\`)
 
           @@map("raw_defaults")
         }
@@ -134,10 +134,10 @@ describe('printPsl literal defaults', () => {
       expect(output).toContain(
         [
           'model CharDefaults {',
-          '  id   Int         @id',
-          '  code Char(10)    @default("abc")',
-          '  one  Char        @default("a")',
-          '  name VarChar(10) @default("abc")',
+          '  id   Int                                  @id',
+          '  code String(storage: char, length: 10)    @default("abc")',
+          '  one  String(storage: char)                @default("a")',
+          '  name String(storage: varchar, length: 10) @default("abc")',
         ].join('\n'),
       );
     });
@@ -158,12 +158,12 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model SpecialValueDefaults {
-          id           Int                   @id
-          floatNaN     Float                 @default(NaN)
-          floatNegInf  Float                 @default(-Infinity)
-          realNaN      Real                  @default(NaN)
-          decimalNaN   Numeric               @default(NaN)
-          timeWithZone Time(storage: timetz) @default(timetz\`12:34:56Z\`)
+          id           Int                    @id
+          floatNaN     Float                  @default(NaN)
+          floatNegInf  Float                  @default(-Infinity)
+          realNaN      Float(storage: float4) @default(NaN)
+          decimalNaN   Decimal                @default(NaN)
+          timeWithZone Time(storage: timetz)  @default(timetz\`12:34:56Z\`)
 
           @@map("special_value_defaults")
         }
@@ -221,17 +221,17 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model ListDefaults {
-          id             Int                 @id
-          negInts        Int?[]?             @default([-1, 2])
-          negSmallInts   SmallInt?[]?        @default([-1, 2])
-          bigInts        BigInt?[]?          @default([1, 2])
-          negBigInts     BigInt?[]?          @default([-1, 2])
-          emptyBigInts   BigInt?[]?          @default([])
-          hugeBigInts    BigInt?[]?          @default([9007199254740993, -9007199254740993])
-          negFloats      Float?[]?           @default([-1.5, 2])
-          longDecimals   Numeric(65, 30)?[]? @default([12345678901234567890.123456789, 0.000000000000000001])
-          scaledDecimals Numeric(10, 2)?[]?  @default([-1.25, 2])
-          emptyVarchars  VarChar(32)?[]?     @default([])
+          id             Int                                      @id
+          negInts        Int?[]?                                  @default([-1, 2])
+          negSmallInts   Int(storage: int2)?[]?                   @default([-1, 2])
+          bigInts        BigInt?[]?                               @default([1, 2])
+          negBigInts     BigInt?[]?                               @default([-1, 2])
+          emptyBigInts   BigInt?[]?                               @default([])
+          hugeBigInts    BigInt?[]?                               @default([9007199254740993, -9007199254740993])
+          negFloats      Float?[]?                                @default([-1.5, 2])
+          longDecimals   Decimal(precision: 65, scale: 30)?[]?    @default([12345678901234567890.123456789, 0.000000000000000001])
+          scaledDecimals Decimal(precision: 10, scale: 2)?[]?     @default([-1.25, 2])
+          emptyVarchars  String(storage: varchar, length: 32)?[]? @default([])
 
           @@map("list_defaults")
         }

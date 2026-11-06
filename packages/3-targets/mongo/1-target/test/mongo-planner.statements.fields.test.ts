@@ -137,9 +137,9 @@ describe('MongoMigrationPlanner, field statements', () => {
       ),
     ).toEqual({
       labels: [
-        'Drop index on profiles (name:1)',
+        'Drop index name_1 on profiles (name:1)',
         'Rename field name to fullName in collection profiles',
-        'Create index on profiles (fullName:1)',
+        'Create index fullName_1 on profiles (fullName:1)',
         'Update validator on profiles (added: fullName; removed: name)',
       ],
       classes: ['widening', 'widening', 'additive', 'widening'],
@@ -169,9 +169,9 @@ describe('MongoMigrationPlanner, field statements', () => {
     ).toMatchObject({
       labels: [
         'Rename collection profiles to users',
-        'Drop index on users (name:1)',
+        'Drop index name_1 on users (name:1)',
         'Rename field name to fullName in collection users',
-        'Create index on users (fullName:1)',
+        'Create index fullName_1 on users (fullName:1)',
         'Update validator on users (added: fullName; removed: name)',
       ],
       applied: [[0], [2]],

@@ -75,29 +75,29 @@ function makeContract(collections: Record<string, MongoCollectionData>): MongoCo
 }
 
 function emptyIR(): MongoSchemaIR {
-  return new MongoSchemaIR([]);
+  return new MongoSchemaIR([], { fromDatabase: false });
 }
 
 describe('renderOps', () => {
   describe('individual call rendering', () => {
     it('renders createIndex call', () => {
       const keys = [{ field: 'email', direction: 1 as const }];
-      const call = new CreateIndexCall('users', keys, { unique: true });
+      const call = new CreateIndexCall('users', keys, { name: 'email_1', unique: true });
 
       const ops = renderOps([call]);
 
       expect(ops).toHaveLength(1);
-      expect(ops[0]).toEqual(createIndex('users', keys, { unique: true }));
+      expect(ops[0]).toEqual(createIndex('users', keys, { name: 'email_1', unique: true }));
     });
 
     it('renders dropIndex call', () => {
       const keys = [{ field: 'email', direction: 1 as const }];
-      const call = new DropIndexCall('users', keys);
+      const call = new DropIndexCall('users', keys, { name: 'User_email_key', unique: true });
 
       const ops = renderOps([call]);
 
       expect(ops).toHaveLength(1);
-      expect(ops[0]).toEqual(dropIndex('users', keys));
+      expect(ops[0]).toEqual(dropIndex('users', keys, { name: 'User_email_key', unique: true }));
     });
 
     it('renders createCollection call', () => {
@@ -167,7 +167,7 @@ describe('renderOps', () => {
 
     it('produces identical JSON for index creation scenario', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const schema = emptyIR();
 
@@ -200,12 +200,17 @@ describe('renderOps', () => {
 
     it('produces identical JSON for index drop scenario', () => {
       const contract = makeContract({ users: {} });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [new MongoSchemaIndex({ keys: [{ field: 'email', direction: 1 }] })],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -237,7 +242,7 @@ describe('renderOps', () => {
     it('produces identical JSON for collection create with validator', () => {
       const contract = makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
           validator: {
             jsonSchema: { required: ['email'] },
             validationLevel: 'strict',
@@ -276,12 +281,17 @@ describe('renderOps', () => {
 
     it('produces identical JSON for collection drop scenario', () => {
       const contract = makeContract({});
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [new MongoSchemaIndex({ keys: [{ field: 'email', direction: 1 }] })],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -320,17 +330,20 @@ describe('renderOps', () => {
           },
         },
       });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [],
-          validator: new MongoSchemaValidator({
-            jsonSchema: { required: ['email'] },
-            validationLevel: 'moderate',
-            validationAction: 'warn',
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [],
+            validator: new MongoSchemaValidator({
+              jsonSchema: { required: ['email'] },
+              validationLevel: 'moderate',
+              validationAction: 'warn',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,
@@ -363,13 +376,13 @@ describe('renderOps', () => {
       const contract = makeContract({
         orders: {
           indexes: [
-            { keys: [{ field: 'customerId', direction: 1 }] },
-            { keys: [{ field: 'createdAt', direction: -1 }] },
+            { name: 'customerId_1', keys: [{ field: 'customerId', direction: 1 }] },
+            { name: 'createdAt_-1', keys: [{ field: 'createdAt', direction: -1 }] },
           ],
           options: { changeStreamPreAndPostImages: { enabled: true } },
         },
         products: {
-          indexes: [{ keys: [{ field: 'sku', direction: 1 }], unique: true }],
+          indexes: [{ name: 'sku_1', keys: [{ field: 'sku', direction: 1 }], unique: true }],
           validator: {
             jsonSchema: { required: ['name', 'price'] },
             validationLevel: 'strict',
@@ -377,19 +390,25 @@ describe('renderOps', () => {
           },
         },
       });
-      const schema = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'orders',
-          indexes: [
-            new MongoSchemaIndex({ keys: [{ field: 'customerId', direction: 1 }] }),
-            new MongoSchemaIndex({ keys: [{ field: 'status', direction: 1 }] }),
-          ],
-        }),
-        new MongoSchemaCollection({
-          name: 'legacy',
-          indexes: [],
-        }),
-      ]);
+      const schema = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'orders',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'customerId_1',
+                keys: [{ field: 'customerId', direction: 1 }],
+              }),
+              new MongoSchemaIndex({ name: 'status_1', keys: [{ field: 'status', direction: 1 }] }),
+            ],
+          }),
+          new MongoSchemaCollection({
+            name: 'legacy',
+            indexes: [],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const planResult = planner.plan({
         contract,

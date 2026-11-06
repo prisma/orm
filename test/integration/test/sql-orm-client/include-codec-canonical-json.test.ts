@@ -1,9 +1,9 @@
 import {
   byteaColumn,
   int4Column,
-  int8Column,
+  int8BigIntColumn,
   intervalPartsColumn,
-  numericColumn,
+  numericStringColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
@@ -39,9 +39,9 @@ const VECTOR = [0.5, -0.25, 1.5];
 const Reading = model('Reading', {
   fields: {
     id: field.column(int4Column).id(),
-    amount: field.column(numericColumn(38, 20)).optional(),
-    padded: field.column(numericColumn(10, 2)).optional(),
-    counter: field.column(int8Column).optional(),
+    amount: field.column(numericStringColumn(38, 20)).optional(),
+    padded: field.column(numericStringColumn(10, 2)).optional(),
+    counter: field.column(int8BigIntColumn).optional(),
     payload: field.column(byteaColumn).optional(),
     elapsed: field.column(intervalPartsColumn()).optional(),
     embedding: field.column(vector(3)).optional(),
@@ -54,7 +54,7 @@ const StationBase = model('Station', {
     readingId: field.column(int4Column).column('reading_id'),
     // A per-station tally wide enough to hold values a double cannot, so an
     // aggregate over it has something to lose.
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }),
