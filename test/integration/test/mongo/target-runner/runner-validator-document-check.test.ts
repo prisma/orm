@@ -133,8 +133,8 @@ async function run(operations: readonly AnyMongoMigrationOperation[]) {
 }
 
 async function validatorOfUsers(): Promise<unknown> {
-  const [info] = await db.listCollections({ name: 'users' }).toArray();
-  return info?.['options']?.['validator'];
+  const [info] = await db.listCollections({ name: 'users' }, { nameOnly: false }).toArray();
+  return info !== undefined && 'options' in info ? info.options?.['validator'] : undefined;
 }
 
 describe('MongoMigrationRunner, a validator change that checks the documents first', () => {
