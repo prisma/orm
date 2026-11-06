@@ -4,4 +4,4 @@ export type {
   MysqlDriverCreateOptions,
   MysqlRuntimeDriver,
 } from '../core/runtime/mysql-driver';
-export { default } from '../core/runtime/runtime-driver';
+export { createMysqlRuntimeDriverDescriptor, default } from '../core/runtime/runtime-driver';

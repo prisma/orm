@@ -29,7 +29,11 @@ import { Canceller, type CancelOutcome } from './canceller';
 /** Where the runtime driver connects: a `mysql://` URL. */
 export type MysqlBinding = { readonly kind: 'url'; readonly url: string };
 
-export type MysqlRuntimeDriver = RuntimeDriverInstance<'sql', 'mysql'> & SqlDriver<MysqlBinding>;
+export type MysqlRuntimeDriver<TargetId extends string = 'mysql'> = RuntimeDriverInstance<
+  'sql',
+  TargetId
+> &
+  SqlDriver<MysqlBinding>;
 
 export interface MysqlDriverCreateOptions {
   /** Stream each query's rows as they arrive, instead of reading the whole result before the first row, which is the default, as on Postgres without a cursor. */
@@ -537,9 +541,12 @@ type DriverState =
 /**
  * The MySQL runtime driver: a `mariadb` pool. Every statement takes one round trip over the text protocol, the package writing its values into it. A query reads its whole result before the first row unless `stream` is set. The pool runs the session setup once on each physical connection, and the driver then sets the target's session settings on it; a connection goes back to the pool after each statement as it is; a broken connection is destroyed. `close()` waits for every connection and stream it has handed out before it ends the pool.
  */
-export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
+export class MysqlDriver<TargetId extends string = 'mysql'>
+  extends MysqlQueryable
+  implements MysqlRuntimeDriver<TargetId>
+{
   readonly familyId = 'sql' as const;
-  readonly targetId = 'mysql' as const;
+  readonly targetId: TargetId;
   protected readonly holdsClient = false;
 
   #state: DriverState = { kind: 'unbound' };
@@ -550,8 +557,15 @@ export class MysqlDriver extends MysqlQueryable implements MysqlRuntimeDriver {
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
 
-  constructor(options: MysqlDriverCreateOptions = {}) {
+  constructor(
+    options: MysqlDriverCreateOptions = {},
+    targetId: TargetId = blindCast<
+      TargetId,
+      'without a target id the driver is MySQL, the default of TargetId'
+    >('mysql'),
+  ) {
     super(options.stream ?? false);
+    this.targetId = targetId;
     this.#options = options;
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {});
   }
