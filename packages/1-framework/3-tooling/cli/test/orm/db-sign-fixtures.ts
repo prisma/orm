@@ -169,6 +169,7 @@ export function conflictSpace(space: string, storageHash: string): DbSignSpaceOu
   return {
     space,
     status: 'conflict',
+    reason: 'storageHash',
     contract: { storageHash, profileHash: PROFILE_HASH },
     expected: { storageHash: HASH_PREVIOUS, profileHash: PROFILE_HASH },
     found: { storageHash: HASH_MOVED, profileHash: PROFILE_HASH },

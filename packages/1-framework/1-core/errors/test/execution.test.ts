@@ -4,6 +4,7 @@ import { CliStructuredError } from '../src/control';
 import {
   errorHashMismatch,
   errorMarkerMissing,
+  errorMarkerPoliciesCorrupt,
   errorMarkerReadFailed,
   errorMarkerRequired,
   errorMarkerRowCorrupt,
@@ -111,6 +112,33 @@ describe('Runtime Errors', () => {
   it('errorRuntime without cause leaves no own cause property', () => {
     const error = errorRuntime('DRIVER.CONNECTION_FAILED', 'Something failed');
     expect(Object.hasOwn(error, 'cause')).toBe(false);
+  });
+
+  it('errorMarkerPoliciesCorrupt keeps the marker, whatever the database stores it in', () => {
+    const error = errorMarkerPoliciesCorrupt({
+      why: 'meta.policies is not a valid policy declaration',
+      space: 'app',
+      markerLocation: '_prisma_migrations',
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      fix: error.fix,
+      nextActions: error.nextActions,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CONTRACT.MARKER_ROW_CORRUPT',
+      message: "The marker's policies cannot be read",
+      fix: 'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker. The marker for space "app" in _prisma_migrations also records the database\'s contract and invariants.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
+        },
+      ],
+      meta: { space: 'app' },
+    });
   });
 
   it('errorMarkerRowCorrupt creates CONTRACT.MARKER_ROW_CORRUPT envelope', () => {

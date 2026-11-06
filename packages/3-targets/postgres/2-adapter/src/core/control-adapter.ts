@@ -27,7 +27,14 @@ import {
   type DataType,
   type DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  DATABASE_POLICIES_META_KEY,
+  type MarkerDestination,
+  type MarkerInsert,
+  type SchemaNodeRef,
+  storedDatabasePolicies,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -128,6 +135,7 @@ import {
   ledgerReadShape,
   marker,
   mergeInvariants,
+  metaRecordingPolicies,
   NOW,
 } from './marker-ledger';
 import { reportedSqlType } from './reported-sql-type';
@@ -453,11 +461,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async insertMarker(
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerInsert,
   ): Promise<void> {
     await execute(
       (query) => this.lower(query, { contract: undefined }),
@@ -481,12 +485,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async initMarker(
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
   ): Promise<void> {
+    const policies = destination.databasePolicies;
     await execute(
       (query) => this.lower(query, { contract: undefined }),
       driver,
@@ -499,7 +500,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: null,
           updated_at: NOW,
           app_tag: null,
-          meta: {},
+          meta:
+            policies === undefined
+              ? {}
+              : { [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(policies) },
           invariants: destination.invariants ?? [],
         })
         .onConflict(marker.space)
@@ -510,7 +514,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           canonical_version: excluded.canonical_version,
           updated_at: NOW,
           app_tag: excluded.app_tag,
-          meta: excluded.meta,
+          ...ifDefined(
+            'meta',
+            policies === undefined ? undefined : metaRecordingPolicies(policies),
+          ),
           invariants: excluded.invariants,
         }))
         .build(),
@@ -525,11 +532,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
   ): Promise<boolean> {
     const currentInvariants =
       destination.invariants === undefined
@@ -539,6 +542,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       destination.invariants === undefined
         ? undefined
         : mergeInvariants(currentInvariants, destination.invariants);
+    const policies = destination.databasePolicies;
 
     const query = marker
       .update()
@@ -546,7 +550,8 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         core_hash: destination.storageHash,
         profile_hash: destination.profileHash,
         updated_at: NOW,
-        ...(mergedInvariants !== undefined ? { invariants: mergedInvariants } : {}),
+        ...ifDefined('invariants', mergedInvariants),
+        ...ifDefined('meta', policies === undefined ? undefined : metaRecordingPolicies(policies)),
       })
       .where(marker.space.eq(space).and(marker.core_hash.eq(expectedFrom)))
       .returning(marker.space)

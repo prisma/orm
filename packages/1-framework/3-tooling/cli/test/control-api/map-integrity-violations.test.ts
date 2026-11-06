@@ -42,6 +42,30 @@ describe('mapIntegrityViolations', () => {
     ]);
   });
 
+  it('reports an unreadable ref as an invalid ref file, naming the file and the bad field', () => {
+    const error = mapIntegrityViolations(
+      [
+        {
+          kind: 'refUnreadable',
+          spaceId: 'app',
+          refName: 'production',
+          path: 'migrations/app/refs/production.json',
+          detail: 'policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
+        },
+      ],
+      'migrations',
+    );
+    expect({ code: error?.code, why: error?.why, meta: error?.meta }).toEqual({
+      code: 'MIGRATION.INVALID_REF_FILE',
+      why: 'Ref file at "migrations/app/refs/production.json" is invalid: policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
+      meta: {
+        path: 'migrations/app/refs/production.json',
+        reason: 'policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
+      },
+    });
+    expect(error?.fix).toContain('"policies"');
+  });
+
   it('interpolates the configured migrations dir into layout violation text', () => {
     const error = mapIntegrityViolations(
       [{ kind: 'orphanSpaceDir', spaceId: 'snapshots' }],

@@ -1,4 +1,5 @@
 import type {
+  DatabasePolicyDifference,
   MigrationPlannerConflict,
   MigrationSubjectJson,
   OperationPreview,
@@ -97,6 +98,8 @@ export interface MigrationCommandResult {
     readonly storageHash: string;
     readonly profileHash?: string;
   };
+  /** The settings the run recorded as the database's policies, with the values they replaced. */
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
   /**
    * Per-space execution breakdown in canonical schedule order
    * (extensions alphabetically, then app). Surfaces per-space markers

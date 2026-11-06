@@ -123,7 +123,7 @@ export async function projectWithTwoMigrations(): Promise<
 }
 
 export function markersAt(storageHash: string) {
-  return new Map([['app', { storageHash, invariants: [] as readonly string[] }]]);
+  return new Map([['app', { storageHash, meta: {}, invariants: [] as readonly string[] }]]);
 }
 
 export const EXTERNAL_SPACE = 'external';
@@ -163,7 +163,7 @@ export function withAllExternalExtension(config: Record<string, unknown>): Recor
 
 export function markersWithExternalAtHead(appHash: string) {
   return new Map([
-    ['app', { storageHash: appHash, invariants: [] as readonly string[] }],
+    ['app', { storageHash: appHash, meta: {}, invariants: [] as readonly string[] }],
     [EXTERNAL_SPACE, { storageHash: HASH_EXTERNAL_HEAD, invariants: [] as readonly string[] }],
   ]);
 }

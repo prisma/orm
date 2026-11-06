@@ -53,7 +53,7 @@ import type {
 } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
-import { dbFlag } from '../flags';
+import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { baseDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
@@ -74,6 +74,7 @@ function updatePresentations(inputs: {
   readonly to: string | undefined;
   readonly dryRun: boolean;
   readonly advanceRef: string | undefined;
+  readonly permitPolicyChange: boolean;
   readonly statements: readonly StatementText[];
 }): Presentations {
   const { document, database, dryRun } = inputs;
@@ -104,6 +105,7 @@ function updatePresentations(inputs: {
           ...(inputs.advanceRef === undefined
             ? []
             : ['--advance-ref', shellQuoted(inputs.advanceRef)]),
+          ...(inputs.permitPolicyChange ? ['--permit-policy-change'] : []),
           ...inputs.statements.map(statementFlag),
         ]),
       ),
@@ -224,6 +226,7 @@ function updateDocument(inputs: {
         }),
     ...ifDefined('perSpace', value.perSpace),
     ...ifDefined('changedStorageEntities', value.changedStorageEntities),
+    ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'
@@ -283,6 +286,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           brief: 'Advance the named ref to the post-command contract hash',
           placeholder: 'name',
         }),
+        permitPolicyChange: permitPolicyChangeFlag,
       },
     },
     statements: dbUpdateStatementVerbs,
@@ -357,6 +361,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
             to: args.flags.to,
             advanceRef: args.flags.advanceRef,
+            permitPolicyChange: args.flags.permitPolicyChange,
             statements: [...planned, ...previewConsents, ...unansweredConsents(ctx.statements)],
             canRunOffline: false,
           }),
@@ -404,6 +409,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...(args.flags.advanceRef === undefined
             ? []
             : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+          ...(args.flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
           ...statementArgs,
         ];
         const result = await client.dbUpdate({
@@ -411,6 +417,8 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           mode,
           migrationsDir,
           statements: [...planned, ...previewConsents],
+          ...ifDefined('ref', destination?.ref),
+          ...(args.flags.permitPolicyChange === true ? { permitPolicyChange: true } : {}),
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs, statementArgs },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
@@ -500,6 +508,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             to: args.flags.to,
             dryRun: args.flags.dryRun,
             advanceRef: args.flags.advanceRef,
+            permitPolicyChange: args.flags.permitPolicyChange === true,
             statements: [...planned, ...previewConsents],
           }),
         ),

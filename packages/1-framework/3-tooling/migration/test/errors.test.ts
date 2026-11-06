@@ -314,3 +314,11 @@ describe('errorContractDeserializationFailed', () => {
     ).toEqual({ filePath: '/m/contract.json', message: 'bad shape' });
   });
 });
+
+describe('errorInvalidRefFile', () => {
+  it('describes the ref file, its optional policies and their allowed values', () => {
+    expect(errorInvalidRefFile('/m/app/refs/prod.json', 'bad').fix).toBe(
+      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."], "policies": { "change": ["migrate" | "reconcile", ...], "dataProtection": { "dataLoss": "data-loss-forbidden" | "data-loss-with-consent" | "data-loss-permitted", "accessWidening": "access-widening-forbidden" | "access-widening-with-consent" | "access-widening-permitted" } } }. "policies" and each key inside it are optional.',
+    );
+  });
+});

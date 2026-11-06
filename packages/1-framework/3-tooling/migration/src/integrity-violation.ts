@@ -48,6 +48,8 @@ export type IntegrityViolation =
       readonly kind: 'refUnreadable';
       readonly spaceId: string;
       readonly refName: string;
+      /** The ref file that could not be read. */
+      readonly path: string;
       readonly detail: string;
     }
   // config/contract-dependent — produced only when the matching opt is set

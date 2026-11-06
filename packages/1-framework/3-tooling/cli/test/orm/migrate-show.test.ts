@@ -165,7 +165,7 @@ describe('migrate --show', () => {
     it('resolves --to @db to the live marker', async () => {
       const cwd = await buildProject();
       mocks.readAllMarkers.mockResolvedValue(
-        new Map([['app', { storageHash: C1, invariants: [] }]]),
+        new Map([['app', { storageHash: C1, invariants: [], meta: {} }]]),
       );
 
       const run = await harness(ormConfig(cwd)).run(
@@ -184,7 +184,7 @@ describe('migrate --show', () => {
     it('shows nothing to run for --to @db when the from-state is the live marker too', async () => {
       const cwd = await buildProject();
       mocks.readAllMarkers.mockResolvedValue(
-        new Map([['app', { storageHash: C1, invariants: [] }]]),
+        new Map([['app', { storageHash: C1, invariants: [], meta: {} }]]),
       );
 
       const run = await harness(ormConfig(cwd)).run(
@@ -199,7 +199,7 @@ describe('migrate --show', () => {
     it('labels the target @db for --from @empty --to @db', async () => {
       const cwd = await buildProject();
       mocks.readAllMarkers.mockResolvedValue(
-        new Map([['app', { storageHash: C1, invariants: [] }]]),
+        new Map([['app', { storageHash: C1, invariants: [], meta: {} }]]),
       );
 
       const run = await harness(ormConfig(cwd)).run(
@@ -222,7 +222,7 @@ describe('migrate --show', () => {
     ])('refuses a marker outside the migration graph: $argv', async ({ argv }) => {
       const cwd = await buildProject();
       mocks.readAllMarkers.mockResolvedValue(
-        new Map([['app', { storageHash: UNKNOWN, invariants: [] }]]),
+        new Map([['app', { storageHash: UNKNOWN, invariants: [], meta: {} }]]),
       );
 
       const run = await harness(ormConfig(cwd)).run(
@@ -240,7 +240,7 @@ describe('migrate --show', () => {
     it('refuses a marker at the emitted contract when the app space has no migrations', async () => {
       const cwd = await buildProjectWithoutMigrations();
       mocks.readAllMarkers.mockResolvedValue(
-        new Map([['app', { storageHash: C2, invariants: [] }]]),
+        new Map([['app', { storageHash: C2, invariants: [], meta: {} }]]),
       );
 
       const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show', '--json'], {
@@ -269,7 +269,7 @@ describe('migrate --show', () => {
       async ({ argv, named }) => {
         const cwd = await buildProject();
         mocks.readAllMarkers.mockResolvedValue(
-          new Map([['app', { storageHash: C1, invariants: [] }]]),
+          new Map([['app', { storageHash: C1, invariants: [], meta: {} }]]),
         );
 
         const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show', ...argv], {

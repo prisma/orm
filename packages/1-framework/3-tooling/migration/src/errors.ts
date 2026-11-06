@@ -1,4 +1,9 @@
 import { CliStructuredError } from '@internal/errors/control';
+import {
+  ACCESS_WIDENING_LEVELS,
+  CHANGE_STRATEGIES,
+  DATA_LOSS_LEVELS,
+} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -240,10 +245,16 @@ export function errorInvalidRefs(refsPath: string, reason: string): MigrationToo
   });
 }
 
+function alternatives(values: readonly string[]): string {
+  return values.map((value) => JSON.stringify(value)).join(' | ');
+}
+
+const REF_FILE_SHAPE = `Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."], "policies": { "change": [${alternatives(CHANGE_STRATEGIES)}, ...], "dataProtection": { "dataLoss": ${alternatives(DATA_LOSS_LEVELS)}, "accessWidening": ${alternatives(ACCESS_WIDENING_LEVELS)} } } }. "policies" and each key inside it are optional.`;
+
 export function errorInvalidRefFile(filePath: string, reason: string): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REF_FILE', 'Invalid ref file', {
     why: `Ref file at "${filePath}" is invalid: ${reason}`,
-    fix: 'Ensure the ref file contains valid JSON with { "hash": "<64 hex chars>", "invariants": ["..."] }.',
+    fix: REF_FILE_SHAPE,
     meta: { path: filePath, reason },
   });
 }

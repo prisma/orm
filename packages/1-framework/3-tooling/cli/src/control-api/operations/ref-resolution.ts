@@ -64,6 +64,8 @@ export function retryCommandFor(args: {
   readonly from?: string | undefined;
   readonly to: string | undefined;
   readonly advanceRef?: string | undefined;
+  /** The command was given `--permit-policy-change`, which the retry repeats. */
+  readonly permitPolicyChange?: boolean | undefined;
   /** The statements as given: each verb's values in order, `rename` first. */
   readonly statements?: readonly StatementText[] | undefined;
   /** The command runs without a database when `--from` names a contract. */
@@ -78,6 +80,7 @@ export function retryCommandFor(args: {
     ...(suggestsOffline ? ['--from <contract>'] : []),
     ...(args.to === undefined ? [] : [`--to ${args.to}`]),
     ...(args.advanceRef === undefined ? [] : [`--advance-ref ${args.advanceRef}`]),
+    ...(args.permitPolicyChange === true ? ['--permit-policy-change'] : []),
     ...(args.statements ?? []).map(statementFlag),
     ...(needsConnection ? ['--db $DATABASE_URL'] : []),
   ].join(' ');

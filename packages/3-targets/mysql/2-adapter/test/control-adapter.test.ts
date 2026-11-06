@@ -197,8 +197,8 @@ describe('MysqlControlAdapter', () => {
     expect(await adapter.updateMarker(driver, 'app', 'sha256:other', destination)).toBe(false);
     expect(await adapter.updateMarker(driver, 'app', 'sha256:old', destination)).toBe(true);
     expect(driver.statements).toEqual([
-      'SELECT core_hash, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
-      'SELECT core_hash, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
+      'SELECT core_hash, meta, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
+      'SELECT core_hash, meta, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
       'UPDATE `_prisma_marker` SET core_hash = ?, profile_hash = ?, updated_at = CURRENT_TIMESTAMP(3), invariants = ? WHERE space = ? AND core_hash = ?',
     ]);
   });

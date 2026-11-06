@@ -1,10 +1,20 @@
+import {
+  DATABASE_POLICIES_META_KEY,
+  type DatabasePolicies,
+  storedDatabasePolicies,
+} from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
+  ColumnRef,
   type LoweredStatement,
+  ParamRef,
   RawExpr,
 } from '@internal/sql-relational-core/ast';
-import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
+import {
+  PG_JSONB_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+} from '@internal/target-postgres/codec-ids';
 import {
   int4,
   int8,
@@ -90,6 +100,23 @@ export const NOW = new RawExpr({
   parts: ['now()'],
   returns: { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID, nullable: false },
 });
+
+/**
+ * The marker's `meta` with `policies` set to `policies`, merged in the statement so the other
+ * keys are kept as the row holds them when it is written.
+ */
+export function metaRecordingPolicies(policies: DatabasePolicies): RawExpr {
+  return new RawExpr({
+    parts: [
+      'jsonb_set(coalesce(',
+      ColumnRef.of('marker', 'meta'),
+      `, '{}'::jsonb), '{${DATABASE_POLICIES_META_KEY}}', `,
+      ParamRef.of(storedDatabasePolicies(policies), { codec: { codecId: PG_JSONB_CODEC_ID } }),
+      ')',
+    ],
+    returns: { codecId: PG_JSONB_CODEC_ID, nullable: false },
+  });
+}
 
 type Lower = (query: AnyQueryAst) => LoweredStatement;
 

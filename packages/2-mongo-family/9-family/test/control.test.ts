@@ -1,4 +1,11 @@
-import { createControlStack, hasSchemaView } from '@internal/framework-components/control';
+import type { ContractMarkerRecord } from '@internal/contract/types';
+import {
+  compareMarkerDatabasePolicies,
+  createControlStack,
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+  hasSchemaView,
+} from '@internal/framework-components/control';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -153,6 +160,7 @@ describe('createMongoFamilyInstance', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: 'app',
         contract: {
           storageHash: contract.storage.storageHash,
@@ -241,6 +249,7 @@ describe('createMongoFamilyInstance', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: 'app',
         contract: {
           storageHash: contract.storage.storageHash,
@@ -251,6 +260,185 @@ describe('createMongoFamilyInstance', () => {
       },
     ]);
     expect(writes).toEqual([]);
+  });
+
+  describe('signSpaces() given the policies the caller checked', () => {
+    const recorded = { change: ['migrate'] };
+    const migrateOnly = { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] as const };
+    const expected = { storageHash: 'old', profileHash: 'old-profile' };
+
+    function policiesStore(options: { readonly policiesAfterCheck?: unknown } = {}) {
+      const writes: unknown[][] = [];
+      let policies: unknown = recorded;
+      let changed = false;
+      const adapter = {
+        readMarker: async () => ({ ...expected, meta: { policies } }),
+        initMarker: async (...args: unknown[]) => {
+          writes.push(['init', ...args.slice(1)]);
+        },
+        updateMarker: async (...args: unknown[]) => {
+          writes.push(['update', ...args.slice(1)]);
+          if (options.policiesAfterCheck !== undefined && !changed) {
+            policies = options.policiesAfterCheck;
+            changed = true;
+          }
+          const held = args[4] as DatabasePolicies | undefined;
+          return (
+            held === undefined ||
+            compareMarkerDatabasePolicies(
+              { ...expected, meta: { policies } } as unknown as ContractMarkerRecord,
+              held,
+            ).kind === 'held'
+          );
+        },
+      } as unknown as MongoControlAdapter<'mongo'>;
+      const instance = createMongoFamilyInstance(
+        createControlStack({
+          family: mongoFamilyDescriptor,
+          target: stubMongoTargetDescriptor,
+          adapter: stubAdapterDescriptor(adapter),
+        }),
+      );
+      const contract = instance.deserializeContract(mongoContractJson({}));
+      const driver = { targetId: 'mongo' } as Parameters<typeof instance.signSpaces>[0]['driver'];
+      const contractHashes = {
+        storageHash: contract.storage.storageHash,
+        profileHash: contract.profileHash,
+      };
+      return { instance, contract, driver, contractHashes, writes };
+    }
+
+    it('signs no space when the policies moved before the first write, and reports them on the application space', async () => {
+      const { instance, contract, driver, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [
+          { space: 'audit', contract, expected: null },
+          { space: 'app', contract, expected },
+        ],
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          {
+            status: 'conflict',
+            reason: 'databasePolicies',
+            space: 'app',
+            checked: DEFAULT_DATABASE_POLICIES,
+            comparison: { kind: 'moved', found: migrateOnly },
+          },
+        ],
+        writes: [],
+      });
+    });
+
+    it('swaps the application marker only while it stores the policies read', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore();
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ status: signature?.status, writes }).toEqual({
+        status: 'updated',
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
+      });
+    });
+
+    it('reports a swap that fails while the hashes hold as moved policies', async () => {
+      const { instance, contract, driver } = policiesStore({
+        policiesAfterCheck: { change: ['reconcile'] },
+      });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect(signature).toMatchObject({
+        status: 'conflict',
+        reason: 'databasePolicies',
+        comparison: { kind: 'moved', found: { change: ['reconcile'] } },
+      });
+    });
+
+    it('signs an extension space without the application space, checking the policies all the same', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'audit', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          { status: 'updated', space: 'audit', contract: contractHashes, previous: expected },
+        ],
+        writes: [['update', 'audit', 'old', contractHashes, undefined]],
+      });
+    });
+
+    it('signs no extension space without the application space when the policies moved', async () => {
+      const { instance, contract, driver, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'audit', contract, expected }],
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          {
+            status: 'conflict',
+            reason: 'databasePolicies',
+            space: 'app',
+            checked: DEFAULT_DATABASE_POLICIES,
+            comparison: { kind: 'moved', found: migrateOnly },
+          },
+        ],
+        writes: [],
+      });
+    });
+
+    it('reports policies that become unreadable while the hashes hold as unreadable, not as a moved hash', async () => {
+      const { instance, contract, driver } = policiesStore({ policiesAfterCheck: 'strict' });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect(signature).toMatchObject({
+        status: 'conflict',
+        reason: 'databasePolicies',
+        comparison: { kind: 'unreadable' },
+      });
+    });
+
+    it('signs when another process stored the same policies in another form', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore({
+        policiesAfterCheck: migrateOnly,
+      });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ status: signature?.status, writes }).toEqual({
+        status: 'updated',
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
+      });
+    });
   });
 
   it('createRunnerDependencies() returns the dependencies the adapter builds for the driver', () => {

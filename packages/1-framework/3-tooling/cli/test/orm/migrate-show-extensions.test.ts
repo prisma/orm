@@ -71,8 +71,8 @@ describe('migrate --show with extension spaces', () => {
       await addExtensionSpace(cwd);
       mocks.readAllMarkers.mockResolvedValue(
         new Map([
-          ['app', { storageHash: C1, invariants: [] }],
-          ['pgvector', { storageHash: EXT_C1, invariants: [] }],
+          ['app', { storageHash: C1, invariants: [], meta: {} }],
+          ['pgvector', { storageHash: EXT_C1, invariants: [], meta: {} }],
         ]),
       );
 
