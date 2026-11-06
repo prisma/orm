@@ -5,10 +5,16 @@ import type {
 } from '@internal/framework-components/control';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import type { MigrationMeta } from '@internal/migration-tools/migration';
-import { MysqlMigration } from './mysql-migration';
+import { MysqlMigrationBase } from './mysql-migration';
 import type { Op } from './operations';
 import { renderOps } from './render-ops';
 import { renderCallsToTypeScript } from './render-typescript';
+
+/** The target a planner plans for: the id its operations and migrations carry, and the facade module its `migration.ts` imports from. */
+export interface MysqlMigrationTarget<TargetId extends string> {
+  readonly targetId: TargetId;
+  readonly migrationModule: string;
+}
 
 export interface MysqlMigrationDestinationInfo {
   readonly storageHash: string;
@@ -16,10 +22,12 @@ export interface MysqlMigrationDestinationInfo {
 }
 
 /** The plan the MySQL planner produces: its operations, and the `migration.ts` that writes them. */
-export class TypeScriptRenderableMysqlMigration
-  extends MysqlMigration
+export class TypeScriptRenderableMysqlMigration<TargetId extends string = 'mysql'>
+  extends MysqlMigrationBase<TargetId>
   implements MigrationPlanWithAuthoringSurface
 {
+  readonly targetId: TargetId;
+  readonly #migrationModule: string;
   readonly #calls: readonly OpFactoryCall[];
   readonly #meta: MigrationMeta;
   readonly #destination: MysqlMigrationDestinationInfo;
@@ -35,8 +43,11 @@ export class TypeScriptRenderableMysqlMigration
     readonly snapshotsImportPath: string;
     readonly destination?: MysqlMigrationDestinationInfo;
     readonly lowerer?: ExecuteRequestLowerer;
+    readonly target: MysqlMigrationTarget<TargetId>;
   }) {
     super();
+    this.targetId = options.target.targetId;
+    this.#migrationModule = options.target.migrationModule;
     this.#calls = options.calls;
     this.#meta = options.meta;
     this.#spaceId = options.spaceId;
@@ -46,7 +57,7 @@ export class TypeScriptRenderableMysqlMigration
   }
 
   override get operations(): readonly (Op | Promise<Op>)[] {
-    this.#operationsCache ??= renderOps(this.#calls, this.#lowerer);
+    this.#operationsCache ??= renderOps(this.#calls, this.#lowerer, this.targetId);
     return this.#operationsCache;
   }
 
@@ -68,6 +79,7 @@ export class TypeScriptRenderableMysqlMigration
       to: this.#meta.to,
       snapshotsImportPath: this.#snapshotsImportPath,
       resolveImportSpecifier,
+      migrationModule: this.#migrationModule,
     });
   }
 }

@@ -5,10 +5,12 @@ import {
 } from '@internal/framework-components/control';
 import {
   type ImportSpecifierResolver,
+  keepInternalSpecifiers,
   resolveRequirementSpecifiers,
 } from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
 import { type ImportRequirement, renderImports } from '@internal/ts-render';
+import { MYSQL_MIGRATION_MODULE } from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
@@ -22,12 +24,14 @@ export interface RenderMigrationMeta {
    * cannot forget it. Defaults to leaving specifiers as authored.
    */
   readonly resolveImportSpecifier?: ImportSpecifierResolver;
+  /** The facade `migration` module of the target the scaffold is for, which every import of MySQL's `migration` module names instead. */
+  readonly migrationModule: string;
 }
 
-/** The base class and the CLI entrypoint every scaffold imports, both from the MySQL facade's `migration` module. */
+/** The base class and the CLI entrypoint every scaffold imports, both from the facade's `migration` module. */
 const BASE_IMPORTS: readonly ImportRequirement[] = [
-  { moduleSpecifier: '@internal/mysql/migration', symbol: 'Migration' },
-  { moduleSpecifier: '@internal/mysql/migration', symbol: 'MigrationCLI' },
+  { moduleSpecifier: MYSQL_MIGRATION_MODULE, symbol: 'Migration' },
+  { moduleSpecifier: MYSQL_MIGRATION_MODULE, symbol: 'MigrationCLI' },
 ];
 
 export function renderCallsToTypeScript(
@@ -66,7 +70,12 @@ function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigration
       requirements.push(req);
     }
   }
-  return renderImports(resolveRequirementSpecifiers(requirements, meta.resolveImportSpecifier));
+  const resolve = meta.resolveImportSpecifier ?? keepInternalSpecifiers;
+  return renderImports(
+    resolveRequirementSpecifiers(requirements, (specifier) =>
+      resolve(specifier === MYSQL_MIGRATION_MODULE ? meta.migrationModule : specifier),
+    ),
+  );
 }
 
 function contractImports(meta: RenderMigrationMeta): readonly ImportRequirement[] {

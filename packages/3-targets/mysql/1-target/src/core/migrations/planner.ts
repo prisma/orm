@@ -37,17 +37,22 @@ import { coalesceSubtreeIssues, issueNode, planIssues } from './issue-planner';
 import {
   DropColumnCall,
   DropTableCall,
+  MYSQL_MIGRATION_MODULE,
+  MYSQL_TARGET_ID,
   type MysqlOpFactoryCall,
   RawSqlCall,
   renameTableByHandOp,
 } from './op-factory-call';
-import { TypeScriptRenderableMysqlMigration } from './planner-produced-mysql-migration';
+import {
+  type MysqlMigrationTarget,
+  TypeScriptRenderableMysqlMigration,
+} from './planner-produced-mysql-migration';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
 
-export type MysqlPlanResult =
+export type MysqlPlanResult<TargetId extends string = 'mysql'> =
   | {
       readonly kind: 'success';
-      readonly plan: TypeScriptRenderableMysqlMigration;
+      readonly plan: TypeScriptRenderableMysqlMigration<TargetId>;
       readonly appliedStatements: readonly [];
       readonly dataLoss: readonly MigrationDataLoss[];
       readonly accessChanges: readonly MigrationAccessChange[];
@@ -55,13 +60,20 @@ export type MysqlPlanResult =
     }
   | SqlPlannerFailureResult;
 
-const mysqlTableRenameByHand: TableRenameByHand = {
-  renderTableRename: (rename) =>
-    new RawSqlCall(renameTableByHandOp(rename.from, rename.to)).renderTypeScript(),
-  tableRenameByHand: (rename) => [
-    `RENAME TABLE ${quoteIdentifier(rename.from)} TO ${quoteIdentifier(rename.to)}`,
-  ],
+const MYSQL_MIGRATION_TARGET: MysqlMigrationTarget<'mysql'> = {
+  targetId: MYSQL_TARGET_ID,
+  migrationModule: MYSQL_MIGRATION_MODULE,
 };
+
+function tableRenameByHand(targetId: string): TableRenameByHand {
+  return {
+    renderTableRename: (rename) =>
+      new RawSqlCall(renameTableByHandOp(rename.from, rename.to, targetId)).renderTypeScript(),
+    tableRenameByHand: (rename) => [
+      `RENAME TABLE ${quoteIdentifier(rename.from)} TO ${quoteIdentifier(rename.to)}`,
+    ],
+  };
+}
 
 function tableTarget(table: string, column?: string) {
   return {
@@ -96,15 +108,17 @@ function isTableOwnedElsewhere(issue: SchemaDiffIssue, ownership: SchemaOwnershi
 }
 
 /**
- * The MySQL migration planner. It diffs the contract's schema against the live one and plans creating and dropping tables, columns, indexes, unique constraints and foreign keys. Every other change, and every statement such as a rename, is refused with a conflict that says it is not yet supported on MySQL.
+ * The MySQL migration planner, for MySQL or a target that extends it. It diffs the contract's schema against the live one and plans creating and dropping tables, columns, indexes, unique constraints and foreign keys. Every other change, and every statement such as a rename, is refused with a conflict that says it is not yet supported on MySQL.
  */
-export class MysqlMigrationPlanner
-  implements SqlMigrationPlanner<MysqlPlanTargetDetails>, MigrationPlanner<'sql', 'mysql'>
+export class MysqlMigrationPlanner<TargetId extends string = 'mysql'>
+  implements SqlMigrationPlanner<MysqlPlanTargetDetails>, MigrationPlanner<'sql', TargetId>
 {
   readonly #lowerer: ExecuteRequestLowerer;
+  readonly #target: MysqlMigrationTarget<TargetId>;
 
-  constructor(lowerer: ExecuteRequestLowerer) {
+  constructor(lowerer: ExecuteRequestLowerer, target: MysqlMigrationTarget<TargetId>) {
     this.#lowerer = lowerer;
+    this.#target = target;
   }
 
   plan(options: {
@@ -118,7 +132,7 @@ export class MysqlMigrationPlanner
     readonly spaceId: string;
     readonly ownership?: SchemaOwnership;
     readonly snapshotsImportPath: string;
-  }): MysqlPlanResult {
+  }): MysqlPlanResult<TargetId> {
     return this.#planSql(
       blindCast<
         SqlMigrationPlannerPlanOptions,
@@ -130,17 +144,18 @@ export class MysqlMigrationPlanner
   emptyMigration(
     context: MigrationScaffoldContext,
     spaceId: string,
-  ): TypeScriptRenderableMysqlMigration {
+  ): TypeScriptRenderableMysqlMigration<TargetId> {
     return new TypeScriptRenderableMysqlMigration({
       calls: [],
       meta: { from: context.fromHash, to: context.toHash },
       spaceId,
       snapshotsImportPath: context.snapshotsImportPath,
       lowerer: this.#lowerer,
+      target: this.#target,
     });
   }
 
-  #planSql(options: SqlMigrationPlannerPlanOptions): MysqlPlanResult {
+  #planSql(options: SqlMigrationPlannerPlanOptions): MysqlPlanResult<TargetId> {
     if (!options.policy.allowedOperationClasses.includes('additive')) {
       return plannerFailure([
         {
@@ -193,13 +208,14 @@ export class MysqlMigrationPlanner
             : { profileHash: options.contract.profileHash }),
         },
         lowerer: this.#lowerer,
+        target: this.#target,
       }),
       appliedStatements: [],
       ...subjectsOfCalls(calls.map(callSubjects), {
         fromContract: options.fromContract,
         contract: options.contract,
         origins: NO_RENAMED_ORIGINS,
-        byHand: mysqlTableRenameByHand,
+        byHand: tableRenameByHand(this.#target.targetId),
         removedVariants: [],
       }),
     };
@@ -215,6 +231,16 @@ function statementNotYetSupported(statement: ResolvedMigrationStatement): SqlPla
   };
 }
 
-export function createMysqlMigrationPlanner(lowerer: ExecuteRequestLowerer): MysqlMigrationPlanner {
-  return new MysqlMigrationPlanner(lowerer);
+export function createMysqlMigrationPlanner(
+  lowerer: ExecuteRequestLowerer,
+): MysqlMigrationPlanner<'mysql'>;
+export function createMysqlMigrationPlanner<TargetId extends string>(
+  lowerer: ExecuteRequestLowerer,
+  target: MysqlMigrationTarget<TargetId>,
+): MysqlMigrationPlanner<TargetId>;
+export function createMysqlMigrationPlanner(
+  lowerer: ExecuteRequestLowerer,
+  target: MysqlMigrationTarget<string> = MYSQL_MIGRATION_TARGET,
+): MysqlMigrationPlanner<string> {
+  return new MysqlMigrationPlanner(lowerer, target);
 }

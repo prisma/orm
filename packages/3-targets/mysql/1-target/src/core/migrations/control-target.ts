@@ -16,6 +16,7 @@ import { mysqlError } from '../errors';
 import { MysqlContractSerializer } from '../mysql-contract-serializer';
 import { diffMysqlSchema, mysqlContractToSchema } from './diff-database-schema';
 import { MysqlSchemaVerifier } from './mysql-schema-verifier';
+import { MYSQL_MIGRATION_MODULE } from './op-factory-call';
 import { createMysqlMigrationPlanner } from './planner';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
 import { createMysqlMigrationRunner } from './runner';
@@ -24,25 +25,50 @@ function isSqlContract(contract: Contract | null): contract is Contract<SqlStora
   return contract === null || contract.storage instanceof SqlStorage;
 }
 
-function createMysqlControlTargetDescriptor(): SqlControlTargetDescriptor<
-  'mysql',
-  MysqlPlanTargetDetails
-> {
+type MysqlControlTargetParts =
+  | 'contractSerializer'
+  | 'schemaVerifier'
+  | 'diffSchema'
+  | 'classifySubjectGranularity'
+  | 'classifyEntityKind'
+  | 'migrations'
+  | 'create'
+  | 'createPlanner'
+  | 'createRunner';
+
+/** What a target that extends MySQL gives the control target factory: its descriptor meta, which carries its target id and session settings, and the facade module its `migration.ts` files import from. */
+export interface MysqlControlTargetOptions<TargetId extends string> {
+  readonly descriptorMeta: Omit<
+    SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails>,
+    MysqlControlTargetParts
+  >;
+  readonly migrationModule: string;
+}
+
+/** The control target of MySQL, or of a target that extends it, which reuses MySQL's planner, runner, schema verifier and contract serializer under its own target id. */
+export function createMysqlControlTargetDescriptor<TargetId extends string = 'mysql'>(
+  options: MysqlControlTargetOptions<TargetId>,
+): SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails> {
   setFallbackTemporal(fallbackTemporal);
+  const { descriptorMeta } = options;
+  const migrationTarget = {
+    targetId: descriptorMeta.targetId,
+    migrationModule: options.migrationModule,
+  };
   return {
-    ...mysqlTargetDescriptorMeta,
+    ...descriptorMeta,
     contractSerializer: new MysqlContractSerializer(),
     schemaVerifier: new MysqlSchemaVerifier(),
     diffSchema: diffMysqlSchema,
     classifySubjectGranularity: relationalNodeGranularity,
     classifyEntityKind: relationalNodeEntityKind,
     migrations: {
-      createPlanner(adapter: SqlControlAdapter<'mysql'>): MigrationPlanner<'sql', 'mysql'> {
-        return createMysqlMigrationPlanner(adapter);
+      createPlanner(adapter: SqlControlAdapter<TargetId>): MigrationPlanner<'sql', TargetId> {
+        return createMysqlMigrationPlanner(adapter, migrationTarget);
       },
       createRunner(family) {
         return blindCast<
-          MigrationRunner<'sql', 'mysql'>,
+          MigrationRunner<'sql', TargetId>,
           'the SQL runner takes SQL per-space options; the framework types them as the generic MigrationRunnerPerSpaceOptions'
         >(createMysqlMigrationRunner(family));
       },
@@ -56,11 +82,11 @@ function createMysqlControlTargetDescriptor(): SqlControlTargetDescriptor<
         return mysqlContractToSchema(contract, sqlTypeLookupsOf(frameworkComponents));
       },
     },
-    create(): ControlTargetInstance<'sql', 'mysql'> {
-      return { familyId: 'sql', targetId: 'mysql' };
+    create(): ControlTargetInstance<'sql', TargetId> {
+      return { familyId: 'sql', targetId: descriptorMeta.targetId };
     },
-    createPlanner(adapter: SqlControlAdapter<'mysql'>) {
-      return createMysqlMigrationPlanner(adapter);
+    createPlanner(adapter: SqlControlAdapter<TargetId>) {
+      return createMysqlMigrationPlanner(adapter, migrationTarget);
     },
     createRunner(family) {
       return createMysqlMigrationRunner(family);
@@ -68,6 +94,9 @@ function createMysqlControlTargetDescriptor(): SqlControlTargetDescriptor<
   };
 }
 
-const mysqlControlTargetDescriptor = createMysqlControlTargetDescriptor();
+const mysqlControlTargetDescriptor = createMysqlControlTargetDescriptor({
+  descriptorMeta: mysqlTargetDescriptorMeta,
+  migrationModule: MYSQL_MIGRATION_MODULE,
+});
 
 export default mysqlControlTargetDescriptor;

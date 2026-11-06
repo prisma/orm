@@ -29,7 +29,10 @@ import {
 } from './operations';
 import { buildTargetDetails } from './planner-target-details';
 
-const TARGET_MIGRATION_MODULE = '@internal/mysql/migration';
+/** The module every MySQL `migration.ts` imports its base class and helpers from. A target that extends MySQL writes its own module in its place (`renderCallsToTypeScript`). */
+export const MYSQL_MIGRATION_MODULE = '@internal/mysql/migration';
+
+export const MYSQL_TARGET_ID = 'mysql';
 
 /** The refusal of a `MysqlMigration` operation that needs the control adapter, on an instance built without a control stack. */
 export function mysqlMigrationStackMissing(operation: string) {
@@ -48,7 +51,7 @@ abstract class MysqlOpFactoryCallNode extends TsExpression implements OpFactoryC
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;
-  abstract toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op>;
+  abstract toOp(lowerer?: ExecuteRequestLowerer, targetId?: string): Op | Promise<Op>;
 
   importRequirements(): readonly ImportRequirement[] {
     return [];
@@ -113,7 +116,7 @@ function columnImports(columns: readonly DdlColumn[]): ImportRequirement[] {
     if (column.default?.kind === 'literal') symbols.add('lit');
     if (column.default?.kind === 'function') symbols.add('fn');
   }
-  return [...symbols].map((symbol) => ({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol }));
+  return [...symbols].map((symbol) => ({ moduleSpecifier: MYSQL_MIGRATION_MODULE, symbol }));
 }
 
 interface WrittenCall {
@@ -140,7 +143,7 @@ export class CreateTableCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+  async toOp(lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Promise<Op> {
     const statement = await this.lowererFor(lowerer).lowerToExecuteRequest(
       createTable({ table: this.tableName, columns: this.columns, constraints: this.constraints }),
     );
@@ -150,7 +153,7 @@ export class CreateTableCall extends MysqlOpFactoryCallNode {
       label: this.label,
       summary: `Creates table ${this.tableName} with its columns, primary key and unique constraints`,
       operationClass: 'additive',
-      target: { id: 'mysql', details: buildTargetDetails('table', this.tableName) },
+      target: { id: targetId, details: buildTargetDetails('table', this.tableName) },
       precheck: [table.absent(`ensure table "${this.tableName}" does not exist`)],
       execute: [step(`create table "${this.tableName}"`, statement.sql, statement.params)],
       postcheck: [table.present(`verify table "${this.tableName}" exists`)],
@@ -166,13 +169,13 @@ export class CreateTableCall extends MysqlOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const sql = createSqlTextSources(MYSQL_MIGRATION_MODULE);
     const columns = this.columns.map((column) => renderColumn(column, sql)).join(', ');
     const constraints = this.constraints.map(renderConstraint);
     const source = `this.createTable({ table: ${jsonToTsSource(this.tableName)}, columns: [${columns}]${constraints.length > 0 ? `, constraints: [${constraints.join(', ')}]` : ''} })`;
     const constraintImports = [
       ...new Set(this.constraints.map((c) => (c.kind === 'primary-key' ? 'primaryKey' : 'unique'))),
-    ].map((symbol) => ({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol }));
+    ].map((symbol) => ({ moduleSpecifier: MYSQL_MIGRATION_MODULE, symbol }));
     return {
       source,
       imports: [...columnImports(this.columns), ...constraintImports, ...sql.imports()],
@@ -191,14 +194,14 @@ export class DropTableCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const table = tableChecks(this.tableName);
     return {
       id: `dropTable.${this.tableName}`,
       label: this.label,
       summary: `Drops table ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
-      target: { id: 'mysql', details: buildTargetDetails('table', this.tableName) },
+      target: { id: targetId, details: buildTargetDetails('table', this.tableName) },
       precheck: [table.present(`ensure table "${this.tableName}" exists`)],
       execute: [
         step(`drop table "${this.tableName}"`, `DROP TABLE ${quoteIdentifier(this.tableName)}`),
@@ -228,7 +231,7 @@ export class AddColumnCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
+  async toOp(lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Promise<Op> {
     const definition = await columnDefinitionSql(
       this.column,
       this.tableName,
@@ -241,7 +244,7 @@ export class AddColumnCall extends MysqlOpFactoryCallNode {
       summary: `Adds column ${this.columnName} to ${this.tableName}`,
       operationClass: 'additive',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('column', this.columnName, this.tableName),
       },
       precheck: [
@@ -269,7 +272,7 @@ export class AddColumnCall extends MysqlOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const sql = createSqlTextSources(MYSQL_MIGRATION_MODULE);
     const source = `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumn(this.column, sql)} })`;
     return { source, imports: [...columnImports([this.column]), ...sql.imports()] };
   }
@@ -289,7 +292,7 @@ export class DropColumnCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const column = columnChecks(this.tableName, this.columnName);
     return {
       id: `dropColumn.${this.tableName}.${this.columnName}`,
@@ -297,7 +300,7 @@ export class DropColumnCall extends MysqlOpFactoryCallNode {
       summary: `Drops column ${this.columnName} on ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('column', this.columnName, this.tableName),
       },
       precheck: [
@@ -336,7 +339,7 @@ export class CreateIndexCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const index = indexChecks(this.tableName, this.indexName);
     return {
       id: `index.${this.tableName}.${this.indexName}`,
@@ -344,7 +347,7 @@ export class CreateIndexCall extends MysqlOpFactoryCallNode {
       summary: `Creates ${this.unique ? 'unique ' : ''}index ${this.indexName} on ${this.tableName}`,
       operationClass: 'additive',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('index', this.indexName, this.tableName),
       },
       precheck: [index.absent(`ensure index "${this.indexName}" is missing`)],
@@ -377,7 +380,7 @@ export class DropIndexCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const index = indexChecks(this.tableName, this.indexName);
     return {
       id: `dropIndex.${this.tableName}.${this.indexName}`,
@@ -385,7 +388,7 @@ export class DropIndexCall extends MysqlOpFactoryCallNode {
       summary: `Drops index ${this.indexName} on ${this.tableName} which is not in the contract`,
       operationClass: 'widening',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('index', this.indexName, this.tableName),
       },
       precheck: [index.present(`ensure index "${this.indexName}" exists`)],
@@ -419,7 +422,7 @@ export class AddUniqueCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const constraint = constraintChecks(this.tableName, this.constraintName, 'UNIQUE');
     return {
       id: `unique.${this.tableName}.${this.constraintName}`,
@@ -427,7 +430,7 @@ export class AddUniqueCall extends MysqlOpFactoryCallNode {
       summary: `Adds unique constraint ${this.constraintName} on ${this.tableName}`,
       operationClass: 'additive',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('unique', this.constraintName, this.tableName),
       },
       precheck: [constraint.absent(`ensure unique constraint "${this.constraintName}" is missing`)],
@@ -460,7 +463,7 @@ export class DropUniqueCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const constraint = constraintChecks(this.tableName, this.constraintName, 'UNIQUE');
     return {
       id: `dropUnique.${this.tableName}.${this.constraintName}`,
@@ -468,7 +471,7 @@ export class DropUniqueCall extends MysqlOpFactoryCallNode {
       summary: `Drops unique constraint ${this.constraintName} on ${this.tableName} which is not in the contract`,
       operationClass: 'widening',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('unique', this.constraintName, this.tableName),
       },
       precheck: [constraint.present(`ensure unique constraint "${this.constraintName}" exists`)],
@@ -510,7 +513,7 @@ export class AddForeignKeyCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const { name, columns, references } = this.foreignKey;
     const constraint = constraintChecks(this.tableName, name, 'FOREIGN KEY');
     return {
@@ -519,7 +522,7 @@ export class AddForeignKeyCall extends MysqlOpFactoryCallNode {
       summary: `Adds foreign key ${name} on ${this.tableName} referencing ${references.table}`,
       operationClass: 'additive',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('foreignKey', name, this.tableName),
       },
       precheck: [constraint.absent(`ensure foreign key "${name}" is missing`)],
@@ -561,7 +564,7 @@ export class DropForeignKeyCall extends MysqlOpFactoryCallNode {
     this.freeze();
   }
 
-  toOp(): Op {
+  toOp(_lowerer?: ExecuteRequestLowerer, targetId = MYSQL_TARGET_ID): Op {
     const constraint = constraintChecks(this.tableName, this.constraintName, 'FOREIGN KEY');
     return {
       id: `dropForeignKey.${this.tableName}.${this.constraintName}`,
@@ -569,7 +572,7 @@ export class DropForeignKeyCall extends MysqlOpFactoryCallNode {
       summary: `Drops foreign key ${this.constraintName} on ${this.tableName} which is not in the contract`,
       operationClass: 'widening',
       target: {
-        id: 'mysql',
+        id: targetId,
         details: buildTargetDetails('foreignKey', this.constraintName, this.tableName),
       },
       precheck: [constraint.present(`ensure foreign key "${this.constraintName}" exists`)],
@@ -610,19 +613,19 @@ export class RawSqlCall extends MysqlOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'rawSql' }];
+    return [{ moduleSpecifier: MYSQL_MIGRATION_MODULE, symbol: 'rawSql' }];
   }
 }
 
 /** The table rename a user writes by hand on MySQL, which the planner does not plan yet. */
-export function renameTableByHandOp(from: string, to: string): Op {
+export function renameTableByHandOp(from: string, to: string, targetId = MYSQL_TARGET_ID): Op {
   const fromTable = tableChecks(from);
   const toTable = tableChecks(to);
   return {
     id: `renameTable.${from}`,
     label: `Rename table ${from} to ${to}`,
     operationClass: 'widening',
-    target: { id: 'mysql', details: buildTargetDetails('table', to) },
+    target: { id: targetId, details: buildTargetDetails('table', to) },
     precheck: [
       fromTable.present(`ensure table "${from}" exists`),
       toTable.absent(`ensure table "${to}" does not exist`),
