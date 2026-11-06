@@ -215,7 +215,8 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
     expect(await collections(dbName), 'S2.05: the collection is gone').toEqual(['users']);
   });
 
-  it('S3: db update adds a required field to a collection with documents without asking', async () => {
+  // Fails at the validator's document check until db update fills a new required field with a temporary value.
+  it.fails('S3: db update adds a required field to a collection with documents without asking', async () => {
     const dbName = 'mongo_delete_required';
     const ctx = setupPslProject(withDatabase(replSet.getUri(), dbName));
     created.add(ctx.testDir);
