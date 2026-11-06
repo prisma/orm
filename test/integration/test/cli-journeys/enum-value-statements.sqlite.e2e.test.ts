@@ -406,7 +406,10 @@ withTempDir(({ createTempDir }) => {
         const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
         writeFileSync(
           file,
-          followEdits(readFileSync(file, 'utf-8'), byHand.replace('"<stored value>"', '"active"')),
+          followEdits(
+            readFileSync(file, 'utf-8'),
+            byHand.replaceAll("'<stored value>'", "'active'"),
+          ),
         );
         const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
         expect(reEmit.exitCode, `S5.06: node migration.ts: ${reEmit.stderr}`).toBe(0);
