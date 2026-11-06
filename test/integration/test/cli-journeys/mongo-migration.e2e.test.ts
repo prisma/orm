@@ -149,6 +149,21 @@ function findMigrationDirBySlug(ctx: JourneyContext, slugFragment: string): stri
   return join(migrationsDir, match);
 }
 
+function declarationsWithoutHeader(text: string): string {
+  return text
+    .replace(/^(\/\/.*\n)+/, '')
+    .replace(/^\/\*.*?\*\/ /, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function expectSnapshotDeclarationsOnOneLine(snapshotDts: string, emittedDts: string): void {
+  expect({
+    lines: snapshotDts.split('\n').length,
+    declarations: declarationsWithoutHeader(snapshotDts),
+  }).toEqual({ lines: 2, declarations: declarationsWithoutHeader(emittedDts) });
+}
+
 /** Path to a `migrations/snapshots/<hex>/contract.{json,d.ts}` store entry. */
 function contractSnapshotPath(
   ctx: JourneyContext,
@@ -193,17 +208,18 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       readFileSync(join(migrationDir, 'migration.json'), 'utf-8'),
     ) as { to: string };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(
         readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.json'), 'utf-8'),
       ),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
-    expect(
+    expectSnapshotDeclarationsOnOneLine(
       readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.d.ts'), 'utf-8'),
-    ).toBe(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'));
+      readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
+    );
 
     // Plan leaves a draft migration; self-emit by running migration.ts in-process to
     // produce `ops.json` and the attested `migration.json`.
@@ -274,13 +290,14 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       migrationHash: string;
     };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.json'), 'utf-8')),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
-    expect(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8')).toBe(
+    expectSnapshotDeclarationsOnOneLine(
+      readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8'),
       readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
     );
 
