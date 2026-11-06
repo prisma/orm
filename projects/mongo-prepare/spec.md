@@ -127,7 +127,7 @@ Both come from an existing gap: the query builder never encodes literal values. 
 - **`limit` and `skip`** in the query builder, and `limit` and `offset` in the ORM, also take a placeholder. Paging is the most common prepared query, and SQL accepts placeholders there.
   - The types accept a non-nullable placeholder whose codec's `input` is `number`, as SQL accepts non-nullable numeric operands. They do not list codec ids, so an extension codec with a numeric input works.
   - `MongoLimitStage.limit` and `MongoSkipStage.skip` become `number | MongoPreparedParamRef`. Their constructors keep the integer check for numbers and accept a placeholder.
-  - Each run checks, after `beforeEncode`, that the value in `$limit` or `$skip` is a non-negative integer, and throws `ORM.ARGUMENT_INVALID` otherwise, the same code an ad-hoc `limit(-1)` throws. Checking after middleware covers a value middleware replaced. The check walks every pipeline in the draft, including the sub-pipelines of `$lookup`, `$facet`, `$unionWith` and `$merge.whenMatched`. `mongo/double@1` encodes an integer to `Double(20)`, which MongoDB accepts in `$limit`.
+  - Each run checks, after `beforeEncode`, that the value in `$limit` is a positive integer and the value in `$skip` a non-negative integer, and throws `ORM.ARGUMENT_INVALID` otherwise, the same code an ad-hoc `limit(-1)` throws. Checking after middleware covers a value middleware replaced. The check walks every pipeline in the draft, including the sub-pipelines of `$lookup`, `$facet`, `$unionWith` and `$merge.whenMatched`. `mongo/double@1` encodes an integer to `Double(20)`, which MongoDB accepts in `$limit`.
   - Lowering keeps the placeholder in `$limit` and `$skip`, and resolving fills it in. No other code reads these stages' values: the result-shape code treats both as stages that do not change the shape.
 - **ORM:** see D9.
 
@@ -193,7 +193,7 @@ Positions that take a placeholder:
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
 | Placeholder in an ORM write or value-object literal | `ORM.ARGUMENT_INVALID` (existing) | when the write runs, or when the `where` is built |
 | Name missing at run, or params not an object | `RUNTIME.PREPARE_MISSING_PARAM` | run |
-| `limit` or `skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` (existing) | run, after `beforeEncode` |
+| `limit` value not a positive integer, or `skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` (existing) | run, after `beforeEncode` |
 | Target without the bridge | invariant error | run |
 | Plan with a placeholder run without `prepare` | `RUNTIME.PREPARE_BIND_ON_ADHOC` | ad-hoc run |
 | Codec fails on a value | `RUNTIME.ENCODE_FAILED` (existing) | run |
