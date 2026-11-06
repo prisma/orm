@@ -36,12 +36,14 @@ describe('defineConfig for MariaDB', () => {
     });
   });
 
-  it('refuses a TypeScript contract, since TypeScript contracts are built for MySQL', () => {
-    expect(() => defineConfig({ contract: './prisma/contract.ts' })).toThrow(
-      expect.objectContaining({
-        code: 'CONFIG.VALIDATION_FAILED',
-        meta: { contract: './prisma/contract.ts' },
-      }),
+  it.each([
+    './prisma/contract.ts',
+    './prisma/contract.mts',
+    './prisma/contract.cts',
+    './prisma/contract.json',
+  ])('refuses %s, since only a .prisma contract is built for MariaDB', (contract) => {
+    expect(() => defineConfig({ contract })).toThrow(
+      expect.objectContaining({ code: 'CONFIG.VALIDATION_FAILED', meta: { contract } }),
     );
   });
 

@@ -1,10 +1,10 @@
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 
-/** A TypeScript contract given to MariaDB's `defineConfig`: only PSL contracts are built for MariaDB. */
-export function typescriptContractUnsupported(contract: string): StructuredError {
+/** A contract given to MariaDB's `defineConfig` that is not a `.prisma` schema: only PSL contracts are built for MariaDB. */
+export function pslContractRequired(contract: string): StructuredError {
   return structuredError(
     'CONFIG.VALIDATION_FAILED',
-    `MariaDB's defineConfig reads only PSL contracts, and "${contract}" is a TypeScript contract.`,
+    `MariaDB's defineConfig reads only .prisma contracts, and "${contract}" is not one.`,
     {
       why: 'TypeScript contracts are built for MySQL; MariaDB contracts are written in PSL.',
       fix: 'Write the contract as a .prisma schema and point `contract` at it.',

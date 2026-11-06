@@ -5,7 +5,7 @@ import { createMysqlDefineConfig, type MysqlConfigOptions } from '@internal/mysq
 import mariadb from '@internal/target-mariadb/control';
 import mariadbPackRef from '@internal/target-mariadb/pack';
 import { extname } from 'pathe';
-import { typescriptContractUnsupported } from '../errors';
+import { pslContractRequired } from '../errors';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 
@@ -18,6 +18,6 @@ const mariadbDefineConfig = createMysqlDefineConfig({
 
 /** The `prisma.config.ts` of a MariaDB project, whose contract is a `.prisma` schema. */
 export function defineConfig(options: MariadbConfigOptions): PrismaNextConfig<'sql', 'mariadb'> {
-  if (extname(options.contract) === '.ts') throw typescriptContractUnsupported(options.contract);
+  if (extname(options.contract) !== '.prisma') throw pslContractRequired(options.contract);
   return mariadbDefineConfig(options);
 }
