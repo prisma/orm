@@ -1,5 +1,6 @@
 import { createMongoAdapter } from '@internal/adapter-mongo';
-import type { MongoLoweredDraft } from '@internal/mongo-lowering';
+import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { AnyMongoCommand } from '@internal/mongo-query-ast/execution';
 import {
   AggregateCommand,
@@ -13,9 +14,16 @@ import {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { flattenMongoDraftLeaves, flattenMongoParamRefs } from '@internal/mongo-runtime';
+import {
+  createMongoExecutionContext,
+  createMongoExecutionStack,
+  createMongoRuntime,
+  flattenMongoParamRefs,
+} from '@internal/mongo-runtime';
 import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
-import { describe, expect, it } from 'vitest';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const stubMeta = { target: 'mongo', storageHash: 'test-hash', lane: 'mongo-orm' };
 
@@ -74,11 +82,7 @@ function collectRefsFromDraft(draft: MongoLoweredDraft): DraftLeaf[] {
 }
 
 function expectFlattenMatchesResolve(draft: MongoLoweredDraft): void {
-  const fromResolveWalk = collectRefsFromDraft(draft);
-  expect([...flattenMongoDraftLeaves(draft)]).toEqual(fromResolveWalk);
-  expect([...flattenMongoParamRefs(draft)]).toEqual(
-    fromResolveWalk.filter((leaf) => leaf instanceof MongoParamRef),
-  );
+  expect([...flattenMongoParamRefs(draft)]).toEqual(collectRefsFromDraft(draft));
 }
 
 describe('flattenMongoParamRefs / resolveParams walk parity', () => {
@@ -158,24 +162,56 @@ describe('flattenMongoParamRefs / resolveParams walk parity', () => {
     expectFlattenMatchesResolve(draft);
   });
 
-  it('matches resolve traversal for placeholders in a filter and a sub-pipeline $limit', () => {
-    const email = new MongoPreparedParamRef('email', 'mongo/string@1', false);
-    const take = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
-    const draft = adapter.structuralLower(
-      plan(
-        'users',
-        new AggregateCommand('users', [
-          new MongoMatchStage(MongoFieldFilter.eq('email', email)),
-          new MongoLookupStage({
-            from: 'posts',
-            as: 'posts',
-            pipeline: [new MongoLimitStage(take)],
-          }),
-          new MongoLimitStage(take),
-        ]),
-      ),
+  it('matches resolve traversal for a prepared run, whose placeholders are bound in a filter and a sub-pipeline $limit', async () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const realAdapter = stack.adapter.create(stack);
+    const resolvedDrafts: MongoLoweredDraft[] = [];
+    const recordingAdapter: MongoAdapter = {
+      lower: realAdapter.lower.bind(realAdapter),
+      structuralLower: realAdapter.structuralLower.bind(realAdapter),
+      resolveParams: (draft, ctx) => {
+        resolvedDrafts.push(draft);
+        return realAdapter.resolveParams(draft, ctx);
+      },
+    };
+    const driver = {
+      execute: vi.fn(async function* () {}),
+      close: vi.fn(async () => {}),
+    } as unknown as MongoDriver;
+    const runtime = createMongoRuntime({
+      context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+      adapter: recordingAdapter,
+      driver,
+    });
+
+    const statement = await runtime.prepare(
+      { email: 'mongo/string@1', take: 'mongo/int32@1' },
+      (p) =>
+        plan(
+          'users',
+          new AggregateCommand('users', [
+            new MongoMatchStage(MongoFieldFilter.eq('email', p.email)),
+            new MongoLookupStage({
+              from: 'posts',
+              as: 'posts',
+              pipeline: [new MongoLimitStage(p.take)],
+            }),
+            new MongoLimitStage(p.take),
+          ]),
+        ),
     );
-    expect([...flattenMongoDraftLeaves(draft)]).toEqual([email, take, take]);
+    await statement.query(runtime, { email: 'a@example.com', take: 2 }).toArray();
+
+    const [draft] = resolvedDrafts;
+    if (draft === undefined) throw new Error('expected a resolved draft');
+    expect([...flattenMongoParamRefs(draft)].map((ref) => ref.value)).toEqual([
+      'a@example.com',
+      2,
+      2,
+    ]);
     expectFlattenMatchesResolve(draft);
   });
 });
