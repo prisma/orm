@@ -8,7 +8,7 @@ MariaDB has its own target, `mariadb`, built on MySQL's. The target id is part o
 
 ## Setup
 
-You need a MariaDB 10.11 or later server and an empty application database for the example. The repository's `docker-compose.yaml` starts a server on port 3308 with an empty `root` password; create the `prisma_demo` database on it before running anything. `MARIADB_URL` must name that database, never the `mysql` system database, or the CLI creates the example's tables inside it.
+You need a MariaDB server and an empty application database for the example. The example is tested on MariaDB 10.11. The repository's `docker-compose.yaml` starts a server on port 3308 with an empty `root` password; create the `prisma_demo` database on it before running anything. `MARIADB_URL` must name that database, never the `mysql` system database, or the CLI creates the example's tables inside it.
 
 ```bash
 docker compose up -d mariadb

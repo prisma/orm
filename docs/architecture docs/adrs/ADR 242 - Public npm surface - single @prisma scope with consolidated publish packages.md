@@ -29,8 +29,7 @@ Every published package lives under the single `@prisma` scope. The full public 
 
 | Published package | Role |
 |---|---|
-| `prisma-next` | bin-only shim carrying the `prisma-next` command (ADR 211 mechanics) |
-| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
+| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one; `orm-mariadb` depends on `orm-mysql` (see below) |
 | `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
@@ -40,6 +39,8 @@ Every published package lives under the single `@prisma` scope. The full public 
 ## What an application depends on
 
 One facade, plus whatever extension packs it installs. Nothing else — not `@prisma/orm-family-sql`, not `@prisma/orm-toolchain`, even though the facade brings both in. Those arrive as the facade's own dependencies, and an application that names one directly is claiming a version contract it does not have.
+
+The facade of a database that extends another depends on that database's facade: `@prisma/orm-mariadb` depends on `@prisma/orm-mysql`, whose `createMysqlDefineConfig` builds MariaDB's `defineConfig`. This is the only dependency from one facade to another. The extended database's facade arrives as a dependency like any other, and the application still names only its own facade.
 
 That holds only if the facade has a name for everything an application reaches, so it republishes each of them as one of its own entrypoints:
 
