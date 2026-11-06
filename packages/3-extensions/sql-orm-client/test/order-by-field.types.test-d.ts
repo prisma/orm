@@ -1,7 +1,7 @@
 import type { OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { Ordered } from '../src/collection-types';
+import type { Ordered, Paged } from '../src/collection-types';
 import { orderByField } from '../src/fragments';
 import type { Orderable, OrderableFieldNames } from '../src/types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
@@ -45,7 +45,7 @@ describe('orderByField', () => {
       orderByField(db.Post, input.orderBy, input.direction, ['title', 'views']),
     );
     expectTypeOf(posts).toEqualTypeOf<Ordered<PostCollection>>();
-    expectTypeOf(posts.cursor({ id: 1 })).toEqualTypeOf<Ordered<PostCollection>>();
+    expectTypeOf(posts.cursor({ id: 1 })).toEqualTypeOf<Paged<Ordered<PostCollection>>>();
   });
 
   test('fits a plain root collection', () => {
