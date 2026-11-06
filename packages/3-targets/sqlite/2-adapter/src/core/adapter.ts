@@ -84,6 +84,7 @@ const defaultCapabilities = Object.freeze({
     enums: false,
     insertOnConflictSkip: true,
     insertOnConflictWithoutTarget: true,
+    insertOnConflictTarget: true,
   },
 });
 

@@ -1,15 +1,11 @@
 # Prisma 8 Demo (MySQL)
 
 A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL
-application installs. It has a PSL contract with two models, a relation and an
-enum, and a committed migration written by `prisma migration plan`.
+application installs. It has a PSL contract with three models, a relation, an
+enum and the convenience date and time types, and two committed migrations
+written by `prisma migration plan`.
 
-MySQL support is early, and this example grows with it. Today it shows the
-control plane and reads: the contract emits, the committed migration applies to
-an empty MySQL database, `db verify` and `db sign` pass, planning again from the
-unchanged contract writes nothing, and the ORM and the SQL builder read the
-seeded rows, includes among them. Writes and MariaDB will be added here as each
-lands, and each is done only when this example runs it in CI.
+MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB will be added here when it lands, and is done only when this example runs it in CI.
 
 ## Reading
 
@@ -36,8 +32,45 @@ await db.orm.Post.include('author').all();
 await db.query(db.sql.User.select('id', 'email').where((f, fns) => fns.eq(f.role, 'ADMIN')).build());
 ```
 
-The ORM cannot write to MySQL yet, so `src/seed.ts` inserts the demo rows
-through the raw SQL lane, `db.raw.sql`.
+## Writing
+
+`src/seed.ts` writes the demo rows with `createAndCount`, and `src/orm-client/user-writes.ts` holds the other writes. Each returns what it returns on Postgres:
+
+```ts
+const user = await db.orm.User.create({ email: 'a@example.com', role: 'USER' });
+await db.orm.User.where({ id: user.id }).update({ role: 'ADMIN' });
+await db.orm.User.upsert({
+  create: { email: 'a@example.com', role: 'USER' },
+  update: { role: 'ADMIN' },
+  conflictOn: { email: 'a@example.com' },
+});
+await db.orm.User.where({ id: user.id }).delete();
+const n = await db.orm.User.where({ role: 'USER' }).updateAndCount({ role: 'ADMIN' });
+```
+
+MySQL has no `RETURNING`, so a write that returns rows runs inside a transaction and reads them back with a `SELECT` by key; `create` reads the id MySQL generated. A `createAll` that returns several rows whose ids MySQL generates is refused; `createAndCount` writes them. See [Writes without `RETURNING`](../../packages/3-extensions/sql-orm-client/README.md#writes-without-returning).
+
+## Dates and times
+
+`Event` has a `DateTime`, a `Date` and a `Time` field:
+
+```prisma
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startsAt  DateTime                  // datetime(3), read as a JavaScript Date in UTC
+  day       Date                      // date, read as "2024-02-29"
+  opensAt   Time                      // time(6), read as "09:30:00"
+  createdAt DateTime @default(now())  // filled by MySQL with CURRENT_TIMESTAMP(3)
+}
+```
+
+`src/raw/create-event.ts` inserts an event through the raw SQL lane. Each
+value is a parameter, wrapped in `param(value, { codecId })` from
+`@prisma/orm-mysql/relational-core/expression`, so the column's codec
+encodes it: the `Date` is written in UTC, and a date or time MySQL does not
+hold is refused before it reaches the database. `src/orm-client/get-events-on.ts`
+reads the events on a day through the ORM.
 
 ## Setup
 
@@ -85,9 +118,10 @@ which contract the database is at.
 creates a uniquely named database on that server and drops it afterwards.
 `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and
 `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with
-`db migrate`, seeds the rows and checks the whole result of each read. Without `MYSQL_URL` the tests are skipped.
+`db migrate`, seeds the rows and checks the whole result of each read.
+`test/events.test.ts` writes events and reads back their dates and times. Without `MYSQL_URL` the tests are skipped.
 
-## What the migration creates
+## What the migrations create
 
 ```sql
 CREATE TABLE `Post` (
@@ -105,21 +139,37 @@ CREATE TABLE `User` (
 );
 ```
 
-plus an index on `Post.authorId` and the foreign key to `User`. The PSL enum
-`Role` becomes a native MySQL `enum` column, so the database enforces its
+plus an index on `Post.authorId` and the foreign key to `User`. The second
+migration creates the events table:
+
+```sql
+CREATE TABLE `Event` (
+  `createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
+  `day` date NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `opensAt` time(6) NOT NULL,
+  `startsAt` datetime(3) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  PRIMARY KEY (`id`)
+);
+```
+
+The PSL enum `Role` becomes a native MySQL `enum` column, so the database enforces its
 members. `String` becomes `varchar(191)`, because MySQL cannot put a unique
 index on a `text` column without a key length.
 
 ## Key files
 
-- `prisma/contract.prisma` — the contract (User, Post, Role)
+- `prisma/contract.prisma` — the contract (User, Post, Event, Role)
 - `prisma.config.ts` — CLI config; reads the connection from `MYSQL_URL`
-- `migrations/` — the committed migration and its contract snapshot
+- `migrations/` — the committed migrations and their contract snapshots
 - `src/prisma/db.ts` — the client
 - `src/orm-client/` — the ORM reads, one file each
 - `src/queries/` — the SQL builder read
 - `src/seed.ts` — the demo rows
+- `src/raw/create-event.ts` — an event written through the raw SQL lane, its values encoded by their codecs
 - `test/migrations.test.ts` — the migration flow
 - `test/reads.test.ts` — the reads against a migrated, seeded database
+- `test/events.test.ts` — events written and read back with their dates and times
 - `test/cli.ts` — runs the `prisma` CLI on a copy of the example
 - `test/database.ts` — creates and drops a database for each test file

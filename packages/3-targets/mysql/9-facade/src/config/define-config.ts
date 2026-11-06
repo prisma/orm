@@ -10,8 +10,9 @@ import type { ControlExtensionDescriptor } from '@internal/framework-components/
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
 import { MYSQL_ENUM_CODEC_ID, MYSQL_INT_CODEC_ID } from '@internal/target-mysql/codec-ids';
-import mysql, { mysqlCreateNamespace } from '@internal/target-mysql/control';
+import mysql from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
+import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 

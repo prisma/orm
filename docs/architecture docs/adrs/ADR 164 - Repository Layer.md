@@ -47,7 +47,9 @@ Repository operations compose these primitives to implement multi-query workflow
 
 | Scenario | Why multi-query | Strategy |
 |----------|----------------|----------|
-| CREATE without RETURNING | Target lacks RETURNING | INSERT followed by SELECT using known key |
+| CREATE without RETURNING | Target lacks RETURNING | INSERT followed by SELECT using known key: the key values the client supplies, or the insert id the driver reports for a one-row insert |
+| UPDATE / DELETE without RETURNING | Target lacks RETURNING | SELECT the matching keys; write with the caller's filter (many rows) or by the selected key (one row); then SELECT by those keys, with any new key value the update set, or return the rows read first (DELETE) |
+| UPSERT without RETURNING | Target lacks RETURNING | INSERT with an update on conflict, then SELECT by the create's values for the conflict columns |
 | Nested creates | Parent + children across tables | Ordered INSERTs within a transaction, propagating generated keys |
 
 ### 6) Transaction policy
@@ -75,7 +77,7 @@ The repository layer is the **successor** to the ORM lane, not an extension of i
 
 The repository layer reads **contract capabilities** (ADR 031) to choose between single-query and multi-query strategies:
 
-- When `RETURNING` is available, a CREATE can be lowered to a single statement; when absent, the repository issues INSERT + SELECT
+- When `RETURNING` is available, a CREATE can be lowered to a single statement; when absent, the repository issues INSERT + SELECT. A database without `RETURNING` reports at most one generated value per statement, so an operation that would need several generated keys back (a multi-row create returning rows) is refused before it runs
 - When CTE-based nested mutations are feasible (e.g., writable CTEs on Postgres), prefer single-statement lowering via the lane; otherwise, fall back to multi-statement orchestration
 - Strategy selection is deterministic given the same contract and capabilities — no runtime feature detection
 

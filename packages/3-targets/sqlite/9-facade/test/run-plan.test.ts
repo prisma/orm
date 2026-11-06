@@ -38,7 +38,7 @@ describe('query and execute on a sqlite client', () => {
     );
     const rows = await db.query(db.sql.posts.select('id', 'title').build()).toArray();
 
-    expect(inserted).toEqual({ affectedRows: 1 });
+    expect(inserted).toEqual({ affectedRows: 1, insertId: '1' });
     expect(rows).toEqual([{ id: 1, title: 'Hello' }]);
   });
 });
