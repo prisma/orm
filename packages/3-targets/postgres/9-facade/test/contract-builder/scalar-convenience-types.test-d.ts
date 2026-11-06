@@ -31,6 +31,10 @@ test('a scalar convenience call with no row does not compile', () => {
     type.BigInt({ as: 'number', storage: 'numeric' });
     // @ts-expect-error Text takes no length
     type.String({ length: 12 });
+    // @ts-expect-error Json stores only jsonb or json
+    type.Json({ storage: 'text' });
+    // @ts-expect-error Json has no as option
+    type.Json({ as: 'string' });
     return { models: {} };
   });
 });
