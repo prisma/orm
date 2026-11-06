@@ -3,6 +3,7 @@ import { ok } from '@internal/utils/result';
 import { expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { str } from '../src/attribute-spec/combinators/str';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import type { ArgType, BlockAttributeCtx } from '../src/attribute-spec/types';
 import { structBlock } from '../src/block-spec/constructors';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
@@ -51,17 +52,22 @@ it('passes the block being parsed to its values and attributes through the parse
     'tagged First {\n  owner = x\n  @@mark(y)\n}\ntagged Second {\n  owner = x\n}',
     'self-block.psl',
   );
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
 
   const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
     pslBlockDescriptors,
     binder: supportBinder({ sources, symbolTable, pslBlockDescriptors }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
 
-  const first = symbolTable.topLevel.blocks['First']!;
-  const second = symbolTable.topLevel.blocks['Second']!;
+  const first = symbolTable.defaultNamespace.blocks['First']!;
+  const second = symbolTable.defaultNamespace.blocks['Second']!;
   expect(diagnostics).toEqual([]);
   expect(parsedBlocks.get(first)).toMatchObject({
     values: { owner: 'First' },
@@ -70,5 +76,7 @@ it('passes the block being parsed to its values and attributes through the parse
   expect(parsedBlocks.get(second)).toMatchObject({ values: { owner: 'Second' } });
   expect(refinedBlocks).toEqual([first]);
   expect(factoryContexts.length).toBeGreaterThan(0);
-  for (const ctx of factoryContexts) expect(ctx).toEqual({ symbols: symbolTable });
+  for (const ctx of factoryContexts) {
+    expect(ctx).toEqual({ symbols: symbolTable, dataTypes: EMPTY_DATA_TYPES });
+  }
 });

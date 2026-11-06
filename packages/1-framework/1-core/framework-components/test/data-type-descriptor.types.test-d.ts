@@ -3,7 +3,6 @@
  * names it at adaptation instead. ADR 254, spec B1.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { expectTypeOf, test } from 'vitest';
 import {
@@ -17,33 +16,34 @@ import {
   type CodecInstanceContext,
   type CodecTrait,
   type DataTypeId,
-  dataTypeId,
+  type DataTypeValue,
+  dataType,
 } from '../src/exports/codec';
 
-const demoInt = dataTypeId('demo/int');
+const demoIntType = dataType('demo/int', { read: (json) => json });
+const demoInt = demoIntType.id;
 
 class DemoCodec extends CodecImpl<'demo/int@1', readonly ['equality'], number, number> {
-  async encode(value: number, _ctx: CodecCallContext): Promise<number> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  async fromWire(wire: number, _ctx: CodecCallContext): Promise<number> {
     return wire;
   }
-  encodeJson(value: number): JsonValue {
-    return value;
+  toDataTypeValue(value: number): DataTypeValue {
+    return this.dataTypeValueOf(value);
   }
-  decodeJson(json: JsonValue): number {
-    return Number(json);
+  fromDataTypeValue(value: DataTypeValue): number {
+    return Number(value.value);
   }
 }
 
 abstract class DemoDescriptorBody<P> extends CodecDescriptorTemplateImpl<P> {
   override readonly codecId = 'demo/int@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
-  override readonly targetTypes: readonly string[] = ['int'];
   override readonly paramsSchema: StandardSchemaV1<P> | undefined = undefined;
   override factory(): (ctx: CodecInstanceContext) => Codec {
-    return () => new DemoCodec(this);
+    return () => new DemoCodec(this, demoIntType);
   }
 }
 
@@ -51,10 +51,9 @@ class DemoDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = demoInt;
   override readonly codecId = 'demo/int@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
-  override readonly targetTypes: readonly string[] = ['int'];
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Codec {
-    return () => new DemoCodec(this);
+    return () => new DemoCodec(this, demoIntType);
   }
 }
 
@@ -74,10 +73,9 @@ test('a descriptor without a data type does not type-check', () => {
   const missing = {
     codecId: 'demo/int@1',
     traits: ['equality'] as readonly CodecTrait[],
-    targetTypes: ['int'] as readonly string[],
     paramsSchema: undefined,
     isParameterized: false,
-    factory: () => () => new DemoCodec(new DemoDescriptor()),
+    factory: () => () => new DemoCodec(new DemoDescriptor(), demoIntType),
   };
   // @ts-expect-error a codec descriptor names the data type it represents
   const descriptor: CodecDescriptor<void> = missing;

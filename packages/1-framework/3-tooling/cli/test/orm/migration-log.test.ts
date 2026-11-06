@@ -150,8 +150,16 @@ describe('migration log', () => {
         ],
       ],
     });
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+  });
+
+  it('prints one data line per applied migration: applied at, space, name, from, to and operation count', async () => {
+    mocks.readLedger.mockResolvedValue([ledgerEntry()]);
+
+    const run = await harness(ormConfig()).run(['migration', 'log'], { cwd: '/tmp' });
+
+    expect(run.stdout).toBe(
+      '2026-06-01T08:00:00.000Z\tapp\t20260601T0800_initial\t\tdest-hash\t3\n',
+    );
   });
 
   it('lines the table up under its headings', async () => {
@@ -206,7 +214,8 @@ describe('migration log', () => {
       error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
     });
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('raises the migration namespace code when the target has no runner', async () => {

@@ -1,0 +1,1213 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "sqlite",
+  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "roots": {
+    "employees": {
+      "model": "Employee",
+      "namespace": "__unbound__"
+    },
+    "generated": {
+      "model": "Generated",
+      "namespace": "__unbound__"
+    },
+    "post_tags": {
+      "model": "PostTag",
+      "namespace": "__unbound__"
+    },
+    "posts": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "profiles": {
+      "model": "Profile",
+      "namespace": "__unbound__"
+    },
+    "tags": {
+      "model": "Tag",
+      "namespace": "__unbound__"
+    },
+    "users": {
+      "model": "User",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Employee": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "managerId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              }
+            },
+            "relations": {
+              "manager": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "managerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Employee",
+                  "namespace": "__unbound__"
+                }
+              },
+              "reports": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "managerId"
+                  ]
+                },
+                "to": {
+                  "model": "Employee",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "managerId": {
+                  "column": "managerId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "employees"
+            }
+          },
+          "Generated": {
+            "fields": {
+              "cuid2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "ksuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "nanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "shortNanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 12
+                  }
+                }
+              },
+              "ulid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "uuidv7": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ksuid": {
+                  "column": "ksuid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "shortNanoid": {
+                  "column": "shortNanoid"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "uuidv7": {
+                  "column": "uuidv7"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "generated"
+            }
+          },
+          "Post": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              },
+              "tags": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "postId"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "tagId"
+                  ],
+                  "namespaceId": "__unbound__",
+                  "parentColumns": [
+                    "postId"
+                  ],
+                  "table": "post_tags",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Tag",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "posts"
+            }
+          },
+          "PostTag": {
+            "fields": {
+              "postId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "tagId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "postId": {
+                  "column": "postId"
+                },
+                "tagId": {
+                  "column": "tagId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "post_tags"
+            }
+          },
+          "Profile": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "rank": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "rank": {
+                  "column": "rank"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "profiles"
+            }
+          },
+          "Tag": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "tagId"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "postId"
+                  ],
+                  "namespaceId": "__unbound__",
+                  "parentColumns": [
+                    "tagId"
+                  ],
+                  "table": "post_tags",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "label": {
+                  "column": "label"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "tags"
+            }
+          },
+          "User": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "cuid2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "ksuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "nanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "seenAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "shortNanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 10
+                  }
+                }
+              },
+              "ulid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "__unbound__"
+                }
+              },
+              "profile": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Profile",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "email": {
+                  "column": "email"
+                },
+                "externalId": {
+                  "column": "externalId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ksuid": {
+                  "column": "ksuid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "seenAt": {
+                  "column": "seenAt"
+                },
+                "shortNanoid": {
+                  "column": "shortNanoid"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "users"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "employees": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "managerId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "generated": {
+              "columns": {
+                "cuid2": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "ksuid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "nanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "shortNanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 12
+                  }
+                },
+                "ulid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "uuidv7": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "post_tags": {
+              "columns": {
+                "postId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "tagId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "uniques": []
+            },
+            "posts": {
+              "columns": {
+                "authorId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "title": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "posts"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "profiles": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "rank": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "profiles_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "profiles"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "profiles_userId_idx_a489d58a",
+                  "prefix": "profiles_userId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "tags": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "label": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "users": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                },
+                "cuid2": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                },
+                "email": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "externalId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "ksuid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "nanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "seenAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                },
+                "shortNanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 10
+                  }
+                },
+                "ulid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "nanoid",
+                    "cuid2"
+                  ],
+                  "name": "by_short_ids_4281457c",
+                  "prefix": "by_short_ids",
+                  "unique": true
+                },
+                {
+                  "columns": [
+                    "email"
+                  ],
+                  "name": "users_email_idx_46df9cad",
+                  "prefix": "users_email_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "ulid"
+                  ],
+                  "name": "users_ulid_exact",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "61f45717d58063c164b53696498c9bb6823230363cbbf5b6ebcad72797501deb"
+  },
+  "execution": {
+    "executionHash": "2fd552b8b15a3551234178e075fd25d6a5c4eff1d93bc4e236730b63e646f7d3",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "employees",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "cuid2",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "ksuid",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "nanoid",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator",
+            "params": {
+              "size": 12
+            }
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "shortNanoid",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "ulid",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "uuidv7",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "posts",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "profiles",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "tags",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "createdAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "sql": {
+      "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

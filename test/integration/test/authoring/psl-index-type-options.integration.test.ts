@@ -1,7 +1,8 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import paradedbPack from '@internal/extension-paradedb/pack';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -10,15 +11,16 @@ import {
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 // postgresPack is used directly in interpretPslDocumentToSqlContract (not in defineContract).
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 
-const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: string }>([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+const scalarColumnDescriptors = new Map<string, { codecId: string }>([
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['String', { codecId: 'pg/text@1' }],
 ]);
 
 const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
@@ -36,9 +38,9 @@ function interpret(schema: string) {
     sourceId: 'index-type-options.prisma',
     context: {
       composedExtensions: [paradedbPack.id],
+      defaultNamespaceId: 'public',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -47,9 +49,10 @@ function interpret(schema: string) {
         dataTypes: {},
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
-      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      codecLookup: createPostgresBuiltinCodecLookup(),
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: postgresDataTypeLookup,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup, dataTypeOfCodec: () => undefined },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

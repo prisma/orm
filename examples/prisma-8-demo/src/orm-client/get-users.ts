@@ -1,7 +1,5 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-export async function ormClientGetUsers(limit: number, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.limit(limit).all();
+export async function ormClientGetUsers(limit: number, orm: DemoOrm) {
+  return orm.User.limit(limit).all();
 }

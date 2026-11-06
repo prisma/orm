@@ -1,6 +1,5 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * Full-text search over post titles, best match first.
@@ -12,9 +11,8 @@ import { createOrmClient } from './client';
  * `-excluded` and `or` work. For a typeahead prefix match, the `tsquery` tag
  * quotes the typed text as one term: `` tsquery`${term}:*` ``.
  */
-export async function ormClientSearchPostsByTitle(query: string, limit: number, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.Post.select('id', 'title', 'userId')
+export async function ormClientSearchPostsByTitle(query: string, limit: number, orm: DemoOrm) {
+  return orm.Post.select('id', 'title', 'userId')
     .where((p) => p.title.fullTextMatches(websearchToTsquery(query)))
     .orderBy((p) => p.title.fullTextRank(websearchToTsquery(query)).desc())
     .orderBy((p) => p.id.asc())

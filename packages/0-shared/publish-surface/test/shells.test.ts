@@ -56,7 +56,9 @@ describe('publicShells', () => {
   // rule stands for.
   it('classifies each shell the way its name says', () => {
     const expectedKind = (name: string) => {
-      if (name.startsWith('@prisma/orm-extension-')) return 'extension';
+      if (name.startsWith('@prisma/orm-extension-') || name === '@prisma/orm-postgres-contrib') {
+        return 'extension';
+      }
       return /^@prisma\/orm-(framework|toolchain|family-|target-)/.test(name)
         ? 'platform'
         : 'facade';
@@ -88,6 +90,24 @@ describe('publicShells', () => {
     expect(dangling).toEqual([]);
   });
 
+  it('publishes each contrib module only through its per-plane entrypoints', () => {
+    const manifest: unknown = JSON.parse(
+      readFileSync(
+        join(repoRoot, 'packages/9-public/@prisma/orm-postgres-contrib', 'package.json'),
+        'utf8',
+      ),
+    );
+
+    expect(Object.keys((manifest as { exports?: Record<string, unknown> }).exports ?? {})).toEqual([
+      './citext/codec-types',
+      './citext/column-types',
+      './citext/control',
+      './citext/pack',
+      './citext/runtime',
+      './package.json',
+    ]);
+  });
+
   it('publishes the Prisma schema sources only through the entrypoints applications import', () => {
     const published = (shellDir: string, pattern: RegExp): string[] => {
       const manifest: unknown = JSON.parse(
@@ -104,6 +124,7 @@ describe('publicShells', () => {
         './contract-psl',
         './contract-psl/attribute-specs',
         './contract-psl/default-table-name',
+        './contract-psl/diagnostics',
         './contract-psl/map-names',
         './contract-psl/provider',
       ],
@@ -124,7 +145,7 @@ describe('publicShells', () => {
   it('forwards every Mongo target export from the Mongo facade except the ones only the facade imports', () => {
     const notForwardedByFacade = ['prisma6-binding'];
     const manifest: unknown = JSON.parse(
-      readFileSync(join(repoRoot, 'packages/3-mongo-target/1-mongo-target/package.json'), 'utf8'),
+      readFileSync(join(repoRoot, 'packages/3-targets/mongo/1-target/package.json'), 'utf8'),
     );
     const targetSubpaths = Object.keys(
       (manifest as { exports?: Record<string, unknown> }).exports ?? {},
@@ -143,7 +164,7 @@ describe('publicShells', () => {
   it('forwards every Postgres target export from the Postgres facade except the ones only the facade imports', () => {
     const notForwardedByFacade = ['prisma7-binding'];
     const manifest: unknown = JSON.parse(
-      readFileSync(join(repoRoot, 'packages/3-targets/3-targets/postgres/package.json'), 'utf8'),
+      readFileSync(join(repoRoot, 'packages/3-targets/postgres/1-target/package.json'), 'utf8'),
     );
     const targetSubpaths = Object.keys(
       (manifest as { exports?: Record<string, unknown> }).exports ?? {},

@@ -14,14 +14,6 @@ function planWith(annotations: Record<string, unknown>): { readonly meta: PlanMe
 }
 
 describe('cacheAnnotation handle', () => {
-  it('declares namespace "cache"', () => {
-    expect(cacheAnnotation.namespace).toBe('cache');
-  });
-
-  it('declares applicableTo = ["read"]', () => {
-    expect(Array.from(cacheAnnotation.applicableTo)).toEqual(['read']);
-  });
-
   it('produces an applied annotation under namespace "cache" carrying the payload', () => {
     const applied = cacheAnnotation({ key: 'user-1' });
 

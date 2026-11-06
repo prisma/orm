@@ -1,17 +1,24 @@
-import type { RuntimeMiddlewareContext } from '@internal/framework-components/runtime';
+import type { ActivityContext } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { cacheAnnotation } from '../src/cache-annotation';
 import { type CacheMiddleware, createCacheMiddleware } from '../src/cache-middleware';
-import { type MockExec, makeCtx, makeExec, runMiss, spyStore } from './middleware-fixtures';
+import {
+  endStatement,
+  type MockExec,
+  makeCtx,
+  makeExec,
+  runMiss,
+  spyStore,
+} from './middleware-fixtures';
 
 async function startMiss(
   mw: CacheMiddleware,
-  ctx: RuntimeMiddlewareContext,
+  ctx: ActivityContext,
   key: string,
   meta?: unknown,
 ): Promise<MockExec> {
   const exec = makeExec(`select ${key}`, { cache: cacheAnnotation({ key, meta }) });
-  await mw.interceptQuery?.(exec, ctx);
+  await mw.intercept?.onQuery?.(exec, ctx);
   await mw.onRow?.({ id: 1 }, exec, ctx);
   return exec;
 }
@@ -19,13 +26,9 @@ async function startMiss(
 async function finishMiss(
   mw: CacheMiddleware,
   exec: MockExec,
-  ctx: RuntimeMiddlewareContext,
+  ctx: ActivityContext,
 ): Promise<void> {
-  await mw.afterQuery?.(
-    exec,
-    { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-    ctx,
-  );
+  await endStatement(mw, exec, ctx, { rowCount: 1 });
 }
 
 function debugCtx() {
@@ -92,11 +95,11 @@ describe('createCacheMiddleware — invalidate', () => {
     const exec = makeExec('select 1', { cache: cacheAnnotation({ key: 'user-1' }) });
     const ctx = makeCtx();
     await runMiss(mw, exec, ctx, [{ id: 1 }]);
-    expect(await mw.interceptQuery?.(exec, ctx)).toBeDefined();
+    expect(await mw.intercept?.onQuery?.(exec, ctx)).toBeDefined();
 
     await mw.invalidate({ keys: ['user-1'] });
 
-    expect(await mw.interceptQuery?.(exec, ctx)).toBeUndefined();
+    expect(await mw.intercept?.onQuery?.(exec, ctx)).toBeUndefined();
   });
 
   it.each([
@@ -149,7 +152,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
         version: 7,
         data: { empty: true },
       },
-      [{ id: 1 }],
+      { kind: 'statement-rows', rows: [{ id: 1 }] },
     );
   });
 
@@ -162,7 +165,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ keys: ['B'] });
     await finishMiss(mw, exec, ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('does not store a miss for key A that overlapped invalidate({ keys: ["A"] }), and logs the skip', async () => {
@@ -201,7 +204,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ meta: { tags: ['users'] } });
     await finishMiss(mw, exec, ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('stores a miss with meta that started after an invalidate({ meta }) naming that meta', async () => {
@@ -212,7 +215,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ meta: { tags: ['users'] } });
     await finishMiss(mw, await startMiss(mw, ctx, 'A', { tags: ['users'] }), ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('stores a miss that started after an invalidate', async () => {
@@ -223,7 +226,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ keys: ['A'] });
     await finishMiss(mw, await startMiss(mw, ctx, 'A'), ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('logs the store when set returns true', async () => {

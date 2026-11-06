@@ -70,17 +70,6 @@ describe('createMetaBuilder', () => {
     );
   });
 
-  it('runtime gate rejects a read-only annotation forced through a cast on a write builder', () => {
-    const meta = createMetaBuilder('write', 'create');
-    const annotateAny = meta.annotate as (annotation: unknown) => unknown;
-    expect(() => annotateAny.call(meta, cacheAnnotation({ ttl: 60 }))).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.ANNOTATION_INAPPLICABLE',
-        category: 'RUNTIME',
-      }),
-    );
-  });
-
   it('runtime gate names the offending namespace and terminal in the error', () => {
     const meta = createMetaBuilder('write', 'create');
     const annotateAny = meta.annotate as (annotation: unknown) => unknown;

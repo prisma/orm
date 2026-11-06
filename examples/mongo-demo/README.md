@@ -70,7 +70,7 @@ This creates the unique index on `users.email` and records the migration in the 
 
 ## Cross-family caching
 
-`src/db.ts` wires `@internal/middleware-cache` into the Mongo runtime — the same middleware used by `examples/prisma-8-demo` against Postgres. The package depends only on `@internal/framework-components/runtime`; cache keys come from `RuntimeMiddlewareContext.contentHash(exec)`, which `MongoRuntimeImpl` populates the same way `SqlRuntime` does, so the middleware works against Mongo out of the box.
+`src/db.ts` wires `@internal/middleware-cache` into the Mongo runtime — the same middleware used by `examples/prisma-8-demo` against Postgres. The package depends only on `@internal/framework-components/runtime`; cache keys come from `ActivityContext.contentHash(exec)`, which `MongoRuntimeImpl` populates the same way `SqlRuntime` does, so the middleware works against Mongo out of the box.
 
 The cache is **opt-in per query**: it acts only on plans whose `meta.annotations` carry a `cacheAnnotation`, and the default store keeps entries for 60 seconds. `scripts/cache-demo.ts` builds an aggregation plan with `mongoQuery`, attaches `cacheAnnotation({})` to `plan.meta.annotations.cache`, runs the same plan twice, and prints the per-call latency so the cache hit is visible:
 
@@ -102,13 +102,12 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 
 ## How the runtime works
 
-`src/db.ts` creates the client with `mongo<Contract>({ contractJson, url, dbName, middleware })` from `@prisma/orm-mongo/runtime`, which:
+`src/db.ts` validates the emitted `contract.json` and types it with `Contract` from `src/contract.d.ts` through `contractFromJson<Contract>(contractJson)` from `@prisma/orm-mongo/static`. It then creates the client with `mongo({ contract, url, dbName, middleware })` from `@prisma/orm-mongo/runtime`, which:
 
-1. Validates the emitted `contract.json` and types it with `Contract` from `src/contract.d.ts`
-2. Builds the execution stack from the Mongo target, adapter and driver, and the runtime that executes queries (with the cache middleware)
-3. Exposes the ORM with typed collection accessors (`db.orm.users`, `db.orm.posts`), the query builder (`db.query`) and the enums (`db.enums`)
+1. Builds the execution stack from the Mongo target, adapter and driver, and the runtime that executes queries (with the cache middleware)
+2. Exposes the ORM with typed collection accessors (`db.orm.users`, `db.orm.posts`), the query builder (`db.query`) and the enums (`db.enums`)
 
-`mongo()` also fills generated fields such as `temporal.createdAt()` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context as `mutationDefaults`: `mongoOrm({ contract, executor, mutationDefaults: context })`. It fills generated fields such as `temporal.createdAt()`, and `mongoOrm()` refuses a contract that has them when the option is missing (`ORM.MUTATION_DEFAULTS_MISSING`).
+`mongo()` also fills generated fields such as `temporal.CreatedAt` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context and the runtime, as with the SQL `orm()`: `mongoOrm({ context, runtime })`. The ORM fills generated fields such as `temporal.CreatedAt` through the context, and checks a written enum value against the contract's enums.
 
 ## Key files
 
@@ -129,6 +128,6 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 | Target        | PostgreSQL                                  | MongoDB                                     |
 | Schema        | `schema.prisma` (PSL)                       | `contract.prisma` (PSL)                     |
 | Emission      | CLI (`prisma contract emit`)           | CLI (`prisma contract emit`)           |
-| Runtime       | `postgres()` one-liner                      | `createMongoAdapter()` + `createMongoDriver()` + `createMongoRuntime()` + `mongoOrm()` |
+| Runtime       | `postgres()` one-liner                      | `mongo()` one-liner                         |
 | Relations     | SQL joins                                   | `$lookup` aggregation pipeline              |
 | Tests         | Requires running PostgreSQL                 | Uses `mongodb-memory-server` (no external DB) |

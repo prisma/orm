@@ -1,17 +1,19 @@
-import {
-  createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
-} from '@internal/adapter-postgres/control';
+import { createPostgresBuiltinCodecLookup } from '@internal/adapter-postgres/control';
 import type { PostgresContract } from '@internal/adapter-postgres/types';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import type { Client } from 'pg';
+import { createTestPostgresControlAdapter } from '../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
-const postgresControlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const postgresControlAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const postgresControlLowererContext = { contract: {} as PostgresContract };
 
 export async function executeLoweredStatement(

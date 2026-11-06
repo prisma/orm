@@ -19,7 +19,8 @@
       "!**/sql-contract.json",
       "!**/mongo-contract.json",
       "!**/migrations/*/*/migration.json",
-      "!**/migrations/*/*/ops.json"
+      "!**/migrations/*/*/ops.json",
+      "!**/planner-golden/fixtures/*/planned.golden.json"
     ]
   },
   "formatter": {
@@ -87,6 +88,12 @@
           }
         }
       }
+    },
+    // An upgrade script fixture holds the files a script reads and writes, byte for byte.
+    {
+      "includes": ["**/upgrade-instructions/*/fixtures/**"],
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
     },
     {
       "includes": ["**/*.config.ts"],

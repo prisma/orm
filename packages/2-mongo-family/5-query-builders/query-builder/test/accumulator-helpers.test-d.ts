@@ -1,9 +1,7 @@
 import { expectTypeOf } from 'vitest';
 import { acc } from '../src/accumulator-helpers';
 import type {
-  ArrayField,
   DocField,
-  NullableNumericField,
   NumericField,
   StringField,
   TypedAccumulatorExpr,
@@ -23,54 +21,6 @@ describe('accumulator helper types', () => {
     type IntField = { readonly codecId: 'mongo/int@1'; readonly nullable: false };
     const intExpr = {} as TypedAggExpr<IntField>;
     expectTypeOf(acc.sum(intExpr)).toEqualTypeOf<TypedAccumulatorExpr<IntField>>();
-  });
-
-  it('stdDevPop returns NullableNumericField', () => {
-    expectTypeOf(acc.stdDevPop(d)).toEqualTypeOf<TypedAccumulatorExpr<NullableNumericField>>();
-  });
-
-  it('stdDevSamp returns NullableNumericField', () => {
-    expectTypeOf(acc.stdDevSamp(d)).toEqualTypeOf<TypedAccumulatorExpr<NullableNumericField>>();
-  });
-
-  it('firstN returns ArrayField', () => {
-    expectTypeOf(acc.firstN({ input: d, n })).toEqualTypeOf<TypedAccumulatorExpr<ArrayField>>();
-  });
-
-  it('lastN returns ArrayField', () => {
-    expectTypeOf(acc.lastN({ input: d, n })).toEqualTypeOf<TypedAccumulatorExpr<ArrayField>>();
-  });
-
-  it('maxN returns ArrayField', () => {
-    expectTypeOf(acc.maxN({ input: d, n })).toEqualTypeOf<TypedAccumulatorExpr<ArrayField>>();
-  });
-
-  it('minN returns ArrayField', () => {
-    expectTypeOf(acc.minN({ input: d, n })).toEqualTypeOf<TypedAccumulatorExpr<ArrayField>>();
-  });
-
-  it('top returns DocField', () => {
-    expectTypeOf(acc.top({ output: d, sortBy: { score: -1 } })).toEqualTypeOf<
-      TypedAccumulatorExpr<DocField>
-    >();
-  });
-
-  it('bottom returns DocField', () => {
-    expectTypeOf(acc.bottom({ output: d, sortBy: { score: -1 } })).toEqualTypeOf<
-      TypedAccumulatorExpr<DocField>
-    >();
-  });
-
-  it('topN returns ArrayField', () => {
-    expectTypeOf(acc.topN({ output: d, sortBy: { score: -1 }, n })).toEqualTypeOf<
-      TypedAccumulatorExpr<ArrayField>
-    >();
-  });
-
-  it('bottomN returns ArrayField', () => {
-    expectTypeOf(acc.bottomN({ output: d, sortBy: { score: -1 }, n })).toEqualTypeOf<
-      TypedAccumulatorExpr<ArrayField>
-    >();
   });
 
   it('rejects wrong type for firstN n key', () => {

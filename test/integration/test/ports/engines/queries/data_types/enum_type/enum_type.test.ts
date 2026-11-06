@@ -1,5 +1,6 @@
 import { defineContract, enumType, field, member, model } from '@internal/mongo/contract-builder';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
+import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts as mongoTimeouts, withMongoPort } from '../../../../../_harness/mongo';
 import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
@@ -14,7 +15,7 @@ function withEnum(fn: Parameters<typeof withPostgresPort<PostgresContract>>[1]) 
 
 const MyEnum = enumType(
   'MyEnum',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('A'),
   member('B'),
   member('C'),
@@ -26,7 +27,7 @@ const mongoContract = defineContract({
     TestModel: model('TestModel', {
       collection: 'TestModel',
       fields: {
-        _id: field.int32(),
+        _id: field.objectId(),
         my_enum: field.namedType(MyEnum).optional(),
       },
     }),
@@ -66,12 +67,15 @@ describe('ports/engines/queries/data_types/enum_type', () => {
       withMongoPort<typeof mongoContract>(
         { contractJson: mongoContract },
         async ({ db, mongoDb }) => {
+          const id = new ObjectId();
           await mongoDb
-            .collection<{ _id: number; my_enum: string }>('TestModel')
-            .insertOne({ _id: 1, my_enum: 'D' }, { bypassDocumentValidation: true });
+            .collection<{ _id: ObjectId; my_enum: string }>('TestModel')
+            .insertOne({ _id: id, my_enum: 'D' }, { bypassDocumentValidation: true });
 
           await expect(
-            db.TestModel.where(MongoFieldFilter.eq('_id', 1)).select('my_enum').first(),
+            db.TestModel.where(MongoFieldFilter.eq('_id', id.toHexString()))
+              .select('my_enum')
+              .first(),
           ).rejects.toThrow();
         },
       ),

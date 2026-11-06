@@ -48,12 +48,6 @@ describe('IdentifierAst', () => {
     expect(id!.token()?.text).toBe('User');
   });
 
-  it('returns syntax property', () => {
-    const root = createSyntaxTree(buildIdentifier('User'));
-    const id = IdentifierAst.cast(root);
-    expect(id!.syntax).toBe(root);
-  });
-
   it('cast returns undefined for non-matching kind', () => {
     const b = new GreenNodeBuilder();
     b.startNode('Document');

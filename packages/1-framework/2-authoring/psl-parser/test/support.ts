@@ -1,11 +1,14 @@
 import type {
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
-  DataTypeAuthoringEntry,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
-import type { AttributeSpecNamespace } from '../src/attribute-spec/spec-context';
-import type { BlockAttributeCtx } from '../src/attribute-spec/types';
+import { notOk, ok } from '@internal/utils/result';
+import { identifier } from '../src/attribute-spec/combinators/identifier';
+import { type AttributeSpecNamespace, EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
+import type { ArgType, AttributeCtx, BlockAttributeCtx } from '../src/attribute-spec/types';
 import {
   type Binder,
   type BinderContext,
@@ -18,6 +21,27 @@ import type { PslSources, Range, SourceFile } from '../src/source-file';
 import { buildSymbolTable, type SymbolTable } from '../src/symbol-table';
 import type { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
+
+export function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
+
+export function rejectingNothing(): ArgType<never, AttributeCtx> {
+  return {
+    kind: 'rejecting',
+    label: 'nothing',
+    message: 'Rejects every value',
+    parse: () => notOk([]),
+  };
+}
 
 /**
  * The framework PSL built-in scalar names a typical target declares. `resolve`
@@ -104,25 +128,27 @@ export function binderContext(
     readonly attributeSpecs?: AttributeSpecNamespace;
     readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
     readonly defaultFunctionRegistry?: ControlMutationDefaultRegistry;
-    readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>>;
+    readonly dataTypes?: DataTypeSupport;
     readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute;
     readonly describeUnresolvedType?: DescribeUnresolvedType;
   } = {},
 ): BinderContext {
   const { describeUnsupportedAttribute, describeUnresolvedType } = input;
+  const dataTypes = input.dataTypes ?? EMPTY_DATA_TYPES;
   return {
     authoringContributions: {
-      field: {},
       type: input.contributedTypes ?? {},
       entityTypes: {},
       pslBlockDescriptors: input.pslBlockDescriptors ?? {},
       modelAttributes: {},
       attributeSpecs: input.attributeSpecs ?? { model: {}, field: {} },
-      dataTypes: input.dataTypeEntries ?? {},
+      dataTypes: dataTypes.entries,
     },
     controlMutationDefaults: {
       defaultFunctionRegistry: input.defaultFunctionRegistry ?? new Map(),
     },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    dataTypes,
     pslDiagnostics: {
       ...(describeUnsupportedAttribute === undefined
         ? {}
@@ -156,8 +182,12 @@ export function blockAttributeFixture(attributeSource: string): {
   readonly ctx: BlockAttributeCtx;
 } {
   const { document, sources } = parse(`fixture Probe {\n  ${attributeSource}\n}`, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const block = symbolTable.topLevel.blocks['Probe'];
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
+  const block = symbolTable.defaultNamespace.blocks['Probe'];
   const node = block === undefined ? undefined : [...block.node.attributes()][0];
   if (block === undefined || node === undefined) throw new Error('expected a block attribute');
   return {

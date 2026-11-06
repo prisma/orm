@@ -1,14 +1,11 @@
+import type { PlanMeta } from '@internal/contract/types';
 import {
-  domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
-  type PlanMeta,
-} from '@internal/contract/types';
-import type {
-  AnyMongoTypeMaps,
-  ExtractMongoCodecTypes,
-  MongoContract,
-  MongoContractWithTypeMaps,
-  MongoModelDefinition,
+  type AnyMongoTypeMaps,
+  defaultMongoDomainNamespaceId,
+  type ExtractMongoCodecTypes,
+  type MongoContract,
+  type MongoContractWithTypeMaps,
+  mongoModelsOf,
 } from '@internal/mongo-contract';
 import type {
   MongoAggAccumulator,
@@ -60,7 +57,6 @@ import {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { createFieldAccessor, type Expression, type FieldAccessor } from './field-accessor';
@@ -832,15 +828,11 @@ export class PipelineChain<
     const contractNarrow = this.#contract as MongoContract;
     let resultShape: MongoResultShape | undefined;
     if (modelName !== undefined) {
-      const model = castAs<MongoModelDefinition | undefined>(
-        domainModelsAtDefaultNamespace(contractNarrow.domain)[modelName],
-      );
+      const model = mongoModelsOf(contractNarrow.domain, defaultMongoDomainNamespaceId)[modelName];
       resultShape = model
         ? computePipelineResultShape(
             this.#state.stages,
-            contractModelToMongoResultShape(model, {
-              valueObjects: domainValueObjectsAtDefaultNamespace(contractNarrow.domain) ?? {},
-            }),
+            contractModelToMongoResultShape(model, { storage: contractNarrow.storage }),
           )
         : { kind: 'unknown' as const };
     }

@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { orm } from '@internal/sql-orm-client';
+import { activitySource, delegatingActivitySource } from '@internal/sql-runtime';
 import type { SqliteClient } from '@internal/sqlite/runtime';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { rejectionShape } from './error-shape';
@@ -53,7 +55,11 @@ describe('integration/integer representation type on sqlite', () => {
       );
     `);
 
-    client = sqlite<Contract>({ contractJson, path, verifyMarker: false });
+    client = sqlite({
+      contract: contractFromJson<Contract>(contractJson),
+      path,
+      verifyMarker: false,
+    });
     const runtime = await client.connect();
     db = orm({
       context: client.context,
@@ -67,6 +73,7 @@ describe('integration/integer representation type on sqlite', () => {
         connection() {
           return runtime.connection();
         },
+        [activitySource]: delegatingActivitySource(() => runtime),
       },
     });
   });
@@ -135,7 +142,7 @@ describe('integration/integer representation type on sqlite', () => {
     // runtime's column-context envelope, with the codec error on `cause`.
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
+      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
@@ -146,10 +153,9 @@ describe('integration/integer representation type on sqlite', () => {
       },
       cause: {
         name: 'StructuredError',
-        message:
-          'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: JSON.stringify(String(FIRST_UNSAFE)) },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: String(FIRST_UNSAFE) },
       },
     });
 

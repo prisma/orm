@@ -2,7 +2,7 @@
 
 namespace public {
   model Profile {
-    id       Uuid   @id @default(uuid())
+    id       Uuid   @id @default(sql`gen_random_uuid()`)
     username String
     userId   Uuid   @unique
     user     supabase:auth.AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)

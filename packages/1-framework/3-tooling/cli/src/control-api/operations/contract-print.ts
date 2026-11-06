@@ -4,7 +4,7 @@ import { createControlStack, hasPslContractBuild } from '@internal/framework-com
 import { printPsl } from '@internal/psl-printer';
 import { ifDefined } from '@internal/utils/defined';
 import { errorRuntime } from '../../utils/cli-errors';
-import { loadContractSourceWithStack } from './load-contract-source';
+import { loadContractSourceWithStack, withWarningFindings } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
 type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
@@ -36,7 +36,8 @@ const defaultContractPrintDependencies: ContractPrintDependencies = { printPsl }
  * PSL. One control stack serves the whole operation: the source is loaded against it, the family
  * instance is created from it, and its block descriptors and codec lookup render the text.
  *
- * @throws {CliStructuredError} `CONTRACT.SOURCE_LOAD_FAILED` when the source cannot produce a
+ * @throws {CliStructuredError} the source's own code for a structured error it throws, such as
+ * `CONTRACT.DEFAULT_INVALID`, `CONTRACT.SOURCE_LOAD_FAILED` for any other failure to produce a
  * contract, and `CONTRACT.PRINT_UNSUPPORTED` when the family or target cannot print it
  * @throws the family instance's error for a contract whose structure it rejects, as `contract emit`
  * reports it
@@ -48,22 +49,23 @@ export async function executeContractPrint(
 ): Promise<ContractPrintResult> {
   const { config, contractConfig, description, cwd, signal } = options;
   const stack = createControlStack(config);
-  const sourceWarnings: ContractSourceDiagnostic[] = [];
   const loaded = await loadContractSourceWithStack({
     stack,
     source: contractConfig.source,
     cwd,
     ...ifDefined('signal', signal),
-    reportWarning: (diagnostic) => {
-      sourceWarnings.push(diagnostic);
-    },
   });
   if (!loaded.ok) {
-    throw loaded.failure.error;
+    throw withWarningFindings(loaded.failure.error, loaded.failure.warnings, cwd);
   }
+  const { warnings: sourceWarnings } = loaded.value;
 
   const familyInstance = config.family.create(stack);
-  const contract = validateLoadedContract({ config, familyInstance, contract: loaded.value });
+  const contract = validateLoadedContract({
+    config,
+    familyInstance,
+    contract: loaded.value.contract,
+  });
   if (!hasPslContractBuild(familyInstance)) {
     throw errorRuntime(
       'CONTRACT.PRINT_UNSUPPORTED',

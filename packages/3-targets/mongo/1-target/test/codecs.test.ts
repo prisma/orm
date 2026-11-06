@@ -1,0 +1,272 @@
+import { isStructuredError } from '@internal/utils/structured-error';
+import { BSON, Double, ObjectId } from 'bson';
+import { ObjectId as DriverObjectId } from 'mongodb';
+import { describe, expect, it } from 'vitest';
+import {
+  mongoBooleanCodec,
+  mongoDateCodec,
+  mongoDescriptorById,
+  mongoDoubleCodec,
+  mongoInt32Codec,
+  mongoObjectIdCodec,
+  mongoStringCodec,
+  mongoVectorCodec,
+} from '../src/core/codecs';
+import { fromContractJson, toContractJson } from './contract-json';
+
+describe('mongoObjectIdCodec', () => {
+  it('decodes ObjectId to hex string', async () => {
+    const oid = new ObjectId('507f1f77bcf86cd799439011');
+    expect(await mongoObjectIdCodec.fromWire(oid, {})).toBe('507f1f77bcf86cd799439011');
+  });
+
+  it('encodes hex string to ObjectId', async () => {
+    const result = await mongoObjectIdCodec.toWire('507f1f77bcf86cd799439011', {});
+    expect(result).toBeInstanceOf(ObjectId);
+    expect(result.toHexString()).toBe('507f1f77bcf86cd799439011');
+  });
+
+  it('round-trips: decode(encode(hex)) === hex', async () => {
+    const hex = '65a1b2c3d4e5f6a7b8c9d0e1';
+    expect(await mongoObjectIdCodec.fromWire(await mongoObjectIdCodec.toWire(hex, {}), {})).toBe(
+      hex,
+    );
+  });
+});
+
+describe('mongoStringCodec', () => {
+  it('round-trips string values', async () => {
+    const value = 'hello world';
+    expect(await mongoStringCodec.fromWire(value, {})).toBe(value);
+    expect(await mongoStringCodec.toWire(value, {})).toBe(value);
+  });
+});
+
+describe('mongoInt32Codec', () => {
+  it('round-trips number values', async () => {
+    expect(await mongoInt32Codec.fromWire(42, {})).toBe(42);
+    expect(await mongoInt32Codec.toWire(42, {})).toBe(42);
+  });
+
+  it('encodes both ends of the signed 32-bit range', async () => {
+    expect(await mongoInt32Codec.toWire(-(2 ** 31), {})).toBe(-(2 ** 31));
+    expect(await mongoInt32Codec.toWire(2 ** 31 - 1, {})).toBe(2 ** 31 - 1);
+  });
+
+  it.each([
+    ['1.5', 1.5],
+    ['2147483648', 2 ** 31],
+    ['1099511627776', 2 ** 40],
+    ['-2147483649', -(2 ** 31) - 1],
+    ['NaN', Number.NaN],
+    ['string "1"', '1'],
+  ])('refuses %s instead of letting the server reject it', async (received, value) => {
+    await expect(mongoInt32Codec.toWire(value as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `mongo/int32@1 value must be an integer from -2147483648 to 2147483647; received ${received}`,
+    });
+  });
+});
+
+describe('mongoDoubleCodec', () => {
+  it('round-trips floating-point number values', async () => {
+    expect(await mongoDoubleCodec.fromWire(42.5, {})).toBe(42.5);
+    expect(await mongoDoubleCodec.toWire(42.5, {})).toEqual(new Double(42.5));
+  });
+
+  it('encodes a whole number so that it is stored as a BSON double, not an int', async () => {
+    const stored = BSON.deserialize(
+      BSON.serialize({ value: await mongoDoubleCodec.toWire(2, {}) }),
+      { promoteValues: false },
+    );
+    expect(stored['value']).toMatchObject({ _bsontype: 'Double' });
+    expect(stored['value'].valueOf()).toBe(2);
+  });
+
+  it('refuses a value that is not a number', async () => {
+    await expect(mongoDoubleCodec.toWire('2' as unknown as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: 'mongo/double@1 value must be a number; received string "2"',
+    });
+  });
+});
+
+describe('mongoBooleanCodec', () => {
+  it('round-trips boolean values', async () => {
+    expect(await mongoBooleanCodec.fromWire(true, {})).toBe(true);
+    expect(await mongoBooleanCodec.toWire(false, {})).toBe(false);
+  });
+});
+
+describe('codecs that check the type of the value they write', () => {
+  it.each<[string, { toWire(value: never, ctx: object): unknown }, unknown]>([
+    ['mongo/string@1 value must be a string; received null', mongoStringCodec, null],
+    ['mongo/string@1 value must be a string; received 5', mongoStringCodec, 5],
+    [
+      'mongo/string@1 value must be a string; received a Date',
+      mongoStringCodec,
+      new Date('2020-01-01T00:00:00Z'),
+    ],
+    ['mongo/bool@1 value must be a boolean; received object', mongoBooleanCodec, { on: true }],
+    ['mongo/bool@1 value must be a boolean; received undefined', mongoBooleanCodec, undefined],
+    ['mongo/bool@1 value must be a boolean; received string "true"', mongoBooleanCodec, 'true'],
+    ['mongo/bool@1 value must be a boolean; received null', mongoBooleanCodec, null],
+    [
+      'mongo/date@1 value must be a valid Date; received string "2020-01-01"',
+      mongoDateCodec,
+      '2020-01-01',
+    ],
+    [
+      'mongo/date@1 value must be a valid Date; received an invalid Date',
+      mongoDateCodec,
+      new Date('not a date'),
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received null',
+      mongoObjectIdCodec,
+      null,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received 1700000000',
+      mongoObjectIdCodec,
+      1700000000,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "abcdefabcdef"',
+      mongoObjectIdCodec,
+      'abcdefabcdef',
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "zzzzzzzzzzzzzzzzzzzzzzzz"',
+      mongoObjectIdCodec,
+      'zzzzzzzzzzzzzzzzzzzzzzzz',
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId' },
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId', toHexString: () => 'not hex' },
+    ],
+    [
+      'mongo/vector@1 value must be an array of numbers; received an array',
+      mongoVectorCodec,
+      [1, '2'],
+    ],
+    ['mongo/vector@1 value must be an array of numbers; received null', mongoVectorCodec, null],
+  ])('refuses with: %s', async (message, codec, value) => {
+    await expect(
+      Promise.resolve().then(() => codec.toWire(value as never, {})),
+    ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED', message });
+  });
+
+  it('ObjectId takes upper-case hex digits', async () => {
+    const encoded = await mongoObjectIdCodec.toWire('65F0000000000000000000A1', {});
+    expect(encoded.toHexString()).toBe('65f0000000000000000000a1');
+  });
+
+  it('ObjectId takes the driver`s ObjectId as well as a hex string', async () => {
+    const hex = '65f0000000000000000000a1';
+    const encoded = await mongoObjectIdCodec.toWire(
+      new DriverObjectId(hex) as unknown as string,
+      {},
+    );
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
+  });
+
+  it('ObjectId takes an ObjectId from another major version of bson, by its hex string', async () => {
+    const hex = '65f0000000000000000000a2';
+    const otherMajorObjectId = {
+      _bsontype: 'ObjectId',
+      [Symbol.for('@@mdb.bson.version')]: 6,
+      toHexString: () => hex,
+    };
+    const encoded = await mongoObjectIdCodec.toWire(otherMajorObjectId as unknown as string, {});
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
+  });
+});
+
+describe('mongoVectorCodec', () => {
+  it('round-trips number array values', async () => {
+    const vec = [1.0, 2.5, 3.7];
+    expect(await mongoVectorCodec.fromWire(vec, {})).toBe(vec);
+    expect(await mongoVectorCodec.toWire(vec, {})).toBe(vec);
+  });
+});
+
+describe('mongoDateCodec', () => {
+  it('decodes wire Date through identity', async () => {
+    const d = new Date('2024-01-02T03:04:05.000Z');
+    expect(await mongoDateCodec.fromWire(d, {})).toBe(d);
+  });
+
+  it('encodes Date through identity', async () => {
+    const d = new Date('2024-01-02T03:04:05.000Z');
+    expect(await mongoDateCodec.toWire(d, {})).toBe(d);
+  });
+
+  it('toDataTypeValue writes the ISO string the contract stores', () => {
+    const d = new Date('2024-01-02T03:04:05.000Z');
+    expect(toContractJson(mongoDateCodec, d)).toBe('2024-01-02T03:04:05.000Z');
+  });
+
+  it('fromDataTypeValue reads the stored ISO string back to a Date', () => {
+    const result = fromContractJson(mongoDateCodec, '2024-01-02T03:04:05.000Z');
+    expect(result).toBeInstanceOf(Date);
+    expect(result.toISOString()).toBe('2024-01-02T03:04:05.000Z');
+  });
+
+  it('mongo/date refuses stored JSON that is not a string', () => {
+    expect(() => fromContractJson(mongoDateCodec, 123)).toThrow(
+      'mongo/date JSON value must be a date and time in UTC as Date.toISOString writes it',
+    );
+  });
+
+  it('mongo/date refuses stored JSON that is not a string with RUNTIME.DECODE_FAILED', () => {
+    let caught: unknown;
+    try {
+      fromContractJson(mongoDateCodec, 123);
+    } catch (err) {
+      caught = err;
+    }
+    expect(isStructuredError(caught)).toBe(true);
+    if (!isStructuredError(caught)) return;
+    expect(caught.code).toBe('RUNTIME.DECODE_FAILED');
+  });
+});
+
+describe('mongo vector descriptor', () => {
+  it('renders no output type text; its pack declares Vector<N> as a type function', () => {
+    expect(mongoDescriptorById(mongoVectorCodec.id)).not.toHaveProperty('renderOutputType');
+  });
+});
+
+describe('mongo descriptor factory', () => {
+  it('descriptor.factory()(ctx) returns the underlying MongoCodec', () => {
+    const descriptor = mongoDescriptorById(mongoStringCodec.id);
+    expect(descriptor).toBeDefined();
+    if (!descriptor) return;
+    const make = (descriptor.factory as () => () => unknown)();
+    const codec = make();
+    expect(codec).toBe(mongoStringCodec);
+  });
+
+  it('every standard mongo codec descriptor materializes its codec via factory', () => {
+    for (const descriptor of [
+      mongoDescriptorById(mongoObjectIdCodec.id),
+      mongoDescriptorById(mongoVectorCodec.id),
+      mongoDescriptorById(mongoDateCodec.id),
+    ]) {
+      expect(descriptor).toBeDefined();
+      if (!descriptor) continue;
+      const make = (descriptor.factory as () => () => unknown)();
+      expect(typeof make).toBe('function');
+      expect(make()).toBeDefined();
+    }
+  });
+});

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { join } from 'pathe';
 import { writeContractSnapshot } from './contract-snapshot-store';
@@ -39,10 +39,9 @@ export interface ContractSpaceArtifactInputs {
  * The head contract snapshot is write-if-absent (see
  * {@link writeContractSnapshot}): a changed extension contract has a new
  * hash, so it lands as a new store entry; an unchanged hash means identical
- * canonical content already sits there. `refs/head.json` stays
- * always-overwrite: the framework owns it, so running `migrate` twice with
- * the same inputs is a no-op observably (idempotent), but the helper does
- * not check pre-existing contents — re-emit always wins.
+ * canonical content already sits there. `refs/head.json` is
+ * rewritten whenever the head it holds differs; a file that already holds the
+ * same head, however it is formatted, is left alone.
  *
  * Path layout matches the convention in
  * [`spaceMigrationDirectory`](./space-layout.ts). The space id is
@@ -53,27 +52,48 @@ export interface ContractSpaceArtifactInputs {
  *
  * The migrations directory and space subdirectory are created if they
  * do not yet exist (`mkdir { recursive: true }`).
+ *
+ * Returns the snapshot directory and the head ref path when this call wrote them.
  */
 export async function emitContractSpaceArtifacts(
   projectMigrationsDir: string,
   spaceId: string,
   inputs: ContractSpaceArtifactInputs,
-): Promise<void> {
+): Promise<{ readonly writtenPaths: readonly string[] }> {
   assertValidSpaceId(spaceId);
 
   const dir = join(projectMigrationsDir, spaceId);
   const refsDir = spaceRefsDirectory(dir);
   await mkdir(refsDir, { recursive: true });
 
-  await writeContractSnapshot(projectMigrationsDir, inputs.headRef.hash, {
+  const writtenPaths: string[] = [];
+  const snapshot = await writeContractSnapshot(projectMigrationsDir, inputs.headRef.hash, {
     contractJson: inputs.contract,
     contractDts: inputs.contractDts,
   });
+  if (snapshot.written) writtenPaths.push(snapshot.dir);
 
   const sortedInvariants = [...inputs.headRef.invariants].sort();
   const headJson = canonicalizeJson({
     hash: inputs.headRef.hash,
     invariants: sortedInvariants,
   });
-  await writeFile(join(refsDir, 'head.json'), `${headJson}\n`);
+  const headPath = join(refsDir, 'head.json');
+  if ((await canonicalHeadOnDisk(headPath)) !== headJson) {
+    await writeFile(headPath, `${headJson}\n`);
+    writtenPaths.push(headPath);
+  }
+  return { writtenPaths };
+}
+
+async function canonicalHeadOnDisk(headPath: string): Promise<string | undefined> {
+  try {
+    const onDisk: { hash?: unknown; invariants?: unknown } = JSON.parse(
+      await readFile(headPath, 'utf-8'),
+    );
+    if (!Array.isArray(onDisk.invariants)) return undefined;
+    return canonicalizeJson({ hash: onDisk.hash, invariants: [...onDisk.invariants].sort() });
+  } catch {
+    return undefined;
+  }
 }

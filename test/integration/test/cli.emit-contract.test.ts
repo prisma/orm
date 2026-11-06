@@ -29,11 +29,13 @@ function buildSourceContext(
 ): ContractSourceContext {
   return {
     composedExtensions: stack.extensions.map((p) => p.id),
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs,
     capabilities: stack.capabilities,
   };

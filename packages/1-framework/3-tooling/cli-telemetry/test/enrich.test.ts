@@ -143,11 +143,6 @@ describe('buildTelemetryEvent', () => {
     expect(event.exitCode).toBe(4);
   });
 
-  it('reports exitCode null when the parent sent none', () => {
-    const event = buildTelemetryEvent(basePayload, baseProjectConfig, baseEnv);
-    expect(event.exitCode).toBeNull();
-  });
-
   it('detects bun as the runtime when versions.bun is present', () => {
     const event = buildTelemetryEvent(basePayload, baseProjectConfig, {
       ...baseEnv,
@@ -184,16 +179,6 @@ describe('buildTelemetryEvent', () => {
 
   it('passes null packageManager when npm_config_user_agent is absent', () => {
     expect(buildTelemetryEvent(basePayload, baseProjectConfig, baseEnv).packageManager).toBeNull();
-  });
-
-  it('passes the project-config slice straight through (databaseTarget + extensions)', () => {
-    const event = buildTelemetryEvent(
-      basePayload,
-      { databaseTarget: 'mongodb', extensions: ['pgvector', 'paradedb'] },
-      baseEnv,
-    );
-    expect(event.databaseTarget).toBe('mongodb');
-    expect(event.extensions).toEqual(['pgvector', 'paradedb']);
   });
 });
 

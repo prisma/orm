@@ -5,6 +5,7 @@ import type {
   MongoContract,
   MongoContractWithTypeMaps,
   MongoModelsMap,
+  OwnStoredNameOf,
 } from '@internal/mongo-contract';
 import type { MongoAggAccumulator, MongoAggExpr } from '@internal/mongo-query-ast/execution';
 import type { ModelArrayField, ModelOriginBrand, ModelOriginBranded } from './resolve-path';
@@ -40,11 +41,18 @@ type ExtractCodecId<F> = F extends { type: { kind: 'scalar'; codecId: infer C } 
     ? C
     : string;
 
+/**
+ * A model's document shape, keyed by stored name.
+ */
 export type ModelToDocShape<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = {
-  [K in keyof MongoModelsMap<TContract>[ModelName]['fields'] & string]: {
+  [K in keyof MongoModelsMap<TContract>[ModelName]['fields'] & string as OwnStoredNameOf<
+    TContract,
+    ModelName,
+    K
+  >]: {
     readonly codecId: ExtractCodecId<MongoModelsMap<TContract>[ModelName]['fields'][K]>;
     readonly nullable: MongoModelsMap<TContract>[ModelName]['fields'][K]['nullable'];
   };
@@ -67,7 +75,7 @@ type ResolveFields<
     ? IsConcreteContract<TContract> extends true
       ? TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>
         ? ModelName extends string & keyof MongoModelsMap<TContract>
-          ? Array<InferModelRow<TContract, ModelName>>
+          ? Array<StoredModelRow<TContract, ModelName>>
           : unknown[]
         : unknown[]
       : unknown[]
@@ -85,15 +93,15 @@ type ResolveFields<
  *
  *  1. Detect the `ModelOriginBrand` on `Shape` — the phantom symbol
  *     placed by `ModelToDocShape`. When present (and the contract has
- *     type maps), the row is resolved via `InferModelRow<TC, M>` from
- *     `@internal/mongo-contract`, which walks scalar / valueObject /
+ *     type maps), the row is `InferModelRow<TC, M>` from
+ *     `@internal/mongo-contract` re-keyed by stored name; `InferModelRow` walks scalar / valueObject /
  *     union field kinds (handling nested value-objects and list fields).
  *     This makes entry-point reads (`q.from('users').build()`) and
  *     shape-extending stages (`match`, `addFields`) resolve value-object
  *     fields to their concrete nested types instead of `unknown`.
  *
  *  2. Detect the per-field `ModelArrayField<ModelName>` marker produced
- *     by `lookup()` and resolve it to `Array<InferModelRow<TC, M>>` so
+ *     by `lookup()` and resolve it to an array of the same stored-key rows so
  *     lookup rows carry the same fully-typed foreign rows.
  *
  * When the contract is not threaded through (or lacks the type-map
@@ -125,6 +133,20 @@ type IsConcreteContract<TContract> = [ExtractMongoTypeMaps<TContract>] extends [
   ? false
   : true;
 
+/**
+ * A model's row as stored: keyed by stored name, each value typed by the field it stores.
+ */
+type StoredModelRow<
+  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = {
+  [K in keyof InferModelRow<TContract, ModelName> as OwnStoredNameOf<
+    TContract,
+    ModelName,
+    K
+  >]: InferModelRow<TContract, ModelName>[K];
+};
+
 export type ResolveRow<
   Shape extends DocShape,
   CodecTypes extends Record<string, { readonly output: unknown }>,
@@ -134,10 +156,10 @@ export type ResolveRow<
     ? TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>
       ? ModelName extends string & keyof MongoModelsMap<TContract>
         ? Flatten<
-            InferModelRow<TContract, ModelName> &
+            StoredModelRow<TContract, ModelName> &
               Omit<
                 ResolveFields<Shape, CodecTypes, TContract>,
-                keyof InferModelRow<TContract, ModelName>
+                keyof StoredModelRow<TContract, ModelName>
               >
           >
         : ResolveFields<Shape, CodecTypes, TContract>

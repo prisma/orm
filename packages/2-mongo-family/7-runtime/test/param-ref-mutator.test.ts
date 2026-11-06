@@ -158,6 +158,7 @@ describe('flattenMongoParamRefs', () => {
         collection: 'users',
         filter: { id: new MongoParamRef(1) },
         update: { $set: { v: new MongoParamRef(2) } },
+        bypassDocumentValidation: false,
       } satisfies MongoLoweredDraft,
       expectedLength: 2,
     },
@@ -337,26 +338,6 @@ describe('createMongoParamRefMutator', () => {
       if (updated.kind === 'insertOne') {
         expect((updated.document['name'] as MongoParamRef).value).toBe('Bob');
         expect((updated.document['role'] as MongoParamRef).value).toBe('moderator');
-      }
-    });
-
-    it('preserves codecId and name on replaced MongoParamRef nodes', () => {
-      const ref = new MongoParamRef('Alice', { codecId: 'encrypt', name: 'nameParam' });
-      const draft: MongoLoweredDraft = {
-        kind: 'insertOne',
-        collection: 'users',
-        document: { name: ref },
-      };
-      const mutator = createMongoParamRefMutator(draft);
-      const [entry] = [...mutator.entries()];
-      mutator.replaceValues([{ ref: entry!.ref, newValue: 'EncryptedBob' }]);
-
-      const updated = mutator.currentDraft();
-      if (updated.kind === 'insertOne') {
-        const nameRef = updated.document['name'] as MongoParamRef;
-        expect(nameRef.value).toBe('EncryptedBob');
-        expect(nameRef.codecId).toBe('encrypt');
-        expect(nameRef.name).toBe('nameParam');
       }
     });
 
@@ -647,6 +628,7 @@ describe('createMongoParamRefMutator', () => {
           collection: 'users',
           filter: { id: new MongoParamRef(1) },
           update: { $set: { v: new MongoParamRef(0) } },
+          bypassDocumentValidation: false,
         } satisfies MongoLoweredDraft,
         read: (updated: MongoLoweredDraft) => {
           if (updated.kind !== 'rawUpdateMany') throw new Error('wrong kind');

@@ -22,11 +22,11 @@ function schedule(entry: string, clientSupportsSnippets = false) {
 
 describe('generic block value completion', () => {
   it('offers models in scope for an entity reference', () => {
-    expect(policy('target = |').labels).toEqual(['User', 'Post']);
+    expect(policy('target = |').labels).toEqual(['User', 'Post', 'public']);
   });
 
   it.each(['roles = [|', 'roles = [admin, |]'])('offers role blocks in scope: %s', (entry) => {
-    expect(policy(entry).labels).toEqual(['admin', 'reader']);
+    expect(policy(entry).labels).toEqual(['admin', 'reader', 'public']);
   });
 
   it('offers boolean literals for a bool parameter', () => {
@@ -51,6 +51,7 @@ describe('generic block value completion', () => {
     expect(result.edits).toEqual([
       { start: result.cursorOffset - 2, end: result.cursorOffset, newText: 'User' },
       { start: result.cursorOffset - 2, end: result.cursorOffset, newText: 'Post' },
+      { start: result.cursorOffset - 2, end: result.cursorOffset, newText: 'public.' },
     ]);
   });
 
@@ -58,7 +59,7 @@ describe('generic block value completion', () => {
     const result = complete(
       ['policy_select read_own {', '  roles = [admin, |', '  permissive = true', '}'].join('\n'),
     );
-    expect(result.labels).toEqual(['admin', 'reader']);
+    expect(result.labels).toEqual(['admin', 'reader', 'public']);
   });
 
   it('offers the function call for a function-valued parameter', () => {

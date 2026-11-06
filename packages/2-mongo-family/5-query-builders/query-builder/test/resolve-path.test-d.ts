@@ -35,7 +35,15 @@ type ScalarListContract = Omit<TestContract, 'domain'> & {
               readonly nullableBoth: ScalarListField<true, true>;
             };
             readonly relations: Record<string, never>;
-            readonly storage: { readonly collection: 'orders' };
+            readonly storage: {
+              readonly collection: 'orders';
+              readonly fields: {
+                readonly strict: { readonly field: 'strict' };
+                readonly nullableElements: { readonly field: 'nullableElements' };
+                readonly nullableContainer: { readonly field: 'nullableContainer' };
+                readonly nullableBoth: { readonly field: 'nullableBoth' };
+              };
+            };
           };
         };
       };

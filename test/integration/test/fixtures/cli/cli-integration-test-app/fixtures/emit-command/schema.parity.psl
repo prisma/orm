@@ -14,7 +14,7 @@ model User {
   id Int @id @default(autoincrement())
   email Email @unique
   role Role
-  createdAt DateTime @default(now())
+  createdAt DateTime(as: temporal) @default(now())
   isActive Boolean @default(true)
   profile Jsonb?
   @@map("user")

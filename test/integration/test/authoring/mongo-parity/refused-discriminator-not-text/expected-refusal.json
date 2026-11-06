@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.ARGUMENT_INVALID",
+    "message": "Discriminator field \"Task.type\" must be text, such as field.string(), but its data type is \"mongo/int32\"."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+      "message": "Discriminator field \"type\" on model \"Task\" must be text, such as String, but is \"Int32\"",
+      "spanText": "@@discriminator(type)"
+    }
+  ]
+}

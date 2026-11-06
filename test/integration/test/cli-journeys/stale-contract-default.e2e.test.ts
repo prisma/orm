@@ -1,7 +1,8 @@
 /**
  * Journey: a contract.json an earlier version emitted, or one edited by hand, can hold what this
- * version's codecs refuse: a literal default, such as a uuid in upper case, or a column's type
- * parameters. The commands that render DDL from it report the library's own error, not an
+ * version refuses: a literal default its data type refuses, such as a uuid in upper case, which
+ * the commands refuse when they load the contract, naming the column; or type parameters its data
+ * type refuses, which the commands that render DDL report with the library's own error, not an
  * unexpected failure of the command.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ import {
   runContractEmit,
   runDbInit,
   runDbUpdate,
+  runMigrationCheck,
   runMigrationPlan,
   setupJourney,
   timeouts,
@@ -31,16 +33,37 @@ model Token {
 }
 `;
 
+const UUID_MESSAGE =
+  'pg/uuid JSON value must be "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", as pg/uuid stores this value';
+
 const refusal = {
-  code: 'CONTRACT.DEFAULT_INVALID',
-  summary: `Column "Token"."value" has a default its codec pg/uuid@1 refuses: pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12`,
-  why: "A contract.json that an earlier version emitted, or a migration.ts it planned, can hold a default that this version's codec refuses, and so can either file after a hand edit.",
+  code: 'CONTRACT.VALIDATION_FAILED',
+  summary: 'Contract validation failed',
+  why: expect.stringContaining(
+    `failed to deserialize: Namespace "public", table "Token", column "value": the default "${UPPER_CASE}" is not a value of pg/uuid: ${UUID_MESSAGE}`,
+  ),
+  nextActions: expect.arrayContaining([
+    expect.objectContaining({
+      kind: 'open-url',
+      url: 'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app',
+    }),
+    expect.objectContaining({
+      kind: 'run-command',
+      command: expect.stringContaining('contract emit'),
+    }),
+  ]),
   meta: {
-    table: 'Token',
-    column: 'value',
-    codecId: 'pg/uuid@1',
-    value: UPPER_CASE,
-    reason: 'codec-refused-default',
+    refusedDefaults: [
+      {
+        namespaceId: 'public',
+        table: 'Token',
+        column: 'value',
+        dataType: 'pg/uuid',
+        value: UPPER_CASE,
+        message: UUID_MESSAGE,
+        reason: 'type-refused-default',
+      },
+    ],
   },
 };
 
@@ -48,16 +71,15 @@ const LENGTH_SCHEMA = `// use prisma-8
 
 model Label {
   id   Int         @id
-  name VarChar(10) @default("abc")
+  name Varchar(10) @default("abc")
 }
 `;
 
 async function reportedByDdlCommands(ctx: ReturnType<typeof setupJourney>) {
-  const json = { isTTY: false };
   const runs = {
-    init: await runDbInit(ctx, ['--dry-run'], json),
-    update: await runDbUpdate(ctx, ['--dry-run'], json),
-    plan: await runMigrationPlan(ctx, [], json),
+    init: await runDbInit(ctx, ['--dry-run', '--json']),
+    update: await runDbUpdate(ctx, ['--dry-run', '--json']),
+    plan: await runMigrationPlan(ctx, ['--json']),
   };
   return Object.fromEntries(
     Object.entries(runs).map(([name, run]) => {
@@ -87,7 +109,7 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'is reported as a contract error by db init, db update and migration plan',
+      'is refused when db init, db update and migration plan load the contract, naming the column',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -104,26 +126,14 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(contractJsonPath, emitted.replace(CANONICAL, UPPER_CASE), 'utf-8');
 
         const reported = await reportedByDdlCommands(ctx);
-        const expected = {
-          exitCode: 2,
-          error: {
-            ...refusal,
-            nextActions: [
-              {
-                kind: 'user-choice',
-                label:
-                  'If contract.json holds the default, emit the contract again with this version, and correct the default in the contract source if emit refuses it. If a migration.ts sets it, correct it in that file.',
-              },
-            ],
-          },
-        };
+        const expected = { exitCode: 2, error: refusal };
         expect(reported).toEqual({ init: expected, update: expected, plan: expected });
       },
       timeouts.spinUpPpgDev,
     );
 
     it(
-      'reports type parameters the codec refuses as the codec error, not an unexpected one',
+      'reports type parameters the data type refuses as a contract error, not an unexpected one',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -149,15 +159,46 @@ withTempDir(({ createTempDir }) => {
         const expected = {
           exitCode: 2,
           error: {
-            code: 'RUNTIME.TYPE_PARAMS_INVALID',
-            summary:
-              'Invalid "length" type parameter for "character varying": expected a positive integer, got 0',
+            code: 'CONTRACT.TYPE_PARAMS_INVALID',
+            summary: 'pg/varchar: length must be at least 1 (was 0)',
             why: undefined,
             nextActions: [],
-            meta: { nativeType: 'character varying', param: 'length', received: 0 },
+            meta: { dataType: 'pg/varchar', parameters: ['length'] },
           },
         };
         expect(reported).toEqual({ init: expected, update: expected, plan: expected });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+  describe('Journey: migration check on a contract whose default its type now refuses', () => {
+    const db = useDevDatabase();
+
+    it(
+      'reports the contract it cannot load, naming the column, instead of passing',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        writeFileSync(join(ctx.testDir, 'contract.prisma'), SCHEMA, 'utf-8');
+        const emit = await runContractEmit(ctx);
+        expect(emit.exitCode, stripAnsi(emit.stderr)).toBe(0);
+        const plan = await runMigrationPlan(ctx, ['--name', 'initial']);
+        expect(plan.exitCode, stripAnsi(plan.stderr)).toBe(0);
+
+        const contractJsonPath = join(ctx.testDir, 'contract.json');
+        const emitted = readFileSync(contractJsonPath, 'utf-8');
+        writeFileSync(contractJsonPath, emitted.replace(CANONICAL, UPPER_CASE), 'utf-8');
+
+        const check = await runMigrationCheck(ctx, ['--json']);
+        const error = engineError(check);
+        expect({ exitCode: check.exitCode, code: error?.code, meta: error?.meta }).toEqual({
+          exitCode: 2,
+          code: 'CONTRACT.VALIDATION_FAILED',
+          meta: refusal.meta,
+        });
       },
       timeouts.spinUpPpgDev,
     );

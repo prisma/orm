@@ -19,6 +19,7 @@ import type {
 export interface EmitStackInput {
   readonly codecTypeImports?: ReadonlyArray<TypesImportSpec>;
   readonly queryOperationTypeImports?: ReadonlyArray<TypesImportSpec>;
+  readonly parameterizedOutputTypeImports?: ReadonlyArray<TypesImportSpec>;
   readonly extensionIds?: ReadonlyArray<string>;
   readonly codecLookup?: CodecLookup;
   readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;

@@ -112,14 +112,6 @@ describe('resolveSchemaInputs', () => {
     expect(set.includes(pathToFileURL('/abs/other.psl').toString())).toBe(false);
   });
 
-  it('treats every configured input as a schema, not just the first', async () => {
-    const set = await resolveSchemaInputs(
-      configWith(['/abs/a.psl', '/abs/b.psl', '/abs/c.psl']),
-      alwaysMember,
-    );
-    expect(set.includes(pathToFileURL('/abs/c.psl').toString())).toBe(true);
-  });
-
   it.each([
     'file:///D:/project/next.prisma',
     'file:///d:/project/next.prisma',

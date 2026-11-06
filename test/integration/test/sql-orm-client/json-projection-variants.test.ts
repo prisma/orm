@@ -17,7 +17,7 @@ import {
 import { isPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer } from '../../../../packages/2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer } from '../../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 import {
   planContract,
   representativePlans,
@@ -40,8 +40,8 @@ const sqliteContract = new TestSqlContractSerializer().deserializeContract({
           table: {
             post: {
               columns: {
-                id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
-                price: { codecId: 'sqlite/bigint@1', nativeType: 'text', nullable: false },
+                id: { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer', nullable: false },
+                price: { codecId: 'sqlite/bigint@1', dataType: 'sqlite/integer', nullable: false },
               },
               uniques: [],
               indexes: [],
@@ -66,6 +66,7 @@ describe('JSON projection variants', () => {
   // column — the same stack a pgvector application assembles.
   const postgresAdapter = createPostgresAdapter({
     codecDescriptors: pgvectorCodecDescriptors,
+    dataTypes: pgvectorRuntime.dataTypes ?? [],
   });
   const sqliteAdapter = createSqliteAdapter();
 

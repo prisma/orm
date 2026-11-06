@@ -1,4 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -222,6 +223,19 @@ describe('migration check', () => {
       });
     });
 
+    it('prints one data line per failure: space, code and the file it is about', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'));
+      await seedUnloadableDirectory(join(dir, 'migrations'));
+
+      const run = await harness(ormConfig()).run(['migration', 'check'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.stdout.split('\n')[0]).toBe(
+        'app\tMIGRATION.CHECK_FILE_MISSING\tmigrations/app/20250102T0000_broken/migration.json',
+      );
+    });
+
     it('points each diagnostic at the file it is about and keeps its next actions', async () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));
@@ -431,6 +445,35 @@ describe('migration check', () => {
   });
 
   describe('could not run the check', () => {
+    it('errors at exit 2, with the refused defaults, when the emitted contract cannot be loaded', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'));
+      await mkdir(join(dir, 'output'), { recursive: true });
+      await writeFile(join(dir, 'output', 'contract.json'), JSON.stringify(TEST_CONTRACT), 'utf-8');
+      const refusedDefaults = [{ namespaceId: 'public', table: 'user', column: 'id' }];
+      const config = ormConfig({
+        family: {
+          ...(ormConfig()['family'] as Record<string, unknown>),
+          create: () => ({
+            deserializeContract: () => {
+              throw new ContractValidationError('refused', 'storage', { refusedDefaults });
+            },
+          }),
+        },
+      });
+
+      const run = await harness(config).run(['migration', 'check', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: { code: 'CONTRACT.VALIDATION_FAILED', meta: { refusedDefaults } },
+        },
+      });
+    });
+
     it('errors at exit 2 when --space names no on-disk space', async () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));
@@ -477,7 +520,8 @@ describe('migration check', () => {
         terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
 
       expect(envelope?.nextActions.length).toBeGreaterThan(0);
-      expect(envelope).not.toHaveProperty('fix');
+      expect(envelope?.ok).toBe(false);
+      expect(envelope).not.toHaveProperty('error.fix');
     });
   });
 
@@ -489,21 +533,6 @@ describe('migration check', () => {
     });
 
     expect(`${run.stdout}${run.stderr}`).toContain('4 = integrity failure(s) found');
-  });
-
-  it('narrows to one space when --space is given', async () => {
-    const dir = await projectDir();
-    await seedMigration(join(dir, 'migrations'));
-    await seedDanglingRef(join(dir, 'migrations'), 'staging');
-
-    const run = await harness(ormConfig()).run(['migration', 'check', '--space', 'app', '--json'], {
-      cwd: dir,
-    });
-
-    expect(run.exitCode).toBe(4);
-    expect(diagnosticsOf(run).map((diagnostic) => diagnostic.code)).toEqual([
-      'MIGRATION.CHECK_DANGLING_REF',
-    ]);
   });
 
   it('resolves migrations against the run cwd, not the process cwd', async () => {

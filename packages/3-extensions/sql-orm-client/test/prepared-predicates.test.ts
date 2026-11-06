@@ -32,11 +32,12 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { Expression } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
+import { createCollectionTables } from '../src/collection-tables';
 import { shorthandToWhereExpr } from '../src/filters';
 import { COMPARISON_METHODS_META } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
 import { createCollectionFor } from './collection-fixtures';
-import { getTestContext, getTestContract } from './helpers';
+import { getTestContext, getTestContract, publicTables } from './helpers';
 
 function parameter<C extends string, N extends boolean>(
   name: string,
@@ -289,43 +290,67 @@ describe('structured nullable prepared comparisons', () => {
     expect(() => comparison([id, optional])).toThrow(/nullable prepared parameter/i);
   });
   it('creates null-safe shorthand equality before binding', () => {
-    expect(shorthandToWhereExpr(getTestContext(), 'public', 'User', { id: optional })).toEqual(
-      new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()),
-    );
+    expect(
+      shorthandToWhereExpr(
+        getTestContext(),
+        'public',
+        'User',
+        { id: optional },
+        createCollectionTables(getTestContext().contract, 'public', 'User').root,
+      ),
+    ).toEqual(new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()));
   });
   it.each(['eq', 'neq'] as const)('preserves explicitly authored %s', (op) => {
     for (const [left, right] of [
       [column, optional.buildAst()],
       [optional.buildAst(), column],
     ] as const) {
-      const result = bindWhereExpr(contract, new BinaryExpr(op, left, right));
+      const result = bindWhereExpr(
+        contract,
+        new BinaryExpr(op, left, right),
+        publicTables('users'),
+      );
       expect(result).toEqual(new BinaryExpr(op, left, right));
-      expect(bindWhereExpr(contract, result)).toEqual(result);
+      expect(bindWhereExpr(contract, result, publicTables('users'))).toEqual(result);
     }
   });
   it.each(wrappers)('preserves explicit equality inside %s', (_name, wrap) => {
-    expect(bindWhereExpr(contract, wrap(invalid()))).toBeDefined();
+    expect(bindWhereExpr(contract, wrap(invalid()), publicTables('users'))).toBeDefined();
   });
   it.each(['gt', 'lt', 'gte', 'lte', 'like', 'in', 'notIn'] as const)(
     'preserves explicitly authored %s',
     (op) => {
       const expr = new BinaryExpr(op, column, optional.buildAst());
-      expect(bindWhereExpr(contract, expr)).toEqual(expr);
+      expect(bindWhereExpr(contract, expr, publicTables('users'))).toEqual(expr);
     },
   );
   it('preserves structured operands and leaves raw payloads opaque', () => {
     expect(
-      bindWhereExpr(contract, BinaryExpr.eq(column, CastExpr.as(optional.buildAst(), 'int4'))),
+      bindWhereExpr(
+        contract,
+        BinaryExpr.eq(column, CastExpr.as(optional.buildAst(), 'int4')),
+        publicTables('users'),
+      ),
     ).toMatchObject({ op: 'eq' });
     const opaque = raw(invalid());
-    expect(bindWhereExpr(contract, opaque)).toBe(opaque);
+    expect(bindWhereExpr(contract, opaque, publicTables('users'))).toBe(opaque);
     expect(
-      bindWhereExpr(contract, BinaryExpr.eq(raw(optional.buildAst()), id.buildAst())),
+      bindWhereExpr(
+        contract,
+        BinaryExpr.eq(raw(optional.buildAst()), id.buildAst()),
+        publicTables('users'),
+      ),
     ).toBeDefined();
     expect(
-      bindWhereExpr(contract, BinaryExpr.eq(raw(optional.buildAst()), optional.buildAst())),
+      bindWhereExpr(
+        contract,
+        BinaryExpr.eq(raw(optional.buildAst()), optional.buildAst()),
+        publicTables('users'),
+      ),
     ).toMatchObject({ op: 'eq' });
-    expect(bindWhereExpr(contract, NullCheckExpr.isNull(optional.buildAst()))).toBeDefined();
+    expect(
+      bindWhereExpr(contract, NullCheckExpr.isNull(optional.buildAst()), publicTables('users')),
+    ).toBeDefined();
   });
   it('preserves structured ToWhereExpr operators during compilation', () => {
     const { collection, runtime } = createCollectionFor('User');

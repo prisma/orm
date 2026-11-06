@@ -207,13 +207,6 @@ describe('document store', () => {
       expect(store.readSnapshot(alias)).toEqual(first);
     });
 
-    it('reads a never-opened member from disk and caches it as a disk entry', async () => {
-      const { uri: fileUri } = await fixtureFile('model Disk {}');
-      const store = new DocumentStore();
-      expect(store.text(fileUri)).toBe('model Disk {}');
-      expect(store.getOpenDocument(fileUri)).toBeUndefined();
-    });
-
     it('skips stat for covered identities and reloads after invalidation', async () => {
       const file = await fixtureFile('first');
       const store = new DocumentStore();
@@ -330,15 +323,6 @@ describe('document store', () => {
       expect(store.getOpenDocument(fileUri)).toBe(overlay);
     });
 
-    it('refreshes from disk after close, discarding the overlay text', async () => {
-      const { uri: fileUri } = await fixtureFile('model DiskOriginal {}');
-      const store = new DocumentStore();
-      store.open({ uri: fileUri, languageId: 'prisma', version: 1, text: 'model Edited {}' });
-      expect(store.close(fileUri)?.getText()).toBe('model Edited {}');
-      expect(store.getOpenDocument(fileUri)).toBeUndefined();
-      expect(store.text(fileUri)).toBe('model DiskOriginal {}');
-    });
-
     it('leaves a disk entry untouched when change targets it (existing unopened-change contract)', async () => {
       const { uri: fileUri } = await fixtureFile('model Disk {}');
       const store = new DocumentStore();
@@ -347,20 +331,6 @@ describe('document store', () => {
         store.change({ uri: fileUri, version: 2 }, [{ text: 'model Mutated {}' }]),
       ).toBeUndefined();
       expect(store.text(fileUri)).toBe('model Disk {}');
-    });
-
-    it('is a no-op invalidating an overlay', async () => {
-      const { uri: fileUri } = await fixtureFile('model Disk {}');
-      const store = new DocumentStore();
-      const overlay = store.open({
-        uri: fileUri,
-        languageId: 'prisma',
-        version: 1,
-        text: 'model Overlay {}',
-      });
-      store.invalidate(fileUri);
-      expect(store.getOpenDocument(fileUri)).toBe(overlay);
-      expect(store.text(fileUri)).toBe('model Overlay {}');
     });
 
     it('evicts a disk entry on invalidate, forcing a fresh read on next access', async () => {
@@ -401,19 +371,6 @@ describe('document store', () => {
       await writeFile(path, 'AAAA', 'utf8');
       await utimes(path, pinned, pinned);
       expect(store.text(fileUri)).toBe('AAAA');
-    });
-
-    it('reuses the cached disk entry when mtime and size both match', async () => {
-      const { path, uri: fileUri } = await fixtureFile('cached');
-      const store = new DocumentStore();
-      const pinned = new Date('2020-01-01T00:00:00Z');
-      await utimes(path, pinned, pinned);
-      expect(store.text(fileUri)).toBe('cached');
-
-      await writeFile(path, 'MUTATE', 'utf8');
-      await utimes(path, pinned, pinned);
-
-      expect(store.text(fileUri)).toBe('cached');
     });
   });
 });

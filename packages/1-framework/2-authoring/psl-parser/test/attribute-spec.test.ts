@@ -24,8 +24,9 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
@@ -410,7 +411,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },
@@ -430,7 +431,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },

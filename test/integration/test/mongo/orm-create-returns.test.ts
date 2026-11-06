@@ -1,11 +1,14 @@
-import { defineContract } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, valueObject } from '@internal/mongo/contract-builder';
 import mongo from '@internal/mongo/runtime';
 import { timeouts } from '@repo/test-utils';
 import { type CommandStartedEvent, Long, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const NoteKey = valueObject('NoteKey', { fields: { k: field.int32() } });
+
+const contract = defineContract({
+  valueObjects: { NoteKey },
   models: {
     Note: model('Note', {
       collection: 'notes',
@@ -26,10 +29,10 @@ const contract = defineContract({}, ({ field, model }) => ({
     }),
     BsonNote: model('BsonNote', {
       collection: 'bson_notes',
-      fields: { _id: field.bson(), title: field.string() },
+      fields: { _id: field.valueObject(NoteKey), title: field.string() },
     }),
   },
-}));
+});
 
 describe('Mongo create return values', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   let replSet: MongoMemoryReplSet;
@@ -88,7 +91,18 @@ describe('Mongo create return values', { timeout: timeouts.spinUpMongoMemoryServ
     expect(many.map(({ title }) => title)).toEqual(Array.from({ length: 2000 }, (_, i) => `m${i}`));
   });
 
-  it('return an _id that is a date, bytes or a BSON document as it was written', async () => {
+  it('return an _id that is a date, bytes or a document as it was written, under the validators', async () => {
+    const mongoDb = client.db('create_returns');
+    for (const collection of ['dated_notes', 'byte_notes', 'bson_notes'] as const) {
+      const validator =
+        contract.storage.namespaces['__unbound__']?.entries.collection?.[collection]?.validator;
+      if (validator === undefined) expect.unreachable(`${collection} has a validator`);
+      await mongoDb.createCollection(collection, {
+        validator: { $jsonSchema: validator.jsonSchema },
+        validationLevel: validator.validationLevel,
+        validationAction: validator.validationAction,
+      });
+    }
     const db = database();
     const at = new Date('2024-01-02T00:00:00.000Z');
 
@@ -104,5 +118,8 @@ describe('Mongo create return values', { timeout: timeouts.spinUpMongoMemoryServ
       _id: { k: 1 },
       title: 'j',
     });
+    await expect(
+      mongoDb.collection('dated_notes').insertOne({ _id: 'not a date', title: 'x' } as never),
+    ).rejects.toThrow('Document failed validation');
   });
 });

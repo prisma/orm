@@ -6,9 +6,9 @@ export function findUsers(db: Db) {
 }
 
 export function findUserById(db: Db, id: string) {
-  return db.orm.users.where({ _id: id }).first();
+  return db.orm.users.where({ id }).first();
 }
 
-export function createUser(db: Db, data: Omit<FieldInputTypes['__unbound__']['User'], '_id'>) {
+export function createUser(db: Db, data: Omit<FieldInputTypes['__unbound__']['User'], 'id'>) {
   return db.orm.users.create(data);
 }

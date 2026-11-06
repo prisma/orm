@@ -9,7 +9,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
-import { defineConfig, type FormatterConfig, type PrismaNextConfig } from '../src/config-types';
+import { defineConfig, type PrismaNextConfig } from '../src/config-types';
 import type {
   ContractSourceDiagnostic,
   ContractSourceFormat,
@@ -47,6 +47,7 @@ const postgresTargetDescriptor: ControlTargetDescriptor<'sql', 'postgres'> = {
   id: 'postgres',
   familyId: 'sql',
   targetId: 'postgres',
+  defaultNamespaceId: 'public',
   contractSerializer: {
     deserializeContract: (json) => json as never,
     serializeContract: (contract) => contract as never,
@@ -160,30 +161,6 @@ test('a contract source is PSL or TypeScript, and nothing else', () => {
   void other;
 });
 
-test('carries an optional formatter section', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
-    family: sqlFamilyDescriptor,
-    target: postgresTargetDescriptor,
-    adapter: postgresAdapterDescriptor,
-    formatter: { indent: 'tab', newline: 'CRLF' },
-  };
-
-  const result = defineConfig(config);
-  expectTypeOf(result.formatter).toEqualTypeOf<FormatterConfig | undefined>();
-  expectTypeOf<FormatterConfig['indent']>().toEqualTypeOf<number | 'tab' | undefined>();
-  expectTypeOf<FormatterConfig['newline']>().toEqualTypeOf<'LF' | 'CRLF' | undefined>();
-});
-
-test('omits the formatter section when absent', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
-    family: sqlFamilyDescriptor,
-    target: postgresTargetDescriptor,
-    adapter: postgresAdapterDescriptor,
-  };
-
-  expectTypeOf(config.formatter).toEqualTypeOf<FormatterConfig | undefined>();
-});
-
 test('rejects an invalid newline literal in the formatter section', () => {
   const config: PrismaNextConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
@@ -203,6 +180,7 @@ test('rejects mismatched target in target descriptor', () => {
     id: 'mysql',
     familyId: 'sql',
     targetId: 'mysql',
+    defaultNamespaceId: 'public',
     contractSerializer: {
       deserializeContract: (json) => json as never,
       serializeContract: (contract) => contract as never,

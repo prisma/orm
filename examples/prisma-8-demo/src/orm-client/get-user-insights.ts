@@ -1,9 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-export async function ormClientGetUserInsights(limit: number, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.newestFirst()
+export async function ormClientGetUserInsights(limit: number, orm: DemoOrm) {
+  return orm.User.newestFirst()
     .select('id', 'email', 'kind', 'createdAt')
     .include('posts', (posts) =>
       posts.combine({

@@ -23,6 +23,7 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
 - User wants to add a namespace block (Postgres schema) or a cross-contract foreign key.
 - User wants to set `@@control` on a model or configure `defaultControlPolicy`.
 - User wants to use a custom type from an extension (`pgvector.Vector(length: 1536)`, `postgis.Geometry(...)`).
+- User needs a column of a database type no Prisma column type covers (`tsvector`, `ltree`, `circle`, a domain): a raw column, ``Raw(sql`...`)``.
 - User wants to install or configure an extension via `extensions: [...]` in `prisma.config.ts`, including `@internal/extension-supabase`.
 - User is migrating between authoring sources (PSL ↔ TypeScript builder).
 - User received `CONFIG.CONTRACT_MISSING`, `CONTRACT.VALIDATION_FAILED`, or `CONFIG.MISSING_EXTENSION_PACKS` from `contract emit`.
@@ -40,7 +41,7 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
 
 ## Key Concepts
 
-- **The `@internal/<target>` façade is the only surface user-authored code imports from.** For a Postgres app: `@internal/postgres/config`, `@internal/postgres/contract-builder`, `@internal/postgres/control`, `@internal/postgres/runtime`. Mongo has the same layout (`@internal/mongo/config`, `@internal/mongo/contract-builder`, `@internal/mongo/runtime`). Each extension publishes its own façade — `@internal/extension-pgvector/control`, `@internal/extension-postgis/control`, `@internal/extension-paradedb/control`. **Never reach into `@internal/cli/*`, `@internal/family-*`, `@internal/target-*`, `@internal/adapter-*`, `@internal/driver-*`, or `@internal/sql-contract-*` from user code.** The façade bakes the family / target / adapter / driver wiring in. See *Common Pitfalls* #4.
+- **The `@internal/<target>` façade is the only surface user-authored code imports from.** For a Postgres app: `@internal/postgres/config`, `@internal/postgres/contract-builder`, `@internal/postgres/control`, `@internal/postgres/runtime`, `@internal/postgres/static`. Mongo has the same layout (`@internal/mongo/config`, `@internal/mongo/contract-builder`, `@internal/mongo/runtime`, `@internal/mongo/static`). Each extension publishes its own façade — `@internal/extension-pgvector/control`, `@internal/extension-postgis/control`, `@internal/extension-paradedb/control`. **Never reach into `@internal/cli/*`, `@internal/family-*`, `@internal/target-*`, `@internal/adapter-*`, `@internal/driver-*`, or `@internal/sql-contract-*` from user code.** The façade bakes the family / target / adapter / driver wiring in. See *Common Pitfalls* #4.
 - **Contract source.** A file the framework reads and lowers to the canonical Contract IR. Two flavours, both first-class:
   - **`contract.prisma` (PSL)** — schema-flavoured DSL. Canonical for typical apps and brownfield Prisma users. Wired by `contract: './<path>/contract.prisma'` — the target config (`ormConfig`, below) detects the `.prisma` extension and routes through the PSL provider. The first line of every `.prisma` file is `// use prisma-8`; `orm init` and `contract infer` write it, and the language server only serves diagnostics, completion, and formatting on files that carry it (it still recognises the header earlier releases wrote and rewrites it on Format).
   - **`contract.ts` (TypeScript builder)** — programmatic authoring with `defineContract({...}, ({ field, model, rel, type }) => ({...}))` from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). Wired by `contract: './<path>/contract.ts'` — the façade detects the `.ts` extension and routes through the TS provider. Use when you need programmatic composition (per-tenant variants, generated fields) or constructs PSL doesn't yet express (e.g. registering a parameterised extension type — see pgvector's contract).
@@ -63,7 +64,7 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
 
   The fields `ormConfig` accepts: `contract` (path string — `.prisma` or `.ts`), `output` (optional override for where `contract.json` lands), `db` (`{ connection?: string }`), `extensions` (array of control descriptors), `migrations` (`{ dir?: string }`). Without `output`, the path for `contract.json` is derived from `contract` (e.g. `./src/prisma/contract.prisma` → `./src/prisma/contract.json`). Keep `import 'dotenv/config'` when the config reads `process.env`.
 - **Emit pipeline.** `prisma contract emit --config <path>?` reads `prisma.config.ts`, calls the provider the façade picked, validates the resulting Contract, then atomically writes `contract.json` + `contract.d.ts` colocated with the source.
-- **Extension namespaces.** Extensions contribute namespaced constructors (`pgvector.Vector(length: 1536)`, `postgis.Geometry(...)`) and helper presets. Install them by adding the descriptor to **two** places — both fields are named `extensions`, but the two surfaces consume two different descriptor types and shapes:
+- **Extension namespaces.** Extensions contribute namespaced constructors (`pgvector.Vector(length: 1536)`, `postgis.Geometry(...)`) and type aliases. Install them by adding the descriptor to **two** places — both fields are named `extensions`, but the two surfaces consume two different descriptor types and shapes:
   - **In the config (façade and core):** `extensions: [pgvector]` — array of *control* descriptors imported from `@internal/extension-<name>/control`.
   - **In the TS builder's `defineContract` (only when authoring `contract.ts`):** `extensions: { pgvector }` — record of *pack* descriptors imported from `@internal/extension-<name>/pack`.
 - **Contract space.** Every package that emits a contract owns its own *contract space* — a `prisma.config.ts` at package root, a contract source, the colocated emitted artefacts, and a `migrations/` directory. **There are two intentional on-disk layouts**, picked by whether the contract space is the consuming application or a contract-space package (an extension, an internal aggregate-root package, etc.):
@@ -116,28 +117,37 @@ model Post {
 
 Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `references/build.md`). Specify cascade behaviour explicitly with `onDelete` / `onUpdate`; the default is `Restrict`.
 
-**Temporal columns.** On PostgreSQL, `Date`, `Timestamp(p)`, `Timestamptz(p)` and `Time(p)` read and write `Temporal` values (`Temporal.PlainDate`, `PlainDateTime`, `Instant`, `PlainTime`), never JavaScript `Date`. They need a global `Temporal` at query time: Node.js 26.8.2 and later ship `globalThis.Temporal`; 26.8.1 and earlier — including every 22 and 24 release — do not, and the first read or write of such a column throws `RUNTIME.TEMPORAL_UNAVAILABLE`. On those runtimes either `import 'temporal-polyfill/full/global'` before the first query (add `temporal-polyfill` as a dependency) or author the column as `DateString` / `TimestampString(p)` / `TimestamptzString(p)` / `TimeString(p)`, which carry PostgreSQL's own text and need no `Temporal`. `prisma contract emit`, `prisma db init` and the other commands need no global `Temporal`: the Postgres target loads `temporal-polyfill` as a fallback `Temporal` for the control plane, and sets no global. `temporal-polyfill` is a required peer dependency of `@prisma/orm-postgres`. npm, pnpm and bun install it automatically. With Yarn, add `temporal-polyfill` (`^1.0.4`) to the project's dependencies, or the commands fail because Node.js cannot find the package. That fallback is held once per process. An application that loads control-plane code in its own process, such as server code under `vite dev` with the Prisma Vite plugin or a script that calls the control client, decodes dates without its own `Temporal`, and then fails in production. An application that uses the Temporal codecs must load its own `Temporal`. A TypeScript contract file that constructs a `Temporal` value must load an implementation too.
+**Integer, decimal, float, text, boolean and binary types.** On PostgreSQL, `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are convenience types: bare, each is the usual type (`Int` an `int4`, `BigInt` an `int8` read as a `bigint`, `Decimal` a `numeric` read as decimal text, `String` a `text`). An optional `storage` chooses another database type, and `BigInt` also takes `as`: `Int(storage: int2)`, `BigInt(as: number)` (an `int8` read as a `number` in the safe-integer range), `BigInt(storage: numeric)` (an integer of any size, read as a `bigint`), `Float(storage: float4)`, `Decimal(precision: 10, scale: 2)`, `String(storage: varchar, length: 12)`, `String(storage: char, length: 3)`. `String(length: 12)` is refused: `length` applies only to `varchar` and `char`. The contract stores the explicit type each call chooses, named after the database type (`Int2`, `Int4`, `Int8BigInt`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Float8`, `Text`, `Varchar`, `Char`, `Bool`, `Bytea`), and writing that type directly is the same. `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real` and `VarChar` are deprecated names of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4` and `Varchar`, and warn `PSL_DEPRECATED_SCALAR_NAME`. In a TypeScript contract: `type.BigInt({ as: 'number' })`, `type.String({ storage: 'varchar', length: 64 })`.
 
-`@@index` also accepts `expression:` (instead of a fields list), `where:` (partial-index predicate), `unique:`, `type:`/`options:` (target-registered access method), and `name:` xor `map:`:
+**Date and time types.** On PostgreSQL, write a field with a convenience type named for what it means: `DateTime` (a moment in time, a `timestamptz(3)` read as a JavaScript `Date`), `Date` (a calendar date, read as a string such as `"2024-02-29"`), `Time` (a time of day, read as a string) or `Duration` (an ISO 8601 duration string such as `"P1M"`). None needs `Temporal`. Optional arguments choose another explicit type: `as`, the value the application reads (`jsDate`, `temporal` or `string` for `DateTime`; `string` or `temporal` for `Date` and `Time`; `string` or `parts` for `Duration`), `storage`, the database type that stores it (`timestamptz` or `timestamp` for `DateTime`; `time` or, with `as: string`, `timetz` for `Time`), and `precision`: `DateTime(as: temporal)`, `DateTime(storage: timestamp)`, `Time(precision: 0)`. The contract stores only the explicit type, and `contract print` writes it; the full table is [Scalar types](https://github.com/prisma/orm/blob/main/docs/reference/scalar-types.md). SQLite has the same four types with the same defaults, all stored as text: `DateTime` reads a `Date`, `DateTime(as: temporal)` a `Temporal.Instant` and `DateTime(as: string)` the stored text `"2024-01-01T00:00:00.000Z"`; `Date` and `Time` read `"2024-02-29"` and `"09:30:00.000"`, or `Temporal.PlainDate` and `Temporal.PlainTime` with `as: temporal`; `Duration` reads an ISO 8601 duration. SQLite has no `storage` choices and no `precision`: an instant and a time hold milliseconds. MySQL has the same four types with the same defaults: `DateTime` is a `datetime(3)` read as a `Date`, `storage: timestamp` picks a `timestamp` column (1970 to 2038), and `as: temporal` and `as: string` default to `precision: 6`; `Date` and `Time` read `"2024-02-29"` and `"09:30:00"`; `Duration` is ISO 8601 text in a `varchar(191)`. Every MySQL instant is UTC, and a value written with more fraction digits than its column holds is cut to the column's precision, not rounded, but a value with digits below a microsecond (a `Temporal` value ending in `.123456789`) is refused, so round it to microseconds first; a column with no written precision holds whole seconds. `Time(3)` is refused, because the first argument is `as`; write `Time(precision: 3)`. In a TypeScript contract the helpers take one object: `type.DateTime({ as: 'string', precision: 6 })`, `type.Time({ storage: 'timetz' })`.
+
+**Temporal columns.** On PostgreSQL, `DateTemporal`, `TimestampTemporal(p)`, `TimestampInstant(p)`, `TimestamptzTemporal(p)` and `TimeTemporal(p)`, on SQLite `DatetimeTemporal`, `DateTemporal` and `TimeTemporal`, on MySQL `DatetimeTemporal(p)`, `TimestampTemporal(p)`, `DateTemporal` and `TimeTemporal(p)` (and a convenience type with `as: temporal` on any of them) read and write `Temporal` values (`Temporal.PlainDate`, `PlainDateTime`, `Instant` for both instant types, `PlainTime`), never JavaScript `Date`. They need a global `Temporal` at query time: Node.js 26.8.2 and later ship `globalThis.Temporal`; 26.8.1 and earlier — including every 22 and 24 release — do not, and the first read or write of such a column throws `RUNTIME.TEMPORAL_UNAVAILABLE`. On those runtimes either `import 'temporal-polyfill/full/global'` before the first query (add `temporal-polyfill` as a dependency) or author the column as `DateString` / `TimestampString(p)` / `TimestamptzString(p)` / `TimeString(p)`, which carry ISO 8601 text, the same on every server (`2024-01-01T00:00:00Z` for a `timestamptz`, the instant in UTC), and need no `Temporal`, or as `TimestamptzJsDate(p)` / `TimestampJsDate(p)`, which read a JavaScript `Date`. `IntervalParts(p)` reads `{ months, days, micros }` and `IntervalString(p)` an ISO 8601 duration such as `P1Y2M`. `prisma contract emit`, `prisma db init` and the other commands need no global `Temporal`: the Postgres, SQLite and MySQL targets load `temporal-polyfill` as a fallback `Temporal` for the control plane, and set no global. `temporal-polyfill` is a required peer dependency of `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-mysql`. npm, pnpm and bun install it automatically. With Yarn, add `temporal-polyfill` (`^1.0.4`) to the project's dependencies, or the commands fail because Node.js cannot find the package. That fallback is held once per process. An application that loads control-plane code in its own process, such as server code under `vite dev` with the Prisma Vite plugin or a script that calls the control client, decodes dates without its own `Temporal`, and then fails in production. An application that uses the Temporal codecs must load its own `Temporal`. A TypeScript contract file that constructs a `Temporal` value must load an implementation too.
+
+`@@index` also accepts `expression:` (instead of a fields list), `where:` (partial-index predicate), `unique:`, `type:`/`options:` (target-registered access method), and `name:` xor `map:`. Raw SQL in `expression:` and `where:` is a `sql` literal; a quoted string is refused with `PSL_VALUE_TYPE_INCOMPATIBLE`, whose message gives the rewrite:
 
 ```prisma
-@@index(expression: "lower(email)", name: "users_email_lower")
-@@index([authorId], where: "(archived_at IS NULL)", name: "posts_author_active")
+@@index(expression: sql`lower(email)`, name: "users_email_lower")
+@@index([authorId], where: sql`(archived_at IS NULL)`, name: "posts_author_active")
 ```
 
-`name:` declares a wire-named index (physical name `<name>_<8-hex hash>`, renames plan as `ALTER INDEX … RENAME`); `map:` adopts an exact physical name verbatim (for infer-captured objects — combining it with a SQL body warns, because drift detection byte-compares the authored text against Postgres's reprint). An `expression:` requires `name:` or `map:`. The TS builder mirrors this via `constraints.index([cols.x], {...})` / `constraints.index({ expression, ... })` — see `packages/2-sql/2-authoring/contract-ts/README.md`.
+`name:` declares a wire-named index (physical name `<name>_<8-hex hash>`, renames plan as `ALTER INDEX … RENAME`); `map:` adopts an exact physical name verbatim (for infer-captured objects — combining it with a SQL body warns, because drift detection byte-compares the authored text against Postgres's reprint). An `expression:` requires `name:` or `map:`. The TS builder mirrors this via `constraints.index([cols.x], {...})` / `constraints.index({ expression, ... })`, where `expression` and `where` are `sql` values such as ``sql`lower(email)` `` (a string does not compile) — see `packages/2-sql-family/2-authoring/contract-ts/README.md`.
 
-**Full-text search indexes (PostgreSQL).** Do not hand-write the `to_tsvector` expression — Postgres only uses the index when it is the same `to_tsvector` over the same configuration literal and the same column as the query. Declare `@@fullTextIndex`, which renders the same expression `fullTextMatches` / `fullTextRank` / `fullTextHeadline` lower to (see `references/queries-postgres.md`):
+**Full-text search indexes (PostgreSQL).** Do not hand-write the `to_tsvector` expression — Postgres only uses the index when the query carries the same search document: the same columns, configuration and weights. Declare `@@fullTextIndex`, and the index and the queries `fullTextMatches` / `fullTextRank` / `fullTextHeadline` build are rendered from the same definition (see `references/queries-postgres.md`):
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
 @@fullTextIndex([summary], language: "german", name: "message_summary_search_de")
-@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+@@fullTextIndex([text], where: sql`archived_at IS NULL`, name: "message_text_search_live")
+@@fullTextIndex([[title, subtitle], body], name: "post_search")
 ```
 
-The TS builder has the same helper: `fullTextIndex(cols.text, { name: 'message_text_search' })`, from `@prisma/orm-postgres/contract-builder`, inside the model's `sql({ indexes: [...] })`. It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:` like any expression index. It is repeatable, so a model may index several columns. Give the index and the operation the same `language` — a mismatch is silent, costing the index and falling back to a sequential scan. The parser that builds the query (`websearchToTsquery` and the others) takes its own `language` for the query side; it does not affect index use. It lowers to a GIN index over `to_tsvector('<language>', "<column>")` — the column name resolved through `@map` — so `@@index(expression: …)` remains only for expressions this attribute does not cover.
+The fields are one field, or a list whose items are fields or lists of fields. Each top-level item is a weight group, strongest first (`A` to `D`, so at most four groups); fields in a nested list share a weight. `[title, body]` is two groups, `[[title, body]]` one. A single field has no weight. Diagnostics refuse more than four groups, an empty group, a field named twice, an unknown field and a field that is not text.
 
-PSL alias surface for repeated types lives in a top-level `types {}` block:
+The TS builder has the same helper: `fullTextIndex(cols.text, { name: 'message_text_search' })` or `fullTextIndex([[cols.title, cols.subtitle], cols.body], { name: 'post_search' })`, from `@prisma/orm-postgres/contract-builder`, inside the model's `sql({ indexes: [...] })`. Both take an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index (a `sql` value, ``where: sql`archived_at IS NULL` ``), and `name:` xor `map:`. Both are repeatable. In the SQL builder, pass the index itself, `table.indexes.<name>`, to `fullTextMatches` and `fullTextRank`, which then search its document with its groups and language. A column or a `fullTextDocument` given other groups or another `language` than the index is silent, costing the index and falling back to a sequential scan. The parser that builds the query (`websearchToTsquery` and the others) takes its own `language` for the query side; it does not affect index use. With `map:` the index keeps the exact database name you give it, and `db verify` compares the rendered search document with the text Postgres prints back for the index exactly, character for character. Postgres prints it in its own form (`to_tsvector('english'::regconfig, title)`), so a `map:` full-text index reports drift; `@@fullTextIndex` and `fullTextIndex` warn about this with `PN_EXACT_NAME_BODY_COMPARISON`. Use `name:` unless the database already has the index under that name.
+
+The contract stores the index as data, not SQL: an index of type `fullText` whose `columns` are the covered storage columns and whose `options` are `{ weightGroups, language }`, the weight groups as storage column names. The DDL is a GIN index over the rendered document, `to_tsvector('<language>', "<column>")` for one field, and `setweight(...) || ...` with every column wrapped in `coalesce` for several. `@@index(expression: …)` remains only for expressions this attribute does not cover.
+
+PSL aliases for repeated types are declared in top-level `types {}` blocks. A schema may have several `types` blocks, in one file or several; each name may be declared only once across all of them, and a repeated name fails with `PSL_DUPLICATE_DECLARATION`:
 
 ```prisma
 types {
@@ -150,11 +160,17 @@ model User {
 }
 ```
 
-Note: scalar lists (e.g. `String[]`) are gated on the target's `sql.scalarList` capability — PostgreSQL declares it, so `tags String[]` lowers to an array column (with a generated no-NULL-elements check, see `@noCheck` under *Enums*); SQLite does not, and rejects the field with `PSL_SCALAR_LIST_UNSUPPORTED_TARGET`. Implicit Prisma-ORM many-to-many (list navigation on both sides without a join model) is rejected by the SQL interpreter — declare the join model explicitly and the ORM traverses it for you (`references/queries.md`). Composite/embeddable types (`type Address { ... }` with `address Address` on a model) are supported: the interpreter lowers them to `valueObjects` in the domain and stores them as `jsonb` columns. See *Workflow — Value objects* below.
+An alias is expanded into each field that uses it: the column stores the alias's codec and type params, and the contract stores no alias. An alias may carry `@default`, `@onCreate` and `@onUpdate`, which every field typed by it takes: `UpdatedAt = TimestampString(3) @onCreate(now()) @onUpdate(now())`. It may not carry `@id` or `@unique`; write those on the field. A field may add attributes its alias does not set (`updatedAt UpdatedAt @default(now())`), but repeating one the alias sets is `PSL_DUPLICATE_ATTRIBUTE`. An alias may not name another alias. The targets contribute `temporal.CreatedAt` (generated on create) and `temporal.UpdatedAt` (on create and on update), written bare: `createdAt temporal.CreatedAt`. On Postgres they are `DateTime` with its defaults, a `timestamptz(3)` column read as a JavaScript `Date`; on SQLite `DateTime`; on Mongo `Date`. They take no arguments; for another kind of value or a precision, write the type and attributes, as in `DateTime(as: string) @onCreate(now())`. The SQL targets also contribute an alias for the column of each identifier format the client generates: `sql.UuidString`, `sql.Ulid`, `sql.Nanoid`, `sql.Cuid2` and `sql.Ksuid`, which Postgres also names at the top level, as `Ulid`. Each stores `Char(n)` of its format's length and carries no generator, so the key writes `id Ulid @id @onCreate(ulid())` and a foreign key writes `authorId Ulid`. On Postgres, a UUID is better stored in the native column: `id Uuid @id @onCreate(uuid(7))`.
+
+Values the client generates are written `@onCreate(fn())` and `@onUpdate(fn())`: `id String @id @onCreate(uuid(7))`, `slug String @onCreate(nanoid(12))`, `updatedAt DateTime @onCreate(now()) @onUpdate(now())`. `@default(...)` is a database default only (`now()`, `autoincrement()`, a literal, or `` sql`...` ``); `@default(uuid())` is refused with `PSL_GENERATOR_IN_DEFAULT`. In the TS builder, write `.onCreate(gen.uuid(7))` and `.onUpdate(gen.now())`. Column defaults and generators can sit on one field: `@default(now()) @onCreate(now())`.
+
+In the TS builder, an alias is a constant passed as the field, because field builders are immutable: `const Slug = field.column(type.String({ storage: 'varchar', length: 64 }))`, `const UpdatedAt = field.column(type.TimestampString(3)).onCreate(gen.now()).onUpdate(gen.now())`, then `slug: Slug, updatedAt: UpdatedAt.default(now())`. `type.*` has a helper for every PSL type constructor, and the contributed aliases are `type.temporal.CreatedAt()`, `type.temporal.UpdatedAt()` and the identifier aliases such as `type.Ulid()` (`type.sql.Ulid()` on every SQL target), used as `field.column(type.temporal.UpdatedAt())` and `field.column(type.Ulid()).id().onCreate(gen.ulid())`. A definition has no `types` key (`CONTRACT.TYPES_KEY_REMOVED`), and `field.namedType(...)` takes only an enum handle.
+
+Note: scalar lists (e.g. `String[]`) are gated on the target's `sql.scalarList` capability — PostgreSQL declares it, so `tags String[]` lowers to an array column (with a generated no-NULL-elements check; write `tags String?[]` for a list whose elements may be null, which gets no such check); SQLite does not, and rejects the field with `PSL_SCALAR_LIST_UNSUPPORTED_TARGET`. Implicit Prisma-ORM many-to-many (list navigation on both sides without a join model) is rejected by the SQL interpreter — declare the join model explicitly and the ORM traverses it for you (`references/queries.md`). Composite/embeddable types (`type Address { ... }` with `address Address` on a model) are supported: the interpreter lowers them to storage value objects, at `storage.namespaces.<ns>.entries.valueObject`, and stores them as `jsonb` columns. See *Workflow — Value objects* below.
 
 ## Workflow — Edit a model / field / relation (TS builder)
 
-The concept: same model, different authoring surface. The façade re-exports `defineContract`, `field`, `model`, `rel`, plus the `family`/`target` packs as default exports of `@internal/postgres/family` and `@internal/postgres/target`. Use the callback overload (`defineContract({...}, ({ field, model, rel, type }) => ({...}))`) to get the higher-level helpers (`field.text()`, `field.id.uuidv7String()`, `field.temporal.createdAt()`, `type.sql.String(35)`).
+The concept: same model, different authoring surface. The façade re-exports `defineContract`, `field`, `model`, `rel`, plus the `family`/`target` packs as default exports of `@internal/postgres/family` and `@internal/postgres/target`. Use the callback overload (`defineContract({...}, ({ field, model, rel, type, gen }) => ({...}))`) to get the type constructors, type aliases and generator calls (`field.column(type.String())`, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, `field.column(type.temporal.CreatedAt())`, `type.sql.String(35)`).
 
 ```typescript
 import sqlFamily from '@internal/postgres/family';
@@ -166,13 +182,13 @@ export const contract = defineContract(
     family: sqlFamily,
     target: postgresPack,
   },
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
         fields: {
-          id: field.id.uuidv7String(),
-          email: field.text().unique(),
-          createdAt: field.temporal.createdAt(),
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+          email: field.column(type.String()).unique(),
+          createdAt: field.column(type.temporal.CreatedAt()),
         },
       }).sql({ table: 'app_user' }),
     },
@@ -180,13 +196,13 @@ export const contract = defineContract(
 );
 ```
 
-Then `pnpm prisma contract emit`. The `field.<scalar>()` helpers are only available inside the callback overload; outside the callback only `field.column(...)`, `field.generated(...)`, `field.namedType(...)` exist.
+Then `pnpm prisma contract emit`. On Postgres, `@prisma/orm-postgres/contract-builder` exports `field`, `type` and `gen`, the same helpers the callback receives, without the ones an extension adds (such as pgvector's `type.pgvector.Vector`); for those, use the callback's helpers. On other targets `type` and `gen` are only available inside the callback overload.
 
 For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The Mongo builder also exposes `index` and `valueObject`.
 
 Mongo scalar types, as PSL name / TS builder / application type: `String` / `field.string()` / `string`; `Int32` / `field.int32()` / `number`; `Int64` / `field.int64()` / `bigint`; `Double` / `field.double()` / `number`; `Decimal128` / `field.decimal128()` / decimal text as a `string`; `Bool` / `field.bool()` / `boolean`; `Date` / `field.date()` / `Date`; `ObjectId` / `field.objectId()` / `string`; `Binary` / `field.binary()` / `Uint8Array`; `Json` / `field.json()` / `JsonValue`; `Bson` / `field.bson()` / `BsonValue`. `Json` holds a JSON value only, validated as the JSON-representable BSON types; `Bson` holds any BSON value, unconstrained by the validator. The full table, with codec ids and storage types, is [Scalar types](https://github.com/prisma/orm/blob/main/docs/reference/scalar-types.md).
 
-Mongo timestamps the ORM fills: in PSL, type the field `temporal.createdAt()` (set on create), `temporal.updatedAt()` (set on create and on every update with a non-empty payload), or `temporal.timestamp(onCreate: now, onUpdate: now)` with either option; in TS, use `field.temporal.createdAt()` and the rest inside the callback overload. They store a BSON date read back as `Date`, one value per ORM operation, and an explicit value in the write wins. The fields are optional on create. A preset field cannot be optional (`?`), a list, `@id`, or a field of a composite type.
+Mongo timestamps the ORM fills: in PSL, write `createdAt Date @onCreate(now())` (set on create) or `updatedAt Date @onCreate(now()) @onUpdate(now())` (set on create and on every update with a non-empty payload), or type the field `temporal.CreatedAt` or `temporal.UpdatedAt`; in TS, use `field.date().onCreate(gen.now())` or `field.date().onCreate(gen.now()).onUpdate(gen.now())`. They store a BSON date read back as `Date`, one value per ORM operation, and an explicit value in the write wins. The fields are optional on create. A field with a generated value cannot be optional (`?`), a list, `@id`, or a field of a composite type.
 
 ## Workflow — Add an extension-typed scalar (pgvector)
 
@@ -225,6 +241,28 @@ If you reference `pgvector.*` without registering the descriptor in the config, 
 
 For canonical worked examples covering single and multi-extension setups, read `examples/prisma-8-demo/prisma.config.ts`, `examples/multi-extension-monorepo/app/prisma.config.ts` and `examples/prisma-8-postgis-demo/prisma.config.ts`.
 
+## Workflow — Raw columns (a type no column type covers)
+
+The concept: ``Raw(sql`<type>`)`` declares a column whose type Prisma does not model, such as `tsvector`, `ltree`, `circle` or a domain of the user's own. Migrations write the text as given, and `db verify` compares it with the type the database reports, exactly. Values are typed `unknown`, read the same flat and through includes, and write back as read. On Postgres the ORM reads each value as the text the database prints for it. On SQLite a value keeps the shape of its storage class: a number, a string, a `Uint8Array` for a BLOB, or null. The ORM offers no filters or ordering on raw values. Raw columns exist on Postgres and SQLite.
+
+```prisma
+model Category {
+  id     Int                @id
+  search Raw(sql`tsvector`)
+  area   Raw(sql`circle`)   @default(sql`'<(0,0),1>'::circle`)
+  net    Raw(sql`cidr`)?
+  tags   Raw(sql`"MyTag"[]`)
+}
+```
+
+In the TypeScript builder, use ``field.column(type.Raw(sql`tsvector`))`` in the callback overload, or ``field.column(rawColumn(sql`tsvector`))`` with `rawColumn` from the adapter's column types and `sql` from the contract builder. A quoted string, `Raw("tsvector")`, is refused with ``Expected sql`...`; write sql`tsvector` ``.
+
+- Write the type as the database catalog prints it: `integer`, not `int4`; `character varying(10)`, not `varchar(10)`. Another form reports a type mismatch in `db verify`, and the finding names the text to write.
+- A raw column's default is a `sql` expression. A literal default is refused at emit (`` Expected sql`...` ``).
+- The text is one type name: words and double-quoted names separated by single spaces, the first optionally after one schema name and a dot, each optionally followed by parentheses of letters, digits, underscores, commas, spaces and a minus sign before a digit, and at most one trailing `[]`. `geometry(Point,4326)`, `double precision` and `app.email` (a domain whose schema is not on the `search_path`) are fine; quotes of other kinds, `$` and operators are refused.
+- A type whose name needs double quotes is written with them inside the literal: ``Raw(sql`"MyType"`)``.
+- Changing the text changes the column's type: `migration plan` writes `ALTER COLUMN ... TYPE`. If the database has no cast between the two types, name the field with `--convert` and write the conversion. The generated call is `alterColumnType({ ..., type: "text", raw: true })`; keep `raw: true` when editing it, since a raw type is checked as written.
+
 ## Workflow — Polymorphism (`@@discriminator` / `@@base`)
 
 The concept (SQL targets): one base model declares the discriminator field; each variant model declares its base + discriminator value. The variant chooses STI vs MTI by **whether it sets `@@map(...)`**: no `@@map` means the variant inherits the base's table (single-table inheritance); `@@map("variant_table")` means the variant gets its own table joined 1:1 by primary key (multi-table inheritance).
@@ -255,7 +293,9 @@ model Feature {
 }
 ```
 
-Verify the polymorphism syntax against the interpreter tests if in doubt: `packages/2-sql/2-authoring/contract-psl/test/interpreter.polymorphism.test.ts`.
+A variant's base can be in another namespace: write `@@base(ns.Model, "value")`. Such a variant must set `@@map(...)`, because a variant that shares its base's table has to be in the base's namespace.
+
+Verify the polymorphism syntax against the interpreter tests if in doubt: `packages/2-sql-family/2-authoring/contract-psl/test/interpreter.polymorphism.test.ts`.
 
 Mongo PSL takes the same `@@discriminator(field)` / `@@base(Base, "value")` attributes (the Mongo interpreter implements both; `examples/mongo-demo/src/contract.prisma` declares `Post` with `@@discriminator(kind)` and `Article` / `Tutorial` variants via `@@base(Post, "article")`). Variants share the base's collection — there is no `@@map` on a Mongo variant, since there is no second table to join. The TS builder's `discriminator` option on the model is the programmatic equivalent.
 
@@ -263,7 +303,7 @@ Querying the variants is a runtime concern — see `references/queries.md`.
 
 ## Workflow — Value objects (composite types)
 
-The concept: `type Foo { ... }` blocks declare value-object shapes. The interpreter lowers them to `valueObjects` in the contract domain and stores them as `jsonb` columns. Nested value-object references are supported.
+The concept: `type Foo { ... }` blocks declare value-object shapes. The interpreter lowers them to storage value objects, at `storage.namespaces.<ns>.entries.valueObject`, and stores them as `jsonb` columns; a domain field refers to one by coordinate. Nested value-object references are supported.
 
 ```prisma
 type Address {
@@ -274,13 +314,15 @@ type Address {
 }
 
 model User {
-  id      String   @id @default(uuid())
+  id      String   @id @onCreate(uuid())
   email   String
   address Address?
 }
 ```
 
-Emitted `contract.json` carries `domain.namespaces.<ns>.valueObjects.Address` with its field descriptors, and the `address` column lands as `codecId: "pg/jsonb@1"` / `nativeType: "jsonb"` in `storage`.
+Emitted `contract.json` carries the value object in storage, at `storage.namespaces.<ns>.entries.valueObject.Address` with its field descriptors, and the domain field `address` refers to it by coordinate: `{ "kind": "valueObject", "plane": "storage", "namespaceId": "public", "entityKind": "valueObject", "entityName": "Address" }`. The `address` column lands as `codecId: "pg/jsonb@1"` / `dataType: "pg/jsonb"`. Because the value object is in storage, renaming, adding or removing one of its fields changes the storage hash, and `prisma migration plan` writes a migration for it.
+
+On Postgres, a managed table gets a derived check on each value object column, `<table>_<column>_shape_<hash>`: the value must be an object (an array of them for a list) with every required member, each of its JSON type, and no other key. A nullable column also accepts `NULL`. On SQL, a polymorphic base's discriminator column refers to a value set `<Base>.<field>` holding the variants' values, and Postgres derives a check from it, as for an enum.
 
 Canonical worked example: `examples/prisma-8-demo/src/prisma/contract.prisma`.
 
@@ -296,12 +338,18 @@ enum user_type {
 }
 
 model User {
-  id   String    @id @default(uuid())
+  id   String    @id @onCreate(uuid())
   kind user_type
 }
 ```
 
-**Waiving enforcement (`@noCheck`).** A field can decline the generated CHECK constraints for its column: bare `@noCheck` waives every kind the column's shape derives; `@noCheck(membership)` and `@noCheck(elementNotNull)` waive one kind (`membership` is the enum value-set check; `elementNotNull` is the no-NULL-elements check every list column gets). The TS authoring equivalent is `.noCheck(...)` on the field builder. Declared types do not change: the field still types as the enum union, and a list still types with non-null elements — once enforcement is waived, runtime values may diverge from what the types claim. That divergence is the author's accepted risk, and it is scoped to the kinds actually waived: waiving `membership` stops the database rejecting out-of-set values, waiving `elementNotNull` stops it rejecting NULL elements. A list that waives only `membership` still rejects NULL elements. `contract infer` emits `@noCheck(elementNotNull)` automatically for list columns whose source database does not carry the generated check.
+**Reading members at runtime (`db.enums`).** `db.enums.<namespace>.<Enum>` on Postgres, and `db.enums.<Enum>` on SQLite and Mongo, holds each member as a query returns it: a `pg/int8@1` member written `Low = "1"` is `1n`, a date or timestamp member is the `Date` or Temporal value its codec reads, and a float member written `"NaN"` is `NaN`. So `db.enums.public.Level.members.Low === row.level` holds wherever `===` applies. `has(value)`, `nameOf(value)` and `ordinalOf(value)` find a value equal to a member: a string, number or bigint must be the member itself, and an object such as a `Date` must be of the member's kind and stored as the member is, so a date equal to a member matches although it is a different object. Text a codec would normalize, such as an upper-case uuid, is no member. Each read of a mutable member, such as a `Date` or a `Uint8Array`, returns a fresh copy, so changing it does not change the enum; a Temporal member is immutable and is the same value on every read. An enum's members are decoded when the enum is first read, so a client builds without `Temporal` even when its contract has a Temporal enum. `contract.d.ts` types each member as that same value. The rule behind this: the value a codec reads from the contract's stored form equals the value a query returns for it. The stored form itself can differ from the text the database prints, such as ISO 8601 for a timestamp.
+
+**Codecs an enum cannot use.** An enum compares values with its members, so a codec whose values cannot be compared for equality, or whose values read back never equal a member as the contract stores it, is refused, in TypeScript with `CONTRACT.ENUM_INVALID` and in PSL with `PSL_EXTENSION_INVALID_VALUE` at the `@@type`. The message says why and what to use instead. On Postgres: `pg/json@1`, `pg/jsonb@1`, `pg/bytea@1` and `pg/tsquery@1` (use a text enum). The text date and time codecs read their values in ISO 8601, so an enum can use them.
+
+**Mongo enums.** A Mongo contract's collection validator lists each enum's members in their stored JSON forms, so an enum needs a codec whose BSON type JSON holds: string, int, double, bool, object or array, with finite numbers for doubles. PSL and TypeScript contracts derive the same validator. An enum over `mongo/int64@1`, `mongo/date@1` or `mongo/objectId@1` is refused: with `PSL_EXTENSION_INVALID_VALUE` in PSL, and with `CONTRACT.ENUM_INVALID` by `defineContract`.
+
+**Generated checks cannot be waived.** On a managed table every enum column gets a membership check, and every list column with non-null elements gets a no-NULL-elements check. A list whose elements may be null is written `String?[]` (TS: `.many({ elementsNullable: true })`) and gets no element check. `contract infer` writes `String?[]` for a list column whose database has no element check, and a Prisma 7 schema's lists are read as `String?[]`.
 
 Canonical worked example: `examples/prisma-8-demo/src/prisma/contract.prisma`.
 
@@ -315,16 +363,16 @@ model Order {
   total Decimal
 
   // name: is a prefix — the physical constraint becomes order_total_positive_<8-hex hash>.
-  @@check(expression: "total > 0", name: "order_total_positive")
+  @@check(expression: sql`total > 0`, name: "order_total_positive")
 }
 ```
 
-`expression` is the raw predicate — the text that goes inside `CHECK (...)` — and it is never parsed, so get it right; Prisma 8 does not validate SQL syntax. Exactly one of `name:` or `map:` is required, and they're mutually exclusive:
+`expression` is the raw predicate — the text that goes inside `CHECK (...)`, written as a `sql` literal (a quoted string is refused) — and it is never parsed, so get it right; Prisma 8 does not validate SQL syntax. Exactly one of `name:` or `map:` is required, and they're mutually exclusive:
 
 - **`name:`** — declaring a new rule. Prisma 8 picks the physical constraint name and future plans compare by that name, so Postgres's own reprint of your predicate (which rarely matches what you typed byte-for-byte) never causes false drift.
 - **`map:`** — adopting a rule that already exists. Give the constraint's exact physical name and Prisma 8 compares the predicate byte-for-byte against what's live. This is the form `contract infer` writes for you (see *Workflow — Brownfield introspection* below) when it finds a hand-written check in the database. Every `map:` body warns at emit time (`PN_EXACT_NAME_BODY_COMPARISON`) — the warning fires on the text, not on who wrote it, so the check `contract infer` just wrote warns again on your next `contract emit` too. That is expected, not a defect: the comparison is still sound because both sides are Postgres's own reprint. Prefer `name:` for anything you're authoring fresh: your text and Postgres's reprint of it rarely match character-for-character, and a byte comparison reports that as drift even when both mean exactly the same thing. Reserve `map:` for adopting what's already there, where both sides are the database's own reprint and so do match.
 
-A model can carry any number of `@@check` attributes. The TS builder mirrors this with `check({ expression, name })` / `check({ expression, map })` on a model's `.sql({ checks: [...] })`, next to `index()`.
+A model can carry any number of `@@check` attributes. The TS builder mirrors this with `check({ expression, name })` / `check({ expression, map })` on a model's `.sql({ checks: [...] })`, next to `index()`; `expression` is a `sql` value, as in ``check({ expression: sql`total > 0`, name: 'order_total_positive' })``. The `sql` tag, from the same contract-builder module, may interpolate other `sql` values: ``sql`${owner} AND deleted_at IS NULL` ``.
 
 Check constraints need the target's `checkConstraint` capability. Postgres has it; SQLite does not. `@@check` on a SQLite contract is rejected at authoring time; `check()` on a SQLite contract isn't caught until migration DDL is rendered, but either way you get a refusal, never a silently-dropped constraint.
 
@@ -335,7 +383,7 @@ The concept: wrap models in a `namespace <name> { ... }` block to place them in 
 ```prisma
 namespace public {
   model Profile {
-    id       String @id @default(uuid())
+    id       String @id @onCreate(uuid())
     username String
     userId   String @unique
     @@map("profile")
@@ -344,6 +392,46 @@ namespace public {
 ```
 
 Canonical worked example: `examples/supabase/src/contract.prisma`.
+
+## Workflow — Mixins (shared members)
+
+The concept: a mixin is a named set of members for one kind of block. Declare it with the block's keyword followed by `mixin`, and include it in a block with `+<Name>`. The emitted contract is the same as if the mixin's members were written at the position of the inclusion.
+
+```prisma
+model mixin Timestamps {
+  createdAt DateTime @default(now())
+  updatedAt DateTime @onCreate(now()) @onUpdate(now())
+  @@index([createdAt])
+}
+
+enum mixin BaseRoles {
+  ADMIN = "admin"
+  USER  = "user"
+}
+
+model User {
+  id    Int    @id
+  +Timestamps
+  email String
+}
+
+enum Role {
+  @@type("pg/text@1")
+  +BaseRoles
+  GUEST = "guest"
+}
+```
+
+`User` has the fields `id`, `createdAt`, `updatedAt`, `email`, in that order, and the index on `createdAt`. `Role` has the members `ADMIN`, `USER`, `GUEST`.
+
+Rules:
+
+- **One keyword per mixin.** A `model mixin` can be included only in models, a `type mixin` only in composite types, an `enum mixin` only in enums, and a mixin for a block an extension defines (for example `policy_select mixin`) only in blocks of that keyword.
+- **A member provided twice is an error.** A field name or an enum member that the block already has, from its own body or from another mixin, is reported and the earlier one is kept. Including the same mixin twice in one block is also an error.
+- **A mixin's attributes can name only its own fields.** `@@index([createdAt])` inside `Timestamps` works because `createdAt` is a field of the mixin. An attribute that needs a field of the including model belongs in that model; a model's own attributes can name the fields a mixin provides, as in `@@id([tenantId, id])`.
+- **A mixin cannot include a mixin.**
+- **Names follow namespaces.** A mixin declared in `namespace auth { ... }` is included from another namespace as `+auth.Timestamps`. The types of its fields are looked up from the mixin's namespace, not from the including block's.
+- **A mixin is not a type.** It cannot be used as a field type, and it produces nothing in the contract unless a block includes it.
 
 ## Workflow — Cross-contract foreign keys
 
@@ -356,7 +444,7 @@ types {
 
 namespace public {
   model Profile {
-    id       String     @id @default(uuid())
+    id       String     @id @onCreate(uuid())
     username String
     userId   AuthUserId @unique
     user     supabase:auth.AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -423,26 +511,27 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 
 1. **Forgetting to re-emit after an edit.** `contract.json` and `contract.d.ts` go stale; downstream typecheck and `migration plan` see the old shape. Re-emit, or install the Vite plugin (`references/build.md`).
 2. **Editing the emitted artefacts.** `contract.json` and `contract.d.ts` are emitted; edits there round-trip away on the next emit. Edit the source.
-3. **Wrong factory/import path for the TS builder.** `defineContract`, `field`, `model`, `rel` come from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). Outside the callback overload, the available field constructors are `field.column(...)`, `field.generated(...)`, `field.namedType(...)`.
+3. **Wrong factory/import path for the TS builder.** `defineContract`, `field`, `model`, `rel` come from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). On Postgres the facade also exports `type` and `gen` (`field.column(type.TimestamptzTemporal())`, `.onCreate(gen.uuid())`) without an extension's helpers; elsewhere, outside the callback overload, the available field constructors are `field.column(...)` and `field.namedType(...)`.
 4. **Reaching into internal packages from user code.** User-authored files (`prisma.config.ts`, `contract.ts`, `db.ts`, control clients) import only from `@internal/<target>/<subpath>` and `@internal/extension-<name>/<subpath>`. Imports from `@internal/cli/*`, `@internal/family-*`, `@internal/target-*`, `@internal/adapter-*`, `@internal/driver-*`, or `@internal/sql-contract-*` are framework-internal — the façade composes them for you. If a façade subpath you need is missing for your target, see *What Prisma 8 doesn't do yet* and route to `references/feedback.md`. The canonical worked examples are `examples/multi-extension-monorepo/app/prisma.config.ts` and `examples/prisma-8-postgis-demo/prisma.config.ts`.
 5. **Confusing the config `extensions` with the TS builder's `extensions`.** Same packs, two surfaces, one field name but two shapes: `ormConfig({ extensions: [pgvector] })` (array of *control* descriptors from `@internal/extension-<name>/control`) versus `defineContract({ extensions: { pgvector } })` (record of *pack* descriptors from `@internal/extension-<name>/pack`).
 6. **Writing a flat `prisma.config.ts`.** `export default defineConfig({ contract, extensions })` from the target config alone is the pre-rc.4 shape and fails with `CONFIG.VERSION_MARKER_MISSING`. Wrap it: `definePrismaConfig({ orm: ormConfig({...}) })`.
-7. **Renaming a field and expecting the planner to detect it.** Prisma 8 has no in-contract rename hint; the planner sees a destructive drop+add. Hand-edit `migration.ts` after `migration plan` (see `references/migrations.md`), or use the keep-then-drop two-migration pattern.
+7. **Renaming a model or field and expecting the planner to detect it.** The contract does not record renames, so the planner sees a destructive drop+add. State the rename on the command line with `--rename old:new` on `migration plan` or `db update` (see `references/migrations.md`); the planner then renames instead of dropping. Do not invent a rename attribute in the contract source.
+8. **Quoting a type-constructor argument.** A type constructor's argument is a value, read as an attribute argument is. Write a length, precision or scale as a plain whole number: `Varchar(255)`, `NumericString(10, 2)`, `String(storage: varchar, length: 255)`. `Varchar("255")` is refused with `Expected a number; write 255`, and on Postgres `Varchar(255.0)` is refused too, because a number with a fraction is not a 32-bit integer.
 
 ## What Prisma 8 doesn't do yet
 
-- **In-contract rename hint.** No `@@rename(old: ..., new: ...)` or similar. Use the workarounds in *Common Pitfalls* #7. To request first-class rename, file via `references/feedback.md`.
-- **Model validations.** No declarative `@validates(...)` surface. Validate in application code (arktype). To request declarative validations in the contract, file via `references/feedback.md`.
-- **Lifecycle callbacks** (`beforeSave`, `afterCreate`, etc.). Not supported. Use middleware (`references/runtime.md`) or app code. To request lifecycle callbacks, file via `references/feedback.md`.
-- **Soft delete / `paranoid: true`.** No built-in soft-delete column. Add a nullable `deletedAt DateTime?` and filter explicitly in queries (or in middleware). To request built-in soft delete, file via `references/feedback.md`.
+- **In-contract rename hint.** No `@@rename(old: ..., new: ...)` or similar; renames are stated with `--rename` on the command line, as in *Common Pitfalls* #7.
+- **Model validations.** No declarative `@validates(...)` surface. Validate in application code (arktype). The maintainers decided it stays out of the core; an extension may provide it (prisma/orm ADR 293).
+- **Lifecycle callbacks** (`beforeSave`, `afterCreate`, etc.). Not supported. Use middleware (`references/runtime.md`) or app code. The maintainers decided it stays out of the core; an extension may provide it (prisma/orm ADR 293).
+- **Soft delete / `paranoid: true`.** No built-in soft-delete column. Add a nullable `deletedAt DateTime?` and filter explicitly in queries (or in middleware). The maintainers decided it stays out of the core; an extension may provide it (prisma/orm ADR 293).
 - **Scopes / default filters.** No ActiveRecord-style scopes. Compose query helpers yourself. To request scopes, file via `references/feedback.md`.
 - **Implicit Prisma-ORM many-to-many.** List navigation on both sides without an explicit join model is rejected. Author the join model explicitly. To request implicit M2M, file via `references/feedback.md`.
 
 ## Reference
 
 - Run `pnpm prisma contract --help` for the live command surface.
-- PSL feature surface and what the interpreter accepts: `packages/2-sql/2-authoring/contract-psl/README.md`.
-- TS builder surface and the callback-helper vocabulary: `packages/2-sql/2-authoring/contract-ts/README.md`.
+- PSL feature surface and what the interpreter accepts: `packages/2-sql-family/2-authoring/contract-psl/README.md`.
+- TS builder surface and the callback-helper vocabulary: `packages/2-sql-family/2-authoring/contract-ts/README.md`.
 - Layouts (where `contract.prisma`, `contract.json`, `contract.d.ts`, and `migrations/` live):
   - **App layout** (`src/prisma/...` + `migrations/app/...`) — what `examples/prisma-8-demo` demonstrates; the canonical shape consuming applications use.
   - **Contract-space-package layout** (`src/contract.{prisma,ts}` directly, `migrations/<timestamp>_<slug>/` without a space-id segment) — for extensions and aggregate-root packages, documented in `.cursor/rules/contract-space-package-layout.mdc` and ADR 212.
@@ -454,8 +543,8 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 - [ ] Edited the contract source (`contract.prisma` or `contract.ts`), not an emitted artefact.
 - [ ] For new extension namespaces: added the package, imported its control descriptor (`@internal/extension-<name>/control`), added it to `extensions: [...]` in `ormConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
 - [ ] `prisma.config.ts` is the envelope form — `definePrismaConfig({ orm: ormConfig({...}) })` — not a flat `defineConfig({...})`.
-- [ ] For renames: hand-edited `migration.ts` after `migration plan` (or used the keep-then-drop two-migration pattern) — Prisma 8 has no rename hint today.
+- [ ] For renames: passed `--rename old:new` to `migration plan` or `db update` (or hand-edited `migration.ts` where statements do not cover the rename).
 - [ ] Ran `pnpm prisma contract emit` after the edit (or let the Vite plugin re-emit on save).
 - [ ] Confirmed `contract.json` and `contract.d.ts` updated next to the source.
 - [ ] Did **not** hand-edit `contract.json` / `contract.d.ts`.
-- [ ] Did **not** confabulate a missing feature (validations, callbacks, soft delete, scopes, in-contract rename hint) — referred the user to *What Prisma 8 doesn't do yet* + `references/feedback.md`.
+- [ ] Did **not** confabulate a missing feature (validations, callbacks, soft delete, scopes, a rename attribute in the contract source) — referred the user to *What Prisma 8 doesn't do yet* + `references/feedback.md`.

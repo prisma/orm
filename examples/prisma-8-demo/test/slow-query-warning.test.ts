@@ -1,17 +1,19 @@
 /**
  * Offline unit tests for the custom `slowQueryWarning` middleware example.
  *
- * Drives the middleware's `afterQuery` hook directly with a hand-built
- * execution plan and context — no database required. The plan's `ast` and
- * `meta` come from a real DSL build so the shapes match what the runtime
- * hands to middleware.
+ * Drives the middleware's `beforeEncode` and `activityEnded` hooks directly with a hand-built execution plan, statement activity and context — no database required. The plan's `ast` and `meta` come from a real DSL build so the shapes match what the runtime hands to middleware.
  */
-import type { AfterQueryResult, SqlMiddlewareContext } from '@prisma/orm-postgres/family-runtime';
+import type {
+  SqlMiddlewareContext,
+  StatementActivity,
+  StatementEnded,
+} from '@prisma/orm-postgres/family-runtime';
 import { describe, expect, it } from 'vitest';
 import { db } from '../src/prisma/db';
 import { slowQueryWarning } from '../src/prisma/slow-query-warning';
 
 function makeContext(warnEvents: unknown[]): SqlMiddlewareContext {
+  const states = new Map<string | symbol, Record<string | symbol, unknown>>();
   return {
     contract: db.contract,
     mode: 'strict',
@@ -25,7 +27,13 @@ function makeContext(warnEvents: unknown[]): SqlMiddlewareContext {
     },
     contentHash: async () => 'test-content-hash',
     scope: 'runtime',
-    planExecutionId: 'test-plan-execution',
+    parent: undefined,
+    state(key) {
+      const state = states.get(key) ?? {};
+      states.set(key, state);
+      return state;
+    },
+    inTransaction: () => false,
   };
 }
 
@@ -39,16 +47,42 @@ function makeExecutionPlan() {
   };
 }
 
-function makeResult(latencyMs: number): AfterQueryResult {
-  return { rowCount: 1, latencyMs, completed: true, source: 'driver' };
+function makeActivity(): StatementActivity {
+  return {
+    id: 'test-activity',
+    kind: 'statement',
+    returns: 'rows',
+    plan: makeExecutionPlan(),
+    annotations: new Map(),
+  };
+}
+
+function makeResult(latencyMs: number): StatementEnded {
+  return {
+    kind: 'statement',
+    outcome: 'succeeded',
+    returns: 'rows',
+    rowCount: 1,
+    latencyMs,
+    source: 'driver',
+  };
+}
+
+async function runStatement(
+  middleware: ReturnType<typeof slowQueryWarning>,
+  latencyMs: number,
+  warnEvents: unknown[],
+): Promise<void> {
+  const ctx = makeContext(warnEvents);
+  await middleware.beforeEncode?.(makeExecutionPlan(), ctx);
+  await middleware.activityEnded?.(makeActivity(), makeResult(latencyMs), ctx);
 }
 
 describe('slowQueryWarning middleware', () => {
   it('logs a warning when latency exceeds the threshold', async () => {
     const warnEvents: unknown[] = [];
-    const middleware = slowQueryWarning({ thresholdMs: 250 });
 
-    await middleware.afterQuery?.(makeExecutionPlan(), makeResult(900), makeContext(warnEvents));
+    await runStatement(slowQueryWarning({ thresholdMs: 250 }), 900, warnEvents);
 
     expect(warnEvents).toHaveLength(1);
     expect(warnEvents[0]).toMatchObject({
@@ -58,26 +92,36 @@ describe('slowQueryWarning middleware', () => {
         latencyMs: 900,
         rowCount: 1,
         source: 'driver',
-        planExecutionId: 'test-plan-execution',
+        activityId: 'test-activity',
       },
     });
   });
 
   it('stays silent at or below the threshold', async () => {
     const warnEvents: unknown[] = [];
-    const middleware = slowQueryWarning({ thresholdMs: 250 });
 
-    await middleware.afterQuery?.(makeExecutionPlan(), makeResult(250), makeContext(warnEvents));
+    await runStatement(slowQueryWarning({ thresholdMs: 250 }), 250, warnEvents);
 
     expect(warnEvents).toHaveLength(0);
   });
 
   it('defaults the threshold to 250ms', async () => {
     const warnEvents: unknown[] = [];
-    const middleware = slowQueryWarning();
 
-    await middleware.afterQuery?.(makeExecutionPlan(), makeResult(251), makeContext(warnEvents));
+    await runStatement(slowQueryWarning(), 251, warnEvents);
 
     expect(warnEvents).toHaveLength(1);
+  });
+
+  it('ignores the end of a transaction', async () => {
+    const warnEvents: unknown[] = [];
+
+    await slowQueryWarning({ thresholdMs: 0 }).activityEnded?.(
+      { id: 'tx', kind: 'transaction', annotations: new Map() },
+      { kind: 'transaction', outcome: 'succeeded' },
+      makeContext(warnEvents),
+    );
+
+    expect(warnEvents).toHaveLength(0);
   });
 });

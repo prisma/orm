@@ -1,4 +1,5 @@
 import mongo from '@internal/mongo/runtime';
+import { contractFromJson } from '@internal/mongo/static';
 import {
   MongoFieldFilter,
   type MongoFilterExpr,
@@ -53,8 +54,8 @@ describe('Mongo where filters on a Bson field', () => {
         const created = await db.posts.create({ ...post, raw: { owner: objectId, count: long } });
         await db.posts.create({ ...post, raw: { owner: new ObjectId() } });
 
-        const facade = mongo<Contract>({
-          contractJson,
+        const facade = mongo({
+          contract: contractFromJson<Contract>(contractJson),
           mongoClient: client,
           dbName: mongoDb.databaseName,
         });
@@ -71,9 +72,7 @@ describe('Mongo where filters on a Bson field', () => {
             ormSubPathLong: (
               await db.posts.where(MongoFieldFilter.eq('raw.count', long as never)).all()
             ).length,
-            builderId: await matched(
-              MongoFieldFilter.eq('_id', new ObjectId(created._id) as never),
-            ),
+            builderId: await matched(MongoFieldFilter.eq('_id', new ObjectId(created.id) as never)),
             builderBson: await matched(MongoFieldFilter.eq('raw.owner', objectId as never)),
           }).toEqual({ ormSubPath: 1, ormSubPathLong: 1, builderId: 1, builderBson: 1 });
         } finally {

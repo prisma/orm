@@ -12,7 +12,8 @@
  */
 
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { acc, mongoQuery } from '@internal/mongo-query-builder';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
+import { acc } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
@@ -23,7 +24,9 @@ import {
 } from './fixtures/decode-fixture-contract';
 import { withMongod } from './setup';
 
-const q = mongoQuery<TDecodeFixtureContract>({ contractJson: decodeFixtureContractJson });
+const q = mongoStatic({
+  contract: contractFromJson<TDecodeFixtureContract>(decodeFixtureContractJson),
+}).query;
 
 describe('Mongo runtime decode integration via query-builder', {
   timeout: timeouts.spinUpMongoMemoryServer,
@@ -42,8 +45,8 @@ describe('Mongo runtime decode integration via query-builder', {
         embeddings: vec,
       });
 
-      const plan = mongoQuery<TDecodeFixtureContract>({ contractJson: contract })
-        .from('users')
+      const plan = mongoStatic({ contract })
+        .query.from('users')
         .match((f) =>
           f['_id']!.eq(MongoParamRef.of(insert.insertedId, { codecId: 'mongo/objectId@1' })),
         )

@@ -14,8 +14,8 @@ import type { PgIntegrationRuntime } from './runtime-helpers';
 /**
  * End-to-end proof of the integer-representation types on PostgreSQL, driven
  * through the real emitted fixture (`fixtures/integer-representation/generated/`):
- * `Meter.peak` is `BigIntNumber` (`pg/int8number@1`, int8 read as a JS number)
- * and `Meter.lifetime` is `UnboundedInt` (`pg/unboundedint@1`, unconstrained
+ * `Meter.peak` is `Int8Number` (`pg/int8number@1`, int8 read as a JS number)
+ * and `Meter.lifetime` is `NumericBigInt` (`pg/unboundedint@1`, unconstrained
  * numeric read as a bigint). Boundary values only — a value inside the safe
  * range proves nothing about the guard.
  */
@@ -98,7 +98,7 @@ describe('integration/integer representation types', () => {
   // number rather than decimal text — the boundary value proves that
   // projection survives the nested-document path exactly.
   it(
-    'carries a BigIntNumber column through an include at the safe-range boundary',
+    'carries an Int8Number column through an include at the safe-range boundary',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -130,7 +130,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'reading a stored value past the safe range through BigIntNumber raises RUNTIME.DECODE_FAILED',
+    'reading a stored value past the safe range through Int8Number raises RUNTIME.DECODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -184,7 +184,7 @@ describe('integration/integer representation types', () => {
         // runtime's column-context envelope, with the codec error on `cause`.
         expect(shape).toEqual({
           name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
+          message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
           code: 'RUNTIME.DECODE_FAILED',
           category: 'RUNTIME',
           severity: 'error',
@@ -195,10 +195,9 @@ describe('integration/integer representation types', () => {
           },
           cause: {
             name: 'StructuredError',
-            message:
-              'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
             code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: JSON.stringify(String(FIRST_UNSAFE)) },
+            meta: { codecId: 'pg/int8number@1', received: String(FIRST_UNSAFE) },
           },
         });
       }, contract);
@@ -207,7 +206,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'writing past the safe range through BigIntNumber raises RUNTIME.ENCODE_FAILED',
+    'writing past the safe range through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -228,7 +227,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'writing a non-integral number through BigIntNumber raises RUNTIME.ENCODE_FAILED',
+    'writing a non-integral number through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -255,7 +254,7 @@ describe('integration/integer representation types', () => {
   // `pg/unboundedint@1` stays unbounded, since that column's author chose the
   // exact representation. `min`/`max` resolve to the input codec itself.
   it(
-    'reduces BigIntNumber and UnboundedInt columns through their declared result codecs',
+    'reduces Int8Number and NumericBigInt columns through their declared result codecs',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -328,10 +327,8 @@ describe('integration/integer representation types', () => {
     timeouts.spinUpPpgDev,
   );
 
-  // The include path is the subtler one: the total is projected as a JSON
-  // number, so `JSON.parse` has already rounded it by the time the codec reads
-  // it. Rounding is monotone, which is what makes the post-parse guard
-  // un-foolable — the rounded value is still outside the safe range.
+  // The include path reads the total out of the JSON the database returns,
+  // with the same `fromWire` an ordinary row uses, so it refuses the same total.
   it(
     'refuses a bare sum past the safe range through the include path too',
     async () => {
@@ -355,7 +352,7 @@ describe('integration/integer representation types', () => {
         // scalar include names the column, with the codec error on `cause`.
         expect(shape).toEqual({
           name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
+          message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
           code: 'RUNTIME.DECODE_FAILED',
           category: 'RUNTIME',
           severity: 'error',
@@ -366,10 +363,9 @@ describe('integration/integer representation types', () => {
           },
           cause: {
             name: 'StructuredError',
-            message:
-              'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
             code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: JSON.stringify(String(2 * MAX_SAFE)) },
+            meta: { codecId: 'pg/int8number@1', received: String(2 * MAX_SAFE) },
           },
         });
       }, contract);

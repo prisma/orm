@@ -1,0 +1,22 @@
+// use prisma-8
+
+model User {
+  id        ObjectId @id @map("_id")
+  email     String   @unique
+  tenantId  String
+  name      String
+  expiresAt Date
+  status    String
+  metadata  Json
+  title     String
+  body      String
+
+  @@unique([tenantId, email])
+  @@index([sort(name, Desc)])
+  @@index([wildcard(metadata)])
+  @@index([expiresAt], expireAfterSeconds: 3600)
+  @@index([status], collationLocale: "fr", collationStrength: 2)
+  @@index([name], filter: "{\"status\": \"active\"}")
+  @@textIndex([title, body], weights: { title: 10, body: 1 })
+  @@map("users")
+}

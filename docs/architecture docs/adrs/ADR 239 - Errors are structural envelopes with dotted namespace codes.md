@@ -135,7 +135,7 @@ This ADR collapsed five parallel error systems — a numeric `PN-DOMAIN-NNNN` cl
 
 ## The scheme
 
-**Format.** `NAMESPACE.SUBCODE`. `NAMESPACE` is one of the closed list below. `SUBCODE` is `UPPER_SNAKE_CASE`, noun-first (`MARKER_MISSING`, `HASH_MISMATCH`, `RUNNER_FAILED`) so codes group by subject. A quoted exact-match search for a code finds every occurrence.
+**Format.** `NAMESPACE.SUBCODE`. `NAMESPACE` is one of the closed list below. `SUBCODE` is `UPPER_SNAKE_CASE`, noun-first (`MARKER_MISSING`, `HASH_MISMATCH`, `SCHEMA_VERIFY_FAILED`) so codes group by subject. A quoted exact-match search for a code finds every occurrence.
 
 **Namespaces are meaning-based and closed.** The list is governed by this ADR; each namespace has exactly one owning module that declares its code union. Ownership and meaning coincide: an error detected by the CLI but *about* the contract↔DB relationship is `CONTRACT`, not `CLI`; a runner apply failure surfaced through the CLI is `MIGRATION`, not `CLI`.
 
@@ -251,7 +251,7 @@ type ErroredEnvelope = {
 
 ## Banning bare throws
 
-A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-throws.mjs`, modeled on the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
+A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-ratchets.mjs`, shared with the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
 
 Scope of the ban:
 
@@ -315,7 +315,7 @@ The 46 numeric codes. Grouped by destination namespace; a `↦ merges` note mark
 | PN-RUN-3001 | `errorMarkerMissing` | `CONTRACT.MARKER_MISSING` ↦ merges with existing runtime code |
 | PN-RUN-3002 | `errorHashMismatch` | `CONTRACT.MARKER_MISMATCH` ↦ merges with existing runtime code |
 | PN-RUN-3003 | `errorTargetMismatch` | `CONTRACT.TARGET_MISMATCH` |
-| PN-RUN-3004 | `errorSchemaVerificationFailed` | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
+| PN-RUN-3004 | `errorSchemaVerificationFailed` (since removed; `db verify` and `db sign` raise the code as a diagnostic) | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
 | PN-RUN-3005 | `errorMarkerRowCorrupt` | `CONTRACT.MARKER_ROW_CORRUPT` |
 | PN-RUN-3006 | `errorMarkerReadFailed` | `CONTRACT.MARKER_READ_FAILED` |
 | PN-RUN-3010 | `errorMarkerRequired` | `CONTRACT.MARKER_REQUIRED` |
@@ -326,7 +326,7 @@ The 46 numeric codes. Grouped by destination namespace; a `↦ merges` note mark
 |---|---|---|
 | PN-CLI-4020 | `errorMigrationPlanningFailed` | `MIGRATION.PLANNING_FAILED` |
 | PN-CLI-4021 | `errorTargetMigrationNotSupported` | `MIGRATION.TARGET_UNSUPPORTED` |
-| PN-RUN-3020 | `errorRunnerFailed` | `MIGRATION.RUNNER_FAILED` |
+| PN-RUN-3020 | `errorRunnerFailed` | `MIGRATION.RUNNER_FAILED` (since removed: `db init`, `db update` and `db migrate` report the runner's own code) |
 | PN-RUN-3030 | `errorDestructiveChanges` | `MIGRATION.DESTRUCTIVE_CHANGES` |
 | PN-MIG-2001 | `errorUnfilledPlaceholder` / `placeholder` | `MIGRATION.UNFILLED_PLACEHOLDER` |
 | PN-MIG-2002 | `errorMigrationFileMissing` | `MIGRATION.FILE_MISSING` ↦ merges with existing tooling code |
@@ -376,7 +376,7 @@ The `migration check` failure catalogue (`PN-MIG-CHECK-NNN`) converts to self-de
 
 - `DRIVER.*` — already dotted; `DRIVER` becomes a real namespace. No code strings change.
 - `RUNTIME.MISSING_MUTATION_DEFAULT_GENERATOR` and `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING` (near-duplicates) → single `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING`.
-- The migration runner's bare-word enum values `EXECUTION_FAILED`, `SCHEMA_VERIFY_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FAILED`, `POLICY_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `DESTINATION_CONTRACT_MISMATCH`, `LEGACY_MARKER_SHAPE`, `MARKER_ORIGIN_MISMATCH`, `MARKER_CAS_FAILURE` → `MIGRATION.<VALUE>` on the `Result` failure (the failure already carries a summary and details; only the code string changes).
+- The migration runner's bare-word enum values `EXECUTION_FAILED`, `SCHEMA_VERIFY_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FAILED`, `POLICY_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `DESTINATION_CONTRACT_MISMATCH`, `MARKER_ORIGIN_MISMATCH`, `MARKER_CAS_FAILURE` → `MIGRATION.<VALUE>` on the `Result` failure (the failure already carries a summary and details; only the code string changes).
 - `PLAN.INVALID` / `PLAN.UNSUPPORTED` had no production callers and are deleted rather than migrated.
 - The remaining `MIGRATION.*` / `RUNTIME.*` / `PLAN.*` / `CONTRACT.*` / `LINT.*` / `BUDGET.*` codes already conform; no rename.
 

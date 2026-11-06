@@ -4,9 +4,10 @@ import {
   type ModelNode,
 } from '@internal/postgres/contract-builder';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { postgresTypeLookups } from '../../postgres-type-lookups';
 
-const idDescriptor = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textDescriptor = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const idDescriptor = { codecId: 'pg/int4@1' } as const;
+const textDescriptor = { codecId: 'pg/text@1' } as const;
 
 // The TS author path merges capabilities from the target pack; a full CLI emit
 // derives them from the codec/operation pipeline. For this author the runtime
@@ -102,10 +103,29 @@ const profile: ModelNode = {
   ],
 };
 
-export const contract = buildSqlContractFromDefinition({
-  warnings: undefined,
-  target: postgresTargetPack,
-  namespaces: ['public', 'auth'],
-  models: [publicUser, profile, authUser],
-  createNamespace: postgresCreateNamespace,
-});
+// The same model name `Note`, with the same fields, in BOTH namespaces: a
+// collection's namespace is the only thing that tells the two apart.
+function note(namespaceId: 'public' | 'auth'): ModelNode {
+  return {
+    modelName: 'Note',
+    tableName: 'notes',
+    namespaceId,
+    fields: [
+      { fieldName: 'id', columnName: 'id', descriptor: idDescriptor, nullable: false },
+      { fieldName: 'body', columnName: 'body', descriptor: textDescriptor, nullable: false },
+    ],
+    id: { columns: ['id'] },
+  };
+}
+
+export const contract = buildSqlContractFromDefinition(
+  {
+    warnings: undefined,
+    target: postgresTargetPack,
+    namespaces: ['public', 'auth'],
+    models: [publicUser, profile, authUser, note('public'), note('auth')],
+    createNamespace: postgresCreateNamespace,
+  },
+  postgresTypeLookups.codecLookup,
+  postgresTypeLookups.dataTypeLookup,
+);

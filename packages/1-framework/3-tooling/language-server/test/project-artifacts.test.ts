@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -55,11 +56,11 @@ const interpretContext = {
   composedExtensions: [],
   authoringContributions: {
     type: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1', nativeType: 'Int' } },
+      Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1' } },
     },
-    field: {},
     entityTypes: {},
     pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
     dataTypes: {},
@@ -68,13 +69,15 @@ const interpretContext = {
 } as unknown as ContractSourceContext;
 const controlStack = {
   scalarTypes: ['Int'],
+  defaultNamespaceId: 'public',
   pslBlockDescriptors: {},
+  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   authoringContributions: assembleAuthoringContributions([
     {
       id: 'fixture',
       authoring: {
         type: {
-          Int: { kind: 'typeConstructor', output: { codecId: 'int', nativeType: 'integer' } },
+          Int: { kind: 'typeConstructor', output: { codecId: 'int' } },
         },
         attributeSpecs: {
           model: {},
@@ -165,7 +168,7 @@ describe('ProjectArtifacts binder', () => {
           id: 'replacement',
           authoring: {
             type: {
-              Int: { kind: 'typeConstructor', output: { codecId: 'other', nativeType: 'bigint' } },
+              Int: { kind: 'typeConstructor', output: { codecId: 'other' } },
             },
           },
         },
@@ -176,7 +179,7 @@ describe('ProjectArtifacts binder', () => {
       next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int'),
     ).toMatchObject({
       kind: 'contributedType',
-      symbol: { descriptor: { output: { codecId: 'other', nativeType: 'bigint' } } },
+      symbol: { descriptor: { output: { codecId: 'other' } } },
     });
   });
 
@@ -185,7 +188,7 @@ describe('ProjectArtifacts binder', () => {
     set(schemaUri, cleanSource);
     set(siblingUri, siblingSource);
     const first = project.binder();
-    const user = project.symbolTable().topLevel.models['User']!;
+    const user = project.symbolTable().defaultNamespace.models['User']!;
     expect(first.declaredSymbol(user.node.syntax)).toBe(user);
     expect(project.binder()).toBe(first);
     project.updateInputs(inputs);
@@ -197,7 +200,7 @@ describe('ProjectArtifacts binder', () => {
     const third = project.binder();
     expect(third).not.toBe(second);
     expect(third.declaredSymbol(user.node.syntax)).toBeUndefined();
-    const changed = project.symbolTable().topLevel.models['Changed']!;
+    const changed = project.symbolTable().defaultNamespace.models['Changed']!;
     expect(third.scopeAt(changed.node.syntax).lookup('Changed')?.symbol).toBe(changed);
     expect(third.scopeAt(changed.node.syntax).lookup('User')).toBeUndefined();
     project.documentClosed(schemaUri);
@@ -221,40 +224,16 @@ describe('ProjectArtifacts binder', () => {
     const failed = projectWithSnapshots(
       interpretationDouble(() =>
         notOk({
-          summary: 'preset',
-          diagnostics: [{ sourceId: schemaUri, code: 'UNKNOWN_PRESET', message: 'preset' }],
+          summary: 'refused',
+          diagnostics: [{ sourceId: schemaUri, code: 'INTERPRETER_REFUSAL', message: 'refused' }],
         }),
       ).interpretation,
     );
     failed.set(schemaUri, missing);
     expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
       'PSL_UNRESOLVED_REFERENCE',
-      'UNKNOWN_PRESET',
+      'INTERPRETER_REFUSAL',
     ]);
-  });
-
-  it('resolves a field preset without an interpreter', () => {
-    const { project, set } = projectWithSnapshots(undefined, false, {
-      ...controlStack,
-      authoringContributions: assembleAuthoringContributions([
-        {
-          id: 'fixture',
-          authoring: {
-            type: controlStack.authoringContributions.type,
-            field: {
-              temporal: {
-                createdAt: {
-                  kind: 'fieldPreset',
-                  output: { codecId: 'timestamp', nativeType: 'timestamp' },
-                },
-              },
-            },
-          },
-        },
-      ]),
-    });
-    set(schemaUri, `${directive}model User {\n  id Int\n  createdAt temporal.createdAt()\n}\n`);
-    expect(project.diagnostics(schemaUri)).toEqual([]);
   });
 
   it('describes unsupported attributes with the family describer without an interpreter', () => {
@@ -327,7 +306,7 @@ describe('ProjectArtifacts snapshots', () => {
         const snapshot = set(uri, cleanSource);
         project.documentChanged(uri);
         expect(project.document(uri)).toBe(snapshot);
-        expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User']);
+        expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['User']);
       }
     },
   );
@@ -418,7 +397,7 @@ describe('ProjectArtifacts snapshots', () => {
     expect(parse).toHaveBeenCalledTimes(2);
     const edited = set(siblingUri, `${directive}model Other { id Int }`);
     project.diagnostics(schemaUri);
-    expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User', 'Other']);
+    expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['User', 'Other']);
     expect(project.document(siblingUri)).toBe(edited);
     expect(() => project.sources.sourceFileFor(sibling.parse().document.syntax)).toThrow(
       /No SourceFile/,
@@ -489,7 +468,7 @@ describe('ProjectArtifacts snapshots', () => {
         documents.invalidate(uri);
       }
       expect(project.document(uri)).not.toBe(first);
-      expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['Post']);
+      expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['Post']);
       expect(parse).toHaveBeenCalledTimes(2);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -695,7 +674,7 @@ describe('ProjectArtifacts diagnostics', () => {
     const { project } = projectWithSnapshots();
     expect(project.diagnostics(schemaUri)).toEqual([]);
     expect(project.symbolDiagnostics()).toEqual([]);
-    expect(Object.keys(project.symbolTable().topLevel.models)).toEqual([]);
+    expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual([]);
     expect(parse).not.toHaveBeenCalled();
   });
 });
@@ -711,7 +690,11 @@ describe('ProjectArtifacts binder', () => {
     set(schemaUri, schema);
 
     const { document, sources } = parse(schema, schemaUri);
-    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
     const { diagnostics: expected } = createBinder({
       symbolTable,
       sources,
@@ -729,7 +712,11 @@ describe('ProjectArtifacts binder', () => {
     set(schemaUri, schema);
 
     const { document, sources } = parse(schema, schemaUri);
-    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
     const { diagnostics: expected } = createBinder({
       symbolTable,
       sources,
@@ -749,23 +736,5 @@ describe('ProjectArtifacts binder', () => {
     expect(project.binder()).toBe(first);
     project.diagnostics(schemaUri);
     expect(spy.mock.calls[0]?.[0].binder).toBe(first);
-  });
-
-  it('produces a new binder after a document edit', () => {
-    const { interpretation } = interpretationDouble(() => ok({} as never));
-    const { project, set } = projectWithSnapshots(interpretation);
-    set(schemaUri, cleanSource);
-    const first = project.binder();
-    set(schemaUri, `${directive}model User {\n  id Int @id\n  name Int\n}\n`);
-    project.documentChanged(schemaUri);
-    const second = project.binder();
-    expect(second).toBeDefined();
-    expect(second).not.toBe(first);
-  });
-
-  it('builds a binder from the control stack without an interpretation', () => {
-    const { project, set } = projectWithSnapshots();
-    set(schemaUri, cleanSource);
-    expect(project.binder()).toBeDefined();
   });
 });

@@ -1,0 +1,362 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "",
+  "roots": {},
+  "domain": {
+    "namespaces": {}
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "sample": {
+              "columns": {
+                "c00": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.5"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "c01": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "c02": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "3"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 0
+                  }
+                },
+                "c03": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "120"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 5,
+                    "scale": -1
+                  }
+                },
+                "c04": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  },
+                  "nullable": false
+                },
+                "c05": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "NaN"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "c06": {
+                  "dataType": "pg/char",
+                  "default": {
+                    "kind": "literal",
+                    "value": "ab "
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 3
+                  }
+                },
+                "c07": {
+                  "dataType": "pg/char",
+                  "default": {
+                    "kind": "literal",
+                    "value": "a"
+                  },
+                  "nullable": false
+                },
+                "c08": {
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00.000Z"
+                  },
+                  "nullable": false
+                },
+                "c09": {
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T01:00:00+01:00"
+                  },
+                  "nullable": false
+                },
+                "c10": {
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01 00:00:00.120Z"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "c11": {
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "infinity"
+                  },
+                  "nullable": false
+                },
+                "c12": {
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01 12:34:56"
+                  },
+                  "nullable": false
+                },
+                "c13": {
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T12:34:56.500"
+                  },
+                  "nullable": false
+                },
+                "c14": {
+                  "dataType": "pg/time",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34"
+                  },
+                  "nullable": false
+                },
+                "c15": {
+                  "dataType": "pg/time",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:56.100"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "c16": {
+                  "dataType": "pg/timetz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34+02"
+                  },
+                  "nullable": false
+                },
+                "c17": {
+                  "dataType": "pg/date",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01"
+                  },
+                  "nullable": false
+                },
+                "c18": {
+                  "dataType": "pg/date",
+                  "default": {
+                    "kind": "literal",
+                    "value": "10000-01-01"
+                  },
+                  "nullable": false
+                },
+                "c19": {
+                  "dataType": "pg/date",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0044-03-15 BC"
+                  },
+                  "nullable": false
+                },
+                "c20": {
+                  "dataType": "pg/uuid",
+                  "default": {
+                    "kind": "literal",
+                    "value": "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
+                  },
+                  "nullable": false
+                },
+                "c21": {
+                  "dataType": "pg/uuid",
+                  "default": {
+                    "kind": "literal",
+                    "value": "{a0eebc999c0b4ef8bb6d6bb9bd380a11}"
+                  },
+                  "nullable": false
+                },
+                "c22": {
+                  "dataType": "pg/inet",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2001:0DB8::0001"
+                  },
+                  "nullable": false
+                },
+                "c23": {
+                  "dataType": "pg/inet",
+                  "default": {
+                    "kind": "literal",
+                    "value": "10.0.0.1/32"
+                  },
+                  "nullable": false
+                },
+                "c24": {
+                  "dataType": "pg/interval",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1 year 2 mons"
+                  },
+                  "nullable": false
+                },
+                "c25": {
+                  "dataType": "pg/interval",
+                  "default": {
+                    "kind": "literal",
+                    "value": "PT90M"
+                  },
+                  "nullable": false
+                },
+                "c26": {
+                  "dataType": "pg/bytea",
+                  "default": {
+                    "kind": "literal",
+                    "value": "aGVsbG9="
+                  },
+                  "nullable": false
+                },
+                "c27": {
+                  "dataType": "pg/int4",
+                  "default": {
+                    "kind": "literal",
+                    "value": 5
+                  },
+                  "nullable": false
+                },
+                "c28": {
+                  "dataType": "pg/int8",
+                  "default": {
+                    "kind": "literal",
+                    "value": "7"
+                  },
+                  "nullable": false
+                },
+                "c29": {
+                  "dataType": "pg/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "x"
+                  },
+                  "nullable": false
+                },
+                "c30": {
+                  "dataType": "pg/bool",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "c31": {
+                  "dataType": "pg/jsonb",
+                  "default": {
+                    "kind": "literal",
+                    "value": {
+                      "b": 1,
+                      "a": [
+                        2
+                      ]
+                    }
+                  },
+                  "nullable": false
+                },
+                "list": {
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "2024-01-01T00:00:00.000Z",
+                      null,
+                      "2024-06-01T12:00:00+02:00"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": true
+                  },
+                  "nullable": false
+                },
+                "named": {
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.5"
+                  },
+                  "nullable": false,
+                  "typeRef": "Money"
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "c27"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "f89c428a29d2d0aad25c6f3577a8f93caae026476288852f501540ae5c6462ce",
+    "types": {
+      "Money": {
+        "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
+        "typeParams": {
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "meta": {}
+}

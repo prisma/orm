@@ -1,4 +1,8 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
+import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -8,15 +12,24 @@ import {
   assembleAttributeSpecs,
   type Binder,
   type BlockAttributeSpecFactory,
+  blockSpecContext,
   blockSpecFactoryOf,
+  contributedTypeOf,
+  EMPTY_DATA_TYPES,
   findBlockDescriptor,
+  type MixinSymbol,
+  type ModelSymbol,
+  type PslSymbol,
   type SymbolTable,
   typeReferenceNode,
 } from '@internal/psl-parser';
-import type {
-  FieldDeclarationAst,
+import {
+  CompositeTypeDeclarationAst,
+  type FieldDeclarationAst,
   GenericBlockDeclarationAst,
+  MixinDeclarationAst,
   ModelDeclarationAst,
+  type SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import type { ArgumentGrammar } from './attribute-argument-grammar';
@@ -27,22 +40,54 @@ export interface AttributeSpecSource {
   readonly symbolTable: SymbolTable;
   readonly authoringContributions?: AssembledAuthoringContributions;
   readonly controlMutationDefaults?: ControlMutationDefaults;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
+  readonly dataTypes?: DataTypeSupport;
+}
+
+export type ModelBlockAst = ModelDeclarationAst | MixinDeclarationAst;
+
+export type FieldBlockAst = ModelBlockAst | CompositeTypeDeclarationAst;
+
+export type EntryBlockAst = GenericBlockDeclarationAst | MixinDeclarationAst;
+
+const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+export function castModelBlock(node: SyntaxNode): ModelBlockAst | undefined {
+  const model = ModelDeclarationAst.cast(node);
+  if (model !== undefined) return model;
+  const mixin = MixinDeclarationAst.cast(node);
+  return mixin?.keyword()?.text === 'model' ? mixin : undefined;
+}
+
+export function castFieldBlock(node: SyntaxNode): FieldBlockAst | undefined {
+  const block = ModelDeclarationAst.cast(node) ?? CompositeTypeDeclarationAst.cast(node);
+  if (block !== undefined) return block;
+  const mixin = MixinDeclarationAst.cast(node);
+  return FIELD_BLOCK_KEYWORDS.has(mixin?.keyword()?.text ?? '') ? mixin : undefined;
+}
+
+export function castEntryBlock(node: SyntaxNode): EntryBlockAst | undefined {
+  const block = GenericBlockDeclarationAst.cast(node);
+  if (block !== undefined) return block;
+  const mixin = MixinDeclarationAst.cast(node);
+  const keyword = mixin?.keyword()?.text;
+  return keyword !== undefined && !FIELD_BLOCK_KEYWORDS.has(keyword) ? mixin : undefined;
 }
 
 export interface FieldAttributeOwner {
   readonly ownerKind: 'field';
   readonly field: FieldDeclarationAst;
-  readonly model: ModelDeclarationAst;
+  readonly model: ModelBlockAst;
 }
 
 export interface ModelAttributeOwner {
   readonly ownerKind: 'model';
-  readonly model: ModelDeclarationAst;
+  readonly model: ModelBlockAst;
 }
 
 export interface BlockAttributeOwner {
   readonly ownerKind: 'block';
-  readonly block: GenericBlockDeclarationAst;
+  readonly block: EntryBlockAst;
   readonly blockKeyword: string;
 }
 
@@ -56,7 +101,7 @@ export type AttributeArgumentOwner = AttributeOwner & NamedAttribute;
 
 export interface BlockValueOwner {
   readonly ownerKind: 'blockValue';
-  readonly block: GenericBlockDeclarationAst;
+  readonly block: EntryBlockAst;
   readonly blockKeyword: string;
   readonly key: string;
 }
@@ -83,7 +128,12 @@ function blockValueGrammar(
 ): ArgumentGrammar | undefined {
   const descriptor = findBlockDescriptor(source.pslBlockDescriptors, owner.blockKeyword);
   if (descriptor === undefined) return undefined;
-  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable });
+  const spec = blockSpecFactoryOf(descriptor)(
+    blockSpecContext({
+      symbols: source.symbolTable,
+      dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
+    }),
+  );
   if (spec.mode === 'map') return spec.value.type;
   return Object.hasOwn(spec.parameters, owner.key) ? spec.parameters[owner.key]?.type : undefined;
 }
@@ -101,30 +151,34 @@ export function attributeSpecResolver(
         return blindCast<
           BlockAttributeSpecFactory,
           'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-        >(factory)({ symbols: source.symbolTable });
+        >(factory)(
+          blockSpecContext({
+            symbols: source.symbolTable,
+            dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
+          }),
+        );
       };
     }
     case 'model': {
       if (source.authoringContributions === undefined) return () => undefined;
-      const model = source.binder.declaredSymbol(context.model.syntax);
-      if (model?.kind !== 'model' || source.controlMutationDefaults === undefined) {
+      const model = fieldSpecModel(source.binder.declaredSymbol(context.model.syntax));
+      if (model === undefined || source.controlMutationDefaults === undefined) {
         return () => undefined;
       }
       const specs = assembleAttributeSpecs(source.authoringContributions);
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: {
-          ...source.controlMutationDefaults,
-          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
-        },
+        defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
+        generatorFunctions: source.generatorFunctions,
+        dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       return (name) => specs.model[name]?.(specContext);
     }
     case 'field': {
       if (source.authoringContributions === undefined) return () => undefined;
-      const model = source.binder.declaredSymbol(context.model.syntax);
-      if (model?.kind !== 'model' || source.controlMutationDefaults === undefined) {
+      const model = fieldSpecModel(source.binder.declaredSymbol(context.model.syntax));
+      if (model === undefined || source.controlMutationDefaults === undefined) {
         return () => undefined;
       }
       const field = source.binder.declaredSymbol(context.field.syntax);
@@ -133,14 +187,24 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: {
-          ...source.controlMutationDefaults,
-          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
-        },
+        defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
+        generatorFunctions: source.generatorFunctions,
+        dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       const node = typeReferenceNode(field);
       const typeResolution = node === undefined ? undefined : source.binder.symbolForNode(node);
-      return (name) => specs.field[name]?.({ ...specContext, field, typeResolution });
+      const contributedType = contributedTypeOf(
+        typeResolution,
+        source.binder,
+        field.typeConstructor,
+      );
+      return (name) =>
+        specs.field[name]?.({ ...specContext, field, typeResolution, contributedType });
     }
   }
+}
+
+function fieldSpecModel(symbol: PslSymbol | undefined): ModelSymbol | MixinSymbol | undefined {
+  if (symbol?.kind === 'model') return symbol;
+  return symbol?.kind === 'mixin' && symbol.keyword === 'model' ? symbol : undefined;
 }

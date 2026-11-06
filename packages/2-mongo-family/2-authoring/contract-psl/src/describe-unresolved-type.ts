@@ -5,6 +5,8 @@ import {
 } from '@internal/framework-components/authoring';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import type { DescribeUnresolvedType } from '@internal/psl-parser';
+import { describeRemovedFieldPreset } from '@internal/psl-parser/interpret';
+import { removedMongoFieldPresets } from './removed-field-presets';
 
 const EARLIER_MONGO_SCALAR_NAMES: Readonly<Record<string, string>> = {
   BigInt: 'Int64',
@@ -35,15 +37,17 @@ export function describeUnresolvedMongoType(
 ): DescribeUnresolvedType {
   const types = contributions.type;
   const scalars = collectScalarTypeConstructors(types);
-  return ({ field, owner, written }) => {
-    if (field.typeNamespaceId !== undefined || field.typeConstructor !== undefined) {
+  return ({ field, owner, written, isDeclared }) => {
+    if (field.typeConstructor !== undefined) {
+      return describeRemovedFieldPreset(removedMongoFieldPresets, field, types, isDeclared);
+    }
+    if (field.typeNamespaceId !== undefined) {
       return undefined;
     }
     const replacement = EARLIER_MONGO_SCALAR_NAMES[written];
-    const replacementOutput = replacement === undefined ? undefined : scalars.get(replacement);
-    if (replacement === undefined || replacementOutput === undefined) {
+    if (replacement === undefined || !scalars.has(replacement)) {
       return `Field "${owner.name}.${field.name}" has type "${written}", which is not a scalar type, an enum, a composite type or a model. ${scalarTypesSentence(types)}`;
     }
-    return `Field "${owner.name}.${field.name}" has type "${written}", which is not a Mongo scalar type; use "${replacement}" (stored as BSON ${replacementOutput.nativeType}).`;
+    return `Field "${owner.name}.${field.name}" has type "${written}", which is not a Mongo scalar type; use "${replacement}".`;
   };
 }

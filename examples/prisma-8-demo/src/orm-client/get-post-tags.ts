@@ -1,8 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
 import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type PostId = DefaultModelRow<Contract, 'Post'>['id'];
 
@@ -11,9 +10,8 @@ type PostId = DefaultModelRow<Contract, 'Post'>['id'];
  * Post.tags N:M relation. Demonstrates `.include('tags', ...)` traversing
  * the junction table transparently.
  */
-export async function ormClientGetPostTags(postId: string, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.Post.select('id', 'title')
+export async function ormClientGetPostTags(postId: string, orm: DemoOrm) {
+  return orm.Post.select('id', 'title')
     .include('tags', (tag) => tag.select('id', 'label').orderBy((t) => t.label.asc()))
     .where({ id: toPostId(postId) })
     .first();

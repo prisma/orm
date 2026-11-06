@@ -4,28 +4,31 @@ import type {
   ContributedTypeScope,
   ContributedTypeSymbol,
 } from './contributed-type-scope';
+import { namespaceIdOfPslName } from './namespace-names';
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
+  MixinSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
-  TopLevelScope as TopLevelRecords,
+  SymbolTable,
 } from './symbol-table';
 
 export type ScopeResolution =
-  | { readonly kind: 'model'; readonly symbol: ModelSymbol; readonly namespace?: NamespaceSymbol }
+  | { readonly kind: 'model'; readonly symbol: ModelSymbol; readonly namespace: NamespaceSymbol }
   | {
       readonly kind: 'compositeType';
       readonly symbol: CompositeTypeSymbol;
-      readonly namespace?: NamespaceSymbol;
+      readonly namespace: NamespaceSymbol;
     }
   | {
       readonly kind: 'namedType';
       readonly symbol: NamedTypeSymbol;
       readonly namespace?: NamespaceSymbol;
     }
-  | { readonly kind: 'block'; readonly symbol: BlockSymbol; readonly namespace?: NamespaceSymbol }
+  | { readonly kind: 'block'; readonly symbol: BlockSymbol; readonly namespace: NamespaceSymbol }
+  | { readonly kind: 'mixin'; readonly symbol: MixinSymbol; readonly namespace?: NamespaceSymbol }
   | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
   | { readonly kind: 'contributedNamespace'; readonly symbol: ContributedNamespaceSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
@@ -68,6 +71,8 @@ function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolut
     return { kind: 'compositeType', symbol: compositeType, namespace };
   const block = namespace.blocks[name];
   if (block !== undefined) return { kind: 'block', symbol: block, namespace };
+  const mixin = namespace.mixins[name];
+  if (mixin !== undefined) return { kind: 'mixin', symbol: mixin, namespace };
   return undefined;
 }
 
@@ -90,37 +95,34 @@ class ContributedScope extends Scope {
 }
 
 class DocumentScope extends Scope {
-  readonly #records: TopLevelRecords;
+  readonly #symbols: SymbolTable;
 
-  constructor(records: TopLevelRecords, parent: Scope | undefined) {
+  constructor(symbols: SymbolTable, parent: Scope | undefined) {
     super(parent);
-    this.#records = records;
+    this.#symbols = symbols;
   }
 
   lookup(name: string): ScopeResolution | undefined {
-    const records = this.#records;
-    const model = records.models[name];
-    if (model !== undefined) return { kind: 'model', symbol: model };
-    const compositeType = records.compositeTypes[name];
-    if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-    const namedType = records.namedTypes[name];
+    const { defaultNamespace, namedTypes, namespaces } = this.#symbols;
+    const member = namespaceMember(defaultNamespace, name);
+    if (member !== undefined) return member;
+    const namedType = namedTypes[name];
     if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
-    const block = records.blocks[name];
-    if (block !== undefined) return { kind: 'block', symbol: block };
-    const namespace = records.namespaces[name];
+    const namespace = namespaces[namespaceIdOfPslName(name)];
     if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
     return this.parent?.lookup(name);
   }
 
-  protected ownNames(): Iterable<string> {
-    const records = this.#records;
-    return recordNames(
-      records.models,
-      records.compositeTypes,
-      records.namedTypes,
-      records.blocks,
-      records.namespaces,
+  protected *ownNames(): Iterable<string> {
+    const { defaultNamespace, namedTypes, namespaces } = this.#symbols;
+    yield* recordNames(
+      defaultNamespace.models,
+      defaultNamespace.compositeTypes,
+      namedTypes,
+      defaultNamespace.blocks,
+      defaultNamespace.mixins,
     );
+    for (const namespace of Object.values(namespaces)) yield namespace.name;
   }
 }
 
@@ -138,7 +140,12 @@ class NamespaceScope extends Scope {
 
   protected ownNames(): Iterable<string> {
     const namespace = this.#namespace;
-    return recordNames(namespace.models, namespace.compositeTypes, namespace.blocks);
+    return recordNames(
+      namespace.models,
+      namespace.compositeTypes,
+      namespace.blocks,
+      namespace.mixins,
+    );
   }
 }
 
@@ -146,12 +153,12 @@ export function contributedScope(registry: ContributedTypeScope): Scope {
   return new ContributedScope(registry);
 }
 
-export function documentScope(records: TopLevelRecords, parent: Scope | undefined): Scope {
-  return new DocumentScope(records, parent);
+export function documentScope(symbols: SymbolTable, parent: Scope | undefined): Scope {
+  return new DocumentScope(symbols, parent);
 }
 
-export function namedTypeBaseScope(records: TopLevelRecords, parent: Scope | undefined): Scope {
-  return new DocumentScope({ ...records, namedTypes: {} }, parent);
+export function namedTypeBaseScope(symbols: SymbolTable, parent: Scope | undefined): Scope {
+  return new DocumentScope({ ...symbols, namedTypes: {} }, parent);
 }
 
 export function namespaceScope(namespace: NamespaceSymbol, parent: Scope): Scope {

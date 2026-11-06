@@ -1,0 +1,14 @@
+types {
+  Slug      = VarChar(64)
+  Embedding = pgvector.Vector(3)
+  Code      = Char(8)
+}
+
+model Post {
+  id        Int        @id
+  slug      Slug
+  title     Slug
+  embedding Embedding?
+
+  @@map("post")
+}

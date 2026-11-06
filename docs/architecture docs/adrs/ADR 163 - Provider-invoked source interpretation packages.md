@@ -53,6 +53,6 @@ The CLI / ControlClient remain source-agnostic and do not import PSL-specific pa
 
 - `docs/architecture docs/subsystems/2. Contract Emitter & Types.md`
 - `packages/1-framework/2-authoring/psl-parser/README.md`
-- `packages/2-sql/2-authoring/contract-psl/README.md`
+- `packages/2-sql-family/2-authoring/contract-psl/README.md`
 - `docs/architecture docs/adrs/ADR 006 - Dual Authoring Modes.md`
 - `docs/architecture docs/adrs/ADR 150 - Family-Agnostic CLI and Pack Entry Points.md`

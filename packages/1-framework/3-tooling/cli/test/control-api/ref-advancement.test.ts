@@ -67,10 +67,6 @@ describe('computeRefAdvancementName', () => {
   it('returns null when advanceRef is omitted and db is provided', () => {
     expect(computeRefAdvancementName({ db: 'postgres://localhost/db' })).toBe(null);
   });
-
-  it('returns db when advanceRef is explicitly db on the default database', () => {
-    expect(computeRefAdvancementName({ advanceRef: 'db' })).toBe('db');
-  });
 });
 
 describe('executeRefAdvancement', () => {

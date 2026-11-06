@@ -23,11 +23,13 @@ export const mongoStack = createControlStack({
 export function mongoSourceContext(resolvedInputs: readonly string[]): ContractSourceContext {
   return {
     composedExtensions: mongoStack.extensions.map((extension) => extension.id),
+    defaultNamespaceId: mongoStack.target.defaultNamespaceId,
     composedExtensionContracts: mongoStack.extensionContracts,
     authoringContributions: mongoStack.authoringContributions,
     codecLookup: mongoStack.codecLookup,
-    dataTypeLookup: mongoStack.dataTypeLookup,
+    dataTypes: mongoStack.dataTypes,
     controlMutationDefaults: mongoStack.controlMutationDefaults,
+    generatorFunctions: mongoStack.generatorFunctions,
     resolvedInputs,
     capabilities: mongoStack.capabilities,
   };

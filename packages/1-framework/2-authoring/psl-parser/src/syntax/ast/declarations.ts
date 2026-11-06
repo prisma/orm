@@ -1,32 +1,37 @@
 import type { AstNode, BracedBlock, HasDocComment } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild, readDocComment } from '../ast-helpers';
+import { skipTriviaToken } from '../navigation';
 import { SyntaxNode, type SyntaxToken } from '../red';
 import { FieldAttributeAst, ModelAttributeAst } from './attributes';
 import type { ExpressionAst } from './expressions';
 import { castExpression } from './expressions';
 import { IdentifierAst } from './identifier';
+import { QualifiedNameAst } from './qualified-name';
 import { TypeAnnotationAst } from './type-annotation';
 
 /**
- * What may appear inside a `namespace` block: models, composite types, and
- * extension (block) declarations. `types {}` blocks and nested `namespace`
- * blocks are document-only, so they are not namespace members.
+ * What may appear inside a `namespace` block: models, composite types,
+ * extension (block) declarations, and mixin declarations. `types {}` blocks
+ * and nested `namespace` blocks are document-only, so they are not namespace
+ * members.
  */
 export type NamespaceMemberAst =
   | ModelDeclarationAst
   | CompositeTypeDeclarationAst
-  | GenericBlockDeclarationAst;
+  | GenericBlockDeclarationAst
+  | MixinDeclarationAst;
 
 export type DeclarationAst = NamespaceMemberAst | TypesBlockAst | NamespaceDeclarationAst;
 export type AttributeAst = FieldAttributeAst | ModelAttributeAst;
-export type BlockMemberAst = FieldDeclarationAst | ModelAttributeAst;
-export type GenericBlockMemberAst = KeyValuePairAst | ModelAttributeAst;
+export type BlockMemberAst = FieldDeclarationAst | ModelAttributeAst | MixinInclusionAst;
+export type GenericBlockMemberAst = KeyValuePairAst | ModelAttributeAst | MixinInclusionAst;
 
 function castNamespaceMember(node: SyntaxNode): NamespaceMemberAst | undefined {
   return (
     ModelDeclarationAst.cast(node) ??
     CompositeTypeDeclarationAst.cast(node) ??
-    GenericBlockDeclarationAst.cast(node)
+    GenericBlockDeclarationAst.cast(node) ??
+    MixinDeclarationAst.cast(node)
   );
 }
 
@@ -81,10 +86,17 @@ export class ModelDeclarationAst implements BracedBlock, HasDocComment {
     yield* filterChildren(this.syntax, ModelAttributeAst.cast);
   }
 
+  *inclusions(): Iterable<MixinInclusionAst> {
+    yield* filterChildren(this.syntax, MixinInclusionAst.cast);
+  }
+
   *members(): Iterable<BlockMemberAst> {
     yield* filterChildren(
       this.syntax,
-      (node) => FieldDeclarationAst.cast(node) ?? ModelAttributeAst.cast(node),
+      (node) =>
+        FieldDeclarationAst.cast(node) ??
+        ModelAttributeAst.cast(node) ??
+        MixinInclusionAst.cast(node),
     );
   }
 
@@ -128,10 +140,17 @@ export class CompositeTypeDeclarationAst implements BracedBlock, HasDocComment {
     yield* filterChildren(this.syntax, ModelAttributeAst.cast);
   }
 
+  *inclusions(): Iterable<MixinInclusionAst> {
+    yield* filterChildren(this.syntax, MixinInclusionAst.cast);
+  }
+
   *members(): Iterable<BlockMemberAst> {
     yield* filterChildren(
       this.syntax,
-      (node) => FieldDeclarationAst.cast(node) ?? ModelAttributeAst.cast(node),
+      (node) =>
+        FieldDeclarationAst.cast(node) ??
+        ModelAttributeAst.cast(node) ??
+        MixinInclusionAst.cast(node),
     );
   }
 
@@ -242,10 +261,15 @@ export class GenericBlockDeclarationAst implements BracedBlock, HasDocComment {
     yield* filterChildren(this.syntax, ModelAttributeAst.cast);
   }
 
+  *inclusions(): Iterable<MixinInclusionAst> {
+    yield* filterChildren(this.syntax, MixinInclusionAst.cast);
+  }
+
   *members(): Iterable<GenericBlockMemberAst> {
     yield* filterChildren(
       this.syntax,
-      (node) => KeyValuePairAst.cast(node) ?? ModelAttributeAst.cast(node),
+      (node) =>
+        KeyValuePairAst.cast(node) ?? ModelAttributeAst.cast(node) ?? MixinInclusionAst.cast(node),
     );
   }
 
@@ -257,6 +281,92 @@ export class GenericBlockDeclarationAst implements BracedBlock, HasDocComment {
     return node.kind === 'GenericBlockDeclaration'
       ? new GenericBlockDeclarationAst(node)
       : undefined;
+  }
+}
+
+export class MixinDeclarationAst implements BracedBlock, HasDocComment {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  keyword(): SyntaxToken | undefined {
+    return findChildToken(this.syntax, 'Ident');
+  }
+
+  mixinKeyword(): SyntaxToken | undefined {
+    const next = this.keyword()?.nextToken;
+    const token = next === undefined ? undefined : skipTriviaToken(next, 'next');
+    return token?.kind === 'Ident' && token.parent === this.syntax ? token : undefined;
+  }
+
+  name(): IdentifierAst | undefined {
+    return findFirstChild(this.syntax, IdentifierAst.cast);
+  }
+
+  lbrace(): SyntaxToken | undefined {
+    return findChildToken(this.syntax, 'LBrace');
+  }
+
+  rbrace(): SyntaxToken | undefined {
+    return findChildToken(this.syntax, 'RBrace');
+  }
+
+  *fields(): Iterable<FieldDeclarationAst> {
+    yield* filterChildren(this.syntax, FieldDeclarationAst.cast);
+  }
+
+  *entries(): Iterable<KeyValuePairAst> {
+    yield* filterChildren(this.syntax, KeyValuePairAst.cast);
+  }
+
+  *attributes(): Iterable<ModelAttributeAst> {
+    yield* filterChildren(this.syntax, ModelAttributeAst.cast);
+  }
+
+  /** A mixin cannot include a mixin, but the parser still reads an inclusion written in a mixin body, so that it can be reported as an error at that inclusion. */
+  *inclusions(): Iterable<MixinInclusionAst> {
+    yield* filterChildren(this.syntax, MixinInclusionAst.cast);
+  }
+
+  *members(): Iterable<BlockMemberAst | GenericBlockMemberAst> {
+    yield* filterChildren(
+      this.syntax,
+      (node) =>
+        FieldDeclarationAst.cast(node) ??
+        KeyValuePairAst.cast(node) ??
+        ModelAttributeAst.cast(node) ??
+        MixinInclusionAst.cast(node),
+    );
+  }
+
+  docComment(): string | undefined {
+    return readDocComment(this.syntax);
+  }
+
+  static cast(node: SyntaxNode): MixinDeclarationAst | undefined {
+    return node.kind === 'MixinDeclaration' ? new MixinDeclarationAst(node) : undefined;
+  }
+}
+
+export class MixinInclusionAst implements AstNode {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  plus(): SyntaxToken | undefined {
+    return findChildToken(this.syntax, 'Plus');
+  }
+
+  name(): QualifiedNameAst | undefined {
+    return findFirstChild(this.syntax, QualifiedNameAst.cast);
+  }
+
+  static cast(node: SyntaxNode): MixinInclusionAst | undefined {
+    return node.kind === 'MixinInclusion' ? new MixinInclusionAst(node) : undefined;
   }
 }
 

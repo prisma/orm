@@ -1,8 +1,7 @@
 import type { CacheAnnotationOptions } from '@prisma/orm-extension-middleware-cache';
 import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
-import { createMongoDriver } from '@prisma/orm-mongo/driver';
-import { MongoContractSerializer } from '@prisma/orm-mongo/family/ir';
+import mongoRuntimeDriver from '@prisma/orm-mongo/driver/runtime';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -16,11 +15,8 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 import { seed } from '../src/seed';
-
-const contract = new MongoContractSerializer().deserializeContract<Contract>(contractJson);
 
 /**
  * End-to-end check that a real Mongo runtime + the cross-family
@@ -73,14 +69,21 @@ describe('mongo-demo cache middleware integration', {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
+      driver: mongoRuntimeDriver,
     });
     const context = createMongoExecutionContext({ contract, stack });
-    const driver = await createMongoDriver(replSet.getUri(), dbName);
+    const driver = stack.driver.create();
+    await driver.connect({ kind: 'url', url: replSet.getUri(), dbName });
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
     const cache = createCacheMiddleware();
-    const runtime = createMongoRuntime({ context, driver, middleware: [cache] });
-    const orm = mongoOrm({ contract, executor: runtime });
-    const query = mongoQuery<Contract>({ contractJson });
+    const runtime = createMongoRuntime({
+      context,
+      adapter: stack.adapter.create(stack),
+      driver,
+      middleware: [cache],
+    });
+    const orm = mongoOrm({ context, runtime: runtime });
+    const query = mongoQuery({ context });
     return { runtime, orm, query, driver, driverExecuteSpy };
   }
 

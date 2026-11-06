@@ -26,8 +26,12 @@ export function tsStringLiteral(value: string): string {
 export function tsQuotedTextSource(text: string): string {
   const holdsBothQuoteKinds = text.includes("'") && text.includes('"');
   if (!holdsBothQuoteKinds || needsEscapeSequence(text)) return tsStringLiteral(text);
-  const escaped = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-  return `\`${escaped}\``;
+  return `\`${tsTemplateText(text)}\``;
+}
+
+/** `text` escaped for the inside of a TypeScript template literal: `\`, a backtick and `${` are escaped; nothing else is. */
+export function tsTemplateText(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 }
 
 function needsEscapeSequence(text: string): boolean {

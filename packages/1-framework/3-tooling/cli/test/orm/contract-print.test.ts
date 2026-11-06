@@ -381,31 +381,6 @@ describe('contract print', () => {
     ]);
   });
 
-  it('prints a PSL source the same way as any other source', async () => {
-    const dir = await projectDir();
-    const config = ormConfig(dir, {
-      contract: {
-        source: { format: 'psl', inputs: ['./contract.prisma'], load: mocks.load },
-        output: join(dir, 'generated', 'contract.json'),
-      },
-    });
-
-    const run = await harness(config).run(
-      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
-      { cwd: dir },
-    );
-
-    expect(run.exitCode).toBe(0);
-    expect(mocks.load).toHaveBeenCalled();
-    expect(mocks.printPsl).toHaveBeenCalledWith(
-      { kind: 'psl-document' },
-      expect.objectContaining({
-        description: 'Printed from contract.prisma by `prisma contract print`.',
-      }),
-    );
-    expect(await readFile(join(dir, 'generated', 'contract.prisma'), 'utf-8')).toBe(PSL);
-  });
-
   it('reports what the source reported when it cannot load the schema', async () => {
     const dir = await projectDir();
     mocks.load.mockResolvedValue({

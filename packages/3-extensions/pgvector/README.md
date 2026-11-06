@@ -10,10 +10,11 @@ This extension pack adds support for the `vector` data type and vector similarit
 
 - **Vector Codec**: Provides codec for `pg/vector@1` mapping to `number[]` at runtime, and a `Vector<N>` type for dimensioned typing in `contract.d.ts`
 - **Vector Operations**: Registers vector similarity operations (e.g., `cosineDistance`) for use in queries
+- **Collection Methods**: Contributes `<field>_nearest(vector, maxDistance?)` to the ORM client for each vector field
 - **CLI Integration**: Provides extension descriptor for `prisma.config.ts` configuration
 - **Runtime Extension**: Registers codecs and operations at runtime for vector column operations
 - **Pack Ref Export**: Ships a pure `/pack` entrypoint for TypeScript contract authoring without runtime filesystem access
-- **Baseline Migration**: Ships an on-disk baseline migration in its contract space that installs the `vector` Postgres extension (`CREATE EXTENSION IF NOT EXISTS vector`) when the extension is composed into an application
+- **Extension in the contract**: The pack's contract declares the `vector` Postgres extension, so the planner creates it and verification checks that it is installed
 
 ## Installation
 
@@ -23,15 +24,13 @@ pnpm add @internal/extension-pgvector
 
 ## Database Setup
 
-The pgvector extension ships an on-disk baseline migration in its contract space; applying that migration installs pgvector with `CREATE EXTENSION IF NOT EXISTS vector`. When the extension is composed into an application via `extensions`, `prisma db init` and `prisma db update` apply the baseline (and any subsequent migrations) automatically.
-
-For manual database setup, the equivalent DDL is:
+The pack's contract declares the `vector` extension. When the pack is composed into an application via `extensions`, `prisma contract emit` writes the pack's files under `migrations/pgvector/`, and `prisma db init`, `prisma db update` and `prisma db migrate` create the extension if it is missing:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "vector";
 ```
 
-Ensure the baseline migration (or equivalent DDL) has been applied before running workloads that use vector columns.
+The pack declares the extension in the unbound namespace, so it is found through the connection's search path: `prisma db sign` and `prisma db verify` accept `vector` in any schema on that path, such as the `extensions` schema of a Supabase project, and fail naming the schema and the search path when it is elsewhere. A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
 
 ## Configuration
 
@@ -83,26 +82,17 @@ export const contract = defineContract({
 });
 ```
 
-The `vector(N)` factory is registered through the unified `CodecDescriptor<{ length: number }>` shape — `paramsSchema` validates the dimension at the contract boundary, `renderOutputType: ({ length }) => 'Vector<' + length + '>'` produces the column's TS type for `contract.d.ts`, and the curried `factory` materializes the runtime codec at context construction. See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the descriptor model. Every pgvector column must declare an explicit dimension via `vector(N)`; the runtime codec is constructed against `{ length: N }`, so an undimensioned form has no honest descriptor signature.
+The `vector(N)` factory is registered through the unified `CodecDescriptor<{ length: number }>` shape — `paramsSchema` validates the dimension at the contract boundary and the curried `factory` materializes the runtime codec at context construction. The column's TypeScript type, `Vector<N>`, comes from the `ParameterizedOutputTypesForTypeParams` type function the `codec-types` entry exports; both `defineContract` and the emitted `contract.d.ts` apply it. See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the descriptor model. Every pgvector column must declare an explicit dimension via `vector(N)`; the runtime codec is constructed against `{ length: N }`, so an undimensioned form has no honest descriptor signature.
 
 ### Runtime Setup
 
-Register the extension when creating your execution stack:
+Register the extension when creating the client:
 
 ```typescript
-import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import postgresTarget from '@internal/target-postgres/runtime';
-import pgvector from '@internal/extension-pgvector/runtime';
+import postgres from '@prisma/orm-postgres/runtime';
+import pgvector from '@prisma/orm-extension-pgvector/runtime';
 
-const stack = createSqlExecutionStack({
-  target: postgresTarget,
-  adapter: postgresAdapter,
-  extensions: [pgvector],
-});
-const context = createExecutionContext({ contract, stack });
-const stackInstance = instantiateExecutionStack(stack);
+const db = postgres({ contract, url, extensions: [pgvector] });
 ```
 
 ### Query Usage
@@ -129,6 +119,21 @@ const plan = sql
 
 type Row = ResultType<typeof plan>;
 ```
+
+### Nearest-neighbour search in the ORM
+
+The runtime extension contributes a collection method for each vector field of a model, named `<field>_nearest` ([ADR 272](../../../docs/architecture%20docs/adrs/ADR%20272%20-%20Packages%20contribute%20collection%20methods%20computed%20from%20a%20model.md)). It orders the rows by cosine distance to the vector, nearest first:
+
+```typescript
+const db = postgres({ contract, extensions: [pgvector] });
+
+await db.orm.public.Post.using.embedding_nearest(queryVector, 0.5).limit(10).all();
+```
+
+- With `maxDistance`, only the rows within that distance are returned. Without it the method only orders, so rows whose vector is null are returned too, last.
+- The method declares no filter, because it filters only when `maxDistance` is given, so `updateAll` and `deleteAll` do not compile directly after it.
+- The vector parameter is typed `Vector<N>` with the field's length. A `Vector<N>` of another length is a compile error; the length of a plain `number[]` is checked when the value is encoded.
+- The query binds the vector once, for both the order and the filter.
 
 ## Types
 

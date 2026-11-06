@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Indexed {
+  id Int @id
+  a  Int
+  b  Int @ignore
+  c  Int @unique @ignore @map("c_column")
+
+  @@unique([a, b])
+  @@index([b])
+}

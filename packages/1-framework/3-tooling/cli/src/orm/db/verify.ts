@@ -7,7 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
+import { flag, noDataLines } from '@prisma/cli-engine';
 import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
@@ -109,7 +109,7 @@ function modeLabel(mode: DbVerifyMode, strict: boolean): string {
     : `full (marker + schema, ${strictness})`;
 }
 
-function invocation(mode: DbVerifyMode, strict: boolean): string {
+function commandLine(mode: DbVerifyMode, strict: boolean): string {
   return [
     'db verify',
     ...(mode === 'marker-only' ? ['--marker-only'] : []),
@@ -230,7 +230,9 @@ function verifyPresentations(inputs: {
   const warnings = document.schema?.warnings ?? [];
   const unclaimed = document.unclaimed ?? [];
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,
@@ -295,7 +297,9 @@ function schemaPresentations(inputs: {
   readonly strict: boolean;
 }): Presentations {
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,
@@ -408,12 +412,12 @@ export function createDbVerifyCommand(
         return notOk(resolved.failure);
       }
       const mode = resolved.value;
-      const commandInvocation = invocation(mode, strict);
+      const command = commandLine(mode, strict);
 
       const emitted = await readEmittedContract({
         config: ctx.config,
         cwd: ctx.cwd,
-        commandName: commandInvocation,
+        commandName: command,
       });
       if (!emitted.ok) {
         return notOk(emitted.failure);
@@ -422,7 +426,7 @@ export function createDbVerifyCommand(
       const connection = requireVerifyConnection({
         config: ctx.config,
         db: args.flags.db,
-        invocation: commandInvocation,
+        commandLine: command,
       });
       if (!connection.ok) {
         return notOk(connection.failure);
@@ -637,9 +641,7 @@ export function createDbVerifyCommand(
           ctx.present({ data: document, exitCode: 0 }, verifyPresentations({ document, header })),
         );
       } catch (error) {
-        return notOk(
-          verificationThrow({ error, invocation: commandInvocation, connection: dbConnection }),
-        );
+        return notOk(verificationThrow({ error, commandLine: command, connection: dbConnection }));
       } finally {
         await closeQuietly(client);
       }

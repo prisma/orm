@@ -1,14 +1,8 @@
 /**
- * Prisma 8 takes over migrations from the Prisma 7 schema. On a database
- * Prisma 7 built, Prisma 8 signs, then plans and applies two edits made to
- * `prisma/schema.prisma` in the Prisma 7 dialect: an additive one and a
- * destructive one. After each, `db verify --strict` reports only Prisma 7's
- * ledger table as unclaimed, Prisma 7 sees no drift, and both clients read
- * the new shape. Finally the migrations replay onto an empty database, which
- * then verifies strictly with nothing unclaimed.
+ * Prisma 8 takes over migrations from the Prisma 7 schema. On a database Prisma 7 built, Prisma 8 signs, then plans and applies three edits made to `prisma/schema.prisma` in the Prisma 7 dialect: an additive one, a destructive one, and one that gives an existing column an autoincrement default and names a foreign key with `map`. Then it marks a field `@ignore` and a model `@@ignore`, and removes them again; neither edit changes the storage hash or plans a migration. A fifth edit moves `User`'s primary key and makes deleting a post delete its comments. After each, `db verify --strict` passes with nothing unclaimed, Prisma 7 sees no drift, and the clients read the new shape. Finally the migrations replay onto an empty database, which verifies strictly with nothing unclaimed and has the same primary key and foreign key names as the database Prisma 7 built.
  */
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { timeouts, withDevDatabase } from '@repo/test-utils';
+import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
@@ -52,9 +46,55 @@ function storageHash(dir: string): string {
   return JSON.parse(readContract(dir)).storage.storageHash;
 }
 
+/** Every primary key and foreign key in the public schema, by table, kind and name, leaving out Prisma 7's ledger. */
+function constraintNames(connectionString: string): Promise<readonly string[]> {
+  return withClient(connectionString, async (client) => {
+    const result = await client.query<{ table: string; kind: string; name: string }>(
+      `SELECT t.relname AS table, c.contype AS kind, c.conname AS name
+       FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE n.nspname = 'public' AND c.contype IN ('p', 'f') AND t.relname <> '_prisma_migrations'
+       ORDER BY t.relname, c.contype, c.conname`,
+    );
+    return result.rows.map(
+      (row) => `${row.table} ${row.kind === 'p' ? 'primary key' : 'foreign key'} ${row.name}`,
+    );
+  });
+}
+
 function dbRefHash(dir: string): string {
   return JSON.parse(readFileSync(join(dir, 'migrations/app/refs/db.json'), 'utf-8')).hash;
 }
+
+const SEQUENCE_PLAN_OPERATIONS = [
+  ['setDefault.Post.viewCount', 'widening'],
+  ['foreignKey.public.Post.Post_authorId_fkey.rename', 'widening'],
+];
+
+const KEY_PLAN_OPERATIONS = [
+  ['dropConstraint.Comment.Comment_postId_fkey', 'widening'],
+  ['dropConstraint.Post.Post_author_fk', 'widening'],
+  ['dropConstraint.User.User_pkey', 'widening'],
+  ['primaryKey.User.User_pkey', 'additive'],
+  ['index.User.User_id_key', 'additive'],
+  ['foreignKey.Comment.Comment_postId_fkey', 'additive'],
+  ['foreignKey.Post.Post_author_fk', 'additive'],
+];
+
+/** `Post_author_fk` is unchanged; it is dropped and added back because it depends on the index of `User_pkey`. */
+const KEY_PLAN_SQL = [
+  'ALTER TABLE "public"."Comment" DROP CONSTRAINT "Comment_postId_fkey"',
+  'ALTER TABLE "public"."Post" DROP CONSTRAINT "Post_author_fk"',
+  'ALTER TABLE "public"."User" DROP CONSTRAINT "User_pkey"',
+  'ALTER TABLE "public"."User" ADD CONSTRAINT "User_pkey" PRIMARY KEY ("id", "email")',
+  'CREATE UNIQUE INDEX "User_id_key" ON "public"."User" ("id")',
+  'ALTER TABLE "public"."Comment" ADD CONSTRAINT "Comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "public"."Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE',
+  'ALTER TABLE "public"."Post" ADD CONSTRAINT "Post_author_fk" FOREIGN KEY ("authorId") REFERENCES "public"."User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE',
+].join(';\n');
+
+/** The sequence `Post.viewCount` owns, found at run time whatever its name. */
+const POST_VIEW_COUNT_SEQUENCE = `pg_get_serial_sequence('"public"."Post"', 'viewCount')::regclass`;
 
 describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
   it(
@@ -67,7 +107,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           const v7 = (...args: string[]) =>
             run(dir, connectionString, 'prisma7', [...args, '--config', 'prisma7.config.ts']);
           const v8 = async (...args: string[]) =>
-            resultEnvelope(await run(dir, connectionString, 'prisma', args)).result;
+            resultEnvelope(await run(dir, connectionString, 'prisma', [...args, '--json'])).result;
           const tsx = (script: string) => run(dir, connectionString, 'tsx', [script]);
           const typecheck = (tsconfig: string) =>
             run(dir, connectionString, 'tsc', ['--noEmit', '-p', `test/handover/${tsconfig}`]);
@@ -86,23 +126,15 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             expect(dbRefHash(dir)).toBe(storageHash(dir));
           };
 
-          const verifyOnlyLedgerUnclaimed = async () => {
+          const verifyStrictlyWithNothingUnclaimed = async () => {
             const strict = await runAllowingFailure(dir, connectionString, 'prisma', [
               'db',
               'verify',
               '--strict',
               '--json',
             ]);
-            expect(strict.status, strict.output).toBe(4);
-            const envelope = resultEnvelope(strict.output);
-            expect(envelope.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-              'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-            ]);
-            expect(envelope.result).toMatchObject({
-              ok: false,
-              unclaimed: ['_prisma_migrations'],
-              schema: { issues: [], warnings: { issues: [] } },
-            });
+            expect(strict.status, strict.output).toBe(0);
+            expect(resultEnvelope(strict.output).result).toMatchObject({ ok: true, unclaimed: [] });
             await verifyHasNoFindings(dir, connectionString);
             expect(
               await v7(
@@ -150,6 +182,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             ['foreignKey._PostToTag._PostToTag_A_fkey', 'additive'],
             ['foreignKey._PostToTag._PostToTag_B_fkey', 'additive'],
           ]);
+          expect(renderedSql(baseline)).toContain('CONSTRAINT "_PostToTag_AB_pkey" PRIMARY KEY');
           const bundleNames = [additivePlan['baselineDir'], additivePlan['dir']].map((bundleDir) =>
             basename(String(bundleDir)),
           );
@@ -175,7 +208,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'ALTER TABLE "public"."Comment" ADD CONSTRAINT "Comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "public"."Post" ("id") ON DELETE RESTRICT ON UPDATE CASCADE',
           );
           await migrate();
-          await verifyOnlyLedgerUnclaimed();
+          await verifyStrictlyWithNothingUnclaimed();
           await v7('generate');
           await typecheck('tsconfig.edit-1.json');
           const v7Additive = await tsx('test/handover/v7-after-edit-1.ts');
@@ -196,13 +229,37 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           editSchema('edit-2.prisma');
           await v8('contract', 'emit');
           const destructiveHash = storageHash(dir);
-          const destructivePlan = await v8('migration', 'plan', '--name', 'drop-bio');
+          const refused = await runAllowingFailure(dir, connectionString, 'prisma', [
+            'migration',
+            'plan',
+            '--name',
+            'drop-bio',
+            '--json',
+          ]);
+          expect(refused.status, refused.output).toBe(2);
+          expect(resultEnvelope(refused.output)).toMatchObject({
+            ok: false,
+            error: {
+              code: 'CLI.CONSENT_REQUIRED',
+              nextActions: expect.arrayContaining([
+                expect.objectContaining({ label: 'Run the command again with --delete User.bio' }),
+              ]),
+            },
+          });
+          const destructivePlan = await v8(
+            'migration',
+            'plan',
+            '--name',
+            'drop-bio',
+            '--delete',
+            'User.bio',
+          );
           expect(destructivePlan).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(destructivePlan['baselineDir']).toBeUndefined();
           const destructive = readBundle(dir, String(destructivePlan['dir']));
           expect(destructive).toMatchObject({ from: additiveHash, to: destructiveHash });
           expect(operationClasses(destructive)).toEqual([
-            ['dropDefault.Post.likes', 'destructive'],
+            ['dropDefault.Post.likes', 'widening'],
             ['dropColumn.User.bio', 'destructive'],
             ['alterNullability.dropNotNull.Post.likes', 'widening'],
           ]);
@@ -215,7 +272,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             'ALTER TABLE "public"."Post" ALTER COLUMN "likes" DROP NOT NULL',
           );
           await migrate();
-          await verifyOnlyLedgerUnclaimed();
+          await verifyStrictlyWithNothingUnclaimed();
           await v7('generate');
           await typecheck('tsconfig.edit-2.json');
           const v7Destructive = await tsx('test/handover/v7-after-edit-2.ts');
@@ -224,6 +281,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           );
           expect(v7Destructive).toContain('comment: Commented through Prisma 7 via Prisma 7');
           expect(v7Destructive).toContain('likes cleared to null via Prisma 7');
+          expect(v7Destructive).toContain('viewCount set to 41 via Prisma 7');
           expect(v7Destructive).toContain(
             'bob@example.com columns: createdAt, email, id, name, role, updatedAt',
           );
@@ -233,15 +291,83 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
           );
           expect(v8Destructive).toContain('Draft: what changes at cutover: likes 0 via Prisma 8');
 
+          editSchema('edit-3.prisma');
+          await v8('contract', 'emit');
+          const sequenceHash = storageHash(dir);
+          const sequencePlan = await v8('migration', 'plan', '--name', 'number-posts');
+          expect(sequencePlan).toMatchObject({ from: destructiveHash, to: sequenceHash });
+          const sequenced = readBundle(dir, String(sequencePlan['dir']));
+          expect(sequenced).toMatchObject({ from: destructiveHash, to: sequenceHash });
+          expect(operationClasses(sequenced)).toEqual(SEQUENCE_PLAN_OPERATIONS);
+          expect(
+            sequenced.operations
+              .find((operation) => operation.id === 'setDefault.Post.viewCount')
+              ?.execute.map((step) => step.sql),
+          ).toEqual([
+            `DO $prisma$ BEGIN IF ${POST_VIEW_COUNT_SEQUENCE} IS NULL THEN CREATE SEQUENCE "public"."Post_viewCount_seq" AS integer; ALTER SEQUENCE "public"."Post_viewCount_seq" OWNED BY "public"."Post"."viewCount"; END IF; END $prisma$`,
+            `DO $prisma$ BEGIN EXECUTE format('ALTER SEQUENCE %s AS integer', ${POST_VIEW_COUNT_SEQUENCE}); END $prisma$`,
+            `DO $prisma$ BEGIN EXECUTE format('ALTER TABLE %s ALTER COLUMN %I SET DEFAULT nextval(%L::regclass)', '"public"."Post"', 'viewCount', ${POST_VIEW_COUNT_SEQUENCE}::text); END $prisma$`,
+            `SELECT setval(${POST_VIEW_COUNT_SEQUENCE}, GREATEST(COALESCE(MAX("viewCount"), 0), 0) + 1, false) FROM "public"."Post"`,
+          ]);
+          expect(renderedSql(sequenced).match(/RENAME CONSTRAINT/g)).toHaveLength(1);
+          expect(renderedSql(sequenced)).toContain(
+            'ALTER TABLE "public"."Post" RENAME CONSTRAINT "Post_authorId_fkey" TO "Post_author_fk"',
+          );
+          await migrate();
+          await verifyStrictlyWithNothingUnclaimed();
+          expect(await constraintNames(connectionString)).toContain(
+            'Post foreign key Post_author_fk',
+          );
+          await v7('generate');
+          await typecheck('tsconfig.edit-3.json');
+          const v7Sequenced = await tsx('test/handover/v7-after-edit-3.ts');
+          expect(v7Sequenced).toContain('largest viewCount before: 41');
+          expect(v7Sequenced).toContain('Numbered by the sequence: viewCount 42 via Prisma 7');
+
+          const expectNoChanges = async (fixture: string, name: string) => {
+            editSchema(fixture);
+            await v8('contract', 'emit');
+            expect(storageHash(dir)).toBe(sequenceHash);
+            expect(await v8('migration', 'plan', '--name', name)).toMatchObject({
+              ok: true,
+              noOp: true,
+              from: sequenceHash,
+              to: sequenceHash,
+              operations: [],
+            });
+            await verifyStrictlyWithNothingUnclaimed();
+          };
+          await expectNoChanges('edit-4.prisma', 'ignore-content-and-comments');
+          await expectNoChanges('edit-3.prisma', 'restore-content-and-comments');
+
+          editSchema('edit-5.prisma');
+          await v8('contract', 'emit');
+          const keyHash = storageHash(dir);
+          const keyPlan = await v8('migration', 'plan', '--name', 'move-user-key');
+          expect(keyPlan).toMatchObject({ from: sequenceHash, to: keyHash });
+          const keyed = readBundle(dir, String(keyPlan['dir']));
+          expect(operationClasses(keyed)).toEqual(KEY_PLAN_OPERATIONS);
+          expect(renderedSql(keyed)).toBe(KEY_PLAN_SQL);
+          await migrate();
+          await verifyStrictlyWithNothingUnclaimed();
+          await v7('generate');
+          await typecheck('tsconfig.edit-5.json');
+          expect(await tsx('test/handover/v7-after-edit-5.ts')).toContain(
+            'Adopting Prisma 8 next to Prisma 7: deleted with 1 comments, 0 left via Prisma 7',
+          );
+
           await withDevDatabase(async ({ connectionString: freshUrl }) => {
             const replayed = resultEnvelope(
-              await run(dir, freshUrl, 'prisma', ['db', 'migrate']),
+              await run(dir, freshUrl, 'prisma', ['db', 'migrate', '--json']),
             ).result;
             expect(replayed).toMatchObject({
               ok: true,
-              migrationsApplied: 3,
-              markerHash: destructiveHash,
+              migrationsApplied: 6,
+              markerHash: keyHash,
             });
+            expect(await constraintNames(freshUrl)).toEqual(
+              await constraintNames(connectionString),
+            );
             const strict = await runAllowingFailure(dir, freshUrl, 'prisma', [
               'db',
               'verify',
@@ -251,12 +377,12 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             expect(strict.status, strict.output).toBe(0);
             expect(resultEnvelope(strict.output).result).toMatchObject({ ok: true, unclaimed: [] });
           });
-          expect(dbRefHash(dir)).toBe(destructiveHash);
+          expect(dbRefHash(dir)).toBe(keyHash);
         });
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    timeouts.spinUpPpgDev * 7 + timeouts.typeScriptCompilation * 2,
+    timeouts.spinUpPpgDev * 8 + timeouts.typeScriptCompilation * 4,
   );
 });

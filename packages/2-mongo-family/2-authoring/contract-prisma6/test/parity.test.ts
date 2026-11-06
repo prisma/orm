@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import { mongoTestStack } from '@internal/mongo-contract-psl/test';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { loadPrisma6Schema, mongoSourceContext, serializeMongoContract } from './support';
@@ -48,7 +49,7 @@ describe('Prisma 6 reader parity with Prisma 8 Mongo PSL', () => {
     const prisma6Path = join(parityDir, 'prisma6.prisma');
     const prisma8Path = join(parityDir, 'prisma8.prisma');
     const fromPrisma6 = await loadPrisma6Schema(prisma6Path);
-    const fromPrisma8 = await mongoContract(prisma8Path).source.load(
+    const fromPrisma8 = await mongoContract(prisma8Path, mongoTestStack).source.load(
       mongoSourceContext([prisma8Path]),
     );
     if (!fromPrisma6.ok) throw new Error(JSON.stringify(fromPrisma6.failure.diagnostics));

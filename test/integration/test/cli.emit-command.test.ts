@@ -574,11 +574,13 @@ model Post {
       });
       const sourceResult = await contractConfig!.source.load({
         composedExtensions: stack.extensions.map((p) => p.id),
+        defaultNamespaceId: stack.target.defaultNamespaceId,
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
-        dataTypeLookup: stack.dataTypeLookup,
+        dataTypes: stack.dataTypes,
         controlMutationDefaults: stack.controlMutationDefaults,
+        generatorFunctions: stack.generatorFunctions,
         resolvedInputs: contractConfig!.source.inputs ?? [],
         capabilities: stack.capabilities,
       });
@@ -620,6 +622,53 @@ model Post {
       expect(reported).toContain(JSON.stringify('Cannot find type "Unsupported"'));
       expect(reported).not.toContain('PSL_UNSUPPORTED_FIELD_TYPE');
       expect(reported).toContain('schema.prisma');
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('names the rewrite of removed presets on related models, not a relation error', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-psl.ts',
+    );
+
+    try {
+      writeFileSync(
+        join(testSetup.testDir, 'schema.prisma'),
+        `// use prisma-8
+model User {
+  id    id.ulid()
+  posts Post[]
+}
+
+model Post {
+  id       id.ulid()
+  authorId ulid()
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+        'utf-8',
+      );
+
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(2);
+      const terminal = run.json.at(-1);
+      const envelope =
+        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+      expect(envelope).toMatchObject({
+        ok: false,
+        error: { code: 'CONTRACT.SOURCE_LOAD_FAILED', why: 'Schema has 3 errors' },
+      });
+      const reported = JSON.stringify(envelope);
+      expect(reported).toContain(
+        JSON.stringify(
+          'id.ulid() was a field preset, and Prisma 8 removed field presets. Write Ulid @id @onCreate(ulid()).',
+        ),
+      );
+      expect(reported).not.toContain('CONTRACT.RELATION_INVALID');
     } finally {
       testSetup.cleanup();
     }
@@ -701,7 +750,7 @@ model Post {
               models: {
                 User: expect.objectContaining({
                   fields: expect.objectContaining({
-                    _id: {
+                    id: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
                       many: false,
@@ -711,6 +760,12 @@ model Post {
                       nullable: false,
                       many: false,
                     },
+                  }),
+                  storage: expect.objectContaining({
+                    fields: expect.objectContaining({
+                      id: { field: '_id' },
+                      name: { field: 'name' },
+                    }),
                   }),
                 }),
                 Post: expect.objectContaining({
@@ -795,7 +850,7 @@ model Post {
                   }),
                   discriminator: { field: 'type' },
                   variants: {
-                    Bug: { value: 'bug' },
+                    bug: { namespace: '__unbound__', model: 'Bug' },
                   },
                 }),
                 Bug: expect.objectContaining({

@@ -106,10 +106,10 @@ So `@prisma/orm-family-sql` is a shell whose entrypoints map 1:1 onto the intern
 | `packages/1-framework/0-foundation/contract` | `@prisma/orm-framework/contract` |
 | `packages/1-framework/1-core/framework-components` | `@prisma/orm-framework/components` |
 | `packages/1-framework/2-authoring/psl-parser` | `@prisma/orm-framework/psl-parser` |
-| `packages/2-sql/1-core/contract` | `@prisma/orm-family-sql/contract` |
-| `packages/2-sql/5-runtime` | `@prisma/orm-family-sql/runtime` |
-| `packages/3-targets/6-adapters/postgres` | `@prisma/orm-target-postgres/adapter` |
-| `packages/3-targets/7-drivers/postgres` | `@prisma/orm-target-postgres/driver` |
+| `packages/2-sql-family/1-core/contract` | `@prisma/orm-family-sql/contract` |
+| `packages/2-sql-family/5-runtime` | `@prisma/orm-family-sql/runtime` |
+| `packages/3-targets/postgres/2-adapter` | `@prisma/orm-target-postgres/adapter` |
+| `packages/3-targets/postgres/3-driver` | `@prisma/orm-target-postgres/driver` |
 | `packages/1-framework/3-tooling/cli` | `@prisma/orm-toolchain/cli` |
 
 (The complete mapping lives in `docs/reference/Package Naming Conventions.md`.)

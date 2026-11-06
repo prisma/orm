@@ -12,6 +12,8 @@ import {
   GenericBlockDeclarationAst,
   IdentifierAst,
   KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
@@ -26,12 +28,16 @@ import {
   type TokenAtOffset,
   TypesBlockAst,
 } from '@internal/psl-parser/syntax';
-import type {
-  BlockAttributeOwner,
-  BlockValueOwner,
-  FieldAttributeOwner,
-  ModelAttributeOwner,
-  NamedAttribute,
+import {
+  type BlockAttributeOwner,
+  type BlockValueOwner,
+  castEntryBlock,
+  castFieldBlock,
+  castModelBlock,
+  type EntryBlockAst,
+  type FieldAttributeOwner,
+  type ModelAttributeOwner,
+  type NamedAttribute,
 } from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
@@ -76,12 +82,20 @@ export interface NamespaceMemberCompletionContext {
   readonly space?: string;
 }
 
+export interface MixinInclusionCompletionContext {
+  readonly kind: 'mixinInclusion';
+  readonly offset: number;
+  readonly replacementStartOffset: number;
+  readonly inclusion: MixinInclusionAst;
+  readonly namespace?: string;
+}
+
 export interface GenericBlockKeyCompletionContext {
   readonly kind: 'genericBlockKey';
   readonly offset: number;
   readonly blockKeyword: string;
   readonly replacementStartOffset: number;
-  readonly block: GenericBlockDeclarationAst;
+  readonly block: EntryBlockAst;
 }
 
 interface CompletionReplacement {
@@ -255,6 +269,7 @@ export type PslCompletionContext =
   | AttributeArgumentCompletionContext
   | DeclarationKeywordCompletionContext
   | GenericBlockKeyCompletionContext
+  | MixinInclusionCompletionContext
   | ModelTypeCompletionContext
   | NamespaceMemberCompletionContext
   | SpaceMemberCompletionContext
@@ -297,6 +312,15 @@ export function classifyPslCompletionContext(
     return attributeContext;
   }
 
+  const inclusionContext = classifyMixinInclusion({
+    node: precedingNode,
+    offset,
+    replacementStartOffset,
+  });
+  if (inclusionContext !== undefined) {
+    return inclusionContext;
+  }
+
   const declarationKeywordContext = classifyDeclarationKeyword({
     node: precedingNode,
     offset,
@@ -320,10 +344,7 @@ export function classifyPslCompletionContext(
   if (field === undefined) {
     return UNSUPPORTED;
   }
-  if (
-    field.syntax.findAncestor(any(ModelDeclarationAst.cast, CompositeTypeDeclarationAst.cast)) ===
-    undefined
-  ) {
+  if (field.syntax.findAncestor(castFieldBlock) === undefined) {
     return UNSUPPORTED;
   }
 
@@ -457,6 +478,7 @@ const declarationCast = any(
   CompositeTypeDeclarationAst.cast,
   TypesBlockAst.cast,
   GenericBlockDeclarationAst.cast,
+  MixinDeclarationAst.cast,
   NamespaceDeclarationAst.cast,
 );
 
@@ -499,6 +521,7 @@ function canCompleteDeclaration(
 ): boolean {
   const keywordOnly =
     precedingDeclaration.lbrace() === undefined &&
+    !(precedingDeclaration instanceof MixinDeclarationAst) &&
     (precedingDeclaration instanceof TypesBlockAst || precedingDeclaration.name() === undefined);
   if (keywordOnly) {
     return true;
@@ -535,7 +558,7 @@ function classifyFieldAttribute(input: AttributeClassifierInput): PslCompletionC
     return undefined;
   }
   const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
-  const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
+  const model = attribute.syntax.findAncestor(castModelBlock);
   if (field === undefined || model === undefined) {
     return UNSUPPORTED;
   }
@@ -564,7 +587,7 @@ function classifyGenericBlockAttribute(
   input: AttributeClassifierInput,
 ): PslCompletionContext | undefined {
   const attribute = activeModelAttribute(input);
-  const block = attribute?.syntax.findAncestor(GenericBlockDeclarationAst.cast);
+  const block = attribute?.syntax.findAncestor(castEntryBlock);
   if (attribute === undefined || block === undefined) {
     return undefined;
   }
@@ -598,7 +621,7 @@ function classifyModelAttribute(input: AttributeClassifierInput): PslCompletionC
   if (attribute === undefined) {
     return undefined;
   }
-  const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
+  const model = attribute.syntax.findAncestor(castModelBlock);
   if (model === undefined) {
     return undefined;
   }
@@ -847,7 +870,7 @@ function classifyGenericBlockParameter(input: {
   // question, so it anchors on the cursor's own node — including any in-progress
   // identifier — rather than the edit-skipped `precedingToken` used for gaps.
   const node = input.at.leftBiased()?.parent;
-  const block = node?.findAncestor(GenericBlockDeclarationAst.cast);
+  const block = node?.findAncestor(castEntryBlock);
   if (block === undefined) {
     return undefined;
   }
@@ -896,7 +919,7 @@ function valuePairAtCursor(
 
 function classifyBlockValue(
   pair: KeyValuePairAst,
-  block: GenericBlockDeclarationAst,
+  block: EntryBlockAst,
   blockKeyword: string,
   input: { readonly offset: number; readonly at: TokenAtOffset },
 ): PslCompletionContext {
@@ -941,6 +964,25 @@ function hasUnsupportedAncestor(node: SyntaxNode | undefined): boolean {
       any(AttributeArgListAst.cast, FieldAttributeAst.cast, ModelAttributeAst.cast),
     ) !== undefined
   );
+}
+
+function classifyMixinInclusion(input: {
+  readonly node: SyntaxNode | undefined;
+  readonly offset: number;
+  readonly replacementStartOffset: number;
+}): MixinInclusionCompletionContext | UnsupportedPslCompletionContext | undefined {
+  const { offset, replacementStartOffset } = input;
+  const inclusion = input.node?.findAncestor(MixinInclusionAst.cast);
+  if (inclusion === undefined || inclusion.syntax.isOutside(offset)) return undefined;
+  const name = inclusion.name();
+  if (name?.colon() !== undefined) return undefined;
+  const position = { kind: 'mixinInclusion' as const, offset, replacementStartOffset, inclusion };
+  const dot = name?.dot();
+  if (name === undefined || dot === undefined || offset <= dot.offset) return position;
+  const namespace = name.namespace()?.name();
+  return namespace === undefined || name.isOverQualified()
+    ? UNSUPPORTED
+    : { ...position, namespace };
 }
 
 /** The significant token preceding the cursor — the in-progress edit identifier

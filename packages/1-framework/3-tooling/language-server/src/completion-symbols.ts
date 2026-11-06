@@ -1,6 +1,7 @@
 import {
   type Binder,
   type FieldSymbol,
+  type MixinSymbol,
   type ModelSymbol,
   type NamedTypeSymbol,
   typeReferenceNode,
@@ -12,8 +13,12 @@ export function localFieldNames(
   binder: Binder,
 ): readonly string[] {
   if (context.ownerKind === 'block' || context.ownerKind === 'blockValue') return [];
-  const model = binder.declaredSymbol(context.model.syntax);
-  return scalarFieldNames(model?.kind === 'model' ? model : undefined, binder);
+  const owner = binder.declaredSymbol(context.model.syntax);
+  const model =
+    owner?.kind === 'model' || (owner?.kind === 'mixin' && owner.keyword === 'model')
+      ? owner
+      : undefined;
+  return scalarFieldNames(model, binder);
 }
 
 export function referencedFieldNames(
@@ -28,7 +33,10 @@ export function referencedFieldNames(
   return scalarFieldNames(target?.kind === 'model' ? target.symbol : undefined, binder);
 }
 
-function scalarFieldNames(model: ModelSymbol | undefined, binder: Binder): readonly string[] {
+function scalarFieldNames(
+  model: ModelSymbol | MixinSymbol | undefined,
+  binder: Binder,
+): readonly string[] {
   if (model === undefined) return [];
   return Object.values(model.fields)
     .filter((field) => {

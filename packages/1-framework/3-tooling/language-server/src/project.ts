@@ -1,33 +1,43 @@
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { CliStructuredError } from '@internal/errors/control';
-import { renameLegacyDirective } from '@internal/psl-parser';
-import { format } from '@internal/psl-parser/format';
+import { EMPTY_DATA_TYPES, renameLegacyDirective } from '@internal/psl-parser';
+import { format, resolveFormatOptions } from '@internal/psl-parser/format';
+import { isStructuredError } from '@internal/utils/structured-error';
 import {
   type CompletionItem,
   type Connection,
   type Diagnostic,
   DiagnosticSeverity,
   DidChangeWatchedFilesNotification,
-  type Disposable,
   DocumentDiagnosticReportKind,
   type FoldingRange,
   type FullDocumentDiagnosticReport,
   type Hover,
+  type Location,
+  type LocationLink,
+  LSPErrorCodes,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
+  RegistrationRequest,
   type RelatedFullDocumentDiagnosticReport,
+  ResponseError,
   type SemanticTokens,
   type SignatureHelp,
+  UnregistrationRequest,
+  type WorkspaceEdit,
 } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from './completion-context';
 import { providePslCompletionItems } from './completion-provider';
 import { type ConfigResolution, resolveConfigInputs } from './config-resolution';
+import { provideDefinition } from './definition';
 import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
 import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
+import { provideReferences } from './references';
+import { type PrepareRenameResult, providePrepareRename, provideRename } from './rename';
 import {
   isWatcherCacheEligible,
   normalizeFileUri,
@@ -68,9 +78,7 @@ export class Project {
   #state: LoadState = { status: 'failed' };
   #membershipSequence = 0;
   #watcherGeneration = 0;
-  #watcher:
-    | { readonly disposable: Disposable; readonly schemaInputConfig: SchemaInputConfig }
-    | undefined;
+  #watcher: { readonly id: string; readonly schemaInputConfig: SchemaInputConfig } | undefined;
   #reportedMembers: ReadonlySet<string> = new Set();
 
   constructor(configPath: string, options: ProjectOptions) {
@@ -190,8 +198,106 @@ export class Project {
         position,
         binder: data.artifacts.binder(),
         pslBlockDescriptors: data.controlStack.pslBlockDescriptors,
+        dataTypes: data.controlStack.dataTypes ?? EMPTY_DATA_TYPES,
+        sources: data.artifacts.sources,
       });
     } catch {
+      return null;
+    }
+  }
+
+  async definition(
+    uri: string,
+    position: Position,
+    linkSupport: boolean,
+  ): Promise<LocationLink[] | Location[] | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      return provideDefinition({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        sources: data.artifacts.sources,
+        binder: data.artifacts.binder(),
+        linkSupport,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async references(
+    uri: string,
+    position: Position,
+    includeDeclaration: boolean,
+  ): Promise<Location[]> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return [];
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideReferences({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        includeDeclaration,
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async prepareRename(uri: string, position: Position): Promise<PrepareRenameResult | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return providePrepareRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        symbolTable: data.artifacts.symbolTable(),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async rename(uri: string, position: Position, newName: string): Promise<WorkspaceEdit | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      const documents = data.artifacts.documents().map((snapshot) => ({
+        document: snapshot.parse().document,
+        sourceFile: snapshot.sourceFile,
+      }));
+      return provideRename({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        documents,
+        binder: data.artifacts.binder(),
+        ...data.controlStack,
+        symbolTable: data.artifacts.symbolTable(),
+        formatOptions: resolveFormatOptions(data.formatter),
+        newName,
+      });
+    } catch (error) {
+      if (error instanceof ResponseError && error.code === LSPErrorCodes.RequestFailed) throw error;
       return null;
     }
   }
@@ -370,9 +476,15 @@ export class Project {
   #clearWatcher(): number {
     const generation = ++this.#watcherGeneration;
     this.#options.documents.setWatchCoverage(this.configPath, []);
-    this.#watcher?.disposable.dispose();
+    if (this.#watcher !== undefined) this.#unregisterWatcher(this.#watcher.id);
     this.#watcher = undefined;
     return generation;
+  }
+
+  #unregisterWatcher(id: string): void {
+    void this.#options.connection.sendRequest(UnregistrationRequest.type, {
+      unregisterations: [{ id, method: DidChangeWatchedFilesNotification.type.method }],
+    });
   }
 
   async #registerWatcher(project: ResolvedProject): Promise<void> {
@@ -380,28 +492,31 @@ export class Project {
     if (!this.#options.watchedFilesRegistration) return;
     const patterns = project.schemaInputConfig.contract?.source.inputs ?? [];
     if (patterns.length === 0) return;
-    try {
-      const disposable = await this.#options.connection.client.register(
-        DidChangeWatchedFilesNotification.type,
+    const id = randomUUID();
+    const reply: unknown = await this.#options.connection.sendRequest(RegistrationRequest.type, {
+      registrations: [
         {
-          watchers: patterns.map((pattern) => ({ globPattern: toWatcherGlobPattern(pattern) })),
+          id,
+          method: DidChangeWatchedFilesNotification.type.method,
+          registerOptions: {
+            watchers: patterns.map((pattern) => ({ globPattern: toWatcherGlobPattern(pattern) })),
+          },
         },
-      );
-      if (disposable === undefined) return;
-      if (this.#watcherGeneration === generation) {
-        this.#watcher = { disposable, schemaInputConfig: project.schemaInputConfig };
-        const current = this.#current();
-        if (
-          current?.schemaInputConfig === project.schemaInputConfig &&
-          isWatcherCacheEligible(project.schemaInputConfig)
-        ) {
-          this.#options.documents.setWatchCoverage(this.configPath, current.inputs.uris());
-        }
-      } else {
-        disposable.dispose();
-      }
-    } catch {
+      ],
+    });
+    // The guarded connection settles a failed request as undefined; a client's success reply is null.
+    if (reply === undefined) return;
+    if (this.#watcherGeneration !== generation) {
+      this.#unregisterWatcher(id);
       return;
+    }
+    this.#watcher = { id, schemaInputConfig: project.schemaInputConfig };
+    const current = this.#current();
+    if (
+      current?.schemaInputConfig === project.schemaInputConfig &&
+      isWatcherCacheEligible(project.schemaInputConfig)
+    ) {
+      this.#options.documents.setWatchCoverage(this.configPath, current.inputs.uris());
     }
   }
 
@@ -435,11 +550,7 @@ export class Project {
       diagnostics: [
         {
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-          message: CliStructuredError.is(error)
-            ? (error.why ?? error.message)
-            : error instanceof Error
-              ? error.message
-              : String(error),
+          message: configFailureMessage(error),
           code: CONFIG_LOAD_FAILED_CODE,
           severity: DiagnosticSeverity.Error,
           source: 'prisma',
@@ -451,6 +562,14 @@ export class Project {
   #sendDiagnostics(params: PublishDiagnosticsParams): void {
     void this.#options.connection.sendDiagnostics({ ...params, uri: normalizeFileUri(params.uri) });
   }
+}
+
+/** A failed config load as the user reads it: the cause (`why`, or the message), then the fix when the error carries one. */
+function configFailureMessage(error: unknown): string {
+  if (!isStructuredError(error)) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return [error.why ?? error.message, ...(error.fix === undefined ? [] : [error.fix])].join('\n');
 }
 
 function toDiagnostics(computed: readonly LspDiagnostic[]): Diagnostic[] {

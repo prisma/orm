@@ -18,7 +18,6 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import type { Char } from '@internal/target-postgres/codec-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { getExecutionDefaultedTagsContract } from './helpers';
@@ -29,10 +28,10 @@ import {
 } from './integration-helpers';
 import { seedRoles, seedTags, seedUserRoles, seedUsers, seedUserTags } from './runtime-helpers';
 
-const TAG_RUST = 'tag-rust' as Char<36>;
-const TAG_TS = 'tag-typescript' as Char<36>;
-const ROLE_ADMIN = 'role-admin' as Char<36>;
-const ROLE_EDITOR = 'role-editor' as Char<36>;
+const TAG_RUST = 'tag-rust';
+const TAG_TS = 'tag-typescript';
+const ROLE_ADMIN = 'role-admin';
+const ROLE_EDITOR = 'role-editor';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +18,7 @@ function fields(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const context = classifyPslCompletionContext({
     document,
@@ -26,7 +28,12 @@ function fields(
   if (context.kind !== 'fieldAttributeValue' && context.kind !== 'modelAttributeValue') {
     throw new Error(`Unexpected context: ${context.kind}`);
   }
-  const emptyContext = binderContextFromStack({ scalarTypes: [], pslBlockDescriptors: {} });
+  const emptyContext = binderContextFromStack({
+    scalarTypes: [],
+    defaultNamespaceId: 'public',
+    pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+  });
   const { binder } = createBinder({
     sources,
     symbolTable,
@@ -94,7 +101,7 @@ model Owner { value Alias\n @@probe(fields: [|]) }`),
   it('includes registered inline and aliased scalar constructors in local and referenced fields', () => {
     const typeConstructors: AuthoringTypeNamespace = {
       sql: {
-        String: { kind: 'typeConstructor', output: { codecId: 'text', nativeType: 'varchar' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'text' } },
       },
       pg: {
         enum: {

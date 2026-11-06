@@ -1,14 +1,20 @@
+export type { BuildFailure, BuiltContract } from '../build-contract';
+export { buildMongoContractFromDefinition } from '../build-contract';
 export type {
-  ContractDefinition,
+  BuildRefusal,
+  BuildWarning,
+  FieldKey,
+  IndexShapeRule,
+  RefusalKey,
+  RestatedFieldDifference,
+} from '../build-refusals';
+export type {
+  ContractAuthoringHelpers,
   ContractFactory,
+  ContractInput,
   ContractScaffold,
   ExtractCodecTypesFromPack,
-  FieldBuilder,
-  FieldReference,
-  ModelBuilder,
   MongoContractResult,
-  RelationBuilder,
-  ValueObjectBuilder,
 } from '../contract-builder';
 export {
   buildBoundContract,
@@ -19,5 +25,27 @@ export {
   rel,
   valueObject,
 } from '../contract-builder';
+export type {
+  ContractDefinition,
+  DiscriminatorNode,
+  EmbedRelationNode,
+  FieldNode,
+  IndexNode,
+  ModelNode,
+  ReferenceRelationNode,
+  RelationNode,
+  ValueObjectNode,
+  VariantBaseNode,
+} from '../contract-definition';
+export type {
+  FieldBuilder,
+  FieldReference,
+  ModelBuilder,
+  RelationBuilder,
+  ValueObjectBuilder,
+} from '../contract-dsl';
 export type { BoundEnumType, CodecTypeMap, EnumMember, EnumTypeHandle } from '../enum-type';
 export { bindEnumType, enumType, isEnumTypeHandle, member } from '../enum-type';
+export type { MergedIndexes, RemovedIndex } from '../merge-redundant-indexes';
+export { mergeRedundantIndexes } from '../merge-redundant-indexes';
+export { nameIndexes } from '../name-indexes';

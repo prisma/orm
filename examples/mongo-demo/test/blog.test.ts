@@ -3,14 +3,13 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 
 describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   const dbName = 'blog_test';
-  const mongoDb = mongo<Contract>({ contractJson });
+  const mongoDb = mongo({ contract });
   const orm = mongoDb.orm;
 
   beforeAll(async () => {
@@ -80,14 +79,14 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
         title: 'Hello World',
         content: 'My first post',
         kind: 'article',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-01-15'),
       },
       {
         title: 'Second Post',
         content: 'More content',
         kind: 'tutorial',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-02-01'),
       },
     ]);
@@ -120,7 +119,7 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
       title: 'Hello World',
       content: 'My first post',
       kind: 'article',
-      authorId: alice._id as string,
+      authorId: alice.id as string,
       createdAt: new Date('2026-01-15'),
     });
 
@@ -153,14 +152,14 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
         title: 'Hello World',
         content: 'My first post',
         kind: 'article',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-01-15'),
       },
       {
         title: 'Mongo with Prisma 8',
         content: 'Using the contract-first approach',
         kind: 'tutorial',
-        authorId: bob._id as string,
+        authorId: bob.id as string,
         createdAt: new Date('2026-02-20'),
       },
     ]);
@@ -171,13 +170,13 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
     const posts = await orm.posts.include('author').all();
     expect(posts).toHaveLength(2);
 
-    const alicePost = posts.find((p) => String(p.authorId) === String(alice._id));
+    const alicePost = posts.find((p) => String(p.authorId) === String(alice.id));
     expect(alicePost).toMatchObject({
       title: 'Hello World',
       author: { name: 'Alice' },
     });
 
-    const bobPost = posts.find((p) => String(p.authorId) === String(bob._id));
+    const bobPost = posts.find((p) => String(p.authorId) === String(bob.id));
     expect(bobPost).toMatchObject({
       title: 'Mongo with Prisma 8',
       author: { name: 'Bob' },
@@ -198,32 +197,32 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
         title: 'Article One',
         content: 'Article content',
         kind: 'article',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-01-15'),
       },
       {
         title: 'Tutorial One',
         content: 'Tutorial content',
         kind: 'tutorial',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-02-01'),
       },
       {
         title: 'Article Two',
         content: 'Another article',
         kind: 'article',
-        authorId: alice._id as string,
+        authorId: alice.id as string,
         createdAt: new Date('2026-03-01'),
       },
     ]);
 
-    const articles = await orm.posts.variant('Article').all();
+    const articles = await orm.posts.variant('article').all();
     expect(articles).toHaveLength(2);
     for (const a of articles) {
       expect(a.kind).toBe('article');
     }
 
-    const tutorials = await orm.posts.variant('Tutorial').all();
+    const tutorials = await orm.posts.variant('tutorial').all();
     expect(tutorials).toHaveLength(1);
     expect(tutorials[0]).toMatchObject({ title: 'Tutorial One', kind: 'tutorial' });
   });

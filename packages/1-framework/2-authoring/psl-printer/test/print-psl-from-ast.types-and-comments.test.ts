@@ -165,6 +165,34 @@ describe('printPslFromAst', () => {
     expect(printPslFromAst(ast)).toContain('Plain = Json');
   });
 
+  it('renders a namespaced typeConstructor with no arguments with parentheses', () => {
+    const ast: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 't',
+      namespaces: [],
+      types: {
+        kind: 'types',
+        declarations: [
+          {
+            kind: 'namedType',
+            name: 'Shape',
+            typeConstructor: {
+              kind: 'typeConstructor',
+              path: ['postgis', 'Geometry'],
+              args: [],
+              span: span(0),
+            },
+            attributes: [],
+            span: span(0),
+          },
+        ],
+        span: span(0),
+      },
+      span: span(0),
+    };
+    expect(printPslFromAst(ast)).toContain('Shape = postgis.Geometry()');
+  });
+
   it('does not treat empty type-name strings as relations during topological sort', () => {
     const models: PslModel[] = [
       {

@@ -10,7 +10,12 @@ This package provides the Mongo `contract.ts` DSL:
 - `field`, `index`, `model`, `rel`, and `valueObject` helpers
 - callback and object-literal authoring forms
 
-It builds canonical `MongoContract` values and validates them through `@internal/mongo-contract`.
+It also holds the builder every MongoDB contract source calls ([ADR 306](../../../../docs/architecture%20docs/adrs/ADR%20306%20-%20One%20plain-data%20definition%20and%20one%20builder%20per%20family.md)):
+
+- `ContractDefinition` (`src/contract-definition.ts`) is a contract as plain data, with every name resolved. `defineContract` lowers its builder objects to it (`src/contract-lowering.ts`); Mongo PSL and the Prisma 6 reader produce it from their schemas.
+- `buildMongoContractFromDefinition(definition, codecLookup, dataTypes)` (`src/build-contract.ts`, with stages in the `build-*.ts` files) checks every MongoDB family rule and returns the contract with its warnings, or every refusal with its warnings. Each refusal names its subject by a key the definition carries (`src/build-refusals.ts`). `defineContract` throws the first refusal as a `CONTRACT.*` error (`src/refusal-errors.ts`) and reports the warnings the source collected. The builder merges nothing: two identical indexes in one collection are refused (`indexDuplicate`), and so are two indexes with one name (`indexNameDuplicate`). It takes each index's name from `options.name` and throws for an index without one.
+- `nameIndexes(definition)` (`src/name-indexes.ts`) names each index written without a name after its stored keys and directions, such as `email_1`, as MongoDB names an index created without one. `defineContract` and Mongo PSL call it before `mergeRedundantIndexes`; the Prisma 6 reader names indexes as Prisma 6 did. In `defineContract`, the index option `name` names an index: `index({ email: 1 }, { sparse: true, name: 'email_sparse' })`.
+- `mergeRedundantIndexes(definition, codecLookup, dataTypes)` (`src/merge-redundant-indexes.ts`) returns the definition without the indexes another index with the same name in the same collection makes unnecessary: the later of two identical indexes, or a non-unique index beside a unique one that is otherwise identical. It compares storage indexes with `indexLookupKey`, after variant scoping, and leaves indexes the builder refuses for the builder. `defineContract` and Mongo PSL call it before the builder; the Prisma 6 reader does not.
 
 ## Current Slice
 
@@ -23,14 +28,14 @@ The current implementation supports:
 - top-level value objects referenced from fields
 - Mongo collection index authoring via model-local `indexes`
 - Mongo collection option authoring via model-local `collectionOptions`
-- base Mongo codec helpers (`field.string()`, `field.int32()`, `field.json()`, `field.bson()` and the rest), listed with their codecs and application types in [Scalar types](../../../../docs/reference/scalar-types.md#mongodb)
-- field presets contributed by the packs, such as `field.temporal.createdAt()` and `field.temporal.updatedAt()` from the Mongo target, available on the `field` helper of the callback overload (`defineContract({ family, target }, ({ field, model }) => ...)`); a field with generated values cannot be optional, a list, on a model without a collection, or on a value object
+- base Mongo codec helpers (`field.string()`, `field.int32()`, `field.json()`, `field.bson()` and the rest), listed with their codecs and application types in [Scalar types](../../../../docs/reference/scalar-types.md#mongodb); a read of a removed preset, such as `field.temporal.createdAt`, throws `CONTRACT.FIELD_HELPER_UNKNOWN`, with the preset's rewrite
+- `.onCreate(call)` and `.onUpdate(call)` on a field builder, with a call from `gen` such as `field.date().onCreate(gen.now()).onUpdate(gen.now())`, which resolves by the field's codec through the generator functions of the packs when the contract is built; `gen` comes from the `defineContract` callback (or the facade's `gen` export) and holds only the functions the stack's packs declare, which for Mongo is `now`; a field with generated values cannot be a list, on a variant, on a model without a collection, or on a value object; it may be optional
 
 This first slice does not yet cover union or dict authoring, or Mongo validator authoring.
 
 ## Exports
 
-- `./contract-builder`: Mongo DSL entrypoint
+- `./contract-builder`: Mongo DSL entrypoint, and `ContractDefinition`, its nodes and `buildMongoContractFromDefinition`
 - `./config-types`: config helper types
 
 ## Usage
@@ -50,11 +55,12 @@ const Address = valueObject('Address', {
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
+    id: field.objectId().mongo({ field: '_id' }),
+    email: field.string(),
     homeAddress: field.valueObject(Address).optional(),
   },
   indexes: [
-    index({ _id: 1 }, { unique: true }),
+    index({ email: 1 }, { unique: true }),
   ],
   collectionOptions: {
     collation: { locale: 'en', strength: 2 },
@@ -64,14 +70,14 @@ const User = model('User', {
 const Post = model('Post', {
   collection: 'posts',
   fields: {
-    _id: field.objectId(),
-    authorId: field.objectId(),
+    id: field.objectId().mongo({ field: '_id' }),
+    authorId: field.objectId().mongo({ field: 'author_id' }),
     title: field.string(),
   },
   relations: {
     author: rel.belongsTo(User, {
       from: 'authorId',
-      to: User.ref('_id'),
+      to: User.ref('id'),
     }),
   },
 });
@@ -83,6 +89,8 @@ export const contract = defineContract({
   models: { User, Post },
 });
 ```
+
+Each field is stored under its own name unless `.mongo({ field })` names another stored name, as `id` is stored as `_id` above. Relations, the discriminator and indexes name fields; the builder writes stored names into indexes, validators and execution defaults. A field of a value object is stored under its own name, so `.mongo({ field })` on one is refused.
 
 ## Config helper
 

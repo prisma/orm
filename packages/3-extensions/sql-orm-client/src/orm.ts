@@ -1,5 +1,5 @@
 import { type Contract, domainModelsAtDefaultNamespace } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import type {
   ExecutionContext,
   SqlAggregateDescriptorRegistry,
@@ -7,6 +7,16 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { aggregateOperationNames } from './aggregate-operations';
 import { type Collection, CollectionBase, reservedCollectionMemberNames } from './collection';
+import { collectionMethodTables } from './collection-methods';
+import {
+  type DeclaredFields,
+  type DeclaredFieldsFragment,
+  type DeclaredFieldsFragmentCollection,
+  type DeclaredFieldsFragmentFieldDeclarations,
+  type DeclaredFieldsFragmentModelAccessor,
+  defineDeclaredFieldsFragment,
+  type FragmentFacts,
+} from './fragments';
 import { ormError } from './orm-errors';
 import { domainModelNamesInNamespace, domainModelTableInNamespace } from './storage-resolution';
 import type {
@@ -21,10 +31,10 @@ import type {
 
 export interface OrmOptions<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
+  TCollections extends CollectionClasses,
 > {
   readonly runtime: RuntimeQueryable;
-  readonly collections?: Collections;
+  readonly collections?: TCollections;
   readonly context: ExecutionContext<TContract>;
 }
 
@@ -32,12 +42,18 @@ type ModelNames<TContract extends Contract<SqlStorage>> = CollectionModelName<TC
 
 type AnyCollectionClass = new (...args: never[]) => object;
 
+/** Custom collection classes keyed by model name, as `orm({ collections })` and the clients take them. */
+export type CollectionClasses = Partial<Record<string, AnyCollectionClass>>;
+
+/** No custom collection classes: the default of `orm()` and of every client type. */
+export type NoCollectionClasses = Record<never, never>;
+
 type CustomCollectionForKey<
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
+  TCollections extends CollectionClasses,
   Key extends string,
-> = Key extends keyof Collections
-  ? Collections[Key] extends AnyCollectionClass
-    ? InstanceType<Collections[Key]>
+> = Key extends keyof TCollections
+  ? TCollections[Key] extends AnyCollectionClass
+    ? InstanceType<TCollections[Key]>
     : never
   : never;
 
@@ -47,17 +63,17 @@ type CustomCollectionForKey<
 // `FieldOutputTypes[NsId]`).
 type ModelCollection<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
+  TCollections extends CollectionClasses,
   NsId extends string,
   ModelName extends ModelNames<TContract>,
-> = [CustomCollectionForKey<Collections, ModelName>] extends [never]
+> = [CustomCollectionForKey<TCollections, ModelName>] extends [never]
   ? Collection<
       TContract,
       ModelName,
       InferRootRow<TContract, ModelName, NsId>,
       WithNsId<DefaultCollectionTypeState, NsId>
     >
-  : CustomCollectionForKey<Collections, ModelName>;
+  : CustomCollectionForKey<TCollections, ModelName>;
 
 type NamespaceModelNames<
   TContract extends Contract<SqlStorage>,
@@ -70,12 +86,12 @@ type NamespaceModelNames<
 // the `db.enums` facade member, lane-agnostic contract metadata.
 export type OrmNamespace<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
+  TCollections extends CollectionClasses,
   NsId extends keyof TContract['domain']['namespaces'],
 > = {
   [K in NamespaceModelNames<TContract, NsId>]: ModelCollection<
     TContract,
-    Collections,
+    TCollections,
     NsId & string,
     K
   >;
@@ -83,15 +99,52 @@ export type OrmNamespace<
 
 type NamespacedClientMap<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
+  TCollections extends CollectionClasses,
 > = {
-  [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, Collections, Ns>;
+  [Ns in keyof TContract['domain']['namespaces']]: OrmNamespace<TContract, TCollections, Ns>;
 };
+
+/** The members of the ORM client that sit beside its namespaces, such as `fragment`. */
+export interface OrmClientRootMembers<TContract extends Contract<SqlStorage>> {
+  /**
+   * Define a query fragment for any model that has the declared fields. Declare each field with a field builder from the contract DSL or with `{ codecId, nullable }`, and a list field with `.many()` or `many: { elementNullable: false }`, or `.many({ elementsNullable: true })` or `many: { elementNullable: true }` when its elements may be null. The body sees only the declared fields and may call `where`, `orderBy`, `limit` and `offset`; `updateAll`, `updateAndCount`, `deleteAll` and `deleteAndCount` throw `ORM.ARGUMENT_INVALID` after a fragment that set a limit or an offset, as they do for any limit, offset, cursor, `distinct` or `distinctOn` they would ignore. The fragment accepts a collection of any model whose fields include the declared ones with the same codec and nullability, a list with the same element nullability exactly where the declaration declares one, and returns that collection with the filter and order the body applied.
+   *
+   * ```ts
+   * const notDeleted = db.orm.fragment(
+   *   { deletedAt: field.column(type.TimestamptzTemporal()).optional() },
+   *   (rows) => rows.where((r) => r.deletedAt.isNull()),
+   * );
+   * db.orm.public.Post.with(notDeleted).deleteAll();
+   * ```
+   */
+  fragment<
+    const Declarations extends DeclaredFieldsFragmentFieldDeclarations<
+      keyof ExtractCodecTypes<TContract> & string
+    >,
+    Facts extends FragmentFacts,
+  >(
+    fields: Declarations,
+    body: (
+      rows: DeclaredFieldsFragmentCollection<
+        DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+        FragmentFacts,
+        TContract
+      >,
+    ) => DeclaredFieldsFragmentCollection<
+      DeclaredFieldsFragmentModelAccessor<TContract, DeclaredFields<Declarations>>,
+      Facts,
+      TContract
+    >,
+  ): DeclaredFieldsFragment<TContract, DeclaredFields<Declarations>, Facts>;
+}
 
 type OrmClient<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
-> = NamespacedClientMap<TContract, Collections>;
+  TCollections extends CollectionClasses,
+> = NamespacedClientMap<TContract, TCollections> &
+  ('fragment' extends keyof TContract['domain']['namespaces']
+    ? unknown
+    : OrmClientRootMembers<TContract>);
 
 /**
  * Reject a contributed aggregate operation whose name a collection member
@@ -120,13 +173,14 @@ function assertAggregateOperationsNotReserved(registry: SqlAggregateDescriptorRe
 
 export function orm<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>> = Record<never, never>,
->(options: OrmOptions<TContract, Collections>): OrmClient<TContract, Collections> {
+  TCollections extends CollectionClasses = NoCollectionClasses,
+>(options: OrmOptions<TContract, TCollections>): OrmClient<TContract, TCollections> {
   const { runtime, collections, context } = options;
   assertAggregateOperationsNotReserved(context.aggregateDescriptors);
+  collectionMethodTables(context);
   const contract = context.contract;
   const ctx: CollectionContext<TContract> = { runtime, context };
-  const collectionRegistry = createCollectionRegistry(contract, collections);
+  const collectionRegistry = checkCollectionClasses(contract, collections);
 
   type AnyCollection = Collection<TContract, string, unknown, CollectionTypeState>;
 
@@ -188,25 +242,31 @@ export function orm<
     return facet;
   }
 
-  return new Proxy({} as OrmClient<TContract, Collections>, {
+  return new Proxy({} as OrmClient<TContract, TCollections>, {
     get(_target, prop: string | symbol): unknown {
       if (typeof prop !== 'string') {
         return undefined;
       }
 
-      if (!Object.hasOwn(contract.domain.namespaces, prop)) {
-        return undefined;
+      if (Object.hasOwn(contract.domain.namespaces, prop)) {
+        return namespaceFacet(prop);
       }
 
-      return namespaceFacet(prop);
+      return prop === 'fragment' ? defineDeclaredFieldsFragment : undefined;
     },
   });
 }
 
-function createCollectionRegistry<
+/**
+ * Checks that each custom collection class is a `Collection` subclass registered under a model the contract has, and returns the classes by model name. `orm()` calls it, and a client calls it when it is created, so a wrong class fails there and not on the first query.
+ */
+export function checkCollectionClasses<
   TContract extends Contract<SqlStorage>,
-  Collections extends Partial<Record<string, AnyCollectionClass>>,
->(contract: TContract, collections: Collections | undefined): Map<string, AnyCollectionClass> {
+  TCollections extends CollectionClasses,
+>(
+  contract: TContract,
+  collections: TCollections | undefined,
+): ReadonlyMap<string, AnyCollectionClass> {
   const registry = new Map<string, AnyCollectionClass>();
   if (!collections) {
     return registry;

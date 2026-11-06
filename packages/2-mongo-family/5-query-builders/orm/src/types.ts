@@ -8,6 +8,7 @@ import type {
   MongoModelsMap,
   MongoUnboundFieldInputTypes,
   MongoUnboundFieldOutputTypes,
+  OwnFieldStoredAs,
 } from '@internal/mongo-contract';
 
 type Simplify<T> = T extends unknown ? { [K in keyof T]: T[K] } : never;
@@ -108,16 +109,17 @@ type VariantRow<
   readonly discriminator: { readonly field: infer DiscField extends string };
   readonly variants: infer V;
 }
-  ? V extends Record<string, { readonly value: string }>
+  ? V extends Record<string, { readonly model: string }>
     ? {
-        [VK in keyof V]: VK extends string & keyof MongoModelsMap<TContract>
+        [Value in keyof V & string]: V[Value]['model'] extends infer VK extends string &
+          keyof MongoModelsMap<TContract>
           ? Simplify<
               Omit<InferFullRow<TContract, ModelName>, DiscField> &
                 InferFullRow<TContract, VK> &
-                Record<DiscField, V[VK]['value']>
+                Record<DiscField, Value>
             >
           : never;
-      }[keyof V]
+      }[keyof V & string]
     : InferFullRow<TContract, ModelName>
   : InferFullRow<TContract, ModelName>;
 
@@ -126,7 +128,7 @@ export type InferRootRow<
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = VariantRow<TContract, ModelName>;
 
-export type VariantNames<
+export type DiscriminatorValues<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = MongoModelsMap<TContract>[ModelName] extends {
@@ -135,20 +137,38 @@ export type VariantNames<
   ? keyof V & string
   : never;
 
+type VariantModelName<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+  VariantValue extends string,
+> = MongoModelsMap<TContract>[ModelName] extends {
+  readonly variants: infer V extends Record<string, { readonly model: string }>;
+}
+  ? VariantValue extends keyof V
+    ? V[VariantValue]['model']
+    : never
+  : never;
+
+export type VariantSelectable<TVariantValue extends string> = [TVariantValue] extends [never]
+  ? unknown
+  : {
+      readonly 'variant() needs a collection with no variant selected; call it on the base collection': never;
+    };
+
 export type VariantModelRow<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-  VariantName extends string,
+  VariantValue extends string,
 > = MongoModelsMap<TContract>[ModelName] extends {
   readonly discriminator: { readonly field: infer DiscField extends string };
-  readonly variants: infer V;
+  readonly variants: infer V extends Record<string, { readonly model: string }>;
 }
-  ? V extends Record<string, { readonly value: string }>
-    ? VariantName extends keyof V & string & keyof MongoModelsMap<TContract>
+  ? VariantValue extends keyof V
+    ? V[VariantValue]['model'] extends infer VK extends string & keyof MongoModelsMap<TContract>
       ? Simplify<
           Omit<InferFullRow<TContract, ModelName>, DiscField> &
-            InferFullRow<TContract, VariantName> &
-            Record<DiscField, V[VariantName]['value']>
+            InferFullRow<TContract, VK> &
+            Record<DiscField, VariantValue>
         >
       : InferFullRow<TContract, ModelName>
     : InferFullRow<TContract, ModelName>
@@ -196,9 +216,18 @@ export type MongoWhereFilter<
       readonly codecId: infer CId extends string & keyof TCodecTypes;
     };
   }
-    ? TCodecTypes[CId]['output']
+    ? WhereScalarValue<
+        MongoModelsMap<TContract>[ModelName]['fields'][K],
+        TCodecTypes[CId]['output']
+      >
     : unknown;
 };
+
+type WhereScalarValue<Field, Element> =
+  | (Field extends { readonly many: { readonly elementNullable: infer ElementNullable } }
+      ? Element | readonly (ElementNullable extends true ? Element | null : Element)[]
+      : Element)
+  | (Field extends { readonly nullable: true } ? null : never);
 
 export type MongoIncludeSpec<
   TContract extends MongoContract,
@@ -219,6 +248,17 @@ export type DefaultModelRow<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = ResolvedOutputRow<TContract, ModelName>;
+
+/**
+ * An input with no keys is `Record<string, never>`, not `{}`: TypeScript accepts any object where `{}` is expected, so a model with no fields would accept any key.
+ */
+type ClosedWhenEmpty<T> = [keyof T] extends [never] ? Record<string, never> : T;
+
+/** The fields an update of the model takes. For a model with no fields, it rejects every key. */
+export type UpdateInput<
+  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = ClosedWhenEmpty<Partial<DefaultModelRow<TContract, ModelName>>>;
 
 type ModelCollectionName<
   TContract extends MongoContract,
@@ -251,9 +291,15 @@ type GeneratedOnCreateFields<
     }
   > extends infer Matched
     ? Matched extends { readonly ref: { readonly field: infer Field extends string } }
-      ? Field
+      ? OwnFieldStoredAs<TContract, ModelName, Field>
       : never
     : never;
+
+/** The field stored as `_id`, which MongoDB fills when a create leaves it out. */
+type DocumentIdField<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = OwnFieldStoredAs<TContract, ModelName, '_id'>;
 
 /**
  * Fields a document may leave out: nullable ones, which read back as `null`. The create input makes them optional, as the SQL ORM client does for nullable columns.
@@ -271,7 +317,10 @@ type NullableFields<
 type OptionalOnCreate<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-> = '_id' | GeneratedOnCreateFields<TContract, ModelName> | NullableFields<TContract, ModelName>;
+> =
+  | DocumentIdField<TContract, ModelName>
+  | GeneratedOnCreateFields<TContract, ModelName>
+  | NullableFields<TContract, ModelName>;
 
 export type CreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
@@ -286,9 +335,13 @@ export type CreateInput<
 
 type VariantNullableFields<
   TContract extends MongoContract,
-  VariantName extends string,
-> = VariantName extends string & keyof MongoModelsMap<TContract>
-  ? NullableFields<TContract, VariantName>
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+  VariantValue extends string,
+> = VariantValue extends string
+  ? VariantModelName<TContract, ModelName, VariantValue> extends infer VK extends string &
+      keyof MongoModelsMap<TContract>
+    ? NullableFields<TContract, VK>
+    : never
   : never;
 
 type DiscriminatorField<
@@ -301,41 +354,41 @@ type DiscriminatorField<
   : never;
 
 // TODO(TML-2229): VariantModelRow flows through ResolvedOutputRow, so variant
-// domain fields use output types. Only the _id pick uses ResolvedInputRow.
+// domain fields use output types. Only the document id pick uses ResolvedInputRow.
 // When input/output types diverge (parameterized codecs), this needs an
 // input-side VariantModelRow.
 export type VariantCreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-  VariantName extends string,
+  VariantValue extends string,
 > = Omit<
-  VariantModelRow<TContract, ModelName, VariantName>,
+  VariantModelRow<TContract, ModelName, VariantValue>,
   | OptionalOnCreate<TContract, ModelName>
-  | VariantNullableFields<TContract, VariantName>
+  | VariantNullableFields<TContract, ModelName, VariantValue>
   | DiscriminatorField<TContract, ModelName>
 > &
   Partial<
     Pick<
       ResolvedInputRow<TContract, ModelName>,
-      '_id' & keyof ResolvedInputRow<TContract, ModelName>
+      DocumentIdField<TContract, ModelName> & keyof ResolvedInputRow<TContract, ModelName>
     >
   > &
   Partial<
     Pick<
-      VariantModelRow<TContract, ModelName, VariantName>,
+      VariantModelRow<TContract, ModelName, VariantValue>,
       (
         | GeneratedOnCreateFields<TContract, ModelName>
         | NullableFields<TContract, ModelName>
-        | VariantNullableFields<TContract, VariantName>
+        | VariantNullableFields<TContract, ModelName, VariantValue>
       ) &
-        keyof VariantModelRow<TContract, ModelName, VariantName>
+        keyof VariantModelRow<TContract, ModelName, VariantValue>
     >
   >;
 
 export type ResolvedCreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-  TVariant extends string,
-> = [TVariant] extends [never]
+  TVariantValue extends string,
+> = [TVariantValue] extends [never]
   ? CreateInput<TContract, ModelName>
-  : VariantCreateInput<TContract, ModelName, TVariant>;
+  : VariantCreateInput<TContract, ModelName, TVariantValue>;

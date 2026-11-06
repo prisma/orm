@@ -137,21 +137,35 @@ describe('migration new', () => {
       {
         kind: 'run-command',
         label: 'Run it to self-emit ops.json and attest the package',
-        command: `node "${migrationTs}"`,
+        command: `node ${migrationTs}`,
       },
     ]);
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('repeats the --config it was given in the command that runs the stub', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
-    const run = await harness(project).run(['migration', 'new'], {
+    const run = await harness(project).run(['migration', 'new', '--config', 'prisma.config.ts'], {
       cwd: project.dir,
-      isTty: { stdout: true, stderr: true },
+      isTty: { stdout: true },
     });
+    const [dirName] = await scaffoldedDirs(project);
+    const migrationTs = join('migrations', 'app', dirName ?? '', 'migration.ts');
 
-    expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.presented?.presentation.next?.at(-1)).toEqual({
+      kind: 'run-command',
+      label: 'Run it to self-emit ops.json and attest the package',
+      command: `node ${migrationTs} --config prisma.config.ts`,
+    });
+  });
+
+  it('prints the directory it scaffolded', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+
+    const run = await harness(project).run(['migration', 'new'], { cwd: project.dir });
+    const [dirName] = await scaffoldedDirs(project);
+
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirName ?? '')}\n`);
   });
 
   it('takes the db ref as the origin when --from is absent', async () => {
@@ -203,20 +217,6 @@ describe('migration new', () => {
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toMatchObject({ from: HASH_FROM, to: HASH_TO });
-  });
-
-  it('refuses on a forked graph without a db ref', async () => {
-    const project = await forkedProject();
-
-    const run = await harness(project).run(['migration', 'new', '--json'], {
-      cwd: project.dir,
-    });
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: { ok: false, error: { code: 'MIGRATION.PLAN_ORIGIN_UNKNOWN' } },
-    });
   });
 
   it('refuses a db ref on an empty graph instead of scaffolding from nothing', async () => {
@@ -492,7 +492,8 @@ describe('migration new', () => {
       terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
 
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 });
 

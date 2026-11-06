@@ -1,0 +1,119 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "role": {
+                  "column": "role"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "role": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "37ebc2920cbf480fcc253a3a33b4f45bea0a0c19accd7ccfae01a5892e257591",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "role": {
+                  "dataType": "pg/enum",
+                  "codecId": "pg/enum@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "user"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "user_role": {
+              "kind": "postgres-enum",
+              "typeName": "user_role",
+              "members": ["user", "ADMIN"]
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": ["user", "ADMIN"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

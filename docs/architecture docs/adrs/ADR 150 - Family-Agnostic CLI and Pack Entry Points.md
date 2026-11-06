@@ -53,7 +53,7 @@ Trade‑offs
 ✅ **Completed** (Briefs 20 & 21, Decouple-Framework-CLI-from-SQL)
 
 1) ✅ Config loader: `packages/1-framework/3-tooling/cli/src/config-loader.ts` loads TS module and returns config.
-2) ✅ SQL pack assembly moved to `packages/2-sql/3-tooling/family/src/core/assembly.ts` and is used via `@internal/family-sql/control`.
+2) ✅ SQL pack assembly moved to `packages/2-sql-family/3-tooling/family/src/core/assembly.ts` and is used via `@internal/family-sql/control`.
 3) ✅ Emit command updated to read helpers from `config.family`, assemble inputs, and call emitter with `family.hook`.
 4) ✅ Flags removed: `--adapter` and `--extensions` flags removed; config-only model enforced.
 5) ✅ Pack loading/assembly removed from framework CLI; family-provided helpers handle all assembly logic.

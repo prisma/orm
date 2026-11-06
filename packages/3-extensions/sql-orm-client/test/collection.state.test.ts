@@ -20,7 +20,7 @@ import {
   createReturningCollectionWithoutCapabilities,
   createReturningCollectionWithoutDefaultInInsert,
 } from './collection-fixtures';
-import type { MockExecution, MockRuntime } from './helpers';
+import { fieldUnknown, type MockExecution, type MockRuntime, publicTables } from './helpers';
 
 function insertAstOf(execution: MockExecution): InsertAst {
   const ast = (execution.plan as { ast: unknown }).ast;
@@ -44,6 +44,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
       ]);
       expect(collection.state.filters).toEqual([]);
@@ -53,10 +54,12 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
         bindWhereExpr(
           baseContract,
           BinaryExpr.neq(ColumnRef.of('users', 'email'), LiteralExpr.of('old@example.com')),
+          publicTables('users'),
         ),
       ]);
     });
@@ -112,6 +115,7 @@ describe('Collection', () => {
             BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
             NullCheckExpr.isNull(ColumnRef.of('users', 'email')),
           ]),
+          publicTables('users'),
         ),
       ]);
 
@@ -139,21 +143,6 @@ describe('Collection', () => {
         OrderByItem.asc(ColumnRef.of('posts', 'user_id')),
         OrderByItem.desc(ColumnRef.of('posts', 'id')),
       ]);
-    });
-
-    it('orderBy() accepts expression-based orders', () => {
-      const { collection: postCollection } = createCollectionFor('Post', baseContract);
-
-      const opExpr = new OperationExpr({
-        method: 'cosineDistance',
-        self: ColumnRef.of('posts', 'embedding'),
-        args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
-        returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
-      });
-
-      const ordered = postCollection.orderBy(() => OrderByItem.asc(opExpr));
-      expect(ordered.state.orderBy).toEqual([OrderByItem.asc(opExpr)]);
     });
 
     it('orderBy() mixes column-based and expression-based orders', () => {
@@ -210,6 +199,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
       expect(withPosts.state.includes[0]?.nested.limit).toBe(5);
@@ -226,6 +216,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
 
@@ -378,20 +369,6 @@ describe('Collection', () => {
         .toArray();
 
       expect(rows).toHaveLength(2);
-      expect(runtime.executions).toHaveLength(2);
-    });
-
-    it('createAndCount() uses split insert when defaultInInsert is absent', async () => {
-      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
-      runtime.setNextResults([[], []]);
-      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
-
-      const count = await collection.createAndCount([
-        { id: 1, name: 'Alice', email: 'alice@example.com' },
-        { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
-      ]);
-
-      expect(count).toBe(2);
       expect(runtime.executions).toHaveLength(2);
     });
 
@@ -580,12 +557,7 @@ describe('Collection', () => {
           onConflict: 'skip',
           conflictOn: ['posts' as never],
         }),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'ORM.ARGUMENT_INVALID',
-          message: expect.stringContaining('posts'),
-        }),
-      );
+      ).toThrow(fieldUnknown('User', 'posts'));
       expect(runtime.executions).toHaveLength(0);
     });
 

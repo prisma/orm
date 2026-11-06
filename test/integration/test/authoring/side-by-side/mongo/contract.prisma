@@ -1,11 +1,31 @@
 // use prisma-8
 
-model User {
+enum Role {
+  @@type("mongo/string@1")
+  Member = "member"
+  Editor = "editor"
+}
+
+type Address {
+  street String
+  zip    String?
+}
+
+model Admin {
   id    ObjectId @id @map("_id")
-  name  String
-  email String
-  bio   String?
-  posts Post[]
+  level Int
+
+  @@map("users")
+}
+
+model User {
+  id      ObjectId @id @map("_id")
+  name    String
+  email   String
+  bio     String?
+  role    Role
+  address Address?
+  posts   Post[]
 
   @@map("users")
 }
@@ -18,4 +38,19 @@ model Post {
   author      User     @relation(fields: [authorId], references: [id])
 
   @@map("posts")
+}
+
+model Task {
+  id    ObjectId @id @map("_id")
+  type  String
+  title String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity Int
+
+  @@base(Task, "bug")
 }

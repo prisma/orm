@@ -14,7 +14,6 @@ export type PrinterField = {
   readonly mapName?: string | undefined;
   readonly isId: boolean;
   readonly isRelation: boolean;
-  readonly isUnsupported: boolean;
   readonly comment?: string | undefined;
 };
 

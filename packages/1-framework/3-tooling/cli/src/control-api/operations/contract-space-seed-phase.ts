@@ -8,6 +8,7 @@ import {
   type SpacePlanOutput,
   spaceMigrationDirectory,
 } from '@internal/migration-tools/spaces';
+import { join } from 'pathe';
 
 /**
  * In-memory authored migration package shipped by an extension descriptor.
@@ -40,6 +41,7 @@ export interface SeedPhaseExtensionInput {
 export interface ContractSpaceSeedPhaseInputs {
   readonly migrationsDir: string;
   readonly extensions: ReadonlyArray<SeedPhaseExtensionInput>;
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -63,6 +65,8 @@ export interface ContractSpaceSeedPhaseRecord {
   readonly priorHash: string | null;
   readonly newHash: string;
   readonly newMigrationDirs: readonly string[];
+  /** Absolute path of each file or directory this run wrote for the space: the head snapshot, `refs/head.json`, and each new migration directory. */
+  readonly writtenPaths: readonly string[];
 }
 
 export interface ContractSpaceSeedPhaseResult {
@@ -70,7 +74,8 @@ export interface ContractSpaceSeedPhaseResult {
 }
 
 /**
- * Phase-1 of the two-phase `migration plan` pipeline (sub-spec § 4).
+ * Phase-1 of the two-phase `migration plan` pipeline (sub-spec § 4), and the
+ * step of `contract emit` that writes each pack's pinned files.
  *
  * For every extension that exposes a `contractSpace`:
  *
@@ -143,10 +148,11 @@ export async function runContractSpaceSeedPhase(
     const descriptor = descriptorBySpace.get(space.spaceId);
     if (descriptor === undefined) continue;
 
+    inputs.signal?.throwIfAborted();
     const onDiskHeadRef = await readContractSpaceHeadRef(inputs.migrationsDir, space.spaceId);
     const priorHash = onDiskHeadRef?.hash ?? null;
 
-    await emitContractSpaceArtifacts(inputs.migrationsDir, space.spaceId, {
+    const artifacts = await emitContractSpaceArtifacts(inputs.migrationsDir, space.spaceId, {
       contract: descriptor.contractJson,
       contractDts: buildPlaceholderContractDts(space.spaceId),
       headRef: { hash: descriptor.headRef.hash, invariants: descriptor.headRef.invariants },
@@ -155,6 +161,7 @@ export async function runContractSpaceSeedPhase(
     const spaceDir = spaceMigrationDirectory(inputs.migrationsDir, space.spaceId);
     const newMigrationDirs: string[] = [];
     for (const pkg of space.migrationPackages) {
+      inputs.signal?.throwIfAborted();
       const { written } = await materialiseExtensionMigrationPackageIfMissing(spaceDir, pkg);
       if (written) newMigrationDirs.push(pkg.dirName);
     }
@@ -170,6 +177,10 @@ export async function runContractSpaceSeedPhase(
       priorHash,
       newHash: descriptor.headRef.hash,
       newMigrationDirs,
+      writtenPaths: [
+        ...artifacts.writtenPaths,
+        ...newMigrationDirs.map((dirName) => join(spaceDir, dirName)),
+      ],
     });
   }
 

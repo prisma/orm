@@ -34,17 +34,20 @@ import {
 } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { join, relative } from 'pathe';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { INTEGRITY_FAILED, OK, PRECONDITION } from '../../commands/migration-check/exit-codes';
 import {
   type CliStructuredError,
   errorAmbiguousMigrationRef,
+  errorContractValidationFailed,
   errorInvalidSpaceId,
   errorSpaceNotFound,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
 import { resolveContractPath } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
 import {
   findPackageByDirPath,
@@ -53,6 +56,7 @@ import {
   resolveTargetPathAcrossSpaces,
 } from '../../utils/migration-path-target';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import { mapContractAtError } from './contract-at-errors';
 
 function migrationPathRelative(cwd: string, dirPath: string): string {
   return relative(cwd, dirPath);
@@ -373,13 +377,17 @@ export async function runMigrationCheck(
   return ok({ ok: false, failures, summary: `${failures.length} integrity failure(s)` });
 }
 
+/**
+ * The integrity violations of the project's contract spaces. A contract the family refuses to load, the app's or a snapshot's, such as one holding a default its column type does not hold, is the error, with the refusal's meta; any other failure to load the aggregate leaves the violations to the other checks.
+ */
 export async function loadAggregateIntegrityViolations(
   config: PrismaNextConfig,
   migrationsDir: string,
   verifySnapshotContent?: SnapshotContentVerifier,
-): Promise<readonly IntegrityViolation[]> {
+): Promise<Result<readonly IntegrityViolation[], CliStructuredError>> {
+  const contractPath = resolveContractPath(config);
   try {
-    const contractJsonContent = await readFile(resolveContractPath(config), 'utf-8');
+    const contractJsonContent = await readFile(contractPath, 'utf-8');
     const familyInstance = config.family.create(createControlStack(config));
     const declaredExtensions = toDeclaredExtensionsFromRaw(config.extensions ?? []);
 
@@ -390,9 +398,27 @@ export async function loadAggregateIntegrityViolations(
       appContract: familyInstance.deserializeContract(parsedAppContract),
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
     });
-    return aggregate.checkIntegrity({ declaredExtensions, checkContracts: true });
-  } catch {
-    return [];
+    return ok(aggregate.checkIntegrity({ declaredExtensions, checkContracts: true }));
+  } catch (error) {
+    if (
+      MigrationToolsError.is(error) &&
+      error.code === 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED'
+    ) {
+      return mapContractAtError(error);
+    }
+    if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+      return notOk(
+        errorContractValidationFailed(
+          `Contract at ${contractPath} failed to deserialize: ${error.message}`,
+          {
+            where: { path: contractPath },
+            cause: error,
+            meta: contractValidationMeta(error),
+          },
+        ),
+      );
+    }
+    return ok([]);
   }
 }
 

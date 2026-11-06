@@ -2,14 +2,15 @@ import type {
   ContractExecutionSection,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
+import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { runtimeError } from '../shared/runtime-error';
 
 /**
  * Scope across which a generator's value is constant.
  *
  * - `'field'` — one value per defaulting site (one field of one record). Cache strategy: no cache; call per defaulting site. Right for per-record identifiers (UUIDs, CUIDs, ULIDs, nanoid, ksuid).
- * - `'row'` — one value across all defaulting sites of one record of one operation. Cache strategy: per-call cache keyed by generator id. Right for correlation ids stamped into several fields of one record.
- * - `'query'` — one value across all records and fields of one ORM operation. Cache strategy: caller-provided cache keyed by generator id. Right for `timestampNow` (a single timestamp per bulk create or update).
+ * - `'row'` — one value across all defaulting sites of one record of one operation. Cache strategy: per-call cache keyed by generator id and params. Right for correlation ids stamped into several fields of one record.
+ * - `'query'` — one value across all records and fields of one ORM operation. Cache strategy: caller-provided cache keyed by generator id and params. Right for `timestampNow` (a single timestamp per bulk create or update).
  */
 export type GeneratorStability = 'field' | 'row' | 'query';
 
@@ -215,11 +216,12 @@ function resolveScopedValue(
   if (!cache) {
     return computeExecutionDefaultValue(spec, generatorRegistry);
   }
-  if (cache.has(spec.id)) {
-    return cache.get(spec.id);
+  const key = spec.params === undefined ? spec.id : `${spec.id} ${canonicalStringify(spec.params)}`;
+  if (cache.has(key)) {
+    return cache.get(key);
   }
   const value = computeExecutionDefaultValue(spec, generatorRegistry);
-  cache.set(spec.id, value);
+  cache.set(key, value);
   return value;
 }
 

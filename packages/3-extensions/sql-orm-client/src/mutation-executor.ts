@@ -1,24 +1,24 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { isUniqueConstraintViolation } from '@internal/sql-errors';
-import {
-  type AnyExpression,
-  BinaryExpr,
-  ColumnRef,
-  LiteralExpr,
-} from '@internal/sql-relational-core/ast';
+import { type AnyExpression, BinaryExpr } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { castAs } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  getColumnToFieldMap,
-  resolveFieldToColumn,
+  columnOfContractField,
+  fieldOfColumn,
+  getModelColumnFields,
+  hasContractCapability,
   resolveModelRelations,
   resolveModelTableName,
+  resolveRelationTargetColumns,
   resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
+import { type CollectionTables, createStatementTables } from './collection-tables';
 import { and, shorthandToWhereExpr } from './filters';
 import { ormError } from './orm-errors';
 import {
@@ -35,6 +35,7 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
+import type { AliasedTable } from './table-scope';
 import type {
   CollectionState,
   MutationCreateInput,
@@ -45,6 +46,8 @@ import type {
   RuntimeTransaction,
 } from './types';
 import { emptyState } from './types';
+import { paramRefForStorageColumn } from './where-binding';
+import { readBackIdentity, reportedInsertId, writtenKeys } from './written-keys';
 
 interface JunctionThrough {
   readonly table: string;
@@ -116,6 +119,7 @@ export async function executeNestedCreateMutation(options: {
   modelName: string;
   data: MutationCreateInput<Contract<SqlStorage>, string>;
 }): Promise<Record<string, unknown>> {
+  refuseUnreadableCreate(options.context, options.namespaceId, options.modelName, options.data, []);
   return withMutationScope(options.runtime, async (scope) =>
     createGraph(scope, options.context, options.namespaceId, options.modelName, options.data),
   );
@@ -126,19 +130,95 @@ export async function executeNestedUpdateMutation(options: {
   runtime: RuntimeQueryable;
   namespaceId: string;
   modelName: string;
+  tables: CollectionTables;
   filters: readonly AnyExpression[];
   data: MutationUpdateInput<Contract<SqlStorage>, string>;
 }): Promise<Record<string, unknown> | null> {
+  const { context, namespaceId, modelName, data } = options;
+  if (!hasContractCapability(context.contract, 'returning')) {
+    refuseUnreadableRelatedCreates(
+      context,
+      parseMutationInput(context.contract, namespaceId, modelName, data).relationMutations,
+    );
+  }
   return withMutationScope(options.runtime, async (scope) =>
     updateFirstGraph(
       scope,
       options.context,
       options.namespaceId,
       options.modelName,
+      options.tables,
       options.filters,
       options.data,
     ),
   );
+}
+
+/**
+ * Without `RETURNING`, each row a nested create inserts is read back by its key. This refuses, before anything runs, a create whose rows could not be found that way: the key values each row gets from its input, a client-side default, or the row it relates to must leave out at most the table's auto-increment column.
+ */
+function refuseUnreadableCreate(
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  input: MutationCreateInput<Contract<SqlStorage>, string>,
+  suppliedColumns: readonly string[],
+): void {
+  const contract = context.contract;
+  if (hasContractCapability(contract, 'returning')) return;
+  const { scalarData, relationMutations } = parseMutationInput(
+    contract,
+    namespaceId,
+    modelName,
+    input,
+  );
+  const tableName = resolveModelTableName(contract, namespaceId, modelName);
+  const row = mapModelDataToStorageRow(contract, namespaceId, modelName, scalarData);
+  const defaults = context.applyMutationDefaults({
+    op: 'create',
+    entry: tableName,
+    namespace: namespaceId,
+    values: { ...row },
+  });
+  const supplied = [
+    ...suppliedColumns,
+    ...defaults.map((applied) => applied.field),
+    ...partitionByOwnership(relationMutations).parentOwned.flatMap(
+      ({ relation }) => relation.localColumns,
+    ),
+  ];
+  writtenKeys({
+    context,
+    namespaceId,
+    tableName,
+    modelName,
+    rows: [{ ...Object.fromEntries(supplied.map((column) => [column, true])), ...row }],
+    method: 'create()',
+  });
+  refuseUnreadableRelatedCreates(context, relationMutations);
+}
+
+function refuseUnreadableRelatedCreates(
+  context: ExecutionContext,
+  relationMutations: readonly ParsedRelationMutation[],
+): void {
+  const { parentOwned, childOwned } = partitionByOwnership(relationMutations);
+  for (const { relation, mutation } of relationMutations) {
+    if (mutation.kind !== 'create') continue;
+    const fromParent = childOwned.some((owned) => owned.relation === relation)
+      ? relation.targetColumns
+      : [];
+    const createsOne = parentOwned.some((owned) => owned.relation === relation);
+    for (const childInput of createsOne ? mutation.data.slice(0, 1) : mutation.data) {
+      refuseUnreadableCreate(
+        context,
+        relation.relatedNamespaceId,
+        relation.relatedModelName,
+        castAs<MutationCreateInput<Contract<SqlStorage>, string>>(childInput),
+        fromParent,
+      );
+    }
+  }
 }
 
 export function buildRowIdentityFilterFromRow(
@@ -212,7 +292,14 @@ async function runInTransaction<T>(
     return result;
   } catch (error) {
     if (typeof transaction.rollback === 'function') {
-      await transaction.rollback();
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
+        const settlement = settlementOf(transaction);
+        if (settlement?.rolledBack !== true) throw rollbackError;
+        settlement.logDroppedError(rollbackError);
+      }
     }
     throw error;
   }
@@ -305,11 +392,19 @@ async function updateFirstGraph(
   context: ExecutionContext,
   namespaceId: string,
   modelName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
   input: MutationUpdateInput<Contract<SqlStorage>, string>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
-  const existingRow = await findFirstByFilters(scope, contract, namespaceId, modelName, filters);
+  const existingRow = await findFirstByFilters(
+    scope,
+    contract,
+    namespaceId,
+    modelName,
+    tables,
+    filters,
+  );
   if (!existingRow) {
     return null;
   }
@@ -360,24 +455,48 @@ async function updateFirstGraph(
       namespaceId,
       modelName,
       castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(identityFilter),
+      tables.root,
     );
     if (!identityWhere) {
       throw new InternalError(`Failed to build row identity filter for model "${modelName}"`);
     }
 
-    const compiled = compileUpdateReturning(
-      contract,
-      namespaceId,
-      tableName,
-      mappedUpdateData,
-      [identityWhere],
-      undefined,
-    );
-    const updatedRowsRaw = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
+    if (hasContractCapability(contract, 'returning')) {
+      const compiled = compileUpdateReturning(
+        contract,
+        modelName,
+        tables,
+        mappedUpdateData,
+        [identityWhere],
+        undefined,
+      );
+      const updatedRowsRaw = await queryPlanRows<Record<string, unknown>>(
+        scope,
+        compiled,
+      ).toArray();
 
-    const updatedRaw = updatedRowsRaw[0];
-    if (updatedRaw) {
-      parentRow = mapStorageRowToModelFields(contract, namespaceId, modelName, updatedRaw);
+      const updatedRaw = updatedRowsRaw[0];
+      if (updatedRaw) {
+        parentRow = mapStorageRowToModelFields(contract, namespaceId, modelName, updatedRaw);
+      }
+    } else {
+      await scope.execute(compileUpdateCount(contract, tables, mappedUpdateData, [identityWhere]));
+      const updatedIdentity = { ...identityFilter };
+      for (const column of readBackIdentity(
+        contract,
+        namespaceId,
+        tableName,
+        modelName,
+        'update()',
+      )) {
+        if (Object.hasOwn(mappedUpdateData, column)) {
+          updatedIdentity[toFieldName(contract, namespaceId, modelName, column)] =
+            mappedUpdateData[column];
+        }
+      }
+      parentRow =
+        (await findRowByCriterion(scope, context, namespaceId, modelName, updatedIdentity)) ??
+        parentRow;
     }
   }
 
@@ -656,11 +775,13 @@ async function applyChildOwnedMutation(
 
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
+      const related = createRelatedTables(relation);
       const criterionWhere = shorthandToWhereExpr(
         context,
         relation.relatedNamespaceId,
         relation.relatedModelName,
         castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+        related.root,
       );
       if (!criterionWhere) {
         throw ormError(
@@ -677,14 +798,7 @@ async function applyChildOwnedMutation(
         setValues[childColumn] = parentValue;
       }
 
-      await executeUpdateCount(
-        scope,
-        contract,
-        relation.relatedNamespaceId,
-        relation.relatedTableName,
-        setValues,
-        [criterionWhere],
-      );
+      await executeUpdateCount(scope, contract, related, setValues, [criterionWhere]);
     }
     return;
   }
@@ -695,24 +809,21 @@ async function applyChildOwnedMutation(
   }
 
   if (!mutation.criteria || mutation.criteria.length === 0) {
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [parentJoinWhere],
-    );
+    const related = createRelatedTables(relation);
+    await executeUpdateCount(scope, contract, related, setValues, [
+      buildChildJoinWhere(contract, related.root, parentValues),
+    ]);
     return;
   }
 
   for (const criterion of mutation.criteria) {
+    const related = createRelatedTables(relation);
     const criterionWhere = shorthandToWhereExpr(
       context,
       relation.relatedNamespaceId,
       relation.relatedModelName,
       castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+      related.root,
     );
     if (!criterionWhere) {
       throw ormError(
@@ -724,15 +835,9 @@ async function applyChildOwnedMutation(
       );
     }
 
-    const parentJoinWhere = buildChildJoinWhere(relation, parentValues);
-    await executeUpdateCount(
-      scope,
-      contract,
-      relation.relatedNamespaceId,
-      relation.relatedTableName,
-      setValues,
-      [and(parentJoinWhere, criterionWhere)],
-    );
+    await executeUpdateCount(scope, contract, related, setValues, [
+      and(buildChildJoinWhere(contract, related.root, parentValues), criterionWhere),
+    ]);
   }
 }
 
@@ -1093,16 +1198,23 @@ async function deleteJunctionLink(
     writeJunctionColumn(junctionRow, through, column, value, relation.relationName);
   }
 
+  const junction = createStatementTables({
+    namespaceId: through.namespaceId,
+    tableName: through.table,
+  });
   const exprs: AnyExpression[] = [];
   for (const [column, value] of Object.entries(junctionRow)) {
-    exprs.push(BinaryExpr.eq(ColumnRef.of(through.table, column), LiteralExpr.of(value)));
+    exprs.push(
+      BinaryExpr.eq(
+        junction.root.column(column),
+        paramRefForStorageColumn(context.contract, junction.root.storage, column, value),
+      ),
+    );
   }
 
   const first = exprs[0];
   const where = exprs.length === 1 && first !== undefined ? first : and(...exprs);
-  const compiled = compileDeleteCount(context.contract, through.namespaceId, through.table, [
-    where,
-  ]);
+  const compiled = compileDeleteCount(context.contract, junction, [where]);
   await scope.execute(compiled);
 }
 
@@ -1136,8 +1248,16 @@ function readParentColumnValues(
   return values;
 }
 
+function createRelatedTables(relation: RelationDefinition): CollectionTables {
+  return createStatementTables({
+    namespaceId: relation.relatedNamespaceId,
+    tableName: relation.relatedTableName,
+  });
+}
+
 function buildChildJoinWhere(
-  relation: RelationDefinition,
+  contract: Contract<SqlStorage>,
+  related: AliasedTable,
   childValues: Map<string, unknown>,
 ): AnyExpression {
   const exprs: AnyExpression[] = [];
@@ -1145,8 +1265,8 @@ function buildChildJoinWhere(
   for (const [childColumn, parentValue] of childValues.entries()) {
     exprs.push(
       BinaryExpr.eq(
-        ColumnRef.of(relation.relatedTableName, childColumn),
-        LiteralExpr.of(parentValue),
+        related.column(childColumn),
+        paramRefForStorageColumn(contract, related.storage, childColumn, parentValue),
       ),
     );
   }
@@ -1181,9 +1301,14 @@ async function insertSingleRow(
     mappedData[def.field] = def.value;
   }
 
+  if (!hasContractCapability(contract, 'returning')) {
+    return insertAndReadBack(scope, context, namespaceId, modelName, tableName, mappedData);
+  }
+
   const compiled = compileInsertReturning(
     contract,
     namespaceId,
+    modelName,
     tableName,
     [mappedData],
     undefined,
@@ -1202,6 +1327,46 @@ async function insertSingleRow(
   return mapStorageRowToModelFields(contract, namespaceId, modelName, firstRow);
 }
 
+async function insertAndReadBack(
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  tableName: string,
+  row: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const contract = context.contract;
+  const {
+    keys: [suppliedKey = {}],
+    generated,
+  } = writtenKeys({ context, namespaceId, tableName, modelName, rows: [row], method: 'create()' });
+  const stats = await scope.execute(compileInsertCount(contract, namespaceId, tableName, [row]));
+  const key =
+    generated === undefined
+      ? suppliedKey
+      : {
+          ...suppliedKey,
+          [generated.column]: await generated.decode(
+            reportedInsertId(stats, generated, { operation: 'create', modelName }),
+          ),
+        };
+  const criterion = Object.fromEntries(
+    Object.entries(key).map(([column, value]) => [
+      toFieldName(contract, namespaceId, modelName, column),
+      value,
+    ]),
+  );
+  const created = await findRowByCriterion(scope, context, namespaceId, modelName, criterion);
+  if (!created) {
+    throw ormError(
+      'ORM.MUTATION_ROW_MISSING',
+      `Nested create for model "${modelName}" did not find the row it inserted`,
+      { meta: { operation: 'create', model: modelName, phase: 'nested' } },
+    );
+  }
+  return created;
+}
+
 async function findRowByCriterion(
   scope: RuntimeScope,
   context: ExecutionContext,
@@ -1210,11 +1375,16 @@ async function findRowByCriterion(
   criterion: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   const contract = context.contract;
+  const tables = createStatementTables({
+    namespaceId,
+    tableName: resolveModelTableName(contract, namespaceId, modelName),
+  });
   const whereExpr = shorthandToWhereExpr(
     context,
     namespaceId,
     modelName,
     castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
+    tables.root,
   );
   if (!whereExpr) {
     throw ormError(
@@ -1224,13 +1394,12 @@ async function findRowByCriterion(
     );
   }
 
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const state: CollectionState = {
-    ...emptyState(),
+    ...emptyState(tables),
     filters: [whereExpr],
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state);
+  const compiled = compileSelect(contract, modelName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1246,15 +1415,15 @@ async function findFirstByFilters(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
+  tables: CollectionTables,
   filters: readonly AnyExpression[],
 ): Promise<Record<string, unknown> | null> {
-  const tableName = resolveModelTableName(contract, namespaceId, modelName);
   const state: CollectionState = {
-    ...emptyState(),
+    ...emptyState(tables),
     filters,
     limit: 1,
   };
-  const compiled = compileSelect(contract, namespaceId, tableName, state);
+  const compiled = compileSelect(contract, modelName, state);
   const rows = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();
 
   const firstRow = rows[0];
@@ -1268,12 +1437,11 @@ async function findFirstByFilters(
 async function executeUpdateCount(
   scope: RuntimeScope,
   contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
+  tables: CollectionTables,
   setValues: Record<string, unknown>,
   filters: readonly AnyExpression[],
 ): Promise<void> {
-  const compiled = compileUpdateCount(contract, namespaceId, tableName, setValues, filters);
+  const compiled = compileUpdateCount(contract, tables, setValues, filters);
   await scope.execute(compiled);
 }
 
@@ -1305,11 +1473,9 @@ function getRelationDefinitions(
     relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
     cardinality: relation.cardinality,
     localColumns: relation.on.localFields.map((f) =>
-      resolveFieldToColumn(contract, namespaceId, modelName, f),
+      columnOfContractField(contract, namespaceId, modelName, f),
     ),
-    targetColumns: relation.on.targetFields.map((f) =>
-      resolveFieldToColumn(contract, relation.toNamespace, relation.to, f),
-    ),
+    targetColumns: resolveRelationTargetColumns(contract, relation),
     through: relation.through
       ? {
           table: relation.through.table,
@@ -1332,6 +1498,9 @@ function toFieldName(
   modelName: string,
   columnName: string,
 ): string {
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
-  return columnToField[columnName] ?? columnName;
+  return fieldOfColumn(
+    getModelColumnFields(contract, namespaceId, modelName),
+    modelName,
+    columnName,
+  );
 }

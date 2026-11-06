@@ -8,6 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlock } from '../src/block-spec/interpret';
@@ -68,6 +69,7 @@ function setup(source: string) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   return { symbolTable, sources, diagnostics };
 }
@@ -79,8 +81,8 @@ function blockNamed(
 ): BlockSymbol {
   const scope =
     namespace === undefined
-      ? setupResult.symbolTable.topLevel
-      : setupResult.symbolTable.topLevel.namespaces[namespace];
+      ? setupResult.symbolTable.defaultNamespace
+      : setupResult.symbolTable.namespaces[namespace];
   const block = scope?.blocks[name];
   if (block === undefined) throw new Error(`expected block "${name}" in the symbol table`);
   return block;
@@ -103,6 +105,7 @@ function interpret<S extends BlockSpec<unknown>>(
       symbolTable: setupResult.symbolTable,
       pslBlockDescriptors: { [descriptor.keyword]: descriptor },
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
 }
 
@@ -158,7 +161,9 @@ describe('interpretExtensionBlock — fixed blocks', () => {
 
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.value.values.target.declaration).toBe(result.symbolTable.topLevel.models['Post']);
+    expect(parsed.value.values.target.declaration).toBe(
+      result.symbolTable.defaultNamespace.models['Post'],
+    );
   });
 
   it('prefers the local namespace declaration over a same-named top-level model', () => {
@@ -189,7 +194,7 @@ describe('interpretExtensionBlock — fixed blocks', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value.values.target.declaration).toBe(
-      result.symbolTable.topLevel.namespaces['blog']?.models['Article'],
+      result.symbolTable.namespaces['blog']?.models['Article'],
     );
   });
 
@@ -221,7 +226,7 @@ describe('interpretExtensionBlock — fixed blocks', () => {
     const roles = parsed.value.values.roles;
     expect(roles).toHaveLength(2);
     expect(roles?.[0]).toMatchObject({
-      declaration: result.symbolTable.topLevel.blocks['reporting'],
+      declaration: result.symbolTable.defaultNamespace.blocks['reporting'],
     });
     expect(roles?.[1]).toBe('external_role');
   });
@@ -650,7 +655,10 @@ describe('interpretExtensionBlock — block attributes', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value.attributes['map']).toMatchObject({ args: { name: 'levels' } });
-    expect(seenContexts.at(-1)).toEqual({ symbols: result.symbolTable });
+    expect(seenContexts.at(-1)).toEqual({
+      symbols: result.symbolTable,
+      dataTypes: EMPTY_DATA_TYPES,
+    });
   });
 
   it.each([

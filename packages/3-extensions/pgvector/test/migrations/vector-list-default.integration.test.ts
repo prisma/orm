@@ -48,6 +48,7 @@ const frameworkComponents = [
 ] as const;
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
@@ -61,12 +62,11 @@ const embeddings: ColumnDefaultLiteralInputValue = [
 
 function buildContract(withDefault: boolean): Contract<SqlStorage> {
   const column: StorageColumnInput = {
-    nativeType: 'vector',
+    dataType: 'pgvector/vector',
     codecId: 'pg/vector@1',
     typeParams: { length: 3 },
     nullable: true,
-    many: { elementNullable: false },
-    noCheck: ['elementNotNull'],
+    many: { elementNullable: true },
     ...(withDefault ? { default: { kind: 'literal', value: embeddings } } : {}),
   };
   const hash = withDefault ? 'vector-list-default' : 'vector-list-without-default';
@@ -83,7 +83,7 @@ function buildContract(withDefault: boolean): Contract<SqlStorage> {
             table: {
               doc: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   embeddings: column,
                 },
                 primaryKey: { columns: ['id'] },
@@ -147,6 +147,8 @@ describe('a vector(3)[] literal default', { concurrent: false }, () => {
       schema,
       policy,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -23,6 +23,7 @@ import {
 } from '../../utils/formatters/migration-log-table';
 import { toneSpans } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -78,7 +79,17 @@ function logPresentations(inputs: {
 }): Presentations {
   const grid = inputs.grid;
   return {
-    stdout: () => [],
+    stdout: () =>
+      inputs.document.records.map((record) =>
+        dataLine([
+          record.appliedAt,
+          record.space,
+          record.name,
+          record.fromContract,
+          record.toContract,
+          record.operationCount,
+        ]),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       ...(inputs.database === undefined

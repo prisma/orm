@@ -5,7 +5,7 @@ import type {
   FieldAttributeAst,
   ModelAttributeAst,
 } from './syntax/ast/attributes';
-import type { ExpressionAst } from './syntax/ast/expressions';
+import type { AttributeArgAst, ExpressionAst } from './syntax/ast/expressions';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
 import type { TypeAnnotationAst } from './syntax/ast/type-annotation';
 import { printSyntax } from './syntax/ast-helpers';
@@ -17,6 +17,8 @@ export interface ResolvedAttributeArg {
   readonly value: string;
   readonly expression?: ExpressionAst;
   readonly span: PslSpan;
+  /** The argument as the schema writes it; absent for an argument a reader builds. */
+  readonly node?: AttributeArgAst;
 }
 
 export interface ResolvedAttribute<
@@ -81,6 +83,7 @@ function readResolvedArgList(
       value: renderExpression(expression),
       ...(expression !== undefined ? { expression } : {}),
       span: nodePslSpan(arg.syntax, sources),
+      node: arg,
     });
   }
   return args;

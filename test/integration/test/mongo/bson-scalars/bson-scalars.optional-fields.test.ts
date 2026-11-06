@@ -19,8 +19,8 @@ describe('Mongo optional fields a stored document leaves out', () => {
           role: 'USER',
         });
 
-        const [author] = await db.authors.select('_id', 'karma', 'avatar').all();
-        expect(author).toStrictEqual({ _id: authorId.toHexString(), karma: 1n, avatar: null });
+        const [author] = await db.authors.select('id', 'karma', 'avatar').all();
+        expect(author).toStrictEqual({ id: authorId.toHexString(), karma: 1n, avatar: null });
       }),
     timeouts.spinUpMongoMemoryServer,
   );

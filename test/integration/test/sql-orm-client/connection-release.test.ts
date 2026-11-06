@@ -74,7 +74,7 @@ async function createPooledRuntime(pool: Pool) {
   const context = createExecutionContext({ contract, stack });
   const instance = instantiateExecutionStack(stack);
   if (!instance.adapter || !instance.driver) throw new Error('Missing adapter or driver');
-  await instance.driver.connect({ kind: 'pgPool', pool });
+  await instance.driver.connect({ kind: 'pgPool', pool, ownedByDriver: true });
   const runtime = new PostgresRuntimeImpl({
     closeRefusal: undefined,
     context,
@@ -112,8 +112,8 @@ describe('integration/ORM buffered connection release', () => {
       await withPooledRuntime(async ({ pool, parents, included, codec }) => {
         const entered = gate();
         const resume = gate();
-        const decode = codec.decode.bind(codec);
-        const spy = vi.spyOn(codec, 'decode').mockImplementationOnce(async (wire, context) => {
+        const decode = codec.fromWire.bind(codec);
+        const spy = vi.spyOn(codec, 'fromWire').mockImplementationOnce(async (wire, context) => {
           entered.resolve();
           await resume.promise;
           return decode(wire, context);
@@ -179,7 +179,7 @@ describe('integration/ORM buffered connection release', () => {
       await withPooledRuntime(async ({ pool, parents, included, codec }) => {
         const released = vi.fn();
         pool.on('release', released);
-        const spy = vi.spyOn(codec, 'decode').mockRejectedValueOnce(new Error('Decoder failed'));
+        const spy = vi.spyOn(codec, 'fromWire').mockRejectedValueOnce(new Error('Decoder failed'));
         try {
           await expect(included.all()).rejects.toThrow();
           expect(pool.idleCount).toBe(1);

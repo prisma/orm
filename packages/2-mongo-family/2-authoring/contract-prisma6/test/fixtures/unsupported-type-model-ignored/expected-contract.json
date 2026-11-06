@@ -13,7 +13,7 @@
         "models": {
           "User": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
@@ -24,7 +24,12 @@
             },
             "relations": {},
             "storage": {
-              "collection": "User"
+              "collection": "User",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                }
+              }
             }
           }
         }

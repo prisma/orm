@@ -28,7 +28,9 @@ import { SupabaseRole } from '../src/contract/roles';
 import supabasePack from '../src/exports/pack';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
-const pgUuid = { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
+const pgUuid = { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false } as const;
 
 function buildAppContract() {
   const Item = model('Item', {
@@ -156,13 +158,14 @@ describe('roles enter db verify — declared in the pack contract, checked again
         await client.connect(connectionString);
 
         const applyResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: appContractJson,
           mode: 'apply',
           migrationsDir,
         });
         if (!applyResult.ok) {
           throw new Error(
-            `db init apply failed: ${applyResult.failure.summary}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
+            `db init apply failed: ${applyResult.failure.message}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
           );
         }
 

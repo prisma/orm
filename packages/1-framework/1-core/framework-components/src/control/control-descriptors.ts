@@ -4,8 +4,11 @@ import type {
   DriverDescriptor,
   ExtensionDescriptor,
   FamilyDescriptor,
+  SessionSettings,
   TargetDescriptor,
 } from '../shared/framework-components';
+import type { GeneratorFunctionField } from '../shared/generator-functions';
+import type { DataTypeSupport } from '../shared/written-value';
 import type { ContractSerializer } from './contract-serializer';
 import type {
   ControlAdapterInstance,
@@ -26,6 +29,11 @@ export interface ControlFamilyDescriptor<
   >,
 > extends FamilyDescriptor<TFamilyId> {
   readonly emission: EmissionSpi;
+  /** The length of a field of a codec and type params, in its data type's normal form, as a generator binding reads {@link GeneratorFunctionField.length}. A family whose fields have no length omits it. */
+  readonly fieldLength?: (
+    field: Omit<GeneratorFunctionField, 'length'>,
+    dataTypes: DataTypeSupport,
+  ) => number | undefined;
   readonly pslDiagnostics?: {
     readonly describeUnsupportedAttribute?: unknown;
     readonly describeUnresolvedType?: unknown;
@@ -49,6 +57,7 @@ export interface ControlTargetDescriptor<
    * `deserializeContract` helper. The descriptor IS the aggregator.
    */
   readonly contractSerializer: ContractSerializer<TContract>;
+  readonly defaultNamespaceId: string;
   create(): TTargetInstance;
 }
 
@@ -79,7 +88,21 @@ export interface ControlDriverDescriptor<
   >,
   TConnection = string,
 > extends DriverDescriptor<TFamilyId, TTargetId> {
-  create(connection: TConnection): Promise<TDriverInstance>;
+  create(connection: TConnection, options?: ControlDriverConnectOptions): Promise<TDriverInstance>;
+}
+
+/** How a control driver connects. */
+export interface ControlDriverConnectOptions {
+  /**
+   * Connect only to a database that already exists, and never create one or its file. A driver
+   * whose connect could create a database must honour it; Postgres and MongoDB honour it as they
+   * are, since connecting never creates a database there.
+   */
+  readonly existingDatabaseOnly?: boolean;
+  /** Give up connecting after this many milliseconds, where the driver connects over a network. */
+  readonly connectTimeoutMs?: number;
+  /** Session settings the stack's target declares, which the driver ensures on its connection. */
+  readonly sessionSettings?: SessionSettings;
 }
 
 export interface ControlExtensionDescriptor<

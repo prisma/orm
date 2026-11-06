@@ -1,11 +1,13 @@
 export type { RuntimeTargetInstance } from '@internal/framework-components/execution';
+export type { MongoCodecLookup, MongoExecutionContext } from '@internal/mongo-query-ast/execution';
+export { enumMemberCodecFor } from '@internal/mongo-query-ast/execution';
 export type { MongoExecutionPlan } from '../mongo-execution-plan';
 export type {
-  MongoCodecLookup,
-  MongoExecutionContext,
   MongoExecutionStack,
+  MongoExecutionStackWithDriver,
   MongoRuntimeAdapterDescriptor,
   MongoRuntimeAdapterInstance,
+  MongoRuntimeDriverInstance,
   MongoRuntimeExtensionDescriptor,
   MongoRuntimeExtensionInstance,
   MongoRuntimeTargetDescriptor,

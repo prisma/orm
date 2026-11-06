@@ -29,6 +29,7 @@ describe('diagnostic filenames', () => {
     const { diagnostics } = buildSymbolTable({
       documents: [first.document, second.document],
       sources,
+      defaultNamespaceId: 'public',
     });
     expect(diagnostics).toEqual([
       {
