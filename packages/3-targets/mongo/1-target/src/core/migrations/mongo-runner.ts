@@ -268,13 +268,17 @@ function fieldsTouched(
     );
   const requiredBefore = required(before);
   const propertiesBefore = properties(before);
+  const requires = [...required(after)]
+    .filter((field) => field !== '_id' && !requiredBefore.has(field))
+    .sort();
   return {
-    requires: [...required(after)]
-      .filter((field) => field !== '_id' && !requiredBefore.has(field))
-      .sort(),
+    requires,
     retypes: [...properties(after)]
       .filter(
-        ([field, schema]) => propertiesBefore.has(field) && propertiesBefore.get(field) !== schema,
+        ([field, schema]) =>
+          !requires.includes(field) &&
+          propertiesBefore.has(field) &&
+          propertiesBefore.get(field) !== schema,
       )
       .map(([field]) => field)
       .sort(),
