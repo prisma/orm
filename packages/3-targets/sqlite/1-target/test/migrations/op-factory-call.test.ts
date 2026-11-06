@@ -128,7 +128,7 @@ describe('DropTableCall', () => {
     const call = new DropTableCall('orphan');
     expect(call.factoryName).toBe('dropTable');
     expect(call.operationClass).toBe('destructive');
-    expect(call.label).toBe('Drop table orphan');
+    expect(call.label).toBe('Drop table "orphan"');
 
     const op = await call.toOp(lowerer);
     expect(op.id).toBe('dropTable.orphan');

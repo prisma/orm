@@ -17,7 +17,7 @@ import {
 } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { MONGO_BSON_CODEC_ID } from '../src/core/codec-ids';
-import { mongoBsonCodec, mongoDescriptorById, mongoStandardCodecs } from '../src/core/codecs';
+import { mongoBsonCodec, mongoCodecDescriptors, mongoDescriptorById } from '../src/core/codecs';
 import type { BsonValue } from '../src/exports/codec-types';
 import { fromContractJson, toContractJson } from './contract-json';
 
@@ -293,6 +293,8 @@ describe('mongo/bson@1 descriptor', () => {
   });
 
   it('is registered in the standard codec set', () => {
-    expect(mongoStandardCodecs.map((codec) => codec.id)).toContain(MONGO_BSON_CODEC_ID);
+    expect(mongoCodecDescriptors.map((descriptor) => descriptor.codecId)).toContain(
+      MONGO_BSON_CODEC_ID,
+    );
   });
 });

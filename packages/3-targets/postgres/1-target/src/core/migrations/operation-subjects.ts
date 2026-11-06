@@ -3,11 +3,18 @@ import {
   type CallSubjects,
   type FieldEventCall,
   fieldEventStorage,
+  type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
+  UnfilledValue,
   unknownCallNames,
 } from '@internal/family-sql/control';
-import type { MigrationDataLossKind, OpFactoryCall } from '@internal/framework-components/control';
+import type {
+  MigrationDataLossKind,
+  ModelCoordinate,
+  OpFactoryCall,
+  ValueObjectFieldCoordinate,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
@@ -18,14 +25,16 @@ import {
   AddColumnWithTemporaryDefaultCall,
   AlterColumnTypeCall,
   CreatePostgresRlsPolicyCall,
+  DeleteRowsCall,
   DisableRowLevelSecurityCall,
   DropColumnCall,
   DropPostgresRlsPolicyCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import type { StoredValueSubject } from './stored-value-calls';
 
 interface Locator {
   /** The contract that names the namespaces: the origin contract when the plan has one. */
@@ -34,6 +43,10 @@ interface Locator {
   readonly fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>;
   /** The stored value removals the planner made for enum values, each with its enum value. */
   readonly storedValues?: ReadonlyMap<OpFactoryCall, StoredValueSubject>;
+  /** The key removals and fills the planner made for value object fields, each with its value object field. */
+  readonly storedKeys?: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate>;
+  /** The row deletions the planner made for variants, each with its variant as the origin names it. */
+  readonly variantRows?: ReadonlyMap<OpFactoryCall, ModelCoordinate>;
 }
 
 /**
@@ -80,8 +93,20 @@ function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | un
   if (call instanceof DropTableCall) {
     return target(locator, call.schemaName, call.tableName, undefined);
   }
+  if (call instanceof DeleteRowsCall) {
+    return {
+      ...target(locator, call.schemaName, call.tableName, undefined),
+      ...ifDefined('model', locator.variantRows?.get(call)),
+    };
+  }
   if (call instanceof DropColumnCall || call instanceof AlterColumnTypeCall) {
     return target(locator, call.schemaName, call.tableName, call.columnName);
+  }
+  if (call instanceof RemoveStoredKeyCall) {
+    return {
+      ...target(locator, call.schemaName, call.tableName, call.columnName),
+      ...ifDefined('valueObjectField', locator.storedKeys?.get(call)),
+    };
   }
   if (call instanceof RemoveStoredValueCall) {
     const enumValue = locator.storedValues?.get(call)?.enumValue;
@@ -139,6 +164,29 @@ function accessChangesOf(
   return [];
 }
 
+/** The temporary values a call writes: a new required column's, or a planner-written fill's of a value object field. */
+function temporaryValuesOf(locator: Locator, call: OpFactoryCall): CallSubjects['temporaryValues'] {
+  if (call instanceof AddColumnWithTemporaryDefaultCall) {
+    return [{ table: call.tableName, column: call.columnName, value: call.temporaryDefault }];
+  }
+  const valueObjectField = locator.storedKeys?.get(call);
+  if (
+    !(call instanceof FillStoredKeyCall) ||
+    call.value instanceof UnfilledValue ||
+    valueObjectField === undefined
+  ) {
+    return [];
+  }
+  return [
+    {
+      table: call.tableName,
+      column: call.columnName,
+      value: JSON.stringify(call.value),
+      valueObjectField,
+    },
+  ];
+}
+
 function operationCountOf(call: OpFactoryCall): number {
   return 'companions' in call && Array.isArray(call.companions) ? 1 + call.companions.length : 1;
 }
@@ -174,10 +222,7 @@ export function postgresCallSubjects(
             ? [{ storageName: unknownName, table: undefined, loss }]
             : [],
       accessChanges: accessChangesOf(locator, call, replaced),
-      temporaryValues:
-        call instanceof AddColumnWithTemporaryDefaultCall
-          ? [{ table: call.tableName, column: call.columnName, value: call.temporaryDefault }]
-          : [],
+      temporaryValues: temporaryValuesOf(locator, call),
     };
   });
 }

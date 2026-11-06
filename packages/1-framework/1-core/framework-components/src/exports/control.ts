@@ -168,6 +168,11 @@ export type {
   ResolvedModelRenameStatement,
   ResolvedNamespaceRenameStatement,
   ResolvedRenameStatement,
+  ResolvedValueObjectFieldBackfillStatement,
+  ResolvedValueObjectFieldRenameStatement,
+  ResolvedVariantConvertStatement,
+  ValueObjectFieldCoordinate,
+  ValueObjectFieldCoordinateJson,
 } from '../control/migration-statements';
 export {
   describeMigrationStatement,
@@ -181,6 +186,7 @@ export {
   migrationSubjectKey,
   modelDisplayName,
   modelStatementText,
+  valueObjectFieldStatementText,
 } from '../control/migration-statements';
 export { orderIssuesByDependencies } from '../control/order-issues-by-dependencies';
 export {

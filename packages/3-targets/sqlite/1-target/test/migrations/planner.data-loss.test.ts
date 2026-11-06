@@ -156,11 +156,11 @@ describe('SQLite planner, data loss', () => {
     expect({ dataLoss, accessChanges }).toEqual({
       dataLoss: [
         {
-          operation: 'Drop column nickname on User',
+          operation: 'Drop column "nickname" from "User"',
           subject: { kind: 'field', namespaceId: unbound, model: 'User', field: 'nickname' },
         },
         {
-          operation: 'Drop table Legacy',
+          operation: 'Drop table "Legacy"',
           subject: { kind: 'model', namespaceId: unbound, model: 'Legacy' },
         },
       ],
@@ -246,10 +246,10 @@ describe('SQLite planner, data loss', () => {
 
     expect((await planned(from, to, { fromContract: null })).dataLoss).toEqual([
       {
-        operation: 'Drop column nickname on User',
+        operation: 'Drop column "nickname" from "User"',
         subject: { kind: 'storage', name: 'User.nickname' },
       },
-      { operation: 'Drop table Legacy', subject: { kind: 'storage', name: 'Legacy' } },
+      { operation: 'Drop table "Legacy"', subject: { kind: 'storage', name: 'Legacy' } },
     ]);
   });
 
@@ -278,7 +278,7 @@ describe('SQLite planner, data loss', () => {
       `Drop index User_handle_idx_${HANDLE_INDEX_HASH} on Account`,
       `Create index Account_handle_idx_${HANDLE_INDEX_HASH} on Account`,
       'Recreate table Account',
-      'Drop column nickname on Account',
+      'Drop column "nickname" from "Account"',
     ]);
     expect(result.dataLoss).toEqual([
       {

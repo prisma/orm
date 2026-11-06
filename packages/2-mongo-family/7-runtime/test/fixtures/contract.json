@@ -1,4 +1,5 @@
 {
+  "target": "mongo",
   "targetFamily": "mongo",
   "roots": {
     "users": {
