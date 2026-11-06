@@ -351,6 +351,11 @@ export class TransactionManager {
     })
   }
 
+  /**
+   * Returns the running transaction to execute a query on. Statements sent on it are refused
+   * once the transaction starts closing. A transaction that is already closing is awaited, and
+   * then rejected with the error for how it closed.
+   */
   async getTransaction(txInfo: TransactionInfo, operation: string): Promise<Transaction> {
     let tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
     if (tx.status === 'closing') {
@@ -359,9 +364,82 @@ export class TransactionManager {
       tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
     }
     if (!tx.transaction) throw new TransactionNotFoundError()
-    return tx.transaction
+    return this.#refuseStatementsOnceClosing(tx, tx.transaction, operation)
   }
 
+  /**
+   * Wraps a transaction so that it refuses statements once it has started closing.
+   *
+   * A query holds on to the transaction it was given for as long as it runs, so it can still
+   * send statements after the transaction has timed out or been closed. Adapters that close a
+   * transaction by sending `COMMIT` or `ROLLBACK` and then releasing the connection would run
+   * those statements outside the transaction, where each one commits on its own.
+   */
+  #refuseStatementsOnceClosing(tx: TransactionWrapper, transaction: Transaction, operation: string): Transaction {
+    const assertRunning = () => {
+      switch (tx.status) {
+        case 'running':
+          return
+        case 'closing':
+          throw this.#closedTransactionError(tx, tx.reason, operation)
+        case 'committed':
+        case 'rolled_back':
+        case 'timed_out':
+          throw this.#closedTransactionError(tx, tx.status, operation)
+        case 'waiting':
+          throw new TransactionInternalConsistencyError('Statement sent on a transaction that has not started.')
+        default:
+          assertNever(tx['status'], 'Unknown transaction status.')
+      }
+    }
+
+    return {
+      adapterName: transaction.adapterName,
+      provider: transaction.provider,
+      options: transaction.options,
+      queryRaw: async (query) => {
+        assertRunning()
+        return await transaction.queryRaw(query)
+      },
+      executeRaw: async (query) => {
+        assertRunning()
+        return await transaction.executeRaw(query)
+      },
+      commit: () => transaction.commit(),
+      rollback: () => transaction.rollback(),
+      createSavepoint: transaction.createSavepoint?.bind(transaction),
+      rollbackToSavepoint: transaction.rollbackToSavepoint?.bind(transaction),
+      releaseSavepoint: transaction.releaseSavepoint?.bind(transaction),
+    }
+  }
+
+  /**
+   * Returns the error a query gets on a transaction that closed with `status`.
+   */
+  #closedTransactionError(
+    tx: TransactionWrapper,
+    status: 'committed' | 'rolled_back' | 'timed_out',
+    operation: string,
+  ): TransactionManagerError {
+    switch (status) {
+      case 'committed':
+        return new TransactionClosedError(operation)
+      case 'rolled_back':
+        return new TransactionRolledBackError(operation)
+      case 'timed_out':
+        return new TransactionExecutionTimeoutError(operation, {
+          timeout: tx.timeout!,
+          timeTaken: Date.now() - tx.startedAt,
+        })
+      default:
+        return assertNever(status, 'Unknown transaction status.')
+    }
+  }
+
+  /**
+   * Returns the transaction if it is running or closing. Throws the matching error if it has
+   * already closed or does not exist.
+   */
   #getActiveOrClosingTransaction(transactionId: string, operation: string): TransactionWrapper {
     const transaction = this.transactions.get(transactionId)
 
@@ -375,14 +453,9 @@ export class TransactionManager {
           case 'running':
             throw new TransactionInternalConsistencyError('Active transaction found in closed transactions list.')
           case 'committed':
-            throw new TransactionClosedError(operation)
           case 'rolled_back':
-            throw new TransactionRolledBackError(operation)
           case 'timed_out':
-            throw new TransactionExecutionTimeoutError(operation, {
-              timeout: closedTransaction.timeout!,
-              timeTaken: Date.now() - closedTransaction.startedAt,
-            })
+            throw this.#closedTransactionError(closedTransaction, closedTransaction.status, operation)
         }
       } else {
         debug(`Transaction not found.`, transactionId)
