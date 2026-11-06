@@ -288,7 +288,7 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
   it("refuses a variant's fill whose discriminator value another root model's variant also has", () => {
     const models = (superFields: readonly string[]) =>
       contract(
-        'seed-' + superFields.join(','),
+        `seed-${superFields.join(',')}`,
         {
           Admin: {
             collection: 'users',
