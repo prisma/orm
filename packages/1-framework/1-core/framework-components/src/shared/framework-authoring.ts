@@ -608,26 +608,36 @@ function isAuthoringTemplateRecord(value: unknown): value is Record<string, unkn
 }
 
 export function isAuthoringTypeConstructorDescriptor(
-  value: object,
+  value: unknown,
 ): value is AuthoringTypeConstructorDescriptor {
-  return 'kind' in value && value.kind === 'typeConstructor';
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'typeConstructor'
+  );
 }
 
 export function isAuthoringTypeAliasDescriptor(
-  value: AuthoringTypeNamespaceMember,
+  value: unknown,
 ): value is AuthoringTypeAliasDescriptor {
-  return 'kind' in value && value.kind === 'typeAlias';
+  return typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'typeAlias';
 }
 
 export function isAuthoringTypeChoiceDescriptor(
-  value: AuthoringTypeNamespaceMember,
+  value: unknown,
 ): value is AuthoringTypeChoiceDescriptor {
-  return 'kind' in value && value.kind === 'typeChoice';
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'typeChoice'
+  );
 }
 
 /** Whether `value` is a leaf of a `type` namespace: a type constructor, a type alias or a type choice. */
 export function isAuthoringTypeDescriptor(
-  value: AuthoringTypeNamespaceMember,
+  value: unknown,
 ): value is
   | AuthoringTypeConstructorDescriptor
   | AuthoringTypeAliasDescriptor
@@ -657,21 +667,26 @@ export function getAuthoringTypeConstructor(
 }
 
 export function isAuthoringEntityTypeDescriptor(
-  value: AuthoringEntityTypeDescriptor | AuthoringEntityTypeNamespace,
+  value: unknown,
 ): value is AuthoringEntityTypeDescriptor {
-  return 'kind' in value && value.kind === 'entity';
+  return typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'entity';
 }
 
 export function isAuthoringPslBlockDescriptor(
-  value: AuthoringPslBlockDescriptor | AuthoringPslBlockDescriptorNamespace,
+  value: unknown,
 ): value is AuthoringPslBlockDescriptor {
-  return 'kind' in value && value.kind === 'pslBlock';
+  return typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'pslBlock';
 }
 
 export function isAuthoringModelAttributeDescriptor(
-  value: AuthoringModelAttributeDescriptor | AuthoringModelAttributeDescriptorNamespace,
+  value: unknown,
 ): value is AuthoringModelAttributeDescriptor {
-  return 'kind' in value && value.kind === 'modelAttribute';
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'modelAttribute'
+  );
 }
 
 function isCopyableNamespaceObject(value: unknown): value is Record<string, unknown> {

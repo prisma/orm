@@ -248,4 +248,16 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
       Object.keys(postgresField),
     ]).toEqual([{ codecId: 'pg/text@1' }, ['column', 'namedType']]);
   });
+
+  it('safely tolerates namespaces containing non-object and primitive members', () => {
+    const typesWithPrimitives = {
+      ...postgresLike,
+      invalidPrimitive: 'typeChoice',
+      invalidNull: null,
+      invalidUndefined: undefined,
+    } as unknown as Parameters<typeof refusingRemovedFieldPresets>[1];
+
+    const testField = refusingRemovedFieldPresets(field, typesWithPrimitives);
+    expect(refusalOf(testField, 'id.uuidv4String')).toBeDefined();
+  });
 });
