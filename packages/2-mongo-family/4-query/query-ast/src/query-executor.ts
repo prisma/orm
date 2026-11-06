@@ -2,7 +2,7 @@ import type {
   AsyncIterableResult,
   RuntimeStatementStats,
 } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryPlan } from './query-plan';
 
 export interface MongoQueryExecutor {
   query<Row>(plan: MongoQueryPlan<Row>): AsyncIterableResult<Row>;

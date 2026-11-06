@@ -6,7 +6,9 @@ import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
+  type MongoMiddleware,
   type MongoRuntime,
+  type MongoRuntimeExtensionDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { timeouts } from '@repo/test-utils';
@@ -37,7 +39,13 @@ const stubMeta: PlanMeta = {
   lane: 'mongo',
 };
 
-export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Promise<T> {
+export async function withMongod<T>(
+  fn: (ctx: MongodContext) => Promise<T>,
+  options: {
+    readonly middleware?: readonly MongoMiddleware[];
+    readonly extensions?: readonly MongoRuntimeExtensionDescriptor[];
+  } = {},
+): Promise<T> {
   const replSet = await MongoMemoryReplSet.create({
     instanceOpts: [
       { launchTimeout: timeouts.spinUpMongoMemoryServer, storageEngine: 'wiredTiger' },
@@ -53,11 +61,17 @@ export async function withMongod<T>(fn: (ctx: MongodContext) => Promise<T>): Pro
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
     driver: mongoRuntimeDriver,
+    ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
   });
   const context = createMongoExecutionContext({ contract: fixtureContract, stack });
   const driver = stack.driver.create();
   await driver.connect({ kind: 'url', url: connectionUri, dbName });
-  const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
+  const runtime = createMongoRuntime({
+    context,
+    adapter: stack.adapter.create(stack),
+    driver,
+    ...(options.middleware === undefined ? {} : { middleware: options.middleware }),
+  });
 
   // Cast back to `MongoCodecRegistry` — the test setup is the one place that
   // legitimately mutates the per-execution registry mid-flight (to install

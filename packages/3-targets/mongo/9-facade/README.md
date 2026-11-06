@@ -203,6 +203,8 @@ Options besides the binding:
 - `middleware`: a middleware chain applied to every MongoDB execution.
 - `mode`: the runtime mode.
 
+`db.prepare(declaration, callback)` builds a prepared statement: the callback runs once with one placeholder per declared parameter and returns a query-builder plan, which is lowered once. It opens no connection, so a client with no binding can prepare; a closed client rejects with `DRIVER.NOT_CONNECTED`. Run the handle against the runtime: `await ps.query(await db.runtime(), params).toArray()`, or `ps.execute(...)` for an update or delete. Declarations are checked against the contract's codec ids. See [ADR 318](../../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+
 #### Writing a MongoDB extension
 
 A MongoDB extension declares each codec once, as a codec descriptor, and its pack and its runtime descriptor share that declaration:

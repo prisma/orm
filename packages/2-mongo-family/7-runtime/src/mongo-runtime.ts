@@ -13,11 +13,15 @@ import {
   type StatementActivityRun,
   streamStatement,
 } from '@internal/framework-components/runtime';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoCodecTypesBase } from '@internal/mongo-contract';
+import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type {
+  AnyMongoCommand,
   MongoCodecLookup,
   MongoExecutionContext,
+  MongoQueryExecutor,
   MongoQueryPlan,
+  MongoResultShape,
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -31,6 +35,23 @@ import {
   type MongoParamRefMutator,
   type MongoParamRefMutatorInternal,
 } from './param-ref-mutator';
+import { assertPagingValues } from './prepared/paging-values';
+import { bindPlaceholders, buildPlaceholders, collectPlaceholders } from './prepared/placeholders';
+import {
+  createPreparedHandle,
+  type MongoPreparedBridge,
+  type MongoPreparedInternals,
+  mongoPreparedExecute,
+  mongoPreparedQuery,
+} from './prepared/prepared-statement';
+import type {
+  MongoDeclaration,
+  MongoParamsFromDeclaration,
+  MongoPlaceholders,
+  MongoPreparedFor,
+  MongoPrepareMember,
+} from './prepared/types';
+import { statisticsCountField } from './statistics-count-field';
 
 type MongoStatementActivityRun = StatementActivityRun<
   MongoExecutionPlan,
@@ -42,19 +63,6 @@ function noop() {}
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function statisticsCountField(commandKind: string): 'modifiedCount' | 'deletedCount' | undefined {
-  switch (commandKind) {
-    case 'updateOne':
-    case 'updateMany':
-      return 'modifiedCount';
-    case 'deleteOne':
-    case 'deleteMany':
-      return 'deletedCount';
-    default:
-      return undefined;
-  }
 }
 
 function invalidStatisticsResult(commandKind: string, countField: string): Error {
@@ -85,7 +93,7 @@ export interface MongoRuntimeOptions {
   readonly mode?: RuntimeMode;
 }
 
-export interface MongoRuntime {
+export interface MongoRuntime extends MongoQueryExecutor, MongoPrepareMember {
   /**
    * Query a `MongoQueryPlan` and return an async iterable of rows.
    *
@@ -114,7 +122,7 @@ export interface MongoRuntime {
 
 class MongoRuntimeImpl
   extends RuntimeCore<MongoQueryPlan, MongoExecutionPlan, MongoMiddleware>
-  implements MongoRuntime
+  implements MongoRuntime, MongoPreparedBridge
 {
   readonly #adapter: MongoAdapter;
   readonly #driver: MongoDriver<unknown>;
@@ -201,10 +209,20 @@ class MongoRuntimeImpl
     checkAborted(codecCtx, 'stream');
     const compiled = await this.runBeforeCompile(plan);
     const draft = this.#adapter.structuralLower(compiled);
+    return this.encodeDraft(draft, compiled.meta, compiled.resultShape, codecCtx, run);
+  }
+
+  private async encodeDraft(
+    draft: MongoLoweredDraft,
+    meta: MongoQueryPlan['meta'],
+    resultShape: MongoResultShape | undefined,
+    codecCtx: CodecCallContext,
+    run: MongoStatementActivityRun,
+  ): Promise<MongoExecutionPlan> {
     const mutator: MongoParamRefMutatorInternal = createMongoParamRefMutator(draft);
     const draftExec: MongoExecutionPlan = {
-      meta: compiled.meta,
-      ...ifDefined('resultShape', compiled.resultShape),
+      meta,
+      ...ifDefined('resultShape', resultShape),
       command: blindCast<
         MongoExecutionPlan['command'],
         'MongoLoweredDraft held in command slot before parameter resolution'
@@ -213,11 +231,115 @@ class MongoRuntimeImpl
 
     await run.beforeEncode(draftExec, mutator);
 
+    const encodedDraft = mutator.currentDraft();
+    assertPagingValues(encodedDraft);
     return {
-      meta: compiled.meta,
-      ...ifDefined('resultShape', compiled.resultShape),
-      command: await this.#adapter.resolveParams(mutator.currentDraft(), codecCtx),
+      meta,
+      ...ifDefined('resultShape', resultShape),
+      command: await this.#adapter.resolveParams(encodedDraft, codecCtx),
     };
+  }
+
+  async prepare<
+    D extends MongoDeclaration<CT>,
+    Row,
+    Command extends AnyMongoCommand,
+    CT extends MongoCodecTypesBase = MongoCodecTypesBase,
+  >(
+    declaration: D,
+    callback: (placeholders: MongoPlaceholders<D>) => MongoQueryPlan<Row, Command>,
+  ): Promise<MongoPreparedFor<MongoParamsFromDeclaration<D, CT>, Row, Command>> {
+    for (const spec of Object.values(declaration)) {
+      const codecId = typeof spec === 'string' ? spec : spec.codecId;
+      if (!this.#codecs.has(codecId)) {
+        throw runtimeError(
+          'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+          `No codec is registered for codecId '${codecId}', which a prepared statement declares.`,
+          { codecId },
+        );
+      }
+    }
+
+    const placeholders = blindCast<
+      MongoPlaceholders<D>,
+      'buildPlaceholders makes one placeholder per declared name with its codec id and nullability'
+    >(buildPlaceholders(declaration));
+    const compiled = await this.runBeforeCompile(callback(placeholders));
+    const draft = this.#adapter.structuralLower(compiled);
+
+    const used = collectPlaceholders(draft);
+    const usedNames = new Set(used.map((placeholder) => placeholder.name));
+    const unused = Object.keys(declaration).filter((name) => !usedNames.has(name));
+    if (unused.length > 0) {
+      throw runtimeError(
+        'RUNTIME.PREPARE_UNUSED_PARAM',
+        `Prepared statement declaration includes parameter${unused.length === 1 ? '' : 's'} not referenced by the callback's plan: ${unused.join(', ')}`,
+        { unused },
+      );
+    }
+
+    return blindCast<
+      MongoPreparedFor<MongoParamsFromDeclaration<D, CT>, Row, Command>,
+      "the draft's command kind picks the handle, and MongoPreparedFor states that same choice from the plan's command type"
+    >(
+      createPreparedHandle({
+        meta: compiled.meta,
+        draft,
+        placeholders: used,
+        resultShape: compiled.resultShape,
+      }),
+    );
+  }
+
+  [mongoPreparedQuery]<Row>(
+    statement: MongoPreparedInternals,
+    params: unknown,
+    options?: RuntimeExecuteOptions,
+  ): AsyncIterableResult<Row> {
+    const self = this;
+    const { codecCtx, contextFields } = this.createQueryContexts(options);
+    const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+      const draft = bindPlaceholders(statement.draft, statement.placeholders, params);
+      yield* streamStatement(
+        { middleware: self.middleware, plan: statement, context: contextFields, parent: undefined },
+        async function* (run: MongoStatementActivityRun): AsyncGenerator<Row, void, unknown> {
+          checkAborted(codecCtx, 'stream');
+          const exec = await self.encodeDraft(
+            draft,
+            statement.meta,
+            statement.resultShape,
+            codecCtx,
+            run,
+          );
+          yield* self.#decodedRows<Row>(run, exec, codecCtx);
+        },
+      );
+    };
+    return new AsyncIterableResult(generator());
+  }
+
+  async [mongoPreparedExecute](
+    statement: MongoPreparedInternals,
+    params: unknown,
+    options?: RuntimeExecuteOptions,
+  ): Promise<RuntimeStatementStats> {
+    const { codecCtx, contextFields } = this.createQueryContexts(options);
+    const draft = bindPlaceholders(statement.draft, statement.placeholders, params);
+    return executeStatement(
+      { middleware: this.middleware, plan: statement, context: contextFields, parent: undefined },
+      async (run: MongoStatementActivityRun) => {
+        checkAborted(codecCtx, 'stream');
+        const exec = await this.encodeDraft(
+          draft,
+          statement.meta,
+          statement.resultShape,
+          codecCtx,
+          run,
+        );
+        checkAborted(codecCtx, 'stream');
+        return run.runExecute(exec, () => this.runExecute(exec));
+      },
+    );
   }
 
   override query<Row>(

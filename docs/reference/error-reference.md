@@ -1071,7 +1071,7 @@ An aggregate was invoked for an operation/input pair the composed target declare
 
 ### ORM.ARGUMENT_INVALID
 
-A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection given as an instance / for a nonexistent model in a client's `collections` option or `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer, malformed lookup/group/update specs, a row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) given both `nowait` and `skipLocked`, or a `variant()` call whose value is not a declared discriminator value of the receiver model, or on a model with no discriminator (SQL and Mongo ORMs; the payload adds `value` and `declaredValues`). For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`. The `sql()` builder also raises it when a table's `indexes` is read by a name that more than one of its indexes shares (payload: `namespaceId`, `tableName`, `index`). It also raises it when a query is built with a column of an alias that is not one of the query's sources, such as one from an index read from `table.as('other').indexes` (payload: `alias`, `column`, `sources`).
+A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection given as an instance / for a nonexistent model in a client's `collections` option or `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer (on MongoDB, a limit of zero too, which MongoDB refuses; a refused prepared `limit` or `skip` carries `meta: { stage, name }`), malformed lookup/group/update specs, a row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) given both `nowait` and `skipLocked`, or a `variant()` call whose value is not a declared discriminator value of the receiver model, or on a model with no discriminator (SQL and Mongo ORMs; the payload adds `value` and `declaredValues`). For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`. The `sql()` builder also raises it when a table's `indexes` is read by a name that more than one of its indexes shares (payload: `namespaceId`, `tableName`, `index`). It also raises it when a query is built with a column of an alias that is not one of the query's sources, such as one from an index read from `table.as('other').indexes` (payload: `alias`, `column`, `sources`).
 
 ### ORM.CAPABILITY_MISSING
 
@@ -1253,7 +1253,7 @@ A codec descriptor handed to a target codec-descriptor registry (Postgres, SQLit
 
 ### RUNTIME.CODEC_DESCRIPTOR_MISSING
 
-A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, also when `mongoOrm()` builds the accessors it checks written enum values against), or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
+A column, a domain enum, or an AST-carried CodecRef references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, when a SQL or Mongo client builds `db.enums` (for Mongo, also when `mongoOrm()` builds the accessors it checks written enum values against), or lazily when the AST codec resolver materializes a codec at query time. On MongoDB, `prepare` also raises it, before calling the callback, for a declaration that names a codec id the runtime has no codec for. Payload: `codecId`; on the column path also `table`, `column`.
 
 ### RUNTIME.CODEC_MISSING
 
@@ -1416,15 +1416,19 @@ The Postgres SQL renderer reached lowering with a ParamRef that carries no bound
 
 ### RUNTIME.PREPARE_BIND_ON_ADHOC
 
-An AST containing a prepared-statement bind-site reference (`PreparedParamRef`) was submitted to the ad-hoc `execute()` path. Bind-site references are only valid inside `runtime.prepare(...)`. Payload: `name`.
+A plan holding a prepared-statement placeholder was run without `prepare`: on SQL, an AST containing a bind-site reference (`PreparedParamRef`) submitted to the ad-hoc `query()` or `execute()` path; on MongoDB, a plan holding a `MongoPreparedParamRef` run through `runtime.query()` or `runtime.execute()`. Placeholders are only valid inside `prepare(...)`. Payload: `name`.
 
 ### RUNTIME.PREPARE_MISSING_PARAM
 
-Executing a prepared statement without supplying a value for one of its declared parameters: the lookup fails rather than silently binding `undefined`. Payload: `name`.
+Running a prepared statement without supplying a value for one of its declared parameters: the lookup fails rather than silently binding `undefined`. Raised on SQL and MongoDB. Also raised, with no payload, when the params argument is not an object, because no single name is missing. On MongoDB the check runs before the statement activity starts. Payload: `name`.
+
+### RUNTIME.PREPARE_RAW_PLACEHOLDER
+
+On MongoDB, `prepare(declaration, callback)` found a placeholder in a raw command. Raw commands are sent to the driver as written, so they cannot take prepared parameters; use the query builder for a prepared statement, or put the value into the raw command directly. Payload: `name`.
 
 ### RUNTIME.PREPARE_UNUSED_PARAM
 
-`runtime.prepare(declaration, callback)` found declared parameter names that the callback's plan never references. Remove the unused declarations or reference them in the plan. Payload: `unused`.
+`prepare(declaration, callback)` found declared parameter names that the callback's plan never references, on SQL or MongoDB. Remove the unused declarations or reference them in the plan. Payload: `unused`.
 
 ### RUNTIME.RAW_ROW_COLUMN_MISSING
 
