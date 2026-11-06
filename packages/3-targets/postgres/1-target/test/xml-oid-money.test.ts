@@ -171,6 +171,13 @@ describe('pg/money', () => {
       });
     });
 
+    it('says a write outside a transaction that returns its row is already committed', async () => {
+      await expect(codec.fromWire('1.234,56 €', callCtx)).rejects.toMatchObject({
+        code: 'RUNTIME.LC_MONETARY_NOT_C',
+        why: expect.stringContaining('the write is already committed'),
+      });
+    });
+
     it('refuses a reported numeral with a third fraction digit, which money does not hold', async () => {
       await expect(codec.fromWire('1.234', callCtx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',

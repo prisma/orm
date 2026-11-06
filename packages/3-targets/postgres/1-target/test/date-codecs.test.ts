@@ -20,6 +20,13 @@ describe('pg/timestamptz-date@1', () => {
     },
   );
 
+  it('says a write outside a transaction that returns its row is already committed', async () => {
+    await expect(codec.fromWire('02.01.2026 03:04:05 UTC', {})).rejects.toMatchObject({
+      code: 'RUNTIME.DATE_STYLE_NOT_ISO',
+      why: expect.stringContaining('the write is already committed'),
+    });
+  });
+
   it.each([
     ['2026-01-02 03:04:05.123456+00', '2026-01-02T03:04:05.123Z'],
     ['2026-01-02T03:04:05.123Z', '2026-01-02T03:04:05.123Z'],
