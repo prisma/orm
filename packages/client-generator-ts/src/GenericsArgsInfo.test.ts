@@ -152,6 +152,40 @@ describe('typeNeedsGenericModelArg', () => {
 
     expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
   })
+
+  describe('densely connected input types', () => {
+    // Every type references every other type, like the relation filters of a
+    // large schema. The search used to re-enqueue already queued types and pop
+    // with `Array.prototype.shift`, which made it quadratic on graphs like this.
+    const size = 400
+
+    function denseTypes(lastTypeFields: DMMF.SchemaArg[]) {
+      return Array.from({ length: size }, (_, index) =>
+        inputObjectType(`Input${index}`, [
+          ...Array.from({ length: size }, (_, target) => field(`to${target}`, [inputObjectRef(`Input${target}`)])),
+          ...(index === size - 1 ? lastTypeFields : []),
+        ]),
+      )
+    }
+
+    test('is false when no type contains field refs', () => {
+      const types = denseTypes([field('scalar', [scalarRef('Int')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(false)
+      }
+    })
+
+    test('is true for every type when one reachable type contains a field ref', () => {
+      const types = denseTypes([field('refField', [fieldRef('IntRef')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
+      }
+    })
+  })
 })
 
 describe('typeRefNeedsGenericModelArg', () => {

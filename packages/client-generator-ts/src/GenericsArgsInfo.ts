@@ -25,8 +25,16 @@ export class GenericArgsInfo {
     return this._cache.getOrCreate(topLevelType, () => {
       const toVisit: ToVisitItem[] = [{ type: topLevelType }]
       const visited = new Set<DMMF.InputType>()
+      // Each type is enqueued at most once. A type that is already queued would be
+      // skipped by the `visited` check when popped, so dropping the duplicate does
+      // not change the result, but on schemas with densely connected input types
+      // the duplicates made the queue grow quadratically.
+      const queued = new Set<DMMF.InputType>([topLevelType])
       let item: ToVisitItem | undefined
-      while ((item = toVisit.shift())) {
+      // Pop with an index: `Array.prototype.shift` is O(n), which made the search
+      // quadratic in the queue length.
+      let head = 0
+      while ((item = toVisit[head++])) {
         const { type: currentType } = item
         const cached = this._cache.get(currentType)
         if (cached === true) {
@@ -53,7 +61,8 @@ export class GenericArgsInfo {
               return true
             }
             const inputObject = this._dmmf.resolveInputObjectType(fieldType)
-            if (inputObject) {
+            if (inputObject && !queued.has(inputObject)) {
+              queued.add(inputObject)
               toVisit.push({ type: inputObject, parent: item })
             }
           }
