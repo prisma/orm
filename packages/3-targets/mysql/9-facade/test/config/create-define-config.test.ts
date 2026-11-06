@@ -51,4 +51,20 @@ describe('createMysqlDefineConfig', () => {
       inputs: ['./prisma/contract.prisma'],
     });
   });
+
+  it.each(['./prisma/contract.ts', './prisma/contract.mts', './prisma/contract.json'])(
+    'refuses %s, since it builds only .prisma contracts',
+    (contract) => {
+      expect(() => createMysqlDefineConfig(mariadbComponents)({ contract })).toThrow(
+        expect.objectContaining({
+          name: 'StructuredError',
+          code: 'CONFIG.VALIDATION_FAILED',
+          message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is not a .prisma schema.`,
+          why: 'This defineConfig builds the contract from a PSL schema, and a PSL schema is a file ending in .prisma.',
+          fix: 'Point `contract` at a .prisma schema.',
+          meta: { contract },
+        }),
+      );
+    },
+  );
 });

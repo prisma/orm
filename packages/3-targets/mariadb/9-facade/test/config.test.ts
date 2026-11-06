@@ -43,7 +43,14 @@ describe('defineConfig for MariaDB', () => {
     './prisma/contract.json',
   ])('refuses %s, since only a .prisma contract is built for MariaDB', (contract) => {
     expect(() => defineConfig({ contract })).toThrow(
-      expect.objectContaining({ code: 'CONFIG.VALIDATION_FAILED', meta: { contract } }),
+      expect.objectContaining({
+        name: 'StructuredError',
+        code: 'CONFIG.VALIDATION_FAILED',
+        message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is not a .prisma schema.`,
+        why: 'This defineConfig builds the contract from a PSL schema, and a PSL schema is a file ending in .prisma.',
+        fix: 'Point `contract` at a .prisma schema.',
+        meta: { contract },
+      }),
     );
   });
 

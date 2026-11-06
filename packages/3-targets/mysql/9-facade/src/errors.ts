@@ -14,3 +14,16 @@ export function mysqlClientError(
 ): StructuredError {
   return structuredError(code, message, options);
 }
+
+/** A contract path given to `createMysqlDefineConfig`'s `defineConfig` that is not a `.prisma` schema. */
+export function prismaContractRequired(targetId: string, contract: string): StructuredError {
+  return structuredError(
+    'CONFIG.VALIDATION_FAILED',
+    `defineConfig for target "${targetId}" cannot build a contract from "${contract}", which is not a .prisma schema.`,
+    {
+      why: 'This defineConfig builds the contract from a PSL schema, and a PSL schema is a file ending in .prisma.',
+      fix: 'Point `contract` at a .prisma schema.',
+      meta: { contract },
+    },
+  );
+}
