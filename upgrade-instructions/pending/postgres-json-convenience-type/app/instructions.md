@@ -9,18 +9,18 @@ changes:
         - '(?<![\s\S])(?![\s\S]*(?<![\w$])datasource[ \t]+\w+[ \t]*\{)[\s\S]*\n[ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?Json(?![\w$(])'
   - id: ts-postgres-json-stores-jsonb
     summary: |
-      In a TypeScript contract on PostgreSQL, `type.Json()` now gives a `jsonb` column (`Jsonb`) instead of a `json` column. To keep `json`, write `type.Json({ storage: 'json' })` or `type.PlainJson()`.
+      In a TypeScript contract on PostgreSQL, `type.Json()` and `type.Json({})` now give a `jsonb` column (`Jsonb`) instead of a `json` column. To keep `json`, write `type.Json({ storage: 'json' })` or `type.PlainJson()`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\w$])type\.Json\([ \t]*\)'
+        - '(?<![\w$])type\.Json\(\s*(?:\{\s*\}\s*)?\)'
   - id: ts-renamed-postgres-json-column-helper
     summary: |
       The PostgreSQL column helper `jsonColumn` is renamed to `plainJsonColumn`, after the explicit type it gives (`PlainJson`). The old name is removed. The contract does not change.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - 'import[ \t]+(?:type[ \t]+)?\{[^}]*(?<![\w$])jsonColumn(?![\w$])[^}]*\}[ \t]*from[ \t]*[''"](?:@prisma/orm-postgres/adapter/column-types|@internal/adapter-postgres/column-types)[''"]'
+        - 'import[ \t]+(?:type[ \t]+)?\{[^}]*(?<![\w$])jsonColumn(?![\w$])[^}]*\}[ \t]*from[ \t]*[''"](?:@prisma/orm-postgres/adapter/column-types|@prisma/orm-target-postgres/adapter/column-types|@internal/adapter-postgres/column-types)[''"]'
 ---
 
 # PostgreSQL's `Json` stores `jsonb` by default
@@ -58,7 +58,11 @@ Answer `--delete Event.payload` to accept the in-place change, which runs `ALTER
 - `jsonb` refuses the `\u0000` escape, which `json` accepts, so the change fails on a row that holds one.
 - PostgreSQL refuses to change the type of a column that a view depends on. Drop the view first and create it again afterwards.
 
-Choose `jsonb` only if the application does not depend on duplicate keys or key order. Rewrite only Prisma 8 schemas whose config uses the PostgreSQL target, including the `contract.prisma` copies in migration folders. The detection cannot tell which target a schema is for, so it also matches SQLite's and MongoDB's `Json`, which do not change; a match in a project whose `prisma.config.ts` uses the SQLite or MongoDB target needs no change.
+Choose `jsonb` only if the application does not depend on duplicate keys or key order. Rewrite only Prisma 8 schemas whose config uses the PostgreSQL target.
+
+**A `contract.prisma` copy in a migration folder always keeps `json`,** whichever path the current schema takes. The copy records the schema of a migration planned before this change, when `Json` meant `json`, so write `Json(storage: json)` there. The Prisma CLI does not read these copies when it plans or applies migrations, so a copy left as bare `Json` breaks nothing at once. But it no longer describes its migration: emitting it gives a `jsonb` column and a storage hash that differs from the one the migration recorded.
+
+The detection cannot tell which target a schema is for, so it also matches SQLite's and MongoDB's `Json`, which do not change; a match in a project whose `prisma.config.ts` uses the SQLite or MongoDB target needs no change.
 
 ## `ts-postgres-json-stores-jsonb`
 
@@ -73,7 +77,7 @@ To move to `jsonb`, keep `type.Json()`, re-emit and migrate as above. The detect
 
 ## `ts-renamed-postgres-json-column-helper`
 
-The detection matches a file that imports `jsonColumn` from `@prisma/orm-postgres/adapter/column-types` or `@internal/adapter-postgres/column-types`. In that file, rename the import and every use of the imported name:
+The detection matches a file that imports `jsonColumn` from `@prisma/orm-postgres/adapter/column-types`, `@prisma/orm-target-postgres/adapter/column-types` or `@internal/adapter-postgres/column-types`. In that file, rename the import and every use of the imported name:
 
 ```ts
 import { plainJsonColumn } from '@prisma/orm-postgres/adapter/column-types';

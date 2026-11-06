@@ -43,23 +43,43 @@ describe.each(GUIDES)('the PostgreSQL Json detection in %s', (guidePath) => {
     expect({
       bare: ts('field.column(type.Json())'),
       spaced: ts('field.column(type.Json( ))'),
+      emptyObject: ts('field.column(type.Json({}))'),
+      spacedObject: ts('field.column(type.Json({ }))'),
+      multiline: ts('field.column(\n  type.Json(\n  ),\n)'),
       storage: ts("field.column(type.Json({ storage: 'json' }))"),
       jsonb: ts('field.column(type.Jsonb())'),
       plainJson: ts('field.column(type.PlainJson())'),
-    }).toEqual({ bare: true, spaced: true, storage: false, jsonb: false, plainJson: false });
+    }).toEqual({
+      bare: true,
+      spaced: true,
+      emptyObject: true,
+      spacedObject: true,
+      multiline: true,
+      storage: false,
+      jsonb: false,
+      plainJson: false,
+    });
   });
 
   it('matches only files that import jsonColumn from the PostgreSQL package', () => {
     const ts = (content: string) => matches('ts-renamed-postgres-json-column-helper', content);
     expect({
       published: ts("import { jsonColumn } from '@prisma/orm-postgres/adapter/column-types';"),
+      target: ts("import { jsonColumn } from '@prisma/orm-target-postgres/adapter/column-types';"),
       internal: ts(
         "import {\n  textColumn,\n  jsonColumn,\n} from '@internal/adapter-postgres/column-types';",
       ),
       renamed: ts("import { plainJsonColumn } from '@prisma/orm-postgres/adapter/column-types';"),
       jsonb: ts("import { jsonbColumn } from '@prisma/orm-postgres/adapter/column-types';"),
       sqlite: ts("import { jsonColumn } from '@prisma/orm-sqlite/adapter/column-types';"),
-    }).toEqual({ published: true, internal: true, renamed: false, jsonb: false, sqlite: false });
+    }).toEqual({
+      published: true,
+      target: true,
+      internal: true,
+      renamed: false,
+      jsonb: false,
+      sqlite: false,
+    });
   });
 });
 
