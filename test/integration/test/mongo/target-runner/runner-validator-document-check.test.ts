@@ -63,7 +63,7 @@ const schemaWithPlan = {
 const BY_HAND =
   'The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: "users", updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).';
 const CHECK_DOCUMENTS_FALSE =
-  'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, and remove the checkDocuments call before the rewrites if the file has one, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.';
+  'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.';
 const NO_VALIDATOR_BY_HAND =
   'Change them with a dataTransform in migration.ts, or with an update in mongosh.';
 
@@ -270,6 +270,47 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
       expect(result.failure.why).toContain(
         `To give "plan" values you choose, plan the change with migration plan --backfill User.plan. ${BY_HAND}`,
       );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names no --backfill for a field of a root model that shares the collection, which the planner would refuse',
+    async () => {
+      const root = (required: readonly string[]) => ({
+        required: ['_id', ...required],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          name: { bsonType: 'string' },
+          plan: { bsonType: 'string' },
+        },
+        additionalProperties: false,
+      });
+      const admin = {
+        required: ['_id', 'level'],
+        properties: { _id: { bsonType: 'objectId' }, level: { bsonType: 'string' } },
+        additionalProperties: false,
+      };
+      const shared = (required: readonly string[]) => ({
+        bsonType: 'object',
+        anyOf: [root(required), admin],
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: shared(['name']) } });
+      await db.collection('users').insertOne({ name: 'Ada' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: shared(['name', 'plan']) } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect({
+        backfill: result.failure.why?.includes('--backfill'),
+        byHand: result.failure.why?.includes('bypassDocumentValidation: true'),
+      }).toEqual({ backfill: false, byHand: true });
     },
     timeouts.spinUpMongoMemoryServer,
   );

@@ -208,11 +208,6 @@ function storedField(
   return isEmbedRelation(relation) ? { kind: 'embed' } : { kind: 'reference' };
 }
 
-/**
- * The calls statements and removed fields add to a plan, with the schema the diff starts from:
- * the origin with each renamed collection under its new name, so the diff does not drop and
- * create it again.
- */
 /** The fields of a collection the plan's rewrites change, as the check before them leaves them out. */
 export interface DocumentCheckFields {
   /** The stored names whose values the rewrites change, removed ones included. */
@@ -221,6 +216,11 @@ export interface DocumentCheckFields {
   readonly renamedFields: Readonly<Record<string, string>>;
 }
 
+/**
+ * The calls statements and removed fields add to a plan, with the schema the diff starts from:
+ * the origin with each renamed collection under its new name, so the diff does not drop and
+ * create it again.
+ */
 export interface StatementCalls {
   readonly schema: MongoSchemaIR;
   /** Run first. */

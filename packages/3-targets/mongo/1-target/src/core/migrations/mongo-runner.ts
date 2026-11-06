@@ -31,10 +31,12 @@ import {
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import {
   canonicalize,
+  defaultMongoIndexName,
   type MongoContract,
   modelFieldStoredAs,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
+  validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -66,7 +68,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
-import { castFieldOf } from './migration-factories';
+import { castFieldOf, unrewritableFieldNameReason } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
@@ -289,12 +291,24 @@ function joinedList(items: readonly string[]): string {
   return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
 }
 
-/** The `--backfill` statements that let the user choose values for the fields a change makes required. */
+/**
+ * The `--backfill` statements that let the user choose values for the fields a change makes
+ * required. None where the planner refuses a backfill: in a time-series collection, in a collection
+ * several root models share, and for a stored name MongoDB reads as a path or an operator.
+ */
 function backfillAdvice(
   contract: MongoContract,
   collection: string,
-  requires: readonly string[],
+  fields: {
+    readonly requires: readonly string[];
+    readonly timeSeries: boolean;
+    readonly sharedByRootModels: boolean;
+  },
 ): readonly string[] {
+  if (fields.timeSeries || fields.sharedByRootModels) return [];
+  const requires = fields.requires.filter(
+    (stored) => unrewritableFieldNameReason(stored) === undefined,
+  );
   if (requires.length === 0) return [];
   const statements = requires.flatMap((stored) => {
     const field = fieldStoredAt(contract, collection, stored);
@@ -525,7 +539,7 @@ function indexBuildFailure(
   if (Reflect.get(error, 'code') !== MONGO_DUPLICATE_KEY) return undefined;
   const reason = mongoErrorText(error);
   const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
-  const index = command.name ?? command.keys.map(({ field }) => field).join('_');
+  const index = command.name ?? defaultMongoIndexName(command.keys);
   return runnerFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the unique index ${index} cannot be built, because two documents in collection ${command.collection} hold the same value${duplicate === undefined ? '' : ` ${duplicate}`}`,
@@ -1004,7 +1018,18 @@ export class MongoMigrationRunner {
       `Find them all with ${query} in mongosh.`,
     ];
     const advice = hadValidator
-      ? [...backfillAdvice(apply.contract, collection, touched.requires), byHandAdvice(collection)]
+      ? [
+          ...backfillAdvice(apply.contract, collection, {
+            requires: touched.requires,
+            timeSeries:
+              typeof options === 'object' &&
+              options !== null &&
+              Reflect.get(options, 'timeseries') !== undefined,
+            sharedByRootModels:
+              validatorRootShapesOf(Reflect.get(validator, '$jsonSchema')).length > 1,
+          }),
+          byHandAdvice(collection),
+        ]
       : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const ran = apply.ranOn(collection);
     const why = beforeRewrites
@@ -1012,13 +1037,13 @@ export class MongoMigrationRunner {
           ...found,
           `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
           ...advice,
-          'Under db migrate you can instead remove this checkDocuments call from that migration.ts and set checkDocuments to false on the validator change, both, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
           'Once the documents are fixed, run the command again.',
         ].join(' ')
       : [
           ...found,
           ...advice,
-          'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, and remove the checkDocuments call before the rewrites if the file has one, then run the file with node and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
           'The validator was not changed.',
           ...(ran.length === 0
             ? []

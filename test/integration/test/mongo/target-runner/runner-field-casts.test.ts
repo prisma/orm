@@ -7,7 +7,10 @@ import type {
 } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
-import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
+import {
+  type AnyMongoMigrationOperation,
+  CreateIndexCommand,
+} from '@internal/mongo-query-ast/control';
 import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/control';
 import {
   castField,
@@ -402,6 +405,44 @@ describe('MongoMigrationRunner, a data transform whose update MongoDB cannot con
         ),
         failedTypeChange: undefined,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a unique index build that meets a duplicate value', () => {
+  it(
+    'names the index by the name MongoDB gives it when the call gives none',
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([{ name: 'Ada' }, { name: 'Bo' }]);
+      const properties = { name: { bsonType: 'string' } };
+
+      const result = await run(
+        [
+          {
+            id: 'index.users.create',
+            label: 'Create a unique index on email',
+            operationClass: 'additive',
+            precheck: [],
+            execute: [
+              {
+                description: 'create index',
+                command: new CreateIndexCommand('users', [{ field: 'email', direction: 1 }], {
+                  unique: true,
+                }),
+              },
+            ],
+            postcheck: [],
+          },
+        ],
+        usersContract(properties),
+      );
+
+      if (result.ok) throw new Error('Expected the index build to fail');
+      expect(result.failure.message).toBe(
+        'Operation index.users.create failed: the unique index email_1 cannot be built, because two documents in collection users hold the same value { email: null }',
+      );
     },
     timeouts.spinUpMongoMemoryServer,
   );
