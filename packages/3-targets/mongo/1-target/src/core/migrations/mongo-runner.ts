@@ -33,6 +33,7 @@ import {
   canonicalize,
   type MongoContract,
   modelFieldStoredAs,
+  type ValidatorDocumentShape,
   validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
@@ -213,6 +214,89 @@ function renameTargetExistsRefusal(
 function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undefined {
   const step = op.execute.find(({ command }) => command instanceof CollModCommand)?.command;
   return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
+}
+
+const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];
+
+/** The BSON types a property schema's `bsonType` allows, or `undefined` when it names none. */
+function allowedBsonTypes(schema: unknown): ReadonlySet<string> | undefined {
+  const bsonType: unknown =
+    typeof schema === 'object' && schema !== null ? Reflect.get(schema, 'bsonType') : undefined;
+  const names = typeof bsonType === 'string' ? [bsonType] : Array.isArray(bsonType) ? bsonType : [];
+  const strings = names.filter((name): name is string => typeof name === 'string');
+  if (strings.length === 0) return undefined;
+  return new Set(strings.flatMap((name) => (name === 'number' ? NUMBER_TYPES : [name])));
+}
+
+function problemsAgainst(
+  fields: ReadonlyMap<string, string>,
+  shape: ValidatorDocumentShape,
+): readonly string[] {
+  const missing = shape.required
+    .filter((field) => !fields.has(field))
+    .map((field) => `has no ${JSON.stringify(field)}`);
+  const retyped = [...fields].flatMap(([field, type]) => {
+    const allowed = allowedBsonTypes(shape.properties[field]);
+    return allowed === undefined || allowed.has(type)
+      ? []
+      : [
+          `holds a value of type ${type} in ${JSON.stringify(field)}, which the new validator does not allow there`,
+        ];
+  });
+  const undeclared = shape.closed
+    ? [...fields.keys()]
+        .filter((field) => !Object.hasOwn(shape.properties, field))
+        .map((field) => `has ${JSON.stringify(field)}, a field the new validator does not name`)
+    : [];
+  return [...missing, ...retyped, ...undeclared];
+}
+
+/**
+ * Why a document does not fit a validator: against the root model or variant it fits best, the
+ * required fields it lacks, the fields whose type the validator does not allow, and, for a closed
+ * validator, the fields it does not name.
+ */
+function documentProblems(
+  fields: ReadonlyMap<string, string>,
+  shapes: readonly ValidatorDocumentShape[],
+): readonly string[] {
+  if (fields.size === 0) return [];
+  return (
+    shapes
+      .map((shape) => problemsAgainst(fields, shape))
+      .reduce<readonly string[] | undefined>(
+        (best, problems) => (best === undefined || problems.length < best.length ? problems : best),
+        undefined,
+      ) ?? []
+  );
+}
+
+function joinedList(items: readonly string[]): string {
+  if (items.length <= 2) return items.join(' and ');
+  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+}
+
+/** The `--backfill` statements that let the user choose values for the fields a change makes required. */
+function backfillAdvice(
+  contract: MongoContract,
+  collection: string,
+  requires: readonly string[],
+): readonly string[] {
+  if (requires.length === 0) return [];
+  const statements = requires.flatMap((stored) => {
+    const field = fieldStoredAt(contract, collection, stored);
+    return field.kind === 'field' ? [`--backfill ${fieldStatementText(contract, field)}`] : [];
+  });
+  const plan =
+    statements.length === requires.length
+      ? `migration plan ${statements.join(' ')}`
+      : 'migration plan and --backfill <Model.field> for each';
+  return [`To give ${quotedList(requires)} values you choose, plan the change with ${plan}.`];
+}
+
+/** How to change documents by hand while the old validator, which rejects their new shape, is in place. */
+function byHandAdvice(collection: string): string {
+  return `The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
 }
 
 /**
@@ -581,7 +665,10 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
-              (await this.documentsFailingValidatorRefusal(operation, failing, ranOn)) ??
+              (await this.documentsFailingValidatorRefusal(operation, failing, {
+                ranOn,
+                contract: options.destinationContract,
+              })) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
                 `Operation ${operation.id} failed during precheck: ${failing.description}`,
@@ -819,7 +906,10 @@ export class MongoMigrationRunner {
   private async documentsFailingValidatorRefusal(
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
-    ranOn: (collection: string) => readonly string[],
+    apply: {
+      readonly ranOn: (collection: string) => readonly string[];
+      readonly contract: MongoContract;
+    },
   ): Promise<MongoMigrationRunnerResult | undefined> {
     if (isInspectionCheckSource(failed.source)) return undefined;
     const checked = documentsCheckedBy(op, failed.source);
@@ -850,11 +940,40 @@ export class MongoMigrationRunner {
       Reflect.get(validator, '$jsonSchema'),
     );
     const one = documents === 1;
-    const found = `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh.`;
-    const ran = ranOn(collection);
+    const problems = documentProblems(
+      await this.bsonTypesOfDocument(failed.source, collection, counted?.['documentId']),
+      validatorDocumentShapesOf(Reflect.get(validator, '$jsonSchema')),
+    );
+    const found = [
+      `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
+      ...(problems.length === 0 ? [] : [`That document ${joinedList(problems)}.`]),
+      `Find them all with ${query} in mongosh.`,
+    ];
+    const advice = [
+      ...backfillAdvice(apply.contract, collection, touched.requires),
+      byHandAdvice(collection),
+    ];
+    const ran = apply.ranOn(collection);
     const why = beforeRewrites
-      ? `${found} No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten. Change them so they fit the new validator, then run the command again.`
-      : `${found} Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed.${ran.length === 0 ? '' : ` These operations of this apply already changed collection ${collection} and stay applied: ${ran.join('; ')}.`} Once the documents are fixed, run the command again; operations that already ran are skipped.`;
+      ? [
+          ...found,
+          `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
+          ...advice,
+          'Under db migrate you can instead remove the checkDocuments call before the rewrites from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'Once the documents are fixed, run the command again.',
+        ].join(' ')
+      : [
+          ...found,
+          ...advice,
+          'Under db migrate you can instead set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again to apply the validator over them; db update writes no migration.ts, so there fix the documents first.',
+          'The validator was not changed.',
+          ...(ran.length === 0
+            ? []
+            : [
+                `These operations of this apply already changed collection ${collection} and stay applied: ${ran.join('; ')}.`,
+              ]),
+          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
+        ].join(' ');
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
       `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'does' : 'do'} not fit the new validator${beforeRewrites ? `, and no rewrite of this plan makes ${one ? 'it' : 'them'} fit` : ''}`,
@@ -872,6 +991,40 @@ export class MongoMigrationRunner {
           },
         },
       },
+    );
+  }
+
+  /** The BSON type of each field of the document with `_id`, read with `$type`. */
+  private async bsonTypesOfDocument(
+    source: MongoQueryPlan,
+    collection: string,
+    id: unknown,
+  ): Promise<ReadonlyMap<string, string>> {
+    const row = await this.firstRow({
+      ...source,
+      command: new RawAggregateCommand(collection, [
+        { $match: { _id: id } },
+        { $limit: 1 },
+        {
+          $project: {
+            _id: 0,
+            fields: {
+              $map: {
+                input: { $objectToArray: '$$ROOT' },
+                in: ['$$this.k', { $type: '$$this.v' }],
+              },
+            },
+          },
+        },
+      ]),
+    });
+    const fields: unknown = row?.['fields'];
+    return new Map(
+      (Array.isArray(fields) ? fields : []).flatMap((entry): [string, string][] =>
+        Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string'
+          ? [[entry[0], entry[1]]]
+          : [],
+      ),
     );
   }
 

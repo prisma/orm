@@ -2,6 +2,8 @@
 export interface ValidatorShape {
   readonly properties: Readonly<Record<string, unknown>>;
   readonly required: readonly string[];
+  /** Whether the shape allows no field but its properties (`additionalProperties: false`). */
+  readonly closed: boolean;
 }
 
 /** A root model's shape in a collection validator, with one shape per variant. */
@@ -25,6 +27,7 @@ function shapeOf(schema: Record<string, unknown>): ValidatorShape {
     required: Array.isArray(required)
       ? required.filter((name): name is string => typeof name === 'string')
       : [],
+    closed: schema['additionalProperties'] === false,
   };
 }
 
@@ -69,6 +72,7 @@ export interface ValidatorDocumentShape {
   readonly discriminator: ValidatorDiscriminator | undefined;
   readonly required: readonly string[];
   readonly properties: Readonly<Record<string, unknown>>;
+  readonly closed: boolean;
 }
 
 function discriminatorOf(
@@ -93,6 +97,7 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
           discriminator: undefined,
           required: root.required,
           properties: root.properties,
+          closed: root.closed,
         },
       ];
     }
@@ -104,6 +109,7 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
         discriminator,
         required: [...new Set([...root.required, ...variant.required])],
         properties: { ...root.properties, ...variant.properties },
+        closed: root.closed || variant.closed,
       };
     });
   });

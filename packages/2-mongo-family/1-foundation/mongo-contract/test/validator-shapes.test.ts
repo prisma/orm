@@ -30,10 +30,12 @@ describe('validatorRootShapesOf', () => {
       {
         properties: task.properties,
         required: ['_id', 'type'],
+        closed: false,
         variants: [
           {
             properties: { type: { enum: ['bug'] }, severity: { bsonType: 'int' } },
             required: ['severity', 'type'],
+            closed: true,
           },
         ],
       },
@@ -43,7 +45,7 @@ describe('validatorRootShapesOf', () => {
   it('reads one root model per anyOf branch', () => {
     expect(validatorRootShapesOf({ bsonType: 'object', anyOf: [task, user] })).toEqual([
       expect.objectContaining({ required: ['_id', 'type'] }),
-      { properties: user.properties, required: ['_id', 'email'], variants: [] },
+      { properties: user.properties, required: ['_id', 'email'], closed: true, variants: [] },
     ]);
   });
 });
@@ -72,6 +74,7 @@ describe('validatorDocumentShapesOf', () => {
         discriminator: undefined,
         required: ['_id', 'email'],
         properties: user.properties,
+        closed: true,
       },
       {
         key: '1:["type","bug"]',
@@ -83,6 +86,7 @@ describe('validatorDocumentShapesOf', () => {
           type: { enum: ['bug'] },
           severity: { bsonType: 'int' },
         },
+        closed: true,
       },
     ]);
   });
