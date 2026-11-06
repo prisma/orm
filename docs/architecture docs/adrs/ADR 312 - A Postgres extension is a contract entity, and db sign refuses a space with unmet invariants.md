@@ -1,7 +1,7 @@
 # ADR 312 — A Postgres extension is a contract entity, and db sign refuses a space with unmet invariants
 
 **Status:** Accepted
-**Amended by:** [ADR 316 — An extension pack's extension is found through the connection's search_path](ADR%20316%20-%20An%20extension%20pack's%20extension%20is%20found%20through%20the%20connection's%20search_path.md)
+**Amended by:** [ADR 318 — An extension pack's extension is found through the connection's search_path](ADR%20318%20-%20An%20extension%20pack's%20extension%20is%20found%20through%20the%20connection's%20search_path.md)
 **Date:** 2026-10-29
 **Amends:** [ADR 212 — Contract spaces](ADR%20212%20-%20Contract%20spaces.md)
 **Builds on:** [ADR 221 — Contract IR two planes with uniform entity coordinate and pack-contributed entity kinds](ADR%20221%20-%20Contract%20IR%20two%20planes%20with%20uniform%20entity%20coordinate%20and%20pack-contributed%20entity%20kinds.md), [ADR 225 — Three-layer extensibility for pack-contributed entity kinds](ADR%20225%20-%20Three-layer%20extensibility%20for%20pack-contributed%20entity%20kinds.md)
