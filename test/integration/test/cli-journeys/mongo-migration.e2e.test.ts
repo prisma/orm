@@ -25,6 +25,7 @@
  *     the live database.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
   mkdirSync,
@@ -149,19 +150,22 @@ function findMigrationDirBySlug(ctx: JourneyContext, slugFragment: string): stri
   return join(migrationsDir, match);
 }
 
-function declarationsWithoutHeader(text: string): string {
-  return text
-    .replace(/^(\/\/.*\n)+/, '')
-    .replace(/^\/\*.*?\*\/ /, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const SINGLE_LINE_DECLARATIONS_SCRIPT = `
+import { readFileSync } from 'node:fs';
+import { singleLineDeclarations } from '@prisma/orm-mongo/migration-tools/contract-snapshot-store';
+process.stdout.write(singleLineDeclarations(readFileSync(0, 'utf-8')));
+`;
 
-function expectSnapshotDeclarationsOnOneLine(snapshotDts: string, emittedDts: string): void {
-  expect({
-    lines: snapshotDts.split('\n').length,
-    declarations: declarationsWithoutHeader(snapshotDts),
-  }).toEqual({ lines: 2, declarations: declarationsWithoutHeader(emittedDts) });
+/**
+ * The store's single-line form of `text`, computed in a child process: loading the published package into this
+ * process beside the CLI's own copy makes the CLI refuse to run with `RUNTIME.MULTIPLE_ORM_COPIES`.
+ */
+function singleLineDeclarations(text: string): string {
+  return execFileSync(
+    process.execPath,
+    ['--input-type=module', '--eval', SINGLE_LINE_DECLARATIONS_SCRIPT],
+    { cwd: import.meta.dirname, input: text, encoding: 'utf-8' },
+  );
 }
 
 /** Path to a `migrations/snapshots/<hex>/contract.{json,d.ts}` store entry. */
@@ -216,10 +220,9 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
         readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.json'), 'utf-8'),
       ),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
-    expectSnapshotDeclarationsOnOneLine(
+    expect(
       readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.d.ts'), 'utf-8'),
-      readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
-    );
+    ).toBe(singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')));
 
     // Plan leaves a draft migration; self-emit by running migration.ts in-process to
     // produce `ops.json` and the attested `migration.json`.
@@ -296,9 +299,8 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     expect(
       JSON.parse(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.json'), 'utf-8')),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
-    expectSnapshotDeclarationsOnOneLine(
-      readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8'),
-      readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
+    expect(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8')).toBe(
+      singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')),
     );
 
     const ops = JSON.parse(readFileSync(join(migrationDir, 'ops.json'), 'utf-8'));
