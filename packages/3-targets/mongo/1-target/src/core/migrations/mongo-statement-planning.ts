@@ -24,6 +24,7 @@ import {
   collectionControlPolicyOf,
   collectionOfModel,
   collectionRootModelsOf,
+  embeddingModelOf,
   hasOwnFieldStoredAs,
   MongoCollection,
   type MongoContract,
@@ -59,6 +60,20 @@ export function collectionOf(
 ): string | undefined {
   return collectionOfModel(contract.domain, coordinate);
 }
+
+/** Why the plan does not rewrite the fields of the model at `coordinate`: its documents are embedded in another model's, if they are. */
+export function embeddedModelReason(
+  contract: ContractWithDomain,
+  coordinate: ModelCoordinate,
+): string | undefined {
+  const owner = embeddingModelOf(contract.domain, coordinate);
+  return owner === undefined
+    ? undefined
+    : `model "${modelDisplayName(coordinate)}" is embedded in the documents of model "${owner}"`;
+}
+
+export const EMBEDDED_MODEL_WHY =
+  'Fields of an embedded model are not rewritten in this release. Leave out this statement.';
 
 /** Why a statement on `model` cannot be planned when no collection holds its documents. */
 export function noCollectionReason(model: ModelCoordinate): string {
@@ -541,6 +556,10 @@ function planFieldStatement(
     kind: 'refused',
     conflict: refused(statement, label, reason, why),
   });
+  const embedded =
+    embeddedModelReason(input.fromContract, statement.from) ??
+    embeddedModelReason(input.contract, statement.to);
+  if (embedded !== undefined) return refuse(embedded, EMBEDDED_MODEL_WHY);
   const fromField = storedField(modelAt(input.fromContract, statement.from), statement.from.field);
   const toField = storedField(modelAt(input.contract, statement.to), statement.to.field);
   if (fromField.kind === 'embed' || toField.kind === 'embed') {
@@ -691,12 +710,14 @@ export function destinationModelOf(
   );
   if (renamed !== undefined) return renamed.to;
   if (modelAt(input.contract, origin) !== undefined) return origin;
+  if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return undefined;
   const originCollection = collectionOf(input.fromContract, origin);
   if (originCollection === undefined) return undefined;
   const collection = input.collectionAfterRenames(originCollection);
   const filter = JSON.stringify(variantFilter(input.fromContract, origin) ?? null);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
+      embeddingModelOf(input.contract.domain, candidate) === undefined &&
       collectionOf(input.contract, candidate) === collection &&
       JSON.stringify(variantFilter(input.contract, candidate) ?? null) === filter,
   );
@@ -822,6 +843,7 @@ function rootDocumentsLosing(
  */
 export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemoval[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
+    if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return [];
     const originCollection = collectionOf(input.fromContract, origin);
     if (originCollection === undefined) return [];
     const collection = input.collectionAfterRenames(originCollection);

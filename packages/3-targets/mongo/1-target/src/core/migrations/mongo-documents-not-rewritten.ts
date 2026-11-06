@@ -9,6 +9,7 @@ import {
   type MigrationPlannerConflict,
 } from '@internal/framework-components/control';
 import {
+  embeddedModelReason,
   type ModelMatchInput,
   modelAt,
   modelCoordinates,
@@ -68,8 +69,33 @@ function untouchedChange(name: string, before: AnyField, after: AnyField): strin
 }
 
 /**
- * The changes the plan does not rewrite the documents for, and that are not statements: a field of
- * a value object whose type changes, a field that moves to another value object or between a scalar
+ * What changes for each field of an embedded model, whose documents the plan does not rewrite: a
+ * field removed, a field whose type changes, and a required field that is new or was optional.
+ */
+function embeddedModelChanges(
+  fieldName: (field: string) => string,
+  model: string,
+  before: { readonly fields: Readonly<Record<string, AnyField>> },
+  after: { readonly fields: Readonly<Record<string, AnyField>> },
+): readonly string[] {
+  const named = (field: string) => `Field "${fieldName(field)}" of embedded model "${model}"`;
+  const kept = Object.entries(after.fields).flatMap(([field, definition]) => {
+    const previous = Object.hasOwn(before.fields, field) ? before.fields[field] : undefined;
+    if (previous === undefined) {
+      return definition.nullable ? [] : [`${named(field)} is new and required`];
+    }
+    if (typeKey(previous) !== typeKey(definition)) return [`${named(field)} changes type`];
+    return previous.nullable && !definition.nullable ? [`${named(field)} becomes required`] : [];
+  });
+  const removed = Object.keys(before.fields)
+    .filter((field) => !Object.hasOwn(after.fields, field))
+    .map((field) => `${named(field)} is removed`);
+  return [...kept, ...removed];
+}
+
+/**
+ * The changes the plan does not rewrite the documents for, and that are not statements: a change to
+ * a field of an embedded model, a field of a value object whose type changes, a field that moves to another value object or between a scalar
  * and a value object, and a field that gains an enum or changes enum. Each is a warning that names the field; the validator change's
  * document check then fails the apply until the documents fit.
  */
@@ -81,6 +107,10 @@ export function documentsNotRewrittenWarnings(
     const origin = originModelOf(model, input);
     const before = origin === undefined ? undefined : modelAt(input.fromContract, origin);
     if (after === undefined || before === undefined) return [];
+    if (embeddedModelReason(input.contract, model) !== undefined) {
+      const fieldName = (field: string) => fieldStatementText(input.contract, { ...model, field });
+      return embeddedModelChanges(fieldName, model.model, before, after).map(warning);
+    }
     return Object.entries(after.fields).flatMap(([field, definition]) => {
       const originField = originFieldOf({ ...model, field }, input.statements);
       if (!Object.hasOwn(before.fields, originField)) return [];

@@ -22,6 +22,8 @@ import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   collectionControlPolicy,
   collectionOf,
+  EMBEDDED_MODEL_WHY,
+  embeddedModelReason,
   type ModelMatchInput,
   modelAt,
   noCollectionReason,
@@ -96,6 +98,8 @@ export function convertTransform(
   change: TypeChange | undefined,
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementTransform {
+  const embedded = embeddedModelReason(contracts.contract, statement.field);
+  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
   const unrewritable = unrewritableReason(contracts.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
@@ -184,6 +188,8 @@ export function backfillTransform(
       contracts,
     );
   }
+  const embedded = embeddedModelReason(input.contract, statement.field);
+  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
   const unrewritable = unrewritableReason(input.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);

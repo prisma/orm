@@ -21,6 +21,7 @@ import { unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
   collectionOf,
+  embeddedModelReason,
   type ModelMatchInput,
   modelAt,
   modelCoordinates,
@@ -104,7 +105,11 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
   return modelCoordinates(input.contract).flatMap((model) => {
     const definition = modelAt(input.contract, model);
     const collection = collectionOf(input.contract, model);
-    if (definition === undefined || collection === undefined || definition.owner !== undefined) {
+    if (
+      definition === undefined ||
+      collection === undefined ||
+      embeddedModelReason(input.contract, model) !== undefined
+    ) {
       return [];
     }
     if (input.schema.collection(collection) === undefined) return [];

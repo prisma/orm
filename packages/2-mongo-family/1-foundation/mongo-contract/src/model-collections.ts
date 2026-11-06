@@ -33,6 +33,28 @@ export function collectionOfModel(
 }
 
 /**
+ * The model whose documents embed this model's: its own owner, or its base's. `undefined` for a root
+ * model, a variant of one, or a missing model.
+ */
+export function embeddingModelOf(
+  domain: ApplicationDomain,
+  reference: MongoModelReference,
+): string | undefined {
+  const models = mongoModelsOf(domain, reference.namespaceId);
+  const seen = new Set<string>();
+  for (let name: string | undefined = reference.model; name !== undefined && !seen.has(name); ) {
+    seen.add(name);
+    const model: ContractModel<MongoModelStorage> | undefined = Object.hasOwn(models, name)
+      ? models[name]
+      : undefined;
+    if (model === undefined) return undefined;
+    if (model.owner !== undefined) return model.owner;
+    name = model.base?.model;
+  }
+  return undefined;
+}
+
+/**
  * The field of a root model or a variant whose documents live in `collection` and that is stored
  * under `storedName`. An embedded model's fields are inside its owner's documents, not at their top.
  */
@@ -44,7 +66,7 @@ export function modelFieldStoredAs(
   for (const namespaceId of Object.keys(domain.namespaces)) {
     const models = mongoModelsOf(domain, namespaceId);
     for (const [model, definition] of Object.entries(models)) {
-      if (definition.owner !== undefined) continue;
+      if (embeddingModelOf(domain, { namespaceId, model }) !== undefined) continue;
       if (collectionOfModel(domain, { namespaceId, model }) !== collection) continue;
       const field = Object.entries(ownStoredNamesOf(definition)).find(
         ([, stored]) => stored === storedName,

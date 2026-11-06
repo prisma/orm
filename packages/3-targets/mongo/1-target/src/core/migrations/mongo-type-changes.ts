@@ -21,6 +21,7 @@ import {
   collectionOf,
   destinationFieldOf,
   destinationModelOf,
+  embeddedModelReason,
   type FieldRemovalInput,
   modelAt,
   modelCoordinates,
@@ -137,7 +138,9 @@ export function planFieldTypeChanges(
 ): readonly TypeChange[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
     const model = modelAt(input.fromContract, origin);
-    if (model === undefined || model.owner !== undefined) return [];
+    if (model === undefined || embeddedModelReason(input.fromContract, origin) !== undefined) {
+      return [];
+    }
     const destination = destinationModelOf(origin, input);
     const destinationModel =
       destination === undefined ? undefined : modelAt(input.contract, destination);

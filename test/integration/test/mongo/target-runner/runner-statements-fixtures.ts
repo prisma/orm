@@ -38,9 +38,12 @@ export function closedSchema(fields: readonly string[]) {
 }
 
 export interface ModelSpec {
-  readonly collection: string;
+  /** Left out for a model embedded in another model's documents. */
+  readonly collection?: string;
   readonly fields: readonly string[];
   readonly base?: string;
+  /** The model whose documents embed this one's. */
+  readonly owner?: string;
   readonly variants?: Readonly<Record<string, string>>;
 }
 
@@ -72,9 +75,10 @@ export function contract(
                 ),
                 relations: {},
                 storage: {
-                  collection: spec.collection,
+                  ...(spec.collection === undefined ? {} : { collection: spec.collection }),
                   fields: Object.fromEntries(spec.fields.map((field) => [field, { field }])),
                 },
+                ...(spec.owner === undefined ? {} : { owner: spec.owner }),
                 ...(spec.base === undefined
                   ? {}
                   : { base: { namespace: '__unbound__', model: spec.base } }),

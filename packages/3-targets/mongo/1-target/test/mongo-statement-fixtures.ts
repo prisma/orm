@@ -46,6 +46,8 @@ export interface ModelSpec {
   readonly embeds?: Readonly<Record<string, string>>;
   readonly relations?: readonly string[];
   readonly base?: string;
+  /** The model whose documents embed this one's. */
+  readonly owner?: string;
   readonly discriminator?: string;
   readonly variants?: Readonly<Record<string, string>>;
 }
@@ -164,6 +166,7 @@ export function contract(
                 ...(spec.base === undefined
                   ? {}
                   : { base: { namespace: '__unbound__', model: spec.base } }),
+                ...(spec.owner === undefined ? {} : { owner: spec.owner }),
                 ...(spec.discriminator === undefined
                   ? {}
                   : {

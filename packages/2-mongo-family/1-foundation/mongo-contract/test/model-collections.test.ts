@@ -1,6 +1,6 @@
 import type { ApplicationDomain } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { collectionOfModel, modelFieldStoredAs } from '../src/model-collections';
+import { collectionOfModel, embeddingModelOf, modelFieldStoredAs } from '../src/model-collections';
 
 const field = (stored: string) => ({ field: stored });
 
@@ -24,6 +24,12 @@ const domain = {
           relations: {},
           storage: { fields: { text: field('text') } },
           owner: 'Task',
+        },
+        PinnedNote: {
+          fields: {},
+          relations: {},
+          storage: { fields: {} },
+          base: { namespace: 'app', model: 'Note' },
         },
         Lost: { fields: {}, relations: {}, storage: { fields: {} } },
       },
@@ -54,5 +60,15 @@ describe('modelFieldStoredAs', () => {
       undefined,
       undefined,
     ]);
+  });
+});
+
+describe('embeddingModelOf', () => {
+  it('is the owner of an embedded model or of its base, and none for a root model or a variant', () => {
+    expect(
+      ['Note', 'PinnedNote', 'Task', 'Bug', 'Missing'].map((model) =>
+        embeddingModelOf(domain, { namespaceId: 'app', model }),
+      ),
+    ).toEqual(['Task', 'Task', undefined, undefined, undefined]);
   });
 });
