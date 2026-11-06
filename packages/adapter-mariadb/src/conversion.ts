@@ -129,7 +129,7 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | stri
       case MariaDbColumnType.NEWDATE:
         return formatDate(arg)
       default:
-        return formatDateTime(arg)
+        return arg
     }
   }
 
@@ -177,21 +177,21 @@ export const typeCast: mariadb.TypeCastFunction = (field, next) => {
   return next()
 }
 
-function formatDateTime(date: Date): string {
+export function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
-  const ms = date.getUTCMilliseconds()
+  const ms = date.getMilliseconds()
   return (
-    pad(date.getUTCFullYear(), 4) +
+    pad(date.getFullYear(), 4) +
     '-' +
-    pad(date.getUTCMonth() + 1) +
+    pad(date.getMonth() + 1) +
     '-' +
-    pad(date.getUTCDate()) +
+    pad(date.getDate()) +
     ' ' +
-    pad(date.getUTCHours()) +
+    pad(date.getHours()) +
     ':' +
-    pad(date.getUTCMinutes()) +
+    pad(date.getMinutes()) +
     ':' +
-    pad(date.getUTCSeconds()) +
+    pad(date.getSeconds()) +
     (ms ? '.' + String(ms).padStart(3, '0') : '')
   )
 }
