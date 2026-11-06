@@ -8,10 +8,12 @@ import type {
 } from '@internal/mongo-wire';
 
 /**
- * Intermediate state produced by structural lowering. `MongoParamRef` leaves
- * remain in place — they have not yet been resolved through codecs. The
- * runtime defers value resolution past the `beforeEncode` middleware chain
- * so middleware can walk and rewrite `MongoParamRef` nodes before encoding.
+ * Intermediate state produced by structural lowering. `MongoParamRef` and
+ * `MongoPreparedParamRef` leaves remain in place — they have not yet been
+ * resolved through codecs. A prepared run replaces each `MongoPreparedParamRef`
+ * with a `MongoParamRef` holding the run's value. The runtime defers value
+ * resolution past the `beforeEncode` middleware chain so middleware can walk
+ * and rewrite `MongoParamRef` nodes before encoding.
  *
  * All document/filter/update slots that may carry `MongoParamRef` nodes are
  * typed as `Record<string, unknown>` to allow heterogeneous values. Raw

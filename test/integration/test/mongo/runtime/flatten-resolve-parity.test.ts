@@ -7,12 +7,14 @@ import {
   InsertManyCommand,
   InsertOneCommand,
   MongoFieldFilter,
+  MongoLimitStage,
+  MongoLookupStage,
   MongoMatchStage,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { flattenMongoParamRefs } from '@internal/mongo-runtime';
-import { MongoParamRef } from '@internal/mongo-value';
+import { flattenMongoDraftLeaves, flattenMongoParamRefs } from '@internal/mongo-runtime';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 
 const stubMeta = { target: 'mongo', storageHash: 'test-hash', lane: 'mongo-orm' };
@@ -21,12 +23,14 @@ function plan(collection: string, command: AnyMongoCommand) {
   return { collection, command, meta: stubMeta };
 }
 
+type DraftLeaf = MongoParamRef | MongoPreparedParamRef;
+
 /**
  * Mirrors {@link resolveDraftSlot} in `adapter-mongo/resolve-value.ts` — collects
- * every `MongoParamRef` the resolve walk would visit (without invoking codecs).
+ * every `MongoParamRef` and placeholder the resolve walk would visit (without invoking codecs).
  */
-function collectRefsResolveWalk(value: unknown): MongoParamRef[] {
-  if (value instanceof MongoParamRef) {
+function collectRefsResolveWalk(value: unknown): DraftLeaf[] {
+  if (value instanceof MongoParamRef || value instanceof MongoPreparedParamRef) {
     return [value];
   }
   if (value === null || typeof value !== 'object') {
@@ -41,7 +45,7 @@ function collectRefsResolveWalk(value: unknown): MongoParamRef[] {
   return Object.values(value).flatMap((v) => collectRefsResolveWalk(v));
 }
 
-function collectRefsFromDraft(draft: MongoLoweredDraft): MongoParamRef[] {
+function collectRefsFromDraft(draft: MongoLoweredDraft): DraftLeaf[] {
   switch (draft.kind) {
     case 'insertOne':
     case 'rawInsertOne':
@@ -70,9 +74,11 @@ function collectRefsFromDraft(draft: MongoLoweredDraft): MongoParamRef[] {
 }
 
 function expectFlattenMatchesResolve(draft: MongoLoweredDraft): void {
-  const fromFlatten = [...flattenMongoParamRefs(draft)];
   const fromResolveWalk = collectRefsFromDraft(draft);
-  expect(fromFlatten).toEqual(fromResolveWalk);
+  expect([...flattenMongoDraftLeaves(draft)]).toEqual(fromResolveWalk);
+  expect([...flattenMongoParamRefs(draft)]).toEqual(
+    fromResolveWalk.filter((leaf) => leaf instanceof MongoParamRef),
+  );
 }
 
 describe('flattenMongoParamRefs / resolveParams walk parity', () => {
@@ -149,6 +155,27 @@ describe('flattenMongoParamRefs / resolveParams walk parity', () => {
         ]),
       ),
     );
+    expectFlattenMatchesResolve(draft);
+  });
+
+  it('matches resolve traversal for placeholders in a filter and a sub-pipeline $limit', () => {
+    const email = new MongoPreparedParamRef('email', 'mongo/string@1', false);
+    const take = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
+    const draft = adapter.structuralLower(
+      plan(
+        'users',
+        new AggregateCommand('users', [
+          new MongoMatchStage(MongoFieldFilter.eq('email', email)),
+          new MongoLookupStage({
+            from: 'posts',
+            as: 'posts',
+            pipeline: [new MongoLimitStage(take)],
+          }),
+          new MongoLimitStage(take),
+        ]),
+      ),
+    );
+    expect([...flattenMongoDraftLeaves(draft)]).toEqual([email, take, take]);
     expectFlattenMatchesResolve(draft);
   });
 });

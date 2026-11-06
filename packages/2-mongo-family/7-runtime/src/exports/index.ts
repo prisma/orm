@@ -1,6 +1,8 @@
 export type { RuntimeTargetInstance } from '@internal/framework-components/execution';
 export type { MongoCodecLookup, MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 export { enumMemberCodecFor } from '@internal/mongo-query-ast/execution';
+export type { MongoDraftLeaf } from '../draft-leaves';
+export { flattenMongoDraftLeaves } from '../draft-leaves';
 export type { MongoExecutionPlan } from '../mongo-execution-plan';
 export type {
   MongoExecutionStack,
