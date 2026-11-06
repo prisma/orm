@@ -250,6 +250,22 @@ model User {
     });
   });
 
+  it('writes an unbound extension in namespace unbound, and reads it back', () => {
+    const printed = print(
+      interpret(
+        'namespace unbound {\n  extension pg_trgm {}\n}\n\nmodel User {\n  id Int @id\n}\n',
+      ),
+    );
+    expect(printed).toContain(
+      ['namespace unbound {', '  extension pg_trgm {', '  }', '}'].join('\n'),
+    );
+    const reread = interpret(printed);
+    expect(extensionsOf(reread, '__unbound__')).toEqual({
+      pg_trgm: new PostgresExtension({ name: 'pg_trgm' }),
+    });
+    expect(extensionsOf(reread, 'public')).toEqual({});
+  });
+
   it('reads back the extensions it printed', () => {
     const reread = interpret(print(interpret(source)));
     expect(extensionsOf(reread, 'public')).toEqual({

@@ -638,7 +638,7 @@ export const postgresAuthoringPslBlockDescriptors = {
     kind: 'pslBlock',
     keyword: 'extension',
     documentation:
-      'Declares a PostgreSQL extension the database must have installed, in the schema of the enclosing namespace.',
+      "Declares a PostgreSQL extension the database must have installed, in the schema of the enclosing namespace. In `namespace unbound`, the extension is found through the connection's search path.",
     discriminator: 'extension',
     name: { required: true },
     spec: extensionSpec,
