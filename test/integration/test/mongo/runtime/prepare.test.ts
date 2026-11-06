@@ -65,6 +65,36 @@ const upperCodecExtension: MongoRuntimeExtensionDescriptor = {
   create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
 };
 
+const encodeAbort = new AbortController();
+
+const abortingCodecExtension: MongoRuntimeExtensionDescriptor = {
+  kind: 'extension',
+  id: 'test-aborting-codec',
+  familyId: 'mongo',
+  targetId: 'mongo',
+  version: '0.0.1',
+  types: {
+    codecTypes: {
+      codecDescriptors: [
+        mongoCodecDescriptor(
+          mongoCodec({
+            typeId: 'test/aborts@1',
+            fromWire: (wire: string) => wire,
+            toWire: (_value: string) => {
+              encodeAbort.abort(new Error('aborted while encoding'));
+              return new Promise<string>(() => {});
+            },
+            dataType: textType,
+            fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+          }),
+          { traits: [] },
+        ),
+      ],
+    },
+  },
+  create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+};
+
 function field(row: unknown, key: string): unknown {
   return typeof row === 'object' && row !== null ? Reflect.get(row, key) : undefined;
 }
@@ -178,6 +208,25 @@ describe('runtime.prepare', { timeout: timeouts.spinUpMongoMemoryServer }, () =>
         expect(names(await byName.query(ctx.runtime, { name: 'bob' }).toArray())).toEqual(['BOB']);
       },
       { extensions: [upperCodecExtension] },
+    );
+  });
+
+  it('stops a run whose signal aborts while a value is being encoded', async () => {
+    await withMongod(
+      async (ctx) => {
+        await seedUsers(ctx);
+        const byName = await ctx.runtime.prepare({ name: 'test/aborts@1' }, (p) => ({
+          collection: users,
+          command: new AggregateCommand(users, [
+            new MongoMatchStage(MongoFieldFilter.eq('name', p.name)),
+          ]),
+          meta: ctx.stubMeta,
+        }));
+        await expect(
+          byName.query(ctx.runtime, { name: 'bob' }, { signal: encodeAbort.signal }).toArray(),
+        ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED', details: { phase: 'encode' } });
+      },
+      { extensions: [abortingCodecExtension] },
     );
   });
 
