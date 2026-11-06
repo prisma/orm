@@ -1197,7 +1197,8 @@ function extensionsDeclaredByPacks(
           .map(
             (name): SqlPlannerConflict => ({
               kind: 'unsupportedOperation',
-              summary: `Extension "${name}" is declared in namespace "${namespace.id}" by this contract, and an extension pack declares it in namespace "${UNBOUND_PSL_NAMESPACE_NAME}". Remove this declaration; the pack installs the extension.`,
+              summary: `Extension "${name}" is declared in namespace "${namespace.id}" by this contract, and an extension pack declares it in namespace "${UNBOUND_PSL_NAMESPACE_NAME}".`,
+              why: 'Remove this declaration from the contract; the pack installs the extension.',
             }),
           ),
   );

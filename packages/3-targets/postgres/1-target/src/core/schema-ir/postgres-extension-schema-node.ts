@@ -91,7 +91,7 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
         'an extension left to the search path differs only from an installed extension',
       );
       return {
-        text: `extension "${this.name}" ${offSearchPathText(node.location)}`,
+        text: `extension "${this.name}" ${offSearchPathText(node.location)}. ${searchPathFix(node.location)}`,
         cause: 'differs',
       };
     }
@@ -119,4 +119,9 @@ function isOnSearchPath(location: InstalledLocation): boolean {
 /** Names the schema an extension is installed in and the search path that does not include it. */
 export function offSearchPathText(location: InstalledLocation): string {
   return `is installed in schema "${location.schemaName}", which is not on the search path (${location.searchPath.join(', ')})`;
+}
+
+/** What fixes an extension installed in a schema off the search path. */
+export function searchPathFix(location: InstalledLocation): string {
+  return `Add schema "${location.schemaName}" to the connection's search_path, or reinstall the extension in a schema on it.`;
 }

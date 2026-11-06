@@ -87,7 +87,7 @@ withTempDir(({ createTempDir }) => {
           const sign = await runOnEngine(project, ['db', 'sign']);
           expect(sign.exitCode).not.toBe(0);
           expect(`${sign.stdout}${sign.stderr}`).toContain(
-            'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public)',
+            'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public). Add schema "extensions" to the connection\'s search_path, or reinstall the extension in a schema on it.',
           );
           expect(await pgvectorMarkerHash(connectionString)).toBeUndefined();
         });

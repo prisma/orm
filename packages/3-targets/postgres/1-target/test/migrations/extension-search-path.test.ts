@@ -185,7 +185,7 @@ describe('db verify checks an unbound extension against the search path', () => 
     );
     expect(result.ok).toBe(false);
     expect(result.schema.issues.map((issue) => issue.explanation?.text)).toEqual([
-      'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public)',
+      'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public). Add schema "extensions" to the connection\'s search_path, or reinstall the extension in a schema on it.',
     ]);
   });
 
@@ -291,7 +291,8 @@ describe('planning an unbound extension', () => {
         {
           kind: 'unsupportedOperation',
           summary:
-            'Extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public). The contract declares it in the unbound namespace, so the planner does not move it. Add schema "extensions" to the search path, or reinstall the extension in a schema on the search path.',
+            'Extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public). The contract declares it in the unbound namespace, so the planner does not move it.',
+          why: 'Add schema "extensions" to the connection\'s search_path, or reinstall the extension in a schema on it.',
         },
       ],
     });
@@ -349,7 +350,8 @@ describe('planning an application beside a pack that declares the extension', ()
       conflicts: [
         {
           kind: 'unsupportedOperation',
-          summary: `Extension "vector" is declared in namespace "${namespaceId}" by this contract, and an extension pack declares it in namespace "unbound". Remove this declaration; the pack installs the extension.`,
+          summary: `Extension "vector" is declared in namespace "${namespaceId}" by this contract, and an extension pack declares it in namespace "unbound".`,
+          why: 'Remove this declaration from the contract; the pack installs the extension.',
         },
       ],
     });

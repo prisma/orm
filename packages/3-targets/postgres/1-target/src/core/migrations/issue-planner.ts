@@ -60,6 +60,7 @@ import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-
 import {
   offSearchPathText,
   PostgresExtensionSchemaNode,
+  searchPathFix,
 } from '../schema-ir/postgres-extension-schema-node';
 import type { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
@@ -643,12 +644,11 @@ function mapExtensionNodeIssue(
         actualLocation.kind === 'installed',
         'an extension left to the search path differs only from an installed extension',
       );
-      return notOk(
-        nodeConflict(
-          'unsupportedOperation',
-          `Extension "${actual.name}" ${offSearchPathText(actualLocation)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actualLocation.schemaName}" to the search path, or reinstall the extension in a schema on the search path.`,
-        ),
-      );
+      return notOk({
+        kind: 'unsupportedOperation',
+        summary: `Extension "${actual.name}" ${offSearchPathText(actualLocation)}. The contract declares it in the unbound namespace, so the planner does not move it.`,
+        why: searchPathFix(actualLocation),
+      });
     }
     return ok([new SetExtensionSchemaCall(expected.name, expectedLocation.schemaName)]);
   }

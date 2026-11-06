@@ -301,7 +301,9 @@ withTempDir(({ createTempDir }) => {
   });
   describe('an application beside the pgvector pack that declares vector itself', () => {
     const PLANNER_REFUSAL = (namespace: string) =>
-      `Extension "vector" is declared in namespace "${namespace}" by this contract, and an extension pack declares it in namespace "unbound". Remove this declaration; the pack installs the extension.`;
+      `Extension "vector" is declared in namespace "${namespace}" by this contract, and an extension pack declares it in namespace "unbound".`;
+    const PLANNER_FIX =
+      'Remove this declaration from the contract; the pack installs the extension.';
 
     function declareVector(project: { readonly contractPath: string }, declaration: string) {
       const source = readFileSync(project.contractPath, 'utf8')
@@ -358,6 +360,8 @@ withTempDir(({ createTempDir }) => {
           const plan = await runOnEngine(project, ['migration', 'plan', '--name', 'init']);
           expect(plan.exitCode).not.toBe(0);
           expect(`${plan.stdout}${plan.stderr}`).toContain(PLANNER_REFUSAL(namespace));
+          expect(`${plan.stdout}${plan.stderr}`).toContain(PLANNER_FIX);
+          expect(`${plan.stdout}${plan.stderr}`).not.toContain('db verify --schema-only');
         });
       },
       JOURNEY_TIMEOUT,

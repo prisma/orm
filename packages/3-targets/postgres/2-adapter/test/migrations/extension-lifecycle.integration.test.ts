@@ -378,7 +378,7 @@ describe('Postgres extensions in the unbound namespace against a live database',
     const failed = await verify(contract);
     expect(failed.ok).toBe(false);
     expect(failed.schema.issues.map((issue) => issue.explanation?.text)).toEqual([
-      'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public)',
+      'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public). Add schema "extensions" to the connection\'s search_path, or reinstall the extension in a schema on it.',
     ]);
   });
 
