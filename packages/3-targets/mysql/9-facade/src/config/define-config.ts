@@ -29,8 +29,8 @@ export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   };
 }
 
-/** The parts of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The control target carries the facade module its `migration.ts` files import from. */
-export interface MysqlConfigParts<TargetId extends string> {
+/** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The control target carries the facade module its `migration.ts` files import from. */
+export interface MysqlConfigComponents<TargetId extends string> {
   readonly pack: TargetPackRef<'sql', TargetId>;
   readonly target: PrismaNextConfig<'sql', TargetId>['target'];
   readonly adapter: PrismaNextConfig<'sql', TargetId>['adapter'];
@@ -38,10 +38,10 @@ export interface MysqlConfigParts<TargetId extends string> {
 }
 
 /**
- * The `defineConfig` of MySQL, or of a target that extends it, built from that target's parts. A `.prisma` contract types an `enum` block of text members as a native MySQL enum, and one of integer members as `int`.
+ * The `defineConfig` of MySQL, or of a target that extends it, built from that target's components. A `.prisma` contract types an `enum` block of text members as a native MySQL enum, and one of integer members as `int`.
  */
 export function createMysqlDefineConfig<TargetId extends string>(
-  parts: MysqlConfigParts<TargetId>,
+  components: MysqlConfigComponents<TargetId>,
 ): (options: MysqlConfigOptions<TargetId>) => PrismaNextConfig<'sql', TargetId> {
   return (options) => {
     const output =
@@ -53,16 +53,16 @@ export function createMysqlDefineConfig<TargetId extends string>(
         ? typescriptContractFromPath(options.contract, output)
         : prismaContract(options.contract, {
             output,
-            target: parts.pack,
+            target: components.pack,
             createNamespace: mysqlCreateNamespace,
             enumInferenceCodecs: { text: MYSQL_ENUM_CODEC_ID, int: MYSQL_INT_CODEC_ID },
           });
 
     return coreDefineConfig({
       family: sql,
-      target: parts.target,
-      adapter: parts.adapter,
-      driver: parts.driver,
+      target: components.target,
+      adapter: components.adapter,
+      driver: components.driver,
       extensions: options.extensions ?? [],
       contract,
       ...ifDefined('db', options.db),

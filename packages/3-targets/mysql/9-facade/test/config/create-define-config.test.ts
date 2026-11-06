@@ -13,7 +13,7 @@ import { createMysqlDefineConfig } from '../../src/config/define-config';
 
 const mariadbMeta = { ...mysqlPackRef, targetId: 'mariadb', id: 'mariadb' } as const;
 
-const mariadbParts = {
+const mariadbComponents = {
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,
@@ -29,8 +29,8 @@ const mariadbParts = {
 };
 
 describe('createMysqlDefineConfig', () => {
-  it('builds the defineConfig of a target that extends MySQL from its parts', () => {
-    const config = createMysqlDefineConfig(mariadbParts)({
+  it('builds the defineConfig of a target that extends MySQL from its components', () => {
+    const config = createMysqlDefineConfig(mariadbComponents)({
       contract: './prisma/contract.prisma',
       db: { connection: 'mysql://root@localhost:3306/app' },
     });
@@ -44,9 +44,9 @@ describe('createMysqlDefineConfig', () => {
       inputs: config.contract?.source.inputs,
     }).toEqual({
       family: sql,
-      target: mariadbParts.target,
-      adapter: mariadbParts.adapter,
-      driver: mariadbParts.driver,
+      target: mariadbComponents.target,
+      adapter: mariadbComponents.adapter,
+      driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
     });

@@ -25,7 +25,8 @@ function isSqlContract(contract: Contract | null): contract is Contract<SqlStora
   return contract === null || contract.storage instanceof SqlStorage;
 }
 
-type MysqlControlTargetParts =
+/** The keys of the control target that MySQL builds itself, which a target that extends MySQL does not supply. */
+type ControlTargetKeysMysqlBuilds =
   | 'contractSerializer'
   | 'schemaVerifier'
   | 'diffSchema'
@@ -40,7 +41,7 @@ type MysqlControlTargetParts =
 export interface MysqlControlTargetOptions<TargetId extends string> {
   readonly descriptorMeta: Omit<
     SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails>,
-    MysqlControlTargetParts
+    ControlTargetKeysMysqlBuilds
   >;
   readonly migrationModule: string;
 }

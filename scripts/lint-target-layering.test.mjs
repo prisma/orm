@@ -44,8 +44,8 @@ function database(name) {
   );
 }
 
-function reasons(extendedDatabases) {
-  return findLayeringViolations(base, extendedDatabases).map(
+function reasons(databaseExtends) {
+  return findLayeringViolations(base, databaseExtends).map(
     ({ reason, where }) => `${reason} (${where})`,
   );
 }
