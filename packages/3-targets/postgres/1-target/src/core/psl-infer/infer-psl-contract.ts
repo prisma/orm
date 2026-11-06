@@ -289,9 +289,10 @@ function inferredExtensionBlocks(
         { meta: { extensionName: extension.name } },
       );
     }
-    const blocks = blocksBySchema.get(extension.schemaName) ?? [];
+    const schemaName = extension.installedSchemaName();
+    const blocks = blocksBySchema.get(schemaName) ?? [];
     blocks.push(buildExtensionBlock(extension.name));
-    blocksBySchema.set(extension.schemaName, blocks);
+    blocksBySchema.set(schemaName, blocks);
   }
   return blocksBySchema;
 }

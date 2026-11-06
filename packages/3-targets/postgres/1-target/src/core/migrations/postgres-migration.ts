@@ -862,10 +862,10 @@ export abstract class PostgresMigration<
   }
 
   /**
-   * Emit a `CREATE EXTENSION … WITH SCHEMA …` migration operation, checked to find the extension absent before and present after.
+   * Emit a `CREATE EXTENSION … WITH SCHEMA …` migration operation, checked to find the extension absent before and present after. Without `schema`, the extension goes into the connection's current schema.
    */
   protected createExtension(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly extension: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new CreateExtensionCall(options.schema, options.extension).toOp(
@@ -875,7 +875,7 @@ export abstract class PostgresMigration<
 
   /** Emit a `DROP EXTENSION` migration operation, without `CASCADE`. */
   protected dropExtension(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly extension: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new DropExtensionCall(options.schema, options.extension).toOp(

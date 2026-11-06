@@ -152,7 +152,9 @@ describe('Postgres extensions against a live database', { concurrent: false }, (
 
   async function installed(): Promise<Readonly<Record<string, string>>> {
     const schema = await introspect();
-    return Object.fromEntries(schema.extensions.map((node) => [node.name, node.schemaName]));
+    return Object.fromEntries(
+      schema.extensions.map((node) => [node.name, node.installedSchemaName()]),
+    );
   }
 
   async function plan(input: {
@@ -252,5 +254,129 @@ describe('Postgres extensions against a live database', { concurrent: false }, (
     });
     expect(await apply(planned, contract, ALLOW_DESTRUCTIVE)).toEqual(['dropExtension.vector']);
     expect(Object.keys(await installed())).not.toContain('vector');
+  });
+});
+
+const UNBOUND_VECTOR = `
+namespace unbound {
+  extension vector {}
+}
+
+model Doc {
+  id Int @id
+}
+`;
+
+const UNBOUND_PLPGSQL = `
+namespace unbound {
+  extension plpgsql {}
+}
+
+model Doc {
+  id Int @id
+}
+`;
+
+describe('Postgres extensions in the unbound namespace against a live database', {
+  concurrent: false,
+}, () => {
+  let database: Awaited<ReturnType<typeof createTestDatabase>>;
+  let driver: PostgresControlDriver;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+    driver = await createDriver(database.connectionString);
+  }, testTimeout);
+
+  afterAll(async () => {
+    await driver?.close();
+    await database?.close();
+  }, testTimeout);
+
+  async function vectorNode() {
+    const schema = await familyInstance.introspect({ driver });
+    PostgresDatabaseSchemaNode.assert(schema);
+    return schema.extensions.find((node) => node.name === 'vector');
+  }
+
+  async function verify(contract: Contract<SqlStorage>) {
+    return familyInstance.verifySchema({
+      contract,
+      schema: await familyInstance.introspect({ driver, contract }),
+      strict: false,
+      frameworkComponents,
+    });
+  }
+
+  it('creates the extension with no schema, in the current schema, then verifies clean', {
+    timeout: testTimeout,
+  }, async () => {
+    const contract = contractFromPsl(UNBOUND_VECTOR);
+    const planned = postgresTargetDescriptor.createPlanner(controlAdapter).plan({
+      contract,
+      schema: emptySchema,
+      policy: INIT_ADDITIVE_POLICY,
+      fromContract: null,
+      origin: null,
+      statements: [],
+      frameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
+    const operations = await Promise.all(planned.plan.operations);
+    expect(operations.find((op) => op.id === 'extension.vector')?.execute).toEqual([
+      expect.objectContaining({ sql: 'CREATE EXTENSION IF NOT EXISTS "vector"' }),
+    ]);
+    const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
+      driver,
+      perSpaceOptions: [
+        {
+          space: APP_SPACE_ID,
+          plan: planned.plan,
+          migrationEdges: synthEdges(planned.plan),
+          driver,
+          destinationContract: contract,
+          policy: INIT_ADDITIVE_POLICY,
+          frameworkComponents,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(`Runner failed:\n${formatRunnerFailure(result.failure)}`);
+    expect((await vectorNode())?.schemaName).toBe('public');
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('reads the search path the catalog reports for the connection', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver.query('CREATE SCHEMA IF NOT EXISTS extensions');
+    await driver.query('SET search_path TO "$user", public, extensions');
+    const catalog = await driver.query<{ search_path: string }>(
+      'SELECT pg_catalog.current_schemas(true)::text AS search_path',
+    );
+    expect(catalog.rows[0]?.search_path).toBe('{pg_catalog,public,extensions}');
+    expect((await vectorNode())?.searchPath).toEqual(['pg_catalog', 'public', 'extensions']);
+  });
+
+  it('verifies an extension in a schema on the search path, and fails one off it', {
+    timeout: testTimeout,
+  }, async () => {
+    const contract = contractFromPsl(UNBOUND_VECTOR);
+    await driver.query('ALTER EXTENSION vector SET SCHEMA extensions');
+    await driver.query('SET search_path TO "$user", public, extensions');
+    expect((await verify(contract)).ok).toBe(true);
+
+    await driver.query('SET search_path TO public');
+    const failed = await verify(contract);
+    expect(failed.ok).toBe(false);
+    expect(failed.schema.issues.map((issue) => issue.explanation?.text)).toEqual([
+      'extension "vector" is installed in schema "extensions", which is not on the search path (pg_catalog, public)',
+    ]);
+  });
+
+  it('verifies an extension in pg_catalog', { timeout: testTimeout }, async () => {
+    await driver.query('SET search_path TO public');
+    expect((await verify(contractFromPsl(UNBOUND_PLPGSQL))).ok).toBe(true);
   });
 });

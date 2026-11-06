@@ -98,7 +98,12 @@ function actualTree(installed: Readonly<Record<string, string>>) {
     roles: [],
     extensions: Object.entries(installed).map(
       ([name, schemaName]) =>
-        new PostgresExtensionSchemaNode({ name, schemaName, control: undefined }),
+        new PostgresExtensionSchemaNode({
+          name,
+          schemaName,
+          searchPath: undefined,
+          control: undefined,
+        }),
     ),
     existingSchemas: ['public', 'extensions'],
     pgVersion: 'unknown',
@@ -152,11 +157,13 @@ describe('the expected tree lists each declared extension with its namespace sch
       new PostgresExtensionSchemaNode({
         name: 'pg_trgm',
         schemaName: 'public',
+        searchPath: undefined,
         control: undefined,
       }),
       new PostgresExtensionSchemaNode({
         name: 'postgis',
         schemaName: 'extensions',
+        searchPath: undefined,
         control: 'external',
       }),
     ]);
@@ -173,6 +180,7 @@ describe('the differ reports extension drift', () => {
         expected: new PostgresExtensionSchemaNode({
           name: 'postgis',
           schemaName: 'extensions',
+          searchPath: undefined,
           control: undefined,
         }),
         actual: undefined,
@@ -188,11 +196,13 @@ describe('the differ reports extension drift', () => {
           expected: new PostgresExtensionSchemaNode({
             name: 'postgis',
             schemaName: 'extensions',
+            searchPath: undefined,
             control: undefined,
           }),
           actual: new PostgresExtensionSchemaNode({
             name: 'postgis',
             schemaName: 'public',
+            searchPath: undefined,
             control: undefined,
           }),
         },

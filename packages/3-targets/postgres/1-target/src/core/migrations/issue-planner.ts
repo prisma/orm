@@ -57,7 +57,10 @@ import {
 } from '../default-constraint-names';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
-import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
+import {
+  offSearchPathText,
+  PostgresExtensionSchemaNode,
+} from '../schema-ir/postgres-extension-schema-node';
 import type { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
@@ -624,11 +627,19 @@ function mapExtensionNodeIssue(
   const actual = asNode(issue.actual);
   if (expected !== undefined) {
     PostgresExtensionSchemaNode.assert(expected);
-    return ok([
-      actual === undefined
-        ? new CreateExtensionCall(expected.schemaName, expected.name)
-        : new SetExtensionSchemaCall(expected.name, expected.schemaName),
-    ]);
+    if (actual === undefined) {
+      return ok([new CreateExtensionCall(expected.schemaName, expected.name)]);
+    }
+    PostgresExtensionSchemaNode.assert(actual);
+    if (expected.schemaName === undefined) {
+      return notOk(
+        nodeConflict(
+          'unsupportedOperation',
+          `Extension "${actual.name}" ${offSearchPathText(actual)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actual.installedSchemaName()}" to the search path, or reinstall the extension in a schema on the search path.`,
+        ),
+      );
+    }
+    return ok([new SetExtensionSchemaCall(expected.name, expected.schemaName)]);
   }
   invariant(actual !== undefined, 'an extension issue carries a node on one side');
   PostgresExtensionSchemaNode.assert(actual);

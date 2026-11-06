@@ -748,7 +748,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     );
   }
 
-  /** Reads every installed extension with the schema that holds its objects. */
+  /** Reads every installed extension with the schema that holds its objects and the connection's search path, which locates an extension the contract declares in the unbound namespace. */
   private async introspectExtensions(
     driver: SqlControlDriverInstance<'postgres'>,
   ): Promise<readonly PostgresExtensionSchemaNode[]> {
@@ -758,14 +758,28 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
        JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
        ORDER BY e.extname`,
     );
+    const searchPath = await this.readSearchPath(driver);
     return result.rows.map(
       (row) =>
         new PostgresExtensionSchemaNode({
           name: row.extname,
           schemaName: row.nspname,
+          searchPath,
           control: undefined,
         }),
     );
+  }
+
+  /** The schemas the connection resolves unqualified names in, in order, including the implicit `pg_catalog`. */
+  private async readSearchPath(
+    driver: SqlControlDriverInstance<'postgres'>,
+  ): Promise<readonly string[]> {
+    const result = await driver.query<{ schema_name: string }>(
+      `SELECT s.schema_name
+       FROM unnest(pg_catalog.current_schemas(true)) WITH ORDINALITY AS s(schema_name, position)
+       ORDER BY s.position`,
+    );
+    return result.rows.map((row) => row.schema_name);
   }
 
   /**
