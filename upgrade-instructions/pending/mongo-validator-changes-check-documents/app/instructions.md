@@ -24,7 +24,7 @@ A database adopted from Prisma 6 has no validator, so its first plan adds one an
 
 ## `mongo-type-change-is-asked`
 
-Where a plan now asks about a field, answer with `--delete Model.field`, which casts the values with `$convert` and fails on a value it cannot cast, or plan it with `migration plan --convert Model.field` and write the update in the `placeholder('Model.field:update')` slot of the data transform it writes.
+Where a plan now asks about a field, answer with `--delete Model.field`, which casts the values with `$convert` and fails on a value it cannot cast (a change such as `String` to `Boolean`, where `$convert` would turn `"false"` into `true`, has no cast and offers `--convert` only), or plan it with `migration plan --convert Model.field` and write the update in the `placeholder('Model.field:update')` slot of the data transform it writes.
 
 ## `mongo-new-required-field-gets-temporary-value`
 

@@ -14,7 +14,7 @@ import {
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { convertsFrom, isConvertTarget } from './bson-convert';
+import { castsFrom, isConvertTarget } from './bson-convert';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
@@ -106,7 +106,7 @@ function castOptions(
 ): Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined {
   const [target, ...others] = to.types;
   if (from.list !== to.list || target === undefined || others.length > 0) return undefined;
-  if (!isConvertTarget(target) || !from.types.every((type) => convertsFrom(type, target))) {
+  if (!isConvertTarget(target) || !from.types.every((type) => castsFrom(type, target))) {
     return undefined;
   }
   return { from: from.types, to: target, ...(to.list ? { list: true } : {}) };
@@ -261,7 +261,7 @@ function fieldText(change: TypeChange, contract: ContractWithDomain): string {
     : fieldStatementText(contract, change.destination);
 }
 
-/** A type change `$convert` has no cast for: only a conversion the user writes keeps the field. */
+/** A type change with no cast that keeps what the values mean: only a conversion the user writes keeps the field. */
 export function noCastRefusals(
   changes: readonly TypeChange[],
   contract: ContractWithDomain,
@@ -272,7 +272,7 @@ export function noCastRefusals(
       const field = fieldText(change, contract);
       return {
         kind: 'typeChangeRefused',
-        summary: `Cannot change the type of field "${field}" in collection "${change.collection}" from ${shapeText(change.from)} to ${shapeText(change.to)}: MongoDB has no cast from ${shapeText(change.from)} to ${shapeText(change.to)}`,
+        summary: `Cannot change the type of field "${field}" in collection "${change.collection}" from ${shapeText(change.from)} to ${shapeText(change.to)}: MongoDB has no cast from ${shapeText(change.from)} to ${shapeText(change.to)} that keeps what the values mean`,
         why:
           change.destination === undefined
             ? 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan --from <hash of the migration the database is at> and --convert, and write the conversion in migration.ts.'

@@ -17,6 +17,7 @@ const INT: FieldTypeSpec = { codecId: 'mongo/int32@1' };
 const BIG_INT: FieldTypeSpec = { codecId: 'mongo/int64@1' };
 const STRING: FieldTypeSpec = { codecId: 'mongo/string@1' };
 const DATE: FieldTypeSpec = { codecId: 'mongo/date@1' };
+const BOOLEAN: FieldTypeSpec = { codecId: 'mongo/bool@1' };
 
 function closedSchema(properties: Record<string, Record<string, unknown>>) {
   return {
@@ -49,6 +50,7 @@ const BSON_TYPE: Readonly<Record<string, string>> = {
   'mongo/int64@1': 'long',
   'mongo/string@1': 'string',
   'mongo/date@1': 'date',
+  'mongo/bool@1': 'bool',
   'mongo/double@1': 'double',
 };
 
@@ -217,8 +219,27 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         {
           kind: 'typeChangeRefused',
           summary:
-            'Cannot change the type of field "User.age" in collection "users" from date to int: MongoDB has no cast from date to int',
+            'Cannot change the type of field "User.age" in collection "users" from date to int: MongoDB has no cast from date to int that keeps what the values mean',
           why: 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan and --convert User.age, and write the conversion in migration.ts.',
+        },
+      ]);
+    });
+
+    it('refuses String to Boolean, which $convert makes true for every non-empty string', () => {
+      expect(
+        refusal(
+          plan({
+            from: users('from', { active: STRING }),
+            to: users('to', { active: BOOLEAN }),
+            schema: [liveUsers({ active: STRING })],
+          }),
+        ),
+      ).toEqual([
+        {
+          kind: 'typeChangeRefused',
+          summary:
+            'Cannot change the type of field "User.active" in collection "users" from string to bool: MongoDB has no cast from string to bool that keeps what the values mean',
+          why: 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan and --convert User.active, and write the conversion in migration.ts.',
         },
       ]);
     });
@@ -322,7 +343,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         {
           kind: 'typeChangeRefused',
           summary:
-            'Cannot change the type of field "users.meta" in collection "users" from any value to object, array, string, double, int, long, bool: MongoDB has no cast from any value to object, array, string, double, int, long, bool',
+            'Cannot change the type of field "users.meta" in collection "users" from any value to object, array, string, double, int, long, bool: MongoDB has no cast from any value to object, array, string, double, int, long, bool that keeps what the values mean',
           why: 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan --from <hash of the migration the database is at> and --convert, and write the conversion in migration.ts.',
         },
       ]);
