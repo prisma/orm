@@ -21,9 +21,17 @@ export const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
 
 export const NS = asNamespaceId('__unbound__');
 
+/** A field's type: its codec, and whether it takes null or is a list. A field without one is a required string. */
+export interface FieldTypeSpec {
+  readonly codecId: string;
+  readonly nullable?: boolean;
+  readonly many?: boolean;
+}
+
 export interface ModelSpec {
   readonly collection: string;
   readonly fields: readonly string[];
+  readonly types?: Readonly<Record<string, FieldTypeSpec>>;
   /** The stored name of each field stored under a name other than its own. */
   readonly storedAs?: Readonly<Record<string, string>>;
   /** The stored name of each embed relation, keyed by relation name. */
@@ -64,6 +72,14 @@ function validatorJsonSchemaOf(spec: CollectionSpec): Record<string, unknown> | 
   return spec.jsonSchema ?? (spec.required === undefined ? undefined : jsonSchema(spec.required));
 }
 
+function contractField(spec: FieldTypeSpec | undefined) {
+  return {
+    type: { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' },
+    nullable: spec?.nullable ?? false,
+    ...(spec?.many === true ? { many: { elementNullable: false } } : {}),
+  };
+}
+
 export function contract(
   seed: string,
   models: Readonly<Record<string, ModelSpec>>,
@@ -84,7 +100,9 @@ export function contract(
             Object.entries(models).map(([name, spec]) => [
               name,
               {
-                fields: Object.fromEntries(spec.fields.map((field) => [field, {}])),
+                fields: Object.fromEntries(
+                  spec.fields.map((field) => [field, contractField(spec.types?.[field])]),
+                ),
                 relations: Object.fromEntries([
                   ...(spec.relations ?? []).map((relation) => [
                     relation,

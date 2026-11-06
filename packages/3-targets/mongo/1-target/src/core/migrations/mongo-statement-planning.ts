@@ -40,6 +40,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
+  type CastFieldCall,
   type OpFactoryCall,
   RenameCollectionCall,
   RenameFieldCall,
@@ -60,7 +61,7 @@ export function collectionOf(
   return typeof collection === 'string' ? collection : coordinate.model;
 }
 
-function modelAt(
+export function modelAt(
   contract: ContractWithDomain,
   coordinate: ModelCoordinate,
 ): ContractModel<MongoModelStorage> | undefined {
@@ -94,7 +95,7 @@ function resolvedStoredNameAt(contract: ContractWithDomain, coordinate: FieldCoo
  * The condition that selects a variant's documents in the collection it shares with its base: the
  * base's discriminator field holding the variant's value. A model that is not a variant has none.
  */
-function variantFilter(
+export function variantFilter(
   contract: ContractWithDomain,
   coordinate: ModelCoordinate,
 ): Document | undefined {
@@ -198,7 +199,7 @@ export interface StatementCalls {
   /** Run first. */
   readonly collectionRenames: readonly RenameCollectionCall[];
   /** Run after index drops and before index creates. */
-  readonly rewrites: readonly (RenameFieldCall | UnsetFieldCall)[];
+  readonly rewrites: readonly (RenameFieldCall | CastFieldCall | UnsetFieldCall)[];
 }
 
 export interface StatementPlan {
@@ -226,7 +227,7 @@ function refused(
 
 const LEAVE_OUT = 'Leave out this statement.';
 
-const SEPARATE_THE_MODELS =
+export const SEPARATE_THE_MODELS =
   'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
 
 /**
@@ -248,7 +249,7 @@ function discriminatorValueOf(
 /**
  * The other models stored in `collection`, root models and their variants, whose documents a change of `storedName` with `filter` reaches, and which store the field themselves or through their base. No discriminator tells the documents of several root models apart, so without a filter, or with a base model's filter, every other root model's documents are reached. A variant's filter, one discriminator value, reaches a model only when its documents can hold that value: a variant of another root model with the same discriminator field and value, or a model that declares the discriminator field itself.
  */
-function otherModelsReached(
+export function otherModelsReached(
   contract: ContractWithDomain,
   model: ModelCoordinate,
   collection: string,
@@ -288,7 +289,7 @@ function otherModelsReached(
     .filter((name) => canHold(name) && storesOrInherits(name, storedName));
 }
 
-function sharedCollectionWhy(
+export function sharedCollectionWhy(
   collection: string,
   others: readonly string[],
   change: string,
@@ -319,7 +320,7 @@ export function sharedCollectionRemovalRefusals(
   });
 }
 
-const TIME_SERIES_UPDATES =
+export const TIME_SERIES_UPDATES =
   'MongoDB updates the documents of a time-series collection only through its metaField';
 
 /**
@@ -674,7 +675,7 @@ export interface FieldRemoval {
   readonly subject: MigrationSubject;
 }
 
-function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
+export function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
   return Object.entries(contract.domain?.namespaces ?? {}).flatMap(([namespaceId, namespace]) =>
     Object.keys(namespace.models).map((model) => ({
       namespaceId: asNamespaceId(namespaceId),
@@ -691,7 +692,7 @@ function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
  * The destination model an origin model became: the one a statement renamed it to, else the one of
  * the same name, else the only one stored the same way (same collection, same variant value).
  */
-function destinationModelOf(
+export function destinationModelOf(
   origin: ModelCoordinate,
   input: FieldRemovalInput,
 ): ModelCoordinate | undefined {
@@ -712,7 +713,7 @@ function destinationModelOf(
   return stored.length === 1 ? only : undefined;
 }
 
-interface FieldRemovalInput {
+export interface FieldRemovalInput {
   readonly statements: readonly ResolvedRenameStatement[];
   readonly fromContract: ContractWithDomain;
   readonly contract: MongoContract;

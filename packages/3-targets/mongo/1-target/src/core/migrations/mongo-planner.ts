@@ -18,6 +18,7 @@ import {
   type MigrationSubject,
   type ModelCoordinate,
   type PlanOrigin,
+  type ResolvedFieldConvertStatement,
   type ResolvedMigrationStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
@@ -50,6 +51,16 @@ import {
   sharedCollectionRemovalRefusals,
   timeSeriesRemovalRefusals,
 } from './mongo-statement-planning';
+import {
+  convertRefusal,
+  noCastRefusals,
+  planFieldTypeChanges,
+  planValidatorTypeChanges,
+  sharedCollectionCastRefusals,
+  type TypeChange,
+  timeSeriesCastRefusals,
+  typeChangeConverted,
+} from './mongo-type-changes';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -208,7 +219,7 @@ function modelStoredIn(
   return (storing.find(({ isRoot }) => isRoot) ?? storing[0])?.coordinate;
 }
 
-/** A convert or backfill statement, which this release cannot carry out on MongoDB. */
+/** A convert or backfill statement this release cannot carry out on MongoDB. */
 function unsupportedStatementConflict(
   statement: ResolvedMigrationStatement,
   fromContract: ContractWithDomain,
@@ -511,7 +522,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       'framework planner passes the inspected Mongo schema IR selected for the mongo target'
     >(options.schema);
     const fromContract = options.fromContract;
-    const unsupported = options.statements.find((statement) => statement.kind !== 'rename');
+    const unsupported = options.statements.find(
+      (statement) =>
+        statement.kind !== 'rename' &&
+        !(statement.kind === 'convert' && statement.entity === 'field'),
+    );
     if (unsupported !== undefined) {
       return {
         kind: 'failure',
@@ -543,27 +558,74 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
             ),
           });
-    const removalRefusals = [
+    const typeChanges: readonly TypeChange[] =
+      fromContract === null
+        ? planValidatorTypeChanges({ origin: schema, destination: destinationIR, contract })
+        : planFieldTypeChanges({
+            statements: renames,
+            fromContract,
+            contract,
+            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+            keptCollections: new Set(
+              schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
+            ),
+          });
+    const converts = options.statements.filter(
+      (statement): statement is ResolvedFieldConvertStatement =>
+        statement.kind === 'convert' && statement.entity === 'field',
+    );
+    const converted = converts.map((statement) => ({
+      statement,
+      change: typeChangeConverted(statement, typeChanges),
+    }));
+    const unconverted = typeChanges.filter(
+      (change) => !converted.some((each) => each.change === change),
+    );
+    const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
+    const refusals = [
+      ...converted.map(({ statement, change }) =>
+        change === undefined
+          ? unsupportedStatementConflict(statement, fromContract ?? contract, contract)
+          : convertRefusal(statement, change, fromContract ?? contract, contract),
+      ),
+      ...noCastRefusals(unconverted, contract),
       ...timeSeriesRemovalRefusals(removals, schema),
+      ...timeSeriesCastRefusals(casts, schema),
       ...sharedCollectionRemovalRefusals(removals, contract),
+      ...sharedCollectionCastRefusals(casts, contract),
     ];
-    if (removalRefusals.length > 0) return { kind: 'failure', conflicts: removalRefusals };
+    if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
+    const castCalls = casts.flatMap((change) => (change.cast === undefined ? [] : [change.cast]));
     const result = this.planCalls({
       ...options,
       statementCalls: {
         schema,
         collectionRenames,
-        rewrites: [...fieldRenames, ...removals.map((removal) => removal.call)],
+        rewrites: [...fieldRenames, ...castCalls, ...removals.map((removal) => removal.call)],
       },
     });
     if (result.kind === 'failure') return result;
     const { calls, warnings } = result;
-    const fieldLoss: readonly MigrationDataLoss[] = removals.map((removal) => ({
-      operationIndex: calls.indexOf(removal.call),
-      subject: removal.subject,
-      loss: 'drop',
-      label: removal.call.label,
-    }));
+    const fieldLoss: readonly MigrationDataLoss[] = [
+      ...removals.map((removal) => ({
+        operationIndex: calls.indexOf(removal.call),
+        subject: removal.subject,
+        loss: 'drop' as const,
+        label: removal.call.label,
+      })),
+      ...casts.flatMap(({ cast, subject }): MigrationDataLoss[] =>
+        cast === undefined || cast.operationClass !== 'destructive'
+          ? []
+          : [
+              {
+                operationIndex: calls.indexOf(cast),
+                subject,
+                loss: 'typeChange',
+                label: cast.label,
+              },
+            ],
+      ),
+    ];
     return {
       kind: 'success',
       plan: new PlannerProducedMongoMigration(

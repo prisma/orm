@@ -829,8 +829,8 @@ describe('MongoMigrationPlanner', () => {
             }),
           }),
         ]);
-        const [operation] = planSuccess(planner, contract, origin).operations;
-        return operation;
+        const [call] = planCallsSuccess(planner, contract, origin);
+        return call?.toOp();
       }
 
       it('is widening when the schema becomes {}, as changing Json to Bson does', () => {
@@ -892,6 +892,7 @@ describe('MongoMigrationPlanner', () => {
           (operation) => operation.label,
         );
         expect(labels).toEqual([
+          'Cast field name in collection items from int to string',
           'Remove field legacy from collection items',
           'Update validator on items (changed: name; added: note; removed: legacy)',
         ]);
