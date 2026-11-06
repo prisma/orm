@@ -1,5 +1,3 @@
-export type { ConfigSettings } from '../config-settings';
-export { pickConfigSettings } from '../config-settings';
 export type { ContractConfig, FormatterConfig, PrismaNextConfig } from '../config-types';
 export {
   DEFAULT_CONTRACT_SOURCE_DIR,

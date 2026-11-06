@@ -1,9 +1,8 @@
 import mysqlAdapter from '@internal/adapter-mysql/control';
-import type { ConfigSettings, PrismaNextConfig } from '@internal/config/config-types';
+import type { FormatterConfig, PrismaNextConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
-  pickConfigSettings,
 } from '@internal/config/config-types';
 import mysqlDriver from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
@@ -14,12 +13,20 @@ import { MYSQL_ENUM_CODEC_ID, MYSQL_INT_CODEC_ID } from '@internal/target-mysql/
 import mysql from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
+import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
-export interface MysqlConfigOptions extends ConfigSettings {
+export interface MysqlConfigOptions {
   readonly contract: string;
   readonly output?: string;
+  readonly db?: {
+    readonly connection?: string;
+  };
   readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'mysql'>[];
+  readonly migrations?: {
+    readonly dir?: string;
+  };
+  readonly formatter?: FormatterConfig;
 }
 
 /**
@@ -47,6 +54,8 @@ export function defineConfig(options: MysqlConfigOptions): PrismaNextConfig<'sql
     driver: mysqlDriver,
     extensions: options.extensions ?? [],
     contract,
-    ...pickConfigSettings(options),
+    ...ifDefined('db', options.db),
+    ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }

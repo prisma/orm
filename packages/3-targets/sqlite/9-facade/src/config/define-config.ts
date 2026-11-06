@@ -1,9 +1,8 @@
 import sqliteAdapter from '@internal/adapter-sqlite/control';
-import type { ConfigSettings, PrismaNextConfig } from '@internal/config/config-types';
+import type { FormatterConfig, PrismaNextConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
-  pickConfigSettings,
 } from '@internal/config/config-types';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
@@ -14,12 +13,20 @@ import { SQLITE_INTEGER_CODEC_ID, SQLITE_TEXT_CODEC_ID } from '@internal/target-
 import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
+import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
-export interface SqliteConfigOptions extends ConfigSettings {
+export interface SqliteConfigOptions {
   readonly contract: string;
   readonly output?: string;
+  readonly db?: {
+    readonly connection?: string;
+  };
   readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'sqlite'>[];
+  readonly migrations?: {
+    readonly dir?: string;
+  };
+  readonly formatter?: FormatterConfig;
 }
 
 export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sql', 'sqlite'> {
@@ -47,6 +54,8 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
     driver: sqliteDriver,
     extensions,
     contract: contractConfig,
-    ...pickConfigSettings(options),
+    ...ifDefined('db', options.db),
+    ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }
