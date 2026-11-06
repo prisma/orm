@@ -197,6 +197,19 @@ export interface TransactionContext extends RuntimeQueryable {
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
 
+/**
+ * Raw data captured by {@link SqlRuntimeBase.recordTelemetry}. The `fingerprint` field
+ * is intentionally absent: it is computed lazily when {@link SqlRuntimeBase.telemetry}
+ * is called, so callers that never read telemetry pay no SHA-256 cost per statement.
+ */
+interface PendingTelemetryData {
+  readonly lane: string;
+  readonly target: string;
+  readonly sql: string;
+  readonly outcome: TelemetryOutcome;
+  readonly durationMs?: number;
+}
+
 type SqlStatementActivityRun = StatementActivityRun<
   SqlExecutionPlan,
   SqlParamRefMutator,
@@ -298,7 +311,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     TransactionActivityRun<SqlMiddlewareContext>
   >();
   private codecRegistryValidated: boolean;
-  private _telemetry: RuntimeTelemetryEvent | null;
+  /**
+   * Raw telemetry data recorded after each statement. The expensive
+   * `computeSqlFingerprint` call is deferred until `telemetry()` is read.
+   * `null` means no statement has run yet (or the last statement cleared it).
+   */
+  private _pendingTelemetry: PendingTelemetryData | null;
+  /** Memoised result of the last `telemetry()` call, keyed to `_pendingTelemetry`. */
+  private _telemetryCache: RuntimeTelemetryEvent | null;
 
   constructor(options: RuntimeOptions<TContract>) {
     const {
@@ -351,7 +371,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.verifyMarkerPromise = this.verifyMarkerOption === false ? Promise.resolve() : null;
     this.closePromise = null;
     this.ownsDriver = ownsDriver ?? true;
-    this._telemetry = null;
+    this._pendingTelemetry = null;
+    this._telemetryCache = null;
   }
 
   /**
@@ -810,7 +831,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
   ): Promise<void> {
     this.familyAdapter.validatePlan(exec, this.contract);
-    this._telemetry = null;
+    this._pendingTelemetry = null;
+    this._telemetryCache = null;
     if (this.verifyMarkerPromise === null) {
       const markerQueryable = this.#heldQueryables.has(queryable) ? queryable : this.driver;
       this.verifyMarkerPromise = this.verifyMarker(markerQueryable).catch((error: unknown) => {
@@ -1581,7 +1603,21 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
-    return this._telemetry;
+    const pending = this._pendingTelemetry;
+    if (pending === null) return null;
+    // Build and memoise the event; fingerprint computation (SHA-256 + 3 regexes)
+    // is deferred to the first read so callers that never call telemetry() pay
+    // nothing for it. See https://github.com/prisma/orm/issues/30932.
+    if (this._telemetryCache === null) {
+      this._telemetryCache = Object.freeze({
+        lane: pending.lane,
+        target: pending.target,
+        fingerprint: computeSqlFingerprint(pending.sql),
+        outcome: pending.outcome,
+        ...(pending.durationMs !== undefined ? { durationMs: pending.durationMs } : {}),
+      });
+    }
+    return this._telemetryCache;
   }
 
   close(): Promise<void> {
@@ -1668,14 +1704,16 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     outcome: TelemetryOutcome,
     durationMs?: number,
   ): void {
-    const contract = this.contract;
-    this._telemetry = Object.freeze({
+    // Store only the cheap fields; fingerprint is computed lazily in telemetry():
+    // see https://github.com/prisma/orm/issues/30932.
+    this._pendingTelemetry = {
       lane: plan.meta.lane,
-      target: contract.target,
-      fingerprint: computeSqlFingerprint(plan.sql),
+      target: this.contract.target,
+      sql: plan.sql,
       outcome,
       ...(durationMs !== undefined ? { durationMs } : {}),
-    });
+    };
+    this._telemetryCache = null;
   }
 }
 
