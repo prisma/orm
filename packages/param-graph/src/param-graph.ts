@@ -73,6 +73,7 @@ export interface OutputEdge {
  * needed for parameterization decisions.
  */
 export class ParamGraph {
+  static readonly #decodedGraphs = new WeakMap<SerializedParamGraph, ParamGraphData>()
   readonly #data: ParamGraphData
   readonly #stringIndex: Map<string, number>
   readonly #enumLookup: EnumLookup
@@ -91,9 +92,14 @@ export class ParamGraph {
   /**
    * Creates a ParamGraph from serialized format.
    * This is the primary factory method for runtime use.
+   * Serialized schemas must not be mutated after successful deserialization.
    */
   static deserialize(serialized: SerializedParamGraph, enumLookup: EnumLookup): ParamGraph {
-    const data = deserializeParamGraph(serialized)
+    let data = ParamGraph.#decodedGraphs.get(serialized)
+    if (data === undefined) {
+      data = deserializeParamGraph(serialized)
+      ParamGraph.#decodedGraphs.set(serialized, data)
+    }
     return new ParamGraph(data, enumLookup)
   }
 
