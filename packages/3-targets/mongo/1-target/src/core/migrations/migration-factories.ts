@@ -128,7 +128,11 @@ export function rawAggregate(
   return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
 }
 
-/** A raw `updateMany` on a collection, which a data transform's run can make skip document validation. */
+/**
+ * A raw `updateMany` on a collection, which a data transform's run can make skip document validation.
+ * `update` is an update document, such as `{ $set: { age: 0 } }`, or an aggregation pipeline, such as
+ * `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own values.
+ */
 export function rawUpdateMany(
   collectionName: string,
   filter: Document,
