@@ -5,57 +5,112 @@
 
 ## At a glance
 
-A Prisma 6 schema like this one built two indexes on `email` in MongoDB:
+This Prisma 8 schema asks for two indexes on `email`: a unique one and a sparse one.
 
 ```prisma
 model User {
-  id    String @id @default(auto()) @map("_id") @db.ObjectId
-  email String @unique
+  id    ObjectId @id @map("_id")
+  email String   @unique
 
-  @@index([email(sort: Asc)])
+  @@index([email], sparse: true, map: "email_sparse")
 }
 ```
 
-MongoDB holds them as `User_email_key` (unique) and `User_email_idx`. The contract now records each index's name:
+The contract records each index with its name:
 
 ```json
 "indexes": [
-  { "kind": "mongo-index", "name": "User_email_key", "keys": [{ "field": "email", "direction": 1 }], "unique": true },
-  { "kind": "mongo-index", "name": "User_email_idx", "keys": [{ "field": "email", "direction": 1 }] }
+  { "keys": [{ "direction": 1, "field": "email" }], "kind": "mongo-index", "name": "email_1", "unique": true },
+  { "keys": [{ "direction": 1, "field": "email" }], "kind": "mongo-index", "name": "email_sparse", "sparse": true }
 ]
 ```
 
-`db verify` checks both names, a migration creates each under its name, and a drop removes an index by the name the database holds it under.
-
-## Context
-
-Before this decision a MongoDB contract stored no index name. Migrations named every index after its keys (`email_1`), gave each operation an id built from the keys, and checked whether an index exists by its keys alone. So two indexes on the same keys with different options could not both be created: a unique and a plain index, a plain and a sparse one, or the indexes two variants of one base write on the same field. A drop removed the index named `email_1`, which fails for an index held under another name and can remove the wrong index when two share keys.
+Both indexes can exist in the database at once. A migration creates each one under its name, drops it by its name, and `db verify` checks it by its name.
 
 ## Decision
 
-1. **`MongoIndex` has a required `name`.** It is the name MongoDB stores the index under. The builder refuses two indexes with one name in one collection (`indexNameDuplicate`).
-2. **The sources fill the name.**
-   - Prisma 8 PSL takes it from `map:` on `@@index`, `@@unique`, `@@textIndex` and `@unique`; TypeScript `defineContract` from the index option `name`. An index written without one gets the name MongoDB gives an index created without one: its stored keys and directions, such as `email_1` or `title_text`. `nameIndexes` does this for both sources, before `mergeRedundantIndexes`, so the builder still builds the definition it is given (ADR 306). Every database Prisma 8 built keeps its index names, and a migration plans nothing for them.
-   - Two indexes of one collection that would get the same name are refused, and the message asks for a name with `map:` or `name`. Choosing a name automatically would either rename an existing index when a second one appears, or depend on the order the indexes are written in. MongoDB cannot rename an index, so a rename is a drop and a rebuild.
-   - `mergeRedundantIndexes` merges only indexes with the same name. Two identical indexes that the user named apart are kept, and the builder refuses them, because MongoDB cannot hold both.
-   - The Prisma 6 reader gives each index the name Prisma 6 gives it: `map:` (or `name:` on `@@index`) when written, otherwise `<collection>_<stored fields>_key` for a unique index and `_idx` for any other, cut to 127 bytes, as prisma-engines 6.19.3 `ConstraintNames` builds it. It refuses what Prisma 6 refuses: two indexes of one model with one name, an empty `map`, and a `map` longer than 127 bytes.
-3. **The schema IR reads the name.** `MongoSchemaIndex` has `name`, and its `id` is the name, which MongoDB keeps unique within a collection. Introspection reads it from `listIndexes`.
-4. **The planner pairs indexes by content.** It pairs an origin index with a destination index when `indexLookupKey`, which leaves the name out, is the same. Between two contracts the content compares exactly. A database does not report every index as it was written: it lists a text index's keys as `_fts` and `_ftsx` and fills in its weights and languages, and it fills in a collation's unwritten fields. So when the origin was read from a database (`db update`, `db init`), the planner first undoes these changes, as the verifier does, with `canonicalizeSchemasForVerification`; `MongoSchemaIR.fromDatabase`, which every schema states when it is built, tells the two origins apart. The canonical forms are only for pairing: each create is built from the contract's index as written, so `db init` and `db update` create what `migration plan` writes. Canonicalizing means a collation field the contract does not write may hold any value in the database: removing a field from a contract's collation, such as `strength`, is planned by `migration plan`, but `db update` and `db verify` do not see it. [TML-3795](https://linear.app/prisma-company/issue/TML-3795) tracks comparing unwritten collation fields with the locale's defaults. A pair whose names differ is a drop and a create, because MongoDB cannot rename an index. Drops run before creates, which MongoDB needs: it refuses an index with the content of one it already holds.
-5. **Operations use the name.**
-   - `createIndex(collection, keys, options)` creates the index under `options.name`. Its prechecks require that the collection holds no index with that name and none with the same keys and options; its postcheck requires an index with that name, keys and options.
-   - `dropIndex(collection, keys, options)` drops the index named `options.name`, the name the origin contract or the introspected database holds it under. `options` lists every option the index has. Its precheck requires an index with that name, those keys and exactly those options; its postcheck requires that no index with that name is left.
-   - The operation id is `index.<collection>.<create|drop>(<name>)`.
-   - A call without a name, as migration files written by earlier releases have, names the index after its keys, and a `dropIndex` without options checks the keys only, as it did before. Those files keep working.
-6. **`db verify` reports a name difference.** An index of the contract whose content the database holds under another name is a failure, with the contract index as `expected` and the database index as `actual`. The canonicalization that strips server defaults pairs a live index with the contract index of the same name when several share its keys.
+`MongoIndex`, the contract's index node, has a required `name`. It is the name MongoDB stores the index under. The contract builder refuses two indexes with one name in one collection.
+
+## Why MongoDB needs names
+
+MongoDB identifies an index by its name, not by its keys. Several indexes in one collection may have the same keys and differ only in their options: a unique and a plain index, a plain and a sparse one, two indexes with different collations. Creating, dropping and checking an index by its keys alone cannot tell these apart, so the contract has to carry the name.
+
+MongoDB cannot rename an index. Changing a name means dropping the index and creating it again.
+
+## Where a name comes from
+
+**A written name.** In Prisma 8 PSL, `map:` on `@unique`, `@@index`, `@@unique` and `@@textIndex` names the index. In TypeScript `defineContract`, the index option `name` does.
+
+**No written name.** The index gets the name MongoDB gives an index created without one: each key's field and direction, joined by underscores, such as `email_1` or `title_text`. `defaultMongoIndexName` in `@internal/mongo-contract` builds it. Because this is MongoDB's own rule, an index created without a name already holds this name in the database.
+
+**Two indexes with one name.** When two indexes in one collection end up with the same name, written or not, the schema is refused. The message asks for a name with `map:` or `name`. No second name is invented, because an invented name would depend on the order the indexes are written in, or change when another index appears. Either would drop and rebuild an index the user did not touch, since MongoDB cannot rename one.
+
+**Prisma 6 schemas.** The Prisma 6 reader gives each index the name Prisma 6 gives it, so that a database Prisma 6 built verifies as it is. The name is `map:` (or `name:` on `@@index`) when written. Otherwise it is the collection name, then the stored field names, joined by underscores, with `_key` for a unique index and `_idx` for any other, such as `User_email_key` or `User_email_idx`. The part before the suffix is cut so the whole name fits in 127 bytes. This follows prisma-engines 6.19.3 `ConstraintNames`. The reader refuses what Prisma 6 refuses: two indexes of one model with one name, an empty `map`, and a `map` longer than 127 bytes.
+
+## Where naming sits in the pipeline
+
+ADR 306 says each family has one plain-data definition and one builder, and the builder builds the definition it is given. Naming happens in the sources, before the builder.
+
+```mermaid
+flowchart LR
+  subgraph sources [Sources]
+    direction TB
+    psl[Prisma 8 PSL]
+    ts[TypeScript defineContract]
+    p6[Prisma 6 reader]
+  end
+  name[nameIndexes]
+  merge[mergeRedundantIndexes]
+  builder[Builder]
+  psl --> name
+  ts --> name
+  name --> merge
+  merge --> builder
+  p6 --> builder
+```
+
+1. `nameIndexes` gives every index written without a name its default name. Prisma 8 PSL and `defineContract` call it. The Prisma 6 reader names its indexes itself.
+2. `mergeRedundantIndexes` removes indexes another index makes unnecessary: the later of two identical indexes, or a plain index beside a unique index that is otherwise identical. It merges only indexes with the same name. Two identical indexes with different names are both kept, because the user named them apart.
+3. The builder takes each name from the definition. It refuses two identical indexes in one collection, because MongoDB cannot hold both, and two indexes with one name in one collection (`indexNameDuplicate`).
+
+## How the planner pairs indexes
+
+The migration planner pairs an index of the starting state with an index of the target state by content: keys and options, with the name left out. `indexLookupKey` in `@internal/mongo-contract` computes this content key. Between two contracts, both sides hold indexes as they were written, so the content compares exactly. A schema read from a database needs one more step, described in the next section.
+
+A pair whose content matches but whose names differ is planned as a drop and then a create, because MongoDB cannot rename an index. A pair with the same name and the same content plans nothing. Drops run before creates in every plan, which MongoDB needs: it refuses an index with the content of one it already holds.
+
+## Schemas read from a database
+
+A database does not list every index as it was written. It lists a text index's keys as `_fts` and `_ftsx` and fills in weights, the default language and the language override. It fills in the unwritten fields of a collation. So a database's index must be rewritten into its written form before it can be paired with a contract's index.
+
+Every `MongoSchemaIR` states whether it was read from a database, in its `fromDatabase` field. When the starting state was read from a database, as in `db init` and `db update`, the planner first rewrites both sides with `canonicalizeSchemasForVerification`, the rewrite `db verify` uses before it compares. It strips the values the database filled in for fields the contract did not write. When several contract indexes share a database index's keys, it matches the one with the same name.
+
+The rewritten forms are used for pairing only. Each create is built from the contract's own index, so `db init` and `db update` create exactly what `migration plan` writes.
+
+## The operations
+
+`createIndex(collection, keys, options)` creates the index under `options.name`. Its prechecks require that the collection holds no index with that name and none with the same keys and options. Its postcheck requires an index with that name, those keys and those options.
+
+`dropIndex(collection, keys, options)` drops the index named `options.name`. `options` lists every option the index has. Its precheck requires an index with that name, those keys and exactly those options. Its postcheck requires that no index with that name is left.
+
+The operation id is `index.<collection>.<create|drop>(<name>)`, such as `index.users.create(email_sparse)`.
+
+Both factories accept a call without a name. Then the index is named after its keys, with `defaultMongoIndexName`. A `dropIndex` without options checks the keys only.
+
+## `db verify`
+
+`db verify` pairs the contract's indexes with the database's indexes by content, after the rewrite described above. An index of the contract whose content the database holds under another name is a failure. The failure carries the contract's index as `expected` and the database's index as `actual`.
 
 ## Consequences
 
-- Every MongoDB contract with an index gets a new storage hash, because each index records its name. Databases need no change, because the names already match: users re-emit the contract and sign the database again, or plan a migration that has no operations.
-- A schema with two unnamed indexes on the same keys and different options, which no migration could create before, is now refused until one is named.
-- Contract snapshots written by earlier releases have indexes without names and fail validation. The upgrade note's script adds the names they always had: the name the newly emitted contract gives the same index, or else the name after its keys. It rewrites each snapshot in place and keeps its old storage hash on purpose, because database markers, the ledger and every migration's `from` and `to` name that hash; so a rewritten snapshot's content no longer recomputes to its hash. Nothing recomputes a MongoDB snapshot's hash today, and a future content check of MongoDB snapshots must accept these.
+- An index's name is part of the contract's storage section, so it is part of the storage hash. Renaming an index changes the hash.
+- A schema with two unnamed indexes on the same keys and different options is refused until one of them is named.
+- The schema IR's index, `MongoSchemaIndex`, carries `name`, and its `id` is the name. Introspection reads it from `listIndexes`.
+- A collation field the contract does not write may hold any value in the database, because the rewrite strips unwritten fields before comparing. Removing a field from a contract's collation, such as `strength`, is seen by `migration plan`, which compares two contracts, but not by `db update` or `db verify`.
+- A MongoDB contract snapshot under `migrations/snapshots/` may hold a storage hash its content does not recompute to, because database markers, the ledger and every migration's `from` and `to` refer to that hash. A content check of MongoDB snapshots must allow this.
 
 ## Alternatives considered
 
-- **Content-hash names, as SQL's ADR 243 does (`email_1_<8 hex>`).** SQL needs the hash because Postgres reprints expression text, so the content cannot be compared. MongoDB reports index options as written, so content compares exactly. And MongoDB has no index rename, so moving existing databases to hashed names would rebuild every index.
-- **No names in the contract; drop by content when the migration runs.** This needs a new runner command that looks up an index by content and drops it, it leaves names unchecked, and it still cannot describe the names Prisma 6 gave.
-- **An optional name, where a missing one means the default.** This keeps storage hashes, but the contract would no longer state what the database holds, and every reader of the contract would have to know the default rule.
+- **Content-hashed names, as SQL's [ADR 243](ADR%20243%20-%20Name-identified%20indexes%20and%20exact-name%20adoption.md) does (`email_1_<8 hex>`).** SQL needs the hash because Postgres reprints expression text, so index content cannot be compared. MongoDB index content is plain data, so it compares exactly once the values the database filled in are removed. And MongoDB cannot rename an index, so moving existing databases to hashed names would rebuild every index.
+- **No names in the contract, with drops that look an index up by content when the migration runs.** This needs a new runner command that finds an index by content and drops it. It leaves names unchecked. And it cannot describe the names Prisma 6 gives.
+- **An optional name, where a missing one means the key-derived default.** This keeps storage hashes unchanged, but the contract would not state what the database holds, and every reader of the contract would have to know the default rule.
