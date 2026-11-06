@@ -50,7 +50,7 @@ Every option is optional and has a default, so the bare name is a working type. 
 | `Boolean(storage?)` | | `bool` (default) | `Bool` |
 | `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
 | `Json(storage?)` | | `jsonb` (default) | `Jsonb` |
-| | | `json` | the explicit `json` type (name open, see below) |
+| | | `json` | `PlainJson` |
 
 A type has an `as` option only where its database types have more than one codec. Today only `BigInt` does. Adding one later, such as a decimal library value for `Decimal`, adds an option and rows without renaming anything.
 
@@ -83,7 +83,7 @@ Names follow ADR 257's token rule and ADR 279's suffix rule: the database type, 
 | `Bool` | `pg/bool@1` | `bool` | `boolean` | `Boolean` |
 | `Bytea` | `pg/bytea@1` | `bytea` | `Uint8Array` | `Bytes` |
 | `Jsonb` | `pg/jsonb@1` | `jsonb` | `JsonValue` | `Jsonb` |
-| open | `pg/json@1` | `json` | `JsonValue` | `Json` |
+| `PlainJson` | `pg/json@1` | `json` | `JsonValue` | `Json` |
 
 `sql.String(n)` and `sql.Char(n)` stay as they are.
 
@@ -91,7 +91,7 @@ An explicit name that disappears (`SmallInt`, `BigIntNumber`, `Numeric`, `Unboun
 
 ## `Json` changes its default storage
 
-`Json` today is the explicit type for a `json` column. As a convenience type it defaults to `jsonb`. A field written `Json` in an existing Prisma 8 schema therefore changes from `json` to `jsonb`: the contract changes, `db verify` reports the difference, and the migration planner plans the column change. The upgrade instruction tells users to write `Json(storage: json)` to keep a `json` column, or to re-emit and migrate. A Prisma 7 schema is not affected: Prisma 7's `Json` was already `jsonb`.
+`Json` today is the explicit type for a `json` column. As a convenience type it defaults to `jsonb`, so a field written `Json` in an existing Prisma 8 schema changes from `json` to `jsonb`. A Prisma 7 schema is not affected: Prisma 7's `Json` was already `jsonb`. See "Slice 2 design" for how users find out, how the migration asks about it, and how to keep `json`.
 
 ## Tools
 
@@ -114,9 +114,85 @@ Out of scope:
 - **The type-choice mechanism.** It is in the framework domain and does not change. The two limits above are accepted.
 - **Convenience types for `Uuid`, `Inet` and the other single-concept types.**
 
-## Open question
+## The `json` type's name
 
-**The explicit name of PostgreSQL's `json` type.** The token rule gives `Json`, which the convenience type takes. ADR 279 solved the same clash for `date` with a value suffix, but `json` has one codec, so the suffix rule does not give a name. This needs a name from Will.
+The naming rule gives `Json` for `pg/json@1`, which the convenience type takes, and no value suffix separates it from `jsonb`, because both read a `JsonValue`. Will named it `PlainJson` on 2026-11-06: plain `json`, not `jsonb`. `JsonText` was rejected because it reads as JSON kept in a text column, which is what SQLite's `Json` is. A name in the `pg` namespace, such as `pg.Json`, is not possible: a type choice row names a type constructor at its own level of the namespace, and changing that changes the framework domain.
+
+## Slice 2 design: `Json` (TML-3789)
+
+Reviewed before building by an architect and a principal engineer (Fable), 2026-11-06. Both said build after the changes now folded in below.
+
+```prisma
+model Event {
+  payload Json                 // Jsonb: a jsonb column
+  raw     Json(storage: json)  // PlainJson: a json column
+  legacy  PlainJson            // the same as raw
+}
+```
+
+### Declarations
+
+- In `packages/3-targets/postgres/1-target/src/core/type-constructors.ts`, the `pg/json@1` type constructor is renamed `PlainJson`. It stays marked `inferred` for `pg/json`. Its documentation says "plain `json`, not `jsonb`", because `Plain` also appears in Temporal names such as `Temporal.PlainDate`.
+- `Json` becomes a type choice with one option, `storage`: `jsonb` (default) chooses `Jsonb`, and `json` chooses `PlainJson`. There is no `as` option, because both codecs read a `JsonValue`. `Jsonb` keeps its name.
+- `Json` gets no deprecation warning. The type choice mechanism has no deprecation mark and requires every option to have a default, so a warning or a forced `storage` argument is not possible without changing the framework. A warning on every `Json` field would also fire on the name users should write.
+
+### What changes for users, and how they find out
+
+- **History.** Before 0.16, PostgreSQL `Json` meant `jsonb`. The 0.16-to-0.17 upgrade (`postgres-json-rebound-to-native-json`) bound `Json` to `json` and added `Jsonb`. It told users who meant `jsonb` to write `Jsonb`, so their contracts do not change now. It also told users to rewrite `Json @db.Json` as `Json`; those fields, and every field written `Json` since, change now. The TypeScript preset `field.json()` was removed later, and its refusal message points at `Jsonb`.
+- **Contract change.** A field written `Json` changes from `pg/json@1` (storage `json`) to `pg/jsonb@1` (storage `jsonb`). `contract emit` writes a new storage hash with no diagnostic. `db verify` reports the column.
+- **Migration.** `migration plan` and `db update` do not change the column on their own. `json` to `jsonb` is not in the safe-widening table (`packages/3-targets/postgres/1-target/src/core/migrations/safe-widenings.ts`), so the planner classes the type change as destructive, records a `typeChange` data loss, and asks `accept lossy type change of field "Event.payload"`. The user answers `--delete Event.payload` to accept the in-place cast (`ALTER COLUMN "payload" TYPE jsonb USING "payload"::jsonb`), or `--convert Event.payload` on `migration plan` to write the conversion. This stays destructive: `jsonb` drops duplicate keys and normalizes whitespace and key order, it refuses the `\u0000` escape that `json` accepts, and PostgreSQL refuses to alter a column that a view depends on.
+- **Keeping `json`.** A user who wants no change writes `Json(storage: json)` or `PlainJson`, and the contract is unchanged.
+- **Exception to ADR 257.** ADR 257 keeps a renamed name as a deprecated alias so that a rename never changes a contract silently. Here the name stays and its codec changes, which that rule exists to prevent, and it is the second change to `Json` in the release-candidate line. ADR 316 records this as an exception, with the reason (no deprecation is possible for a type choice without a framework change) and the checks that catch it: the storage hash, `db verify`, and the planner's data-loss question.
+- **Upgrade instructions.** New pending fragments under `upgrade-instructions/pending/postgres-json-convenience-type/{app,extension}/`, following `upgrade-instructions/README.md` (each PR adds its own fragment; no release number). The app fragment states the change, the two paths (keep `json` with `Json(storage: json)`, or re-emit and migrate, answering the data-loss question), and the failure cases above. Its detection matches bare `Json`, `Json?`, `Json[]` and a `types {}` alias `= Json`, and not `Json(`. Like slice 1's, it cannot tell PostgreSQL schemas from SQLite or MongoDB ones, and says so. The extension fragment covers `jsonColumn` becoming `plainJsonColumn` and `Json` becoming a type choice in the namespace.
+
+### Tools
+
+No tool code changes. Tests that encode today's binding change with the declaration.
+
+- `contract infer` and `contract print` write `Json` for a `jsonb` column and `Json(storage: json)` for a `json` column. Every printed schema that showed `Jsonb` now shows `Json`.
+- The Prisma 7 reader keeps both contracts: Prisma 7 `Json` reads as `Jsonb` and `Json @db.Json` as `PlainJson`. `@db.Json` joins `prisma7PostgresRenamedNativeTypes`, so its message says `use PlainJson in type position`.
+- The fill-value check names `pg/jsonb@1` `Json` and `pg/json@1` `PlainJson`.
+- The language server's hover names the explicit type a `Json` call becomes.
+
+### TypeScript
+
+- `type.Json()` is typed as `Jsonb`, and `type.Json({ storage: 'json' })` as `PlainJson`.
+- The PostgreSQL column helper `jsonColumn` (`packages/3-targets/postgres/2-adapter/src/exports/column-types.ts`) is renamed `plainJsonColumn`, with no alias, following slice 1's rule that a helper takes its explicit type's name. `jsonbColumn` keeps its name. Call sites: `test/e2e/framework/test/fixtures/contract.ts` and `test/integration/test/planner-golden/fixtures/postgres/contract.ts`. SQLite's own `jsonColumn` is not changed.
+- The removed-preset refusals for `field.json()` change from `Jsonb` to `Json` / `type.Json()`, like their neighbours `Int` and `BigInt`: `packages/2-sql-family/2-authoring/contract-psl/src/removed-field-presets.ts` and `packages/2-sql-family/2-authoring/contract-ts/src/removed-field-presets.ts`, with their tests.
+
+### Repository schemas
+
+Rule: a PostgreSQL schema that mirrors a real database or tests the `json` type keeps `json` by writing `Json(storage: json)`. Every other PostgreSQL `Json` field moves to `jsonb` and is re-emitted.
+
+- Keep `json`: the Supabase contract (`types { Payload = Json }` mirrors `auth.audit_log_entries.payload`), the engines native-types port (`test/integration/test/ports/engines/queries/data_types/native/postgres/_fixture/other/contract.prisma`), and the collection-methods fixture (`test/integration/test/sql-orm-client/fixtures/collection-methods/contract.prisma`), whose `as_of` method is keyed on `pg/json@1` in `packages/3-extensions/sql-orm-client/test/collection-methods-fixture.ts`.
+- The Supabase generator's alias key in `packages/3-extensions/supabase/scripts/generate-contract.ts` changes from `Json` to `Json(storage: json)`, and the contract is regenerated so a second run leaves no diff. Its `Jsonb` fields print as `Json`. `CONTRACT-FIDELITY.md` is updated.
+- Move to `jsonb`: the four Prisma port fixtures that translate upstream Prisma's `Json`, which is `jsonb` (`json-fields`, `issues-21454-type-in-json`, `issues-29174-jsonb-parameter-regression`, `issues-29267-uint8array-in-json`), and fixtures with no storage intent, such as `without-conflict-target`. Whole-shape assertions on those may see JSON key order change.
+- The `legacy-json` port already writes `Jsonb`. Its comment that says Prisma 8's `Json` is `pg/json@1` is deleted.
+- SQLite, MySQL and MongoDB are not changed.
+
+### Docs
+
+- ADR 316 is amended in place, with a dated amendment note. Line 71 is replaced by the `Json` decision. It adds the `Json` rows, the `PlainJson` naming clause (below), the ADR 257 exception (above), and a Consequences line handing SQLite's and MongoDB's `Json` (explicit types that now carry a convenience name, against ADR 315 rule 5) and MySQL's missing `Json` to TML-3790, with SQLite's `jsonColumn` following its explicit type's new name.
+- Naming clause for ADR 316: when a database type's only codec would take the convenience name, and no application-value suffix separates it from a sibling type, the explicit type takes a qualifier that names it by contrast with that sibling. `PlainJson` is plain `json`, as opposed to `jsonb`. This departs on purpose from "named after the database type"; PostgreSQL has no type called "plain json".
+- ADR 257 gets a dated amendment note for lines 13 and 87, which describe `Json` as an explicit type that stores JSON text.
+- `docs/reference/scalar-types.md`: the convenience table gets `Json`, line 84's "no convenience type yet" goes, the explicit row `Json` becomes `PlainJson`, the cross-target concept row says `Json` (a `Jsonb`) for PostgreSQL, and the Prisma 7 mapping table is updated.
+- `packages/2-sql-family/2-authoring/contract-psl/README.md`, the PostgreSQL adapter README, the `postgresExplicitTypes` doc comment and the `prisma-8` skill reference are updated.
+
+### Tests
+
+| Claim | Test |
+| --- | --- |
+| `Json` emits what `Jsonb` emits, and `Json(storage: json)` what `PlainJson` emits, in PSL | `test/integration/test/convenience-scalar-types/convenience-scalar-types.integration.test.ts` |
+| the same in TypeScript | `packages/3-targets/postgres/9-facade/test/scalar-convenience-type-helpers.test.ts`, `scalar-convenience-types.test-d.ts` |
+| `PlainJson` and `Jsonb` are the marked types for `pg/json` and `pg/jsonb` | `type-choice-inferred-marks.test.ts` |
+| infer and print write `Json` and `Json(storage: json)` | `infer-column-types.test.ts`, `infer-parse-emit.test.ts`, the convenience-types infer integration test, the print round-trip suites |
+| Prisma 7 `Json` and `Json @db.Json` keep their contracts | `native-types-accepted/expected-contract.json` unchanged; a `Json @db.Json` row in the Prisma 7 print integration test; `prisma7-type-map.test.ts` |
+| fill-value naming | `fill-value-check.test.ts`, a row per codec |
+| the planner classes `json` to `jsonb` as destructive and asks | `planner.data-loss.test.ts`; one CLI journey: a database built from the old contract, a bare `Json` field, `db verify`, then `migration plan --delete` |
+| hover names the explicit type | `test/integration/test/authoring/lsp-postgres-convenience-types.test.ts` |
+| `Json` never warns | the "current type name" block of the convenience-types integration test |
+| upgrade detection matches bare `Json` only | `test/integration/test/upgrade-instructions/postgres-json-convenience-type/detection.test.ts` |
+| fixtures emit byte-identical except moved `Json` fields | `pnpm fixtures:check` |
 
 ## Acceptance criteria
 
@@ -125,4 +201,4 @@ Out of scope:
 - [ ] Existing fixtures and examples emit byte-identical `contract.json` files, except fields written `Json`.
 - [ ] `contract infer`, `contract print` and the Prisma 7 reader write the convenience calls listed under Tools, and the print round-trip tests pass.
 - [ ] Each removed explicit name is a deprecated alias that warns and emits the same contract.
-- [ ] `docs/reference/scalar-types.md`, the new ADR and the upgrade instructions describe the final names, and `pnpm lint:deps` and the CI-only checks pass.
+- [ ] `docs/reference/scalar-types.md`, ADR 316 and the upgrade instructions describe the final names, and `pnpm lint:deps` and the CI-only checks pass.

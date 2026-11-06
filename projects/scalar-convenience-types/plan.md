@@ -7,9 +7,9 @@ Spec: [spec.md](spec.md). Approved by Will on 2026-11-02.
 | # | Slice | Linear | Builds on | Hands to |
 | --- | --- | --- | --- | --- |
 | 1 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` convenience types; explicit renames with deprecated aliases; SQL PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME`; ADR 316; docs | TML-3715 | `main` | The renamed explicit types and the SQL deprecation warning |
-| 2 | PostgreSQL `Json` convenience type, `jsonb` by default; new explicit name for `pg/json@1`; upgrade instruction for the contract change | TML-3789 | Slice 1 | — |
+| 2 | PostgreSQL `Json` convenience type, `jsonb` by default; `pg/json@1` renamed `PlainJson`; upgrade instruction for the contract change | TML-3789 | Slice 1 | — |
 
-Slice 2 waits for Will to name the explicit `pg/json@1` type, and for slice 1 to merge.
+Slice 1 merged as prisma/orm#30942 on 2026-11-06. Will named the `pg/json@1` type `PlainJson` the same day.
 
 SQLite, MySQL and MongoDB are TML-3790, outside this project.
 
