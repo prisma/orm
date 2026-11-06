@@ -22,4 +22,4 @@ There is no `mariadb()` runtime client yet.
 
 ## Testing
 
-The live tests need `MARIADB_URL` and are skipped without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`. `test/fixtures/` holds PSL contracts the tests emit in memory.
+The live tests need `MARIADB_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`. `test/fixtures/` holds PSL contracts the tests emit in memory.

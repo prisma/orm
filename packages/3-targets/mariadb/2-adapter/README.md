@@ -27,7 +27,7 @@ The marker upsert binds its values twice instead of naming a row alias, which Ma
 
 ## Testing
 
-The live tests need `MARIADB_URL` and are skipped without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`.
+The live tests need `MARIADB_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`.
 
 ## Exports
 
