@@ -12,7 +12,7 @@ import type {
   MongoUnboundFieldInputTypes,
 } from '@internal/mongo-contract';
 import type { MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import { ormParam } from './orm-param';
 
 // ── Runtime types ────────────────────────────────────────────────────────────
 
@@ -237,28 +237,28 @@ interface RuntimeFieldExpression extends NumericOps<unknown> {
 function createFieldExpression(fieldPath: string): RuntimeFieldExpression {
   return {
     set(value: unknown): FieldOperation {
-      return { operator: '$set', field: fieldPath, value: new MongoParamRef(value) };
+      return { operator: '$set', field: fieldPath, value: ormParam(value, fieldPath) };
     },
     unset(): FieldOperation {
-      return { operator: '$unset', field: fieldPath, value: new MongoParamRef('') };
+      return { operator: '$unset', field: fieldPath, value: ormParam('', fieldPath) };
     },
     inc(value: unknown): FieldOperation {
-      return { operator: '$inc', field: fieldPath, value: new MongoParamRef(value) };
+      return { operator: '$inc', field: fieldPath, value: ormParam(value, fieldPath) };
     },
     mul(value: unknown): FieldOperation {
-      return { operator: '$mul', field: fieldPath, value: new MongoParamRef(value) };
+      return { operator: '$mul', field: fieldPath, value: ormParam(value, fieldPath) };
     },
     push(value: unknown): FieldOperation {
-      return { operator: '$push', field: fieldPath, value: new MongoParamRef(value) };
+      return { operator: '$push', field: fieldPath, value: ormParam(value, fieldPath) };
     },
     pull(match: unknown): FieldOperation {
-      return { operator: '$pull', field: fieldPath, value: new MongoParamRef(match) };
+      return { operator: '$pull', field: fieldPath, value: ormParam(match, fieldPath) };
     },
     addToSet(value: unknown): FieldOperation {
-      return { operator: '$addToSet', field: fieldPath, value: new MongoParamRef(value) };
+      return { operator: '$addToSet', field: fieldPath, value: ormParam(value, fieldPath) };
     },
     pop(end: 1 | -1): FieldOperation {
-      return { operator: '$pop', field: fieldPath, value: new MongoParamRef(end) };
+      return { operator: '$pop', field: fieldPath, value: ormParam(end, fieldPath) };
     },
   };
 }

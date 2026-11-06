@@ -58,7 +58,7 @@ import {
   contractModelToMongoResultShape,
 } from '@internal/mongo-query-builder';
 import type { MongoValue } from '@internal/mongo-value';
-import { isMongoPreparedParamRef, MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -83,6 +83,7 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
+import { ormParam } from './orm-param';
 import type {
   DiscriminatorValues,
   IncludedRow,
@@ -354,7 +355,7 @@ export class MongoCollectionImpl<
         modelStoredNamesOf(this.#contract, this.#modelName),
         discriminator.field,
       ),
-      new MongoParamRef(value),
+      ormParam(value, discriminator.field),
     );
     return this.#cloneWithVariant<V>({ filters: [...this.#state.filters, filter] }, value);
   }
@@ -644,7 +645,7 @@ export class MongoCollectionImpl<
 
       const idFilter = MongoFieldFilter.in(
         '_id',
-        ids.map((id) => new MongoParamRef(id)),
+        ids.map((id) => ormParam(id, '_id')),
       );
       yield* self.#clone({ filters: [idFilter] }).#query();
     }
@@ -1091,7 +1092,7 @@ export class MongoCollectionImpl<
     path: string,
     purpose: ValuePurpose,
   ): MongoValue {
-    if (field === undefined) return new MongoParamRef(value);
+    if (field === undefined) return ormParam(value, path);
     if (value === null) return this.#nullParam(field, path, purpose);
 
     if (field.type.kind === 'scalar') {
@@ -1101,7 +1102,7 @@ export class MongoCollectionImpl<
 
     if (field.type.kind === 'valueObject') {
       const voDef = this.#valueObjectAt(field.type);
-      if (!voDef) return new MongoParamRef(value);
+      if (!voDef) return ormParam(value, path);
 
       if (field.many && Array.isArray(value)) {
         return value.map((item, index) =>
@@ -1129,7 +1130,7 @@ export class MongoCollectionImpl<
       );
     }
 
-    return new MongoParamRef(value);
+    return ormParam(value, path);
   }
 
   #nullParam(field: ContractField, path: string, purpose: ValuePurpose): null {
@@ -1183,7 +1184,7 @@ export class MongoCollectionImpl<
     path: string,
     purpose: ValuePurpose,
   ): MongoValue {
-    if (field.type.kind !== 'scalar') return new MongoParamRef(value);
+    if (field.type.kind !== 'scalar') return ormParam(value, path);
     const codecId = field.type.codecId;
     if (field.many && Array.isArray(value)) {
       const acceptsNull = field.many.elementNullable || purpose === 'filter';
@@ -1197,14 +1198,7 @@ export class MongoCollectionImpl<
   }
 
   #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
-    if (isMongoPreparedParamRef(value)) {
-      throw ormError(
-        'ORM.ARGUMENT_INVALID',
-        `The prepared parameter '${value.name}' cannot be used for '${path}' in collection '${this.#collectionName}'. ORM writes run at once, and value-object literals are built when the query is, so neither can take a prepared parameter.`,
-        { meta: { name: value.name, field: path } },
-      );
-    }
-    return new MongoParamRef(value, { codecId, name: path, collection: this.#collectionName });
+    return ormParam(value, path, { codecId, name: path, collection: this.#collectionName });
   }
 
   #wrapValueObject(
@@ -1233,10 +1227,11 @@ export class MongoCollectionImpl<
         : undefined;
       if (embedStoredName !== undefined) {
         const embedded = storage.embedded(key);
-        doc[embedStoredName] = new MongoParamRef(
+        doc[embedStoredName] = ormParam(
           embedded === undefined
             ? value
             : mapEach(value, (row) => storedDocumentOfRow(row, embedded)),
+          key,
         );
         continue;
       }
@@ -1266,10 +1261,11 @@ export class MongoCollectionImpl<
       const embedded = isEmbed ? storage.embedded(key) : undefined;
       result[storedName] = !isEmbed
         ? this.#wrapFieldValue(value, fields[key], key, 'write')
-        : new MongoParamRef(
+        : ormParam(
             embedded === undefined
               ? value
               : mapEach(value, (row) => storedDocumentOfRow(row, embedded)),
+            key,
           );
     }
     return result;

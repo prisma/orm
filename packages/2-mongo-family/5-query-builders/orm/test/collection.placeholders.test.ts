@@ -77,4 +77,58 @@ describe('a prepared placeholder in the Mongo ORM', () => {
     ).rejects.toMatchObject(refused);
     expect(plans).toEqual([]);
   });
+
+  const newUser = { name: 'Ann', email: 'a@b.c', loginCount: 0, tags: [], homeAddress: null };
+
+  it('is refused in an embedded row, and nothing is sent', async () => {
+    const { executor, plans } = recordingExecutor();
+    const tasks = createMongoCollection(collectionContext(contract, executor), 'Task');
+
+    await expect(
+      tasks.variant('bug').create({
+        title: 'Crash',
+        assigneeId: 'a1',
+        severity: 'high',
+        comments: [{ _id: 'c1', text: placeholder as unknown as string, createdAt: new Date() }],
+      }),
+    ).rejects.toMatchObject(refused);
+    expect(plans).toEqual([]);
+  });
+
+  it.each([
+    ['as a value', placeholder],
+    ['nested in an object', { inner: { deep: placeholder } }],
+    ['nested in an array', [1, [placeholder]]],
+  ])(
+    'is refused in a value-object key the contract does not have, %s, and nothing is sent',
+    async (_label, value) => {
+      const { executor, plans } = recordingExecutor();
+      const users = createMongoCollection(collectionContext(contract, executor), 'User');
+      const homeAddress = { city: 'Paris', country: 'FR', extra: value } as unknown as {
+        city: string;
+        country: string;
+      };
+
+      await expect(users.create({ ...newUser, homeAddress })).rejects.toMatchObject(refused);
+      await expect(users.where({ email: 'a@b.c' }).update({ homeAddress })).rejects.toMatchObject(
+        refused,
+      );
+      await expect(
+        users.where({ email: 'a@b.c' }).update((u) => [u.homeAddress.set(homeAddress)]),
+      ).rejects.toMatchObject(refused);
+      expect(plans).toEqual([]);
+    },
+  );
+
+  it('is refused in an operator the ORM does not encode with a codec', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = createMongoCollection(collectionContext(contract, executor), 'User');
+
+    await expect(
+      users
+        .where({ email: 'a@b.c' })
+        .update((u) => [u.loginCount.inc(placeholder as unknown as number)]),
+    ).rejects.toMatchObject(refused);
+    expect(plans).toEqual([]);
+  });
 });
