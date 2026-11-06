@@ -33,6 +33,7 @@ import type {
   MongoExecutionContext,
   MongoFieldShape,
   MongoFilterExpr,
+  MongoQueryExecutor,
   MongoQueryPlan,
   MongoResultShape,
 } from '@internal/mongo-query-ast/execution';
@@ -65,7 +66,6 @@ import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import type { MongoIncludeExpr } from './collection-state';
 import { emptyCollectionState, type MongoCollectionState } from './collection-state';
 import { compileMongoQuery } from './compile';
-import type { MongoQueryExecutor } from './executor';
 import {
   compileFieldOperations,
   createFieldAccessor,
