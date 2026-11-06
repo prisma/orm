@@ -1,8 +1,14 @@
 import { asNamespaceId, type JsonValue } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import type { EnumValueCoordinateJson } from '@internal/framework-components/control';
+import type {
+  EnumValueCoordinateJson,
+  KeepDataEdit,
+  RowsHoldingValue,
+} from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
+import { marksOfMigration } from './required-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
 const RowsHoldingValueMeta = type({
@@ -10,17 +16,27 @@ const RowsHoldingValueMeta = type({
     enumValue: { 'namespaceId?': 'string', enum: 'string', member: 'string' },
     value: 'string | number',
     'codecRef?': { codecId: 'string', 'typeParams?': 'unknown' },
+    table: 'string',
+    column: 'string',
+    storedValue: 'string | number',
+    'path?': 'string',
   },
 });
 
 /**
  * The enum value a removal check guards, with its stored value as the contract stores it and the
- * column's codec, which the call that removes it carries.
+ * column's codec, which the call that removes it carries, and the column it is removed from.
  */
 export interface RowsHoldingValueMark {
   readonly enumValue: EnumValueCoordinateJson;
   readonly value: string | number;
   readonly codecRef?: CodecRef;
+  readonly table: string;
+  readonly column: string;
+  /** The value as the database stores it, which the runner counts. */
+  readonly storedValue: string | number;
+  /** The JSON path inside the column at which the value is removed, for a member of JSON. */
+  readonly path?: string;
 }
 
 /**
@@ -39,7 +55,7 @@ export function rowsHoldingValueOf(
 ): RowsHoldingValueMark | undefined {
   const meta = RowsHoldingValueMeta(step.meta ?? {});
   if (meta instanceof type.errors) return undefined;
-  const { enumValue, value, codecRef } = meta.rowsHoldingValue;
+  const { enumValue, value, codecRef, table, column, storedValue, path } = meta.rowsHoldingValue;
   return {
     enumValue: {
       ...(enumValue.namespaceId === undefined
@@ -50,6 +66,10 @@ export function rowsHoldingValueOf(
     },
     value,
     ...(codecRef === undefined ? {} : { codecRef: codecRefOf(codecRef) }),
+    table,
+    column,
+    storedValue,
+    ...ifDefined('path', path),
   };
 }
 
@@ -65,13 +85,103 @@ function codecRefOf(codecRef: { codecId: string; typeParams?: unknown }): CodecR
       };
 }
 
-/** What a runner failure says of the rows that hold a stored value a column cannot lose: the value as the database stores it. */
-export function rowsHoldingValueSummary(
-  table: string,
-  column: string,
-  storedValue: unknown,
-  rows: number,
-): string {
-  const counted = `${rows} ${rows === 1 ? 'row' : 'rows'} of "${table}"`;
-  return `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(storedValue)} in column "${column}", which takes no NULL, so the value cannot be removed.`;
+type HoldingPlace = Pick<RowsHoldingValueMark, 'table' | 'column' | 'storedValue' | 'path'>;
+
+function holdingText(place: HoldingPlace, rows: number): string {
+  const counted = `${rows} ${rows === 1 ? 'row' : 'rows'} of "${place.table}"`;
+  const holds = `${counted} ${rows === 1 ? 'holds' : 'hold'} ${JSON.stringify(place.storedValue)}`;
+  return place.path === undefined
+    ? `${holds} in column "${place.column}"`
+    : `${holds} at path ${JSON.stringify(place.path)} in column "${place.column}"`;
+}
+
+/** What a runner failure says of the rows that hold a stored value a column, or a member at a path inside it, cannot lose: the value as the database stores it. */
+export function rowsHoldingValueSummary(place: HoldingPlace, rows: number): string {
+  const holds = holdingText(place, rows);
+  return place.path === undefined
+    ? `${holds}, which takes no NULL, so the value cannot be removed.`
+    : `${holds}, a member that takes no null, so the value cannot be removed.`;
+}
+
+/** A removal check of a plan's operation, with the {@link RowsHoldingValueMark} it carries. */
+export interface MarkedRemoval<TOperation> {
+  readonly operation: TOperation;
+  readonly operationIndex: number;
+  readonly check: SqlMigrationPlanOperationStep;
+  readonly mark: RowsHoldingValueMark;
+}
+
+/** The marked removal checks of the migration of the operation at `operationIndex`, in plan order. */
+export function removalsOfMigration<
+  TOperation extends {
+    readonly precheck: readonly SqlMigrationPlanOperationStep[];
+    readonly execute: readonly SqlMigrationPlanOperationStep[];
+    readonly postcheck: readonly SqlMigrationPlanOperationStep[];
+  },
+>(
+  operations: readonly TOperation[],
+  edges: readonly { readonly operationCount: number }[],
+  operationIndex: number,
+): readonly MarkedRemoval<TOperation>[] {
+  return marksOfMigration(operations, edges, operationIndex, rowsHoldingValueOf).map(
+    ({ operation, operationIndex: index, step, mark }) => ({
+      operation,
+      operationIndex: index,
+      check: step,
+      mark,
+    }),
+  );
+}
+
+/**
+ * A runner failure's summary and reports for the rows that hold stored values removals cannot take
+ * out of required columns. The failed removal is counted first, and the summary names it; undefined
+ * when that count fails. Then each other removal of `others` whose check `checkFails` says fails is
+ * counted, until a count fails, such as for a column an earlier operation adds, so that the advice
+ * can name every column that still holds a removed value.
+ */
+export async function rowsHoldingValueFailure<TOperation>(input: {
+  readonly failed: MarkedRemoval<TOperation>;
+  readonly others: readonly MarkedRemoval<TOperation>[];
+  readonly checkFails: (removal: MarkedRemoval<TOperation>) => Promise<boolean>;
+  readonly count: (removal: MarkedRemoval<TOperation>) => Promise<number>;
+  readonly keepDataEdit: (removal: MarkedRemoval<TOperation>) => KeepDataEdit | undefined;
+}): Promise<
+  { readonly summary: string; readonly reports: readonly RowsHoldingValue[] } | undefined
+> {
+  const { failed } = input;
+  const report = (removal: MarkedRemoval<TOperation>, rows: number): RowsHoldingValue => ({
+    enumValue: removal.mark.enumValue,
+    value: removal.mark.storedValue,
+    rows,
+    operationIndex: removal.operationIndex,
+    ...ifDefined('keepDataEdit', input.keepDataEdit(removal)),
+  });
+  let rows: number;
+  try {
+    rows = await input.count(failed);
+  } catch {
+    return undefined;
+  }
+  const counted = [{ removal: failed, rows }];
+  for (const other of input.others) {
+    if (other.operationIndex === failed.operationIndex) continue;
+    let otherRows: number;
+    try {
+      otherRows = (await input.checkFails(other)) ? await input.count(other) : 0;
+    } catch {
+      break;
+    }
+    if (otherRows > 0) counted.push({ removal: other, rows: otherRows });
+  }
+  return {
+    summary:
+      counted.length === 1
+        ? rowsHoldingValueSummary(failed.mark, rows)
+        : [
+            'Rows hold values that the migration removes where no null is allowed, so the values cannot be removed:',
+            ...counted.map((each) => `- ${holdingText(each.removal.mark, each.rows)}`),
+          ].join('\n'),
+    reports: counted.map((each) => report(each.removal, each.rows)),
+  };
 }

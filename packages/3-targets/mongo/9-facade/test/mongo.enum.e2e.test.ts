@@ -5,14 +5,16 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   deriveCollectionValidators,
   type ExtractMongoFieldOutputTypes,
   type FieldValueSets,
 } from '@internal/mongo-contract';
 import { mongoEmission } from '@internal/mongo-emitter';
-import { mongoDescriptorById, mongoStandardCodecs } from '@internal/target-mongo/codecs';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import { mongoDataTypes } from '@internal/target-mongo/data-types';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
@@ -60,11 +62,12 @@ const contract = defineContract({
   models: { Account },
 });
 
+const standardCodecs = assembleMongoCodecRegistry([mongoRuntimeTarget]);
+
 const knownCodecIds = new Set(['mongo/string@1', 'mongo/objectId@1']);
 
 const codecLookup: CodecLookupWithDescriptors = {
-  get: (id: string) =>
-    knownCodecIds.has(id) ? mongoStandardCodecs.find((codec) => codec.id === id) : undefined,
+  get: (id: string) => (knownCodecIds.has(id) ? standardCodecs.get(id) : undefined),
   descriptorFor: (id: string) => (knownCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
   // Enum field types are produced through the codec seam (TML-2952): the emitter

@@ -2,21 +2,30 @@ import {
   type CallSubjects,
   type FieldEventCall,
   fieldEventStorage,
+  type StoredValueSubject,
   type SubjectStorage,
   storageNameOfOperation,
+  UnfilledValue,
   unknownCallNames,
 } from '@internal/family-sql/control';
-import type { MigrationDataLossKind, OpFactoryCall } from '@internal/framework-components/control';
+import type {
+  MigrationDataLossKind,
+  ModelCoordinate,
+  OpFactoryCall,
+  ValueObjectFieldCoordinate,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  DeleteRowsCall,
   DropColumnCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import type { StoredValueSubject } from './stored-value-calls';
 
 type LostStorage = CallSubjects['dataLoss'][number];
 
@@ -71,6 +80,11 @@ function temporaryValuesOf(call: RecreateTableCall): CallSubjects['temporaryValu
   );
 }
 
+/** What to do about the rows of `tables` that reference deleted rows, which the SQLite runner does not delete. */
+function referencedRowsAdvice(tables: readonly string[]): string {
+  return `SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of ${tables.map((table) => `"${table}"`).join(', ')} that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.`;
+}
+
 /**
  * What each call of a SQLite plan loses. A recreate that leaves a column out loses its values
  * itself, so a later drop of that column is not listed again.
@@ -79,6 +93,9 @@ export function sqliteCallSubjects(
   calls: readonly OpFactoryCall[],
   fieldEvents: ReadonlyMap<OpFactoryCall, FieldEventCall>,
   storedValues: ReadonlyMap<OpFactoryCall, StoredValueSubject> = new Map(),
+  storedKeys: ReadonlyMap<OpFactoryCall, ValueObjectFieldCoordinate> = new Map(),
+  variantRows: ReadonlyMap<OpFactoryCall, ModelCoordinate> = new Map(),
+  referencingTables: (table: string) => readonly string[] = () => [],
 ): readonly CallSubjects[] {
   const lostColumns = new Set<string>();
   const unknownNames = unknownCallNames(
@@ -90,6 +107,8 @@ export function sqliteCallSubjects(
         !(call instanceof DropTableCall) &&
         !(call instanceof RawSqlCall) &&
         !(call instanceof RemoveStoredValueCall) &&
+        !(call instanceof RemoveStoredKeyCall) &&
+        !(call instanceof DeleteRowsCall) &&
         !fieldEvents.has(call),
     ),
   );
@@ -121,6 +140,40 @@ export function sqliteCallSubjects(
         temporaryValues: [],
       };
     }
+    if (call instanceof DeleteRowsCall) {
+      const cascaded = new Set(call.cascade.map(({ table }) => table));
+      const referencing = referencingTables(call.tableName).filter((table) => !cascaded.has(table));
+      return {
+        operationCount,
+        label,
+        dataLoss: [
+          {
+            ...lost(tableTarget(call.tableName)),
+            ...ifDefined('model', variantRows.get(call)),
+            ...ifDefined(
+              'keepDataAdvice',
+              referencing.length === 0 ? undefined : referencedRowsAdvice(referencing),
+            ),
+          },
+        ],
+        accessChanges: [],
+        temporaryValues: [],
+      };
+    }
+    if (call instanceof RemoveStoredKeyCall) {
+      return {
+        operationCount,
+        label,
+        dataLoss: [
+          {
+            ...lost(columnTarget(call.tableName, call.columnName)),
+            ...ifDefined('valueObjectField', storedKeys.get(call)),
+          },
+        ],
+        accessChanges: [],
+        temporaryValues: [],
+      };
+    }
     if (call instanceof RemoveStoredValueCall) {
       const subject = storedValues.get(call);
       return {
@@ -144,6 +197,26 @@ export function sqliteCallSubjects(
         dataLoss: [lost(tableTarget(call.tableName))],
         accessChanges: [],
         temporaryValues: [],
+      };
+    }
+    if (call instanceof FillStoredKeyCall) {
+      const valueObjectField = storedKeys.get(call);
+      return {
+        operationCount,
+        label,
+        dataLoss: [],
+        accessChanges: [],
+        temporaryValues:
+          call.value instanceof UnfilledValue || valueObjectField === undefined
+            ? []
+            : [
+                {
+                  table: call.tableName,
+                  column: call.columnName,
+                  value: JSON.stringify(call.value),
+                  valueObjectField,
+                },
+              ],
       };
     }
     if (call.operationClass !== 'destructive') {

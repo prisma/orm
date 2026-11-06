@@ -40,6 +40,7 @@
   "devDependencies": {
     "mongodb": "catalog:",
     "@internal/emitter": "workspace:8.0.0-rc.22",
+    "@internal/mongo-codec": "workspace:8.0.0-rc.22",
     "@internal/mongo-emitter": "workspace:8.0.0-rc.22",
     "@internal/psl-parser": "workspace:8.0.0-rc.22",
     "@repo/test-utils": "workspace:8.0.0-rc.22",

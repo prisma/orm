@@ -24,10 +24,14 @@ describe('MySQL data types', () => {
     expect(mysqlDataTypes.map((type) => type.id).sort()).toEqual([
       'mysql/bigint',
       'mysql/char',
+      'mysql/date',
       'mysql/datetime',
+      'mysql/duration',
       'mysql/enum',
       'mysql/int',
       'mysql/text',
+      'mysql/time',
+      'mysql/timestamp',
       'mysql/varchar',
       'sql/raw',
     ]);

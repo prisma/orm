@@ -12,12 +12,17 @@ import { describe, expect, it } from 'vitest';
 
 const databasesDirectory = join(import.meta.dirname, '../../../../packages/3-targets');
 
-const targetPackageNames = readdirSync(databasesDirectory).map((database): string => {
-  const manifest: { readonly name: string } = JSON.parse(
-    readFileSync(join(databasesDirectory, database, '1-target', 'package.json'), 'utf8'),
-  );
-  return manifest.name;
-});
+/** `0-shared` holds packages several databases share, not a database (ADR 314). */
+const SHARED_FOLDER = '0-shared';
+
+const targetPackageNames = readdirSync(databasesDirectory)
+  .filter((folder) => folder !== SHARED_FOLDER)
+  .map((database): string => {
+    const manifest: { readonly name: string } = JSON.parse(
+      readFileSync(join(databasesDirectory, database, '1-target', 'package.json'), 'utf8'),
+    );
+    return manifest.name;
+  });
 
 interface TargetComponent {
   readonly familyId?: string;

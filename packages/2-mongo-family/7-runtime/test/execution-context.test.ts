@@ -1,7 +1,7 @@
 import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import {
@@ -17,20 +17,23 @@ const NS = '__unbound__';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
-function registryWith(...ids: readonly string[]) {
-  const registry = newMongoCodecRegistry();
-  for (const id of ids) {
-    registry.register(
-      mongoCodec({
-        typeId: id,
-        fromWire: (w: string) => w,
-        toWire: (v: string) => v,
-        dataType: textType,
-        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
-      }),
-    );
-  }
-  return registry;
+function codecTypesWith(...ids: readonly string[]) {
+  return {
+    codecTypes: {
+      codecDescriptors: ids.map((id) =>
+        mongoCodecDescriptor(
+          mongoCodec({
+            typeId: id,
+            fromWire: (w: string) => w,
+            toWire: (v: string) => v,
+            dataType: textType,
+            fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+          }),
+          { traits: [] },
+        ),
+      ),
+    },
+  };
 }
 
 function target(): MongoRuntimeTargetDescriptor<'mongo'> {
@@ -40,7 +43,7 @@ function target(): MongoRuntimeTargetDescriptor<'mongo'> {
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith('test/target@1'),
+    types: codecTypesWith('test/target@1'),
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };
 }
@@ -54,7 +57,7 @@ function adapter(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith('test/adapter@1'),
+    types: codecTypesWith('test/adapter@1'),
     mutationDefaultGenerators: () => generators,
     create: () => {
       throw new Error('the execution context never instantiates the adapter');
@@ -75,7 +78,7 @@ function extension(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => registryWith(...(options.codecIds ?? [])),
+    types: codecTypesWith(...(options.codecIds ?? [])),
     ...(options.generators ? { mutationDefaultGenerators: () => options.generators ?? [] } : {}),
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };
@@ -210,5 +213,52 @@ describe('context.applyMutationDefaults', () => {
     expect(fields(contextFor([createdAt, updatedAt]), 'update', { title: 'y' })).toEqual([
       'updatedAt',
     ]);
+  });
+});
+
+describe('createMongoExecutionContext contract requirements', () => {
+  const requiringX: MongoContract = { ...testContract, extensions: { x: {} } };
+
+  it('throws RUNTIME.MISSING_EXTENSION_PACK when the stack lacks a required extension', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    expect(() => createMongoExecutionContext({ contract: requiringX, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.MISSING_EXTENSION_PACK',
+        message:
+          "Contract requires extension pack(s) 'x', but runtime descriptors do not provide matching component(s).",
+        details: { packIds: ['x'] },
+      }),
+    );
+  });
+
+  it('builds the context when the stack provides the required extension', () => {
+    const stack = createMongoExecutionStack({
+      target: target(),
+      adapter: adapter(),
+      extensions: [extension('x', {})],
+    });
+    expect(createMongoExecutionContext({ contract: requiringX, stack }).contract).toBe(requiringX);
+  });
+
+  it('throws RUNTIME.CONTRACT_TARGET_MISMATCH for a contract of another target', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    const contract: MongoContract = { ...testContract, target: 'postgres' };
+    expect(() => createMongoExecutionContext({ contract, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CONTRACT_TARGET_MISMATCH',
+        message: "Contract target 'postgres' does not match runtime target descriptor 'mongo'.",
+      }),
+    );
+  });
+
+  it('throws RUNTIME.CONTRACT_FAMILY_MISMATCH for a contract of another family', () => {
+    const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
+    const contract: MongoContract = { ...testContract, targetFamily: 'sql' };
+    expect(() => createMongoExecutionContext({ contract, stack })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.CONTRACT_FAMILY_MISMATCH',
+        message: "Contract target family 'sql' does not match runtime family 'mongo'.",
+      }),
+    );
   });
 });

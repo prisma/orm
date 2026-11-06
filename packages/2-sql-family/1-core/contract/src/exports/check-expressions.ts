@@ -7,6 +7,8 @@ export {
   type ResolvedValueObject,
   type ResolvedValueObjectField,
   type ResolvedValueObjectFieldType,
+  reachesAny,
+  referenceKey,
   resolveColumnValueObject,
   resolveValueObject,
 } from '../check-expressions';

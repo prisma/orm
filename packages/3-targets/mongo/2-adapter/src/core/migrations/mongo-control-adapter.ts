@@ -6,6 +6,7 @@ import type {
 } from '@internal/family-mongo/control-adapter';
 import { APP_SPACE_ID, type ControlDriverInstance } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
+import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import {
@@ -46,8 +47,12 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
   readonly familyId = 'mongo' as const;
   readonly targetId = 'mongo' as const;
   readonly markerLocation = MONGO_MARKER_COLLECTION;
-  readonly #adapter: MongoAdapter = createMongoAdapter();
+  readonly #adapter: MongoAdapter;
   readonly #markerLedgerCollection = collection<MarkerLedgerDocShape>(MARKER_LEDGER_COLLECTION);
+
+  constructor(codecs?: MongoCodecRegistry) {
+    this.#adapter = createMongoAdapter(codecs);
+  }
 
   async #execute(
     driver: ControlDriverInstance<'mongo', 'mongo'>,

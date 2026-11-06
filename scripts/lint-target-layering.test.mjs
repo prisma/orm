@@ -103,6 +103,22 @@ describe('findLayeringViolations', () => {
     ]);
   });
 
+  test('does not take 0-shared, the code several targets share, for a database', () => {
+    pkg('0-shared/1-shared-logic', { name: '@internal/shared-logic' });
+    pkg(
+      'alpha/1-target',
+      { name: '@internal/target-alpha', dependencies: { '@internal/shared-logic': 'workspace:*' } },
+      { 'src/core/codecs.ts': "import { x } from '@internal/shared-logic/now';" },
+    );
+    assert.deepEqual(
+      {
+        databases: [...new Set(targetPackages(base).map(({ database }) => database))],
+        violations: reasons(),
+      },
+      { databases: ['alpha', 'beta'], violations: [] },
+    );
+  });
+
   test('main exits 1 on a peer dependency on the facade', () => {
     pkg('alpha/3-driver', {
       name: '@internal/driver-alpha',

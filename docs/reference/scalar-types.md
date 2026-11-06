@@ -63,7 +63,7 @@ One limitation to know about:
 
 ## PostgreSQL
 
-These are the current names. The date and time types below already follow ADR 257's suffix rule, and their old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias. The Postgres and SQLite rename project will change several of the other names to the target's own type names and update this table.
+These are the current names. The date and time types below already follow ADR 257's suffix rule, and their old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias.
 
 The date and time types have two layers ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)). Each explicit type in the table below names one column type and one kind of value. The convenience types `DateTime`, `Date`, `Time` and `Duration` are named for what a field means, and each becomes one explicit type, chosen by its optional `as` and `storage` arguments: `as` is the value the application reads, and `storage` is the database type that stores it; `precision` is passed on to the explicit type. The contract stores only the explicit type, so `DateTime(as: temporal)` and `TimestamptzTemporal` emit the same contract.
 
@@ -150,7 +150,22 @@ PostgreSQL prints a `money` value in the connection's `lc_monetary` locale, with
 
 ## SQLite
 
-These are the current names; the Postgres and SQLite rename project will update this table. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it.
+Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it.
+
+SQLite has the convenience date and time types too ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
+
+| Convenience type | `as` | Becomes | Stored text |
+| --- | --- | --- | --- |
+| `DateTime(as?, storage?)` | `jsDate` (default) | `DatetimeJsDate` | `2024-01-01T00:00:00.000Z`, the instant in UTC with three fraction digits |
+| | `temporal` | `DatetimeTemporal` | |
+| | `string` | `DatetimeString` | |
+| `Date(as?, storage?)` | `string` (default) | `DateString` | `2024-02-29`, a year from 0000 to 9999 |
+| | `temporal` | `DateTemporal` | |
+| `Time(as?, storage?)` | `string` (default) | `TimeString` | `09:30:00.000`, always three fraction digits |
+| | `temporal` | `TimeTemporal` | |
+| `Duration(as?, storage?)` | `string` (default) | `DurationString` | an ISO 8601 duration, as written: `PT1H30M` |
+
+A write stores the stored text: a value in another ISO 8601 form is converted, an instant's offset to UTC, and a digit below a millisecond is refused rather than rounded. `@default(now())` on a `Date` or `Time` column is `date('now')` or `strftime('%H:%M:%f','now')`, and `@onCreate(now())` and `@onUpdate(now())` write the current UTC value in each type's form. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`. The `Temporal` types need a global `Temporal` in the application, as on PostgreSQL; the SQLite target's control entry sets the fallback for the commands. A duration is stored as written, so `DurationString` compares its text: a filter on `PT60M` does not match a row written as `PT1H`, as it does on PostgreSQL, and the field cannot be ordered. Write durations in one form if you filter on them.
 
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
@@ -160,32 +175,78 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `BigIntNumber` | — | `sqlite/bigintnumber@1` | `integer` | `number` (safe-integer range) |
 | `Float` | — | `sqlite/real@1` | `real` | `number` |
 | `Decimal` | — | `sqlite/text@1` | `text` | `string` |
-| `DateTime` | — | `sqlite/datetime@1` | `text` | `Date` |
+| `DatetimeJsDate` | — | `sqlite/datetime@1` | `text` | `Date` |
+| `DatetimeTemporal` | — | `sqlite/datetime-temporal@1` | `text` | `Temporal.Instant` |
+| `DatetimeString` | — | `sqlite/datetime-string@1` | `text` | `string`, the stored text |
+| `DateString` | — | `sqlite/date-string@1` | `text` | `string` (ISO 8601) |
+| `DateTemporal` | — | `sqlite/date-temporal@1` | `text` | `Temporal.PlainDate` |
+| `TimeString` | — | `sqlite/time-string@1` | `text` | `string` (ISO 8601) |
+| `TimeTemporal` | — | `sqlite/time-temporal@1` | `text` | `Temporal.PlainTime` |
+| `DurationString` | — | `sqlite/duration-string@1` | `text` | `string`, an ISO 8601 duration |
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
 | `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `character varying` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `character` | `string` |
 
-A `DateTime` default is written with the `datetime` tag, as in `@default(datetime`2024-01-01T00:00:00Z`)`, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime` and a `Json` column `sqlite/json`, both stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+A `DateTime` default is written with the `datetime` tag, as in ``@default(datetime`2024-01-01T00:00:00Z`)``, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
+
+## MySQL
+
+Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target.
+
+MySQL has the convenience date and time types ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, the type `DateTime` named before, so its contract is unchanged.
+
+| Convenience type | `as` | `storage` | Becomes |
+| --- | --- | --- | --- |
+| `DateTime(as?, storage?, precision?)` | `jsDate` (default), `temporal`, `string` | `datetime` (default), `timestamp` | `DatetimeJsDate(3)`, `DatetimeTemporal(6)`, `DatetimeString(6)`, `TimestampJsDate(3)`, `TimestampTemporal(6)`, `TimestampString(6)` |
+| `Date(as?, storage?)` | `string` (default), `temporal` | `date` | `DateString`, `DateTemporal` |
+| `Time(as?, storage?, precision?)` | `string` (default), `temporal` | `time` | `TimeString(6)`, `TimeTemporal(6)` |
+| `Duration(as?, storage?)` | `string` | `varchar` | `DurationString` |
+
+The precision in brackets is the default when none is written. Every instant is read and written as UTC. The driver sets each session's `time_zone` to `+00:00`; a raw `SET time_zone` stays on its pooled connection, and MySQL then shifts every `timestamp` value and `now()` default on that connection. Set it back to `+00:00` after the raw queries that need another zone. `datetime` and `date` hold the years 1000 to 9999, and `timestamp` holds 1970-01-01T00:00:01Z to 2038-01-19T03:14:07.999999Z; a value outside them is refused on write. `Time` is a time of day, so a value outside 00:00:00 to 23:59:59.999999 is refused on write and on read, although MySQL's `time` holds more. A written value with more fraction digits than its column holds is cut to the column's precision, because MySQL would round it, possibly into the next day. A value with digits below a microsecond, such as a `Temporal.Instant` ending in `.123456789`, is refused with `RUNTIME.ENCODE_FAILED` whatever its column's precision; round it to microseconds first. A `jsDate` type reads a JavaScript `Date`, which holds milliseconds, so it drops the microseconds of a row another client wrote to a column of precision 4 to 6, and a filter or write-back with that `Date` does not match the row; read such a column with `as: temporal` or `as: string`. A column with no written precision holds whole seconds, so a value written to it is cut to the second. `@default(now())` is `CURRENT_TIMESTAMP(p)`, `CURRENT_DATE` or `CURRENT_TIME(p)` by the column's type. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`. The `Temporal` types need a global `Temporal` in the application; the MySQL target's control entry sets the fallback for the commands. A duration is stored as written, so a filter on `PT60M` does not match a row written as `PT1H`. MySQL's migration planner does not change a column's type yet, so changing a field between these types is reported by `db verify` and refused by `migration plan`.
+
+| PSL name | TS helper | Codec id | Storage type | Application type |
+| --- | --- | --- | --- | --- |
+| `String` | — | `sql/varchar@1` | `varchar(191)` | `string` |
+| `Int` | — | `mysql/int@1` | `int` | `number` |
+| `BigInt` | — | `mysql/bigint@1` | `bigint` | `bigint` |
+| `DatetimeJsDate(p?)` | — | `mysql/datetime@1` | `datetime(p)` | `Date` |
+| `DatetimeTemporal(p?)` | — | `mysql/datetime-temporal@1` | `datetime(p)` | `Temporal.Instant` |
+| `DatetimeString(p?)` | — | `mysql/datetime-string@1` | `datetime(p)` | `string`, the instant in UTC (ISO 8601) |
+| `TimestampJsDate(p?)` | — | `mysql/timestamp-date@1` | `timestamp(p)` | `Date` |
+| `TimestampTemporal(p?)` | — | `mysql/timestamp-temporal@1` | `timestamp(p)` | `Temporal.Instant` |
+| `TimestampString(p?)` | — | `mysql/timestamp-string@1` | `timestamp(p)` | `string`, the instant in UTC (ISO 8601) |
+| `DateString` | — | `mysql/date-string@1` | `date` | `string` (ISO 8601) |
+| `DateTemporal` | — | `mysql/date-temporal@1` | `date` | `Temporal.PlainDate` |
+| `TimeString(p?)` | — | `mysql/time-string@1` | `time(p)` | `string` (ISO 8601) |
+| `TimeTemporal(p?)` | — | `mysql/time-temporal@1` | `time(p)` | `Temporal.PlainTime` |
+| `DurationString` | — | `mysql/duration-string@1` | `varchar(191)` | `string`, an ISO 8601 duration |
+| `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
+| `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `char(n)` | `string` |
+
+A default is written with the tag of its column type: `datetime`, `timestamp`, `date`, `time` or `duration`, as in ``@default(datetime`2024-01-01T00:00:00`)``. [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the stored form of each.
 
 ## Across targets
 
 The PSL name on each target for a concept, and the Prisma 6/7 name a migrating schema uses. A dash means the target has no scalar type for the concept.
 
-| Concept | Prisma 6/7 name | PostgreSQL | SQLite | MongoDB |
-| --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
-| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `Int64` |
-| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | `Int64Number` |
-| double | `Float` | `Float` | `Float` | `Double` |
-| decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
-| boolean | `Boolean` | `Boolean` | — | `Bool` |
-| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` | `Date` |
-| text | `String` | `String` | `String` | `String` |
-| bytes | `Bytes` | `Bytes` | `Bytes` | `Binary` |
-| JSON | `Json` | `Json`, `Jsonb` | `Json` | `Json` |
-| any value | — | — | — | `Bson` |
-| ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
+| Concept | Prisma 6/7 name | PostgreSQL | SQLite | MySQL | MongoDB |
+| --- | --- | --- | --- | --- | --- |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int` | `Int32` |
+| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `BigInt` | `Int64` |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | — | `Int64Number` |
+| double | `Float` | `Float` | `Float` | — | `Double` |
+| decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | — | `Decimal128` |
+| boolean | `Boolean` | `Boolean` | — | — | `Bool` |
+| timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `Date` |
+| calendar date | `DateTime @db.Date` | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | — |
+| time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | — |
+| duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | — |
+| text | `String` | `String` | `String` | `String` | `String` |
+| bytes | `Bytes` | `Bytes` | `Bytes` | — | `Binary` |
+| JSON | `Json` | `Json`, `Jsonb` | `Json` | — | `Json` |
+| any value | — | — | — | — | `Bson` |
+| ObjectId | `String @db.ObjectId` (MongoDB) | — | — | — | `ObjectId` |
 
 A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
 

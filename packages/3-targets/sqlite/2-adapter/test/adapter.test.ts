@@ -38,6 +38,7 @@ import { litParams } from '@repo/test-utils/lowered-params';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import { createSqliteAdapter } from '../src/core/adapter';
+import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import type { SqliteContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
@@ -92,6 +93,16 @@ describe('SQLite adapter', () => {
 
   it('SQLite adapter does not report sql.scalarList capability', () => {
     expect(adapter.profile.capabilities['sql']).not.toMatchObject({ scalarList: true });
+  });
+
+  it('reports that an insert conflict clause applies only to the columns it names', () => {
+    expect({
+      profile: adapter.profile.capabilities['sql'],
+      contract: sqliteAdapterDescriptorMeta.capabilities.sql,
+    }).toMatchObject({
+      profile: { insertOnConflictTarget: true },
+      contract: { insertOnConflictTarget: true },
+    });
   });
 
   it.each([

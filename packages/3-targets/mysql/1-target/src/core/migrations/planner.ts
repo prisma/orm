@@ -200,6 +200,7 @@ export class MysqlMigrationPlanner
         contract: options.contract,
         origins: NO_RENAMED_ORIGINS,
         byHand: mysqlTableRenameByHand,
+        removedVariants: [],
       }),
     };
   }
