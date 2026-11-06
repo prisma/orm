@@ -64,7 +64,12 @@ export function contract(
             Object.entries(models).map(([name, spec]) => [
               name,
               {
-                fields: Object.fromEntries(spec.fields.map((field) => [field, {}])),
+                fields: Object.fromEntries(
+                  spec.fields.map((field) => [
+                    field,
+                    { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+                  ]),
+                ),
                 relations: {},
                 storage: {
                   collection: spec.collection,
