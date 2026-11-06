@@ -89,6 +89,65 @@ describe('parameterizeQuery scalar values', () => {
     `)
   })
 
+  it('parameterizes integer-valued floats outside the Int range', () => {
+    const query: JsonQuery = {
+      modelName: 'User',
+      action: 'findMany',
+      query: {
+        arguments: { where: { salary: { in: [65333601047007986000, 1.5430800568907436e25] } } },
+        selection: { $scalars: true },
+      },
+    }
+
+    const result = parameterizeQuery(query, paramGraph)
+
+    expect(result.parameterizedQuery.query.arguments).toEqual({
+      where: {
+        salary: {
+          in: { $type: 'Param', value: { name: '%1', type: 'List', inner: { type: 'Float' } } },
+        },
+      },
+    })
+    expect(result.placeholderValues).toEqual({
+      '%1': [65333601047007986000, 1.5430800568907436e25],
+    })
+  })
+
+  it('parameterizes integer-valued floats in data', () => {
+    const query: JsonQuery = {
+      modelName: 'User',
+      action: 'updateMany',
+      query: {
+        arguments: { data: { salary: 65333601047007986000 } },
+        selection: { count: true },
+      },
+    }
+
+    const result = parameterizeQuery(query, paramGraph)
+
+    expect(result.parameterizedQuery.query.arguments).toEqual({
+      data: { salary: { $type: 'Param', value: { name: '%1', type: 'Float' } } },
+    })
+    expect(result.placeholderValues).toEqual({ '%1': 65333601047007986000 })
+  })
+
+  it('leaves integers above the Int range inline on Int fields', () => {
+    const query: JsonQuery = {
+      modelName: 'User',
+      action: 'findMany',
+      query: {
+        arguments: { where: { age: 2 ** 31 } },
+        selection: { $scalars: true },
+      },
+    }
+
+    const result = parameterizeQuery(query, paramGraph)
+
+    expect(result.parameterizedQuery.query.arguments).toEqual({
+      where: { age: 2 ** 31 },
+    })
+  })
+
   it('preserves null values', () => {
     const query: JsonQuery = {
       modelName: 'User',
