@@ -532,7 +532,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     >(options.schema);
     const fromContract = options.fromContract;
     const unsupported = options.statements.find(
-      (statement) => statement.kind !== 'rename' && statement.entity !== 'field',
+      (statement) =>
+        statement.kind !== 'rename' &&
+        !(
+          (statement.kind === 'convert' || statement.kind === 'backfill') &&
+          statement.entity === 'field'
+        ),
     );
     if (unsupported !== undefined) {
       return {
@@ -578,18 +583,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
             ),
           });
     const contracts = { fromContract: fromContract ?? contract, contract };
-    const converted = options.statements.flatMap((statement) =>
-      statement.kind === 'convert' && statement.entity === 'field'
-        ? [{ statement, change: typeChangeConverted(statement, typeChanges) }]
-        : [],
-    );
-    const unconverted = typeChanges.filter(
-      (change) => !converted.some((each) => each.change === change),
-    );
-    const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
+    const converted: TypeChange[] = [];
     const transforms = options.statements.flatMap((statement): PlannedTransform[] => {
       if (statement.kind === 'convert' && statement.entity === 'field') {
         const change = typeChangeConverted(statement, typeChanges);
+        if (change !== undefined) converted.push(change);
         return [{ statement, outcome: convertTransform(statement, change, contracts) }];
       }
       if (statement.kind === 'backfill' && statement.entity === 'field') {
@@ -602,6 +600,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       }
       return [];
     });
+    const unconverted = typeChanges.filter((change) => !converted.includes(change));
+    const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
     const fills = planFieldFills({
       fromContract,
       contract,

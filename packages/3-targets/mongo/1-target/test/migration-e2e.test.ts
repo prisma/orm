@@ -398,6 +398,48 @@ describe('migration file E2E', () => {
       );
     });
 
+    it('reproduces a filled data transform scaffold with a variant filter', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { DataTransformCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const { dataTransform, rawAggregate, rawUpdateMany } = await import(
+        '../src/core/migrations/migration-factories'
+      );
+      const filter = {
+        $and: [
+          { type: 'bug' },
+          { $expr: { $not: { $in: [{ $type: '$severity' }, ['missing', 'null', 'int']] } } },
+        ],
+      };
+      const update = [
+        { $set: { severity: { $convert: { input: '$severity', to: 'int', onError: 0 } } } },
+      ];
+      const call = new DataTransformCall('Bug.severity', 'tasks', filter);
+
+      const scaffold = renderCallsToTypeScript([call], defaultMeta);
+      expect(scaffold).toContain('placeholder("Bug.severity:update")');
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        scaffold
+          .replace('placeholder("Bug.severity:update")', JSON.stringify(update))
+          .replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(
+          serializeMongoOps([
+            dataTransform('Bug.severity', {
+              check: { source: () => rawAggregate('tasks', [{ $match: filter }, { $limit: 1 }]) },
+              run: () => rawUpdateMany('tasks', filter, update, { bypassDocumentValidation: true }),
+            }),
+          ]),
+        ),
+      );
+    });
+
     it('reproduces the renameCollection operation in ops.json', async () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { RenameCollectionCall } = await import('../src/core/migrations/op-factory-call');
