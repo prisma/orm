@@ -28,7 +28,7 @@ describe('PrismaBetterSqlite3Adapter', () => {
     await expect(adapter.startTransaction()).rejects.toMatchObject({
       name: 'DriverAdapterError',
       cause: {
-        _tag: 'SocketTimeout',
+        kind: 'SocketTimeout',
       },
     })
 
