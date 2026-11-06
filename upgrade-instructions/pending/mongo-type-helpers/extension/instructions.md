@@ -49,7 +49,7 @@ Commit your work first. The script reads your code with the TypeScript compiler,
 node scripts/rewrite-mongo-field-types.ts
 ```
 
-Pass files or directories to limit it. The script prints a line for each call it leaves. Rewrite each one by hand, except where the line says the script cannot tell the `field` is the MongoDB builder's and it is not. Then type-check the project. The script neither changes nor reports a `field.scalar` call whose argument is computed, such as `field.scalar(codecIdOf(kind))`, because it cannot tell a codec id from a type there; the type check reports each one that passes a codec id, since `field.scalar` takes only a type now. Write those with `type.X()`.
+Pass files or directories to limit it. The script prints a line for each call it leaves. Rewrite each one by hand, except where the line says the script cannot tell the `field` is the MongoDB builder's and it is not. Then type-check the project. The script neither changes nor reports a `field.scalar` call whose argument is computed, such as `field.scalar(codecIdOf(kind))`, because it cannot tell a codec id from a type there; the type check reports each one that passes a codec id, since `field.scalar` takes only a type now. Where the type check cannot see it, in plain JavaScript or with an argument typed `any`, `contract emit` refuses the call with `CONTRACT.ARGUMENT_INVALID`. Write those with `type.X()`.
 
 A field typed by your extension's own codec, written `field.scalar('shout/text@1')` before, needs a type constructor in your extension descriptor's `authoring.type`, under your namespace. The contract then writes `field.scalar(type.shout.Text())`:
 
