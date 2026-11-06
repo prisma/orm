@@ -1471,6 +1471,114 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/mariadb/1-target/src/core/*.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/1-target/src/core/migrations/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/1-target/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/1-target/src/exports/migration.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/1-target/src/exports/pack.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/2-adapter/src/core/*.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/2-adapter/src/core/migrations/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/2-adapter/src/exports/codec-types.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/2-adapter/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/3-driver/src/core/migrations/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/3-driver/src/core/runtime/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/3-driver/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/3-driver/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/9-facade/src/errors.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/9-facade/src/exports/config.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/9-facade/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/9-facade/src/exports/migration.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mariadb/9-facade/src/config/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mongo/1-target/src/core/*.ts",
       "domain": "extensions",
       "layer": "targets",
