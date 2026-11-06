@@ -147,6 +147,8 @@ For each database type, the explicit type marked `inferred` is the one the conve
 | `float4` | `Float(storage: float4)` |
 | `varchar(12)` | `String(storage: varchar, length: 12)` |
 | `character(3)` | `String(storage: char, length: 3)` |
+| `jsonb` | `Json` |
+| `json` | `Json(storage: json)` |
 
 ## Consequences
 
@@ -157,7 +159,7 @@ For each database type, the explicit type marked `inferred` is the one the conve
 - A field written `Json` changes from `json` to `jsonb`. The migration planner asks before it alters the column, because `jsonb` drops duplicate keys, normalizes whitespace and key order, and refuses the `\u0000` escape that `json` accepts.
 - SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) did for the date and time types.
 - This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so TML-3790 must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
-- SQLite's `Json` (`sqlite/json@1`, stored as `text`) and MongoDB's `Json` (`mongo/json@1`) are explicit types with a convenience name, against ADR 315's rule that an explicit type does not take one. TML-3790 renames them and declares `Json` as a convenience type over them, with a `storage` option. MySQL has no `Json` type, and gets one there. SQLite's `jsonColumn` follows its explicit type's new name.
+- SQLite's `Json` (`sqlite/json@1`, stored as `text`) and MongoDB's `Json` (`mongo/json@1`) are explicit types with a convenience name, against ADR 315's rule that an explicit type does not take one. TML-3790 renames them and declares `Json` as a convenience type over them, with a `storage` option. The naming clause in "`Json`" above does not name them: each is the only JSON codec on its target, so there is no sibling type to name it by contrast with. TML-3790 decides their names on its own. MySQL has no `Json` type, and gets one there. SQLite's `jsonColumn` follows its explicit type's new name.
 
 ## Alternatives considered
 
@@ -166,5 +168,11 @@ For each database type, the explicit type marked `inferred` is the one the conve
 **One `Int` convenience type covering `int2`, `int4` and `int8`.** Fewer names, but every surveyed tool separates an integer from a big integer, and an `int8` read as a `number` would sit beside one read as a `bigint` under one name, so the default application value would depend on the storage chosen.
 
 **An `as` option on every convenience type.** It would let every name grow application values without a new option later. An `as` option appears only where some target has a choice of application value, because adding one later renames nothing. `storage` differs: it is on every convenience type so the options are the same on every target, as the Decision says.
+
+**`Json` defaults to `storage: json`.** No contract would change and ADR 257 would need no exception. It was rejected because the concept's default should be the column users want by default, and for JSON that is `jsonb`: it can be indexed and compared, and `json` cannot. Most surveyed tools that name concepts default JSON to `jsonb` (Prisma 7, Django, Ecto, MikroORM, Hibernate, Gel). The contract change and the exception to ADR 257 follow from this choice, and the three checks described in "`Json`" catch it.
+
+**`JsonText` as the name of the `json` type.** It reads as JSON kept in a text column, which is what SQLite's `Json` is. PostgreSQL's `json` is its own data type that validates its input, so the name would describe the wrong thing.
+
+**`pg.Json` as the name of the `json` type.** Not possible without a framework change, as "`Json`" explains.
 
 **Remove the old explicit names at once.** ADR 279 did this for the date and time types before the release candidate. These names are in released schemas, so ADR 257's one-release-line alias rule applies.
