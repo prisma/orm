@@ -400,6 +400,7 @@ export function offlineConfig(options: {
 }
 
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+export const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /**
  * The control client the offline commands render snapshot declarations
