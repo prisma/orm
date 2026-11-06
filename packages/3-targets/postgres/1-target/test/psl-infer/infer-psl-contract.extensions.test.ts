@@ -37,8 +37,7 @@ function databaseWith(installed: Readonly<Record<string, string>>): PostgresData
       ([name, schemaName]) =>
         new PostgresExtensionSchemaNode({
           name,
-          schemaName,
-          searchPath: undefined,
+          location: { kind: 'installed', schemaName, searchPath: ['pg_catalog', 'public'] },
           control: undefined,
         }),
     ),

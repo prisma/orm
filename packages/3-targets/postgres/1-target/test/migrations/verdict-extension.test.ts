@@ -100,8 +100,7 @@ function actualTree(installed: Readonly<Record<string, string>>) {
       ([name, schemaName]) =>
         new PostgresExtensionSchemaNode({
           name,
-          schemaName,
-          searchPath: undefined,
+          location: { kind: 'installed', schemaName, searchPath: ['pg_catalog', 'public'] },
           control: undefined,
         }),
     ),
@@ -156,14 +155,12 @@ describe('the expected tree lists each declared extension with its namespace sch
     expect(tree.extensions).toEqual([
       new PostgresExtensionSchemaNode({
         name: 'pg_trgm',
-        schemaName: 'public',
-        searchPath: undefined,
+        location: { kind: 'declared', schemaName: 'public' },
         control: undefined,
       }),
       new PostgresExtensionSchemaNode({
         name: 'postgis',
-        schemaName: 'extensions',
-        searchPath: undefined,
+        location: { kind: 'declared', schemaName: 'extensions' },
         control: 'external',
       }),
     ]);
@@ -179,8 +176,7 @@ describe('the differ reports extension drift', () => {
         path: ['database', 'postgis'],
         expected: new PostgresExtensionSchemaNode({
           name: 'postgis',
-          schemaName: 'extensions',
-          searchPath: undefined,
+          location: { kind: 'declared', schemaName: 'extensions' },
           control: undefined,
         }),
         actual: undefined,
@@ -195,14 +191,16 @@ describe('the differ reports extension drift', () => {
           path: ['database', 'postgis'],
           expected: new PostgresExtensionSchemaNode({
             name: 'postgis',
-            schemaName: 'extensions',
-            searchPath: undefined,
+            location: { kind: 'declared', schemaName: 'extensions' },
             control: undefined,
           }),
           actual: new PostgresExtensionSchemaNode({
             name: 'postgis',
-            schemaName: 'public',
-            searchPath: undefined,
+            location: {
+              kind: 'installed',
+              schemaName: 'public',
+              searchPath: ['pg_catalog', 'public'],
+            },
             control: undefined,
           }),
         },

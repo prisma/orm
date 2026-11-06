@@ -153,7 +153,7 @@ describe('Postgres extensions against a live database', { concurrent: false }, (
   async function installed(): Promise<Readonly<Record<string, string>>> {
     const schema = await introspect();
     return Object.fromEntries(
-      schema.extensions.map((node) => [node.name, node.installedSchemaName()]),
+      schema.extensions.map((node) => [node.name, node.schemaNameOrOfflineDefault()]),
     );
   }
 
@@ -343,7 +343,10 @@ describe('Postgres extensions in the unbound namespace against a live database',
       ],
     });
     if (!result.ok) throw new Error(`Runner failed:\n${formatRunnerFailure(result.failure)}`);
-    expect((await vectorNode())?.schemaName).toBe('public');
+    expect((await vectorNode())?.location).toMatchObject({
+      kind: 'installed',
+      schemaName: 'public',
+    });
     expect((await verify(contract)).ok).toBe(true);
   });
 
@@ -356,7 +359,11 @@ describe('Postgres extensions in the unbound namespace against a live database',
       'SELECT pg_catalog.current_schemas(true)::text AS search_path',
     );
     expect(catalog.rows[0]?.search_path).toBe('{pg_catalog,public,extensions}');
-    expect((await vectorNode())?.searchPath).toEqual(['pg_catalog', 'public', 'extensions']);
+    expect((await vectorNode())?.location).toEqual({
+      kind: 'installed',
+      schemaName: 'public',
+      searchPath: ['pg_catalog', 'public', 'extensions'],
+    });
   });
 
   it('verifies an extension in a schema on the search path, and fails one off it', {
@@ -406,7 +413,10 @@ describe('Postgres extensions in the unbound namespace against a live database',
     expect(operations.find((op) => op.id === 'setExtensionSchema.vector')?.execute).toEqual([
       expect.objectContaining({ sql: 'ALTER EXTENSION "vector" SET SCHEMA "extensions"' }),
     ]);
-    expect((await vectorNode())?.schemaName).toBe('extensions');
+    expect((await vectorNode())?.location).toMatchObject({
+      kind: 'installed',
+      schemaName: 'extensions',
+    });
 
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
@@ -423,7 +433,10 @@ describe('Postgres extensions in the unbound namespace against a live database',
       ],
     });
     if (!result.ok) throw new Error(`Runner failed:\n${formatRunnerFailure(result.failure)}`);
-    expect((await vectorNode())?.schemaName).toBe('extensions');
+    expect((await vectorNode())?.location).toMatchObject({
+      kind: 'installed',
+      schemaName: 'extensions',
+    });
   });
 
   it('runs a move to the schema the extension is already in as a no-op in PostgreSQL', {
@@ -434,6 +447,9 @@ describe('Postgres extensions in the unbound namespace against a live database',
       (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
     expect(outcome).toBe('no-op');
-    expect((await vectorNode())?.schemaName).toBe('extensions');
+    expect((await vectorNode())?.location).toMatchObject({
+      kind: 'installed',
+      schemaName: 'extensions',
+    });
   });
 });

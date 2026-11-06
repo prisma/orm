@@ -627,27 +627,39 @@ function mapExtensionNodeIssue(
   const actual = asNode(issue.actual);
   if (expected !== undefined) {
     PostgresExtensionSchemaNode.assert(expected);
+    const expectedLocation = expected.location;
     if (actual === undefined) {
-      return ok([new CreateExtensionCall(expected.schemaName, expected.name)]);
+      return ok([
+        new CreateExtensionCall(
+          expectedLocation.kind === 'searchPath' ? undefined : expectedLocation.schemaName,
+          expected.name,
+        ),
+      ]);
     }
     PostgresExtensionSchemaNode.assert(actual);
-    if (expected.schemaName === undefined) {
+    const actualLocation = actual.location;
+    if (expectedLocation.kind === 'searchPath') {
       invariant(
-        actual.searchPath !== undefined,
-        'an unbound extension differs only from a live extension, which carries its search path',
+        actualLocation.kind === 'installed',
+        'an extension left to the search path differs only from an installed extension',
       );
       return notOk(
         nodeConflict(
           'unsupportedOperation',
-          `Extension "${actual.name}" ${offSearchPathText(actual.installedSchemaName(), actual.searchPath)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actual.installedSchemaName()}" to the search path, or reinstall the extension in a schema on the search path.`,
+          `Extension "${actual.name}" ${offSearchPathText(actualLocation)}. The contract declares it in the unbound namespace, so the planner does not move it. Add schema "${actualLocation.schemaName}" to the search path, or reinstall the extension in a schema on the search path.`,
         ),
       );
     }
-    return ok([new SetExtensionSchemaCall(expected.name, expected.schemaName)]);
+    return ok([new SetExtensionSchemaCall(expected.name, expectedLocation.schemaName)]);
   }
   invariant(actual !== undefined, 'an extension issue carries a node on one side');
   PostgresExtensionSchemaNode.assert(actual);
-  return ok([new DropExtensionCall(actual.schemaName, actual.name)]);
+  return ok([
+    new DropExtensionCall(
+      actual.location.kind === 'searchPath' ? undefined : actual.location.schemaName,
+      actual.name,
+    ),
+  ]);
 }
 
 function mapNativeEnumNodeIssue(

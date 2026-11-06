@@ -763,8 +763,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       (row) =>
         new PostgresExtensionSchemaNode({
           name: row.extname,
-          schemaName: row.nspname,
-          searchPath,
+          location: { kind: 'installed', schemaName: row.nspname, searchPath },
           control: undefined,
         }),
     );

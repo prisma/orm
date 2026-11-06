@@ -90,8 +90,7 @@ function liveDatabase(
       ([name, schemaName]) =>
         new PostgresExtensionSchemaNode({
           name,
-          schemaName,
-          searchPath: undefined,
+          location: { kind: 'installed', schemaName, searchPath: ['pg_catalog', 'public'] },
           control: undefined,
         }),
     ),

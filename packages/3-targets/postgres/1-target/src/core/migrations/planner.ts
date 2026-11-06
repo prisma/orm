@@ -1163,9 +1163,9 @@ function retainUnownedExtras(
       if (ownership.declaresEntity({ namespaceId: UNBOUND_NAMESPACE_ID, ...coordinate })) {
         return false;
       }
-      if (node.schemaName === undefined) return true;
+      if (node.location.kind === 'searchPath') return true;
       return !ownership.declaresEntity({
-        namespaceId: namespaceIdOf(node.schemaName),
+        namespaceId: namespaceIdOf(node.location.schemaName),
         ...coordinate,
       });
     }

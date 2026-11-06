@@ -65,14 +65,18 @@ function contractDeclaring(extensions: Readonly<Record<string, string>>): Postgr
 
 function liveDatabase(
   installed: Readonly<Record<string, string>>,
-  searchPath: readonly string[] | undefined,
+  searchPath: readonly string[],
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
     namespaces: {},
     roles: [],
     extensions: Object.entries(installed).map(
       ([name, schemaName]) =>
-        new PostgresExtensionSchemaNode({ name, schemaName, searchPath, control: undefined }),
+        new PostgresExtensionSchemaNode({
+          name,
+          location: { kind: 'installed', schemaName, searchPath },
+          control: undefined,
+        }),
     ),
     existingSchemas: ['public', 'extensions'],
     pgVersion: 'unknown',
@@ -80,6 +84,7 @@ function liveDatabase(
 }
 
 const SUPABASE_SEARCH_PATH = ['pg_catalog', 'public', 'extensions'];
+const DEFAULT_SEARCH_PATH = ['pg_catalog', 'public'];
 
 function verify(contract: Contract<SqlStorage>, schema: PostgresDatabaseSchemaNode) {
   return verifySqlSchemaByDiff({
@@ -148,8 +153,7 @@ describe('the expected tree for an extension in the unbound namespace', () => {
     expect(offlineSchemaOf(contractDeclaring({ vector: UNBOUND })).extensions).toEqual([
       new PostgresExtensionSchemaNode({
         name: 'vector',
-        schemaName: undefined,
-        searchPath: undefined,
+        location: { kind: 'searchPath' },
         control: undefined,
       }),
     ]);
@@ -205,7 +209,7 @@ describe('planning an unbound extension', () => {
   it('creates a missing one with no WITH SCHEMA', async () => {
     const { operations, typeScript } = await plannedOperations({
       contract,
-      schema: liveDatabase({}, undefined),
+      schema: liveDatabase({}, DEFAULT_SEARCH_PATH),
     });
     expect(operations).toEqual([
       {
@@ -249,7 +253,7 @@ describe('planning an unbound extension', () => {
       fromContract,
       schema: offlineSchemaOf(fromContract),
     });
-    const created = plan({ contract, schema: liveDatabase({}, undefined) });
+    const created = plan({ contract, schema: liveDatabase({}, DEFAULT_SEARCH_PATH) });
     if (dropped.kind !== 'success' || created.kind !== 'success') throw new Error('plan failed');
     const operations = await Promise.all([...created.plan.operations, ...dropped.plan.operations]);
     expect(operations.map((op) => op.target.details)).toEqual([
@@ -337,7 +341,7 @@ describe('planning an application beside a pack that declares the extension', ()
   ])('refuses an application that declares it in %s', (_, namespaceId) => {
     const result = plan({
       contract: contractDeclaring({ vector: namespaceId }),
-      schema: liveDatabase({}, undefined),
+      schema: liveDatabase({}, DEFAULT_SEARCH_PATH),
       ownership: PGVECTOR_COMPOSED,
     });
     expect(result).toMatchObject({
