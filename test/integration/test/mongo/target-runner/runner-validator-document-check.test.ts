@@ -163,7 +163,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation validator.users.update stopped: 2 documents in collection users do not fit the new validator',
-        why: `One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         meta: {
           databaseUnchanged: true,
           operationId: 'validator.users.update',
@@ -172,6 +172,8 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
             documents: 2,
             documentId: 'ObjectId("64b7f0c2a1b2c3d4e5f60718")',
             query,
+            requires: ['name', 'plan'],
+            retypes: [],
           },
         },
         validator: undefined,
@@ -207,9 +209,44 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names the fields whose accepted values the change alters, as what it touches',
+    async () => {
+      const ageSchema = (bsonType: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'name'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          name: { bsonType: 'string' },
+          age: { bsonType },
+        },
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: ageSchema('string') } });
+      await db.collection('users').insertOne({ name: 'Ada', age: 'forty' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: ageSchema('int') } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect({
+        start: result.failure.why?.split('. It has')[0],
+        touched: result.failure.meta['documentsFailingValidator'],
+      }).toMatchObject({
+        start: 'This validator change changes what "age" accepts',
+        touched: { requires: [], retypes: ['age'] },
       });
     },
     timeouts.spinUpMongoMemoryServer,

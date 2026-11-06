@@ -29,7 +29,13 @@ import {
   withDatabaseUnchanged,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
-import { type MongoContract, mongoModelsOf, ownStoredNamesOf } from '@internal/mongo-contract';
+import {
+  canonicalize,
+  type MongoContract,
+  mongoModelsOf,
+  ownStoredNamesOf,
+  validatorRootShapesOf,
+} from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AnyMongoMigrationOperation,
@@ -44,6 +50,7 @@ import {
   CollModCommand,
   isInspectionCheckSource,
   isMongoDmlOperation,
+  ListCollectionsCommand,
   RenameCollectionCommand,
 } from '@internal/mongo-query-ast/control';
 import {
@@ -241,6 +248,57 @@ function mongoshValue(value: unknown): string {
     }
   }
   return JSON.stringify(value) ?? String(value);
+}
+
+/** The fields a validator change makes required, and those whose accepted values it changes, read from the root shapes of the two validators. */
+function fieldsTouched(
+  before: unknown,
+  after: unknown,
+): { readonly requires: readonly string[]; readonly retypes: readonly string[] } {
+  const shapes = (jsonSchema: unknown) => validatorRootShapesOf(jsonSchema);
+  const required = (jsonSchema: unknown) =>
+    new Set(shapes(jsonSchema).flatMap((root) => root.required));
+  const properties = (jsonSchema: unknown) =>
+    new Map(
+      shapes(jsonSchema).flatMap((root) =>
+        Object.entries(root.properties).map(
+          ([field, schema]) => [field, canonicalize(schema)] as const,
+        ),
+      ),
+    );
+  const requiredBefore = required(before);
+  const propertiesBefore = properties(before);
+  return {
+    requires: [...required(after)]
+      .filter((field) => field !== '_id' && !requiredBefore.has(field))
+      .sort(),
+    retypes: [...properties(after)]
+      .filter(
+        ([field, schema]) => propertiesBefore.has(field) && propertiesBefore.get(field) !== schema,
+      )
+      .map(([field]) => field)
+      .sort(),
+  };
+}
+
+function quotedList(fields: readonly string[]): string {
+  const quoted = fields.map((field) => JSON.stringify(field));
+  return quoted.length <= 1
+    ? quoted.join('')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
+}
+
+/** What a validator change touches, in words: `This validator change makes "plan" required.` */
+function touchedSentence(touched: ReturnType<typeof fieldsTouched>): string {
+  const parts = [
+    ...(touched.requires.length === 0 ? [] : [`makes ${quotedList(touched.requires)} required`]),
+    ...(touched.retypes.length === 0
+      ? []
+      : [
+          `changes what ${quotedList(touched.retypes)} ${touched.retypes.length === 1 ? 'accepts' : 'accept'}`,
+        ]),
+  ];
+  return parts.length === 0 ? '' : `This validator change ${parts.join(' and ')}. `;
 }
 
 const MONGO_UNAUTHORIZED = 13;
@@ -701,11 +759,23 @@ export class MongoMigrationRunner {
     if (documents === 0) return undefined;
     const documentId = mongoshValue(counted?.['documentId']);
     const query = `db.getCollection(${JSON.stringify(collMod.collection)}).find(${JSON.stringify(failing)})`;
+    const [current] = (
+      await this.deps.inspectionExecutor.listCollections(new ListCollectionsCommand())
+    ).filter((info) => info['name'] === collMod.collection);
+    const options: unknown = current?.['options'];
+    const validatorBefore: unknown =
+      typeof options === 'object' && options !== null
+        ? Reflect.get(options, 'validator')
+        : undefined;
+    const touched = fieldsTouched(
+      Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
+      Reflect.get(collMod.validator ?? {}, '$jsonSchema'),
+    );
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
       `Operation ${op.id} stopped: ${documents} ${documents === 1 ? 'document' : 'documents'} in collection ${collMod.collection} ${documents === 1 ? 'does' : 'do'} not fit the new validator`,
       {
-        why: `${documents === 1 ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+        why: `${touchedSentence(touched)}${documents === 1 ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
         meta: {
           operationId: op.id,
           documentsFailingValidator: {
@@ -713,6 +783,8 @@ export class MongoMigrationRunner {
             documents,
             documentId,
             query,
+            requires: touched.requires,
+            retypes: touched.retypes,
           },
         },
       },
