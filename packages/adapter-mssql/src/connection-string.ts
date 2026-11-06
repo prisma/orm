@@ -128,7 +128,7 @@ export function parseConnectionString(connectionString: string): { config: sql.c
 
   if (portStr) {
     const port = parseInt(portStr, 10)
-    if (isNaN(port)) {
+    if (isNaNOrNegative(port)) {
       throw new Error(`Invalid port number: ${portStr}`)
     }
     config.port = port
@@ -185,11 +185,11 @@ export function parseConnectionString(connectionString: string): { config: sql.c
     config.options.multiSubnetFailover = multiSubnetFailover.toLowerCase() === 'true'
   }
 
-  const connectionLimit = firstKey(parameters, 'connectionLimit')
+  const connectionLimit = firstKey(parameters, 'connectionLimit', 'poolMaxConnections')
   if (connectionLimit !== null) {
     config.pool = config.pool || {}
     const limit = parseInt(connectionLimit, 10)
-    if (isNaN(limit)) {
+    if (isNaNOrNegative(limit)) {
       throw new Error(`Invalid connection limit: ${connectionLimit}`)
     }
     config.pool.max = limit
@@ -198,7 +198,7 @@ export function parseConnectionString(connectionString: string): { config: sql.c
   const connectionTimeout = firstKey(parameters, 'connectionTimeout', 'connectTimeout')
   if (connectionTimeout !== null) {
     const timeout = parseInt(connectionTimeout, 10)
-    if (isNaN(timeout)) {
+    if (isNaNOrNegative(timeout)) {
       throw new Error(`Invalid connection timeout: ${connectionTimeout}`)
     }
     config.connectionTimeout = timeout
@@ -207,7 +207,7 @@ export function parseConnectionString(connectionString: string): { config: sql.c
   const loginTimeout = firstKey(parameters, 'loginTimeout')
   if (loginTimeout !== null) {
     const timeout = parseInt(loginTimeout, 10)
-    if (isNaN(timeout)) {
+    if (isNaNOrNegative(timeout)) {
       throw new Error(`Invalid login timeout: ${loginTimeout}`)
     }
     config.connectionTimeout = timeout
@@ -216,7 +216,7 @@ export function parseConnectionString(connectionString: string): { config: sql.c
   const socketTimeout = firstKey(parameters, 'socketTimeout')
   if (socketTimeout !== null) {
     const timeout = parseInt(socketTimeout, 10)
-    if (isNaN(timeout)) {
+    if (isNaNOrNegative(timeout)) {
       throw new Error(`Invalid socket timeout: ${socketTimeout}`)
     }
     config.requestTimeout = timeout
@@ -225,11 +225,31 @@ export function parseConnectionString(connectionString: string): { config: sql.c
   const poolTimeout = firstKey(parameters, 'poolTimeout')
   if (poolTimeout !== null) {
     const timeout = parseInt(poolTimeout, 10)
-    if (isNaN(timeout)) {
+    if (isNaNOrNegative(timeout)) {
       throw new Error(`Invalid pool timeout: ${poolTimeout}`)
     }
     config.pool = config.pool || {}
     config.pool.acquireTimeoutMillis = timeout * 1000
+  }
+
+  const poolIdleTimeout = firstKey(parameters, 'poolIdleTimeout')
+  if (poolIdleTimeout !== null) {
+    const timeout = parseInt(poolIdleTimeout, 10)
+    if (isNaNOrNegative(timeout)) {
+      throw new Error(`Invalid pool idle timeout: ${poolIdleTimeout}`)
+    }
+    config.pool = config.pool || {}
+    config.pool.idleTimeoutMillis = timeout * 1000
+  }
+
+  const poolMinConnections = firstKey(parameters, 'poolMinConnections')
+  if (poolMinConnections !== null) {
+    const min = parseInt(poolMinConnections, 10)
+    if (isNaNOrNegative(min)) {
+      throw new Error(`Invalid pool min connections: ${poolMinConnections}`)
+    }
+    config.pool = config.pool || {}
+    config.pool.min = min
   }
 
   const appName = firstKey(parameters, 'applicationName', 'application name')
@@ -337,6 +357,10 @@ function parseAuthenticationOptions(
   return undefined
 }
 
+function isNaNOrNegative(num: number): boolean {
+  return isNaN(num) || num < 0
+}
+
 /**
  * Return the value of the first key found in the parameters object
  * @param parameters
@@ -364,6 +388,9 @@ const handledParameters = [
   'loginTimeout',
   'multiSubnetFailover',
   'password',
+  'poolIdleTimeout',
+  'poolMaxConnections',
+  'poolMinConnections',
   'poolTimeout',
   'pwd',
   'schema',
