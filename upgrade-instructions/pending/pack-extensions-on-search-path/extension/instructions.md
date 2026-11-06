@@ -7,7 +7,8 @@ changes:
       glob: "**/*.{ts,mts,cts,prisma}"
       matches:
         - '\bextension\((?![^)]*namespace:\s*unbound\b)[^)]*\)'
-        - '(?<![\s\S])(?![\s\S]*namespace\s+unbound\s*\{)[\s\S]*\bextension\s+[A-Za-z_][\w-]*\s*\{'
+        - '(?:^|\n)extension\s+[A-Za-z_][\w-]*\s*\{'
+        - '\bnamespace\s+(?!unbound\b)[A-Za-z_][\w-]*\s*\{(?:[^{}]|\{[^{}]*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
 ---
 
 # A pack declares its extension in the unbound namespace

@@ -775,7 +775,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   ): Promise<readonly string[]> {
     const result = await driver.query<{ schema_name: string }>(
       `SELECT s.schema_name
-       FROM unnest(pg_catalog.current_schemas(true)) WITH ORDINALITY AS s(schema_name, position)
+       FROM pg_catalog.unnest(pg_catalog.current_schemas(true)) WITH ORDINALITY AS s(schema_name, position)
        ORDER BY s.position`,
     );
     return result.rows.map((row) => row.schema_name);
