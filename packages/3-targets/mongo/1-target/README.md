@@ -12,7 +12,7 @@ MongoDB target pack for Prisma 8.
 ## Entrypoints
 
 - `./pack`: pure target pack ref used by `@internal/family-mongo` and `@internal/mongo-contract-ts`. It also re-exports `CodecTypes`, `ParameterizedOutputTypesForTypeParams` and `Vector`, the types the pack metadata names, so an application that exports a contract built with this pack can emit declarations
-- `./codecs`: codec descriptors, `mongoDescriptorById`, `mongoStandardCodecs`, and `buildStandardCodecRegistry`
+- `./codecs`: codec descriptors (`mongoCodecDescriptors`) and `mongoDescriptorById`. A registry of the target's codecs is `assembleMongoCodecRegistry([target])` from `@internal/mongo-codec`.
 - `./codec-ids`: codec id constants (`MONGO_STRING_CODEC_ID`, …)
 - `./data-types`: the data types the codecs represent
 - `./codec-types`: the `CodecTypes` map, the `Vector<N>` brand, and `ParameterizedOutputTypesForTypeParams`, the type function that gives a vector field with a `length` type parameter the type `Vector<N>`; both `defineContract` and the emitted `contract.d.ts` apply it

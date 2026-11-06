@@ -267,7 +267,7 @@ describe('running a graph', () => {
 
       expect(row).toEqual({ id: 70, title: 'New' });
       expect(statements(runtime)).toEqual(['query select', 'query update']);
-      expect(whereText(runtime.executions[1]!, 'posts')).toBe('(user_id = 7 or user_id = 8)');
+      expect(whereText(runtime.executions[1]!, 'posts')).toBe('user_id in (7, 8)');
     });
 
     it('gives the target every column pair of the edge', async () => {

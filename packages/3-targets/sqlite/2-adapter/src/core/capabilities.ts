@@ -9,5 +9,6 @@ export const sqliteAdapterCapabilities = Object.freeze({
     enums: false,
     insertOnConflictSkip: true,
     insertOnConflictWithoutTarget: true,
+    insertOnConflictTarget: true,
   },
 } as const);

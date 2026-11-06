@@ -1,7 +1,6 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import mongo from '@internal/mongo/runtime';
 import { contractFromJson } from '@internal/mongo/static';
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { CreateInput } from '@internal/mongo-orm';
 import { createMongoExecutionContext, createMongoExecutionStack } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
@@ -270,7 +269,6 @@ describe('Mongo mutation default generator registration', () => {
           familyId: 'mongo',
           targetId: 'mongo',
           version: '0.0.1',
-          codecs: () => newMongoCodecRegistry(),
           mutationDefaultGenerators: () => [
             { id: 'timestampNow', generate: () => new Date(0), stability: 'query' },
           ],

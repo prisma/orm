@@ -1,5 +1,6 @@
 import type { MongoControlAdapterDescriptor } from '@internal/family-mongo/control-adapter';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 import {
   MONGO_BINARY_CODEC_ID,
@@ -142,8 +143,14 @@ export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
       },
     },
   },
-  create(_stack) {
-    return new MongoControlAdapterImpl();
+  create(stack) {
+    return new MongoControlAdapterImpl(
+      assembleMongoCodecRegistry([
+        stack.target,
+        ...(stack.adapter === undefined ? [] : [stack.adapter]),
+        ...stack.extensions,
+      ]),
+    );
   },
 };
 

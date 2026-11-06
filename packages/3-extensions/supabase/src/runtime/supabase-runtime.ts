@@ -159,12 +159,12 @@ export class SupabaseRuntimeImpl<
       },
 
       /**
-       * Resets all session-local config then releases the connection back to the pool.
-       * If RESET ALL fails, destroys the connection instead — pool-poisoning guarantee.
+       * Resets all session-local config and the role (`RESET ALL` leaves `role` alone), then releases the connection back to the pool. If a reset fails, destroys the connection instead — pool-poisoning guarantee.
        */
       async release(): Promise<void> {
         try {
           await conn.execute({ sql: 'RESET ALL' });
+          await conn.execute({ sql: 'RESET ROLE' });
           await conn.release();
         } catch (resetError) {
           await conn.destroy(resetError).catch(() => undefined);

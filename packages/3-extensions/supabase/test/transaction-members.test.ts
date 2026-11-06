@@ -70,6 +70,7 @@ function underRole(
       values === undefined ? { connection, text } : { connection, text, values },
     ),
     { connection, text: 'RESET ALL', values: [] },
+    { connection, text: 'RESET ROLE', values: [] },
   ];
 }
 
@@ -198,6 +199,7 @@ describe('a transaction on a supabase role-bound client', () => {
           'SELECT set_config($1, $2, false)',
           ...middle,
           'RESET ALL',
+          'RESET ROLE',
         ].map((text) => ({ connection, text }));
       };
     expect(runs).toEqual([
