@@ -1,8 +1,8 @@
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
 import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
+import { dateStringNow } from '@internal/type-implementations/now';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  dateStringNow,
   instantNow,
   plainDateNow,
   plainDateTimeNow,

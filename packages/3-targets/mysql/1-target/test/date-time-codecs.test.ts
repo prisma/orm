@@ -1,0 +1,399 @@
+import { describe, expect, it } from 'vitest';
+import { codecDescriptors, mysqlDatetimeDescriptor } from '../src/core/codecs';
+import { mysqlDatetime, mysqlTime, mysqlTimestamp } from '../src/core/data-types';
+import {
+  mysqlDateStringDescriptor,
+  mysqlDateTemporalDescriptor,
+  mysqlDatetimeStringDescriptor,
+  mysqlDatetimeTemporalDescriptor,
+  mysqlDurationStringDescriptor,
+  mysqlTimeStringDescriptor,
+  mysqlTimestampDateDescriptor,
+  mysqlTimestampStringDescriptor,
+  mysqlTimestampTemporalDescriptor,
+  mysqlTimeTemporalDescriptor,
+} from '../src/core/date-time-codecs';
+
+const ctx = {};
+const instance = { name: 'test' };
+
+const ENCODE_FAILED = expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' });
+const DECODE_FAILED = expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' });
+
+describe('the MySQL date and time codecs', () => {
+  it('register every codec once, each with the data type it reads', () => {
+    expect(
+      codecDescriptors
+        .filter((descriptor) => /date|time|duration/.test(descriptor.codecId))
+        .map(({ codecId, dataType }) => [codecId, dataType]),
+    ).toEqual([
+      ['mysql/datetime@1', 'mysql/datetime'],
+      ['mysql/datetime-temporal@1', 'mysql/datetime'],
+      ['mysql/datetime-string@1', 'mysql/datetime'],
+      ['mysql/timestamp-date@1', 'mysql/timestamp'],
+      ['mysql/timestamp-temporal@1', 'mysql/timestamp'],
+      ['mysql/timestamp-string@1', 'mysql/timestamp'],
+      ['mysql/date-string@1', 'mysql/date'],
+      ['mysql/date-temporal@1', 'mysql/date'],
+      ['mysql/time-string@1', 'mysql/time'],
+      ['mysql/time-temporal@1', 'mysql/time'],
+      ['mysql/duration-string@1', 'mysql/duration'],
+    ]);
+  });
+
+  it('refuse a Date outside the years a datetime holds', async () => {
+    const codec = mysqlDatetimeDescriptor.factory({ precision: 3 })(instance);
+    await expect(codec.toWire(new Date('0999-12-31T00:00:00Z'), ctx)).rejects.toThrow(
+      /from 1000-01-01T00:00:00 to 9999-12-31T23:59:59.999999/,
+    );
+  });
+
+  describe('read what MySQL returns in any year, and refuse years outside the column only on write', () => {
+    it.each([
+      [
+        'DatetimeJsDate',
+        mysqlDatetimeDescriptor.factory({ precision: 3 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00.000Z',
+      ],
+      [
+        'DatetimeString',
+        mysqlDatetimeStringDescriptor.factory({ precision: 6 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00Z',
+      ],
+      [
+        'DatetimeTemporal',
+        mysqlDatetimeTemporalDescriptor.factory({ precision: 6 })(instance),
+        '0999-12-31 23:00:00',
+        '0999-12-31T23:00:00Z',
+      ],
+      [
+        'TimestampJsDate',
+        mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00.000Z',
+      ],
+      [
+        'TimestampString',
+        mysqlTimestampStringDescriptor.factory({ precision: 6 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00Z',
+      ],
+      [
+        'TimestampTemporal',
+        mysqlTimestampTemporalDescriptor.factory({ precision: 6 })(instance),
+        '1969-12-31 23:00:00',
+        '1969-12-31T23:00:00Z',
+      ],
+      ['DateString', mysqlDateStringDescriptor.factory()(instance), '0999-12-31', '0999-12-31'],
+      ['DateTemporal', mysqlDateTemporalDescriptor.factory()(instance), '0999-12-31', '0999-12-31'],
+    ] as const)(
+      '%s reads a row from a year outside the column',
+      async (_name, codec, wire, read) => {
+        const value: unknown = await codec.fromWire(wire, ctx);
+        expect(value instanceof Date ? value.toISOString() : String(value)).toBe(read);
+      },
+    );
+  });
+
+  describe('refuse a stored value with more fraction digits than the column holds, which MySQL would round', () => {
+    it.each([
+      ['DatetimeJsDate', {}, mysqlDatetimeDescriptor, mysqlDatetime, '2024-01-01T00:00:00.5'],
+      [
+        'DatetimeString',
+        { precision: 0 },
+        mysqlDatetimeStringDescriptor,
+        mysqlDatetime,
+        '2024-01-01T00:00:00.5',
+      ],
+      [
+        'DatetimeTemporal',
+        { precision: 2 },
+        mysqlDatetimeTemporalDescriptor,
+        mysqlDatetime,
+        '2024-01-01T00:00:00.125',
+      ],
+      [
+        'TimestampJsDate',
+        {},
+        mysqlTimestampDateDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.5',
+      ],
+      [
+        'TimestampString',
+        { precision: 1 },
+        mysqlTimestampStringDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.25',
+      ],
+      [
+        'TimestampTemporal',
+        {},
+        mysqlTimestampTemporalDescriptor,
+        mysqlTimestamp,
+        '2024-01-01T00:00:00.5',
+      ],
+      ['TimeString', {}, mysqlTimeStringDescriptor, mysqlTime, '23:59:59.6'],
+      ['TimeTemporal', { precision: 3 }, mysqlTimeTemporalDescriptor, mysqlTime, '23:59:59.1234'],
+    ] as const)('%s with %j', (_name, params, descriptor, dataType, stored) => {
+      const codec = descriptor.factory(params)(instance);
+      expect(() => codec.fromDataTypeValue(dataType.valueFrom(stored, {}))).toThrow(
+        /holds without rounding/,
+      );
+    });
+
+    it('read a stored value the column holds', () => {
+      const codec = mysqlTimeStringDescriptor.factory({ precision: 1 })(instance);
+      expect(codec.fromDataTypeValue(mysqlTime.valueFrom('23:59:59.5', {}))).toBe('23:59:59.5');
+    });
+  });
+
+  describe('write a value rounded down to the column precision, so MySQL never rounds it up', () => {
+    it.each([
+      [
+        'DatetimeJsDate',
+        { precision: 1 },
+        mysqlDatetimeDescriptor,
+        new Date('2024-01-01T00:00:00.678Z'),
+        '2024-01-01 00:00:00.6',
+      ],
+      [
+        'DatetimeString',
+        { precision: 0 },
+        mysqlDatetimeStringDescriptor,
+        '2024-01-01T00:00:00.9Z',
+        '2024-01-01 00:00:00',
+      ],
+      [
+        'DatetimeTemporal',
+        { precision: 2 },
+        mysqlDatetimeTemporalDescriptor,
+        Temporal.Instant.from('2024-01-01T00:00:00.999Z'),
+        '2024-01-01 00:00:00.99',
+      ],
+      [
+        'TimestampJsDate',
+        { precision: 0 },
+        mysqlTimestampDateDescriptor,
+        new Date('2038-01-19T03:14:07.500Z'),
+        '2038-01-19 03:14:07',
+      ],
+      [
+        'TimestampString',
+        { precision: 0 },
+        mysqlTimestampStringDescriptor,
+        '2038-01-19T03:14:07.5Z',
+        '2038-01-19 03:14:07',
+      ],
+      [
+        'TimestampTemporal',
+        { precision: 3 },
+        mysqlTimestampTemporalDescriptor,
+        Temporal.Instant.from('2038-01-19T03:14:07.999999Z'),
+        '2038-01-19 03:14:07.999',
+      ],
+      ['TimeString', { precision: 0 }, mysqlTimeStringDescriptor, '23:59:59.6', '23:59:59'],
+      [
+        'TimeTemporal',
+        { precision: 0 },
+        mysqlTimeTemporalDescriptor,
+        Temporal.PlainTime.from('23:59:59.6'),
+        '23:59:59',
+      ],
+    ] as const)('%s with %j', async (_name, params, descriptor, value, wire) => {
+      const codec = descriptor.factory(params)(instance);
+      expect(await codec.toWire(value as never, ctx)).toBe(wire);
+    });
+
+    it('write a value whole when the codec reference names no precision, as a raw parameter does', async () => {
+      expect([
+        await mysqlDatetimeDescriptor
+          .factory({})(instance)
+          .toWire(new Date('2024-01-01T00:00:00.678Z'), ctx),
+        await mysqlTimeStringDescriptor.factory({})(instance).toWire('09:30:00.25', ctx),
+      ]).toEqual(['2024-01-01 00:00:00.678', '09:30:00.25']);
+    });
+  });
+
+  describe('TimestampJsDate', () => {
+    const codec = mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance);
+
+    it('reads and writes a Date in UTC', async () => {
+      const instant = new Date('2024-01-02T03:04:05.678Z');
+      expect(await codec.fromWire('2024-01-02 03:04:05.678', ctx)).toEqual(instant);
+      expect(await codec.toWire(instant, ctx)).toBe('2024-01-02 03:04:05.678');
+      expect(codec.toDataTypeValue(instant)).toEqual(
+        mysqlTimestamp.valueFrom('2024-01-02T03:04:05.678', { precision: 3 }),
+      );
+    });
+
+    it('refuses a Date before 1970 or after 2038, which a timestamp does not hold', async () => {
+      await expect(codec.toWire(new Date('1969-12-31T23:59:59Z'), ctx)).rejects.toThrow(
+        ENCODE_FAILED,
+      );
+      await expect(codec.toWire(new Date('2038-01-19T03:14:08Z'), ctx)).rejects.toThrow(
+        /from 1970-01-01T00:00:01 to 2038-01-19T03:14:07.999999/,
+      );
+    });
+  });
+
+  describe.each([
+    ['DatetimeTemporal', mysqlDatetimeTemporalDescriptor, mysqlDatetime],
+    ['TimestampTemporal', mysqlTimestampTemporalDescriptor, mysqlTimestamp],
+  ] as const)('%s', (_name, descriptor, dataType) => {
+    const codec = descriptor.factory({ precision: 6 })(instance);
+
+    it('reads a row as the Temporal.Instant it names in UTC', async () => {
+      const read = await codec.fromWire('2024-01-02 03:04:05.678912', ctx);
+      expect(read).toBeInstanceOf(Temporal.Instant);
+      expect(String(read)).toBe('2024-01-02T03:04:05.678912Z');
+    });
+
+    it('writes an instant with any offset as its UTC date and time', async () => {
+      expect(await codec.toWire(Temporal.Instant.from('2024-01-02T08:34:05.5+05:30'), ctx)).toBe(
+        '2024-01-02 03:04:05.5',
+      );
+    });
+
+    it('refuses digits below a microsecond, a value of another type, and an instant outside the column', async () => {
+      await expect(
+        codec.toWire(Temporal.Instant.from('2024-01-02T03:04:05.123456789Z'), ctx),
+      ).rejects.toThrow(/below a microsecond/);
+      await expect(
+        codec.toWire(Temporal.PlainDate.from('2024-01-02') as never, ctx),
+      ).rejects.toThrow(ENCODE_FAILED);
+      await expect(
+        codec.toWire(Temporal.Instant.from('0999-01-01T00:00:00Z'), ctx),
+      ).rejects.toThrow(ENCODE_FAILED);
+    });
+
+    it('converts a stored value to the instant and back', () => {
+      const stored = dataType.valueFrom('2024-01-02T03:04:05.5', { precision: 6 });
+      const instant = codec.fromDataTypeValue(stored);
+      expect(String(instant)).toBe('2024-01-02T03:04:05.5Z');
+      expect(codec.toDataTypeValue(instant)).toEqual(stored);
+    });
+
+    it('refuses text that names no date and time', async () => {
+      await expect(codec.fromWire('0000-00-00 00:00:00', ctx)).rejects.toThrow(DECODE_FAILED);
+    });
+  });
+
+  describe.each([
+    ['DatetimeString', mysqlDatetimeStringDescriptor, mysqlDatetime],
+    ['TimestampString', mysqlTimestampStringDescriptor, mysqlTimestamp],
+  ] as const)('%s', (_name, descriptor, dataType) => {
+    const codec = descriptor.factory({ precision: 6 })(instance);
+
+    it('reads a row as the ISO instant in UTC, its fraction trimmed of trailing zeros', async () => {
+      expect([
+        await codec.fromWire('2024-01-02 03:04:05.500000', ctx),
+        await codec.fromWire('2024-01-02 03:04:05', ctx),
+      ]).toEqual(['2024-01-02T03:04:05.5Z', '2024-01-02T03:04:05Z']);
+    });
+
+    it('writes ISO text with any UTC offset as its UTC date and time', async () => {
+      expect(await codec.toWire('2024-01-02T08:34:05.25+05:30', ctx)).toBe(
+        '2024-01-02 03:04:05.25',
+      );
+    });
+
+    it('refuses text without an offset, which names no instant, and text that is not a string', async () => {
+      await expect(codec.toWire('2024-01-02T03:04:05', ctx)).rejects.toThrow(/needs a UTC offset/);
+      await expect(codec.toWire(42 as never, ctx)).rejects.toThrow(ENCODE_FAILED);
+    });
+
+    it('converts a stored value to the instant text and back', () => {
+      const stored = dataType.valueFrom('2024-01-02T03:04:05.5', { precision: 6 });
+      expect(codec.fromDataTypeValue(stored)).toBe('2024-01-02T03:04:05.5Z');
+      expect(codec.toDataTypeValue('2024-01-02T03:04:05.5Z')).toEqual(stored);
+    });
+  });
+
+  describe('DateString and DateTemporal', () => {
+    const text = mysqlDateStringDescriptor.factory()(instance);
+    const temporal = mysqlDateTemporalDescriptor.factory()(instance);
+
+    it('read and write a calendar date', async () => {
+      expect(await text.fromWire('2024-02-29', ctx)).toBe('2024-02-29');
+      expect(await text.toWire('2024-02-29', ctx)).toBe('2024-02-29');
+      const day = await temporal.fromWire('2024-02-29', ctx);
+      expect(day).toBeInstanceOf(Temporal.PlainDate);
+      expect(String(day)).toBe('2024-02-29');
+      expect(await temporal.toWire(Temporal.PlainDate.from('2024-03-01'), ctx)).toBe('2024-03-01');
+    });
+
+    it('refuse a date outside the years MySQL holds, and text with a time', async () => {
+      await expect(text.toWire('0999-12-31', ctx)).rejects.toThrow(ENCODE_FAILED);
+      await expect(text.toWire('2024-02-29T00:00:00', ctx)).rejects.toThrow(ENCODE_FAILED);
+      await expect(temporal.toWire(Temporal.PlainDate.from('0999-12-31'), ctx)).rejects.toThrow(
+        ENCODE_FAILED,
+      );
+      await expect(text.fromWire('0000-00-00', ctx)).rejects.toThrow(DECODE_FAILED);
+    });
+  });
+
+  describe('TimeString and TimeTemporal', () => {
+    const text = mysqlTimeStringDescriptor.factory({ precision: 6 })(instance);
+    const temporal = mysqlTimeTemporalDescriptor.factory({ precision: 6 })(instance);
+
+    it('read a time of day with its fraction trimmed, and write it', async () => {
+      expect(await text.fromWire('09:30:00.500000', ctx)).toBe('09:30:00.5');
+      expect(await text.toWire('09:30', ctx)).toBe('09:30:00');
+      const clock = await temporal.fromWire('17:45:00.250000', ctx);
+      expect(clock).toBeInstanceOf(Temporal.PlainTime);
+      expect(String(clock)).toBe('17:45:00.25');
+      expect(await temporal.toWire(Temporal.PlainTime.from('17:45:00.25'), ctx)).toBe(
+        '17:45:00.25',
+      );
+    });
+
+    it('refuse a MySQL time that is no time of day, on read and on write', async () => {
+      await expect(text.fromWire('-01:00:00', ctx)).rejects.toThrow(DECODE_FAILED);
+      await expect(temporal.fromWire('838:59:59', ctx)).rejects.toThrow(DECODE_FAILED);
+      await expect(text.toWire('24:00:00', ctx)).rejects.toThrow(ENCODE_FAILED);
+      await expect(
+        temporal.toWire(Temporal.PlainTime.from('09:30:00.123456789'), ctx),
+      ).rejects.toThrow(/below a microsecond/);
+    });
+  });
+
+  describe('DurationString', () => {
+    const codec = mysqlDurationStringDescriptor.factory({ length: 191 })(instance);
+
+    it('takes the varchar length of its column, and no length, as a raw parameter names it', () => {
+      expect([
+        mysqlDurationStringDescriptor.paramsSchema({ length: 191 }),
+        mysqlDurationStringDescriptor.paramsSchema({}),
+      ]).toEqual([{ length: 191 }, {}]);
+    });
+
+    it('reads and writes an ISO 8601 duration as written', async () => {
+      expect(await codec.fromWire('PT1H30M', ctx)).toBe('PT1H30M');
+      expect(await codec.toWire('P1DT12H', ctx)).toBe('P1DT12H');
+    });
+
+    it('refuses text that is no ISO 8601 duration', async () => {
+      await expect(codec.toWire('90 minutes', ctx)).rejects.toThrow(ENCODE_FAILED);
+      await expect(codec.fromWire('90 minutes', ctx)).rejects.toThrow(DECODE_FAILED);
+    });
+  });
+
+  it('render the value each string codec reads from a stored value as a TypeScript literal', () => {
+    expect([
+      mysqlDatetimeStringDescriptor.renderValueLiteral('2024-01-02T03:04:05'),
+      mysqlTimestampStringDescriptor.renderValueLiteral('2024-01-02T03:04:05'),
+      mysqlDateStringDescriptor.renderValueLiteral('2024-02-29'),
+      mysqlTimeStringDescriptor.renderValueLiteral('09:30:00'),
+      mysqlDurationStringDescriptor.renderValueLiteral('PT1H'),
+    ]).toEqual([
+      '"2024-01-02T03:04:05Z"',
+      '"2024-01-02T03:04:05Z"',
+      '"2024-02-29"',
+      '"09:30:00"',
+      '"PT1H"',
+    ]);
+  });
+});

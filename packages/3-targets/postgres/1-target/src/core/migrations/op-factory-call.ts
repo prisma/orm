@@ -20,19 +20,29 @@
  * `PostgresOpFactoryCall` union.
  */
 
-import { unfilledPlaceholderOperation } from '@internal/errors/migration';
+import type { JsonValue } from '@internal/contract/types';
+import { CliStructuredError } from '@internal/errors/control';
+import { errorUnfilledPlaceholder, unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlDefaultText,
   checkSqlExpressionText,
   createSqlTextSources,
   encodeStoredValue,
+  fillKeyProblem,
+  fillValueProblem,
   isUnfilledSlot,
+  type JsonKeyPath,
+  type JsonPath,
+  keyPathOf,
+  parseJsonPath,
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
+  type StoredKeyFillField,
   type StoredValueCodec,
   slotSource,
   sqlOfSlot,
+  UnfilledValue,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type { DataType } from '@internal/framework-components/codec';
@@ -125,7 +135,20 @@ import {
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
 import { step, targetDetails } from './operations/shared';
-import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
+import {
+  fillStoredKey,
+  keyPlace,
+  removeStoredKey,
+  renameStoredKey,
+} from './operations/stored-keys';
+import {
+  deleteRows,
+  removeStoredValue,
+  removeStoredValueAtPath,
+  replaceStoredValue,
+  replaceStoredValueAtPath,
+  storedValueText,
+} from './operations/stored-values';
 import { dropTable, renameTable } from './operations/tables';
 import { buildAddNotNullColumnWithTemporaryDefaultOperation } from './planner-recipes';
 import {
@@ -2309,9 +2332,11 @@ function replaceStoredValueSource(
   to: string,
   many: boolean,
   codec: StoredValueCodec | undefined,
+  path: JsonPath | undefined,
 ): string {
   const opts = [
     ...location,
+    ...pathSource(path),
     `from: ${from}`,
     `to: ${to}`,
     ...(many ? ['many: true'] : []),
@@ -2320,7 +2345,52 @@ function replaceStoredValueSource(
   return `this.replaceStoredValue({ ${opts.join(', ')} })`;
 }
 
-function codecRefSource(codec: StoredValueCodec | undefined): readonly string[] {
+function pathSource(path: JsonPath | undefined): readonly string[] {
+  return path === undefined ? [] : [`path: ${jsonToTsSource(path.text)}`];
+}
+
+function storedValuePlace(
+  path: JsonPath | undefined,
+  tableName: string,
+  columnName: string,
+): string {
+  return path === undefined
+    ? `in column "${columnName}" of "${tableName}"`
+    : `at path ${JSON.stringify(path.text)} in column "${columnName}" of "${tableName}"`;
+}
+
+/**
+ * The path a stored value call acts at inside JSON: it ends at a member name or at a list
+ * wildcard, and the value is compared as a JSON value, so it takes no codec and no list column.
+ */
+function requireValuePath(
+  path: string | undefined,
+  options: { readonly many: boolean; readonly codec: StoredValueCodec | undefined },
+  factory: string,
+  location: readonly string[],
+): JsonPath | undefined {
+  if (path === undefined) return undefined;
+  const parsed = requirePath(path, factory, location);
+  if (parsed.steps.length === 0) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(path)} does not end at a member name or a wildcard ([*] or .*)`,
+    );
+  }
+  if (options.many || options.codec !== undefined) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      'path takes neither many nor codecRef: a value inside JSON is compared as a JSON value',
+    );
+  }
+  return parsed;
+}
+
+function codecRefSource(codec: Pick<StoredValueCodec, 'codecRef'> | undefined): readonly string[] {
   return codec === undefined ? [] : [`codecRef: ${jsonToTsSource(codec.codecRef)}`];
 }
 
@@ -2341,7 +2411,7 @@ function requireStoredValue(
   );
 }
 
-/** Changes one stored value of a column to another, in every row, or in every list of a list column. */
+/** Changes one stored value of a column to another, in every row, or in every list of a list column, or at a path inside the JSON of the column. */
 export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'replaceStoredValue' as const;
   readonly operationClass = 'widening' as const;
@@ -2353,6 +2423,8 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   readonly many: boolean;
   /** The column's codec, which writes `from` and `to` as the database stores them. */
   readonly codec: StoredValueCodec | undefined;
+  /** The path inside the column's JSON at which the value is replaced, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
   readonly label: string;
 
   constructor(
@@ -2363,6 +2435,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
     to: string | number,
     many: boolean,
     codec?: StoredValueCodec,
+    path?: string,
   ) {
     super();
     const location = columnCallLocation(schemaName, tableName, columnName);
@@ -2373,11 +2446,22 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
     this.from = requireStoredValue(from, this.factoryName, location, 'from');
     this.to = requireStoredValue(to, this.factoryName, location, 'to');
     this.many = many;
-    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} in column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, { many, codec }, this.factoryName, location);
+    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} ${storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
+    if (this.path !== undefined) {
+      return replaceStoredValueAtPath(
+        this.schemaName,
+        this.tableName,
+        this.columnName,
+        this.from,
+        this.to,
+        this.path,
+      );
+    }
     return replaceStoredValue(
       this.schemaName,
       this.tableName,
@@ -2395,6 +2479,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
       jsonToTsSource(this.to),
       this.many,
       this.codec,
+      this.path,
     );
   }
 
@@ -2403,7 +2488,7 @@ export class ReplaceStoredValueCall extends PostgresOpFactoryCallNode {
   }
 }
 
-/** Removes one stored value of a column: sets it to NULL, or takes it out of every list of a list column. */
+/** Removes one stored value of a column: sets it to NULL, or takes it out of every list of a list column, or removes it at a path inside the JSON of the column. */
 export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'removeStoredValue' as const;
   readonly operationClass = 'destructive' as const;
@@ -2416,6 +2501,10 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
   readonly codec: StoredValueCodec | undefined;
   /** The enum value whose stored value is removed, which the check that fails while rows of a required column hold it names. */
   readonly enumValue: EnumValueCoordinateJson | undefined;
+  /** The path inside the column's JSON at which the value is removed, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
+  /** Whether the member at `path` takes JSON `null`; when it does not, the check fails while a row holds the value. */
+  readonly nullable: boolean;
   readonly label: string;
 
   constructor(
@@ -2426,10 +2515,101 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
     many: boolean,
     codec?: StoredValueCodec,
     enumValue?: EnumValueCoordinateJson,
+    path?: string,
+    nullable?: boolean,
+  ) {
+    super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
+    this.codec = codec;
+    this.enumValue = enumValue;
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.value = requireStoredValue(value, this.factoryName, location, 'value');
+    this.many = many;
+    this.path = requireValuePath(path, { many, codec }, this.factoryName, location);
+    if (nullable !== undefined && this.path === undefined) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'nullable',
+        'nullable needs a path: a column says itself whether it takes NULL',
+      );
+    }
+    this.nullable = nullable === true;
+    this.label = `Remove value ${storedValueText(value)} ${this.path === undefined ? `from column "${columnName}" of "${tableName}"` : storedValuePlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  async toOp(): Promise<Op> {
+    const mark =
+      this.enumValue === undefined
+        ? undefined
+        : {
+            enumValue: this.enumValue,
+            value: this.value,
+            ...(this.codec === undefined ? {} : { codecRef: this.codec.codecRef }),
+          };
+    if (this.path !== undefined) {
+      return removeStoredValueAtPath(
+        this.schemaName,
+        this.tableName,
+        this.columnName,
+        this.value,
+        this.path,
+        this.nullable,
+        mark,
+      );
+    }
+    return removeStoredValue(
+      this.schemaName,
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+      this.many,
+      mark,
+    );
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      ...pathSource(this.path),
+      `value: ${jsonToTsSource(this.value)}`,
+      ...(this.many ? ['many: true'] : []),
+      ...(this.nullable ? ['nullable: true'] : []),
+      ...codecRefSource(this.codec),
+      ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
+    ];
+    return `this.removeStoredValue({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+/** Deletes the rows whose column holds one stored value. */
+export class DeleteRowsCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'deleteRows' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly value: string | number;
+  /** The column's codec, which writes `value` as the database stores it. */
+  readonly codec: StoredValueCodec | undefined;
+  readonly label: string;
+
+  constructor(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    value: string | number,
+    codec?: StoredValueCodec,
   ) {
     super();
     this.codec = codec;
-    this.enumValue = enumValue;
     this.schemaName = schemaName;
     this.tableName = tableName;
     this.columnName = columnName;
@@ -2439,25 +2619,16 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
       columnCallLocation(schemaName, tableName, columnName),
       'value',
     );
-    this.many = many;
-    this.label = `Remove value ${storedValueText(value)} from column "${columnName}" of "${tableName}"`;
+    this.label = `Delete the rows of "${tableName}" that hold value ${storedValueText(value)} in column "${columnName}"`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
-    return removeStoredValue(
+    return deleteRows(
       this.schemaName,
       this.tableName,
       this.columnName,
       await encodeStoredValue(this.value, this.codec),
-      this.many,
-      this.enumValue === undefined
-        ? undefined
-        : {
-            enumValue: this.enumValue,
-            value: this.value,
-            ...(this.codec === undefined ? {} : { codecRef: this.codec.codecRef }),
-          },
     );
   }
 
@@ -2465,15 +2636,263 @@ export class RemoveStoredValueCall extends PostgresOpFactoryCallNode {
     const opts = [
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
       `value: ${jsonToTsSource(this.value)}`,
-      ...(this.many ? ['many: true'] : []),
       ...codecRefSource(this.codec),
-      ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
     ];
-    return `this.removeStoredValue({ ${opts.join(', ')} })`;
+    return `this.deleteRows({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
     return [];
+  }
+}
+
+// ============================================================================
+// Stored keys
+// ============================================================================
+
+function refusedArgument(
+  factory: string,
+  location: readonly string[],
+  argument: string,
+  why: string,
+): never {
+  throw postgresError(
+    'CONTRACT.ARGUMENT_INVALID',
+    `${factory}({ ${location.join(', ')} }): ${why}`,
+    {
+      meta: { what: `${factory} ${argument}` },
+    },
+  );
+}
+
+function requirePath(text: string, factory: string, location: readonly string[]): JsonPath {
+  const parsed = parseJsonPath(text);
+  return parsed.ok ? parsed.value : refusedArgument(factory, location, 'path', parsed.failure);
+}
+
+function requireKeyPath(text: string, factory: string, location: readonly string[]): JsonKeyPath {
+  return (
+    keyPathOf(requirePath(text, factory, location)) ??
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(text)} does not end at a member name, the key the operation acts on`,
+    )
+  );
+}
+
+/** Renames the key at the end of a JSON path, in every object of a column the path reaches. */
+export class RenameStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'renameStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly to: string;
+  readonly label: string;
+
+  constructor(schemaName: string, tableName: string, columnName: string, path: string, to: string) {
+    super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    if (typeof to !== 'string' || to === this.path.key) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'to',
+        `to must be a key other than ${JSON.stringify(this.path.key)}; got ${JSON.stringify(to)}`,
+      );
+    }
+    this.to = to;
+    this.label = `Rename key "${this.path.key}" to "${to}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return renameStoredKey(this.schemaName, this.tableName, this.columnName, this.path, this.to);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `to: ${jsonToTsSource(this.to)}`,
+    ];
+    return `this.renameStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+/** Removes the key at the end of a JSON path, from every object of a column the path reaches. */
+export class RemoveStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'removeStoredKey' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly label: string;
+
+  constructor(schemaName: string, tableName: string, columnName: string, path: string) {
+    super();
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(
+      path,
+      this.factoryName,
+      columnCallLocation(schemaName, tableName, columnName),
+    );
+    this.label = `Remove key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return removeStoredKey(this.schemaName, this.tableName, this.columnName, this.path);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+    ];
+    return `this.removeStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+function requireJsonValue(
+  value: JsonValue,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const text: string | undefined = JSON.stringify(value);
+  return text === undefined
+    ? refusedArgument(factory, location, 'value', 'value must be a JSON value; got undefined')
+    : value;
+}
+
+function requireFillValue(
+  value: JsonValue,
+  field: StoredKeyFillField | undefined,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const json = requireJsonValue(value, factory, location);
+  const problem = fillValueProblem(json, field);
+  return problem === undefined ? json : refusedArgument(factory, location, 'value', problem);
+}
+
+/**
+ * The operation of a fill whose value is an unfilled placeholder: a promise that rejects with
+ * `MIGRATION.UNFILLED_PLACEHOLDER`, whose meta names the operation it stands for, so that a plan can
+ * list it before the user fills the value.
+ */
+function unfilledFillOperation(slot: string, standsFor: Op): Promise<never> {
+  const unfilled = errorUnfilledPlaceholder(slot);
+  const operation = Promise.reject(
+    new CliStructuredError(unfilled.code, unfilled.message, {
+      ...ifDefined('why', unfilled.why),
+      ...ifDefined('fix', unfilled.fix),
+      meta: {
+        slot,
+        operation: {
+          id: standsFor.id,
+          label: standsFor.label,
+          operationClass: standsFor.operationClass,
+        },
+      },
+    }),
+  );
+  operation.catch(() => undefined);
+  return operation;
+}
+
+/**
+ * Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it or holds JSON `null` there. An unfilled value is a placeholder the user fills in `migration.ts`; until then the call lowers to no operation.
+ */
+export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
+  readonly factoryName = 'fillStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly schemaName: string;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly value: JsonValue | UnfilledValue;
+  /** The value object field the key holds, which must take `value`. */
+  readonly field: StoredKeyFillField | undefined;
+  readonly label: string;
+
+  constructor(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    path: string,
+    value: JsonValue | UnfilledValue,
+    field?: StoredKeyFillField,
+  ) {
+    super();
+    const location = columnCallLocation(schemaName, tableName, columnName);
+    this.schemaName = schemaName;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    const keyProblem = fillKeyProblem({ key: this.path.key, path: this.path.path.text }, field);
+    if (keyProblem !== undefined) refusedArgument(this.factoryName, location, 'field', keyProblem);
+    this.field = field;
+    this.value =
+      value instanceof UnfilledValue
+        ? value
+        : requireFillValue(value, field, this.factoryName, location);
+    this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op | Promise<Op> {
+    if (this.value instanceof UnfilledValue) {
+      return unfilledFillOperation(
+        this.value.slot,
+        fillStoredKey(this.schemaName, this.tableName, this.columnName, this.path, 'null'),
+      );
+    }
+    return fillStoredKey(
+      this.schemaName,
+      this.tableName,
+      this.columnName,
+      this.path,
+      JSON.stringify(this.value),
+    );
+  }
+
+  renderTypeScript(): string {
+    const value =
+      this.value instanceof UnfilledValue
+        ? `placeholder(${jsonToTsSource(this.value.slot)})`
+        : jsonToTsSource(this.value);
+    const opts = [
+      ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `value: ${value}`,
+      ...(this.field === undefined ? [] : [`field: ${jsonToTsSource(this.field.text)}`]),
+    ];
+    return `this.fillStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return this.value instanceof UnfilledValue
+      ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' }]
+      : [];
   }
 }
 
@@ -2798,6 +3217,10 @@ export type PostgresOpFactoryCall =
   | AddNativeEnumValueCall
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
+  | RenameStoredKeyCall
+  | RemoveStoredKeyCall
+  | FillStoredKeyCall
+  | DeleteRowsCall
   | CreatePostgresRlsPolicyCall
   | DropPostgresRlsPolicyCall
   | EnableRowLevelSecurityCall

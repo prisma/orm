@@ -307,6 +307,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/0-shared/type-implementations/**",
+      "domain": "targets",
+      "layer": "shared",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/1-target/src/core/*.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -775,6 +781,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-options.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-transaction-members.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -980,6 +992,12 @@
     },
     {
       "glob": "packages/3-targets/sqlite/1-target/src/exports/sql-utils.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/sqlite/1-target/src/exports/types.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
@@ -1292,6 +1310,12 @@
     },
     {
       "glob": "packages/3-targets/mysql/1-target/src/exports/sql-utils.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-target/src/exports/types.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"

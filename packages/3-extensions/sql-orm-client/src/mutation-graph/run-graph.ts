@@ -18,7 +18,7 @@ import type { Executed, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
 type Context = CollectionContext<Contract<SqlStorage>>;
-type Collected = readonly (readonly StorageRow[] | number)[];
+type Collected = readonly (readonly StorageRow[] | SqlStatementStats)[];
 
 interface Outcome<Row> {
   readonly rows: readonly Row[];
@@ -89,7 +89,7 @@ async function runNodesInOrder<Row>(
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
   const run = runOn(ctx, scope);
-  const collected: (readonly StorageRow[] | number)[] = [];
+  const collected: (readonly StorageRow[] | SqlStatementStats)[] = [];
   let rows: readonly Row[] = [];
   let count = 0;
 
@@ -100,7 +100,7 @@ async function runNodesInOrder<Row>(
       continue;
     }
     const storageRows = rowsOf(executed);
-    count = typeof executed === 'number' ? executed : storageRows.length;
+    count = Array.isArray(executed) ? storageRows.length : executed.affectedRows;
     if (callerRows !== undefined) {
       rows = await shapeRows<Row>(graph, id, streamOf(storageRows), callerRows).toArray();
     }
@@ -129,7 +129,7 @@ function runOn(ctx: Context, scope: RuntimeScope): Run {
     buildOrmQueryPlan<StorageRow>(contract, ast, deriveParamsFromAst(ast).params);
   return {
     query: (ast) => queryPlanRows(scope, planOf(ast)),
-    execute: async (ast) => (await scope.execute(planOf(ast))).affectedRows,
+    execute: (ast) => scope.execute(planOf(ast)),
   };
 }
 
@@ -155,8 +155,10 @@ function shapeRows<Row>(
   });
 }
 
-function rowsOf(executed: readonly StorageRow[] | number | undefined): readonly StorageRow[] {
-  return typeof executed === 'object' ? executed : [];
+function rowsOf(
+  executed: readonly StorageRow[] | SqlStatementStats | undefined,
+): readonly StorageRow[] {
+  return Array.isArray(executed) ? executed : [];
 }
 
 function rowStream(executed: Executed): AsyncIterableResult<StorageRow> {

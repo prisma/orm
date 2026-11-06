@@ -645,7 +645,10 @@ describe('Postgres adapter', () => {
     expect(adapter.profile.target).toBe('postgres');
     expect(adapter.profile.id).toBe('postgres/default@1');
     expect(adapter.profile.capabilities['postgres']).toMatchObject({ lateral: true });
-    expect(adapter.profile.capabilities['sql']).toMatchObject({ returning: true });
+    expect(adapter.profile.capabilities['sql']).toMatchObject({
+      returning: true,
+      insertOnConflictTarget: true,
+    });
     expect(typeof adapter.profile.readMarker).toBe('function');
   });
 

@@ -128,14 +128,18 @@ export type Log = RuntimeLog;
  */
 export type CloseRefusal = 'when-idle' | 'at-once';
 
-export interface RuntimeOptions<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> {
-  readonly context: ExecutionContext<TContract>;
-  readonly adapter: Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>;
-  readonly driver: SqlDriver<unknown>;
+export interface RuntimeExecutionOptions {
   readonly verifyMarker?: VerifyMarkerOption;
   readonly middleware?: readonly SqlMiddleware[];
   readonly mode?: RuntimeMode;
   readonly log?: Log;
+}
+
+export interface RuntimeOptions<TContract extends Contract<SqlStorage> = Contract<SqlStorage>>
+  extends RuntimeExecutionOptions {
+  readonly context: ExecutionContext<TContract>;
+  readonly adapter: Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>;
+  readonly driver: SqlDriver<unknown>;
   readonly closeRefusal?: CloseRefusal | undefined;
   /** Whether `close()` closes the driver; `true` by default. Pass `false` for a runtime that shares a driver its owner closes: its `close()` refuses new work and waits for work in flight, and leaves the driver open. */
   readonly ownsDriver?: boolean | undefined;

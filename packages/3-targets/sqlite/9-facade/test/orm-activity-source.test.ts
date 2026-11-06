@@ -3,7 +3,7 @@ import { coreHash, profileHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { startActivityOn } from '@internal/sql-runtime';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 

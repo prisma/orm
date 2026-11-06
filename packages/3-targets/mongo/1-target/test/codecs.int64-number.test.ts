@@ -1,9 +1,10 @@
 import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import { BSON, Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { MONGO_INT64_NUMBER_CODEC_ID } from '../src/core/codec-ids';
-import { buildStandardCodecRegistry, mongoDescriptorById } from '../src/core/codecs';
+import { mongoCodecDescriptors, mongoDescriptorById } from '../src/core/codecs';
 import { mongoDataTypes } from '../src/core/data-types';
 import { fromContractJson, toContractJson } from './contract-json';
 
@@ -11,7 +12,9 @@ const decodeFailed = expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' });
 const encodeFailed = expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' });
 
 function codec() {
-  const found = buildStandardCodecRegistry().get(MONGO_INT64_NUMBER_CODEC_ID);
+  const found = assembleMongoCodecRegistry([
+    { id: 'mongo', types: { codecTypes: { codecDescriptors: mongoCodecDescriptors } } },
+  ]).get(MONGO_INT64_NUMBER_CODEC_ID);
   if (found === undefined) throw new Error(`${MONGO_INT64_NUMBER_CODEC_ID} is not registered`);
   return found;
 }

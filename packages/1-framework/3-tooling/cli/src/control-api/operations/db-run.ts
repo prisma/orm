@@ -46,7 +46,8 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
-import { CliStructuredError } from '../../utils/cli-errors';
+import { withEditsAsWritten } from '../../utils/calls-as-written';
+import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
 import {
@@ -73,7 +74,11 @@ import {
   reportAppliedStatements,
   reportConsentStatement,
 } from '../statements/report-applied-statements';
-import { resolveStatements, type StatementOrigin } from '../statements/resolve-statements';
+import {
+  fieldConvertsInDestination,
+  resolveStatements,
+  type StatementOrigin,
+} from '../statements/resolve-statements';
 import { isPlannedStatement, type StatementText } from '../statements/statement-text';
 import { reportTemporaryValues, type TemporaryValueReport } from '../statements/temporary-values';
 import type {
@@ -292,7 +297,26 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     return resolved.value;
   };
   const consentTexts = statementTexts.filter((statement) => !isPlannedStatement(statement));
-  const firstResolved = resolveRenames(statementTexts);
+  const fieldConverts =
+    appOrigin?.origin.kind === 'missing'
+      ? fieldConvertsInDestination(statementTexts, contract)
+      : [];
+  const firstResolved = fieldConverts.length > 0 ? [] : resolveRenames(statementTexts);
+  const needsMigrationFile =
+    fieldConverts.length > 0
+      ? fieldConverts
+      : statementsNeedingMigrationFile(statementTexts, firstResolved);
+  if (needsMigrationFile.length > 0) {
+    const markerHash = markerRows.get(aggregate.app.spaceId)?.storageHash;
+    throw errorStatementNeedsMigrationFile(
+      statementTexts,
+      needsMigrationFile,
+      options.invocation,
+      aggregate.app.packages.some(({ metadata }) => metadata.to === markerHash)
+        ? markerHash
+        : undefined,
+    );
+  }
 
   // 2a. Orphan-marker pre-flight: refuse to *apply* when a marker row
   // exists for a space that is not declared in the aggregate. Plan mode
@@ -554,7 +578,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     ...ifDefined('onProgress', onProgress),
   });
   if (!applied.ok) {
-    const facts = runnerFailureFacts(applied.failure, orderedResolutions);
+    const facts = await withEditsAsWritten(runnerFailureFacts(applied.failure, orderedResolutions));
     return notOk(
       action === 'dbInit'
         ? dbInitRunnerFailureError(applied.failure, facts, options.invocation)
@@ -898,4 +922,24 @@ function recordedDatabaseContract(
 ): string | undefined {
   const hash = markerRows.get(aggregate.app.spaceId)?.storageHash;
   return hash !== undefined && aggregate.app.graph().nodes.has(hash) ? hash : undefined;
+}
+
+/**
+ * The convert and backfill statements of `texts` that ask for code the user writes in a migration
+ * file: every one but a variant convert, which rewrites a stored value the contracts already give.
+ * `resolved` are the planned statements of `texts`, resolved in the order given.
+ */
+function statementsNeedingMigrationFile(
+  texts: readonly StatementText[],
+  resolved: readonly ResolvedMigrationStatement[],
+): readonly StatementText[] {
+  const planned = texts.filter(isPlannedStatement);
+  return planned.filter((_, index) => {
+    const statement = resolved[index];
+    return (
+      statement !== undefined &&
+      statement.kind !== 'rename' &&
+      !(statement.kind === 'convert' && statement.entity === 'model')
+    );
+  });
 }

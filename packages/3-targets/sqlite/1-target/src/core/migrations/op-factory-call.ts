@@ -9,20 +9,29 @@
  * strategies, mirroring the Postgres `ColumnSpec` pattern.
  */
 
-import type { ColumnDefault } from '@internal/contract/types';
-import { unfilledPlaceholderOperation } from '@internal/errors/migration';
+import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import { CliStructuredError } from '@internal/errors/control';
+import { errorUnfilledPlaceholder, unfilledPlaceholderOperation } from '@internal/errors/migration';
 import {
   checkSqlExpressionText,
   createSqlTextSources,
   encodeStoredValue,
+  fillKeyProblem,
+  fillValueProblem,
   isUnfilledSlot,
+  type JsonKeyPath,
+  type JsonPath,
+  keyPathOf,
   type MigrationOperationClass,
+  parseJsonPath,
   type SqlMigrationPlanOperation,
   type SqlSlot,
   type SqlTextSources,
+  type StoredKeyFillField,
   type StoredValueCodec,
   slotSource,
   sqlOfSlot,
+  UnfilledValue,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer, Lowerer } from '@internal/family-sql/control-adapter';
 import type {
@@ -56,7 +65,22 @@ import { quoteIdentifier, SQLITE_QUOTING } from '../sql-utils';
 import { addColumn, dropColumnExecuteSql, renameColumn } from './operations/columns';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import { INLINE_AUTOINCREMENT_PRIMARY_KEY, step } from './operations/shared';
-import { removeStoredValue, replaceStoredValue, storedValueText } from './operations/stored-values';
+import {
+  fillStoredKey,
+  keyPlace,
+  removeStoredKey,
+  renameStoredKey,
+} from './operations/stored-keys';
+import {
+  type CascadingForeignKey,
+  deleteRows,
+  deleteRowsLabel,
+  removeStoredValue,
+  removeStoredValueAtPath,
+  replaceStoredValue,
+  replaceStoredValueAtPath,
+  storedValueText,
+} from './operations/stored-values';
 import {
   type ColumnShape,
   indexDefinitionCheck,
@@ -330,7 +354,7 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
   constructor(tableName: string) {
     super();
     this.tableName = tableName;
-    this.label = `Drop table ${tableName}`;
+    this.label = `Drop table "${tableName}"`;
     this.freeze();
   }
 
@@ -347,7 +371,7 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
     const absent = await lowerer.lowerToExecuteRequest(checks.tableAbsent());
     return {
       id: `dropTable.${this.tableName}`,
-      label: `Drop table ${this.tableName}`,
+      label: `Drop table "${this.tableName}"`,
       summary: `Drops table ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
       target: { id: 'sqlite', details: buildTargetDetails('table', this.tableName) },
@@ -876,7 +900,7 @@ export class DropColumnCall extends SqliteOpFactoryCallNode {
     super();
     this.tableName = tableName;
     this.columnName = columnName;
-    this.label = `Drop column ${columnName} on ${tableName}`;
+    this.label = `Drop column "${columnName}" from "${tableName}"`;
     this.freeze();
   }
 
@@ -899,7 +923,7 @@ export class DropColumnCall extends SqliteOpFactoryCallNode {
     const absent = await lowerer.lowerToExecuteRequest(checks.columnAbsent());
     return {
       id: `dropColumn.${this.tableName}.${this.columnName}`,
-      label: `Drop column ${this.columnName} on ${this.tableName}`,
+      label: `Drop column "${this.columnName}" from "${this.tableName}"`,
       summary: `Drops column ${this.columnName} on ${this.tableName} which is not in the contract`,
       operationClass: 'destructive',
       target: {
@@ -1104,10 +1128,12 @@ function replaceStoredValueSource(
   from: string,
   to: string,
   codec: StoredValueCodec | undefined,
+  path: JsonPath | undefined,
 ): string {
   const opts = [
     `table: ${jsonToTsSource(tableName)}`,
     `column: ${jsonToTsSource(columnName)}`,
+    ...pathSource(path),
     `from: ${from}`,
     `to: ${to}`,
     ...codecRefSource(codec),
@@ -1115,7 +1141,54 @@ function replaceStoredValueSource(
   return `this.replaceStoredValue({ ${opts.join(', ')} })`;
 }
 
-function codecRefSource(codec: StoredValueCodec | undefined): readonly string[] {
+function pathSource(path: JsonPath | undefined): readonly string[] {
+  return path === undefined ? [] : [`path: ${jsonToTsSource(path.text)}`];
+}
+
+function storedValuePlace(
+  path: JsonPath | undefined,
+  tableName: string,
+  columnName: string,
+): string {
+  return path === undefined
+    ? `in column "${columnName}" of "${tableName}"`
+    : `at path ${JSON.stringify(path.text)} in column "${columnName}" of "${tableName}"`;
+}
+
+/**
+ * The path a stored value call acts at inside JSON: it ends at a member name or at a list
+ * wildcard, and the value is compared as a JSON value, so it takes no codec.
+ */
+function requireValuePath(
+  path: string | undefined,
+  codec: StoredValueCodec | undefined,
+  factory: string,
+  tableName: string,
+  columnName: string,
+): JsonPath | undefined {
+  if (path === undefined) return undefined;
+  const location = columnCallLocation(tableName, columnName);
+  const parsed = requirePath(path, factory, location);
+  if (parsed.steps.length === 0) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(path)} does not end at a member name or a wildcard ([*] or .*)`,
+    );
+  }
+  if (codec !== undefined) {
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      'path takes no codecRef: a value inside JSON is compared as a JSON value',
+    );
+  }
+  return parsed;
+}
+
+function codecRefSource(codec: Pick<StoredValueCodec, 'codecRef'> | undefined): readonly string[] {
   return codec === undefined ? [] : [`codecRef: ${jsonToTsSource(codec.codecRef)}`];
 }
 
@@ -1137,7 +1210,7 @@ function requireStoredValue(
   );
 }
 
-/** Changes one stored value of a column to another, in every row that holds it. */
+/** Changes one stored value of a column to another, in every row that holds it, or at a path inside the JSON of the column. */
 export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'replaceStoredValue' as const;
   readonly operationClass = 'widening' as const;
@@ -1147,6 +1220,8 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   readonly to: string | number;
   /** The column's codec, which writes `from` and `to` as the database stores them. */
   readonly codec: StoredValueCodec | undefined;
+  /** The path inside the column's JSON at which the value is replaced, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
   readonly label: string;
 
   constructor(
@@ -1155,6 +1230,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
     from: string | number,
     to: string | number,
     codec?: StoredValueCodec,
+    path?: string,
   ) {
     super();
     this.codec = codec;
@@ -1162,11 +1238,21 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
     this.columnName = columnName;
     this.from = requireStoredValue(from, this.factoryName, tableName, columnName, 'from');
     this.to = requireStoredValue(to, this.factoryName, tableName, columnName, 'to');
-    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} in column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, codec, this.factoryName, tableName, columnName);
+    this.label = `Replace value ${storedValueText(from)} with ${storedValueText(to)} ${storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
+    if (this.path !== undefined) {
+      return replaceStoredValueAtPath(
+        this.tableName,
+        this.columnName,
+        this.from,
+        this.to,
+        this.path,
+      );
+    }
     return replaceStoredValue(
       this.tableName,
       this.columnName,
@@ -1182,6 +1268,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
       jsonToTsSource(this.from),
       jsonToTsSource(this.to),
       this.codec,
+      this.path,
     );
   }
 
@@ -1190,7 +1277,7 @@ export class ReplaceStoredValueCall extends SqliteOpFactoryCallNode {
   }
 }
 
-/** Removes one stored value of a column by setting it to NULL in every row that holds it. */
+/** Removes one stored value of a column by setting it to NULL in every row that holds it, or removes it at a path inside the JSON of the column. */
 export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'removeStoredValue' as const;
   readonly operationClass = 'destructive' as const;
@@ -1201,6 +1288,10 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
   readonly codec: StoredValueCodec | undefined;
   /** The enum value whose stored value is removed, which the check that fails while rows of a required column hold it names. */
   readonly enumValue: EnumValueCoordinateJson | undefined;
+  /** The path inside the column's JSON at which the value is removed, compared as a JSON value. */
+  readonly path: JsonPath | undefined;
+  /** Whether the member at `path` takes JSON `null`; when it does not, the check fails while a row holds the value. */
+  readonly nullable: boolean;
   readonly label: string;
 
   constructor(
@@ -1209,6 +1300,8 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
     value: string | number,
     codec?: StoredValueCodec,
     enumValue?: EnumValueCoordinateJson,
+    path?: string,
+    nullable?: boolean,
   ) {
     super();
     this.codec = codec;
@@ -1216,22 +1309,103 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
     this.tableName = tableName;
     this.columnName = columnName;
     this.value = requireStoredValue(value, this.factoryName, tableName, columnName, 'value');
-    this.label = `Remove value ${storedValueText(value)} from column "${columnName}" of "${tableName}"`;
+    this.path = requireValuePath(path, codec, this.factoryName, tableName, columnName);
+    if (nullable !== undefined && this.path === undefined) {
+      refusedArgument(
+        this.factoryName,
+        columnCallLocation(tableName, columnName),
+        'nullable',
+        'nullable needs a path: a column says itself whether it takes NULL',
+      );
+    }
+    this.nullable = nullable === true;
+    this.label = `Remove value ${storedValueText(value)} ${this.path === undefined ? `from column "${columnName}" of "${tableName}"` : storedValuePlace(this.path, tableName, columnName)}`;
     this.freeze();
   }
 
   async toOp(): Promise<Op> {
-    return removeStoredValue(
-      this.tableName,
-      this.columnName,
-      await encodeStoredValue(this.value, this.codec),
+    const mark =
       this.enumValue === undefined
         ? undefined
         : {
             enumValue: this.enumValue,
             value: this.value,
             ...(this.codec === undefined ? {} : { codecRef: this.codec.codecRef }),
-          },
+          };
+    if (this.path !== undefined) {
+      return removeStoredValueAtPath(
+        this.tableName,
+        this.columnName,
+        this.value,
+        this.path,
+        this.nullable,
+        mark,
+      );
+    }
+    return removeStoredValue(
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+      mark,
+    );
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      `table: ${jsonToTsSource(this.tableName)}`,
+      `column: ${jsonToTsSource(this.columnName)}`,
+      ...pathSource(this.path),
+      `value: ${jsonToTsSource(this.value)}`,
+      ...(this.nullable ? ['nullable: true'] : []),
+      ...codecRefSource(this.codec),
+      ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
+    ];
+    return `this.removeStoredValue({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+/** Deletes the rows whose column holds one stored value. */
+export class DeleteRowsCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'deleteRows' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly value: string | number;
+  /** The column's codec, which writes `value` as the database stores it. */
+  readonly codec: StoredValueCodec | undefined;
+  /** The tables whose rows reference the deleted rows through a foreign key that cascades, deleted first. */
+  readonly cascade: readonly CascadingForeignKey[];
+  readonly label: string;
+
+  constructor(
+    tableName: string,
+    columnName: string,
+    value: string | number,
+    codec?: StoredValueCodec,
+    cascade: readonly CascadingForeignKey[] = [],
+  ) {
+    super();
+    this.codec = codec;
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.value = requireStoredValue(value, this.factoryName, tableName, columnName, 'value');
+    this.cascade = cascade.map((foreignKey) =>
+      requireCascade(foreignKey, this.factoryName, columnCallLocation(tableName, columnName)),
+    );
+    this.label = deleteRowsLabel(tableName, columnName, value, this.cascade);
+    this.freeze();
+  }
+
+  async toOp(): Promise<Op> {
+    return deleteRows(
+      this.tableName,
+      this.columnName,
+      await encodeStoredValue(this.value, this.codec),
+      this.cascade,
     );
   }
 
@@ -1241,13 +1415,262 @@ export class RemoveStoredValueCall extends SqliteOpFactoryCallNode {
       `column: ${jsonToTsSource(this.columnName)}`,
       `value: ${jsonToTsSource(this.value)}`,
       ...codecRefSource(this.codec),
-      ...(this.enumValue === undefined ? [] : [`enumValue: ${jsonToTsSource(this.enumValue)}`]),
+      ...(this.cascade.length === 0 ? [] : [`cascade: ${jsonToTsSource(this.cascade)}`]),
     ];
-    return `this.removeStoredValue({ ${opts.join(', ')} })`;
+    return `this.deleteRows({ ${opts.join(', ')} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
     return [];
+  }
+}
+
+function requireCascade(
+  foreignKey: CascadingForeignKey,
+  factory: string,
+  location: readonly string[],
+): CascadingForeignKey {
+  const { columns, references } = foreignKey;
+  return columns.length > 0 && columns.length === references.length
+    ? { table: foreignKey.table, columns: [...columns], references: [...references] }
+    : refusedArgument(
+        factory,
+        location,
+        'cascade',
+        `cascade of table ${JSON.stringify(foreignKey.table)} must name as many columns as references, and at least one`,
+      );
+}
+
+// ============================================================================
+// Stored keys
+// ============================================================================
+
+function columnCallLocation(tableName: string, columnName: string): readonly string[] {
+  return [`table: ${jsonToTsSource(tableName)}`, `column: ${jsonToTsSource(columnName)}`];
+}
+
+function refusedArgument(
+  factory: string,
+  location: readonly string[],
+  argument: string,
+  why: string,
+): never {
+  throw sqliteError('CONTRACT.ARGUMENT_INVALID', `${factory}({ ${location.join(', ')} }): ${why}`, {
+    meta: { what: `${factory} ${argument}` },
+  });
+}
+
+function requirePath(text: string, factory: string, location: readonly string[]): JsonPath {
+  const parsed = parseJsonPath(text);
+  return parsed.ok ? parsed.value : refusedArgument(factory, location, 'path', parsed.failure);
+}
+
+function requireKeyPath(text: string, factory: string, location: readonly string[]): JsonKeyPath {
+  return (
+    keyPathOf(requirePath(text, factory, location)) ??
+    refusedArgument(
+      factory,
+      location,
+      'path',
+      `path ${JSON.stringify(text)} does not end at a member name, the key the operation acts on`,
+    )
+  );
+}
+
+/** Renames the key at the end of a JSON path, in every object of a column the path reaches. */
+export class RenameStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'renameStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly to: string;
+  readonly label: string;
+
+  constructor(tableName: string, columnName: string, path: string, to: string) {
+    super();
+    const location = columnCallLocation(tableName, columnName);
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    if (typeof to !== 'string' || to === this.path.key) {
+      refusedArgument(
+        this.factoryName,
+        location,
+        'to',
+        `to must be a key other than ${JSON.stringify(this.path.key)}; got ${JSON.stringify(to)}`,
+      );
+    }
+    this.to = to;
+    this.label = `Rename key "${this.path.key}" to "${to}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return renameStoredKey(this.tableName, this.columnName, this.path, this.to);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `to: ${jsonToTsSource(this.to)}`,
+    ];
+    return `this.renameStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+/** Removes the key at the end of a JSON path, from every object of a column the path reaches. */
+export class RemoveStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'removeStoredKey' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly label: string;
+
+  constructor(tableName: string, columnName: string, path: string) {
+    super();
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, columnCallLocation(tableName, columnName));
+    this.label = `Remove key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op {
+    return removeStoredKey(this.tableName, this.columnName, this.path);
+  }
+
+  renderTypeScript(): string {
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+    ];
+    return `this.removeStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+function requireJsonValue(
+  value: JsonValue,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const text: string | undefined = JSON.stringify(value);
+  return text === undefined
+    ? refusedArgument(factory, location, 'value', 'value must be a JSON value; got undefined')
+    : value;
+}
+
+function requireFillValue(
+  value: JsonValue,
+  field: StoredKeyFillField | undefined,
+  factory: string,
+  location: readonly string[],
+): JsonValue {
+  const json = requireJsonValue(value, factory, location);
+  const problem = fillValueProblem(json, field);
+  return problem === undefined ? json : refusedArgument(factory, location, 'value', problem);
+}
+
+/**
+ * The operation of a fill whose value is an unfilled placeholder: a promise that rejects with
+ * `MIGRATION.UNFILLED_PLACEHOLDER`, whose meta names the operation it stands for, so that a plan can
+ * list it before the user fills the value.
+ */
+function unfilledFillOperation(slot: string, standsFor: Op): Promise<never> {
+  const unfilled = errorUnfilledPlaceholder(slot);
+  const operation = Promise.reject(
+    new CliStructuredError(unfilled.code, unfilled.message, {
+      ...ifDefined('why', unfilled.why),
+      ...ifDefined('fix', unfilled.fix),
+      meta: {
+        slot,
+        operation: {
+          id: standsFor.id,
+          label: standsFor.label,
+          operationClass: standsFor.operationClass,
+        },
+      },
+    }),
+  );
+  operation.catch(() => undefined);
+  return operation;
+}
+
+/**
+ * Sets the key at the end of a JSON path to a value, in every object of a column the path reaches that lacks it or holds JSON `null` there. An unfilled value is a placeholder the user fills in `migration.ts`; until then the call lowers to no operation.
+ */
+export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
+  readonly factoryName = 'fillStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly tableName: string;
+  readonly columnName: string;
+  readonly path: JsonKeyPath;
+  readonly value: JsonValue | UnfilledValue;
+  /** The value object field the key holds, which must take `value`. */
+  readonly field: StoredKeyFillField | undefined;
+  readonly label: string;
+
+  constructor(
+    tableName: string,
+    columnName: string,
+    path: string,
+    value: JsonValue | UnfilledValue,
+    field?: StoredKeyFillField,
+  ) {
+    super();
+    const location = columnCallLocation(tableName, columnName);
+    this.tableName = tableName;
+    this.columnName = columnName;
+    this.path = requireKeyPath(path, this.factoryName, location);
+    const keyProblem = fillKeyProblem({ key: this.path.key, path: this.path.path.text }, field);
+    if (keyProblem !== undefined) refusedArgument(this.factoryName, location, 'field', keyProblem);
+    this.field = field;
+    this.value =
+      value instanceof UnfilledValue
+        ? value
+        : requireFillValue(value, field, this.factoryName, location);
+    this.label = `Fill key "${this.path.key}" ${keyPlace(this.path, tableName, columnName)}`;
+    this.freeze();
+  }
+
+  toOp(): Op | Promise<Op> {
+    if (this.value instanceof UnfilledValue) {
+      return unfilledFillOperation(
+        this.value.slot,
+        fillStoredKey(this.tableName, this.columnName, this.path, 'null'),
+      );
+    }
+    return fillStoredKey(this.tableName, this.columnName, this.path, JSON.stringify(this.value));
+  }
+
+  renderTypeScript(): string {
+    const value =
+      this.value instanceof UnfilledValue
+        ? `placeholder(${jsonToTsSource(this.value.slot)})`
+        : jsonToTsSource(this.value);
+    const opts = [
+      ...columnCallLocation(this.tableName, this.columnName),
+      `path: ${jsonToTsSource(this.path.path.text)}`,
+      `value: ${value}`,
+      ...(this.field === undefined ? [] : [`field: ${jsonToTsSource(this.field.text)}`]),
+    ];
+    return `this.fillStoredKey({ ${opts.join(', ')} })`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return this.value instanceof UnfilledValue
+      ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+      : [];
   }
 }
 
@@ -1364,6 +1787,10 @@ export type SqliteOpFactoryCall =
   | DropIndexCall
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
+  | RenameStoredKeyCall
+  | RemoveStoredKeyCall
+  | FillStoredKeyCall
+  | DeleteRowsCall
   | DataTransformCall
   | RawSqlCall;
 

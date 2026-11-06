@@ -31,7 +31,7 @@ import {
 import { MongoParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { _unstable_createMongoAdapterWithCodecs, createMongoAdapter } from '../src/mongo-adapter';
+import { createMongoAdapter } from '../src/mongo-adapter';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -393,7 +393,7 @@ describe('MongoAdapter with codec registry', () => {
     return registry;
   }
 
-  const adapterWithCodecs = _unstable_createMongoAdapterWithCodecs(registryWithUppercase());
+  const adapterWithCodecs = createMongoAdapter(registryWithUppercase());
 
   it('encodes MongoParamRef with codecId in insertOne document', async () => {
     const command = new InsertOneCommand('users', {

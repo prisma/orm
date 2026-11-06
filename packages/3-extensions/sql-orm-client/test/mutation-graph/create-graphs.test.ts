@@ -21,11 +21,16 @@ const grace = { id: 2, name: 'Grace', email: 'grace@example.com' };
 
 describe('createAllGraph', () => {
   it('builds no node for no rows', () => {
-    expect(printGraph(createAllGraph(target, [], undefined))).toBe('result: none');
+    expect(printGraph(createAllGraph(target, [], undefined, 'rows'))).toBe('result: none');
   });
 
   it('builds one Insert of every row as the result when the target fills a missing column with DEFAULT', () => {
-    const graph = createAllGraph(target, [ada, grace, { id: 3, name: 'Edsger' }], undefined);
+    const graph = createAllGraph(
+      target,
+      [ada, grace, { id: 3, name: 'Edsger' }],
+      undefined,
+      'rows',
+    );
 
     expect(printGraph(graph)).toBe(['n1 Insert users 3 rows', 'result: n1'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual([]);
@@ -36,6 +41,7 @@ describe('createAllGraph', () => {
       targetOf(users.state, contextWithoutDefault),
       [ada, grace],
       undefined,
+      'rows',
     );
 
     expect(printGraph(graph)).toBe(
@@ -48,6 +54,7 @@ describe('createAllGraph', () => {
       targetOf(users.state, contextWithoutDefault),
       [ada, { id: 3, name: 'Edsger' }, grace],
       undefined,
+      'rows',
     );
 
     expect(printGraph(graph)).toBe(
@@ -56,7 +63,7 @@ describe('createAllGraph', () => {
   });
 
   it('asks the database to skip rows that collide with the conflict columns', () => {
-    const graph = createAllGraph(target, [ada], { columns: ['email'] });
+    const graph = createAllGraph(target, [ada], { columns: ['email'] }, 'rows');
 
     expect(printGraph(graph)).toBe(
       ['n1 Insert users on conflict (email) do nothing', 'result: n1'].join('\n'),
@@ -64,7 +71,7 @@ describe('createAllGraph', () => {
   });
 
   it('adds a Find that reads the inserted rows with their includes, as the result', () => {
-    const graph = createAllGraph(targetWithIncludes, [ada, grace], undefined);
+    const graph = createAllGraph(targetWithIncludes, [ada, grace], undefined, 'rows');
 
     expect(printGraph(graph)).toBe(
       ['n1 Insert users 2 rows', 'n2 Find users <- FilterData n1 (id->id)', 'result: n2'].join(
@@ -79,7 +86,12 @@ describe('createAllGraph', () => {
     const tables = createStatementTables({ namespaceId: 'public', tableName: 'no_such_table' });
 
     expect(() =>
-      createAllGraph(targetOf({ ...users.include('posts').state, tables }), [ada], undefined),
+      createAllGraph(
+        targetOf({ ...users.include('posts').state, tables }),
+        [ada],
+        undefined,
+        'rows',
+      ),
     ).toThrow(expect.objectContaining({ code: 'ORM.ROW_IDENTITY_MISSING' }));
   });
 });

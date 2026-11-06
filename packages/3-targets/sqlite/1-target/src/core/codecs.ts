@@ -48,6 +48,7 @@ import {
   sqlRawDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
@@ -70,7 +71,17 @@ import {
   sqliteReal,
   sqliteText,
 } from './data-types';
-import { sqliteError } from './errors';
+import {
+  sqliteDateStringDescriptor,
+  sqliteDateTemporalDescriptor,
+  sqliteDatetimeStringDescriptor,
+  sqliteDatetimeTemporalDescriptor,
+  sqliteDurationStringDescriptor,
+  sqliteTimeStringDescriptor,
+  sqliteTimeTemporalDescriptor,
+} from './date-time-codecs';
+import { sqliteInstantMilliseconds } from './date-time-values';
+import { errorDateTimeUnwritable, sqliteError } from './errors';
 
 /**
  * Projects the expression unchanged, for codecs whose canonical JSON is what
@@ -444,6 +455,7 @@ export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteText.id;
   override readonly codecId = SQLITE_TEXT_CODEC_ID;
+  readonly jsonType = 'string' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -488,6 +500,7 @@ export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_INTEGER_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -532,6 +545,7 @@ export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteReal.id;
   override readonly codecId = SQLITE_REAL_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -589,6 +603,7 @@ export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteBlob.id;
   override readonly codecId = SQLITE_BLOB_CODEC_ID;
+  readonly jsonType = 'object' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec {
@@ -608,29 +623,18 @@ sqliteBlobColumn satisfies ColumnHelperForStrict<SqliteBlobDescriptor>;
  * Reads what SQLite holds for an instant as `Date` reads it, with text without a UTC offset read as UTC, as SQLite's own date and time functions read it, never in the machine's time zone. A number is milliseconds since 1970, as the Prisma ORM query engine wrote a `DateTime`. Digits below a millisecond are cut, as `Date` cuts them.
  */
 export function decodeSqliteDatetime(value: string | number): Date {
-  const date = new Date(typeof value === 'number' ? value : asUtcWhenUnmarked(value));
-  if (Number.isNaN(date.getTime())) {
-    throw sqliteError(
-      'RUNTIME.DECODE_FAILED',
-      `sqlite/datetime@1 wire value must be a date and time as text, or a number of milliseconds since 1970: ${String(value)}`,
-      { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: String(value) } },
-    );
-  }
-  return date;
+  return new Date(sqliteInstantMilliseconds(SQLITE_DATETIME_CODEC_ID, value));
 }
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const DATE_TIME_WITHOUT_OFFSET = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
-
-/** A date alone as its midnight in UTC, and a date and time without an offset as UTC. */
-function asUtcWhenUnmarked(text: string): string {
-  if (DATE_ONLY.test(text)) return `${text}T00:00:00Z`;
-  const unmarked = DATE_TIME_WITHOUT_OFFSET.exec(text);
-  return unmarked === null ? text : `${unmarked[1]}T${unmarked[2]}Z`;
-}
-
-/** The text SQLite holds for an instant: what the codec writes for every row, and for a default. */
+/** The text SQLite holds for an instant: what the codec writes for every row, and for a default. An Invalid Date is refused, naming the codec. */
 export function encodeSqliteDatetime(value: Date): string {
+  if (!isValidDate(value)) {
+    throw errorDateTimeUnwritable({
+      codecId: SQLITE_DATETIME_CODEC_ID,
+      received: 'an Invalid Date',
+      detail: 'Pass a Date that holds an instant.',
+    });
+  }
   return value.toISOString();
 }
 
@@ -650,7 +654,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
     return new Date(value.value);
   }
   toDataTypeValue(input: Date): DataTypeValue {
-    return this.dataTypeValueOf(input.toISOString());
+    return this.dataTypeValueOf(encodeSqliteDatetime(input));
   }
 }
 
@@ -660,6 +664,7 @@ export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteDatetime.id;
   override readonly codecId = SQLITE_DATETIME_CODEC_ID;
+  readonly jsonType = 'string' as const;
   override readonly traits = ['equality', 'order'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec {
@@ -709,6 +714,7 @@ export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteJson.id;
   override readonly codecId = SQLITE_JSON_CODEC_ID;
+  readonly jsonType = 'any' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -776,6 +782,7 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -842,6 +849,7 @@ export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_NUMBER_CODEC_ID;
+  readonly jsonType = 'number' as const;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -871,6 +879,13 @@ export const codecDescriptors = defineSqliteCodecs([
   sqliteRealDescriptor,
   sqliteBlobDescriptor,
   sqliteDatetimeDescriptor,
+  sqliteDatetimeTemporalDescriptor,
+  sqliteDatetimeStringDescriptor,
+  sqliteDateStringDescriptor,
+  sqliteDateTemporalDescriptor,
+  sqliteTimeStringDescriptor,
+  sqliteTimeTemporalDescriptor,
+  sqliteDurationStringDescriptor,
   sqliteJsonDescriptor,
   sqliteBigintDescriptor,
   sqliteBigintNumberDescriptor,

@@ -10,6 +10,7 @@ import {
   assembleSqliteCodecRegistry,
   sqliteCodecDescriptorRegistry,
 } from '@internal/target-sqlite/codecs';
+import { sqliteNowGenerators } from '@internal/target-sqlite/runtime';
 import { createSqliteAdapterWithCodecRegistry, sqliteRawCodecInferer } from '../adapter';
 import { sqliteAdapterDescriptorMeta } from '../descriptor-meta';
 
@@ -29,6 +30,13 @@ function createSqliteMutationDefaultGenerators(): ReadonlyArray<RuntimeMutationD
       }),
     ),
     timestampNowRuntimeGenerator(),
+    ...sqliteNowGenerators.map(
+      ({ id, generate }): RuntimeMutationDefaultGenerator => ({
+        id,
+        generate,
+        stability: 'query',
+      }),
+    ),
   ];
 }
 

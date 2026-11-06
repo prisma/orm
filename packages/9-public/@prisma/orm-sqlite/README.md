@@ -16,6 +16,8 @@ pnpm add @prisma/orm-sqlite
 
 The driver is Node's built-in `node:sqlite`, so there is no native module to compile.
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |

@@ -145,6 +145,7 @@ describe('mongo() facade', () => {
       target: mocks.mongoRuntimeTarget,
       adapter: mocks.mongoRuntimeAdapter,
       driver: mocks.mongoRuntimeDriver,
+      extensions: [],
     });
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledWith({

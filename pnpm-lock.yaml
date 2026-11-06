@@ -702,6 +702,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   examples/prisma-8-postgis-demo:
     dependencies:
@@ -3704,6 +3707,31 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/3-targets/0-shared/type-implementations:
+    dependencies:
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
+    devDependencies:
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/3-targets/mongo/1-target:
     dependencies:
       '@internal/cli':
@@ -3830,6 +3858,9 @@ importers:
       '@internal/mongo-query-builder':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-mongo-family/5-query-builders/query-builder
+      '@internal/mongo-runtime':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../2-mongo-family/7-runtime
       '@internal/mongo-schema-ir':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-mongo-family/3-tooling/mongo-schema-ir
@@ -3995,6 +4026,9 @@ importers:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/3-tooling/emitter
+      '@internal/mongo-codec':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../2-mongo-family/1-foundation/mongo-codec
       '@internal/mongo-emitter':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-mongo-family/3-tooling/emitter
@@ -4061,6 +4095,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/0-foundation/utils
@@ -4070,6 +4107,9 @@ importers:
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.22
@@ -4080,6 +4120,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4253,10 +4296,16 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/3-tooling/migration
+      '@internal/psl-parser':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../1-framework/2-authoring/psl-parser
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../2-sql-family/1-core/schema-ir
@@ -4272,6 +4321,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4326,6 +4378,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/0-foundation/utils
@@ -4754,6 +4809,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/0-foundation/utils
@@ -4763,6 +4821,9 @@ importers:
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/driver-sqlite':
         specifier: workspace:8.0.0-rc.22
@@ -4956,6 +5017,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -5019,6 +5083,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5035,6 +5102,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -5427,6 +5497,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5467,6 +5540,9 @@ importers:
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/1-core/ts-render
+      '@internal/type-implementations':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../3-targets/0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../1-framework/0-foundation/utils
@@ -5549,6 +5625,12 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/mysql':
         specifier: workspace:8.0.0-rc.22
@@ -5669,6 +5751,12 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5752,6 +5840,12 @@ importers:
       mariadb:
         specifier: 3.5.4
         version: 3.5.4
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/adapter-mysql':
         specifier: workspace:8.0.0-rc.22
@@ -5762,6 +5856,9 @@ importers:
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../3-targets/mysql/1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsconfig
@@ -5774,6 +5871,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/9-public/@prisma/orm-target-postgres:
     dependencies:
@@ -5829,6 +5929,9 @@ importers:
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../3-targets/postgres/1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsconfig
@@ -5865,6 +5968,12 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      temporal-spec:
+        specifier: 1.0.1
+        version: 1.0.1
     devDependencies:
       '@internal/adapter-sqlite':
         specifier: workspace:8.0.0-rc.22
@@ -5875,6 +5984,9 @@ importers:
       '@internal/target-sqlite':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../3-targets/sqlite/1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.22
+        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.22
         version: link:../../../0-config/tsconfig
@@ -5887,6 +5999,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/9-public/@prisma/orm-toolchain:
     dependencies:

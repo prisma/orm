@@ -4,7 +4,7 @@ import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqliteControlAdapter } from '../helpers/test-control-adapter';
