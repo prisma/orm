@@ -8,17 +8,26 @@ import {
 import { flattenMongoDraftLeaves, mapMongoDraftLeaves } from '../draft-leaves';
 import type { MongoDeclaration } from './types';
 
-const rawDraftKinds: ReadonlySet<MongoLoweredDraft['kind']> = new Set([
-  'rawAggregate',
-  'rawInsertOne',
-  'rawInsertMany',
-  'rawUpdateOne',
-  'rawUpdateMany',
-  'rawDeleteOne',
-  'rawDeleteMany',
-  'rawFindOneAndUpdate',
-  'rawFindOneAndDelete',
-]);
+const isRawDraftKind: Readonly<Record<MongoLoweredDraft['kind'], boolean>> = {
+  aggregate: false,
+  insertOne: false,
+  insertMany: false,
+  updateOne: false,
+  updateMany: false,
+  deleteOne: false,
+  deleteMany: false,
+  findOneAndUpdate: false,
+  findOneAndDelete: false,
+  rawAggregate: true,
+  rawInsertOne: true,
+  rawInsertMany: true,
+  rawUpdateOne: true,
+  rawUpdateMany: true,
+  rawDeleteOne: true,
+  rawDeleteMany: true,
+  rawFindOneAndUpdate: true,
+  rawFindOneAndDelete: true,
+};
 
 export function buildPlaceholders(
   declaration: MongoDeclaration,
@@ -40,7 +49,7 @@ export function collectPlaceholders(
   const found = new Set<MongoPreparedParamRef>();
   for (const leaf of flattenMongoDraftLeaves(draft)) {
     if (!isMongoPreparedParamRef(leaf)) continue;
-    if (rawDraftKinds.has(draft.kind)) {
+    if (isRawDraftKind[draft.kind]) {
       throw runtimeError(
         'RUNTIME.PREPARE_RAW_PLACEHOLDER',
         `The raw command has a placeholder for '${leaf.name}'. Raw commands are sent as written, so they cannot take prepared parameters.`,
