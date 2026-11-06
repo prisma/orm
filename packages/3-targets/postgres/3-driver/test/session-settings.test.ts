@@ -141,6 +141,26 @@ describe('the connection settings of a connection Prisma opens', () => {
     ).toBe(5);
   });
 
+  it('parses URLs with omitted user and host components for pg connection settings', () => {
+    const blankBoth = pgConnectionConfig({ connectionString: 'postgresql:///app' }, SETTINGS);
+    expect(blankBoth.user).toBeUndefined();
+    expect(blankBoth.host).toBeNull();
+    expect(blankBoth.database).toBe('app');
+
+    const blankUser = pgConnectionConfig(
+      { connectionString: 'postgresql://localhost/app' },
+      SETTINGS,
+    );
+    expect(blankUser.user).toBeUndefined();
+    expect(blankUser.host).toBe('localhost');
+    expect(blankUser.database).toBe('app');
+
+    const blankHost = pgConnectionConfig({ connectionString: 'postgresql://u@/app' }, SETTINGS);
+    expect(blankHost.user).toBe('u');
+    expect(blankHost.host).toBeNull();
+    expect(blankHost.database).toBe('app');
+  });
+
   it('parses URLs with blank host and explicit port without setting a dummy host', () => {
     const config = pgConnectionConfig({ connectionString: 'postgresql://:5432/app' }, SETTINGS);
     expect(config.port).toBe('5432');

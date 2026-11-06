@@ -204,6 +204,15 @@ describe('validatePostgresUrl', () => {
     );
   });
 
+  it('accepts connection string with percent-encoded Unix socket directory containing a comma', () => {
+    expect(validatePostgresUrl('postgresql://%2Ftmp%2Fpostgres,socket/mydb')).toBe(
+      'postgresql://%2Ftmp%2Fpostgres,socket/mydb',
+    );
+    expect(validatePostgresUrl('postgresql://user:pass@%2Fvar%2Frun%2Fpostgresql,local/mydb')).toBe(
+      'postgresql://user:pass@%2Fvar%2Frun%2Fpostgresql,local/mydb',
+    );
+  });
+
   it('rejects multi-host connection string', () => {
     expect(() => validatePostgresUrl('postgresql://h1:5432,h2:5432/mydb')).toThrow(
       'Postgres URL must be a valid URL',
