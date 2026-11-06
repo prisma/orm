@@ -35,6 +35,6 @@ The SQL this adapter lowers is not runnable as written: each parameter is a numb
 ## Exports
 
 - `./runtime`: the runtime adapter descriptor
-- `./control`: the control adapter descriptor, `MysqlControlAdapter`, `buildMysqlSchemaIR`, and for a target that extends MySQL `createMysqlControlAdapter`, which takes the target id and a catalog reader, and `readMysqlCatalog` with its queries `MYSQL_CATALOG_QUERIES`
+- `./control`: the control adapter descriptor, `buildMysqlSchemaIR`, and for a target that extends MySQL `createMysqlControlAdapter`, which takes the target id from the control stack and a catalog reader from its options, and `readMysqlCatalog` with its queries `MYSQL_CATALOG_QUERIES` and the row types `MysqlCatalogRows` and `MysqlColumnRow`
 - `./adapter`: capabilities and contract contributions
 - `./codec-types`: the `CodecTypes` an emitted `contract.d.ts` imports

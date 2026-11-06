@@ -14,17 +14,8 @@ const mariadbAdapterDescriptor: SqlControlAdapterDescriptor<'mariadb'> = {
     generatorDescriptors: [],
   },
   create(stack): SqlControlAdapter<'mariadb'> {
-    return createMysqlControlAdapter(stack, {
-      targetId: 'mariadb',
-      readCatalog: readMariadbCatalog,
-    });
+    return createMysqlControlAdapter(stack, { readCatalog: readMariadbCatalog });
   },
 };
 
 export default mariadbAdapterDescriptor;
-
-export {
-  asMysqlColumnRow,
-  MARIADB_CATALOG_QUERIES,
-  readMariadbCatalog,
-} from '../core/migrations/catalog';

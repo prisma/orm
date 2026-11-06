@@ -7,7 +7,7 @@ import type { MysqlCatalogRows } from '../src/core/migrations/introspection';
 import { createAdapter, recordingDriver } from './helpers';
 
 const stack = {
-  target: {},
+  target: { targetId: 'mariadb' },
   extensions: [],
   declaredDataTypes: [],
 } as unknown as ControlStack<'sql', 'mariadb'>;
@@ -31,10 +31,9 @@ const catalog: MysqlCatalogRows = {
 };
 
 describe('the control adapter of a target that extends MySQL', () => {
-  it('carries the target id it is given and introspects through the catalog reader it is given', async () => {
+  it('carries the target id of its stack and introspects through the catalog reader it is given', async () => {
     const readers: SqlControlDriverInstance<string>[] = [];
     const adapter = createMysqlControlAdapter(stack, {
-      targetId: 'mariadb',
       readCatalog: async (driver) => {
         readers.push(driver);
         return catalog;

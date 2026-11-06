@@ -23,13 +23,11 @@ import { LEDGER_TABLE_NAME, MARKER_TABLE_NAME } from '@internal/target-mysql/con
 import type { MysqlCreateTable, MysqlDdlNode, MysqlDdlVisitor } from '@internal/target-mysql/ddl';
 import { mysqlQueryNotYetSupported } from '@internal/target-mysql/errors';
 import { withMarkerLock } from '@internal/target-mysql/marker-lock';
-import { blindCast } from '@internal/utils/casts';
 import { structuredError } from '@internal/utils/structured-error';
 import { decodeMysqlMarkerRow, readMarkerResult, readMarkerRows } from '../marker-read';
 import { renderMysqlColumnDefault, renderMysqlCreateTable } from './ddl-renderer';
 import { declaredIndexes } from './declared-indexes';
 import { buildMysqlSchemaIR, type MysqlCatalogRows } from './introspection';
-import { readMysqlCatalog } from './introspection-queries';
 import {
   compareAndSwapMarkerRow,
   insertLedgerRow,
@@ -45,15 +43,9 @@ export type MysqlCatalogReader = (
 ) => Promise<MysqlCatalogRows>;
 
 /** What a target that extends MySQL gives the MySQL control adapter. */
-export interface MysqlControlAdapterOptions<TargetId extends string> {
-  readonly targetId: TargetId;
+export interface MysqlControlAdapterOptions {
   readonly readCatalog: MysqlCatalogReader;
 }
-
-const MYSQL_CONTROL_ADAPTER_OPTIONS: MysqlControlAdapterOptions<'mysql'> = {
-  targetId: 'mysql',
-  readCatalog: readMysqlCatalog,
-};
 
 /** A DDL node MySQL does not build, such as one another target's visitor accepts. */
 function unsupportedDdl(ast: DdlNode): Error {
@@ -67,26 +59,17 @@ function unsupportedDdl(ast: DdlNode): Error {
 /**
  * The MySQL control adapter, for MySQL or a target that extends it. It introspects the connection's database from `information_schema`, creates, reads and writes the marker and ledger tables, takes the marker lock, and runs work in a transaction. Query lowering refuses with `RUNTIME.AST_UNSUPPORTED`.
  */
-export class MysqlControlAdapter<TargetId extends string = 'mysql'>
-  implements SqlControlAdapter<TargetId>
-{
+export class MysqlControlAdapter<TargetId extends string> implements SqlControlAdapter<TargetId> {
   readonly familyId = 'sql' as const;
-  readonly targetId: TargetId;
   readonly markerLocation = MARKER_TABLE_NAME;
-  readonly #readCatalog: MysqlCatalogReader;
 
   /** `declaredDataTypes` are the stack's data types, which introspection resolves each column's reported type over. */
   constructor(
     private readonly codecRegistry: MysqlCodecRegistry,
     private readonly declaredDataTypes: readonly DataType[],
-    options: MysqlControlAdapterOptions<TargetId> = blindCast<
-      MysqlControlAdapterOptions<TargetId>,
-      'without options the adapter is MySQL, the default of TargetId'
-    >(MYSQL_CONTROL_ADAPTER_OPTIONS),
-  ) {
-    this.targetId = options.targetId;
-    this.#readCatalog = options.readCatalog;
-  }
+    readonly targetId: TargetId,
+    private readonly readCatalog: MysqlCatalogReader,
+  ) {}
 
   bootstrapControlTableQueries(): readonly MysqlDdlNode[] {
     return buildControlTableBootstrapQueries();
@@ -259,7 +242,7 @@ export class MysqlControlAdapter<TargetId extends string = 'mysql'>
   ): Promise<SqlSchemaIR> {
     const columns = contractColumns(contract);
     return buildMysqlSchemaIR(
-      await this.#readCatalog(driver),
+      await this.readCatalog(driver),
       this.declaredDataTypes,
       async (tableName, columnName, rawDefault) => {
         const column = columns.columnOf(undefined, tableName, columnName);
@@ -278,13 +261,14 @@ export class MysqlControlAdapter<TargetId extends string = 'mysql'>
 }
 
 /** The control adapter of MySQL, or of a target that extends it, for the stack the adapter descriptor is given. */
-export function createMysqlControlAdapter<TargetId extends string = 'mysql'>(
+export function createMysqlControlAdapter<TargetId extends string>(
   stack: ControlStack<'sql', TargetId>,
-  options: MysqlControlAdapterOptions<NoInfer<TargetId>>,
+  options: MysqlControlAdapterOptions,
 ): SqlControlAdapter<TargetId> {
   return new MysqlControlAdapter(
     assembleMysqlCodecRegistry(stack.target, stack.extensions),
     stack.declaredDataTypes.map(({ type }) => type),
-    options,
+    stack.target.targetId,
+    options.readCatalog,
   );
 }

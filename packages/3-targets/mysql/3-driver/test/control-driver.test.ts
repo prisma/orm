@@ -22,7 +22,7 @@ class FakeConnection extends EventEmitter {
 describe('MysqlControlDriver', () => {
   it('keeps an error its connection emits from crashing the process, and refuses queries after it', async () => {
     const connection = new FakeConnection();
-    const driver = new MysqlControlDriver(connection as unknown as Connection);
+    const driver = new MysqlControlDriver(connection as unknown as Connection, 'mysql');
 
     expect(() => connection.emit('error', new Error('Connection lost'))).not.toThrow();
     await expect(driver.query('SELECT 1')).rejects.toMatchObject({
@@ -36,7 +36,7 @@ describe('MysqlControlDriver', () => {
   it('refuses a statement with values while the server reports NO_BACKSLASH_ESCAPES, without sending it, and runs one without values', async () => {
     const connection = new FakeConnection();
     connection.info.status = 1 << 9;
-    const driver = new MysqlControlDriver(connection as unknown as Connection);
+    const driver = new MysqlControlDriver(connection as unknown as Connection, 'mysql');
 
     await expect(driver.query('SELECT ? AS v', ['x'])).rejects.toMatchObject({
       code: 'RUNTIME.SQL_MODE_UNSUPPORTED',
@@ -50,7 +50,7 @@ describe('MysqlControlDriver', () => {
 
   it('runs one statement at a time, so a call made while another runs waits for it', async () => {
     const connection = new FakeConnection();
-    const driver = new MysqlControlDriver(connection as unknown as Connection);
+    const driver = new MysqlControlDriver(connection as unknown as Connection, 'mysql');
 
     await Promise.all([driver.query('SELECT 1'), driver.query('SELECT ? AS v', ['x'])]);
     expect({ queries: connection.queries, mostRunning: connection.mostRunning }).toEqual({

@@ -90,7 +90,7 @@ describe('a target that extends MySQL', () => {
       factoryName: 'mysqlOnly',
       operationClass: 'destructive',
       label: 'MySQL only',
-      toOp: () => new DropTableCall('x').toOp(),
+      toOp: () => new DropTableCall('x').toOp(undefined, 'mysql'),
       renderTypeScript: () => '',
       importRequirements: () => [],
     };

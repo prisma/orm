@@ -3,7 +3,7 @@ import type { MigrationPlanOperation, OpFactoryCall } from '@internal/framework-
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { isThenable } from '@internal/utils/promise';
-import { isMysqlOpFactoryCall, MYSQL_TARGET_ID } from './op-factory-call';
+import { isMysqlOpFactoryCall } from './op-factory-call';
 import type { Op } from './operations';
 
 function assertTargetOp(
@@ -42,8 +42,8 @@ function checkedOp(
 /** The operations `calls` lower to, in order, each checked to be an operation of the target `targetId` names. */
 export function renderOps(
   calls: readonly OpFactoryCall[],
-  lowerer?: ExecuteRequestLowerer,
-  targetId: string = MYSQL_TARGET_ID,
+  lowerer: ExecuteRequestLowerer | undefined,
+  targetId: string,
 ): (Op | Promise<Op>)[] {
   return calls.map((call) =>
     checkedOp(

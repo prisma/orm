@@ -23,8 +23,7 @@ const mariadbParts = {
     ...mysqlAdapter,
     targetId: 'mariadb',
     id: 'mariadb',
-    create: (stack) =>
-      createMysqlControlAdapter(stack, { targetId: 'mariadb', readCatalog: readMysqlCatalog }),
+    create: (stack) => createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog }),
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
   driver: createMysqlControlDriverDescriptor('mariadb'),
 };

@@ -21,18 +21,13 @@ export class MysqlControlDriver<TargetId extends string = 'mysql'>
   implements SqlControlDriverInstance<TargetId>
 {
   readonly familyId = 'sql' as const;
-  readonly targetId: TargetId;
 
   #lost: Error | undefined;
 
   constructor(
     private readonly connection: Connection,
-    targetId: TargetId = blindCast<
-      TargetId,
-      'without a target id the driver is MySQL, the default of TargetId'
-    >('mysql'),
+    readonly targetId: TargetId,
   ) {
-    this.targetId = targetId;
     connection.on('error', (error: Error) => {
       this.#lost = error;
     });

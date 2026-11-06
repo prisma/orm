@@ -2,9 +2,15 @@ import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { assembleMysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import { mysqlDataTypes } from '@internal/target-mysql/data-types';
 import { MysqlControlAdapter } from '../src/core/migrations/control-adapter';
+import { readMysqlCatalog } from '../src/core/migrations/introspection-queries';
 
-export function createAdapter(): MysqlControlAdapter {
-  return new MysqlControlAdapter(assembleMysqlCodecRegistry({}, []), mysqlDataTypes);
+export function createAdapter(): MysqlControlAdapter<'mysql'> {
+  return new MysqlControlAdapter(
+    assembleMysqlCodecRegistry({}, []),
+    mysqlDataTypes,
+    'mysql',
+    readMysqlCatalog,
+  );
 }
 
 /** A driver that records each statement and answers it from `answer`. */

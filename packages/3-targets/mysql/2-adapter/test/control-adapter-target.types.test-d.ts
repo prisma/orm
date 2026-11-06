@@ -1,28 +1,27 @@
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
+import type { MysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import { expectTypeOf, test } from 'vitest';
 import {
   createMysqlControlAdapter,
-  type MysqlControlAdapter,
+  MysqlControlAdapter,
 } from '../src/core/migrations/control-adapter';
 import { readMysqlCatalog } from '../src/core/migrations/introspection-queries';
 import mysqlAdapterDescriptor from '../src/exports/control';
 
 declare const mariadbStack: ControlStack<'sql', 'mariadb'>;
 
-test('the control adapter carries the target id it is given, and MySQL by default', () => {
+test('the control adapter carries the target id of its stack', () => {
   expectTypeOf(
-    createMysqlControlAdapter(mariadbStack, { targetId: 'mariadb', readCatalog: readMysqlCatalog }),
+    createMysqlControlAdapter(mariadbStack, { readCatalog: readMysqlCatalog }),
   ).toEqualTypeOf<SqlControlAdapter<'mariadb'>>();
   expectTypeOf(mysqlAdapterDescriptor.create).returns.toEqualTypeOf<SqlControlAdapter<'mysql'>>();
-  expectTypeOf<MysqlControlAdapter['targetId']>().toEqualTypeOf<'mysql'>();
   expectTypeOf<MysqlControlAdapter<'mariadb'>['targetId']>().toEqualTypeOf<'mariadb'>();
 });
 
-test('the target id of the options must be the stack target', () => {
-  createMysqlControlAdapter(mariadbStack, {
-    // @ts-expect-error a MariaDB stack builds no MySQL adapter
-    targetId: 'mysql',
-    readCatalog: readMysqlCatalog,
-  });
+declare const codecRegistry: MysqlCodecRegistry;
+
+test('the control adapter is built only with the target id it carries', () => {
+  // @ts-expect-error the adapter needs its target id and catalog reader
+  new MysqlControlAdapter(codecRegistry, []);
 });

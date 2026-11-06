@@ -557,13 +557,7 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
 
-  constructor(
-    options: MysqlDriverCreateOptions = {},
-    targetId: TargetId = blindCast<
-      TargetId,
-      'without a target id the driver is MySQL, the default of TargetId'
-    >('mysql'),
-  ) {
+  constructor(options: MysqlDriverCreateOptions, targetId: TargetId) {
     super(options.stream ?? false);
     this.targetId = targetId;
     this.#options = options;

@@ -31,5 +31,5 @@ The live tests need `MARIADB_URL` and are skipped without it: `MARIADB_URL='mysq
 
 ## Exports
 
-- `./control`: the control adapter descriptor, `readMariadbCatalog`, `asMysqlColumnRow` and `MARIADB_CATALOG_QUERIES`
+- `./control`: the control adapter descriptor
 - `./codec-types`: `CodecTypes`

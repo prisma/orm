@@ -25,7 +25,7 @@ const IN_DATABASE = 'TABLE_SCHEMA = DATABASE()';
 
 describe('MySQL migration calls', () => {
   it('drop a table with checks that the table is there before and gone after', () => {
-    expect(new DropTableCall('Legacy').toOp()).toEqual({
+    expect(new DropTableCall('Legacy').toOp(undefined, 'mysql')).toEqual({
       id: 'dropTable.Legacy',
       label: 'Drop table Legacy',
       summary: 'Drops table Legacy which is not in the contract',
@@ -55,10 +55,12 @@ describe('MySQL migration calls', () => {
     const checksOf = (op: { precheck: readonly { sql: string; params?: readonly unknown[] }[] }) =>
       op.precheck.map(({ sql, params }) => ({ from: sql.split(' WHERE ')[0], params }));
     expect({
-      column: checksOf(new DropColumnCall('User', 'nickname').toOp()),
-      index: checksOf(new DropIndexCall('User', 'User_email_idx').toOp()),
-      unique: checksOf(new DropUniqueCall('User', 'User_email_key').toOp()),
-      foreignKey: checksOf(new DropForeignKeyCall('Post', 'Post_authorId_fkey').toOp()),
+      column: checksOf(new DropColumnCall('User', 'nickname').toOp(undefined, 'mysql')),
+      index: checksOf(new DropIndexCall('User', 'User_email_idx').toOp(undefined, 'mysql')),
+      unique: checksOf(new DropUniqueCall('User', 'User_email_key').toOp(undefined, 'mysql')),
+      foreignKey: checksOf(
+        new DropForeignKeyCall('Post', 'Post_authorId_fkey').toOp(undefined, 'mysql'),
+      ),
     }).toEqual({
       column: [
         {
@@ -152,16 +154,27 @@ describe('MySQL migration calls', () => {
   });
 
   it('need the control adapter to write a table or a column', async () => {
-    await expect(new CreateTableCall('User', [], []).toOp()).rejects.toMatchObject({
+    await expect(
+      new CreateTableCall('User', [], []).toOp(undefined, 'mysql'),
+    ).rejects.toMatchObject({
       code: 'MIGRATION.MYSQL_CONTROL_STACK_MISSING',
     });
-    await expect(new AddColumnCall('User', col('age', 'int')).toOp()).rejects.toMatchObject({
+    await expect(
+      new AddColumnCall('User', col('age', 'int')).toOp(undefined, 'mysql'),
+    ).rejects.toMatchObject({
       code: 'MIGRATION.MYSQL_CONTROL_STACK_MISSING',
     });
   });
 
+  it('refuse to build an operation without the target id it is for', async () => {
+    expect(() => new DropTableCall('Legacy').toOp()).toThrow(/without a target id/);
+    await expect(new CreateTableCall('User', [], []).toOp(stubLowerer)).rejects.toThrow(
+      /without a target id/,
+    );
+  });
+
   it('carry a table rename written by hand as a raw operation', () => {
-    const op = renameTableByHandOp('Old', 'New');
+    const op = renameTableByHandOp('Old', 'New', 'mysql');
     const call = new RawSqlCall(op);
     expect({
       execute: op.execute.map(({ sql }) => sql),
@@ -185,16 +198,22 @@ describe('renderOps', () => {
       factoryName: 'foreign',
       operationClass: 'additive',
       label: 'Foreign',
-      toOp: () => ({ ...new DropTableCall('x').toOp(), target: { id: 'postgres' } }),
+      toOp: () => ({
+        ...new DropTableCall('x').toOp(undefined, 'mysql'),
+        target: { id: 'postgres' },
+      }),
       renderTypeScript: () => '',
       importRequirements: () => [],
     };
     const lowered = renderOps(
       [new DropTableCall('x'), new AddColumnCall('x', col('a', 'int'))],
       stubLowerer,
+      'mysql',
     );
     expect((await Promise.all(lowered)).map(({ id }) => id)).toEqual(['dropTable.x', 'column.x.a']);
-    expect(() => renderOps([foreign as never])).toThrow(/expected a mysql operation/);
+    expect(() => renderOps([foreign as never], stubLowerer, 'mysql')).toThrow(
+      /expected a mysql operation/,
+    );
   });
 });
 

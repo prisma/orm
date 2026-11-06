@@ -14,7 +14,7 @@ const mysqlAdapterDescriptor: SqlControlAdapterDescriptor<'mysql'> = {
     generatorDescriptors: [],
   },
   create(stack): SqlControlAdapter<'mysql'> {
-    return createMysqlControlAdapter(stack, { targetId: 'mysql', readCatalog: readMysqlCatalog });
+    return createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog });
   },
 };
 
@@ -23,16 +23,12 @@ export default mysqlAdapterDescriptor;
 export {
   createMysqlControlAdapter,
   type MysqlCatalogReader,
-  MysqlControlAdapter,
   type MysqlControlAdapterOptions,
 } from '../core/migrations/control-adapter';
 export {
   buildMysqlSchemaIR,
   type MysqlCatalogRows,
   type MysqlColumnRow,
-  type MysqlConstraintRow,
-  type MysqlForeignKeyRow,
-  type MysqlIndexRow,
 } from '../core/migrations/introspection';
 export {
   MYSQL_CATALOG_QUERIES,
