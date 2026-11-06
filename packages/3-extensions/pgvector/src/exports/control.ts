@@ -56,11 +56,18 @@ import searchPathMetadata from '../../migrations/20261106T1035_find_vector_on_se
 import searchPathOps from '../../migrations/20261106T1035_find_vector_on_search_path/ops.json' with {
   type: 'json',
 };
+import searchPathInstallMetadata from '../../migrations/20261106T1401_install_vector_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathInstallOps from '../../migrations/20261106T1401_install_vector_on_search_path/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
 import {
   PGVECTOR_BASELINE_MIGRATION_NAME,
   PGVECTOR_INSTALL_MIGRATION_NAME,
+  PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
   PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
   PGVECTOR_SPACE_ID,
   PGVECTOR_UPGRADE_MIGRATION_NAME,
@@ -93,6 +100,11 @@ const pgvectorContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
       dirName: PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
       metadata: searchPathMetadata,
       ops: searchPathOps,
+    },
+    {
+      dirName: PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+      metadata: searchPathInstallMetadata,
+      ops: searchPathInstallOps,
     },
   ],
   headRef,

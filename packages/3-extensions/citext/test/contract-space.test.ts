@@ -8,6 +8,9 @@ import searchPathMetadata from '../migrations/20261106T1036_find_citext_on_searc
 import searchPathOps from '../migrations/20261106T1036_find_citext_on_search_path/ops.json' with {
   type: 'json',
 };
+import searchPathInstallOps from '../migrations/20261106T1401_install_citext_on_search_path/ops.json' with {
+  type: 'json',
+};
 import contractJson from '../src/contract.json' with { type: 'json' };
 import citextControl from '../src/exports/control';
 
@@ -18,7 +21,7 @@ describe('the citext contract space', () => {
     });
   });
 
-  it('reaches its head from the empty contract through two migrations that record no invariant', () => {
+  it('reaches its head from the empty contract, directly or through its first head, with migrations that record no invariant', () => {
     const space = citextControl.contractSpace;
     expect({
       id: citextControl.id,
@@ -45,6 +48,12 @@ describe('the citext contract space', () => {
           to: contractJson.storage.storageHash,
           invariants: [],
         },
+        {
+          dirName: '20261106T1401_install_citext_on_search_path',
+          from: null,
+          to: contractJson.storage.storageHash,
+          invariants: [],
+        },
       ],
     });
   });
@@ -58,5 +67,12 @@ describe('the citext contract space', () => {
 
   it('finds the extension it created in public through the search path, so moving to the head runs nothing', () => {
     expect(searchPathOps).toEqual([]);
+  });
+
+  it('creates the extension with no schema named when it builds a new database at the head', () => {
+    expect(searchPathInstallOps.flatMap((op) => op.execute.map((step) => step.sql))).toEqual([
+      'CREATE SCHEMA IF NOT EXISTS "public"',
+      'CREATE EXTENSION IF NOT EXISTS "citext"',
+    ]);
   });
 });

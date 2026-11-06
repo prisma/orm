@@ -29,6 +29,9 @@ export const POSTGIS_INSTALL_MIGRATION_NAME = '20261029T1342_create_postgis_exte
 export const POSTGIS_SEARCH_PATH_MIGRATION_NAME =
   '20261106T1036_find_postgis_on_search_path' as const;
 
+export const POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_postgis_on_search_path' as const;
+
 /**
  * `postgis:*` invariantIds emitted by the baseline migration. Each id,
  * once published, is immutable: downstream consumers (other extensions,

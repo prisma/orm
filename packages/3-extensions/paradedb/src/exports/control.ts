@@ -55,11 +55,18 @@ import searchPathMetadata from '../../migrations/20261106T1036_find_pg_search_on
 import searchPathOps from '../../migrations/20261106T1036_find_pg_search_on_search_path/ops.json' with {
   type: 'json',
 };
+import searchPathInstallMetadata from '../../migrations/20261106T1401_install_pg_search_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathInstallOps from '../../migrations/20261106T1401_install_pg_search_on_search_path/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
 import {
   PARADEDB_BASELINE_MIGRATION_NAME,
   PARADEDB_INSTALL_MIGRATION_NAME,
+  PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME,
   PARADEDB_SEARCH_PATH_MIGRATION_NAME,
   PARADEDB_SPACE_ID,
   PARADEDB_UPGRADE_MIGRATION_NAME,
@@ -76,6 +83,11 @@ const paradedbContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
       dirName: PARADEDB_SEARCH_PATH_MIGRATION_NAME,
       metadata: searchPathMetadata,
       ops: searchPathOps,
+    },
+    {
+      dirName: PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+      metadata: searchPathInstallMetadata,
+      ops: searchPathInstallOps,
     },
   ],
   headRef,

@@ -29,6 +29,9 @@ export const PGVECTOR_INSTALL_MIGRATION_NAME = '20261029T1342_create_vector_exte
 export const PGVECTOR_SEARCH_PATH_MIGRATION_NAME =
   '20261106T1035_find_vector_on_search_path' as const;
 
+export const PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_vector_on_search_path' as const;
+
 /**
  * `pgvector:*` invariantIds emitted by the baseline migration. Each id,
  * once published, is immutable: downstream consumers (other extensions,

@@ -48,26 +48,20 @@ async function installedExtensions(connectionString: string): Promise<readonly s
   });
 }
 
-/**
- * The pinned pgvector head and the migrations a fresh database takes to it: the one that creates the extension from the empty contract, then the one that moves the declaration to the unbound namespace, which has no operations.
- */
+/** The pinned pgvector head and the migration that builds a fresh database at it, which creates the extension with no schema named. */
 function pinnedPgvector(testDir: string): {
   readonly head: string;
-  readonly freshPath: readonly (string | undefined)[];
+  readonly freshInstall: string | undefined;
 } {
   const dir = join(testDir, 'migrations', 'pgvector');
   const head: string = JSON.parse(readFileSync(join(dir, 'refs', 'head.json'), 'utf-8')).hash;
-  const migrations = readdirSync(dir)
+  const freshInstall = readdirSync(dir)
     .filter((name) => existsSync(join(dir, name, 'migration.json')))
-    .map((name) => ({
-      name,
-      metadata: JSON.parse(readFileSync(join(dir, name, 'migration.json'), 'utf-8')),
-    }));
-  const toHead = migrations.find(({ metadata }) => metadata.from !== null && metadata.to === head);
-  const create = migrations.find(
-    ({ metadata }) => metadata.from === null && metadata.to === toHead?.metadata.from,
-  );
-  return { head, freshPath: [create?.name, toHead?.name] };
+    .find((name) => {
+      const metadata = JSON.parse(readFileSync(join(dir, name, 'migration.json'), 'utf-8'));
+      return metadata.from === null && metadata.to === head;
+    });
+  return { head, freshInstall };
 }
 
 async function markers(
@@ -140,8 +134,10 @@ withTempDir(({ createTempDir }) => {
           const fresh = await runMigrate(ctx, ['--db', connectionString]);
           expect(fresh.exitCode, `db migrate on a fresh database\n${output(fresh)}`).toBe(0);
           expect(await installedExtensions(connectionString)).toEqual(['pg_trgm', 'vector']);
-          expect(pinned.freshPath).not.toContain(undefined);
-          expect(await appliedMigrations(connectionString, 'pgvector')).toEqual(pinned.freshPath);
+          expect(pinned.freshInstall).toBeDefined();
+          expect(await appliedMigrations(connectionString, 'pgvector')).toEqual([
+            pinned.freshInstall,
+          ]);
           expect(await markers(connectionString)).toEqual({
             app: { hash: expect.any(String), invariants: [] },
             pgvector: { hash: pinned.head, invariants: [] },

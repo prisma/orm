@@ -10,6 +10,7 @@ import {
   POSTGIS_INSTALL_MIGRATION_NAME,
   POSTGIS_INVARIANTS,
   POSTGIS_NATIVE_TYPE,
+  POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME,
   POSTGIS_SEARCH_PATH_MIGRATION_NAME,
   POSTGIS_SPACE_ID,
   POSTGIS_UPGRADE_MIGRATION_NAME,
@@ -75,6 +76,15 @@ describe('postgis extension descriptor', () => {
     expect(searchPath.ops).toEqual([]);
   });
 
+  it('builds a new database at the head in one migration that names no schema for the extension', () => {
+    const install = migration(POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME);
+    expect(install.metadata).toMatchObject({ from: null, to: headHash, providedInvariants: [] });
+    expect(install.ops.map((op) => [op.id, op.execute.map((step) => step.sql)])).toEqual([
+      ['schema.public', ['CREATE SCHEMA IF NOT EXISTS "public"']],
+      ['extension.postgis', ['CREATE EXTENSION IF NOT EXISTS "postgis"']],
+    ]);
+  });
+
   it('takes an empty database to the head through the one-step migration', () => {
     const graph = reconstructGraph(space.migrations.map((m) => ({ ...m, dirPath: m.dirName })));
     const outcome = findPathWithDecision(graph, EMPTY_CONTRACT_HASH, headHash, {
@@ -82,7 +92,7 @@ describe('postgis extension descriptor', () => {
     });
     expect(
       outcome.kind === 'ok' ? outcome.decision.selectedPath.map((edge) => edge.dirName) : outcome,
-    ).toEqual([POSTGIS_INSTALL_MIGRATION_NAME, POSTGIS_SEARCH_PATH_MIGRATION_NAME]);
+    ).toEqual([POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME]);
   });
 
   it('points the head ref at the contract and requires no invariant', () => {
@@ -92,7 +102,7 @@ describe('postgis extension descriptor', () => {
   it("records each migration's hash of its contents", () => {
     const hashes = (hash: (m: (typeof space.migrations)[number]) => string) =>
       Object.fromEntries(space.migrations.map((m) => [m.dirName, hash(m)]));
-    expect(space.migrations).toHaveLength(4);
+    expect(space.migrations).toHaveLength(5);
     expect(hashes((m) => computeMigrationHash(m.metadata, m.ops))).toEqual(
       hashes((m) => m.metadata.migrationHash),
     );
