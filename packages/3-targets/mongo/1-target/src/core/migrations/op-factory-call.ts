@@ -83,24 +83,23 @@ function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {
   return keys.map((k) => `${k.field}:${k.direction}`).join(', ');
 }
 
+/** The index a call creates or drops: its name and options as `createIndex` takes them. */
+export type IndexCallOptions = CreateIndexOptions & { readonly name: string };
+
 export class CreateIndexCall extends OpFactoryCallNode {
   readonly factoryName = 'createIndex' as const;
   readonly operationClass = 'additive' as const;
   readonly collection: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
-  readonly options: CreateIndexOptions | undefined;
+  readonly options: IndexCallOptions;
   readonly label: string;
 
-  constructor(
-    collection: string,
-    keys: ReadonlyArray<MongoIndexKey>,
-    options?: CreateIndexOptions,
-  ) {
+  constructor(collection: string, keys: ReadonlyArray<MongoIndexKey>, options: IndexCallOptions) {
     super();
     this.collection = collection;
     this.keys = keys;
     this.options = options;
-    this.label = `Create index on ${collection} (${formatKeys(keys)})`;
+    this.label = `Create index ${options.name} on ${collection} (${formatKeys(keys)})`;
     this.freeze();
   }
 
@@ -109,9 +108,7 @@ export class CreateIndexCall extends OpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return this.options
-      ? `createIndex(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.keys)}, ${jsonToTsSource(this.options)})`
-      : `createIndex(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.keys)})`;
+    return `createIndex(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.keys)}, ${jsonToTsSource(this.options)})`;
   }
 }
 
@@ -120,22 +117,24 @@ export class DropIndexCall extends OpFactoryCallNode {
   readonly operationClass = 'widening' as const;
   readonly collection: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
+  readonly options: IndexCallOptions;
   readonly label: string;
 
-  constructor(collection: string, keys: ReadonlyArray<MongoIndexKey>) {
+  constructor(collection: string, keys: ReadonlyArray<MongoIndexKey>, options: IndexCallOptions) {
     super();
     this.collection = collection;
     this.keys = keys;
-    this.label = `Drop index on ${collection} (${formatKeys(keys)})`;
+    this.options = options;
+    this.label = `Drop index ${options.name} on ${collection} (${formatKeys(keys)})`;
     this.freeze();
   }
 
   toOp(): MongoMigrationPlanOperation {
-    return dropIndex(this.collection, this.keys);
+    return dropIndex(this.collection, this.keys, this.options);
   }
 
   renderTypeScript(): string {
-    return `dropIndex(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.keys)})`;
+    return `dropIndex(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.keys)}, ${jsonToTsSource(this.options)})`;
   }
 }
 
@@ -308,8 +307,9 @@ export type OpFactoryCall =
   | UnsetFieldCall
   | CollModCall;
 
-export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): CreateIndexOptions {
+export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {
   return {
+    name: index.name,
     ...(index.unique ? { unique: true } : {}),
     ...ifDefined('sparse', index.sparse),
     ...ifDefined('expireAfterSeconds', index.expireAfterSeconds),

@@ -1,10 +1,17 @@
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import paradedb from '@internal/extension-paradedb/control';
 import pgvector from '@internal/extension-pgvector/control';
 import postgis from '@internal/extension-postgis/control';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
+import {
+  evictEngineCli,
+  runOnEngine,
+  setupTestDirectoryFromFixtures,
+  withTempDir,
+} from './utils/cli-test-helpers';
 import { planMigrationAndSelfEmit } from './utils/journey-test-helpers';
 
 /**
@@ -87,6 +94,18 @@ function upgradeMigrationOf(pack: PackCase): string {
   const upgrade = contractSpaceOf(pack).migrations.find((m) => m.metadata.from === oldHead.hash);
   if (upgrade === undefined) throw new Error(`${pack.descriptor.id} has no upgrade migration`);
   return upgrade.dirName;
+}
+
+/** The migration from the head that declared the extension in `public` to the head that declares it in the unbound namespace, which the search path locates. */
+function searchPathMigrationOf(pack: PackCase) {
+  const publicHead = contractSpaceOf(pack).migrations.find(
+    (m) => m.dirName === upgradeMigrationOf(pack),
+  )?.metadata.to;
+  const searchPath = contractSpaceOf(pack).migrations.find((m) => m.metadata.from === publicHead);
+  if (publicHead === undefined || searchPath === undefined) {
+    throw new Error(`${pack.descriptor.id} has no search-path migration`);
+  }
+  return { publicHead, dirName: searchPath.dirName, ops: searchPath.ops };
 }
 
 async function removeExtension(connectionString: string, pack: PackCase): Promise<void> {
@@ -198,7 +217,34 @@ withTempDir(({ createTempDir }) => {
           });
           expect(await appliedMigrations(connectionString, spaceId)).toEqual([
             upgradeMigrationOf(pack),
+            searchPathMigrationOf(pack).dirName,
           ]);
+
+          const verify = await runOnEngine(project, ['db', 'verify', '--strict']);
+          expect(verify.exitCode, `db verify --strict: ${verify.stderr}`).toBe(0);
+        });
+      },
+      JOURNEY_TIMEOUT,
+    );
+
+    it(
+      'moves a database whose marker declares the extension in public to the new head with a migration that has no operations',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = await setUpOnOldHead(connectionString);
+          const { publicHead, dirName, ops } = searchPathMigrationOf(pack);
+          await withClient(connectionString, (client) =>
+            client.query('UPDATE prisma_contract.marker SET core_hash = $1 WHERE space = $2', [
+              publicHead,
+              spaceId,
+            ]),
+          );
+
+          const migrate = await runOnEngine(project, ['db', 'migrate']);
+          expect(migrate.exitCode, `db migrate: ${migrate.stderr}`).toBe(0);
+          expect(ops).toEqual([]);
+          expect(await appliedMigrations(connectionString, spaceId)).toEqual([dirName]);
+          expect((await markers(connectionString))[spaceId]?.hash).toBe(headHash);
 
           const verify = await runOnEngine(project, ['db', 'verify', '--strict']);
           expect(verify.exitCode, `db verify --strict: ${verify.stderr}`).toBe(0);
@@ -224,6 +270,7 @@ withTempDir(({ createTempDir }) => {
             });
             expect(await appliedMigrations(connectionString, spaceId)).toEqual([
               upgradeMigrationOf(pack),
+              searchPathMigrationOf(pack).dirName,
             ]);
 
             const verify = await runOnEngine(project, ['db', 'verify', '--strict']);
@@ -251,5 +298,132 @@ withTempDir(({ createTempDir }) => {
         JOURNEY_TIMEOUT,
       );
     }
+  });
+  describe('an application beside the pgvector pack that declares vector itself', () => {
+    const PLANNER_REFUSAL = (namespace: string) =>
+      `Extension "vector" is declared in namespace "${namespace}" by this contract, and an extension pack declares it in namespace "unbound".`;
+    const PLANNER_FIX =
+      'Remove this declaration from the contract; the pack installs the extension.';
+
+    function declareVector(project: { readonly contractPath: string }, declaration: string) {
+      const source = readFileSync(project.contractPath, 'utf8')
+        .replace(
+          "import { defineContract, field, model } from '@internal/postgres/contract-builder';",
+          "import { defineContract, extension, field, model, unbound } from '@internal/postgres/contract-builder';",
+        )
+        .replace(
+          'export const contract = defineContract({',
+          `export const contract = defineContract({\n  ${declaration}`,
+        );
+      writeFileSync(project.contractPath, source);
+    }
+
+    function composePgvector(
+      project: { readonly testDir: string; readonly configPath: string },
+      composed: boolean,
+    ) {
+      const config = readFileSync(project.configPath, 'utf8');
+      writeFileSync(
+        project.configPath,
+        composed
+          ? config.replace('extensions: [],', 'extensions: [pack],')
+          : config.replace('extensions: [pack],', 'extensions: [],'),
+      );
+      evictEngineCli(project.testDir);
+    }
+
+    function setUp(connectionString: string) {
+      return setupTestDirectoryFromFixtures(
+        createTempDir,
+        'extension-packs',
+        'prisma.config.with-db.ts',
+        { '{{DB_URL}}': connectionString },
+      );
+    }
+
+    it.each([
+      [
+        'a named namespace',
+        "namespaces: ['extensions'],\n  entities: [extension('vector', { namespace: 'extensions' })],",
+        'extensions',
+      ],
+      ['the default namespace', "entities: [extension('vector')],", 'public'],
+    ])(
+      'refuses to plan when it declares vector in %s',
+      async (_, declaration, namespace) => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = setUp(connectionString);
+          declareVector(project, declaration);
+          const emit = await runOnEngine(project, ['contract', 'emit']);
+          expect(emit.exitCode, `contract emit: ${emit.stderr}`).toBe(0);
+
+          const plan = await runOnEngine(project, ['migration', 'plan', '--name', 'init']);
+          expect(plan.exitCode).not.toBe(0);
+          expect(`${plan.stdout}${plan.stderr}`).toContain(PLANNER_REFUSAL(namespace));
+          expect(`${plan.stdout}${plan.stderr}`).toContain(PLANNER_FIX);
+          expect(`${plan.stdout}${plan.stderr}`).not.toContain('db verify --schema-only');
+        });
+      },
+      JOURNEY_TIMEOUT,
+    );
+
+    it(
+      'is refused by the contract-space check when it declares vector in the unbound namespace',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = setUp(connectionString);
+          declareVector(project, "entities: [extension('vector', { namespace: unbound })],");
+          const emit = await runOnEngine(project, ['contract', 'emit']);
+          expect(emit.exitCode, `contract emit: ${emit.stderr}`).toBe(0);
+
+          const plan = await runOnEngine(project, ['migration', 'plan', '--name', 'init']);
+          expect(plan.exitCode).not.toBe(0);
+          expect(`${plan.stdout}${plan.stderr}`).toContain('MIGRATION.CONTRACT_SPACE_VIOLATION');
+        });
+      },
+      JOURNEY_TIMEOUT,
+    );
+
+    it(
+      'plans no drop of vector when it stops declaring it once the pack is composed',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = setUp(connectionString);
+          const fixtureContract = readFileSync(project.contractPath, 'utf8');
+          composePgvector(project, false);
+          declareVector(project, "entities: [extension('vector')],");
+          expect((await runOnEngine(project, ['contract', 'emit'])).exitCode).toBe(0);
+          const declared = await runOnEngine(project, ['migration', 'plan', '--name', 'declare']);
+          expect(declared.exitCode, `migration plan: ${declared.stderr}`).toBe(0);
+
+          const appDir = join(project.testDir, 'migrations', 'app');
+          const declaration = readdirSync(appDir).find((dir) => dir.endsWith('_declare'));
+          const declaredHash: string = JSON.parse(
+            readFileSync(join(appDir, declaration ?? '', 'migration.json'), 'utf8'),
+          ).to;
+
+          writeFileSync(project.contractPath, fixtureContract);
+          composePgvector(project, true);
+          expect((await runOnEngine(project, ['contract', 'emit'])).exitCode).toBe(0);
+          const removed = await runOnEngine(project, [
+            'migration',
+            'plan',
+            '--from',
+            declaredHash,
+            '--name',
+            'remove',
+          ]);
+          expect(removed.exitCode, `migration plan: ${removed.stderr}`).toBe(0);
+
+          const removal = readdirSync(appDir).find((dir) => dir.endsWith('_remove'));
+          expect(removal).toBeDefined();
+          const ops: readonly { readonly id: string }[] = JSON.parse(
+            readFileSync(join(appDir, removal ?? '', 'ops.json'), 'utf8'),
+          );
+          expect(ops.map((op) => op.id)).not.toContain('dropExtension.vector');
+        });
+      },
+      JOURNEY_TIMEOUT,
+    );
   });
 });

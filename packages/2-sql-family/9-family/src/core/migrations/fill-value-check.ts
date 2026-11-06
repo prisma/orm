@@ -9,6 +9,8 @@ import {
 import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
+  isAuthoringTypeChoiceDescriptor,
+  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecRef, TypeLookups } from '@internal/framework-components/codec';
 import { valueObjectFieldStatementText } from '@internal/framework-components/control';
@@ -38,11 +40,29 @@ export interface StoredKeyFillField {
   readonly check: FillValueCheck | undefined;
 }
 
-/** The name each scalar type constructor of `namespace` is written as, by the codec it makes; the first declared wins. */
+/** The name a schema writes for each codec of `namespace`: a convenience type whose defaults make it, else the first explicit type, never a deprecated one. */
 export function scalarTypeNamesOf(
   namespace: AuthoringTypeNamespace,
 ): (codecRef: CodecRef) => string | undefined {
-  const constructors = [...collectScalarTypeConstructors(namespace)];
+  const isTypeChoice = (name: string) => {
+    const member = namespace[name];
+    return member !== undefined && isAuthoringTypeChoiceDescriptor(member);
+  };
+  const isDeprecated = (name: string) => {
+    const member = namespace[name];
+    return (
+      member !== undefined &&
+      isAuthoringTypeConstructorDescriptor(member) &&
+      member.deprecated !== undefined
+    );
+  };
+  const current = [...collectScalarTypeConstructors(namespace)].filter(
+    ([name]) => !isDeprecated(name),
+  );
+  const constructors = [
+    ...current.filter(([name]) => isTypeChoice(name)),
+    ...current.filter(([name]) => !isTypeChoice(name)),
+  ];
   return (codecRef) =>
     constructors.find(
       ([, output]) =>

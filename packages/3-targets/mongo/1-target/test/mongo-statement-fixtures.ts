@@ -147,6 +147,7 @@ export function contract(
                 name,
                 new MongoCollection({
                   indexes: (spec.unique ?? []).map((field) => ({
+                    name: `${field}_1`,
                     keys: [{ field, direction: 1 as const }],
                     unique: true,
                   })),
@@ -180,7 +181,8 @@ export function schemaCollection(
   return new MongoSchemaCollection({
     name,
     indexes: (spec.unique ?? []).map(
-      (field) => new MongoSchemaIndex({ keys: [{ field, direction: 1 }], unique: true }),
+      (field) =>
+        new MongoSchemaIndex({ name: `${field}_1`, keys: [{ field, direction: 1 }], unique: true }),
     ),
     ...(validatorJsonSchemaOf(spec) === undefined
       ? {}
@@ -208,7 +210,7 @@ export function plan(input: {
 }) {
   return new MongoMigrationPlanner().plan({
     contract: input.to,
-    schema: new MongoSchemaIR(input.schema),
+    schema: new MongoSchemaIR(input.schema, { fromDatabase: false }),
     policy: input.policy ?? ALL_CLASSES_POLICY,
     fromContract: input.from,
     origin: input.origin ?? null,

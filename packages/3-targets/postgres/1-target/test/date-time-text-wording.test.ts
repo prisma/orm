@@ -6,7 +6,7 @@ import {
   errorTemporalUnrepresentable,
   errorTemporalWrongType,
 } from '../src/core/errors';
-import { postgresNativeAuthoringTypes } from '../src/core/type-constructors';
+import { postgresExplicitTypes } from '../src/core/type-constructors';
 
 function wordingOf(error: { message: string; why?: string; fix?: string }): string {
   return [error.message, error.why ?? '', error.fix ?? ''].join(' ');
@@ -62,7 +62,7 @@ describe('the wording that sends a user to a text date or time type', () => {
   it.each(['DateString', 'TimeString', 'TimestampString', 'TimestamptzString', 'Timetz'] as const)(
     'documents %s as ISO 8601 text',
     (name) => {
-      expect(postgresNativeAuthoringTypes[name].documentation).toContain('ISO 8601');
+      expect(postgresExplicitTypes[name].documentation).toContain('ISO 8601');
     },
   );
 });

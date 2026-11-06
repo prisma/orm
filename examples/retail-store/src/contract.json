@@ -862,6 +862,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "userId_1",
                   "unique": true
                 }
               ],
@@ -959,7 +960,8 @@
                       "field": "timestamp"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1_timestamp_-1"
                 },
                 {
                   "expireAfterSeconds": 7776000,
@@ -969,7 +971,8 @@
                       "field": "timestamp"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "timestamp_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -1122,7 +1125,8 @@
                       "field": "orderId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "orderId_1"
                 },
                 {
                   "keys": [
@@ -1132,6 +1136,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "issuedAt_-1",
                   "sparse": true
                 }
               ],
@@ -1219,7 +1224,8 @@
                       "field": "country"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "city_1_country_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -1270,7 +1276,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -1400,6 +1407,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "name_text_description_text",
                   "weights": {
                     "description": 1,
                     "name": 10
@@ -1416,7 +1424,8 @@
                       "field": "subCategory"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "brand_1_subCategory_1"
                 },
                 {
                   "keys": [
@@ -1429,7 +1438,8 @@
                       "field": "articleType"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "primaryCategory_1_articleType_1"
                 },
                 {
                   "keys": [
@@ -1438,7 +1448,8 @@
                       "field": "code"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "code_hashed"
                 }
               ],
               "kind": "mongo-collection",
@@ -1546,6 +1557,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "email_1",
                   "unique": true
                 }
               ],
@@ -1847,7 +1859,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "2f0e67cbc2a193e280f07c26972a484af4b62d3472c018c73bfd095749d4d0f5"
+    "storageHash": "1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8"
   },
   "capabilities": {},
   "extensions": {},

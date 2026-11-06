@@ -49,11 +49,25 @@ import upgradeMetadata from '../../migrations/20261029T1342_declare_pg_search_ex
 import upgradeOps from '../../migrations/20261029T1342_declare_pg_search_extension/ops.json' with {
   type: 'json',
 };
+import searchPathMetadata from '../../migrations/20261106T1036_find_pg_search_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathOps from '../../migrations/20261106T1036_find_pg_search_on_search_path/ops.json' with {
+  type: 'json',
+};
+import searchPathInstallMetadata from '../../migrations/20261106T1401_install_pg_search_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathInstallOps from '../../migrations/20261106T1401_install_pg_search_on_search_path/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
 import {
   PARADEDB_BASELINE_MIGRATION_NAME,
   PARADEDB_INSTALL_MIGRATION_NAME,
+  PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+  PARADEDB_SEARCH_PATH_MIGRATION_NAME,
   PARADEDB_SPACE_ID,
   PARADEDB_UPGRADE_MIGRATION_NAME,
 } from '../core/constants';
@@ -65,6 +79,16 @@ const paradedbContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
     { dirName: PARADEDB_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },
     { dirName: PARADEDB_UPGRADE_MIGRATION_NAME, metadata: upgradeMetadata, ops: upgradeOps },
     { dirName: PARADEDB_INSTALL_MIGRATION_NAME, metadata: installMetadata, ops: installOps },
+    {
+      dirName: PARADEDB_SEARCH_PATH_MIGRATION_NAME,
+      metadata: searchPathMetadata,
+      ops: searchPathOps,
+    },
+    {
+      dirName: PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+      metadata: searchPathInstallMetadata,
+      ops: searchPathInstallOps,
+    },
   ],
   headRef,
 });

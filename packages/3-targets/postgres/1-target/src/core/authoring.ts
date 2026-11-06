@@ -11,7 +11,10 @@ import type {
 } from '@internal/framework-components/authoring';
 import { temporalTypeAliases } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import {
+  type ContributedPslDiagnosticCode,
+  UNBOUND_PSL_NAMESPACE_NAME,
+} from '@internal/framework-components/psl-ast';
 import type {
   AttributeSpecContext,
   BlockSpecContext,
@@ -124,22 +127,6 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
 export const postgresAuthoringTypes = {
   .../* @__PURE__ */ sqlTargetTypeConstructors({ sizeType: PG_SIZE_TYPE }),
   ...generatedIdColumnAliases,
-  BigIntNumber: {
-    kind: 'typeConstructor',
-    documentation:
-      'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
-    output: {
-      codecId: 'pg/int8number@1',
-    },
-  },
-  UnboundedInt: {
-    kind: 'typeConstructor',
-    documentation:
-      'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
-    output: {
-      codecId: 'pg/unboundedint@1',
-    },
-  },
   pg: {
     enum: {
       kind: 'typeConstructor',
@@ -638,7 +625,7 @@ export const postgresAuthoringPslBlockDescriptors = {
     kind: 'pslBlock',
     keyword: 'extension',
     documentation:
-      'Declares a PostgreSQL extension the database must have installed, in the schema of the enclosing namespace.',
+      "Declares a PostgreSQL extension the database must have installed, in the schema of the enclosing namespace. In `namespace unbound`, the extension is found through the connection's search path.",
     discriminator: 'extension',
     name: { required: true },
     spec: extensionSpec,
@@ -993,9 +980,15 @@ export function postgresLowerEntityHandles(
         }
         if (declaredIn !== undefined) {
           const namespaces = [declaredIn, namespaceId].sort();
+          const namespaceNames = namespaces.map((id) =>
+            id === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : id,
+          );
           throw postgresError(
             'CONTRACT.NAME_DUPLICATE',
-            `defineContract: extension "${extensionHandle.name}" is declared in namespaces ${namespaces.map((id) => `"${id}"`).join(' and ')}; declare it in one namespace only.`,
+            `defineContract: extension "${extensionHandle.name}" is declared in namespaces ${namespaceNames
+              .sort()
+              .map((name) => `"${name}"`)
+              .join(' and ')}; declare it in one namespace only.`,
             { meta: { kind: 'extension', name: extensionHandle.name, namespaces } },
           );
         }

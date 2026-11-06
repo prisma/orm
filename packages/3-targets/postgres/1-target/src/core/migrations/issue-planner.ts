@@ -57,7 +57,11 @@ import {
 } from '../default-constraint-names';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
-import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
+import {
+  offSearchPathText,
+  PostgresExtensionSchemaNode,
+  searchPathFix,
+} from '../schema-ir/postgres-extension-schema-node';
 import type { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
@@ -628,15 +632,38 @@ function mapExtensionNodeIssue(
   const actual = asNode(issue.actual);
   if (expected !== undefined) {
     PostgresExtensionSchemaNode.assert(expected);
-    return ok([
-      actual === undefined
-        ? new CreateExtensionCall(expected.schemaName, expected.name)
-        : new SetExtensionSchemaCall(expected.name, expected.schemaName),
-    ]);
+    const expectedLocation = expected.location;
+    if (actual === undefined) {
+      return ok([
+        new CreateExtensionCall(
+          expectedLocation.kind === 'searchPath' ? undefined : expectedLocation.schemaName,
+          expected.name,
+        ),
+      ]);
+    }
+    PostgresExtensionSchemaNode.assert(actual);
+    const actualLocation = actual.location;
+    if (expectedLocation.kind === 'searchPath') {
+      invariant(
+        actualLocation.kind === 'installed',
+        'an extension left to the search path differs only from an installed extension',
+      );
+      return notOk({
+        kind: 'unsupportedOperation',
+        summary: `Extension "${actual.name}" ${offSearchPathText(actualLocation)}. The contract declares it in the unbound namespace, so the planner does not move it.`,
+        why: searchPathFix(actualLocation),
+      });
+    }
+    return ok([new SetExtensionSchemaCall(expected.name, expectedLocation.schemaName)]);
   }
   invariant(actual !== undefined, 'an extension issue carries a node on one side');
   PostgresExtensionSchemaNode.assert(actual);
-  return ok([new DropExtensionCall(actual.schemaName, actual.name)]);
+  return ok([
+    new DropExtensionCall(
+      actual.location.kind === 'searchPath' ? undefined : actual.location.schemaName,
+      actual.name,
+    ),
+  ]);
 }
 
 function mapNativeEnumNodeIssue(

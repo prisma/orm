@@ -19,6 +19,8 @@ const CASES: readonly string[] = [
   'ignored-field-referenced',
   'index-already-exists',
   'index-argument-unsupported',
+  'index-name-duplicate',
+  'index-name-invalid',
   'indexes',
   'list-relation-unsupported',
   'lists',

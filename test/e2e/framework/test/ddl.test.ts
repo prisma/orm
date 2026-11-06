@@ -14,7 +14,7 @@ describe('DDL E2E Tests', { timeout: 30000 }, () => {
       expect(sql).toMatchInlineSnapshot(`
         "CREATE SCHEMA IF NOT EXISTS "public";
 
-        CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
+        CREATE EXTENSION IF NOT EXISTS "vector";
 
         CREATE TABLE "public"."comment" (
           "content" text NOT NULL,

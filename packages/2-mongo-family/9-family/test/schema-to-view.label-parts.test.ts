@@ -10,31 +10,35 @@ import { mongoSchemaToView } from '../src/core/schema-to-view';
 
 describe('mongoSchemaToView label parts', () => {
   const view = mongoSchemaToView(
-    new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [
-              { field: 'email', direction: 1 },
-              { field: 'createdAt', direction: -1 },
-            ],
-            unique: true,
-            sparse: true,
+    new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'email_1_createdAt_-1',
+              keys: [
+                { field: 'email', direction: 1 },
+                { field: 'createdAt', direction: -1 },
+              ],
+              unique: true,
+              sparse: true,
+            }),
+          ],
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['email'],
+              properties: { email: { bsonType: 'string' }, name: { bsonType: 'string' } },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
           }),
-        ],
-        validator: new MongoSchemaValidator({
-          jsonSchema: {
-            bsonType: 'object',
-            required: ['email'],
-            properties: { email: { bsonType: 'string' }, name: { bsonType: 'string' } },
-          },
-          validationLevel: 'strict',
-          validationAction: 'error',
+          options: new MongoSchemaCollectionOptions({ capped: { size: 1024 } }),
         }),
-        options: new MongoSchemaCollectionOptions({ capped: { size: 1024 } }),
-      }),
-    ]),
+      ],
+      { fromDatabase: false },
+    ),
   );
   const collection = view.root.children?.[0];
   const [index, validator, options] = collection?.children ?? [];

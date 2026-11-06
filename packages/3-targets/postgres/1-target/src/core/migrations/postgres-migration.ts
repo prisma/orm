@@ -111,12 +111,7 @@ import { createWorkingSchema, type WorkingSchemaCall } from './working-schema';
  * stored adapter, so user migrations can write `this.dataTransform(...)`
  * without threading the adapter through every call.
  *
- * Every method requires an explicit `schema`. Postgres migrations name their
- * schema deliberately — there is no default and no `search_path`-relative
- * option. A migration that left the schema unspecified would resolve against
- * whatever `search_path` the connection happened to carry, and that ambiguity
- * is an antipattern in a migration. (The unbound/unspecified namespace concept
- * remains for SQLite, which has no schemas, and for Mongo's connection `db`.)
+ * Every method that creates, changes or drops a table, column, index, constraint, type or policy requires an explicit `schema`; a migration does not leave those to whatever `search_path` the connection carries. The one exception is an extension declared in the unbound namespace: `createExtension` and `dropExtension` take an optional `schema`, and without it the extension goes into the connection's current schema, unless the extension's control file names a schema, and the search path finds it (ADR 316).
  */
 export abstract class PostgresMigration<
   Start extends Contract<SqlStorage> = Contract<SqlStorage>,
@@ -981,10 +976,10 @@ export abstract class PostgresMigration<
   }
 
   /**
-   * Emit a `CREATE EXTENSION … WITH SCHEMA …` migration operation, checked to find the extension absent before and present after.
+   * Emit a `CREATE EXTENSION … WITH SCHEMA …` migration operation, checked to find the extension absent before and present after. Without `schema`, the extension goes into the connection's current schema, unless the extension's control file names a schema.
    */
   protected createExtension(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly extension: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new CreateExtensionCall(options.schema, options.extension).toOp(
@@ -994,7 +989,7 @@ export abstract class PostgresMigration<
 
   /** Emit a `DROP EXTENSION` migration operation, without `CASCADE`. */
   protected dropExtension(options: {
-    readonly schema: string;
+    readonly schema?: string;
     readonly extension: string;
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new DropExtensionCall(options.schema, options.extension).toOp(

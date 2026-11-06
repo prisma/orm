@@ -443,13 +443,23 @@ describe('mongo contract builder', () => {
       users: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'email_1',
+            keys: [{ field: 'email', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'createdAt_1',
             keys: [{ field: 'createdAt', direction: 1 }],
             expireAfterSeconds: 3600,
           },
-          { kind: 'mongo-index', keys: [{ field: 'location', direction: '2dsphere' }] },
+          {
+            kind: 'mongo-index',
+            name: 'location_2dsphere',
+            keys: [{ field: 'location', direction: '2dsphere' }],
+          },
         ],
         validator: strictValidator({
           bsonType: 'object',
@@ -579,9 +589,15 @@ describe('mongo contract builder', () => {
       tasks: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'title', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'title_1',
+            keys: [{ field: 'title', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'expiresAt_1',
             keys: [{ field: 'expiresAt', direction: 1 }],
             expireAfterSeconds: 3600,
             partialFilterExpression: { type: 'derived' },
@@ -639,7 +655,14 @@ describe('mongo contract builder', () => {
           contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['tasks'],
         ),
       )['indexes'],
-    ).toEqual([{ kind: 'mongo-index', keys: [{ field: 'title', direction: 1 }], unique: true }]);
+    ).toEqual([
+      {
+        kind: 'mongo-index',
+        name: 'title_1',
+        keys: [{ field: 'title', direction: 1 }],
+        unique: true,
+      },
+    ]);
   });
 
   it('rejects indexes on models without collections', () => {

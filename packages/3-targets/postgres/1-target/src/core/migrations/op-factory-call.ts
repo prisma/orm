@@ -1871,11 +1871,11 @@ export class RawSqlCall extends PostgresOpFactoryCallNode {
 export class CreateExtensionCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'createExtension' as const;
   readonly operationClass = 'additive' as const;
-  readonly schemaName: string;
+  readonly schemaName: string | undefined;
   readonly extensionName: string;
   readonly label: string;
 
-  constructor(schemaName: string, extensionName: string) {
+  constructor(schemaName: string | undefined, extensionName: string) {
     super();
     this.schemaName = schemaName;
     this.extensionName = extensionName;
@@ -1885,13 +1885,15 @@ export class CreateExtensionCall extends PostgresOpFactoryCallNode {
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
     return createExtension(
-      { schema: this.schemaName, extension: this.extensionName },
+      { ...ifDefined('schema', this.schemaName), extension: this.extensionName },
       requireLowerer(lowerer, 'CreateExtensionCall', `extension "${this.extensionName}"`),
     );
   }
 
   renderTypeScript(): string {
-    return `this.createExtension({ schema: ${jsonToTsSource(this.schemaName)}, extension: ${jsonToTsSource(this.extensionName)} })`;
+    const schema =
+      this.schemaName === undefined ? '' : `schema: ${jsonToTsSource(this.schemaName)}, `;
+    return `this.createExtension({ ${schema}extension: ${jsonToTsSource(this.extensionName)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -1902,11 +1904,11 @@ export class CreateExtensionCall extends PostgresOpFactoryCallNode {
 export class DropExtensionCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropExtension' as const;
   readonly operationClass = 'destructive' as const;
-  readonly schemaName: string;
+  readonly schemaName: string | undefined;
   readonly extensionName: string;
   readonly label: string;
 
-  constructor(schemaName: string, extensionName: string) {
+  constructor(schemaName: string | undefined, extensionName: string) {
     super();
     this.schemaName = schemaName;
     this.extensionName = extensionName;
@@ -1916,13 +1918,15 @@ export class DropExtensionCall extends PostgresOpFactoryCallNode {
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
     return dropExtension(
-      { schema: this.schemaName, extension: this.extensionName },
+      { ...ifDefined('schema', this.schemaName), extension: this.extensionName },
       requireLowerer(lowerer, 'DropExtensionCall', `extension "${this.extensionName}"`),
     );
   }
 
   renderTypeScript(): string {
-    return `this.dropExtension({ schema: ${jsonToTsSource(this.schemaName)}, extension: ${jsonToTsSource(this.extensionName)} })`;
+    const schema =
+      this.schemaName === undefined ? '' : `schema: ${jsonToTsSource(this.schemaName)}, `;
+    return `this.dropExtension({ ${schema}extension: ${jsonToTsSource(this.extensionName)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {

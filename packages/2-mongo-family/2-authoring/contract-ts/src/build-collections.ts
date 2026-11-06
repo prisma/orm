@@ -1,6 +1,7 @@
 import {
   type ApplyScopeResult,
   applyPolymorphicScopeToMongoIndex,
+  defaultMongoIndexName,
   indexLookupKey,
   type MongoCollectionInput,
   MongoCollectionOptions,
@@ -13,10 +14,12 @@ import {
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { storedFieldNameIn } from './build-models';
 import type { BuildRefusal, IndexKey, IndexShapeRule } from './build-refusals';
 import type { FieldNode, IndexNode, ModelNode } from './contract-definition';
 
+/** The stored form of an index key: the field's stored name, with a wildcard scope kept. */
 function storedIndexKey(fields: readonly FieldNode[], key: string): string {
   const wildcardMatch = key.match(/^(.+)\.\$\*\*$/);
   const scope = wildcardMatch?.[1];
@@ -24,7 +27,34 @@ function storedIndexKey(fields: readonly FieldNode[], key: string): string {
   return key === '$**' ? key : storedFieldNameIn(fields, key);
 }
 
+/** The name MongoDB gives the index when it is created without one, from its stored keys. */
+export function defaultIndexNameOf(index: IndexNode, fields: readonly FieldNode[]): string {
+  return defaultMongoIndexName(
+    Object.entries(index.fields).map(([field, direction]) => ({
+      field: storedIndexKey(fields, field),
+      direction,
+    })),
+  );
+}
+
+/** The index as its refusals show it: as written, without a name that is only the default. */
+function indexSignature(index: IndexNode, fields: readonly FieldNode[]): string {
+  const name = index.options?.name;
+  if (name === undefined || name !== defaultIndexNameOf(index, fields)) {
+    return canonicalStringify(index);
+  }
+  const { name: _, ...options } = index.options ?? {};
+  return canonicalStringify(
+    Object.keys(options).length === 0 ? { fields: index.fields } : { ...index, options },
+  );
+}
+
 function toStorageIndex(index: IndexNode, fields: readonly FieldNode[]): MongoIndex {
+  if (index.options?.name === undefined) {
+    throw new InternalError(
+      `An index on ${Object.keys(index.fields).join(', ')} reached the MongoDB contract builder without a name. Call nameIndexes on the definition before building it.`,
+    );
+  }
   const keys = Object.entries(index.fields).map(([field, direction]) => ({
     field: storedIndexKey(fields, field),
     direction,
@@ -152,7 +182,7 @@ export function checkModelIndexes(
   const polymorphicScope = resolveVariantScope(model, modelsByName, variantValues);
   return (model.indexes ?? []).map((written, position): CheckedIndex => {
     const key: IndexKey = { kind: 'index', model: model.modelName, position };
-    const signature = canonicalStringify(written);
+    const signature = indexSignature(written, model.fields);
     const missingField = findMissingIndexField(written, model.fields);
     if (missingField !== undefined) {
       return {
@@ -204,6 +234,7 @@ export function buildCollections(input: {
   const { models, variantValues, refusals } = input;
   const intermediate: Record<string, MongoCollectionInput> = {};
   const indexOwnersByCollection = new Map<string, Map<string, IndexKey>>();
+  const indexNameOwnersByCollection = new Map<string, Map<string, IndexKey>>();
   const textIndexCollections = new Set<string>();
   const modelsByName = new Map(models.map((model) => [model.modelName, model]));
 
@@ -218,6 +249,8 @@ export function buildCollections(input: {
     const existingIndexes = existingCollection.indexes ?? [];
     const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
     indexOwnersByCollection.set(collection, indexOwners);
+    const nameOwners = indexNameOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
+    indexNameOwnersByCollection.set(collection, nameOwners);
 
     if (existingCollection.options && model.collectionOptions) {
       refusals.push({
@@ -243,7 +276,7 @@ export function buildCollections(input: {
         return;
       }
       const key: IndexKey = { kind: 'index', model: modelName, position };
-      const signature = canonicalStringify(checked.written);
+      const signature = indexSignature(checked.written, model.fields);
       if (isTextIndex(checked.written)) {
         if (textIndexCollections.has(collection)) {
           refusals.push({ kind: 'indexShape', key, rule: 'second-text-index', signature });
@@ -264,7 +297,20 @@ export function buildCollections(input: {
         });
         return;
       }
+      const firstNamed = nameOwners.get(checked.index.name);
+      if (firstNamed !== undefined) {
+        refusals.push({
+          kind: 'indexNameDuplicate',
+          key,
+          collection,
+          name: checked.index.name,
+          firstModel: firstNamed.model,
+          firstPosition: firstNamed.position,
+        });
+        return;
+      }
       indexOwners.set(lookupKey, key);
+      nameOwners.set(checked.index.name, key);
       storageIndexes.push(checked.index);
     });
 

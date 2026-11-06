@@ -43,6 +43,7 @@ import {
   type IndexNode,
   type ModelNode,
   mergeRedundantIndexes,
+  nameIndexes,
   type RelationNode,
   type RemovedIndex,
   type ValueObjectNode,
@@ -60,6 +61,7 @@ import type {
   ParsedWrittenScalar,
   PslSpan,
   Resolution,
+  ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
 import {
@@ -114,6 +116,7 @@ import {
   type EnumSite,
   type FieldSite,
   fieldSiteKey,
+  type IndexSite,
   type ModelSites,
   refusalDiagnostic,
   type SchemaSites,
@@ -517,6 +520,7 @@ function buildNormalIndex(
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...(unique && { unique: true }),
       ...ifDefined('sparse', parsed.sparse),
       ...ifDefined('expireAfterSeconds', parsed.expireAfterSeconds),
@@ -546,6 +550,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): IndexNod
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...ifDefined('partialFilterExpression', parsed.filter),
       ...ifDefined('collation', collation),
       ...ifDefined('weights', parsed.weights),
@@ -596,12 +601,13 @@ function collectIndexes(
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
-): (Site & { readonly index: IndexNode })[] {
-  const indexes: (Site & { readonly index: IndexNode })[] = [];
+): IndexSite[] {
+  const indexes: IndexSite[] = [];
   for (const field of Object.values(pslModel.fields)) {
     if (fieldTypeResolution(field, binder)?.kind === 'model') continue;
-    const uniqueNode = field.attributes.find((attr) => attr.name === 'unique')?.node;
-    if (!uniqueNode) continue;
+    const uniqueAttribute = field.attributes.find((attr) => attr.name === 'unique');
+    const uniqueNode = uniqueAttribute?.node;
+    if (!uniqueAttribute || !uniqueNode) continue;
     const unique = interpretFieldAttribute({
       symbols: specContext.symbols,
       node: uniqueNode,
@@ -622,10 +628,20 @@ function collectIndexes(
       diagnostics,
     });
     if (unique === undefined) continue;
+    const source = diagnosticSource(sources, uniqueNode.syntax);
+    const span = nodePslSpan(uniqueNode.syntax, sources);
+    if (unique.map === '') {
+      reportEmptyIndexMap(diagnostics, source, span);
+      continue;
+    }
     indexes.push({
-      index: { fields: { [field.name]: 1 }, options: { unique: true } },
-      source: diagnosticSource(sources, uniqueNode.syntax),
-      span: nodePslSpan(uniqueNode.syntax, sources),
+      index: {
+        fields: { [field.name]: 1 },
+        options: { unique: true, ...ifDefined('name', unique.map) },
+      },
+      source,
+      span,
+      label: `${attributeText('@', uniqueAttribute)} on field "${pslModel.name}.${field.name}"`,
     });
   }
 
@@ -674,9 +690,40 @@ function collectIndexes(
       if (!parsed) continue;
       index = buildNormalIndex(parsed, unique, ctx);
     }
-    if (index !== undefined) indexes.push({ index, source, span: attr.span });
+    if (index === undefined) continue;
+    if (index.options?.name === '') {
+      reportEmptyIndexMap(diagnostics, source, attr.span);
+      continue;
+    }
+    indexes.push({
+      index,
+      source,
+      span: attr.span,
+      label: `${attributeText('@@', attr)} on model "${pslModel.name}"`,
+    });
   }
   return indexes;
+}
+
+/** An attribute as the schema writes it, with its arguments as written. */
+function attributeText(prefix: '@' | '@@', attribute: ResolvedAttribute): string {
+  if (attribute.args.length === 0) return `${prefix}${attribute.name}`;
+  const args = attribute.args.map((arg) =>
+    arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value,
+  );
+  return `${prefix}${attribute.name}(${args.join(', ')})`;
+}
+
+function reportEmptyIndexMap(
+  diagnostics: PslDiagnosticCollector,
+  source: DiagnosticSource,
+  span: PslSpan,
+): void {
+  diagnostics.push({
+    code: 'PSL_INVALID_INDEX',
+    message: 'The `map` argument of an index cannot be an empty string.',
+    ...source.at(span),
+  });
 }
 
 function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | undefined {
@@ -1473,7 +1520,7 @@ export function interpretPslDocumentToMongoContract(
     warnings: undefined,
   };
   const { definition, removedIndexes } = mergeRedundantIndexes(
-    written,
+    nameIndexes(written),
     codecLookup,
     input.dataTypes,
   );

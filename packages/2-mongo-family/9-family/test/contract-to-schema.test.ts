@@ -65,7 +65,7 @@ describe('contractToMongoSchemaIR', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
         },
       }),
     );
@@ -79,7 +79,7 @@ describe('contractToMongoSchemaIR', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
         },
       }),
     );
@@ -90,8 +90,8 @@ describe('contractToMongoSchemaIR', () => {
   it('converts multiple collections', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
-        posts: { indexes: [{ keys: [{ field: 'title', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
+        posts: { indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }] },
       }),
     );
     expect(ir.collections).toHaveLength(2);
@@ -103,7 +103,9 @@ describe('contractToMongoSchemaIR', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'nickname', direction: 1 }], sparse: true }],
+          indexes: [
+            { name: 'nickname_1', keys: [{ field: 'nickname', direction: 1 }], sparse: true },
+          ],
         },
       }),
     );
@@ -114,7 +116,13 @@ describe('contractToMongoSchemaIR', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'createdAt', direction: 1 }], expireAfterSeconds: 3600 }],
+          indexes: [
+            {
+              name: 'createdAt_1',
+              keys: [{ field: 'createdAt', direction: 1 }],
+              expireAfterSeconds: 3600,
+            },
+          ],
         },
       }),
     );
@@ -126,7 +134,13 @@ describe('contractToMongoSchemaIR', () => {
     const ir = contractToMongoSchemaIR(
       makeContract({
         users: {
-          indexes: [{ keys: [{ field: 'status', direction: 1 }], partialFilterExpression: pfe }],
+          indexes: [
+            {
+              name: 'status_1',
+              keys: [{ field: 'status', direction: 1 }],
+              partialFilterExpression: pfe,
+            },
+          ],
         },
       }),
     );
@@ -139,6 +153,7 @@ describe('contractToMongoSchemaIR', () => {
         users: {
           indexes: [
             {
+              name: 'email_1_tenantId_1',
               keys: [
                 { field: 'email', direction: 1 },
                 { field: 'tenantId', direction: 1 },
@@ -162,6 +177,7 @@ describe('contractToMongoSchemaIR', () => {
         users: {
           indexes: [
             {
+              name: 'bio_text',
               keys: [{ field: 'bio', direction: 'text' as const }],
               weights: { bio: 10 },
               default_language: 'english',
@@ -169,6 +185,7 @@ describe('contractToMongoSchemaIR', () => {
               collation: { locale: 'en', strength: 2 },
             },
             {
+              name: '$**_1',
               keys: [{ field: '$**', direction: 1 as const }],
               wildcardProjection: { name: 1 as const, email: 1 as const },
             },

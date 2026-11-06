@@ -275,7 +275,7 @@ describe('contributed type aliases', () => {
 
 describe('the types key', () => {
   const message =
-    'defineContract no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.VarChar(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".';
+    'defineContract no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.sql.String(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".';
 
   it('is refused when the callback returns it', () => {
     expect(() =>
@@ -311,7 +311,7 @@ describe('the types key', () => {
       expect.objectContaining({
         code: 'CONTRACT.TYPES_KEY_REMOVED',
         message:
-          'buildContractDefinition no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.VarChar(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".',
+          'buildContractDefinition no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.sql.String(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".',
         meta: { keys: ['Slug'] },
       }),
     );
@@ -335,7 +335,7 @@ describe('the types key', () => {
       expect.objectContaining({
         code: 'CONTRACT.TYPES_KEY_REMOVED',
         message:
-          'buildSqlContractFromDefinition no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.VarChar(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".',
+          'buildSqlContractFromDefinition no longer takes a "types" key. Write a type alias as a constant, such as const Slug = field.column(type.sql.String(64)), and use it as a field. Register a database type of a contract space under "databaseTypes".',
         meta: { keys: ['Slug'] },
       }),
     );
