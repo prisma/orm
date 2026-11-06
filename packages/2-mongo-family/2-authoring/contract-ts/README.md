@@ -42,8 +42,10 @@ This first slice does not yet cover union or dict authoring, or Mongo validator 
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {

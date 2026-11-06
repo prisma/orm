@@ -54,8 +54,10 @@ const result = await familyInstance.emitContract({ contract });
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {

@@ -10,6 +10,7 @@ export const contract = defineContract({}, ({ field, model, type }) => ({
           'mongo/string@1', // the title
         ),
         body: field.scalar(type.String()),
+        summary: field /* the summary */ .string(),
       },
     }),
   },
