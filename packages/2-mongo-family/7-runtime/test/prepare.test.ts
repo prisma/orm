@@ -422,7 +422,7 @@ describe('running a prepared statement', () => {
       const { runtime, update } = await preparedUpdate();
       const target = { query: runtime.query.bind(runtime), execute: runtime.execute.bind(runtime) };
       expect(() => update.execute(target, { status: 'new' })).toThrow(
-        'MongoQueryExecutor is missing the prepared statement execute bridge',
+        'A prepared statement runs against a MongoRuntime, such as `await db.runtime()`. The target passed to execute() is not one: it has no prepared statement execute bridge.',
       );
     });
   });
@@ -432,7 +432,7 @@ describe('running a prepared statement', () => {
     const statement = await runtime.prepare({ email: 'test/string@1' }, byEmail);
     const target = { query: runtime.query.bind(runtime), execute: runtime.execute.bind(runtime) };
     expect(() => statement.query(target, { email: 'a' })).toThrow(
-      'MongoQueryExecutor is missing the prepared statement query bridge',
+      'A prepared statement runs against a MongoRuntime, such as `await db.runtime()`. The target passed to query() is not one: it has no prepared statement query bridge.',
     );
   });
 

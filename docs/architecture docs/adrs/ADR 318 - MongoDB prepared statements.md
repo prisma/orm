@@ -107,7 +107,7 @@ The second handle has both methods because a MongoDB update or delete plan, type
 
 ## The runtime is the only target, and the bridge is internal
 
-Handles type `target` as `MongoQueryExecutor { query(plan); execute(plan) }`, which `@internal/mongo-query-ast/execution` declares beside `MongoQueryPlan`. SQL types its target the same way, as `RuntimeScope`. `MongoRuntime` extends it. At run time the handle looks for an internal bridge symbol on the target; `MongoRuntimeImpl` installs it, and no public entry point exports it. A target without it throws an invariant error: `'MongoQueryExecutor is missing the prepared statement query bridge'` (or `execute bridge`).
+Handles type `target` as `MongoQueryExecutor { query(plan); execute(plan) }`, which `@internal/mongo-query-ast/execution` declares beside `MongoQueryPlan`. SQL types its target the same way, as `RuntimeScope`. `MongoRuntime` extends it. At run time the handle looks for an internal bridge symbol on the target; `MongoRuntimeImpl` installs it, and no public entry point exports it. A target without it throws an invariant error that names what to pass: "A prepared statement runs against a MongoRuntime, such as `await db.runtime()`. The target passed to query() is not one: it has no prepared statement query bridge." (`execute` for the other face).
 
 The MongoDB runtime has no connections or transactions to run a handle on, so its only target is the runtime. The `mongo()` client is not a target: `db.query` is the query builder, so the client has no `query(plan)`.
 

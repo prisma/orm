@@ -65,7 +65,7 @@ class MongoPreparedStatementImpl<Params, Row>
   ): AsyncIterableResult<Row> {
     invariant(
       hasBridge(target, mongoPreparedQuery),
-      'MongoQueryExecutor is missing the prepared statement query bridge',
+      'A prepared statement runs against a MongoRuntime, such as `await db.runtime()`. The target passed to query() is not one: it has no prepared statement query bridge.',
     );
     return target[mongoPreparedQuery]<Row>(this, params, options);
   }
@@ -82,7 +82,7 @@ class MongoPreparedExecutionImpl<Params, Row>
   ): Promise<RuntimeStatementStats> {
     invariant(
       hasBridge(target, mongoPreparedExecute),
-      'MongoQueryExecutor is missing the prepared statement execute bridge',
+      'A prepared statement runs against a MongoRuntime, such as `await db.runtime()`. The target passed to execute() is not one: it has no prepared statement execute bridge.',
     );
     return target[mongoPreparedExecute](this, params, options);
   }
