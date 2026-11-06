@@ -61,6 +61,7 @@ import {
   sharedCollectionRemovalRefusals,
   timeSeriesRemovalRefusals,
 } from './mongo-statement-planning';
+import { structureChangeWarnings } from './mongo-structure-warnings';
 import {
   noCastRefusals,
   planFieldTypeChanges,
@@ -653,6 +654,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     });
     if (result.kind === 'failure') return result;
     const { calls, warnings } = result;
+    const allWarnings = [
+      ...warnings,
+      ...(fromContract === null
+        ? []
+        : structureChangeWarnings({ fromContract, contract, renames })),
+    ];
     const fieldLoss: readonly MigrationDataLoss[] = [
       ...removals.map((removal) => ({
         operationIndex: calls.indexOf(removal.call),
@@ -700,7 +707,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         subject: fill.subject,
         value: fill.text,
       })),
-      ...(warnings.length > 0 ? { warnings } : {}),
+      ...(allWarnings.length > 0 ? { warnings: allWarnings } : {}),
     };
   }
 

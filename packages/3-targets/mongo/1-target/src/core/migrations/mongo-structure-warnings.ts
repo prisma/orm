@@ -1,0 +1,111 @@
+import {
+  type ContractField,
+  type ContractValueObjectField,
+  type ContractWithDomain,
+  valueObjectAt,
+  valueObjectsWithCoordinates,
+} from '@internal/contract/types';
+import {
+  fieldStatementText,
+  type MigrationPlannerConflict,
+  type ResolvedRenameStatement,
+} from '@internal/framework-components/control';
+import type { MongoContract } from '@internal/mongo-contract';
+import { originFieldOf, originModelOf } from './mongo-data-transforms';
+import { modelAt, modelCoordinates } from './mongo-statement-planning';
+
+type AnyField = ContractField | ContractValueObjectField;
+
+const NOT_A_STATEMENT =
+  'This change is not a statement, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.';
+
+function warning(summary: string): MigrationPlannerConflict {
+  return { kind: 'documentsNotRewritten', summary, why: NOT_A_STATEMENT };
+}
+
+function typeKey(field: AnyField): string {
+  const { type } = field;
+  const many = field.many !== undefined && field.many !== false;
+  if (type.kind === 'scalar') return JSON.stringify(['scalar', type.codecId, many]);
+  if (type.kind === 'valueObject') {
+    return JSON.stringify(['valueObject', type.namespaceId, type.entityName, many]);
+  }
+  return JSON.stringify(['union', many]);
+}
+
+function valueSetName(field: AnyField): string | undefined {
+  return field.valueSet?.entityName;
+}
+
+function valueObjectName(field: AnyField): string | undefined {
+  return field.type.kind === 'valueObject' ? field.type.entityName : undefined;
+}
+
+/** What changes for a field kept by both contracts that the plan does not rewrite, in words. */
+function untouchedChange(name: string, before: AnyField, after: AnyField): string | undefined {
+  const enumBefore = valueSetName(before);
+  const enumAfter = valueSetName(after);
+  if (enumAfter !== undefined && enumBefore === undefined) {
+    return `Field "${name}" gains enum "${enumAfter}"`;
+  }
+  if (enumAfter !== undefined && enumBefore !== undefined && enumAfter !== enumBefore) {
+    return `Field "${name}" changes from enum "${enumBefore}" to enum "${enumAfter}"`;
+  }
+  const objectBefore = valueObjectName(before);
+  const objectAfter = valueObjectName(after);
+  if (objectBefore !== undefined && objectAfter !== undefined && objectBefore !== objectAfter) {
+    return `Field "${name}" moves from value object "${objectBefore}" to value object "${objectAfter}"`;
+  }
+  return undefined;
+}
+
+/**
+ * The changes the plan does not rewrite the documents for, and that are not statements: a field of
+ * a value object whose type changes, a field that moves to another value object, and a field that
+ * gains an enum or changes enum. Each is a warning that names the field; the validator change's
+ * document check then fails the apply until the documents fit.
+ */
+export function structureChangeWarnings(input: {
+  readonly fromContract: ContractWithDomain;
+  readonly contract: MongoContract;
+  readonly renames: readonly ResolvedRenameStatement[];
+}): readonly MigrationPlannerConflict[] {
+  const modelFields = modelCoordinates(input.contract).flatMap((model) => {
+    const after = modelAt(input.contract, model);
+    const origin = originModelOf(model, input.renames);
+    const before = modelAt(input.fromContract, origin);
+    if (after === undefined || before === undefined) return [];
+    return Object.entries(after.fields).flatMap(([field, definition]) => {
+      const originField = originFieldOf({ ...model, field }, origin, input.renames);
+      if (!Object.hasOwn(before.fields, originField)) return [];
+      const previous = before.fields[originField];
+      const change =
+        previous === undefined
+          ? undefined
+          : untouchedChange(
+              fieldStatementText(input.contract, { ...model, field }),
+              previous,
+              definition,
+            );
+      return change === undefined ? [] : [warning(change)];
+    });
+  });
+  const valueObjectFields = valueObjectsWithCoordinates(input.contract.storage).flatMap(
+    ({ coordinate, valueObject }) => {
+      const before = valueObjectAt(input.fromContract.storage, coordinate);
+      if (before === undefined) return [];
+      return Object.entries(valueObject.fields).flatMap(([field, definition]) => {
+        const previous = Object.hasOwn(before.fields, field) ? before.fields[field] : undefined;
+        if (previous === undefined) return [];
+        const name = `${coordinate.entityName}.${field}`;
+        const change =
+          untouchedChange(name, previous, definition) ??
+          (typeKey(previous) === typeKey(definition)
+            ? undefined
+            : `Field "${name}" of a value object changes type`);
+        return change === undefined ? [] : [warning(change)];
+      });
+    },
+  );
+  return [...modelFields, ...valueObjectFields];
+}

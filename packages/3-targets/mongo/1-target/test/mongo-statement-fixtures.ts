@@ -28,6 +28,10 @@ export interface FieldTypeSpec {
   readonly codecId: string;
   readonly nullable?: boolean;
   readonly many?: boolean;
+  /** The value object the field holds, in place of its codec. */
+  readonly valueObject?: string;
+  /** The enum whose values the field takes. */
+  readonly valueSet?: string;
 }
 
 export interface ModelSpec {
@@ -76,9 +80,28 @@ function validatorJsonSchemaOf(spec: CollectionSpec): Record<string, unknown> | 
 
 function contractField(spec: FieldTypeSpec | undefined) {
   return {
-    type: { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' },
+    type:
+      spec?.valueObject === undefined
+        ? { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' }
+        : {
+            kind: 'valueObject',
+            plane: 'storage',
+            namespaceId: '__unbound__',
+            entityKind: 'valueObject',
+            entityName: spec.valueObject,
+          },
     nullable: spec?.nullable ?? false,
     ...(spec?.many === true ? { many: { elementNullable: false } } : {}),
+    ...(spec?.valueSet === undefined
+      ? {}
+      : {
+          valueSet: {
+            plane: 'domain',
+            namespaceId: '__unbound__',
+            entityKind: 'enum',
+            entityName: spec.valueSet,
+          },
+        }),
   };
 }
 
@@ -86,6 +109,7 @@ export function contract(
   seed: string,
   models: Readonly<Record<string, ModelSpec>>,
   collections: Readonly<Record<string, CollectionSpec>>,
+  valueObjects: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>> = {},
 ): MongoContract {
   return {
     target: 'mongo',
@@ -162,6 +186,23 @@ export function contract(
           id: '__unbound__',
           kind: 'mongo-namespace',
           entries: {
+            ...(Object.keys(valueObjects).length === 0
+              ? {}
+              : {
+                  valueObject: Object.fromEntries(
+                    Object.entries(valueObjects).map(([name, fields]) => [
+                      name,
+                      {
+                        fields: Object.fromEntries(
+                          Object.entries(fields).map(([field, type]) => [
+                            field,
+                            contractField(type),
+                          ]),
+                        ),
+                      },
+                    ]),
+                  ),
+                }),
             collection: Object.fromEntries(
               Object.entries(collections).map(([name, spec]) => [
                 name,
