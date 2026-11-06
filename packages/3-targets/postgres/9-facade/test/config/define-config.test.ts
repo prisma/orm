@@ -161,4 +161,13 @@ describe('defineConfig facade', () => {
 
     expect(config.extensions).toContain(mockExtension);
   });
+
+  it('passes formatter config through', () => {
+    const config = defineConfig({
+      contract: './prisma/contract.prisma',
+      formatter: { indent: 'tab', newline: 'CRLF' },
+    });
+
+    expect(config.formatter).toEqual({ indent: 'tab', newline: 'CRLF' });
+  });
 });

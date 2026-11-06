@@ -1,5 +1,5 @@
 import mysqlAdapter from '@internal/adapter-mysql/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { FormatterConfig, PrismaNextConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -26,6 +26,7 @@ export interface MysqlConfigOptions {
   readonly migrations?: {
     readonly dir?: string;
   };
+  readonly formatter?: FormatterConfig;
 }
 
 /**
@@ -55,5 +56,6 @@ export function defineConfig(options: MysqlConfigOptions): PrismaNextConfig<'sql
     contract,
     ...ifDefined('db', options.db),
     ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }
