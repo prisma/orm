@@ -68,6 +68,7 @@ tail -50 wip/test-packages.20260615-190441.32317.log
 
 ## Don't
 
+- **Don't run repo-wide builds or checks locally.** Many agents share one laptop, and a full `pnpm build`, `pnpm test:packages`, `pnpm fixtures:check`, `pnpm lint:ratchets` or `pnpm check:upgrade-coverage` takes its CPU from all of them. Build and test only the packages you changed (`pnpm --filter <pkg> build`, then that package's `pnpm test`). After merging `main` into your branch, check whether the merged files touch your packages (`git diff --name-only HEAD^1 HEAD`); if they do not, push and let CI run the checks. Run a repo-wide check only when your change is what that check covers, for example `fixtures:check` after changing an emitter or a contract.
 - **Don't run the full integration suite locally.** It is too slow and flakes under load: run only the files for your change (`pnpm --filter integration-tests test test/cross-package/<name>`; a `--` before the path runs the whole suite) and let CI run the rest. Pull-request CI does not run the integration suite; the merge queue does. To run it on a branch before queueing, use `gh workflow run integration.yml --ref <branch>`. Same for `pnpm test:packages`: run the changed package's own `pnpm test`. When you know the failing file, use §3.
 - **Don't run bare `pnpm test:packages` etc. for a full run.** They dump everything into your context; use the `:agent` variant.
 - **Don't pipe a `:agent` command to `tail`/`grep`/`head`.** Read the log path it printed.
