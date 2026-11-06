@@ -94,7 +94,7 @@ It does no I/O, as on SQL. It is `async`, as on SQL, so a future async `beforeCo
 `handle.query(target, params, options?)`:
 
 1. Finds the bridge on `target` (D7).
-2. Checks `params` is an object and every placeholder name in the draft has a value. A missing name, or `params` that is not an object, throws `RUNTIME.PREPARE_MISSING_PARAM` with `{ name }`. Extra names are ignored, as on SQL.
+2. Checks `params` is an object and every placeholder name in the draft has a value. A missing name throws `RUNTIME.PREPARE_MISSING_PARAM` with `{ name }`. `params` that is not an object throws the same code with no details, as on SQL, because no single name is missing. The check runs before the activity starts: on the first iteration for `query`, and as a rejected promise for `execute`. SQL checks inside the activity; the ADR notes the difference. Extra names are ignored, as on SQL.
 3. Builds a bound draft. Each placeholder becomes one `MongoParamRef(value, { name, codecId, nullable })`, created once per placeholder and placed at every position that placeholder holds. A placeholder used twice is one `MongoParamRef` in two places, as when the ORM reuses one. So `mutator.entries()` lists it twice, and one `replaceValue` changes both positions.
 4. Continues as the ad-hoc path does after structural lowering: the `streamStatement` activity, `beforeEncode` with a `MongoParamRefMutator` over the bound draft, then a check of the `limit` and `skip` values in the draft after middleware (D5), `resolveParams`, the driver, and row decoding with the handle's `resultShape`. The ad-hoc `prepareOperation` is split so both paths share this code, instead of copying it.
 
