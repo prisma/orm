@@ -46,7 +46,7 @@ export type MongoParamRefEntryUnion<TCodecMap extends Record<string, unknown>> =
   | MongoParamRefEntry<undefined>;
 
 /**
- * Mongo-family mutator threaded into `MongoMiddleware.beforeExecute` as
+ * Mongo-family mutator threaded into `MongoMiddleware.beforeEncode` as
  * `params`. Scope is `MongoParamRef.value` slots only — middleware cannot
  * insert or remove refs, rewrite the filter shape, or modify the pipeline
  * structure. The phantom `MongoParamRefHandle` brand and the typed
@@ -85,7 +85,7 @@ export interface MongoParamRefMutator<
 
 /**
  * Internal-only view that exposes `currentDraft()` to the Mongo runtime.
- * The runtime calls this after the `beforeExecute` chain; the result is the
+ * The runtime calls this after the `beforeEncode` chain; the result is the
  * original draft by reference if nothing was mutated, otherwise a new tree
  * with the mutations applied. `MongoMiddleware` consumers never see this
  * shape; they receive the public `MongoParamRefMutator` view.
@@ -285,6 +285,7 @@ function buildMutatedDraft(
         collection: draft.collection,
         filter: substituteDoc(draft.filter, overrides),
         update: substituteUpdate(draft.update, overrides),
+        bypassDocumentValidation: draft.bypassDocumentValidation,
       };
     case 'deleteOne':
       return {

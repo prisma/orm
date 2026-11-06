@@ -23,3 +23,16 @@ export function effectiveControlPolicy(
 ): ControlPolicy {
   return nodeControl ?? defaultControlPolicy ?? 'managed';
 }
+
+/**
+ * The control policy that governs one storage object: what a planner may change in it and, in MongoDB, whether its contract describes a validator and how the verifier grades it. An `external` contract default is a floor that no object's own policy can raise ([ADR 224](../../../../../docs/architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20%E2%80%94%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md)); otherwise this is {@link effectiveControlPolicy}.
+ */
+export function governingControlPolicy(
+  subject: { readonly explicitNodeControlPolicy?: ControlPolicy | undefined } | undefined,
+  defaultControlPolicy: ControlPolicy | undefined,
+): ControlPolicy {
+  if (defaultControlPolicy === 'external') {
+    return 'external';
+  }
+  return effectiveControlPolicy(subject?.explicitNodeControlPolicy, defaultControlPolicy);
+}

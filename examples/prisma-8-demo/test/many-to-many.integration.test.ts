@@ -4,7 +4,7 @@ import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import postgres from '@prisma/orm-postgres/runtime';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createOrmClient } from '../src/orm-client/client';
+import { collections } from '../src/orm-client/collections';
 import { ormClientConnectPostTags } from '../src/orm-client/connect-post-tags';
 import { ormClientCreatePostConnectTags } from '../src/orm-client/create-post-connect-tags';
 import { ormClientCreatePostWithTags } from '../src/orm-client/create-post-with-tags';
@@ -14,23 +14,23 @@ import { ormClientGetPostsByTagFilter } from '../src/orm-client/get-posts-by-tag
 import { ormClientGetTagPosts } from '../src/orm-client/get-tag-posts';
 import { ormClientGetUserProfile } from '../src/orm-client/get-user-profile';
 import type { Contract } from '../src/prisma/contract.d';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, type DemoOrm, db } from '../src/prisma/db';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 const Priority = db.enums.public.Priority;
 
 type PostId = DefaultModelRow<Contract, 'Post'>['id'];
 
-async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+async function getRuntime(connectionString: string): Promise<{ runtime: Runtime; orm: DemoOrm }> {
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
+    collections,
   });
-  return client.connect();
+  const runtime = await client.connect();
+  return { runtime, orm: client.orm.public };
 }
 
 const authorId = '00000000-0000-0000-0000-000000000001';
@@ -113,11 +113,11 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
-          const profile = await ormClientGetUserProfile(authorId, runtime);
+          const profile = await ormClientGetUserProfile(authorId, orm);
 
           expect(profile).toEqual({
             id: authorId,
@@ -155,11 +155,11 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
-          const post = await ormClientGetPostTags(seededPostIds.alpha, runtime);
+          const post = await ormClientGetPostTags(seededPostIds.alpha, orm);
 
           expect(post).toEqual({
             id: seededPostIds.alpha,
@@ -182,11 +182,11 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
-          const tag = await ormClientGetTagPosts(seededTagIds.orm, runtime);
+          const tag = await ormClientGetTagPosts(seededTagIds.orm, orm);
 
           expect(tag).toEqual({
             id: seededTagIds.orm,
@@ -209,11 +209,10 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
-          const orm = createOrmClient(runtime);
           const post = await orm.Post.include('tags')
             .where({ id: seededPostIds.beta as PostId })
             .first();
@@ -226,6 +225,7 @@ describe('ORM client many-to-many examples', () => {
             createdAt: Temporal.Instant.from('2024-01-02T10:00:00.000Z'),
             expiresAt: expect.any(Temporal.Instant),
             embedding: null,
+            body: null,
             viewCount: null,
             impressionCount: null,
             reachScore: null,
@@ -244,22 +244,22 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
 
-          const some = await ormClientGetPostsByTagFilter('some', 'typescript', runtime);
+          const some = await ormClientGetPostsByTagFilter('some', 'typescript', orm);
           expect(some).toEqual([{ id: seededPostIds.alpha, title: 'Alpha post' }]);
 
-          const none = await ormClientGetPostsByTagFilter('none', 'typescript', runtime);
+          const none = await ormClientGetPostsByTagFilter('none', 'typescript', orm);
           expect(none).toEqual([
             { id: seededPostIds.beta, title: 'Beta post' },
             { id: seededPostIds.untagged, title: 'Untagged post' },
           ]);
 
           // Vacuous truth: the untagged post satisfies `every`.
-          const every = await ormClientGetPostsByTagFilter('every', 'typescript', runtime);
+          const every = await ormClientGetPostsByTagFilter('every', 'typescript', orm);
           expect(every).toEqual([
             { id: seededPostIds.beta, title: 'Beta post' },
             { id: seededPostIds.untagged, title: 'Untagged post' },
@@ -277,14 +277,14 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
           const post = await ormClientConnectPostTags(
             seededPostIds.untagged,
             [seededTagIds.demo, seededTagIds.typescript],
-            runtime,
+            orm,
           );
 
           expect(post).toEqual({
@@ -308,14 +308,14 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
           const post = await ormClientDisconnectPostTags(
             seededPostIds.alpha,
             [seededTagIds.orm],
-            runtime,
+            orm,
           );
 
           expect(post).toEqual({
@@ -336,7 +336,7 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
@@ -348,7 +348,7 @@ describe('ORM client many-to-many examples', () => {
               userId: authorId,
               tags: [{ label: 'fresh' }, { label: 'brand-new' }],
             },
-            runtime,
+            orm,
           );
 
           expect(created).toEqual({
@@ -359,12 +359,13 @@ describe('ORM client many-to-many examples', () => {
             createdAt: expect.any(Temporal.Instant),
             expiresAt: expect.any(Temporal.Instant),
             embedding: null,
+            body: null,
             viewCount: null,
             impressionCount: null,
             reachScore: null,
           });
 
-          const readBack = await ormClientGetPostTags(newPostId, runtime);
+          const readBack = await ormClientGetPostTags(newPostId, orm);
           expect(readBack).toEqual({
             id: newPostId,
             title: 'Fresh post',
@@ -386,7 +387,7 @@ describe('ORM client many-to-many examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedManyToManyData(runtime);
@@ -398,7 +399,7 @@ describe('ORM client many-to-many examples', () => {
               userId: authorId,
               tagIds: [seededTagIds.typescript, seededTagIds.demo],
             },
-            runtime,
+            orm,
           );
 
           expect(created).toEqual({
@@ -409,12 +410,13 @@ describe('ORM client many-to-many examples', () => {
             createdAt: expect.any(Temporal.Instant),
             expiresAt: expect.any(Temporal.Instant),
             embedding: null,
+            body: null,
             viewCount: null,
             impressionCount: null,
             reachScore: null,
           });
 
-          const readBack = await ormClientGetPostTags(newPostId, runtime);
+          const readBack = await ormClientGetPostTags(newPostId, orm);
           expect(readBack).toEqual({
             id: newPostId,
             title: 'Connected post',

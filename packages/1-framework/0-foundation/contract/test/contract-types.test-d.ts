@@ -1,7 +1,7 @@
 import { expectTypeOf, test } from 'vitest';
-import type { Contract } from '../src/contract-types';
+import type { Contract, ContractValueObjectAt } from '../src/contract-types';
 import type { CrossReference } from '../src/cross-reference';
-import type { ContractModel, ModelStorageBase } from '../src/domain-types';
+import type { ContractField, ContractModel, ModelStorageBase } from '../src/domain-types';
 import type { NamespaceId } from '../src/namespace-id';
 import type { StorageBase, StorageHashBase } from '../src/types';
 
@@ -26,10 +26,12 @@ type ExampleModels = {
       readonly id: {
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+        readonly many: false;
       };
       readonly email: {
         readonly nullable: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+        readonly many: false;
       };
     };
     readonly relations: {
@@ -51,8 +53,8 @@ type ExampleStorage = StorageBase<'abc123'> & {
   readonly tables: {
     readonly user: {
       readonly columns: {
-        readonly id: { readonly nativeType: 'int4' };
-        readonly email: { readonly nativeType: 'text' };
+        readonly id: { readonly dataType: 'example/int4' };
+        readonly email: { readonly dataType: 'example/text' };
       };
     };
   };
@@ -84,24 +86,6 @@ test('StorageBase with specific hash extends default StorageBase', () => {
 
 // ── Literal type preservation ────────────────────────────────────────────────
 
-test('preserves model field literal types through the domain namespace', () => {
-  expectTypeOf<
-    ExampleContract['domain']['namespaces']['public']['models']['User']['fields']['id']['type']['kind']
-  >().toEqualTypeOf<'scalar'>();
-});
-
-test('preserves relation literal types through the domain namespace', () => {
-  expectTypeOf<
-    ExampleContract['domain']['namespaces']['public']['models']['User']['relations']['posts']['to']
-  >().toEqualTypeOf<ExamplePostRef>();
-});
-
-test('preserves model storage bridge literals through the domain namespace', () => {
-  expectTypeOf<
-    ExampleContract['domain']['namespaces']['public']['models']['User']['storage']['table']
-  >().toEqualTypeOf<'user'>();
-});
-
 test('preserves storage hash literal through TStorage', () => {
   expectTypeOf<ExampleContract['storage']['storageHash']>().toEqualTypeOf<
     StorageHashBase<'abc123'>
@@ -110,12 +94,43 @@ test('preserves storage hash literal through TStorage', () => {
 
 test('preserves storage table literal types through TStorage', () => {
   expectTypeOf<
-    ExampleContract['storage']['tables']['user']['columns']['id']['nativeType']
-  >().toEqualTypeOf<'int4'>();
+    ExampleContract['storage']['tables']['user']['columns']['id']['dataType']
+  >().toEqualTypeOf<'example/int4'>();
 });
 
 // ── Framework consumer compatibility ─────────────────────────────────────────
 
 test('emitted contract satisfies Contract', () => {
   expectTypeOf<ExampleContract>().toExtend<Contract>();
+});
+
+test('old many: true does not satisfy ContractField', () => {
+  expectTypeOf<{
+    readonly nullable: false;
+    readonly type: { readonly kind: 'scalar'; readonly codecId: 'text' };
+    readonly many: true;
+  }>().not.toExtend<ContractField>();
+});
+
+test('ContractField has no sibling elementNullable property', () => {
+  expectTypeOf<ContractField>().not.toHaveProperty('elementNullable');
+});
+
+test('ContractValueObjectAt finds the value object a reference names in its storage namespace', () => {
+  type Point = { readonly fields: { readonly x: ContractField } };
+  type Geo = { readonly fields: { readonly lat: ContractField } };
+  type Storage = {
+    readonly namespaces: {
+      readonly public: { readonly entries: { readonly valueObject: { readonly Point: Point } } };
+      readonly geo: { readonly entries: { readonly valueObject: { readonly Point: Geo } } };
+    };
+  };
+  type Ref<Ns extends string, Name extends string> = {
+    readonly namespaceId: Ns;
+    readonly entityName: Name;
+  };
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'public', 'Point'>>>().toEqualTypeOf<Point>();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'geo', 'Point'>>>().toEqualTypeOf<Geo>();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'public', 'Missing'>>>().toBeNever();
+  expectTypeOf<ContractValueObjectAt<Storage, Ref<'missing', 'Point'>>>().toBeNever();
 });

@@ -16,7 +16,7 @@ describe('MongoCollection', () => {
 
   it('normalises plain index data into MongoIndex instances', () => {
     const collection = new MongoCollection({
-      indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+      indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
     });
     const indexes = collection.indexes;
     expect(indexes).toHaveLength(1);
@@ -25,7 +25,7 @@ describe('MongoCollection', () => {
   });
 
   it('preserves already-constructed nested IR-class instances by reference', () => {
-    const idx = new MongoIndex({ keys: [{ field: 'email', direction: 1 }] });
+    const idx = new MongoIndex({ name: 'email_1', keys: [{ field: 'email', direction: 1 }] });
     const validator = new MongoValidator({
       jsonSchema: { type: 'object' },
       validationLevel: 'strict',
@@ -61,11 +61,18 @@ describe('MongoCollection', () => {
 
   it('omits undeclared optional fields from canonical JSON', () => {
     const collection = new MongoCollection({
-      indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+      indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
     });
     expect(JSON.parse(JSON.stringify(collection))).toEqual({
       kind: 'mongo-collection',
-      indexes: [{ kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      indexes: [
+        {
+          kind: 'mongo-index',
+          name: 'email_1',
+          keys: [{ field: 'email', direction: 1 }],
+          unique: true,
+        },
+      ],
     });
   });
 });

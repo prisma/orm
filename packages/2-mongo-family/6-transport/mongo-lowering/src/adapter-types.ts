@@ -10,7 +10,7 @@ import type {
 /**
  * Intermediate state produced by structural lowering. `MongoParamRef` leaves
  * remain in place — they have not yet been resolved through codecs. The
- * runtime defers value resolution past the `beforeExecute` middleware chain
+ * runtime defers value resolution past the `beforeEncode` middleware chain
  * so middleware can walk and rewrite `MongoParamRef` nodes before encoding.
  *
  * All document/filter/update slots that may carry `MongoParamRef` nodes are
@@ -94,6 +94,7 @@ export type MongoLoweredDraft =
       readonly collection: string;
       readonly filter: Record<string, unknown>;
       readonly update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>;
+      readonly bypassDocumentValidation: boolean;
     }
   | {
       readonly kind: 'rawDeleteOne';
@@ -143,7 +144,7 @@ export interface MongoAdapter {
    * calling `resolveValue` on any `MongoParamRef` leaf. All filter predicates,
    * document fields, and pipeline stage values that carry `MongoParamRef`
    * nodes are preserved in the returned `MongoLoweredDraft` so that the
-   * `beforeExecute` middleware chain can inspect and rewrite them before
+   * `beforeEncode` middleware chain can inspect and rewrite them before
    * encoding runs. Synchronous — no I/O or codec calls.
    */
   structuralLower(plan: MongoQueryPlan): MongoLoweredDraft;

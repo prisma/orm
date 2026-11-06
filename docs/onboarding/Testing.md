@@ -32,4 +32,4 @@ CI runs on pull requests via GitHub Actions (`.github/workflows/ci.yml`):
 - **test** (`Test`): Preserves the required check name as a lightweight final gate over package shards, coverage, and examples
 - **test-e2e**: Runs after build and requires Postgres
 
-Environment: Node 24.16.0, pnpm 10, Postgres 15. `TEST_TIMEOUT_MULTIPLIER=2` in CI.
+Environment: Node 24.22.0, pnpm 10, Postgres 15. `TEST_TIMEOUT_MULTIPLIER=2` in CI.

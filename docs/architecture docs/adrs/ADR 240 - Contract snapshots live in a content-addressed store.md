@@ -15,12 +15,12 @@ A rendered `migration.ts` imports the store directly:
 ```ts
 #!/usr/bin/env -S node
 import { col, Migration, MigrationCLI } from '@internal/postgres/migration';
-import type { Contract as Start } from '../../snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract';
-import startContract from '../../snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract.json' with {
+import type { Contract as Start } from '../../snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract';
+import startContract from '../../snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract.json' with {
   type: 'json',
 };
-import type { Contract as End } from '../../snapshots/f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/contract';
-import endContract from '../../snapshots/f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/contract.json' with {
+import type { Contract as End } from '../../snapshots/6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/contract';
+import endContract from '../../snapshots/6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/contract.json' with {
   type: 'json',
 };
 
@@ -43,10 +43,10 @@ matching the on-disk layout:
 ```text
 migrations/
   snapshots/
-    93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/
+    6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/
       contract.json
       contract.d.ts
-    f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/
+    6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/
       contract.json
       contract.d.ts
   app/
@@ -64,7 +64,7 @@ A chain of N migrations previously stored roughly 2N copies of N+1 distinct cont
 
 The store is keyed by `storage.storageHash`, not a hash over the full contract. Because `migration.json` already carries `from` / `to` as storage hashes (ADR 199), every reader that already has a hash in hand — a migration manifest, a ref pointer, a `--to <hash>` argument — resolves the store entry directly, with no secondary index to maintain.
 
-The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
+The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
 
 ## Write-if-absent, made sound by canonicalization
 
@@ -120,4 +120,4 @@ Store entries could be written as `contract.json.gz`, with readers tolerating ei
 - [ADR 232 — A migration is authored against its start and end contract snapshots](ADR%20232%20-%20A%20migration%20is%20authored%20against%20its%20start%20and%20end%20contract%20snapshots.md) (amended — its file-layout claims describe the pre-store sibling-copy shape)
 - [Migration System subsystem doc](../subsystems/7.%20Migration%20System.md)
 - Store implementation: `packages/1-framework/1-core/framework-components/src/control/contract-snapshot-layout.ts`, `packages/1-framework/3-tooling/migration/src/contract-snapshot-store.ts`
-- Postgres content-addressed contract table: `packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`
+- Postgres content-addressed contract table: `packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`

@@ -35,12 +35,11 @@ import {
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-mongo/components/control';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
   latestMigrationToHash,
@@ -54,6 +53,11 @@ import {
   runMigrationStatus,
   selfEmitMigration,
 } from '../utils/journey-test-helpers';
+import {
+  contractSnapshotFile,
+  mongoDataMigrationImports,
+  mongoMigrationModule,
+} from '../utils/journey-workspace-helpers';
 
 const INVARIANT_ID = 'lowercase-user-name';
 
@@ -85,24 +89,7 @@ function setupMongoJourney(connectionString: string | undefined): JourneyContext
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
 
-  // The journey's project states the one package it installs. Emission reads
-  // the nearest manifest to decide which names generated files carry, and
-  // without this the temp directory would inherit the shared fixture app's,
-  // which lists the whole workspace and looks nothing like a user's project.
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify(
-      {
-        name: 'mongo-journey-app',
-        private: true,
-        type: 'module',
-        dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-      },
-      null,
-      2,
-    ),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
 
   copyFileSync(join(FIXTURES_DIR, 'contract-base.ts'), join(testDir, 'contract.ts'));
 
@@ -168,7 +155,7 @@ function contractSnapshotPath(
   storageHash: string,
   file: 'contract.json' | 'contract.d.ts',
 ): string {
-  return join(ctx.testDir, 'migrations', 'snapshots', storageHashHex(storageHash), file);
+  return contractSnapshotFile(ctx.testDir, storageHash, file);
 }
 
 // Journey tests run multi-step CLI flows, which easily exceed the
@@ -196,7 +183,7 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     const migrationDir = getLatestMigrationDir(ctx);
 
     const migrationTs = readFileSync(join(migrationDir, 'migration.ts'), 'utf-8');
-    expect(migrationTs).toContain('@prisma/orm-mongo/target/migration');
+    expect(migrationTs).toContain(mongoMigrationModule);
     expect(migrationTs).toContain('createIndex');
     // Prettier rewrites double-quoted literals to single-quoted on disk.
     expect(migrationTs).toContain("'users'");
@@ -269,7 +256,7 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
 
     const migrationTs = readFileSync(join(migrationDir, 'migration.ts'), 'utf-8');
     expect(migrationTs).toContain(
-      "import { Migration, MigrationCLI } from '@prisma/orm-mongo/target/migration'",
+      `import { Migration, MigrationCLI } from '${mongoMigrationModule}'`,
     );
     // New generator shape: the base derives describe() from the imported contract
     // JSON, so the scaffold carries `Migration<…, End>` + the endContractJson
@@ -401,9 +388,7 @@ describe('Journey: Mongo migration authoring (live database)', {
     // The check finds documents whose `name` contains an uppercase letter;
     // after the transform all names are lower-case so the check is
     // satisfied, enabling idempotency-skip on re-apply (tested below).
-    const handAuthored = `import { createIndex, dataTransform, Migration, MigrationCLI } from '@prisma/orm-mongo/target/migration';
-import { RawUpdateManyCommand, RawAggregateCommand } from '@prisma/orm-mongo/query-ast/execution';
-
+    const handAuthored = `${mongoDataMigrationImports()}
 const planMeta = {
   target: 'mongo',
   storageHash: 'hand-authored',

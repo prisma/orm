@@ -1,7 +1,5 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-export async function ormClientFindUserById(id: string, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.first({ id });
+export async function ormClientFindUserById(id: string, orm: DemoOrm) {
+  return orm.User.first({ id });
 }

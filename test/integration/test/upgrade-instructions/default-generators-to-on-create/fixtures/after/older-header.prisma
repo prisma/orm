@@ -1,0 +1,4 @@
+// use prisma-next
+model Session {
+  id String @id @onCreate(cuid(2))
+}

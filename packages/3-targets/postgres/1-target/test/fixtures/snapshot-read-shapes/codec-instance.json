@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "fixture-codec-instance",
+  "roots": {},
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {}
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "embeddings": {
+              "columns": {
+                "vec": {
+                  "codecId": "pg/vector@1",
+                  "dataType": "pgvector/vector",
+                  "nullable": false,
+                  "typeParams": { "length": 1536 }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["vec"]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "dfafdd7513008245df6caa1e85b110f53d7c4b178f81f4d633e9502576028113",
+    "types": {
+      "Embedding1536": {
+        "codecId": "pg/vector@1",
+        "dataType": "pgvector/vector",
+        "kind": "codec-instance",
+        "typeParams": {
+          "length": 1536
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {}
+}

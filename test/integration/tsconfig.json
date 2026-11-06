@@ -5,5 +5,11 @@
     "types": ["vitest/globals"]
   },
   "include": ["test/**/*", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist", "test/fixtures/**/*", "test/authoring/templates/**/*"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/fixtures/**/*",
+    "test/authoring/templates/**/*",
+    "test/upgrade-instructions/*/fixtures/**/*"
+  ]
 }

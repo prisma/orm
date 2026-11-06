@@ -1,0 +1,178 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "",
+  "roots": {},
+  "domain": {
+    "namespaces": {}
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "sample": {
+              "columns": {
+                "e00": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0101000020E6100000000000000000F03F0000000000000040"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "srid": 4326
+                  }
+                },
+                "e01": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0101000020e6100000000000000000f03f0000000000000040"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "srid": 4326
+                  }
+                },
+                "e02": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0020000001000010e63ff00000000000004000000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "srid": 4326
+                  }
+                },
+                "e03": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0101000000a4703d0ad7c351c0ae47e17a142e4540"
+                  },
+                  "nullable": false
+                },
+                "e04": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0000000001c051c3d70a3d70a440452e147ae147ae"
+                  },
+                  "nullable": false
+                },
+                "e05": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0020000002000010e600000002000000000000000000000000000000003ff80000000000004002000000000000"
+                  },
+                  "nullable": false
+                },
+                "e06": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "00000000030000000100000004000000000000000000000000000000003ff000000000000000000000000000003ff00000000000003ff000000000000000000000000000000000000000000000"
+                  },
+                  "nullable": false
+                },
+                "e07": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0020000004000010e6000000020020000001000010e63ff00000000000004000000000000000010100000000000000000008400000000000001040"
+                  },
+                  "nullable": false
+                },
+                "e08": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "000000000500000001000000000200000002000000000000000000000000000000003ff00000000000003ff0000000000000"
+                  },
+                  "nullable": false
+                },
+                "e09": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0000000006000000010103000000010000000400000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f000000000000f03f00000000000000000000000000000000"
+                  },
+                  "nullable": false
+                },
+                "e10": {
+                  "dataType": "postgis/geometry",
+                  "default": {
+                    "kind": "literal",
+                    "value": "010100002000000000000000000000f03f0000000000000040"
+                  },
+                  "nullable": false
+                },
+                "e11": {
+                  "dataType": "pgvector/vector",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      1,
+                      2.5,
+                      3
+                    ]
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 3
+                  }
+                },
+                "e12": {
+                  "dataType": "pgvector/vector",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      0,
+                      0.5,
+                      -2
+                    ]
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 3
+                  }
+                },
+                "e13": {
+                  "dataType": "pgvector/vector",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      0.1,
+                      0.2,
+                      0.3
+                    ]
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 3
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": []
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "568b71e1aff32473d279c1c7575f36e9bc5814c7cc305a83d3c2885d63374d5b"
+  },
+  "extensions": {},
+  "capabilities": {},
+  "meta": {}
+}

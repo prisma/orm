@@ -80,6 +80,9 @@ function copyFixture(): void {
   installFakePrisma7();
 }
 
+/** The Prisma 7 fixture is an app with dependencies and no `type`, which init leaves as it is. */
+const MODULE_TYPE_KEPT = expect.stringContaining('package.json declares no "type"');
+
 function hashTree(dir: string): string {
   const hash = createHash('sha256');
   for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
@@ -260,7 +263,7 @@ describe('the Prisma 7 scaffold', () => {
       expect(readProjectFile('prisma.config.ts')).toContain('prisma7Schema(');
       expect(outcome.filesRenamed).toEqual([{ from: 'prisma.config.ts', to: 'prisma7.config.ts' }]);
       expect(outcome.filesWritten).not.toContain('prisma7.config.ts');
-      expect(outcome.warnings).toEqual([]);
+      expect(outcome.warnings).toEqual([MODULE_TYPE_KEPT]);
     });
 
     it('rewrites a double-quoted import too, and keeps the extension', () => {
@@ -290,7 +293,10 @@ describe('the Prisma 7 scaffold', () => {
       expect(readProjectFile('prisma7.config.ts')).toBe(
         "export default { schema: 'prisma/schema.prisma' };\n",
       );
-      expect(outcome.warnings).toEqual([expect.stringContaining('prisma/config')]);
+      expect(outcome.warnings).toEqual([
+        expect.stringContaining('prisma/config'),
+        MODULE_TYPE_KEPT,
+      ]);
     });
 
     it('refuses to rename onto an existing prisma7.config.* and writes nothing', () => {

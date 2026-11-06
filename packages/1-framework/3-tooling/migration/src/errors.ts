@@ -1,6 +1,7 @@
 import { CliStructuredError } from '@internal/errors/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
 
@@ -16,7 +17,7 @@ import type { MigrationGraph } from './graph';
  */
 function reemitHint(dir: string, fallback?: string): string {
   const relativeDir = relative(process.cwd(), dir);
-  const reemit = `Re-emit the package by running \`node "${relativeDir}/migration.ts"\``;
+  const reemit = `Re-emit the package by running \`node "${relativeDir}/migration.ts"\`, adding the \`--config <path>\` you gave this command, if any`;
   return fallback ? `${reemit}, ${fallback}` : `${reemit}.`;
 }
 
@@ -355,23 +356,40 @@ export interface NoInvariantPathStructuralEdge {
   readonly invariants: readonly string[];
 }
 
+/** The extension space a `NO_INVARIANT_PATH` is about, and the advice for it, which only the caller can write. */
+export interface NoInvariantPathExtensionSpace {
+  readonly spaceId: string;
+  readonly why: string;
+  readonly fix: string;
+  readonly nextActions: readonly NextAction[];
+}
+
 export function errorNoInvariantPath(args: {
   readonly refName?: string;
   readonly required: readonly string[];
   readonly missing: readonly string[];
   readonly structuralPath: readonly NoInvariantPathStructuralEdge[];
+  readonly extensionSpace?: NoInvariantPathExtensionSpace;
 }): MigrationToolsError {
-  const { refName, required, missing, structuralPath } = args;
+  const { refName, required, missing, structuralPath, extensionSpace } = args;
   const refClause = refName ? `Ref "${refName}"` : 'Target';
   const missingList = missing.map((id) => JSON.stringify(id)).join(', ');
   const requiredList = required.map((id) => JSON.stringify(id)).join(', ');
   return new MigrationToolsError(
     'MIGRATION.NO_INVARIANT_PATH',
-    'No path covers the required invariants',
+    extensionSpace === undefined
+      ? 'No path covers the required invariants'
+      : `No path covers the required invariants of extension space "${extensionSpace.spaceId}"`,
     {
-      why: `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
-      fix: 'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      why:
+        extensionSpace?.why ??
+        `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
+      fix:
+        extensionSpace?.fix ??
+        'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      ...ifDefined('nextActions', extensionSpace?.nextActions),
       meta: {
+        ...ifDefined('spaceId', extensionSpace?.spaceId),
         required,
         missing,
         structuralPath,
@@ -468,6 +486,9 @@ export function errorBundleNotFoundForGraphNode(
   });
 }
 
+/**
+ * A contract at `filePath` that failed to load. When the family refused it for its contents, such as defaults its column types do not hold, the refusal's meta (`refusedDefaults`) is kept beside the file path.
+ */
 export function errorContractDeserializationFailed(
   filePath: string,
   message: string,
@@ -479,10 +500,16 @@ export function errorContractDeserializationFailed(
     {
       why: `Contract at "${filePath}" failed to deserialize: ${message}`,
       fix: reemitHint(dirname(filePath), 'or restore the directory from version control.'),
-      meta: { filePath, message },
+      meta: { ...refusalMetaOf(options?.cause), filePath, message },
       ...ifDefined('cause', options?.cause),
     },
   );
+}
+
+function refusalMetaOf(cause: unknown): Readonly<Record<string, unknown>> | undefined {
+  return isStructuredError(cause) && cause.code === 'CONTRACT.VALIDATION_FAILED'
+    ? cause.meta
+    : undefined;
 }
 
 export function errorHashNotInGraph(hash: string, graph: MigrationGraph): MigrationToolsError {

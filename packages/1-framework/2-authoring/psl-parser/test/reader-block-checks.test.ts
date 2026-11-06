@@ -1,5 +1,7 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
+import { jsonValue } from '../src/attribute-spec/combinators/json-value';
+import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { enumMemberAttributeDiagnostics } from '../src/enum-member-attributes';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -11,8 +13,11 @@ const descriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'enum',
     discriminator: 'enum',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () =>
+      mapBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
   },
   pack: {
     policy: {
@@ -20,7 +25,7 @@ const descriptors: AuthoringPslBlockDescriptorNamespace = {
       keyword: 'policy',
       discriminator: 'policy',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
     },
   },
 };
@@ -30,9 +35,9 @@ function blocksOf(source: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: descriptors,
+    defaultNamespaceId: 'public',
   });
-  return { blocks: symbolTable.topLevel.blocks, sources };
+  return { blocks: symbolTable.defaultNamespace.blocks, sources };
 }
 
 describe('claimedBlockKeywords', () => {

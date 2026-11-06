@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
@@ -262,6 +262,76 @@ describe('runContractSpaceSeedPhase', () => {
     expect(record.priorHash).toBe(HASH_A);
     expect(record.newHash).toBe(HASH_A);
     expect(record.newMigrationDirs).toEqual(['20260101T0000_init']);
+  });
+
+  describe('the paths it writes', () => {
+    function seedAt(hash: string, migrations: readonly DescriptorMigrationPackage[] = []) {
+      return runContractSpaceSeedPhase({
+        migrationsDir,
+        extensions: [
+          {
+            id: 'cipherstash',
+            contractSpace: {
+              contractJson: makeContract(hash, { v: hash }),
+              headRef: { hash, invariants: [] },
+              migrations,
+            },
+          },
+        ],
+      });
+    }
+    const headPath = () => join(migrationsDir, 'cipherstash', 'refs', 'head.json');
+
+    it('lists the snapshot, the head ref and each new migration on a first seed', async () => {
+      const out = await seedAt(HASH_A, [makePkg('20260101T0000_init', { from: null, to: HASH_A })]);
+
+      expect(out.seeded[0]?.writtenPaths).toEqual([
+        contractSnapshotDir(migrationsDir, HASH_A),
+        headPath(),
+        join(migrationsDir, 'cipherstash', '20260101T0000_init'),
+      ]);
+    });
+
+    it('lists nothing when every file already holds the pack', async () => {
+      await seedAt(HASH_A, [makePkg('20260101T0000_init', { from: null, to: HASH_A })]);
+
+      const out = await seedAt(HASH_A, [makePkg('20260101T0000_init', { from: null, to: HASH_A })]);
+
+      expect(out.seeded[0]?.writtenPaths).toEqual([]);
+    });
+
+    it('lists the head ref when it moves the head back to an older installed pack', async () => {
+      await seedAt(HASH_A);
+      await seedAt(HASH_B);
+
+      const out = await seedAt(HASH_A);
+
+      expect(out.seeded[0]).toMatchObject({
+        priorHash: HASH_B,
+        newHash: HASH_A,
+        writtenPaths: [headPath()],
+      });
+    });
+  });
+
+  it('writes nothing once cancelled', async () => {
+    await expect(
+      runContractSpaceSeedPhase({
+        migrationsDir,
+        signal: AbortSignal.abort(),
+        extensions: [
+          {
+            id: 'cipherstash',
+            contractSpace: {
+              contractJson: makeContract(HASH_A),
+              headRef: { hash: HASH_A, invariants: [] },
+              migrations: [],
+            },
+          },
+        ],
+      }),
+    ).rejects.toSatisfy((error: unknown) => error instanceof Error && error.name === 'AbortError');
+    expect(await readdir(migrationsDir)).toEqual([]);
   });
 
   it('skips extensions without a contractSpace (codec-only packs)', async () => {

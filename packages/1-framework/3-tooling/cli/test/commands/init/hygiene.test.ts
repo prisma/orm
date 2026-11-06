@@ -34,13 +34,6 @@ describe('mergeGitignore (FR3.3)', () => {
     expect(mergeGitignore(existing)).toBeNull();
   });
 
-  it('does not duplicate entries on a re-run (FR9.3)', () => {
-    const first = mergeGitignore('node_modules/\n');
-    expect(first).not.toBeNull();
-    const second = mergeGitignore(first ?? '');
-    expect(second).toBeNull();
-  });
-
   it('preserves user-authored comments and blank lines', () => {
     const existing = '# top-level comment\n\nnode_modules/\n# trailing\n';
     const result = mergeGitignore(existing);

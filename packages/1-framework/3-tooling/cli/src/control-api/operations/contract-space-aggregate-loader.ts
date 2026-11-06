@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
+import type {
+  ControlExtensionDescriptor,
+  MigrationPlanOperation,
+} from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
@@ -12,14 +15,14 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { CliStructuredError, errorUnexpected } from '../../utils/cli-errors';
+import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -101,6 +104,26 @@ function describeIntegrityViolation(violation: IntegrityViolation): string {
  * target mismatch, then disjointness, then a contract-validation
  * failure, then any remaining structural integrity violation.
  */
+function layoutFix(
+  layout: readonly Extract<
+    IntegrityViolation,
+    { kind: 'orphanSpaceDir' | 'declaredButUnmigrated' }
+  >[],
+  migrationsDir: string,
+): string {
+  const spaceDir = `\`${migrationsDir}/<space>/\``;
+  return [
+    layout.some((v) => v.kind === 'declaredButUnmigrated')
+      ? `Run \`prisma contract emit\` or \`prisma migration plan\` to write the pinned files of each declared extension pack under ${spaceDir}.`
+      : [],
+    layout.some((v) => v.kind === 'orphanSpaceDir')
+      ? `For a directory no extension declares, declare its extension in \`extensions\` or remove ${spaceDir}.`
+      : [],
+  ]
+    .flat()
+    .join(' ');
+}
+
 export function mapIntegrityViolations(
   violations: readonly IntegrityViolation[],
   migrationsDir: string,
@@ -119,7 +142,7 @@ export function mapIntegrityViolations(
         : `Contract-space layout violations detected (${layout.length})`;
     return new CliStructuredError('MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION', summary, {
       why: `The on-disk \`${migrationsDir}/\` directory and your \`extensions\` declaration are not in agreement.\n${lines.join('\n')}`,
-      fix: `Declare the extension in \`extensions\` and re-emit its contract-space artefacts, or remove the orphan \`${migrationsDir}/<space>\` directory.`,
+      fix: layoutFix(layout, migrationsDir),
       docsUrl: CONTRACT_SPACES_DOCS_URL,
       meta: { violations: layout },
     });
@@ -361,7 +384,11 @@ export async function buildReadAggregate(
   },
 ): Promise<
   Result<
-    { readonly aggregate: ContractSpaceAggregate; readonly contractHash: string },
+    {
+      readonly aggregate: ContractSpaceAggregate;
+      readonly contractHash: string;
+      readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+    },
     CliStructuredError
   >
 > {
@@ -406,15 +433,14 @@ export async function buildReadAggregate(
     if (!loaded.ok) {
       return loaded;
     }
-    return ok({ aggregate: loaded.value, contractHash });
+    return ok({
+      aggregate: loaded.value,
+      contractHash,
+      storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+    });
   } catch (error) {
-    if (MigrationToolsError.is(error)) {
-      return notOk(error);
-    }
     return notOk(
-      errorUnexpected(error instanceof Error ? error.message : String(error), {
-        why: `Failed to read migrations directory: ${error instanceof Error ? error.message : String(error)}`,
-      }),
+      errorFromCaught(error, (message) => `Failed to read migrations directory: ${message}`),
     );
   }
 }

@@ -41,12 +41,12 @@ model User {
 }
 
 model Profile {
-  id        String   @id @default(cuid(2))
+  id        String   @id @onCreate(cuid(2))
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String   @unique
   email     String   @unique
   alias     String   @unique
-  createdAt DateTime @default(now())
+  createdAt TimestamptzTemporal @default(now())
   @@map("profile")
 }
 
@@ -59,7 +59,7 @@ model Post {
 }
 
 model Payment {
-  id     String @id @default(cuid(2))
+  id     String @id @onCreate(cuid(2))
   ccn    String @unique
   author User?
   @@map("payment")

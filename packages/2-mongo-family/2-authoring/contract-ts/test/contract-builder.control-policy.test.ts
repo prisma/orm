@@ -1,6 +1,5 @@
 import type { ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
-import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   createMongoContractSchema,
@@ -11,22 +10,7 @@ import {
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-
-const mongoFamilyPack = {
-  kind: 'family',
-  id: 'mongo',
-  familyId: 'mongo',
-  version: '0.0.1',
-} as const satisfies FamilyPackRef<'mongo'>;
-
-const mongoTargetPack = {
-  kind: 'target',
-  id: 'mongo',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  defaultNamespaceId: '__unbound__',
-} as const satisfies TargetPackRef<'mongo', 'mongo'>;
+import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
 
 function unboundCollections(storage: MongoStorageShape): Record<string, MongoCollection> {
   const namespace = storage.namespaces[UNBOUND_NAMESPACE_ID];
@@ -50,6 +34,13 @@ function collectionEffectiveControl(
 function defaultControlPolicyOf(contract: MongoContract): ControlPolicy | undefined {
   return contract.defaultControlPolicy;
 }
+
+const policies = [
+  'managed',
+  'tolerated',
+  'external',
+  'observed',
+] as const satisfies readonly ControlPolicy[];
 
 describe('defineContract defaultControlPolicy', () => {
   it('lowers defaultControlPolicy to Contract.defaultControlPolicy', () => {
@@ -85,13 +76,6 @@ describe('defineContract defaultControlPolicy', () => {
 });
 
 describe('defineContract per-collection controlPolicy', () => {
-  const policies = [
-    'managed',
-    'tolerated',
-    'external',
-    'observed',
-  ] as const satisfies readonly ControlPolicy[];
-
   it('accepts each ControlPolicy on the model collection', () => {
     for (const controlPolicy of policies) {
       const built = defineContract({
@@ -206,5 +190,68 @@ describe('defineContract mixed default and per-collection controlPolicy', () => 
     );
 
     expect(roundTrippedCollections['users']).not.toHaveProperty('control');
+  });
+});
+
+describe('defineContract collection validators under a control policy', () => {
+  function validatedCollections(contract: MongoContract): readonly string[] {
+    return Object.entries(unboundCollections(contract.storage))
+      .filter(([, collection]) => collection.validator !== undefined)
+      .map(([name]) => name)
+      .sort();
+  }
+
+  it('gives a validator only to managed collections', () => {
+    const built = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: Object.fromEntries(
+        policies.map((controlPolicy) => [
+          controlPolicy,
+          model(controlPolicy, {
+            collection: controlPolicy,
+            controlPolicy,
+            fields: { _id: field.objectId(), name: field.string() },
+          }),
+        ]),
+      ),
+    });
+
+    expect(validatedCollections(built)).toEqual(['managed']);
+  });
+
+  it('gives no validator to a collection that takes a non-managed default policy', () => {
+    const built = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      defaultControlPolicy: 'observed',
+      models: {
+        Job: model('Job', { collection: 'jobs', fields: { _id: field.objectId() } }),
+        User: model('User', {
+          collection: 'users',
+          controlPolicy: 'managed',
+          fields: { _id: field.objectId() },
+        }),
+      },
+    });
+
+    expect(validatedCollections(built)).toEqual(['users']);
+  });
+
+  it('gives no validator to a managed collection under an external default policy', () => {
+    const built = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      defaultControlPolicy: 'external',
+      models: {
+        User: model('User', {
+          collection: 'users',
+          controlPolicy: 'managed',
+          fields: { _id: field.objectId() },
+        }),
+      },
+    });
+
+    expect(validatedCollections(built)).toEqual([]);
   });
 });

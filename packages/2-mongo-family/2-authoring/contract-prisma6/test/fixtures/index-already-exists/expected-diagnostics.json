@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "@unique on field \"User.email\" has the same fields, with the same sort, as @@unique([email]) on model \"User\". Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "@@unique([email]) on model \"User\" has the same fields, with the same sort, as @unique on field \"User.email\". Prisma 6 refuses this: \"Index already exists in the model.\" Remove one of them."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "@@index([name]) on model \"User\" and @@index([name(sort: Asc)]) on model \"User\" are the same index, with the same keys and options, in collection \"User\". MongoDB cannot hold two identical indexes in one collection. Remove one of them."
+  }
+]

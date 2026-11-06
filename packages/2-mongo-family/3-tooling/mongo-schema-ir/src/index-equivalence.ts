@@ -1,9 +1,6 @@
-import { canonicalize } from './canonicalize';
-import type { MongoSchemaIndex } from './schema-index';
-
 /**
  * Key-order-sensitive structural comparison. For key-order-independent
- * comparison (e.g. lookup key construction), use {@link canonicalize}.
+ * comparison, use `canonicalize` from `@internal/mongo-contract`.
  */
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -35,26 +32,4 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   }
 
   return false;
-}
-
-export function indexesEquivalent(a: MongoSchemaIndex, b: MongoSchemaIndex): boolean {
-  if (a.keys.length !== b.keys.length) return false;
-  for (let i = 0; i < a.keys.length; i++) {
-    const aKey = a.keys[i];
-    const bKey = b.keys[i];
-    if (!aKey || !bKey) return false;
-    if (aKey.field !== bKey.field) return false;
-    if (aKey.direction !== bKey.direction) return false;
-  }
-  if (a.unique !== b.unique) return false;
-  if (a.sparse !== b.sparse) return false;
-  if (a.expireAfterSeconds !== b.expireAfterSeconds) return false;
-  if (canonicalize(a.partialFilterExpression) !== canonicalize(b.partialFilterExpression))
-    return false;
-  if (canonicalize(a.wildcardProjection) !== canonicalize(b.wildcardProjection)) return false;
-  if (canonicalize(a.collation) !== canonicalize(b.collation)) return false;
-  if (canonicalize(a.weights) !== canonicalize(b.weights)) return false;
-  if (a.default_language !== b.default_language) return false;
-  if (a.language_override !== b.language_override) return false;
-  return true;
 }

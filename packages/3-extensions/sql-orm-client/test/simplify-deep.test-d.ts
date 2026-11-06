@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/utils/json';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import { createMockRuntime, getTestContext } from './helpers';
@@ -14,11 +15,7 @@ describe('Collection result types are simplified', () => {
       name: string;
       email: string;
       invitedById: number | null;
-      address: {
-        readonly street: string;
-        readonly city: string;
-        readonly zip: string | null;
-      } | null;
+      address: JsonValue | null;
     }>();
   });
 
@@ -41,11 +38,7 @@ describe('Collection result types are simplified', () => {
       name: string;
       email: string;
       invitedById: number | null;
-      address: {
-        readonly street: string;
-        readonly city: string;
-        readonly zip: string | null;
-      } | null;
+      address: JsonValue | null;
       posts: {
         id: number;
         title: string;
@@ -82,11 +75,7 @@ describe('Collection result types are simplified', () => {
       name: string;
       email: string;
       invitedById: number | null;
-      address: {
-        readonly street: string;
-        readonly city: string;
-        readonly zip: string | null;
-      } | null;
+      address: JsonValue | null;
     }>();
   });
 
@@ -99,11 +88,7 @@ describe('Collection result types are simplified', () => {
       name: string;
       email: string;
       invitedById: number | null;
-      address: {
-        readonly street: string;
-        readonly city: string;
-        readonly zip: string | null;
-      } | null;
+      address: JsonValue | null;
       posts: {
         id: number;
         title: string;
@@ -116,11 +101,7 @@ describe('Collection result types are simplified', () => {
         name: string;
         email: string;
         invitedById: number | null;
-        address: {
-          readonly street: string;
-          readonly city: string;
-          readonly zip: string | null;
-        } | null;
+        address: JsonValue | null;
       } | null;
     }>();
   });

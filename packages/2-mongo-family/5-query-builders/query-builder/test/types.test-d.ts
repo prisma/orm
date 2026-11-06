@@ -4,8 +4,6 @@ import type { ModelArrayField } from '../src/resolve-path';
 import type {
   BooleanField,
   DateField,
-  DocField,
-  DocShape,
   ExtractDocShape,
   ModelToDocShape,
   ResolveRow,
@@ -14,15 +12,6 @@ import type {
 import type { TestCodecTypes, TestContract } from './fixtures/test-contract';
 
 describe('type machinery', () => {
-  it('DocField has codecId and nullable', () => {
-    expectTypeOf<DocField>().toHaveProperty('codecId');
-    expectTypeOf<DocField>().toHaveProperty('nullable');
-  });
-
-  it('DocShape is a record of DocField', () => {
-    expectTypeOf<DocShape>().toMatchTypeOf<Record<string, DocField>>();
-  });
-
   it('ModelToDocShape derives correct shape from contract model', () => {
     type OrderShape = ModelToDocShape<TestContract, 'Order'>;
 

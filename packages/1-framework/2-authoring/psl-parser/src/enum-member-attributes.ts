@@ -8,10 +8,10 @@ export function enumMemberAttributeDiagnostics(
   sources: PslSources,
 ): PslDiagnostic[] {
   const source = diagnosticSource(sources, enumBlock.node.syntax);
-  return Array.from(enumBlock.node.entries()).flatMap((member) =>
+  return enumBlock.entries.flatMap((member) =>
     Array.from(member.attributes(), (attribute) => ({
       code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
-      message: `enum "${enumBlock.block.name}": member "${member.key()?.name() ?? '?'}" carries @${attribute.name()?.path().join('.') ?? '?'}, but an enum member takes no attributes`,
+      message: `enum "${enumBlock.name}": member "${member.key()?.name() ?? '?'}" carries @${attribute.name()?.path().join('.') ?? '?'}, but an enum member takes no attributes`,
       ...source.at(nodePslSpan(attribute.syntax, sources)),
     })),
   );

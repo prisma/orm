@@ -11,6 +11,7 @@ import type { PslDiagnostic } from '../src/diagnostic';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type ModelSymbol } from '../src/symbol-table';
+import { binderContext } from './support';
 
 const silent: ArgType<string, ModelAttributeCtx> = {
   kind: 'fieldRef',
@@ -25,18 +26,13 @@ function build(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
-  const model = symbolTable.topLevel.models['User']!;
+  const model = symbolTable.defaultNamespace.models['User']!;
   const { binder } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, model, binder, symbolTable };
 }
@@ -146,6 +142,7 @@ describe('oneOf and a silently failing alternative', () => {
 
   const loudAlt: ArgType<string, ModelAttributeCtx> = {
     kind: 'identifier',
+    name: undefined,
     label: 'a four-character name',
     parse: (arg): Result<string, readonly PslDiagnostic[]> =>
       arg.syntax.green.textLength === 4

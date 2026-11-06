@@ -1,14 +1,16 @@
-import {
+import postgresAdapterDescriptor, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { CodecControlHooks, SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import {
@@ -20,11 +22,49 @@ import {
 import { applicationDomainOf } from '@repo/test-utils';
 import { expectNarrowedType } from '@repo/test-utils/typed-expectations';
 import { describe, expect, it } from 'vitest';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+
+const postgresComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>> = [
+  postgresTargetDescriptor,
+  postgresAdapterDescriptor,
+];
+
+function testEnumComponent(
+  hooks: CodecControlHooks,
+): TargetBoundComponentDescriptor<'sql', 'postgres'> {
+  return {
+    kind: 'adapter',
+    id: 'test',
+    familyId: 'sql',
+    targetId: 'postgres',
+    version: '0.0.0-test',
+    types: {
+      codecTypes: {
+        codecDescriptors: [
+          {
+            codecId: 'app/test-type@1',
+            dataType: 'pg/enum',
+            traits: [],
+            isParameterized: false,
+            factory: () => () => ({ id: 'app/test-type@1' }),
+          } as unknown as AnyCodecDescriptor,
+        ],
+        controlPlaneHooks: {
+          'app/test-type@1': hooks,
+        },
+      },
+    },
+  } as TargetBoundComponentDescriptor<'sql', 'postgres'>;
+}
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',
@@ -37,6 +77,79 @@ const emptySchema = new PostgresDatabaseSchemaNode({
 });
 
 describe('PostgresMigrationPlanner - storage types', () => {
+  it('runs the type hooks for the vector type pgvector registers', async () => {
+    const planner = createPostgresMigrationPlanner(testAdapter);
+    const seen: string[] = [];
+    const hooks: CodecControlHooks = {
+      planTypeOperations: (options) => {
+        seen.push(`${options.typeName} ${options.typeInstance.codecId}`);
+        return {
+          operations: [
+            {
+              id: `type.${options.typeName}`,
+              label: `Create type ${options.typeName}`,
+              operationClass: 'additive',
+              target: { id: 'postgres' },
+              precheck: [],
+              execute: [{ description: 'create extension', sql: 'CREATE EXTENSION vector' }],
+              postcheck: [],
+            },
+          ],
+        };
+      },
+    };
+    const vectorHookComponent = {
+      kind: 'extension',
+      id: 'vector-hooks',
+      familyId: 'sql',
+      targetId: 'postgres',
+      version: '0.0.0-test',
+      types: { codecTypes: { controlPlaneHooks: { 'pg/vector@1': hooks } } },
+    } as TargetBoundComponentDescriptor<'sql', 'postgres'>;
+
+    const contract: Contract<SqlStorage> = {
+      target: 'postgres',
+      targetFamily: 'sql',
+      profileHash: profileHash('test'),
+      storage: new SqlStorage({
+        storageHash: coreHash('test'),
+        types: {
+          vector: {
+            kind: 'codec-instance',
+            codecId: 'pg/vector@1',
+            dataType: 'pgvector/vector',
+            typeParams: {},
+          },
+        },
+        namespaces: { [UNBOUND_NAMESPACE_ID]: PostgresUnboundSchema.instance },
+      }),
+      roots: {},
+      domain: applicationDomainOf({ models: {} }),
+      capabilities: {},
+      extensions: {},
+      meta: {},
+    };
+
+    const result = planner.plan({
+      contract,
+      schema: emptySchema,
+      policy: INIT_ADDITIVE_POLICY,
+      fromContract: null,
+      origin: null,
+      statements: [],
+      frameworkComponents: [...postgresComponents, vectorHookComponent],
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+
+    expectNarrowedType(result.kind === 'success');
+    const ops = await Promise.all(result.plan.operations);
+    expect({ seen, ops: ops.map((op) => op.id) }).toEqual({
+      seen: ['vector pg/vector@1'],
+      ops: ['type.vector'],
+    });
+  });
+
   it('plans type operations before table operations', async () => {
     const planner = createPostgresMigrationPlanner(testAdapter);
     const hooks: CodecControlHooks = {
@@ -55,22 +168,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
       }),
     };
 
-    const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> = [
-      {
-        kind: 'adapter',
-        id: 'test',
-        familyId: 'sql',
-        targetId: 'postgres',
-        version: '0.0.0-test',
-        types: {
-          codecTypes: {
-            controlPlaneHooks: {
-              'app/test-type@1': hooks,
-            },
-          },
-        },
-      },
-    ];
+    const frameworkComponents = [...postgresComponents, testEnumComponent(hooks)];
 
     const contract: Contract<SqlStorage> = {
       target: 'postgres',
@@ -82,8 +180,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Role: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'role',
-            typeParams: { values: ['USER'] },
+            dataType: 'app/test-type',
+            typeParams: { typeName: 'role', values: ['USER'] },
           },
         },
         namespaces: {
@@ -93,12 +191,12 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     role: {
-                      nativeType: 'role',
+                      dataType: 'app/test-type',
                       codecId: 'app/test-type@1',
                       nullable: false,
-                      typeRef: 'Role',
+                      typeParams: { typeName: 'role', values: ['USER'] },
                     },
                   },
                   primaryKey: { columns: ['id'] },
@@ -123,6 +221,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -153,22 +253,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
       }),
     };
 
-    const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> = [
-      {
-        kind: 'adapter',
-        id: 'test',
-        familyId: 'sql',
-        targetId: 'postgres',
-        version: '0.0.0-test',
-        types: {
-          codecTypes: {
-            controlPlaneHooks: {
-              'app/test-type@1': hooks,
-            },
-          },
-        },
-      },
-    ];
+    const frameworkComponents = [...postgresComponents, testEnumComponent(hooks)];
 
     const contract: Contract<SqlStorage> = {
       target: 'postgres',
@@ -180,8 +265,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Role: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'role',
-            typeParams: { values: ['USER'] },
+            dataType: 'app/test-type',
+            typeParams: { typeName: 'role', values: ['USER'] },
           },
         },
         namespaces: { [UNBOUND_NAMESPACE_ID]: PostgresUnboundSchema.instance },
@@ -198,6 +283,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -233,22 +320,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
       }),
     };
 
-    const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> = [
-      {
-        kind: 'adapter',
-        id: 'test',
-        familyId: 'sql',
-        targetId: 'postgres',
-        version: '0.0.0-test',
-        types: {
-          codecTypes: {
-            controlPlaneHooks: {
-              'app/test-type@1': hooks,
-            },
-          },
-        },
-      },
-    ];
+    const frameworkComponents = [...postgresComponents, testEnumComponent(hooks)];
 
     const contract: Contract<SqlStorage> = {
       target: 'postgres',
@@ -260,8 +332,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
           UserKind: {
             kind: 'codec-instance',
             codecId: 'app/test-type@1',
-            nativeType: 'UserKind',
-            typeParams: { values: ['ADMIN', 'USER'] },
+            dataType: 'app/test-type',
+            typeParams: { typeName: 'UserKind', values: ['ADMIN', 'USER'] },
           },
         },
         namespaces: {
@@ -271,12 +343,12 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+                    id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
                     kind: {
-                      nativeType: 'UserKind',
+                      dataType: 'app/test-type',
                       codecId: 'app/test-type@1',
                       nullable: false,
-                      typeRef: 'UserKind',
+                      typeParams: { typeName: 'UserKind', values: ['ADMIN', 'USER'] },
                     },
                   },
                   primaryKey: { columns: ['id'] },
@@ -301,6 +373,8 @@ describe('PostgresMigrationPlanner - storage types', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -319,7 +393,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
     expect(createTableSql).toContain('"UserKind"');
   });
 
-  it('expands parameterized storage type refs when creating tables', async () => {
+  it('writes a vector column with its own type params when creating tables', async () => {
     const planner = createPostgresMigrationPlanner(testAdapter);
     const contract: Contract<SqlStorage> = {
       target: 'postgres',
@@ -331,7 +405,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Embedding1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -342,12 +416,12 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 document: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
-                      typeRef: 'Embedding1536',
+                      typeParams: { length: 1536 },
                     },
                   },
                   primaryKey: { columns: ['id'] },
@@ -372,7 +446,9 @@ describe('PostgresMigrationPlanner - storage types', () => {
       schema: emptySchema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [pgvectorDescriptor],
+      origin: null,
+      statements: [],
+      frameworkComponents: [...postgresComponents, pgvectorDescriptor],
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -390,7 +466,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
     expect(createTableSql).not.toContain('"embedding" "vector(1536)"');
   });
 
-  it('fails when parameterized storage type refs cannot expand without codec hooks', () => {
+  it('fails when a column names a codec no component registers', () => {
     const planner = createPostgresMigrationPlanner(testAdapter);
     const contract: Contract<SqlStorage> = {
       target: 'postgres',
@@ -402,7 +478,7 @@ describe('PostgresMigrationPlanner - storage types', () => {
           Embedding1536: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -413,12 +489,12 @@ describe('PostgresMigrationPlanner - storage types', () => {
               table: {
                 document: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
-                      typeRef: 'Embedding1536',
+                      typeParams: { length: 1536 },
                     },
                   },
                   primaryKey: { columns: ['id'] },
@@ -444,12 +520,12 @@ describe('PostgresMigrationPlanner - storage types', () => {
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
-        frameworkComponents: [],
+        origin: null,
+        statements: [],
+        frameworkComponents: postgresComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
       }),
-    ).toThrow(
-      'Column declares typeParams for nativeType "vector" but no expandNativeType hook is registered for codecId "pg/vector@1".',
-    );
+    ).toThrow('No codec "pg/vector@1" is registered, so its column type cannot be named.');
   });
 });

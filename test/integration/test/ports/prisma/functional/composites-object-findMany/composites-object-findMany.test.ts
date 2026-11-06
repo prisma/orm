@@ -11,7 +11,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // port uses the required-content root.
 //
 // Ported here:
-//   - simple                 → `.where({ _id }).all()`.
+//   - simple                 → `.where({ id }).all()`.
 //   - filter equals shorthand → `.where({ content: <value> })` — Prisma 8's
 //     plain-object where does composite equality, the exact subject of the shorthand.
 //
@@ -47,8 +47,8 @@ function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
 }
 
 async function seed(db: Parameters<Parameters<typeof withComposites>[0]>[0]['db']) {
-  await db.comments_required.create({ _id: id1, country: null, content: contentA });
-  await db.comments_required.create({ _id: id2, country: 'France', content: contentB });
+  await db.comments_required.create({ id: id1, country: null, content: contentA });
+  await db.comments_required.create({ id: id2, country: 'France', content: contentB });
 }
 
 describe('ports/prisma/functional/composites/object/findMany', () => {
@@ -58,11 +58,11 @@ describe('ports/prisma/functional/composites/object/findMany', () => {
       withComposites(async ({ db }) => {
         await seed(db);
 
-        const comments = await db.comments_required.where({ _id: id1 }).all();
+        const comments = await db.comments_required.where({ id: id1 }).all();
 
         expect(comments).toEqual([
           {
-            _id: id1,
+            id: id1,
             content: contentA,
             country: null,
           },
@@ -81,7 +81,7 @@ describe('ports/prisma/functional/composites/object/findMany', () => {
 
         expect(comments).toEqual([
           {
-            _id: id1,
+            id: id1,
             content: contentA,
             country: null,
           },

@@ -63,13 +63,17 @@ export class QualifiedNameAst implements AstNode {
     return findFirstChild(this.syntax, IdentifierAst.cast);
   }
 
+  segments(): Iterable<IdentifierAst> {
+    return filterChildren(this.syntax, IdentifierAst.cast);
+  }
+
   /**
    * Every identifier segment, in source order. A bare `Vector` yields
    * `['Vector']`; a qualified `pgvector.Vector` yields `['pgvector', 'Vector']`.
    */
   path(): readonly string[] {
     const segments: string[] = [];
-    for (const segment of filterChildren(this.syntax, IdentifierAst.cast)) {
+    for (const segment of this.segments()) {
       const text = segment.token()?.text;
       if (text !== undefined) segments.push(text);
     }

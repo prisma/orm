@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.NAME_DUPLICATE",
+    "message": "Model \"Doc\" stores both \"a\" and \"b\" as \"a\"."
+  },
+  "psl": [
+    {
+      "code": "PSL_DUPLICATE_STORED_NAME",
+      "message": "Fields \"Doc.a\" and \"Doc.b\" are both stored as \"a\". Give each field its own stored name with @map.",
+      "spanText": "b  String @map(\"a\")"
+    }
+  ]
+}

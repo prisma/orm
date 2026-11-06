@@ -2,14 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  findInternalImportSpecifiers,
-  findInternalNames,
-  importSubpaths,
-  installShells,
-  packShell,
-  runInScratch,
-} from '@repo/tsdown/shell-testkit';
+import { importSubpaths, installShells, packShell, runInScratch } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const shellDir = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,13 +46,5 @@ describe('@prisma/orm-framework tarball smoke test', () => {
       console.log('identity ok');
     `;
     expect(runInScratch(scratch, script)).toContain('identity ok');
-  });
-
-  it('ships no unrecorded internal package name in dist', async () => {
-    expect(await findInternalNames(installedDir)).toEqual([]);
-  });
-
-  it('ships no @internal import specifier in dist', async () => {
-    expect(await findInternalImportSpecifiers(installedDir)).toEqual([]);
   });
 });

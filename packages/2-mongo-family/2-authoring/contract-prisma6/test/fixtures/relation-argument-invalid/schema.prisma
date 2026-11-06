@@ -20,7 +20,7 @@ model Post {
 model Comment {
   id       String @id @default(auto()) @map("_id") @db.ObjectId
   authorId String @db.ObjectId
-  author   User   @relation(fields: authorId, references: [id])
+  author   User   @relation(fields: authorId, references: id)
 }
 
 model Like {

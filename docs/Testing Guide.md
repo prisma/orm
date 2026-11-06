@@ -147,7 +147,7 @@ it('emits contract and verifies it matches on-disk artifacts', async () => {
 
 Package coverage policy lives in each Vitest project's adjacent `coverage.config.json`. `pnpm coverage:packages` first builds the same package-only prerequisites as `pnpm test:packages`, then runs every package Vitest project with coverage in one root process. Ordinary `pnpm test` and `pnpm test:packages` remain the faster noncoverage paths.
 
-CI divides that same root project set into four Vitest shards. Each shard uploads a native blob report with coverage thresholds disabled for the partial run. The `Coverage` job downloads all matching artifacts into one directory, verifies all four expected blobs are present, runs `pnpm coverage:packages:merge`, and only then applies the full coverage policy. A final lightweight `Test` job preserves the required status name and requires package shards, coverage, and examples to pass. Missing or failed shards therefore cannot produce a passing gate.
+CI divides that same root project set into four Vitest shards. Each shard uploads a native blob report with coverage thresholds disabled for the partial run. The `Coverage` job downloads all matching artifacts into one directory, verifies all four expected blobs are present, runs `pnpm coverage:packages:merge`, and only then applies the full coverage policy. A final lightweight `Test` job preserves the required status name and requires package shards, coverage, and examples to pass. In the merge queue it also requires the four `Integration Tests` shards to pass, unless the diff is inert; pull requests do not run them (see [CI pipeline](oss/ci-pipeline.md#integration-tests-run-only-in-the-merge-queue)). Missing or failed shards therefore cannot produce a passing gate.
 
 Each entry in the merged `coverage/coverage-final.json` is attributed to the package that owns the entry's source path, not to a test project. Examples are not coverage projects and remain separately exercised by `pnpm test:examples`.
 
@@ -1072,9 +1072,19 @@ MongoDB tests use `mongodb-memory-server` to run a real MongoDB instance in-proc
 
 ### Dependencies
 
-- `mongodb-memory-server` (`^10.4.0`) — in-process MongoDB server
-- `mongodb` (`^6.16.0`, via pnpm catalog) — MongoDB driver
-- Listed in `pnpm-workspace.yaml` under `allowBuilds`
+- `mongodb-memory-server` (via pnpm catalog) — in-process MongoDB server
+- `mongodb` (via pnpm catalog) — MongoDB driver
+- Listed in `pnpm-workspace.yaml` under `allowBuilds`, so `pnpm install` downloads the `mongod` binary once
+
+### The `mongod` binary in CI
+
+Each CI job that runs MongoDB tests uses `.github/actions/mongod-binary` after installing. It restores the binary from the Actions cache, or downloads it with `scripts/download-mongod-binary.mjs`, before any test starts. Tests then never download it. Without this, test packages that start in parallel each download the binary into one folder and fail on its lock file (`Cannot unlock file …/mongodb-binaries/<version>.lock`).
+
+The script retries a failed download up to four times. Before each retry it deletes lock files and any binary that does not run.
+
+### Retrying CI setup steps
+
+CI setup steps that fetch over the network run through `scripts/retry-command.mjs`, which runs a command up to three times. Its `--before-retry` option undoes what a failed attempt left behind, as `supabase stop --no-backup` does before `supabase start` runs again. `pnpm install` retries failed package downloads five times (`fetchRetries` in `pnpm-workspace.yaml`). Wrap any new setup step that downloads or pulls images the same way.
 
 ### Test setup helpers
 

@@ -46,6 +46,15 @@ export function targetPackageName(
   return resolveImportSpecifier(target === 'postgres' ? '@internal/postgres' : '@internal/mongo');
 }
 
+// biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([['mongo', 'mongodb']]);
+
+/** Packages the target package declares as required peer dependencies; init installs them with it. */
+export function targetPeerPackages(target: TargetId): readonly string[] {
+  const driver = DRIVER_PEERS.get(target);
+  return driver === undefined ? [] : [driver];
+}
+
 /** One entrypoint of the scaffolded project's target package. */
 export function targetEntrypoint(
   target: TargetId,
@@ -129,14 +138,14 @@ import { defineContract } from '${builder}';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
         fields: {
-          id: field.id.uuidv7String(),
-          email: field.text().unique(),
-          username: field.text().optional(),
-          name: field.text().optional(),
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+          email: field.column(type.String()).unique(),
+          username: field.column(type.String()).optional(),
+          name: field.column(type.String()).optional(),
         },
       }),
     },
@@ -156,7 +165,7 @@ export const contract = defineContract(
       User: model('User', {
         collection: 'users',
         fields: {
-          _id: field.objectId(),
+          id: field.objectId().mongo({ field: '_id' }),
           email: field.string(),
           username: field.string().optional(),
           name: field.string().optional(),
@@ -172,23 +181,23 @@ function starterSchemaPslPostgres(): string {
   return `// use prisma-8
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        Int                @id @default(autoincrement())
+  email     String             @unique
   username  String?
   name      String?
   posts     Post[]
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   title     String
   content   String?
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User               @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 `;
 }
@@ -217,28 +226,28 @@ model Post {
 }
 
 function starterSchemaTsPostgres(builder: string): string {
-  return `import { defineContract } from '${builder}';
+  return `import { defineContract, now } from '${builder}';
 
-export const contract = defineContract({}, ({ field, model, rel }) => {
+export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
-      id: field.id.uuidv7String(),
-      email: field.text().unique(),
-      username: field.text().optional(),
-      name: field.text().optional(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      email: field.column(type.String()).unique(),
+      username: field.column(type.String()).optional(),
+      name: field.column(type.String()).optional(),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
   const Post = model('Post', {
     fields: {
-      id: field.id.uuidv7String(),
-      title: field.text(),
-      content: field.text().optional(),
-      authorId: field.uuidString(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      title: field.column(type.String()),
+      content: field.column(type.String()).optional(),
+      authorId: field.column(type.Uuid()),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
@@ -266,26 +275,26 @@ export const contract = defineContract(
       User: model('User', {
         collection: 'users',
         fields: {
-          _id: field.objectId(),
+          id: field.objectId().mongo({ field: '_id' }),
           email: field.string(),
           username: field.string().optional(),
           name: field.string().optional(),
         },
         relations: {
-          posts: rel.hasMany('Post', { from: '_id', to: 'authorId' }),
+          posts: rel.hasMany('Post', { from: 'id', to: 'authorId' }),
         },
       }),
 
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          _id: field.objectId(),
+          id: field.objectId().mongo({ field: '_id' }),
           title: field.string(),
           content: field.string().optional(),
           authorId: field.objectId(),
         },
         relations: {
-          author: rel.belongsTo('User', { from: 'authorId', to: '_id' }),
+          author: rel.belongsTo('User', { from: 'authorId', to: 'id' }),
         },
       }),
     },
@@ -349,26 +358,18 @@ export function dbFile(
   resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
 ): string {
   const runtime = targetEntrypoint(target, 'runtime', resolveImportSpecifier);
-  if (target === 'postgres') {
-    return `import 'dotenv/config';
-import postgres from '${runtime}';
-import type { Contract } from './contract.d';
-import contractJson from './contract.json' with { type: 'json' };
-
-export const db = postgres<Contract>({
-  contractJson,
-  url: process.env['DATABASE_URL']!,
-});
-`;
-  }
-
+  const staticEntry = targetEntrypoint(target, 'static', resolveImportSpecifier);
+  const factory = target === 'postgres' ? 'postgres' : 'mongo';
   return `import 'dotenv/config';
-import mongo from '${runtime}';
+import ${factory} from '${runtime}';
+import { contractFromJson } from '${staticEntry}';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = mongo<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = ${factory}({
+  contract,
   url: process.env['DATABASE_URL']!,
 });
 `;

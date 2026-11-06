@@ -8,12 +8,13 @@ import {
   defineContract,
   enumType,
   field,
+  gen,
   member,
   model,
   now,
 } from '@internal/postgres/contract-builder';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
 
 const enums = {
   AccountStatus: enumType(
@@ -34,12 +35,7 @@ const enums = {
 
 const Account = model('Account', {
   fields: {
-    id: field
-      .generated({
-        type: textColumn,
-        generated: { kind: 'generator', id: 'ulid' },
-      })
-      .id(),
+    id: field.column(textColumn).onCreate(gen.ulid()).id(),
     email: field.column(varcharColumn(320)).unique(),
     status: field.namedType(enums.AccountStatus),
     profile: field.column(jsonbColumn).optional(),
@@ -49,12 +45,7 @@ const Account = model('Account', {
 
 const Project = model('Project', {
   fields: {
-    id: field
-      .generated({
-        type: textColumn,
-        generated: { kind: 'generator', id: 'ulid' },
-      })
-      .id(),
+    id: field.column(textColumn).onCreate(gen.ulid()).id(),
     accountId: field.column(textColumn),
     name: field.column(textColumn),
     slug: field.column(varcharColumn(128)).optional(),

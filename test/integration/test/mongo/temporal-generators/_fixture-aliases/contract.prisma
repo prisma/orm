@@ -1,0 +1,49 @@
+// use prisma-8
+
+types {
+  TouchedAt = Date @onUpdate(now())
+}
+
+model Post {
+  id        ObjectId           @id @map("_id")
+  title     String
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt @map("updated_at")
+  touchedAt TouchedAt
+
+  @@map("posts")
+}
+
+model Counter {
+  id        ObjectId           @id @map("_id")
+  key       String
+  tags      String[]
+  scores    Int32[]
+  factor    Double
+  hits      Int32
+  label     String?
+  updatedAt temporal.UpdatedAt
+
+  @@map("counters")
+}
+
+model Event {
+  id        ObjectId           @id @map("_id")
+  kind      String
+  createdAt temporal.CreatedAt
+
+  @@discriminator(kind)
+  @@map("events")
+}
+
+model Click {
+  url String
+
+  @@base(Event, "click")
+}
+
+model View {
+  path String
+
+  @@base(Event, "view")
+}

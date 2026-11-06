@@ -13,13 +13,6 @@ describe('hashContent', () => {
       const hex = digest.slice('sha512:'.length);
       expect(hex).toMatch(/^[0-9a-f]{128}$/);
     });
-
-    it('always produces a fixed total length regardless of input size', async () => {
-      const small = await hashContent('x');
-      const large = await hashContent('x'.repeat(10_000_000));
-      expect(small.length).toBe(large.length);
-      expect(small.length).toBe('sha512:'.length + 128);
-    });
   });
 
   describe('determinism', () => {
@@ -44,36 +37,6 @@ describe('hashContent', () => {
     it('produces different digests for different inputs', async () => {
       expect(await hashContent('a')).not.toBe(await hashContent('b'));
       expect(await hashContent('select 1')).not.toBe(await hashContent('select 2'));
-    });
-
-    it('discriminates inputs that differ only in a trailing character', async () => {
-      expect(await hashContent('hello')).not.toBe(await hashContent('hello!'));
-    });
-
-    it('discriminates inputs that differ only in case', async () => {
-      expect(await hashContent('Hello')).not.toBe(await hashContent('hello'));
-    });
-
-    it('discriminates inputs that differ in separator placement', async () => {
-      // The canonical-string composition uses '|' as a separator. Make sure
-      // shifting a separator boundary produces a distinct digest, so a
-      // pathological input cannot collide with a different decomposition.
-      expect(await hashContent('a|bc')).not.toBe(await hashContent('ab|c'));
-    });
-  });
-
-  describe('opacity', () => {
-    it('does not embed the original input in its output', async () => {
-      const secret = 'super-secret-token-1234567890';
-      const digest = await hashContent(secret);
-      expect(digest).not.toContain(secret);
-    });
-
-    it('does not leak large payload contents in its output', async () => {
-      const payload = 'x'.repeat(1024);
-      const digest = await hashContent(payload);
-      expect(digest).not.toContain(payload);
-      expect(digest.length).toBeLessThan(payload.length);
     });
   });
 

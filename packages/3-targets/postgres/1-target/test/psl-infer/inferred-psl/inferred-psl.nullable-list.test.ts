@@ -1,0 +1,27 @@
+import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { describe, expect, it } from 'vitest';
+import { printPslFromFlat } from '../fixtures';
+
+describe('printPsl — nullable list columns', () => {
+  it('a nullable text[] column with no element check prints String?[]?, and a NOT NULL one prints String?[]', async () => {
+    const schemaIR = new SqlSchemaIR({
+      tables: {
+        users: {
+          name: 'users',
+          columns: {
+            id: { name: 'id', typeText: 'int4', nullable: false },
+            labels: { name: 'labels', typeText: 'text', nullable: true, many: true },
+            tags: { name: 'tags', typeText: 'text', nullable: false, many: true },
+          },
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        },
+      },
+    });
+    const psl = await printPslFromFlat(schemaIR);
+    expect(psl).toMatch(/^\s*labels\s+String\?\[\]\?(\s|$)/m);
+    expect(psl).toMatch(/^\s*tags\s+String\?\[\](\s|$)/m);
+  });
+});

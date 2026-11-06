@@ -8,5 +8,5 @@ export async function bm25TopByScore(query: string, limit = 10) {
     .orderBy((f, fns) => fns.paradeDbScore(f.id), { direction: 'desc' })
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

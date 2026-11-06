@@ -13,52 +13,78 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "slug": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "rank": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "mongo/int32@1"
+                  "codecId": "mongo/int64Number@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
-              "post_title": {
+              "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "createdAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "slug": {
+                  "field": "slug"
+                },
+                "rank": {
+                  "field": "rank"
+                },
+                "title": {
+                  "field": "post_title"
+                },
+                "authorId": {
+                  "field": "authorId"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                }
+              }
             }
           }
         }
@@ -70,7 +96,7 @@
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a",
+    "storageHash": "c2121b18447a7f303d360e3f34a3295dcce495934ec2070656e0b6578bb27441",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -82,6 +108,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "slug_key",
                   "keys": [
                     {
                       "field": "slug",
@@ -92,6 +119,7 @@
                 },
                 {
                   "kind": "mongo-index",
+                  "name": "Post_rank_key",
                   "keys": [
                     {
                       "field": "rank",
@@ -102,6 +130,7 @@
                 },
                 {
                   "kind": "mongo-index",
+                  "name": "Post_authorId_post_title_key",
                   "keys": [
                     {
                       "field": "authorId",
@@ -116,6 +145,7 @@
                 },
                 {
                   "kind": "mongo-index",
+                  "name": "by_author",
                   "keys": [
                     {
                       "field": "authorId",
@@ -129,6 +159,7 @@
                 },
                 {
                   "kind": "mongo-index",
+                  "name": "Post_post_title_idx",
                   "keys": [
                     {
                       "field": "post_title",

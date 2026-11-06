@@ -39,13 +39,13 @@ const { mongoFamilyDescriptor } = await importFromRepo(
   'packages/2-mongo-family/9-family/dist/control.mjs',
 );
 const { mongoTargetDescriptor } = await importFromRepo(
-  'packages/3-mongo-target/1-mongo-target/dist/control.mjs',
+  'packages/3-targets/mongo/1-target/dist/control.mjs',
 );
 const { default: mongoAdapter } = await importFromRepo(
-  'packages/3-mongo-target/2-mongo-adapter/dist/control.mjs',
+  'packages/3-targets/mongo/2-adapter/dist/control.mjs',
 );
 const { default: mongoDriver } = await importFromRepo(
-  'packages/3-mongo-target/3-mongo-driver/dist/control.mjs',
+  'packages/3-targets/mongo/3-driver/dist/control.mjs',
 );
 
 const args = process.argv.slice(2);

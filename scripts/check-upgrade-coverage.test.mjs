@@ -151,15 +151,19 @@ describe('independent PR declarations', () => {
   for (const [audience, changedFile] of [
     ['app', 'examples/demo.ts'],
     ['extension', 'packages/3-extensions/pack/src.ts'],
+    ['extension', 'packages/3-targets/postgres/9-facade/src.ts'],
+    ['extension', 'packages/3-targets/sqlite/9-facade/src.ts'],
+    ['extension', 'packages/3-targets/mongo/9-facade/src.ts'],
+    ['extension', 'packages/3-targets/mysql/9-facade/src/x.ts'],
   ]) {
-    it(`accepts a new no-op ${audience} without a transition`, () => {
+    it(`accepts a new no-op ${audience} without a transition for ${changedFile}`, () => {
       const base = commit();
       write(changedFile, 'changed');
       write(pending('feature', audience));
       commit();
       passes(base);
     });
-    it(`rejects inherited and modified ${audience} declarations`, () => {
+    it(`rejects inherited and modified ${audience} declarations for ${changedFile}`, () => {
       write(pending('existing', audience));
       const base = commit();
       write(changedFile, 'changed');

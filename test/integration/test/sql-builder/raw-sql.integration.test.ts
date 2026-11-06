@@ -125,7 +125,7 @@ describe('integration: rawSql expression in typed builder', {
     const resolvedDriver = stackInstance.driver;
     if (!resolvedDriver) throw new Error('Driver missing');
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     closeFns.push(
       () => driver.close(),
@@ -146,6 +146,7 @@ describe('integration: rawSql expression in typed builder', {
 
   function buildRuntime(middleware?: readonly SqlMiddleware[]): Runtime {
     return new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,
@@ -193,14 +194,14 @@ describe('integration: rawSql expression in typed builder', {
     });
   });
 
-  describe('ParamRef from rawSql interpolation surfaces in beforeQuery params walk', () => {
-    it('param() inside rawSql appears in beforeQuery entries() in canonical order', async () => {
+  describe('ParamRef from rawSql interpolation surfaces in beforeEncode params walk', () => {
+    it('param() inside rawSql appears in beforeEncode entries() in canonical order', async () => {
       const capturedEntries: Array<{ codecId: string | undefined; value: unknown }> = [];
 
       const middleware: SqlMiddleware = {
         name: 'param-capture',
         familyId: 'sql',
-        beforeQuery(_plan, _ctx, params?: SqlParamRefMutator) {
+        beforeEncode(_plan, _ctx, params?: SqlParamRefMutator) {
           if (!params) return;
           for (const entry of params.entries()) {
             capturedEntries.push({ codecId: entry.codecId, value: entry.value });
@@ -214,7 +215,7 @@ describe('integration: rawSql expression in typed builder', {
 
       // The where clause embeds a param() inside a rawSql expression.
       // After lowering, the plan carries one ParamRef (value 50, codec pg/int4@1).
-      // The middleware's beforeQuery should see it via params.entries().
+      // The middleware's beforeEncode should see it via params.entries().
       // fns.raw is RawSqlTag (non-optional) — callable directly as a template tag.
       const result = runtime.query(
         db.public.posts
@@ -237,13 +238,13 @@ describe('integration: rawSql expression in typed builder', {
       expect(paramEntry?.value).toBe(50);
     });
 
-    it('param() count in beforeQuery entries matches the number of param() calls in rawSql', async () => {
+    it('param() count in beforeEncode entries matches the number of param() calls in rawSql', async () => {
       const capturedEntries: Array<{ codecId: string | undefined; value: unknown }> = [];
 
       const middleware: SqlMiddleware = {
         name: 'param-count-capture',
         familyId: 'sql',
-        beforeQuery(_plan, _ctx, params?: SqlParamRefMutator) {
+        beforeEncode(_plan, _ctx, params?: SqlParamRefMutator) {
           if (!params) return;
           for (const entry of params.entries()) {
             capturedEntries.push({ codecId: entry.codecId, value: entry.value });

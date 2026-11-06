@@ -9,11 +9,17 @@ export class MongoSchemaIR extends MongoSchemaIRNode {
   readonly id = 'schema';
   readonly collections: ReadonlyArray<MongoSchemaCollection>;
   readonly collectionNames: ReadonlyArray<string>;
+  /** Whether the schema was read from a database, which reports some index options with server defaults filled in. */
+  readonly fromDatabase: boolean;
 
   private readonly _byName: Map<string, MongoSchemaCollection>;
 
-  constructor(collections: ReadonlyArray<MongoSchemaCollection>) {
+  constructor(
+    collections: ReadonlyArray<MongoSchemaCollection>,
+    options: { readonly fromDatabase: boolean },
+  ) {
     super();
+    this.fromDatabase = options.fromDatabase;
     const sorted = [...collections].sort((a, b) => a.name.localeCompare(b.name));
     this.collections = sorted;
     this._byName = new Map(sorted.map((c) => [c.name, c]));

@@ -1,5 +1,7 @@
 # ADR 210 — Prepared Statements: Author Surface and Driver SPI
 
+> **Update — the hooks are removed.** The middleware hooks `beforeQuery`, `interceptQuery` and `afterQuery` this ADR describes no longer exist. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced them with lifecycle events and interceptors on a tree of activities.
+
 > **Update — the prepared handle is one of two shapes, per [ADR 247](<./ADR 247 - Whole-query raw SQL is the fragment mechanism at statement position.md>):** `prepare()` reads the plan's declared result. A rows plan returns the `PreparedStatement<Params, Row>` this ADR describes, consumed with `.query(target, params)`. A plan declaring an affected-row count returns a `PreparedExecution<Params>`, consumed with `.execute(target, params)` and resolving `SqlStatementStats`. The declaration, the bind-site callback, the lower-once contract, and the internal bridge below hold for both. So does the request record the driver receives — the same lowered SQL, encoded params, and opaque `preparedStatementHandle` slot, with the driver still never seeing the `PreparedStatement` object. What differs is the method that request goes to: the "Driver SPI" section below describes rows going to `SqlQueryable.query()`, and the statistics face goes to `SqlQueryable.execute()` instead, which resolves `SqlStatementStats` rather than streaming rows.
 
 ## Status

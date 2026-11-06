@@ -26,7 +26,13 @@ function makeMinimalModel(overrides: Record<string, unknown> = {}) {
 function makeValidContract(overrides: Record<string, unknown> = {}): DomainContractShape {
   const defaultModels = {
     Item: makeMinimalModel({
-      fields: { _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false } },
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+      },
     }),
   };
   const {
@@ -45,6 +51,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
       domainOverride !== undefined
         ? (domainOverride as DomainContractShape['domain'])
         : applicationDomainOf({ models }),
+    storage: { namespaces: {} },
     ...rest,
   } as DomainContractShape;
 }
@@ -77,10 +84,14 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
-            variants: { SpecialItem: { value: 'special' } },
+            variants: { special: crossRef('SpecialItem') },
           }),
           SpecialItem: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -93,10 +104,14 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
-            variants: { Ghost: { value: 'ghost' } },
+            variants: { ghost: crossRef('Ghost') },
           }),
         },
       });
@@ -109,14 +124,22 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Other: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
             variants: {},
@@ -135,7 +158,11 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
             variants: {},
@@ -206,7 +233,11 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
           }),
@@ -222,10 +253,14 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'kind' },
-            variants: { Special: { value: 'special' } },
+            variants: { special: crossRef('Special') },
           }),
           Special: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -241,10 +276,14 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Child: makeMinimalModel({
             base: crossRef('Item'),
@@ -262,9 +301,13 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
-            variants: { Special: { value: 'special' } },
+            variants: { special: crossRef('Special') },
           }),
           Special: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -280,14 +323,18 @@ describe('validateContractDomain()', () => {
         models: {
           Item: makeMinimalModel({
             fields: {
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Child: makeMinimalModel({
             base: crossRef('Item'),
-            variants: { Grandchild: { value: 'grandchild' } },
+            variants: { grandchild: crossRef('Grandchild') },
           }),
         },
       });
@@ -317,12 +364,25 @@ describe('validateContractDomain()', () => {
         models: {
           Task: makeMinimalModel({
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              type: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              title: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              type: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
               assigneeId: {
                 type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                 nullable: false,
+                many: false,
               },
             },
             relations: {
@@ -339,31 +399,52 @@ describe('validateContractDomain()', () => {
             },
             discriminator: { field: 'type' },
             variants: {
-              Bug: { value: 'bug' },
-              Feature: { value: 'feature' },
+              bug: crossRef('Bug'),
+              feature: crossRef('Feature'),
             },
           }),
           Bug: makeMinimalModel({
             fields: {
-              severity: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              severity: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             base: crossRef('Task'),
           }),
           Feature: makeMinimalModel({
             fields: {
-              priority: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              priority: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
               targetRelease: {
                 type: { kind: 'scalar', codecId: 'mongo/string@1' },
                 nullable: false,
+                many: false,
               },
             },
             base: crossRef('Task'),
           }),
           User: makeMinimalModel({
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              email: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {
               addresses: {
@@ -374,16 +455,40 @@ describe('validateContractDomain()', () => {
           }),
           Address: makeMinimalModel({
             fields: {
-              street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              street: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              city: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              zip: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
           }),
           Comment: makeMinimalModel({
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              text: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              createdAt: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              text: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              createdAt: {
+                type: { kind: 'scalar', codecId: 'mongo/date@1' },
+                nullable: false,
+                many: false,
+              },
             },
           }),
         },

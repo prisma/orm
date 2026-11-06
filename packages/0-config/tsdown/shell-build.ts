@@ -12,7 +12,7 @@ import type { UserConfig } from 'tsdown';
 import { defineConfig } from './base.ts';
 
 /** A shell build configuration or mapping-table inconsistency. */
-class ShellConfigError extends Error {}
+export class ShellConfigError extends Error {}
 
 /**
  * Peers every shell declares by hand rather than deriving from the packages it
@@ -340,23 +340,31 @@ function crossShellRewritePlugin(shellName: ShellName) {
       if (target.shell === shellName) return null;
       return { id: target.id, external: true };
     },
-    // The dts bundler leaves inline `import("@internal/...")` type
-    // references (copied verbatim from the internal declaration files) in the
-    // emitted output; rewrite them to published specifiers. Same-shell
-    // references become self-references, which TypeScript resolves through
-    // the shell's own exports map.
     generateBundle(_options: unknown, bundle: Record<string, { type: string; code?: string }>) {
       for (const [fileName, output] of Object.entries(bundle)) {
         if (!fileName.endsWith('.d.mts') || output.type !== 'chunk') continue;
         if (typeof output.code !== 'string') continue;
-        output.code = output.code.replace(
-          /import\((["'])(@internal\/[^"')]+)\1\)/g,
-          (_match, quote: string, source: string) =>
-            `import(${quote}${publicSpecifier(source, shellName).id}${quote})`,
-        );
+        output.code = rewriteInternalModuleNames(output.code, shellName);
       }
     },
   };
+}
+
+/**
+ * The dts bundler leaves inline `import("@internal/...")` type references (copied verbatim from the internal declaration files) in the emitted output, and keeps `declare module "@internal/..."` augmentations verbatim. This rewrites both to published specifiers. Same-shell references become self-references, which TypeScript resolves through the shell's own exports map. An `@internal/` module with no public mapping throws `ShellConfigError`.
+ */
+export function rewriteInternalModuleNames(declarations: string, shellName: ShellName): string {
+  return declarations
+    .replace(
+      /import\((["'])(@internal\/[^"')]+)\1\)/g,
+      (_match, quote: string, source: string) =>
+        `import(${quote}${publicSpecifier(source, shellName).id}${quote})`,
+    )
+    .replace(
+      /declare module (["'])(@internal\/[^"']+)\1/g,
+      (_match, quote: string, source: string) =>
+        `declare module ${quote}${publicSpecifier(source, shellName).id}${quote}`,
+    );
 }
 
 function readAllInternalPackages(repoRoot: string): Map<string, InternalPackage> {

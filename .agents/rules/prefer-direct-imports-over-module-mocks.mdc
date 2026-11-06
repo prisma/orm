@@ -93,7 +93,7 @@ The fix is to test against **real objects over a fake boundary**, not a mocked s
 - For an in-memory-capable target, prefer the real thing: a real `:memory:` SQLite driver makes the test honest with no mocks at all.
 - To assert a surface *doesn't* expose something (e.g. a role-bound `Db` has no `connection()`), use a behavioural check plus a type-level `*.test-d.ts` assertion — not a constructor spy.
 
-If you find yourself needing to mock your own constructor to make a test pass, the test isn't worth keeping in that shape — rewrite it against real objects + a fake driver, or delete it. (Reference: PR #792 / TML-2502 rewrote the postgres/sqlite/supabase facade suites this way — real factories over a fake `pg` and real `:memory:` sqlite; the recording-fake-driver pattern lives in `packages/2-sql/5-runtime/test/`.)
+If you find yourself needing to mock your own constructor to make a test pass, the test isn't worth keeping in that shape — rewrite it against real objects + a fake driver, or delete it. (Reference: PR #792 / TML-2502 rewrote the postgres/sqlite/supabase facade suites this way — real factories over a fake `pg` and real `:memory:` sqlite; the recording-fake-driver pattern lives in `packages/2-sql-family/5-runtime/test/`.)
 
 ## Repo precedent
 

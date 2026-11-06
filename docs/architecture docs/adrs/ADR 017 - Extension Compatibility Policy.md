@@ -1,5 +1,7 @@
 # ADR 017 — Extension and Alternate Runtime Compatibility Policy
 
+**Amended by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md):** the clients no longer accept `contractJson`. They take a contract value, and emitted JSON becomes that value through `contractFromJson<Contract>(json)`.
+
 ## Context
 
 - Prisma Next intentionally supports multiple query authoring lanes and invites third parties to add new lanes or even alternate runtimes

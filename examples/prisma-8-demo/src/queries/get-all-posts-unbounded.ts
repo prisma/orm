@@ -16,5 +16,5 @@ import { db } from '../prisma/db';
  */
 export async function getAllPostsUnbounded() {
   const plan = db.sql.public.post.select('id', 'title', 'userId', 'createdAt').build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

@@ -1,7 +1,6 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import type { AddressInput, Contract } from '../prisma/contract';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type UserRow = DefaultModelRow<Contract, 'User'>;
 
@@ -16,10 +15,9 @@ export interface OrmClientCreateUserWithAddressInput {
 
 export async function ormClientCreateUserWithAddress(
   data: OrmClientCreateUserWithAddressInput,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  return db.User.select('id', 'email', 'kind', 'address').create({
+  return orm.User.select('id', 'email', 'kind', 'address').create({
     id: toUserId(data.id),
     email: data.email,
     displayName: data.displayName,

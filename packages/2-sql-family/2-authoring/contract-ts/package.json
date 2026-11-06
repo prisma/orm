@@ -1,0 +1,70 @@
+{
+  "name": "@internal/sql-contract-ts",
+  "private": true,
+  "version": "8.0.0-rc.22",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "SQL-specific TypeScript contract authoring surface for Prisma 8",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "schemas:generate": "tsx scripts/generate-json-schema.ts && biome format --write schemas/data-contract-sql-v1.json",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/config": "workspace:8.0.0-rc.22",
+    "@internal/contract": "workspace:8.0.0-rc.22",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.22",
+    "@internal/framework-components": "workspace:8.0.0-rc.22",
+    "@internal/sql-contract": "workspace:8.0.0-rc.22",
+    "@internal/sql-schema-ir": "workspace:8.0.0-rc.22",
+    "@internal/utils": "workspace:8.0.0-rc.22",
+    "arktype": "^2.2.2",
+    "pathe": "^2.0.3",
+    "ts-toolbelt": "^9.6.0"
+  },
+  "devDependencies": {
+    "@internal/ids": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "ajv": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "schemas"
+  ],
+  "exports": {
+    "./config-types": "./dist/config-types.mjs",
+    "./contract-builder": "./dist/contract-builder.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/2-sql-family/2-authoring/contract-ts"
+  }
+}

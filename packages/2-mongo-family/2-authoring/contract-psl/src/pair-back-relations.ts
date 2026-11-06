@@ -1,5 +1,4 @@
 import { type ContractReferenceRelation, crossRef } from '@internal/contract/types';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { diagnosticSource, type FieldSymbol, type PslDiagnostic } from '@internal/psl-parser';
 import {
   consumeInvalidFkPairing,
@@ -41,6 +40,7 @@ export function pairMongoBackRelations(input: {
   readonly foreignKeys: readonly MongoForeignKeyRelation[];
   readonly candidates: readonly MongoBackRelationCandidate[];
   readonly invalidFkPairings: InvalidFkPairing[];
+  readonly namespaceId: string;
 }): { readonly relations: PairedMongoBackRelation[]; readonly diagnostics: PslDiagnostic[] } {
   const foreignKeysByPair = new Map<string, MongoForeignKeyRelation[]>();
   for (const fk of input.foreignKeys) {
@@ -98,7 +98,7 @@ export function pairMongoBackRelations(input: {
       modelName,
       fieldName: field.name,
       relation: {
-        to: crossRef(targetModelName, UNBOUND_NAMESPACE_ID),
+        to: crossRef(targetModelName, input.namespaceId),
         ...(candidate.cardinality === '1:N'
           ? { cardinality: '1:N' as const }
           : { cardinality: '1:1' as const, nullable: true }),

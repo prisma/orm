@@ -7,6 +7,7 @@ export * from '../column-descriptors';
 export * from '../contract-factories';
 export * from '../lowered-params';
 export * from '../operation-descriptors';
+export * from '../startup-parameters';
 export * from '../timeouts';
 
 function normalizeConnectionString(raw: string): string {
@@ -39,6 +40,9 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
  * active connection (second connections are rejected until the first is closed).
  */
 export async function createDevDatabase(options?: ServerOptions): Promise<DevDatabase> {
+  // Stops each dev server starting the Prisma Streams touch-processor worker
+  // thread, which crashes Node 24 (nodejs/node#66366, nodejs/node#63323).
+  process.env['DS_TOUCH_WORKERS'] = '0';
   const settings = {
     databaseConnectTimeoutMillis: 1000,
     databaseIdleTimeoutMillis: DEFAULT_IDLE_TIMEOUT_MS,

@@ -9,6 +9,25 @@ import type {
   MongoContractWithTypeMaps,
   MongoTypeMaps,
 } from '@internal/mongo-contract';
+import { blindCast } from '@internal/utils/casts';
+
+type ValueObjectRef<Name extends string> = {
+  readonly kind: 'valueObject';
+  readonly plane: 'storage';
+  readonly namespaceId: '__unbound__';
+  readonly entityKind: 'valueObject';
+  readonly entityName: Name;
+};
+
+function valueObjectRef<Name extends string>(entityName: Name): ValueObjectRef<Name> {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId: '__unbound__',
+    entityKind: 'valueObject',
+    entityName,
+  };
+}
 
 type TestModels = {
   readonly Order: {
@@ -16,53 +35,80 @@ type TestModels = {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly status: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly amount: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly customerId: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly notes: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: true;
+        readonly many: false;
       };
       readonly tags: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
-        readonly many: true;
+        readonly many: { readonly elementNullable: false };
       };
     };
     readonly relations: Record<string, never>;
-    readonly storage: { readonly collection: 'orders' };
+    readonly storage: {
+      readonly collection: 'orders';
+      readonly fields: {
+        readonly _id: { readonly field: '_id' };
+        readonly status: { readonly field: 'status' };
+        readonly amount: { readonly field: 'amount' };
+        readonly customerId: { readonly field: 'customerId' };
+        readonly notes: { readonly field: 'notes' };
+        readonly tags: { readonly field: 'tags' };
+      };
+    };
   };
   readonly User: {
     readonly fields: {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly firstName: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly lastName: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly email: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
     };
     readonly relations: Record<string, never>;
-    readonly storage: { readonly collection: 'users' };
+    readonly storage: {
+      readonly collection: 'users';
+      readonly fields: {
+        readonly _id: { readonly field: '_id' };
+        readonly firstName: { readonly field: 'firstName' };
+        readonly lastName: { readonly field: 'lastName' };
+        readonly email: { readonly field: 'email' };
+      };
+    };
   };
   /**
    * Fixture for value-object dot-path traversal (TML-2281). `address` is a
@@ -75,26 +121,68 @@ type TestModels = {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly name: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly address: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+        readonly type: ValueObjectRef<'Address'>;
         readonly nullable: false;
+        readonly many: false;
       };
       readonly workAddress: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+        readonly type: ValueObjectRef<'Address'>;
         readonly nullable: true;
+        readonly many: false;
       };
       readonly stats: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'Stats' };
+        readonly type: ValueObjectRef<'Stats'>;
         readonly nullable: false;
+        readonly many: false;
       };
     };
     readonly relations: Record<string, never>;
-    readonly storage: { readonly collection: 'customers' };
+    readonly storage: {
+      readonly collection: 'customers';
+      readonly fields: {
+        readonly _id: { readonly field: '_id' };
+        readonly name: { readonly field: 'name' };
+        readonly address: { readonly field: 'address' };
+        readonly workAddress: { readonly field: 'workAddress' };
+        readonly stats: { readonly field: 'stats' };
+      };
+    };
+  };
+  readonly Account: {
+    readonly fields: {
+      readonly id: {
+        readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
+        readonly nullable: false;
+        readonly many: false;
+      };
+      readonly displayName: {
+        readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+        readonly nullable: false;
+        readonly many: false;
+      };
+      readonly home: {
+        readonly type: ValueObjectRef<'Address'>;
+        readonly nullable: true;
+        readonly many: false;
+      };
+    };
+    readonly relations: Record<string, never>;
+    readonly storage: {
+      readonly collection: 'accounts';
+      readonly fields: {
+        readonly id: { readonly field: '_id' };
+        readonly displayName: { readonly field: 'display_name' };
+        readonly home: { readonly field: 'home_address' };
+      };
+    };
   };
 };
 
@@ -104,18 +192,22 @@ type TestValueObjects = {
       readonly street: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly city: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly zip: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: true;
+        readonly many: false;
       };
       readonly geo: {
-        readonly type: { readonly kind: 'valueObject'; readonly name: 'GeoPoint' };
+        readonly type: ValueObjectRef<'GeoPoint'>;
         readonly nullable: false;
+        readonly many: false;
       };
     };
   };
@@ -124,10 +216,12 @@ type TestValueObjects = {
       readonly lat: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly lng: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
         readonly nullable: false;
+        readonly many: false;
       };
     };
   };
@@ -136,10 +230,12 @@ type TestValueObjects = {
       readonly visits: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly lastSeen: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
         readonly nullable: true;
+        readonly many: false;
       };
     };
   };
@@ -156,7 +252,9 @@ type TestStorage = {
           readonly orders: { readonly kind: 'mongo-collection' };
           readonly users: { readonly kind: 'mongo-collection' };
           readonly customers: { readonly kind: 'mongo-collection' };
+          readonly accounts: { readonly kind: 'mongo-collection' };
         };
+        readonly valueObject: TestValueObjects;
       };
     };
   };
@@ -169,12 +267,12 @@ export type TestContract = Omit<MongoContract<TestStorage>, 'domain'> & {
     readonly orders: CrossReference & { readonly model: 'Order' };
     readonly users: CrossReference & { readonly model: 'User' };
     readonly customers: CrossReference & { readonly model: 'Customer' };
+    readonly accounts: CrossReference & { readonly model: 'Account' };
   };
   readonly domain: {
     readonly namespaces: {
       readonly __unbound__: {
         readonly models: TestModels;
-        readonly valueObjects: TestValueObjects;
       };
     };
   };
@@ -227,6 +325,16 @@ type TestFieldOutputTypes = {
       } | null;
       readonly stats: { visits: number; lastSeen: Date | null };
     };
+    readonly Account: {
+      readonly id: string;
+      readonly displayName: string;
+      readonly home: {
+        street: string;
+        city: string;
+        zip: string | null;
+        geo: { lat: number; lng: number };
+      } | null;
+    };
   };
 };
 
@@ -242,6 +350,7 @@ export const testContractJson = {
     orders: crossRef('Order'),
     users: crossRef('User'),
     customers: crossRef('Customer'),
+    accounts: crossRef('Account'),
   },
   domain: {
     namespaces: {
@@ -249,64 +358,142 @@ export const testContractJson = {
         models: {
           Order: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              status: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              amount: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              status: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              amount: {
+                type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                nullable: false,
+                many: false,
+              },
               customerId: {
                 type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                 nullable: false,
+                many: false,
               },
-              notes: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+              notes: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: true,
+                many: false,
+              },
               tags: {
                 type: { kind: 'scalar', codecId: 'mongo/string@1' },
                 nullable: false,
-                many: true,
+                many: { elementNullable: false },
               },
             },
             relations: {},
-            storage: { collection: 'orders' },
+            storage: {
+              collection: 'orders',
+              fields: {
+                _id: { field: '_id' },
+                status: { field: 'status' },
+                amount: { field: 'amount' },
+                customerId: { field: 'customerId' },
+                notes: { field: 'notes' },
+                tags: { field: 'tags' },
+              },
+            },
           },
           User: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              firstName: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              lastName: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              firstName: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              lastName: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              email: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: {
+                _id: { field: '_id' },
+                firstName: { field: 'firstName' },
+                lastName: { field: 'lastName' },
+                email: { field: 'email' },
+              },
+            },
           },
           Customer: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              address: { type: { kind: 'valueObject', name: 'Address' }, nullable: false },
-              workAddress: { type: { kind: 'valueObject', name: 'Address' }, nullable: true },
-              stats: { type: { kind: 'valueObject', name: 'Stats' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              name: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              address: {
+                type: valueObjectRef('Address'),
+                nullable: false,
+                many: false,
+              },
+              workAddress: {
+                type: valueObjectRef('Address'),
+                nullable: true,
+                many: false,
+              },
+              stats: { type: valueObjectRef('Stats'), nullable: false, many: false },
             },
             relations: {},
-            storage: { collection: 'customers' },
-          },
-        },
-        valueObjects: {
-          Address: {
-            fields: {
-              street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-              zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
-              geo: { type: { kind: 'valueObject', name: 'GeoPoint' }, nullable: false },
+            storage: {
+              collection: 'customers',
+              fields: {
+                _id: { field: '_id' },
+                name: { field: 'name' },
+                address: { field: 'address' },
+                workAddress: { field: 'workAddress' },
+                stats: { field: 'stats' },
+              },
             },
           },
-          GeoPoint: {
+          Account: {
             fields: {
-              lat: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
-              lng: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
+              id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              displayName: {
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                nullable: false,
+                many: false,
+              },
+              home: { type: valueObjectRef('Address'), nullable: true, many: false },
             },
-          },
-          Stats: {
-            fields: {
-              visits: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
-              lastSeen: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: true },
+            relations: {},
+            storage: {
+              collection: 'accounts',
+              fields: {
+                id: { field: '_id' },
+                displayName: { field: 'display_name' },
+                home: { field: 'home_address' },
+              },
             },
           },
         },
@@ -323,6 +510,63 @@ export const testContractJson = {
           orders: { kind: 'mongo-collection' },
           users: { kind: 'mongo-collection' },
           customers: { kind: 'mongo-collection' },
+          accounts: { kind: 'mongo-collection' },
+        },
+        entries: {
+          valueObject: {
+            Address: {
+              fields: {
+                street: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: false,
+                  many: false,
+                },
+                city: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: false,
+                  many: false,
+                },
+                zip: {
+                  type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                  nullable: true,
+                  many: false,
+                },
+                geo: {
+                  type: valueObjectRef('GeoPoint'),
+                  nullable: false,
+                  many: false,
+                },
+              },
+            },
+            GeoPoint: {
+              fields: {
+                lat: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+                lng: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+              },
+            },
+            Stats: {
+              fields: {
+                visits: {
+                  type: { kind: 'scalar', codecId: 'mongo/double@1' },
+                  nullable: false,
+                  many: false,
+                },
+                lastSeen: {
+                  type: { kind: 'scalar', codecId: 'mongo/date@1' },
+                  nullable: true,
+                  many: false,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -332,3 +576,8 @@ export const testContractJson = {
   profileHash: 'test-profile',
   meta: {},
 };
+
+export const testContract = blindCast<
+  TContract,
+  'query-builder fixture JSON carries domain.namespaces envelope'
+>(testContractJson);

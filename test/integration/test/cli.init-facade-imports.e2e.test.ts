@@ -39,11 +39,11 @@ interface FacadeInfo {
 const FACADE_FOR_TARGET: Record<TargetId, FacadeInfo> = {
   postgres: {
     packageName: '@internal/postgres',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/postgres/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/postgres/9-facade/package.json'),
   },
   mongo: {
     packageName: '@internal/mongo',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/mongo/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mongo/9-facade/package.json'),
   },
 };
 

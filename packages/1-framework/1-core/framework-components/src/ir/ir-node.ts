@@ -23,7 +23,7 @@
  * lives in the free `freezeNode` helper below. Keeping `freezeNode` out
  * of the class type means an emitted contract literal type
  * (`{ readonly kind: 'mongo-collection', ... }` or an unkeyed literal
- * like `{ nativeType, codecId, nullable }`) is structurally assignable
+ * like `{ dataType, codecId, nullable }`) is structurally assignable
  * to its class type — a `protected freeze()` instance method would
  * otherwise leak into the public type surface and require the literal
  * to carry it too.

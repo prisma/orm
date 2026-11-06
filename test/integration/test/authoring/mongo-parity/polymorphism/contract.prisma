@@ -1,0 +1,32 @@
+// use prisma-8
+
+model Task {
+  id       ObjectId @id @map("_id")
+  type     String
+  title    String
+  assignee String
+
+  @@index([title])
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity Int32
+
+  @@index([severity])
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int32
+
+  @@index([priority], filter: "{\"type\": \"feature\"}")
+  @@base(Task, "feature")
+}
+
+model Chore {
+  dueOn Date
+
+  @@base(Task, "chore")
+}

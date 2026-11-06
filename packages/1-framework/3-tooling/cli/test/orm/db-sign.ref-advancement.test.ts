@@ -10,17 +10,18 @@ import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
-import { notOk } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CONNECTION,
   cleanupProjectDirs,
   envelopeOf,
+  failedSpace,
   HASH_A,
+  HASH_EXT,
   HASH_PREVIOUS,
   harness,
-  MISSING_COLUMN,
   mocks,
   ormConfig,
   projectDir,
@@ -28,7 +29,7 @@ import {
   refHashOf,
   refsDirOf,
   resetMocks,
-  schemaResult,
+  signedSpace,
 } from './db-sign-fixtures';
 
 const HASH_B = `55bada2${'0'.repeat(57)}`;
@@ -63,7 +64,9 @@ describe('db sign', () => {
       );
 
       expect(run.exitCode).toBe(0);
-      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'db', hash: HASH_A } });
+      expect(run.presented?.data).toMatchObject({
+        advancedRefs: [{ space: 'app', name: 'db', hash: HASH_A }],
+      });
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
     });
 
@@ -77,7 +80,7 @@ describe('db sign', () => {
 
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({
-        advancedRef: { name: 'staging', hash: HASH_A },
+        advancedRefs: [{ space: 'app', name: 'staging', hash: HASH_A }],
       });
       expect(await refHashOf(dir, 'staging')).toBe(HASH_A);
       expect(await refHashOf(dir, 'db')).toBeUndefined();
@@ -120,8 +123,7 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'MIGRATION.INVALID_REF_NAME' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
-      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
       expect(existsSync(refsDirOf(dir))).toBe(false);
     });
 
@@ -145,7 +147,7 @@ describe('db sign', () => {
       );
 
       expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
       expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual({
@@ -156,19 +158,50 @@ describe('db sign', () => {
 
     it('writes no ref when verification refuses the signature', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(
-        schemaResult({
-          ok: false,
-          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-          summary: 'Database schema does not satisfy contract',
-          schema: { issues: [MISSING_COLUMN] },
-        }),
-      );
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
       expect(run.exitCode).toBe(4);
       expect(existsSync(refsDirOf(dir))).toBe(false);
+      expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
+    });
+
+    it('advances the ref of every extension space that was signed', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [signedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign'], {
+        cwd: dir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(await refHashOf(dir, 'db')).toBe(HASH_A);
+      expect(await refHashOf(dir, 'db', 'pgvector')).toBe(HASH_EXT);
+      expect(run.presented?.presentation.human.at(-1)).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: [
+          { text: 'Advanced ref "db" of space "pgvector" → ' },
+          { text: HASH_EXT, tone: 'identifier' },
+        ],
+      });
+    });
+
+    it('advances only the refs of the spaces that were signed', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(await refHashOf(dir, 'db')).toBeUndefined();
+      expect(await refHashOf(dir, 'db', 'pgvector')).toBe(HASH_EXT);
       expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
     });
 
@@ -180,7 +213,9 @@ describe('db sign', () => {
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
       expect(run.exitCode).toBe(0);
-      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'db', hash: HASH_A } });
+      expect(run.presented?.data).toMatchObject({
+        advancedRefs: [{ space: 'app', name: 'db', hash: HASH_A }],
+      });
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
     });
 
@@ -217,8 +252,7 @@ describe('db sign', () => {
         error: { code: 'CONTRACT.TYPES_RENDER_FAILED' },
       });
       expect(JSON.stringify(run.json.at(-1))).toContain('relation author must declare nullability');
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
-      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
       expect(existsSync(refsDirOf(dir))).toBe(false);
       expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
     });
@@ -240,8 +274,7 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'CONTRACT.VALIDATION_FAILED' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
-      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
       expect(existsSync(refsDirOf(dir))).toBe(false);
     });
 
@@ -254,9 +287,9 @@ describe('db sign', () => {
       });
 
       expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
       expect(mocks.renderContractDts).not.toHaveBeenCalled();
-      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(run.presented?.data).toMatchObject({ advancedRefs: [] });
       expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
     });
 
@@ -296,8 +329,8 @@ describe('db sign', () => {
       });
 
       expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
-      const signArg = mocks.sign.mock.calls[0]?.[0] as {
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
+      const signArg = mocks.dbSign.mock.calls[0]?.[0] as {
         contract: { storage: { storageHash: string } };
       };
       expect(signArg.contract.storage.storageHash).toBe(HASH_B);
@@ -320,8 +353,8 @@ describe('db sign', () => {
       });
 
       expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
-      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
+      expect(run.presented?.data).toMatchObject({ advancedRefs: [] });
       expect(existsSync(refsDirOf(dir))).toBe(false);
       expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
     });
@@ -358,8 +391,7 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'CLI.ADVANCE_REF_ARG_CONFLICT' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
-      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
       expect(existsSync(refsDirOf(dir))).toBe(false);
     });
   });

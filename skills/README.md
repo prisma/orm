@@ -4,7 +4,7 @@ Agent skills for [Prisma 8](https://github.com/prisma/prisma) (Prisma 8) — `SK
 
 > **Edit your data contract. Prisma handles the rest.**
 >
-> **You get the skill by installing the packages.** `prisma-8` ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-mongo` tarballs, so the skill in your project always describes the version you installed.
+> **You get the skill by installing the packages.** `prisma-8` ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` and `@prisma/orm-mongo` tarballs, so the skill in your project always describes the version you installed.
 
 ## What's in the box
 

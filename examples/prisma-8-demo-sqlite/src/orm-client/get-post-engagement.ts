@@ -1,5 +1,4 @@
-import type { SqliteRuntime } from '@prisma/orm-sqlite/runtime';
-import { createOrmClient } from './client';
+import { db } from '../prisma/db';
 
 /**
  * Reads the two engagement counters side by side.
@@ -10,9 +9,8 @@ import { createOrmClient } from './client';
  * and arrives as a `bigint`. SQLite offers no third option — `UnboundedInt`
  * needs storage wider than 64 bits, which SQLite has not got.
  */
-export async function ormClientGetPostEngagement(limit: number, runtime: SqliteRuntime) {
-  const db = createOrmClient(runtime);
-  return db.Post.select('title', 'viewCount', 'impressionCount')
+export async function ormClientGetPostEngagement(limit: number) {
+  return db.orm.Post.select('title', 'viewCount', 'impressionCount')
     .orderBy([(post) => post.title.asc()])
     .limit(limit)
     .all();

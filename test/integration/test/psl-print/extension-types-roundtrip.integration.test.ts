@@ -1,4 +1,6 @@
+import citext from '@internal/extension-citext/control';
 import pgvector from '@internal/extension-pgvector/control';
+import postgis from '@internal/extension-postgis/control';
 import { describe, expect, it } from 'vitest';
 import {
   composePostgresStack,
@@ -8,6 +10,8 @@ import {
 } from './print-and-read-back';
 
 const stack = composePostgresStack([pgvector]);
+const postgisStack = composePostgresStack([postgis]);
+const citextStack = composePostgresStack([citext]);
 
 describe('a printed contract with an extension-contributed column type', () => {
   it('writes the extension type and reads back as the same contract', async () => {
@@ -27,13 +31,39 @@ model Document {
     );
     const { text, sourceSettings } = printContract(authored, stack);
 
+    expect(text).not.toContain('types {');
     expect(text).toContain('embedding pgvector.Vector(3)');
+    expect(text).toContain('named     pgvector.Vector(3)');
     const printed = await readPsl(text, { stack, sourceSettings });
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });
 
-  it('refuses an extension type on a value-object field, whose type parameters the PSL source drops', async () => {
+  it('writes a namespaced type called without arguments with parentheses, and reads back as the same contract', async () => {
+    const authored = await readPsl(
+      `// use prisma-8
+types {
+  Shape = postgis.Geometry()
+}
+
+model Place {
+  id    Int                @id
+  area  postgis.Geometry()
+  named Shape
+}
+`,
+      { stack: postgisStack },
+    );
+    const { text, sourceSettings } = printContract(authored, postgisStack);
+
+    expect(text).not.toContain('types {');
+    expect(text).toContain('area  postgis.Geometry()');
+    expect(text).toContain('named postgis.Geometry()');
+    const printed = await readPsl(text, { stack: postgisStack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
+  });
+
+  it('writes an extension type with type parameters on a value-object member and reads back as the same contract', async () => {
     const authored = await readPsl(
       `// use prisma-8
 type Point {
@@ -47,13 +77,12 @@ model Place {
 `,
       { stack },
     );
+    const { text, sourceSettings } = printContract(authored, stack);
 
-    expect(() => printContract(authored, stack)).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.PRINT_UNSUPPORTED',
-        meta: { coordinate: '"public".Point.at', codecId: 'pg/vector@1' },
-      }),
-    );
+    expect(text).toContain('at pgvector.Vector(3)');
+    const printed = await readPsl(text, { stack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
+    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });
 
   it('writes a literal default on an extension-typed column and reads back as the same contract', async () => {
@@ -70,6 +99,30 @@ model Document {
 
     expect(text).toContain('@default([1, 2, 3])');
     const printed = await readPsl(text, { stack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
+    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
+  });
+
+  it('writes citext.Citext for a citext column, with its default, and reads back as the same contract', async () => {
+    const authored = await readPsl(
+      `// use prisma-8
+model User {
+  id    Int           @id
+  email citext.Citext @default("Ada@Example.com")
+}
+`,
+      { stack: citextStack },
+    );
+    const [namespace] = Object.values(authored.storage.namespaces);
+    expect(namespace?.entries.table?.['User']?.columns['email']).toMatchObject({
+      dataType: 'citext/citext',
+      codecId: 'pg/citext@1',
+    });
+
+    const { text, sourceSettings } = printContract(authored, citextStack);
+
+    expect(text).toContain('email citext.Citext() @default("Ada@Example.com")');
+    const printed = await readPsl(text, { stack: citextStack, sourceSettings });
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });

@@ -67,7 +67,13 @@ async function buildHarness(log: Log): Promise<Harness> {
   if (!driver) throw new Error('SQLite driver missing from execution stack');
   await driver.connect({ kind: 'path', path: dbPath });
 
-  const runtime = new SqliteRuntimeImpl({ context, adapter: stackInstance.adapter, driver, log });
+  const runtime = new SqliteRuntimeImpl({
+    context,
+    adapter: stackInstance.adapter,
+    driver,
+    log,
+    closeRefusal: undefined,
+  });
   const db = sqlBuilder<Contract>({
     context,
     rawCodecInferer: stack.adapter.rawCodecInferer,

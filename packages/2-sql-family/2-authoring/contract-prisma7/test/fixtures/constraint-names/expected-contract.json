@@ -1,0 +1,417 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Author": {
+            "storage": {
+              "table": "Author",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "longThings": {
+                "to": {
+                  "namespace": "public",
+                  "model": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["authorIdentifierWithAVeryLongColumnName"]
+                }
+              },
+              "posts": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["authorId"]
+                }
+              }
+            }
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorId": {
+                  "column": "authorId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Author"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorId"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          },
+          "Membership": {
+            "storage": {
+              "table": "Membership",
+              "namespaceId": "public",
+              "fields": {
+                "userId": {
+                  "column": "userId"
+                },
+                "groupId": {
+                  "column": "groupId"
+                }
+              }
+            },
+            "fields": {
+              "userId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "groupId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
+            "storage": {
+              "table": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorIdentifierWithAVeryLongColumnName": {
+                  "column": "authorIdentifierWithAVeryLongColumnName"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorIdentifierWithAVeryLongColumnName": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Author"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorIdentifierWithAVeryLongColumnName"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          },
+          "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
+            "storage": {
+              "table": "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "MultibyteName": {
+            "storage": {
+              "table": "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Author": {
+      "namespace": "public",
+      "model": "Author"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    },
+    "Membership": {
+      "namespace": "public",
+      "model": "Membership"
+    },
+    "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
+      "namespace": "public",
+      "model": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde"
+    },
+    "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
+      "namespace": "public",
+      "model": "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz"
+    },
+    "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt": {
+      "namespace": "public",
+      "model": "MultibyteName"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "fe897b402a23ea91191a22ab3f57db0cb94714641a3016dd17b6a1dbf6a62ac8",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Author": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"],
+                "name": "author_primary"
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "authorId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Author",
+                    "columns": ["id"]
+                  },
+                  "name": "post_written_by",
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Membership": {
+              "columns": {
+                "userId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "groupId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["userId", "groupId"],
+                "name": "membership_pair"
+              }
+            },
+            "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "authorIdentifierWithAVeryLongColumnName": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde",
+                    "columns": ["authorIdentifierWithAVeryLongColumnName"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Author",
+                    "columns": ["id"]
+                  },
+                  "name": "ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbc_fkey",
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

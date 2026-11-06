@@ -1,0 +1,80 @@
+{
+  "name": "@prisma/orm-target-mysql",
+  "version": "8.0.0-rc.22",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Prisma 8 MySQL target: target descriptor, adapter, driver",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome check . --error-on-warnings",
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.22",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.22",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
+    "@standard-schema/spec": "1.1.0",
+    "arktype": "^2.2.2",
+    "mariadb": "3.5.4",
+    "temporal-spec": "1.0.1"
+  },
+  "devDependencies": {
+    "@internal/adapter-mysql": "workspace:8.0.0-rc.22",
+    "@internal/driver-mysql": "workspace:8.0.0-rc.22",
+    "@internal/target-mysql": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./adapter": "./dist/adapter.mjs",
+    "./adapter/adapter": "./dist/adapter__adapter.mjs",
+    "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
+    "./adapter/control": "./dist/adapter__control.mjs",
+    "./adapter/runtime": "./dist/adapter__runtime.mjs",
+    "./driver": "./dist/driver.mjs",
+    "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
+    "./target": "./dist/target.mjs",
+    "./target/codec-descriptor": "./dist/target__codec-descriptor.mjs",
+    "./target/codec-ids": "./dist/target__codec-ids.mjs",
+    "./target/codec-types": "./dist/target__codec-types.mjs",
+    "./target/codecs": "./dist/target__codecs.mjs",
+    "./target/contract-free": "./dist/target__contract-free.mjs",
+    "./target/control": "./dist/target__control.mjs",
+    "./target/control-tables": "./dist/target__control-tables.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
+    "./target/ddl": "./dist/target__ddl.mjs",
+    "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
+    "./target/errors": "./dist/target__errors.mjs",
+    "./target/marker-lock": "./dist/target__marker-lock.mjs",
+    "./target/migration": "./dist/target__migration.mjs",
+    "./target/pack": "./dist/target__pack.mjs",
+    "./target/runtime": "./dist/target__runtime.mjs",
+    "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/9-public/@prisma/orm-target-mysql"
+  }
+}

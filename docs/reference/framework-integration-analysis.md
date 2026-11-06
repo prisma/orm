@@ -92,7 +92,7 @@ HMR reloads application modules on file changes, re-executing the module that cr
 
 ```typescript
 const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb> };
-export const db = globalForDb.db ??= createDb({ contractJson, url: process.env['DATABASE_URL']! });
+export const db = globalForDb.db ??= createDb({ contract, url: process.env['DATABASE_URL']! });
 ```
 
 This is framework-agnostic — the same pattern works in every meta-framework.
@@ -252,7 +252,7 @@ const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb>; 
 // (DRY up the following with a helper like createDevDb())
 const currentHash = contractJson.storageHash;
 if (globalForDb.hash !== currentHash) {
-  globalForDb.db = createDb({ contractJson, url: process.env['DATABASE_URL']! });
+  globalForDb.db = createDb({ contract, url: process.env['DATABASE_URL']! });
   globalForDb.hash = currentHash;
 }
 export const db = globalForDb.db;
@@ -402,7 +402,7 @@ NestJS is the only framework that structurally requires a wrapper package:
 
 ```typescript
 @Module({
-  imports: [PrismaNextModule.forRoot({ contractJson, url: process.env['DATABASE_URL']! })],
+  imports: [PrismaNextModule.forRoot({ contract, url: process.env['DATABASE_URL']! })],
 })
 export class AppModule {}
 
@@ -419,11 +419,12 @@ All non-DI backend frameworks (Express, Fastify, Koa, Hapi) use the same pattern
 
 ```typescript
 import postgres from '@internal/postgres/runtime';
-import type { Contract, TypeMaps } from './contract.d';
+import { contractFromJson } from '@internal/postgres/static';
+import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract, TypeMaps>({
-  contractJson,
+export const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
 });
 ```
@@ -434,7 +435,7 @@ All meta-frameworks in dev use the same `globalThis` pattern:
 
 ```typescript
 const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb> };
-export const db = globalForDb.db ??= createDb({ contractJson, url: process.env['DATABASE_URL']! });
+export const db = globalForDb.db ??= createDb({ contract, url: process.env['DATABASE_URL']! });
 ```
 
 ---

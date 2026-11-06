@@ -1,6 +1,6 @@
 # Prisma 7 reference fixture
 
-`schema.prisma` exercises every construct the Prisma 7 contract source handles or rejects (see `packages/2-sql/2-authoring/contract-prisma7/README.md`). `migration.sql` is what Prisma 7.10.0 generates for it against an empty Postgres database. Both files are the ground truth for the Prisma 7 interpreter; rules are written against this SQL, not from memory.
+`schema.prisma` exercises every construct the Prisma 7 contract source handles or rejects (see `packages/2-sql-family/2-authoring/contract-prisma7/README.md`). `migration.sql` is what Prisma 7.10.0 generates for it against an empty Postgres database. Both files are the ground truth for the Prisma 7 interpreter; rules are written against this SQL, not from memory.
 
 ## How `migration.sql` was produced
 
@@ -40,10 +40,9 @@ The `NativeTypes.citext` column needs the `citext` extension. Run `CREATE EXTENS
 
 ## Ground truth only
 
-This directory records what Prisma 7 does. It is not the input for the zero-findings end-to-end proof (`contract emit`, `db sign`, `db verify`), because the interpreter reports eight constructs in this schema as errors:
+This directory records what Prisma 7 does. It is not the input for the zero-findings end-to-end proof (`contract emit`, `db sign`, `db verify`), because the interpreter reports two constructs in this schema as errors:
 
 - `view UserSummary` (`PSL.PRISMA7_VIEW_UNSUPPORTED`)
-- `Post.search Unsupported("tsvector")` (`PSL.PRISMA7_UNSUPPORTED_TYPE`)
-- `@db.Citext`, `@db.Bit(8)`, `@db.VarBit(8)`, `@db.Xml`, `@db.Oid`, `@db.Money` on `NativeTypes` (`PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`)
+- `@db.Citext` on `NativeTypes` without the citext pack composed (`PSL.PRISMA7_EXTENSION_PACK_MISSING`); `../citext/` reads citext columns with the pack composed
 
-Use `../supported/` for the end-to-end proof. It is this schema with those eight constructs removed and nothing else changed.
+Use `../supported/` for the end-to-end proof. It is this schema with those two constructs removed and nothing else changed.

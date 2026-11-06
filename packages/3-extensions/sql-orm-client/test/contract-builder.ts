@@ -1,10 +1,20 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type { ExtensionPackRef } from '@internal/framework-components/components';
+import { assembleDataTypeSupport } from '@internal/framework-components/authoring';
+import {
+  assembleDataTypes,
+  type CodecLookupWithDescriptors,
+  type DataTypeLookup,
+} from '@internal/framework-components/codec';
+import type {
+  ComponentMetadata,
+  ExtensionPackRef,
+} from '@internal/framework-components/components';
 import type { StorageTypeInstance } from '@internal/sql-contract/types';
 import {
   buildBoundContract,
   type ComposedAuthoringHelpers,
   type ContractInput,
+  createComposedAuthoringHelpers,
   type EnumTypeHandle,
   field,
   type MergeEnums,
@@ -13,6 +23,7 @@ import {
   rel,
   type ScalarFieldBuilder,
 } from '@internal/sql-contract-ts/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 
@@ -25,6 +36,26 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 
 export type { ScalarFieldBuilder };
 export { field, model, rel };
+
+const composedHelpers = createComposedAuthoringHelpers({
+  family: sqlFamilyPack,
+  target: postgresPack,
+  codecLookup: assemblePostgresCodecRegistryWithBuiltins(
+    [],
+    assembleDataTypeSupport([sqlFamilyPack, postgresPack], () => undefined).support.lookup,
+  ),
+});
+
+export const type: ComposedAuthoringHelpers<
+  typeof sqlFamilyPack,
+  typeof postgresPack,
+  undefined
+>['type'] = composedHelpers.type;
+export const gen: ComposedAuthoringHelpers<
+  typeof sqlFamilyPack,
+  typeof postgresPack,
+  undefined
+>['gen'] = composedHelpers.gen;
 
 type SqlFamily = typeof sqlFamilyPack;
 type PostgresPack = typeof postgresPack;
@@ -44,6 +75,8 @@ type PostgresResult<
     PostgresPack,
     {
       readonly createNamespace: typeof postgresCreateNamespace;
+      readonly codecLookup: CodecLookupWithDescriptors;
+      readonly dataTypeLookup: DataTypeLookup;
       readonly types?: Types;
       readonly models?: Models;
       readonly extensions?: Extensions;
@@ -56,7 +89,14 @@ type PostgresBaseScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = Omit<
   ContractInput<SqlFamily, PostgresPack, Record<never, never>, Record<never, never>, Extensions>,
-  'family' | 'target' | 'types' | 'models' | 'enums' | 'createNamespace'
+  | 'family'
+  | 'target'
+  | 'types'
+  | 'models'
+  | 'enums'
+  | 'createNamespace'
+  | 'codecLookup'
+  | 'dataTypeLookup'
 >;
 
 type PostgresDefinition<
@@ -111,7 +151,16 @@ export function defineContract(
     readonly enums?: EnumsConstraint;
   },
 ): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
-  const bound = { ...definition, createNamespace: postgresCreateNamespace };
+  const extensionPacks: readonly Pick<ComponentMetadata, 'types' | 'dataTypes'>[] = Object.values(
+    definition.extensions ?? {},
+  );
+  const dataTypeLookup = assembleDataTypes([postgresPack, ...extensionPacks]).lookup;
+  const bound = {
+    ...definition,
+    createNamespace: postgresCreateNamespace,
+    codecLookup: assemblePostgresCodecRegistryWithBuiltins(extensionPacks, dataTypeLookup),
+    dataTypeLookup,
+  };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
   }

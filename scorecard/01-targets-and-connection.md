@@ -18,8 +18,8 @@ Legend:
 | Driver binding / connect (url, pool/client, uri/mongoClient) | ✅ | ✅ | ✅ | `test/e2e/framework/test/runtime.basic.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts`; `test/integration/test/mongo/orm.test.ts` |
 | Multi-namespace (schema-qualified) runtime | ✅ | 🟡 | — | `test/e2e/framework/test/multi-namespace-runtime.test.ts` (`applies auth + public schemas and queries each namespace`) |
 | `verifyMarker` guardrail | ✅ | ✅ | ✅ | `test/integration/test/runtime.verify-marker.missing-table.integration.test.ts`; `test/e2e/framework/test/sqlite/runtime.verify-marker.missing-table.test.ts`; `test/integration/test/mongo/db-verify-sign.test.ts` |
-| `enums` runtime accessor | ✅ | 🟡 | 🟡 | `packages/3-targets/6-adapters/postgres/test/migrations/order-by-enum.integration.test.ts` |
-| `nativeEnums` runtime accessor (Postgres native enums) | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/order-by-enum.integration.test.ts` |
+| `enums` runtime accessor | ✅ | 🟡 | 🟡 | `packages/3-targets/postgres/2-adapter/test/migrations/order-by-enum.integration.test.ts` |
+| `nativeEnums` runtime accessor (Postgres native enums) | ✅ | — | — | `packages/3-targets/postgres/2-adapter/test/migrations/order-by-enum.integration.test.ts` |
 | Mongo strict/permissive binding mode | — | — | 🟡 | |
 | Static (no-driver) `sql` authoring surface (`postgresStatic`/`sqliteStatic`/`mongoStatic`, no execute) | 🟡 | 🟡 | 🟡 | |
 | Static (no-driver) `raw` authoring surface (`postgresStatic`/`sqliteStatic`/`mongoStatic`, no execute) | 🟡 | 🟡 | 🟡 | |

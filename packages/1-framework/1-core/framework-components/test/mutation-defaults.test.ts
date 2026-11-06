@@ -115,8 +115,8 @@ describe('assertMutationDefaultGeneratorsAvailable', () => {
         category: 'RUNTIME',
         severity: 'error',
         message:
-          "Contract requires mutation default generator(s) 'gen-a', 'gen-b', but no runtime component provides them.",
-        details: { ids: ['gen-a', 'gen-b'] },
+          "Contract requires mutation default generators 'gen-a' for user.id and 'gen-b' for user.slug, but no runtime component in the execution stack provides them. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['gen-a', 'gen-b'], fields: ['user.id', 'user.slug'] },
       }),
     );
   });
@@ -133,7 +133,32 @@ describe('assertMutationDefaultGeneratorsAvailable', () => {
         ]),
         registry,
       ),
-    ).toThrow(expect.objectContaining({ details: { ids: ['uuidv4'] } }));
+    ).toThrow(expect.objectContaining({ details: { ids: ['uuidv4'], fields: ['user.id'] } }));
+  });
+
+  it('names every field that needs a missing generator', () => {
+    expect(() =>
+      assertMutationDefaultGeneratorsAvailable(
+        execution([
+          {
+            ref: { namespace: 'ns', entry: 'posts', field: 'createdAt' },
+            onCreate: { kind: 'generator', id: 'timestampNow' },
+          },
+          {
+            ref: { namespace: 'ns', entry: 'posts', field: 'updated_at' },
+            onCreate: { kind: 'generator', id: 'timestampNow' },
+            onUpdate: { kind: 'generator', id: 'timestampNow' },
+          },
+        ]),
+        new Map(),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "Contract requires mutation default generator 'timestampNow' for posts.createdAt and posts.updated_at, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['timestampNow'], fields: ['posts.createdAt', 'posts.updated_at'] },
+      }),
+    );
   });
 });
 
@@ -287,6 +312,41 @@ describe('applyMutationDefaults', () => {
     expect(apply()).toEqual([{ field: 'touchedAt', value: 2 }]);
   });
 
+  it('shares a query-stable value only between defaults with the same params', () => {
+    const clock: RuntimeMutationDefaultGenerator = {
+      id: 'clock',
+      stability: 'query',
+      generate: (params) => `now at precision ${String(params?.['precision'] ?? 'unset')}`,
+    };
+    const defaults = execution(
+      ['second', 'millisecond', 'again', 'unset'].map((field, index) => ({
+        ref: { namespace: 'ns', entry: 'user', field },
+        onCreate:
+          index === 3
+            ? { kind: 'generator', id: 'clock' }
+            : { kind: 'generator', id: 'clock', params: { precision: index === 1 ? 3 : 0 } },
+      })),
+    );
+    expect(
+      applyMutationDefaults(
+        defaults,
+        collectMutationDefaultGenerators([contributor('x', [clock])]),
+        {
+          op: 'create',
+          namespace: 'ns',
+          entry: 'user',
+          values: {},
+          defaultValueCache: new Map(),
+        },
+      ),
+    ).toEqual([
+      { field: 'second', value: 'now at precision 0' },
+      { field: 'millisecond', value: 'now at precision 3' },
+      { field: 'again', value: 'now at precision 0' },
+      { field: 'unset', value: 'now at precision unset' },
+    ]);
+  });
+
   it('shares a row-stable value across fields of one call but not across calls', () => {
     const counter = counterGenerator('correlationId', 'row');
     const defaults = execution([
@@ -361,7 +421,7 @@ describe('applyMutationDefaults', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract references mutation default generator 'sizedId' but no runtime component provides it.",
+          "Contract references mutation default generator 'sizedId' but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
         details: { id: 'sizedId' },
       }),
     );

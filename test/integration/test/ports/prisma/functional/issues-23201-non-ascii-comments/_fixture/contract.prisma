@@ -13,7 +13,7 @@
 //
 // Subject: a schema with non-ASCII characters in comments still connects and queries.
 model User {
-  id    String @id @default(cuid(2))
+  id    String @id @onCreate(cuid(2))
   email String @unique // привет, 世界
   @@map("user")
 }
