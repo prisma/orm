@@ -19,9 +19,8 @@ dataTransform('User.age', {
   run: () => rawUpdateMany('users', AGE_NOT_INT, placeholder('User.age:update'), { bypassDocumentValidation: true }),
 }),
 renameStoredKey({ collection: 'users', field: 'addresses', path: '$[*].street', to: 'line1' }),
-<fill>({ collection: 'users', field: 'plan', value: { $literal: '' } }),
-<document check>({ collection: 'users', ... }),
-setValidation({ collection: 'users', ... }),
+fillField({ collection: 'users', field: 'plan', value: { $literal: '' } }),
+setValidation({ collection: 'users', ..., checkDocuments: true }),
 ```
 
 Without `--convert User.age`, both commands refuse and print `--convert User.age` and `--delete User.age`, as they do on SQL.
@@ -47,7 +46,7 @@ Today every row of this table is planned as a validator change and nothing else.
 
 ## Decisions to check
 
-1. **A new operation checks the documents before each validator change.** The planner writes it just before each validator add or update. It runs an aggregate that matches the documents the new validator rejects (`$nor: [{ $jsonSchema }]`) with `$limit: 1`. When one matches, it counts them and fails with a typed error: the count, one `_id`, the `mongosh` query that finds the rest, and the fields this change requires or retypes, named as what the change touches, not as the cause. `collMod` and `setValidation` stay as they are, so existing `migration.ts` files re-emit the same `ops.json`. A user who wants the validator over documents that do not fit deletes the call. This is the MongoDB form of the Postgres `SET NOT NULL` failure (TML-3517) and of ADR 309's derived checks. ADR 188 gets a paragraph on it. The operation's name is yours to choose. **Costs:**
+1. **A validator change checks the documents first** (agreed with Will, 2026-11-06). `setValidation` takes a new option, `checkDocuments`. When it is `true`, the operation gets a precheck: an aggregate that matches the documents the new validator rejects (`$nor: [{ $jsonSchema }]`) with `$limit: 1`. When one matches, the apply fails with a typed error: the count, one `_id`, the `mongosh` query that finds the rest, and the fields this change requires or retypes, named as what the change touches, not as the cause. The option is optional and leaving it out keeps today's behaviour, so existing `migration.ts` files re-emit the same `ops.json`. The planner always writes `checkDocuments: true` for a validator add or update. A user adopting a database whose documents do not fit sets it to `false` in `migration.ts`; `db update` writes no file, so there the check always applies. This is the MongoDB form of the Postgres `SET NOT NULL` failure (TML-3517) and of ADR 309's derived checks. ADR 188 gets a paragraph on it. **Costs:**
    - One read of the collection per changed validator, stopping at the first document that does not fit.
    - A database imported from Prisma 6 or 7 has no validator, and Prisma 8's is closed. Today the first plan adds it and the documents fail later. After this slice that first apply fails until every collection fits. The upgrade fragment and the Prisma 6 guide say what to do.
    - The operations before it (index drops, rewrites, index creates) have already run when it fails. A re-run skips them through their own postchecks, so the message says what ran, not "nothing changed".
@@ -77,8 +76,8 @@ Today every row of this table is planned as a validator change and nothing else.
    - Pipelines are used rather than `arrayFilters` because `$rename` takes no positional operators and one pipeline expresses a conditional rename, fill or removal per element at any depth.
    - Refused, naming the field: a path that enters a recursive group (a value object or embedded model reachable from itself), since the validator checks nothing below it (`recursiveGroupsOf`); a key containing `.` or `$`, as 4a refuses such field names; dictionaries and unions, which no MongoDB authoring surface produces.
 7. **Every new rewrite gets 4a's refusals and filters.** A rewrite in a time-series collection is refused. A rewrite of one root model's documents in a collection another root model shares, with no discriminator to tell them apart, is refused. A variant's rewrite filters on its discriminator value. The selected variant is carried as a typed value, which pays the `deferred.md` debt on `otherModelsReached`.
-8. **Enum values:** `string`, `int` and `bool` values are matched by equality; `double` values are written with `$toDouble`; enums of `object` or `array` values are refused in this slice, since equality on them depends on key order or matches containing lists. Values that trade places go through a temporary value, as SQL does (`enum-value-planning.ts`). Without an origin contract nothing is asked or rewritten, and the document check fails the apply while documents hold a removed value.
-9. **Operation names follow one rule.** Root fields keep 4a's `renameField` and `unsetField`. Keys inside a field's value use SQL's names and shape, with the root field in the column's place: `renameStoredKey`, `removeStoredKey`, `fillStoredKey`, `replaceStoredValue`, `removeStoredValue`, taking `{ collection, field, path, … }`, and `path` in SQL's JSONPath grammar (`$[*].street`). Three new operations have no SQL counterpart, and their names are yours: the root field fill, the document check (decision 1) and the variant document delete (SQL's is `deleteRows`).
+8. **Enum values** (agreed with Will, 2026-11-06, although the project plan listed 4b without them): `string`, `int` and `bool` values are matched by equality; `double` values are written with `$toDouble`; enums of `object` or `array` values are refused in this slice, since equality on them depends on key order or matches containing lists. Values that trade places go through a temporary value, as SQL does (`enum-value-planning.ts`). Without an origin contract nothing is asked or rewritten, and the document check fails the apply while documents hold a removed value.
+9. **Operation names follow one rule.** Root fields keep 4a's `renameField` and `unsetField`. Keys inside a field's value use SQL's names and shape, with the root field in the column's place: `renameStoredKey`, `removeStoredKey`, `fillStoredKey`, `replaceStoredValue`, `removeStoredValue`, taking `{ collection, field, path, … }`, and `path` in SQL's JSONPath grammar (`$[*].street`). Two new operations have no SQL counterpart (named by Will, 2026-11-06): `fillField` writes a temporary value into a root field where it is missing or `null`, beside `renameField` and `unsetField`; `deleteDocuments({ collection, filter })` deletes documents, as SQL's `deleteRows` deletes rows, and is what `--delete Bug` plans for a removed variant.
 10. **No framework change.** The statement kinds (`convert`, `backfill`, variant `convert`), the subjects (`valueObjectField`, `enumValue`), the `typeChange` loss and `temporaryValues` already exist, and SQL uses them. The variant lookup stays in the MongoDB target. If the build finds a framework change is needed, it stops and tells you.
 
 ## Order inside the rewrite step
@@ -92,13 +91,13 @@ Today every row of this table is planned as a validator change and nothing else.
 5. Fills and scaffolded backfills
 6. Removals of keys and enum values
 
-Then, per collection, the document check, then the validator change. All rewrites skip document validation, as 4a's do. Classes: renames, casts that keep every value, replacements and fills are `widening`; removals, document deletes and `--delete` casts are `destructive`; scaffolds are `data`. So `db update` runs all but the scaffolds, which it refuses with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`. Every operation is something a user could write in `migration.ts`, and re-running the file reproduces `ops.json`.
+Then, per collection, the validator change with its document check. All rewrites skip document validation, as 4a's do. Classes: renames, casts that keep every value, replacements and fills are `widening`; removals, document deletes and `--delete` casts are `destructive`; scaffolds are `data`. So `db update` runs all but the scaffolds, which it refuses with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`. Every operation is something a user could write in `migration.ts`, and re-running the file reproduces `ops.json`.
 
 ## Pull requests
 
 | PR | Contents |
 | --- | --- |
-| 1 | Top-level fields: the document check (decision 1), type changes with casts, `--convert` and `--delete`, `--backfill`, temporary values, the scaffolded data transform call, and the W1 warning |
+| 1 | Top-level fields: `checkDocuments` on `setValidation` (decision 1), type changes with casts, `--convert` and `--delete`, `--backfill`, temporary values, the scaffolded data transform call, and the W1 warning |
 | 2 | The path walk, then value object and embedded model keys (rename, delete, fill, backfill), enum values, variants. Removes MongoDB's refusals of `enumValue`, `valueObjectField` and discriminator value changes. If the diff grows past one review, variants move to a third pull request; they need only PR 1 |
 
 PR 1 changes what every MongoDB validator change does, so it is reviewed alone. Between the two, a value object or enum change that only PR 2 can answer fails at the document check; the W1 warning names the hand-written route.
@@ -135,7 +134,7 @@ PR 1 changes what every MongoDB validator change does, so it is reviewed alone. 
 ## Implementation notes
 
 - Planner: `packages/3-targets/mongo/1-target/src/core/migrations/mongo-planner.ts` refuses every statement whose kind is not `rename` (514-520) and plans validator changes in `planValidatorDiffCall` (627-665). `mongo-statement-planning.ts` refuses `enumValue` and `valueObjectField` (365-394) and a discriminator value change (`discriminatorValueChange`, 478).
-- A collection validator change is a DDL operation whose checks can only list collections and indexes (`packages/2-mongo-family/4-query/query-ast/src/migration-operation-types.ts` 10-17). So the document check is a DML operation with a precheck and no run, and its failure is a typed runner failure, like `renameOverwriteRefusal`.
+- A collection validator change is a DDL operation whose checks can only list collections and indexes today (`packages/2-mongo-family/4-query/query-ast/src/migration-operation-types.ts` 10-17), evaluated through the runner's inspection executor (`mongo-runner.ts` 604). Decision 1 extends that check type, in the MongoDB family, to take a document aggregate. Its failure is a typed runner failure, like `renameOverwriteRefusal`, since a failed precheck reports only "failed during precheck" today. The runner skips a DDL operation whose postcheck passes (`mongo-runner.ts` 302-309), so a re-run after the validator was set does not check again; that is intended.
 - `dataTransform` is in `migration-factories.ts` (69-114) and calls `run()` at once; its call class must return an unfilled placeholder operation instead of throwing for the whole plan.
 - The runner accepts only `aggregate` and `rawAggregate` checks (`mongo-runner.ts` 54, 559-572). `noDocumentHolds` (`migration-factories.ts` 166-183) is the pattern for a check.
 - Validator derivation: `packages/2-mongo-family/1-foundation/mongo-contract/src/derive-json-schema.ts` and `recursive-groups.ts`.
