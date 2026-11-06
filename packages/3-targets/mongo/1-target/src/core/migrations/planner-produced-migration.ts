@@ -35,7 +35,10 @@ export class PlannerProducedMongoMigration
     super();
   }
 
-  override get operations(): readonly AnyMongoMigrationOperation[] {
+  override get operations(): readonly (
+    | AnyMongoMigrationOperation
+    | Promise<AnyMongoMigrationOperation>
+  )[] {
     return renderOps(this.calls);
   }
 

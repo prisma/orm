@@ -10,12 +10,21 @@ import {
   sharedJsonSchema,
 } from './mongo-statement-fixtures';
 
-const shared = (seed: string, admin: readonly string[], user: readonly string[]) =>
+const shared = (
+  seed: string,
+  admin: readonly string[],
+  user: readonly string[],
+  userTypes?: ModelSpec['types'],
+) =>
   contract(
     seed,
     {
       Admin: { collection: 'users', fields: ['_id', ...admin] },
-      User: { collection: 'users', fields: ['_id', ...user] },
+      User: {
+        collection: 'users',
+        fields: ['_id', ...user],
+        ...(userTypes === undefined ? {} : { types: userTypes }),
+      },
     },
     { users: { jsonSchema: sharedJsonSchema(admin, user) } },
   );
@@ -26,7 +35,9 @@ describe('MongoMigrationPlanner, a collection that stores several root models', 
       planned(
         plan({
           from: null,
-          to: shared('to', ['level'], ['email']),
+          to: shared('to', ['level'], ['email'], {
+            email: { codecId: 'mongo/string@1', nullable: true },
+          }),
           schema: [schemaCollection('users', { required: ['level'] })],
         }),
       ),
@@ -53,14 +64,15 @@ describe('MongoMigrationPlanner, a collection that stores several root models', 
       ),
     ).toEqual({
       labels: [
+        'Check that the documents in users can fit the new validator',
         'Remove field nickname from collection users',
         'Update validator on users (removed: nickname)',
       ],
-      classes: ['destructive', 'widening'],
+      classes: ['widening', 'destructive', 'widening'],
       applied: [],
       dataLoss: [
         {
-          operationIndex: 0,
+          operationIndex: 1,
           subject: { kind: 'storage', name: 'users.nickname' },
           loss: 'drop',
           label: 'Remove field nickname from collection users',
@@ -113,11 +125,12 @@ describe('MongoMigrationPlanner, field changes in a collection that stores sever
       ),
     ).toEqual({
       labels: [
+        'Check that the documents in users can fit the new validator',
         'Rename field level to rank in collection users',
         'Update validator on users (added: rank; removed: level)',
       ],
-      classes: ['widening', 'widening'],
-      applied: [[0], [0]],
+      classes: ['widening', 'widening', 'widening'],
+      applied: [[1], [1]],
       dataLoss: [],
     });
   });
@@ -152,7 +165,7 @@ describe('MongoMigrationPlanner, field changes in a collection that stores sever
           ],
           statements: [renameField('Admin', 'level', 'Admin', 'rank')],
         }),
-      ).labels[0],
+      ).labels[1],
     ).toBe('Rename field level to rank in collection users');
   });
 

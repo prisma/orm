@@ -110,17 +110,29 @@ Each check composes three pieces:
 ```ts
 interface MongoMigrationCheck {
   readonly description: string;
-  readonly source: AnyMongoInspectionCommand;
+  readonly source: AnyMongoInspectionCommand | MongoQueryPlan;
   readonly filter: MongoFilterExpr;
   readonly expect: 'exists' | 'notExists';
 }
 ```
 
-- **`source`** — an inspection command (`ListIndexesCommand`, `ListCollectionsCommand`) that queries the database and returns result documents.
+- **`source`** — an inspection command (`ListIndexesCommand`, `ListCollectionsCommand`) that queries the database and returns result documents, or an aggregate over a collection's documents (a read-only `MongoQueryPlan`), which the runner reads through the adapter and driver, as it reads a DML check.
 - **`filter`** — a `MongoFilterExpr` applied client-side to the results. This reuses the existing filter expression AST from `@internal/mongo-query-ast` — the same `$eq`, `$and`, `$or`, `$not`, `$exists`, `$gt`, `$in` vocabulary used in query `$match` stages. We reuse it because it's already built, tested, serializable, and familiar to anyone who knows MongoDB query syntax.
 - **`expect`** — `'exists'` means at least one result matches; `'notExists'` means none match.
 
 This gives checks the same expressive power as MongoDB query filters, without inventing a separate vocabulary.
+
+### A validator change can check the documents
+
+A validator change is a `collMod`. Left alone, MongoDB applies it over documents that no longer fit, and each of them then fails its next update. So a validator change can check the documents first, with the option `checkDocuments: true`. On `setValidation` it sits in the options, beside `validationLevel` and `validationAction`: `setValidation(collection, schema, { checkDocuments: true })`. `collMod(collection, options, meta)` passes its second argument to MongoDB's `collMod` command unchanged, so the option sits in the third, the meta, beside `id` and `label`: `collMod(collection, { validator }, { checkDocuments: true })`. A `collMod` whose options set no validator has nothing to check the documents against, so `checkDocuments: true` on it is refused with `MIGRATION.INVALID_OPERATION_ENTRY` when the operation is built. The option adds a precheck that aggregates over the collection:
+
+```ts
+{ $match: { $nor: [{ $jsonSchema: schema }] } }, { $limit: 1 }
+```
+
+It passes when nothing matches. When a document matches, the runner counts them and stops with `MIGRATION.PRECHECK_FAILED`, naming what the change touches, one `_id`, and the `mongosh` query that finds the rest. The planner writes `checkDocuments: true` for every validator it adds or changes. The check stays a DDL check: the operation is still a `collMod`, and its postcheck still lets a re-run skip it once the validator is set. Without the option, the operation is as before.
+
+This check runs after the plan's rewrites, so on its own it finds a document no rewrite could fix only once the rewrites have changed the collection. By then the documents may hold fields the old validator rejects too. So when a plan rewrites a collection whose validator it changes with `checkDocuments: true`, or creates an index on it, the planner puts a separate operation before the collection's first rewrite or index create: `checkDocuments({ collection, validator, rewrittenFields, renamedFields })`. Its precheck is the same aggregate, against the new validator relaxed in each root model and variant branch. Each field in `rewrittenFields`, the stored names the plan's casts, conversions, fills, backfills and removals change, is left out of `required` and allowed to hold any value. Each field in `renamedFields`, old stored name to new, is left out of `required` under its new name, and allowed under its old name with the new name's schema, so a renamed discriminator's `enum` still selects one variant branch under either name. A `required` left empty is dropped, since MongoDB refuses an empty one. It has no `execute` and no `postcheck`, so it runs on every apply. It is its own operation, not a precheck of the first rewrite, so that `migration.ts` shows it as one call and the rewrites keep their own checks. It runs before index creates too, because a unique index build on documents that lack the field fails on their shared `null` before the validator's check could name the field. Under `db migrate`, applying the validator over documents that do not fit takes two edits to `migration.ts` together: remove the `checkDocuments(...)` call, and set `checkDocuments: false` on the validator change. Either alone still stops the apply, and both failures say so.
 
 ### DML operations and unified check shape
 
@@ -149,9 +161,9 @@ interface MongoDmlCheck {
 }
 ```
 
-The only difference is the `source` type: `MongoQueryPlan` (an aggregation or raw command) instead of `AnyMongoInspectionCommand`. Both use `MongoFilterExpr` for `filter` and `'exists' | 'notExists'` for `expect`. Both are evaluated by the same `FilterEvaluator` path in the runner — run the source query, apply the filter client-side, check against the expectation.
+`MongoDmlCheck` is a subset of `MongoMigrationCheck`: its `source` is only a `MongoQueryPlan` (an aggregation or raw command), while a DDL check's source is an inspection command or a `MongoQueryPlan`. So every DML check is also a valid DDL check, but not the other way round. Both use `MongoFilterExpr` for `filter` and `'exists' | 'notExists'` for `expect`. Both are evaluated by the same `FilterEvaluator` path in the runner — run the source query, apply the filter client-side, check against the expectation.
 
-The two types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>` because the source types need different executors — DDL checks dispatch through `MongoInspectionCommandVisitor`, DML checks dispatch through `MongoAdapter.lower()` → `MongoDriver.execute()`. Two concrete types with a shared shape let the runner dispatch internally based on which operation type it's processing.
+The two sources need different executors: an inspection command dispatches through `MongoInspectionCommandVisitor`, and a `MongoQueryPlan` through `MongoAdapter.lower()` → `MongoDriver.execute()`. The runner tells them apart by shape, with `isInspectionCheckSource`: a `MongoQueryPlan` carries its wire command in `command`, and an inspection command has no such property. A DML check needs no test, since its source is always a `MongoQueryPlan`. The types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>`, so that a DML operation's type says its checks never use an inspection command.
 
 #### One factory derives both precheck and postcheck
 
@@ -169,6 +181,31 @@ dataTransform('backfill-status', {
 ```
 
 The factory resolves this into a precheck with `expect: 'exists'` (violations found — run the transform) and a postcheck with `expect: 'notExists'` (no violations remain — transform succeeded). This gives idempotency and verification from a single check specification. Omitting `check` entirely produces empty arrays — always run, no idempotency guard.
+
+#### The planner writes the check of a transform it scaffolds
+
+For `--convert` and `--backfill`, the planner knows which documents still need the change, so it writes the check and the filter and leaves only the update to the user. For `--convert User.age` from `String` to `Int`, the filter selects the documents whose `age` holds a value of another type than `int`, read with `$expr` so that a list is read as one value:
+
+```ts
+dataTransform('User.age', {
+  check: {
+    source: () =>
+      rawAggregate('users', [
+        { $match: { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'int']] } } } },
+        { $limit: 1 },
+      ]),
+  },
+  run: () =>
+    rawUpdateMany(
+      'users',
+      { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'int']] } } },
+      placeholder('User.age:update'),
+      { bypassDocumentValidation: true },
+    ),
+})
+```
+
+`rawAggregate` and `rawUpdateMany` exist beside `mongoRaw(...)` because a migration needs what `mongoRaw` does not give: they address a collection by its stored name rather than through a root of the contract, need no execution context, and `rawUpdateMany` can skip document validation. The user replaces the placeholder with an update document, such as `{ $set: { age: 0 } }`, or an aggregation pipeline, such as `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own values; `rawUpdateMany` takes either. The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites are DML operations of the same envelope, classed by their effect like `renameField`. `castField({ collection, field, from, to, list?, filter? })` takes its class from `from` and `to`: it is `widening` when `$convert` keeps every value of every type in `from`, as from `int` to `long`, and `destructive` otherwise. `fillField({ collection, field, value, filter? })` sets the field only where it is missing or `null`, so it is always `widening`.
 
 #### DML execution
 

@@ -48,7 +48,7 @@ describe('MongoMigrationPlanner and runner - statements', () => {
         },
       ]);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(5);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(6);
       expect(planned.kind === 'success' ? planned.dataLoss : undefined).toEqual([]);
       expect({
         collections: (
@@ -102,10 +102,10 @@ describe('MongoMigrationPlanner and runner - statements', () => {
 
       const { planned, result } = await live.planAndRun(from, to);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(2);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(3);
       expect(planned.kind === 'success' ? planned.dataLoss : undefined).toEqual([
         {
-          operationIndex: 0,
+          operationIndex: 1,
           subject: { kind: 'field', namespaceId: NS, model: 'User', field: 'nickname' },
           label: 'Remove field nickname from collection users',
           loss: 'drop',
@@ -264,6 +264,44 @@ describe('MongoMigrationPlanner and runner - statements', () => {
           'Cannot remove field "value" from collection "readings": it is a time-series collection',
         ],
         kept: 0,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationPlanner and runner - a field removed from an embedded model', () => {
+  it(
+    "leaves the owner's documents as they are, top-level fields of the same name included",
+    async () => {
+      await live.db().createCollection('users');
+      await live
+        .db()
+        .collection('users')
+        .insertMany([{ street: 'Main', addresses: [{ street: 'Elm', city: 'Oslo' }] }]);
+      const withAddress = (hash: string, address: readonly string[]) =>
+        contract(
+          hash,
+          {
+            User: { collection: 'users', fields: ['_id', 'street'] },
+            Address: { owner: 'User', fields: address },
+          },
+          { users: new MongoCollection({}) },
+        );
+
+      const { planned, result } = await live.planAndRun(
+        withAddress('from', ['street', 'city']),
+        withAddress('to', ['city']),
+      );
+
+      expect({
+        executed: result.ok ? result.value.operationsExecuted : result.failure,
+        dataLoss: planned.kind === 'success' ? planned.dataLoss : undefined,
+        users: await live.documents('users'),
+      }).toEqual({
+        executed: 0,
+        dataLoss: [],
+        users: [{ street: 'Main', addresses: [{ street: 'Elm', city: 'Oslo' }] }],
       });
     },
     timeouts.spinUpMongoMemoryServer,

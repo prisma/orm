@@ -1,4 +1,4 @@
-import type { ContractMarkerRecord } from '@internal/contract/types';
+import { asNamespaceId, type ContractMarkerRecord } from '@internal/contract/types';
 import { fieldRewriteOf } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
@@ -13,6 +13,7 @@ import {
   type FailedCheck,
   failedPostcheckWhy,
   failedPrecheckWhy,
+  fieldStatementText,
   type MigrationOperationPolicy,
   type MigrationPlan,
   type MigrationPlanOperation,
@@ -20,6 +21,7 @@ import {
   type MigrationRunnerFailure,
   type MigrationRunnerFailureMeta,
   type MigrationRunnerPerSpaceSuccessValue,
+  type MigrationSubject,
   migrationRunnerFailure,
   type OperationContext,
   schemaCheckWhy,
@@ -27,17 +29,34 @@ import {
   withDatabaseUnchanged,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
-import type { MongoContract } from '@internal/mongo-contract';
+import {
+  canonicalize,
+  defaultMongoIndexName,
+  type MongoContract,
+  modelFieldStoredAs,
+  type ValidatorDocumentShape,
+  validatorDocumentShapesOf,
+  validatorRootShapesOf,
+} from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
+  AnyMongoDdlCommand,
   AnyMongoMigrationOperation,
   MongoDmlCheck,
   MongoDmlOperation,
+  MongoFilterExpr,
   MongoInspectionCommandVisitor,
   MongoMigrationCheck,
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
-import { isMongoDmlOperation, RenameCollectionCommand } from '@internal/mongo-query-ast/control';
+import {
+  CollModCommand,
+  CreateIndexCommand,
+  isInspectionCheckSource,
+  isMongoDmlOperation,
+  ListCollectionsCommand,
+  RenameCollectionCommand,
+} from '@internal/mongo-query-ast/control';
 import {
   type MongoQueryPlan,
   RawAggregateCommand,
@@ -49,6 +68,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
+import { castFieldOf, unrewritableFieldNameReason } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
@@ -195,6 +215,254 @@ function renameTargetExistsRefusal(
   );
 }
 
+function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undefined {
+  const step = op.execute.find(({ command }) => command instanceof CollModCommand)?.command;
+  return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
+}
+
+const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];
+
+/** The BSON types a property schema's `bsonType` allows, or `undefined` when it names none. */
+function allowedBsonTypes(schema: unknown): ReadonlySet<string> | undefined {
+  const bsonType: unknown =
+    typeof schema === 'object' && schema !== null ? Reflect.get(schema, 'bsonType') : undefined;
+  const names = typeof bsonType === 'string' ? [bsonType] : Array.isArray(bsonType) ? bsonType : [];
+  const strings = names.filter((name): name is string => typeof name === 'string');
+  if (strings.length === 0) return undefined;
+  return new Set(strings.flatMap((name) => (name === 'number' ? NUMBER_TYPES : [name])));
+}
+
+interface DocumentField {
+  readonly type: string;
+  readonly value: unknown;
+}
+
+function problemsAgainst(
+  fields: ReadonlyMap<string, DocumentField>,
+  shape: ValidatorDocumentShape,
+): readonly string[] {
+  const missing = shape.required
+    .filter((field) => !fields.has(field))
+    .map((field) => `has no ${JSON.stringify(field)}`);
+  const retyped = [...fields].flatMap(([field, { type }]) => {
+    const allowed = allowedBsonTypes(shape.properties[field]);
+    return allowed === undefined || allowed.has(type)
+      ? []
+      : [
+          `holds a value of type ${type} in ${JSON.stringify(field)}, which the new validator does not allow there`,
+        ];
+  });
+  const undeclared = shape.closed
+    ? [...fields.keys()]
+        .filter((field) => !Object.hasOwn(shape.properties, field))
+        .map((field) => `has ${JSON.stringify(field)}, a field the new validator does not name`)
+    : [];
+  return [...missing, ...retyped, ...undeclared];
+}
+
+/**
+ * Why a document does not fit a validator: against the variant whose discriminator value the
+ * document holds, or else the root model or variant it fits best, the required fields it lacks, the
+ * fields whose type the validator does not allow, and, for a closed validator, the fields it does not
+ * name.
+ */
+function documentProblems(
+  fields: ReadonlyMap<string, DocumentField>,
+  shapes: readonly ValidatorDocumentShape[],
+): readonly string[] {
+  if (fields.size === 0) return [];
+  const selected = shapes.filter(
+    ({ discriminator }) =>
+      discriminator !== undefined &&
+      canonicalize(fields.get(discriminator.field)?.value) === canonicalize(discriminator.value),
+  );
+  return (
+    (selected.length > 0 ? selected : shapes)
+      .map((shape) => problemsAgainst(fields, shape))
+      .reduce<readonly string[] | undefined>(
+        (best, problems) => (best === undefined || problems.length < best.length ? problems : best),
+        undefined,
+      ) ?? []
+  );
+}
+
+function joinedList(items: readonly string[]): string {
+  if (items.length <= 2) return items.join(' and ');
+  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+}
+
+/**
+ * The `--backfill` statements that let the user choose values for the fields a change makes
+ * required. None where the planner refuses a backfill: in a time-series collection, in a collection
+ * several root models share, and for a stored name MongoDB reads as a path or an operator.
+ */
+function backfillAdvice(
+  contract: MongoContract,
+  collection: string,
+  fields: {
+    readonly requires: readonly string[];
+    readonly timeSeries: boolean;
+    readonly sharedByRootModels: boolean;
+  },
+): readonly string[] {
+  if (fields.timeSeries || fields.sharedByRootModels) return [];
+  const requires = fields.requires.filter(
+    (stored) => unrewritableFieldNameReason(stored) === undefined,
+  );
+  if (requires.length === 0) return [];
+  const statements = requires.flatMap((stored) => {
+    const field = fieldStoredAt(contract, collection, stored);
+    return field.kind === 'field' ? [`--backfill ${fieldStatementText(contract, field)}`] : [];
+  });
+  const plan =
+    statements.length === requires.length
+      ? `migration plan ${statements.join(' ')}`
+      : 'migration plan and --backfill <Model.field> for each';
+  return [`To give ${quotedList(requires)} values you choose, plan the change with ${plan}.`];
+}
+
+/** How to change documents by hand while the old validator, which rejects their new shape, is in place. */
+function byHandAdvice(collection: string): string {
+  return `The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
+}
+
+/**
+ * The collection and validator a document check reads: a validator change's own, or, for the check
+ * before a collection's first rewrite, the relaxed validator its aggregate matches against.
+ */
+function documentsCheckedBy(
+  op: MongoMigrationPlanOperation,
+  source: MongoQueryPlan,
+):
+  | {
+      readonly collection: string;
+      readonly validator: Readonly<Record<string, unknown>>;
+      readonly beforeRewrites: boolean;
+    }
+  | undefined {
+  const collMod = validatorSetBy(op);
+  if (collMod?.validator !== undefined) {
+    return { collection: collMod.collection, validator: collMod.validator, beforeRewrites: false };
+  }
+  if (op.execute.length > 0 || !(source.command instanceof RawAggregateCommand)) return undefined;
+  const match: unknown = Reflect.get(source.command.pipeline[0] ?? {}, '$match');
+  const nor: unknown =
+    typeof match === 'object' && match !== null ? Reflect.get(match, '$nor') : undefined;
+  const [validator] = Array.isArray(nor) ? nor : [];
+  return typeof validator === 'object' && validator !== null && !Array.isArray(validator)
+    ? { collection: source.command.collection, validator, beforeRewrites: true }
+    : undefined;
+}
+
+function bsonTypeOf(value: object): unknown {
+  return Reflect.get(value, '_bsontype');
+}
+
+function uuidText(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-');
+}
+
+/** A value as `mongosh` writes it: `ObjectId("…")`, `ISODate("…")`, `UUID("…")`, anything else as JSON. */
+function mongoshValue(value: unknown): string {
+  if (value instanceof Date) return `ISODate(${JSON.stringify(value.toISOString())})`;
+  if (typeof value === 'object' && value !== null) {
+    if (bsonTypeOf(value) === 'ObjectId') return `ObjectId(${JSON.stringify(String(value))})`;
+    const bytes: unknown = Reflect.get(value, 'buffer');
+    if (
+      bsonTypeOf(value) === 'Binary' &&
+      Reflect.get(value, 'sub_type') === 4 &&
+      bytes instanceof Uint8Array &&
+      bytes.length === 16
+    ) {
+      return `UUID(${JSON.stringify(uuidText(bytes))})`;
+    }
+  }
+  return JSON.stringify(value) ?? String(value);
+}
+
+/** The required fields and the property schemas, in canonical form, of one kind of document a validator describes. */
+interface DocumentShape {
+  readonly key: string;
+  readonly required: ReadonlySet<string>;
+  readonly properties: ReadonlyMap<string, string>;
+}
+
+function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
+  return validatorDocumentShapesOf(jsonSchema).map((shape) => ({
+    key: shape.key,
+    required: new Set(shape.required),
+    properties: new Map(
+      Object.entries(shape.properties).map(
+        ([field, schema]) => [field, canonicalize(schema)] as const,
+      ),
+    ),
+  }));
+}
+
+const ANY_VALUE = canonicalize({});
+
+const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };
+
+/**
+ * The fields a validator change makes required, and those whose accepted values it changes, each
+ * kind of document compared with the same kind under the validator the collection has. A kind the
+ * collection's validator does not describe is not compared; with no validator, every field it
+ * requires is new.
+ */
+function fieldsTouched(
+  before: unknown,
+  after: unknown,
+): { readonly requires: readonly string[]; readonly retypes: readonly string[] } {
+  const shapesBefore = documentShapes(before);
+  const requires = new Set<string>();
+  const retypes = new Set<string>();
+  for (const shape of documentShapes(after)) {
+    const previous =
+      shapesBefore.length === 0 ? NO_SHAPE : shapesBefore.find(({ key }) => key === shape.key);
+    if (previous === undefined) continue;
+    for (const field of shape.required) {
+      if (field !== '_id' && !previous.required.has(field)) requires.add(field);
+    }
+    for (const [field, schema] of shape.properties) {
+      const schemaBefore = previous.properties.get(field);
+      if (schemaBefore !== undefined && schemaBefore !== schema && schema !== ANY_VALUE) {
+        retypes.add(field);
+      }
+    }
+  }
+  return {
+    requires: [...requires].sort(),
+    retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
+  };
+}
+
+function quotedList(fields: readonly string[]): string {
+  const quoted = fields.map((field) => JSON.stringify(field));
+  return quoted.length <= 1
+    ? quoted.join('')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
+}
+
+/** What a validator change touches, in words: `This validator change makes "plan" required.` */
+function touchedSentence(touched: ReturnType<typeof fieldsTouched>): string {
+  const parts = [
+    ...(touched.requires.length === 0 ? [] : [`makes ${quotedList(touched.requires)} required`]),
+    ...(touched.retypes.length === 0
+      ? []
+      : [
+          `changes what ${quotedList(touched.retypes)} ${touched.retypes.length === 1 ? 'accepts' : 'accept'}`,
+        ]),
+  ];
+  return parts.length === 0 ? '' : `This validator change ${parts.join(' and ')}. `;
+}
+
 const MONGO_UNAUTHORIZED = 13;
 
 /**
@@ -216,11 +484,142 @@ function bypassValidationRefusal(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the database user may not skip document validation`,
     {
-      why: `Renaming or removing a field rewrites documents with bypassDocumentValidation, because the old validator requires the old field. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
+      why: `Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_UNAUTHORIZED,
         codeName,
+      },
+    },
+  );
+}
+
+const MONGO_CONVERSION_FAILURE = 241;
+
+/** The innermost cause MongoDB gives in an error's message, without its closing period. */
+function mongoErrorText(error: object): string {
+  const message = String(Reflect.get(error, 'message'));
+  return (message.split(' :: caused by :: ').at(-1) ?? message).replace(/\.+$/, '');
+}
+
+/** The field of the destination contract a collection stores under `storedName`, or the storage name when no model declares it. */
+function fieldStoredAt(
+  contract: MongoContract,
+  collection: string,
+  storedName: string,
+): MigrationSubject {
+  const field = modelFieldStoredAs(contract.domain, collection, storedName);
+  return field === undefined
+    ? { kind: 'storage', name: `${collection}.${storedName}` }
+    : { kind: 'field', ...field, namespaceId: asNamespaceId(field.namespaceId) };
+}
+
+const MONGO_DUPLICATE_KEY = 11000;
+
+/** What a user can do about a MongoDB error that stopped a rewrite, when the error says. */
+function rewriteErrorFix(mongoCode: number, reason: string): string | undefined {
+  if (mongoCode !== MONGO_DUPLICATE_KEY) return undefined;
+  const index = /index: (\S+)/.exec(reason)?.[1];
+  const named = index === undefined ? 'a unique index' : `unique index ${JSON.stringify(index)}`;
+  return `The rewrite would give two documents the same value under ${named}. Change or remove the documents that would collide, then run the command again; operations that already ran are skipped.`;
+}
+
+/**
+ * The failure when MongoDB cannot build a unique index because two documents hold the same value
+ * of its keys, as documents without the field all hold `null`. The build changes nothing.
+ */
+function indexBuildFailure(
+  op: MongoMigrationPlanOperation,
+  command: AnyMongoDdlCommand,
+  error: unknown,
+): MongoMigrationRunnerResult | undefined {
+  if (!(command instanceof CreateIndexCommand) || typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  if (Reflect.get(error, 'code') !== MONGO_DUPLICATE_KEY) return undefined;
+  const reason = mongoErrorText(error);
+  const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
+  const index = command.name ?? defaultMongoIndexName(command.keys);
+  return runnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${op.id} failed: the unique index ${index} cannot be built, because two documents in collection ${command.collection} hold the same value${duplicate === undefined ? '' : ` ${duplicate}`}`,
+    {
+      why: 'A document without the field counts as holding null. Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped.',
+      meta: {
+        operationId: op.id,
+        mongoCode: MONGO_DUPLICATE_KEY,
+        index,
+        collection: command.collection,
+        ...(duplicate === undefined ? {} : { duplicateKey: duplicate }),
+      },
+    },
+  );
+}
+
+/**
+ * The failure when a rewrite fails after MongoDB began it: documents it reached may already be
+ * rewritten. A planner cast that meets a value `$convert` cannot cast names the field, which the
+ * advice reads to offer `--convert`. A data transform's update is the user's own, so its failure
+ * never names a type change.
+ */
+function rewriteFailure(
+  op: MongoDmlOperation,
+  error: unknown,
+  position: { readonly operationIndex: number; readonly contract: MongoContract },
+): MongoMigrationRunnerResult | undefined {
+  const rewrite = fieldRewriteOf(op);
+  if (rewrite === undefined || typeof error !== 'object' || error === null) return undefined;
+  const mongoCode: unknown = Reflect.get(error, 'code');
+  if (typeof mongoCode !== 'number') return undefined;
+  const codeName: unknown = Reflect.get(error, 'codeName');
+  const reason = mongoErrorText(error);
+  const cast = op.operationClass === 'data' ? undefined : castFieldOf(op);
+  if (mongoCode === MONGO_CONVERSION_FAILURE && op.operationClass === 'data') {
+    return runnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
+      {
+        why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
+        meta: { operationId: op.id, mongoCode },
+      },
+    );
+  }
+  if (mongoCode !== MONGO_CONVERSION_FAILURE || cast === undefined) {
+    const named = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
+    const fix = rewriteErrorFix(mongoCode, reason);
+    return runnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      `Operation ${op.id} failed: MongoDB error ${named}: ${reason}`,
+      {
+        why: [
+          'Documents the rewrite changed before the error stay changed.',
+          ...(fix === undefined ? [] : [fix]),
+        ].join(' '),
+        meta: {
+          operationId: op.id,
+          mongoCode,
+          ...(typeof codeName === 'string' ? { codeName } : {}),
+        },
+      },
+    );
+  }
+  const field = fieldStoredAt(position.contract, rewrite.collection, rewrite.field);
+  const named =
+    field.kind === 'field' ? fieldStatementText(position.contract, field) : rewrite.field;
+  return runnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
+    {
+      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${reason}. Documents cast before that value stay cast, and a re-run casts the rest.`,
+      meta: {
+        operationId: op.id,
+        mongoCode,
+        failedTypeChange: {
+          field,
+          by: 'cast',
+          reason: 'value',
+          operationIndex: position.operationIndex,
+        },
       },
     },
   );
@@ -277,8 +676,10 @@ export class MongoMigrationRunner {
     const filterEvaluator = new FilterEvaluator();
 
     let operationsExecuted = 0;
+    const rewritesRan = new Map<string, string[]>();
+    const ranOn = (collection: string): readonly string[] => rewritesRan.get(collection) ?? [];
 
-    for (const operation of operations) {
+    for (const [operationIndex, operation] of operations.entries()) {
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
@@ -291,10 +692,15 @@ export class MongoMigrationRunner {
             runPrechecks,
             runPostchecks,
             wrote,
+            { operationIndex, contract: options.destinationContract },
           );
           if (result.failure) return result.failure;
           if (result.executed) {
             operationsExecuted += 1;
+            const collection = operation.run[0]?.collection;
+            if (collection !== undefined) {
+              rewritesRan.set(collection, [...ranOn(collection), operation.label]);
+            }
           }
           continue;
         }
@@ -318,6 +724,10 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
+              (await this.documentsFailingValidatorRefusal(operation, failing, {
+                ranOn,
+                contract: options.destinationContract,
+              })) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
                 `Operation ${operation.id} failed during precheck: ${failing.description}`,
@@ -328,7 +738,13 @@ export class MongoMigrationRunner {
         }
 
         for (const step of operation.execute) {
-          await executeDdl(step.command);
+          try {
+            await executeDdl(step.command);
+          } catch (error) {
+            const failure = indexBuildFailure(operation, step.command, error);
+            if (failure === undefined) throw error;
+            return failure;
+          }
           wrote();
         }
 
@@ -483,19 +899,15 @@ export class MongoMigrationRunner {
     runPrechecks: boolean,
     runPostchecks: boolean,
     wrote: () => void,
+    position: { readonly operationIndex: number; readonly contract: MongoContract },
   ): Promise<{ executed: boolean; failure?: MongoMigrationRunnerResult }> {
     if (runPostchecks && runIdempotency && op.postcheck.length > 0) {
-      const allSatisfied = await this.evaluateDmlChecks(
-        op.postcheck,
-        adapter,
-        driver,
-        filterEvaluator,
-      );
+      const allSatisfied = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
       if (allSatisfied) return { executed: false };
     }
 
     if (runPrechecks && op.precheck.length > 0) {
-      const passed = await this.evaluateDmlChecks(op.precheck, adapter, driver, filterEvaluator);
+      const passed = await this.evaluateDmlChecks(op.precheck, filterEvaluator);
       if (!passed) {
         return {
           executed: false,
@@ -524,23 +936,28 @@ export class MongoMigrationRunner {
         if (reportedChange || !reportedNoChange) wrote();
       } catch (error) {
         const refusal = bypassValidationRefusal(op, plan, error);
-        if (refusal === undefined) throw error;
-        return { executed: false, failure: refusal };
+        if (refusal !== undefined) return { executed: false, failure: refusal };
+        const failure = rewriteFailure(op, error, position);
+        if (failure === undefined) throw error;
+        wrote();
+        return { executed: false, failure };
       }
     }
 
     if (runPostchecks && op.postcheck.length > 0) {
-      const passed = await this.evaluateDmlChecks(op.postcheck, adapter, driver, filterEvaluator);
+      const passed = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
       if (!passed) {
         return {
           executed: false,
-          failure: runnerFailure(
-            'MIGRATION.POSTCHECK_FAILED',
-            `Operation ${op.id} failed during postcheck`,
-            {
-              meta: { operationId: op.id, name: op.name },
-            },
-          ),
+          failure:
+            (await this.documentsStillMatchingFailure(op)) ??
+            runnerFailure(
+              'MIGRATION.POSTCHECK_FAILED',
+              `Operation ${op.id} failed during postcheck`,
+              {
+                meta: { operationId: op.id, name: op.name },
+              },
+            ),
         };
       }
     }
@@ -548,41 +965,232 @@ export class MongoMigrationRunner {
     return { executed: true };
   }
 
+  /**
+   * The failure when a validator change's before-check, or the check before a collection's first
+   * rewrite, finds documents the new validator rejects: how many, one `_id`, and the query that finds
+   * them all.
+   */
+  private async documentsFailingValidatorRefusal(
+    op: MongoMigrationPlanOperation,
+    failed: MongoMigrationCheck,
+    apply: {
+      readonly ranOn: (collection: string) => readonly string[];
+      readonly contract: MongoContract;
+    },
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    if (isInspectionCheckSource(failed.source)) return undefined;
+    const checked = documentsCheckedBy(op, failed.source);
+    if (checked === undefined) return undefined;
+    const { collection, validator, beforeRewrites } = checked;
+    const failing = { $nor: [validator] };
+    const counted = await this.firstRow({
+      ...failed.source,
+      command: new RawAggregateCommand(collection, [
+        { $match: failing },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
+    const documentId = mongoshValue(counted?.['documentId']);
+    const query = `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(failing)})`;
+    const [current] = (
+      await this.deps.inspectionExecutor.listCollections(new ListCollectionsCommand())
+    ).filter((info) => info['name'] === collection);
+    const options: unknown = current?.['options'];
+    const validatorBefore: unknown =
+      typeof options === 'object' && options !== null
+        ? Reflect.get(options, 'validator')
+        : undefined;
+    const touched = fieldsTouched(
+      Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
+      Reflect.get(validator, '$jsonSchema'),
+    );
+    const one = documents === 1;
+    const problems = documentProblems(
+      await this.fieldsOfDocument(failed.source, collection, counted?.['documentId']),
+      validatorDocumentShapesOf(Reflect.get(validator, '$jsonSchema')),
+    );
+    const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
+    const found = [
+      `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
+      ...(problems.length === 0 ? [] : [`That document ${joinedList(problems)}.`]),
+      `Find them all with ${query} in mongosh.`,
+    ];
+    const advice = hadValidator
+      ? [
+          ...backfillAdvice(apply.contract, collection, {
+            requires: touched.requires,
+            timeSeries:
+              typeof options === 'object' &&
+              options !== null &&
+              Reflect.get(options, 'timeseries') !== undefined,
+            sharedByRootModels:
+              validatorRootShapesOf(Reflect.get(validator, '$jsonSchema')).length > 1,
+          }),
+          byHandAdvice(collection),
+        ]
+      : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
+    const ran = apply.ranOn(collection);
+    const why = beforeRewrites
+      ? [
+          ...found,
+          `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
+          ...advice,
+          'Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
+          'Once the documents are fixed, run the command again.',
+        ].join(' ')
+      : [
+          ...found,
+          ...advice,
+          'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
+          'The validator was not changed.',
+          ...(ran.length === 0
+            ? []
+            : [
+                `These operations of this apply already changed collection ${collection} and stay applied: ${ran.join('; ')}.`,
+              ]),
+          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
+        ].join(' ');
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'does' : 'do'} not fit the new validator${beforeRewrites ? `, and no rewrite of this plan makes ${one ? 'it' : 'them'} fit` : ''}`,
+      {
+        why,
+        meta: {
+          operationId: op.id,
+          documentsFailingValidator: {
+            collection,
+            documents,
+            documentId,
+            query,
+            requires: touched.requires,
+            retypes: touched.retypes,
+          },
+        },
+      },
+    );
+  }
+
+  /**
+   * The failure when a data transform's check still finds documents after its update: how many, one
+   * `_id`, and the query that finds them all.
+   */
+  private async documentsStillMatchingFailure(
+    op: MongoDmlOperation,
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const [check] = op.postcheck;
+    const command = check?.source.command;
+    if (check?.expect !== 'notExists' || !(command instanceof RawAggregateCommand))
+      return undefined;
+    const match: unknown = Reflect.get(command.pipeline[0] ?? {}, '$match');
+    if (typeof match !== 'object' || match === null) return undefined;
+    const counted = await this.firstRow({
+      ...check.source,
+      command: new RawAggregateCommand(command.collection, [
+        { $match: match },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
+    const one = documents === 1;
+    const documentId = mongoshValue(counted?.['documentId']);
+    const query = `db.getCollection(${JSON.stringify(command.collection)}).find(${JSON.stringify(match)})`;
+    return runnerFailure(
+      'MIGRATION.POSTCHECK_FAILED',
+      `Operation ${op.id} failed: after its update, ${documents} ${one ? 'document' : 'documents'} in collection ${command.collection} still ${one ? 'matches' : 'match'} its check`,
+      {
+        why: `${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped.`,
+        meta: {
+          operationId: op.id,
+          name: op.name,
+          documentsStillMatching: { collection: command.collection, documents, documentId, query },
+        },
+      },
+    );
+  }
+
+  /** Each field of the document with `_id`: its BSON type, read with `$type`, and its value. */
+  private async fieldsOfDocument(
+    source: MongoQueryPlan,
+    collection: string,
+    id: unknown,
+  ): Promise<ReadonlyMap<string, DocumentField>> {
+    const row = await this.firstRow({
+      ...source,
+      command: new RawAggregateCommand(collection, [
+        { $match: { _id: id } },
+        { $limit: 1 },
+        {
+          $project: {
+            _id: 0,
+            fields: {
+              $map: {
+                input: { $objectToArray: '$$ROOT' },
+                in: ['$$this.k', { $type: '$$this.v' }, '$$this.v'],
+              },
+            },
+          },
+        },
+      ]),
+    });
+    const fields: unknown = row?.['fields'];
+    return new Map(
+      (Array.isArray(fields) ? fields : []).flatMap((entry): [string, DocumentField][] =>
+        Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string'
+          ? [[entry[0], { type: entry[1], value: entry[2] }]]
+          : [],
+      ),
+    );
+  }
+
+  private async firstRow(plan: MongoQueryPlan): Promise<Record<string, unknown> | undefined> {
+    const wireCommand = await this.deps.adapter.lower(plan, {});
+    for await (const row of this.deps.driver.execute<Record<string, unknown>>(wireCommand)) {
+      return row;
+    }
+    return undefined;
+  }
+
   private async evaluateDmlChecks(
     checks: readonly MongoDmlCheck[],
-    adapter: MongoAdapter,
-    driver: MongoQueryable,
     filterEvaluator: FilterEvaluator,
   ): Promise<boolean> {
     for (const check of checks) {
-      const commandKind = check.source.command.kind;
-      if (!READ_ONLY_CHECK_COMMAND_KINDS.has(commandKind)) {
-        throw mongoTargetError(
-          'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
-          `Data-transform check rejected: command kind "${commandKind}" is not read-only`,
-          {
-            why: 'Data-transform checks must use aggregate or rawAggregate commands so the pre/postcheck path cannot mutate the database.',
-            fix: 'Author the check.source as an aggregate pipeline (or rawAggregate) rather than a DML write command.',
-            meta: {
-              checkDescription: check.description,
-              commandKind,
-              collection: check.source.collection,
-            },
-          },
-        );
-      }
-      const wireCommand = await adapter.lower(check.source, {});
-      let matchFound = false;
-      for await (const row of driver.execute<Record<string, unknown>>(wireCommand)) {
-        if (filterEvaluator.evaluate(check.filter, row)) {
-          matchFound = true;
-          break;
-        }
-      }
+      const matchFound = await this.documentsMatch(check, check.source, filterEvaluator);
       const passed = check.expect === 'exists' ? matchFound : !matchFound;
       if (!passed) return false;
     }
     return true;
+  }
+
+  private async documentsMatch(
+    check: { readonly description: string; readonly filter: MongoFilterExpr },
+    source: MongoQueryPlan,
+    filterEvaluator: FilterEvaluator,
+  ): Promise<boolean> {
+    const commandKind = source.command.kind;
+    if (!READ_ONLY_CHECK_COMMAND_KINDS.has(commandKind)) {
+      throw mongoTargetError(
+        'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+        `Migration check rejected: command kind "${commandKind}" is not read-only`,
+        {
+          why: 'A migration check must read with an aggregate or rawAggregate command, so that running it cannot change the database.',
+          fix: "Write the check's source as an aggregate or rawAggregate pipeline, not a command that writes.",
+          meta: {
+            checkDescription: check.description,
+            commandKind,
+            collection: source.collection,
+          },
+        },
+      );
+    }
+    const wireCommand = await this.deps.adapter.lower(source, {});
+    for await (const row of this.deps.driver.execute<Record<string, unknown>>(wireCommand)) {
+      if (filterEvaluator.evaluate(check.filter, row)) return true;
+    }
+    return false;
   }
 
   private async evaluateChecks(
@@ -601,8 +1209,11 @@ export class MongoMigrationRunner {
     filterEvaluator: FilterEvaluator,
   ): Promise<MongoMigrationCheck | undefined> {
     for (const check of checks) {
-      const documents = await check.source.accept(inspectionExecutor);
-      const matchFound = documents.some((doc) => filterEvaluator.evaluate(check.filter, doc));
+      const matchFound = isInspectionCheckSource(check.source)
+        ? (await check.source.accept(inspectionExecutor)).some((doc) =>
+            filterEvaluator.evaluate(check.filter, doc),
+          )
+        : await this.documentsMatch(check, check.source, filterEvaluator);
       const passed = check.expect === 'exists' ? matchFound : !matchFound;
       if (!passed) return check;
     }

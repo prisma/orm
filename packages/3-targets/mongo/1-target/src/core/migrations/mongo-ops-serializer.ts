@@ -17,6 +17,7 @@ import {
   MongoFieldFilter,
   type MongoFilterExpr,
   type MongoMigrationCheck,
+  type MongoMigrationCheckSource,
   type MongoMigrationPlanOperation,
   type MongoMigrationStep,
   MongoNotExpr,
@@ -734,11 +735,15 @@ function deserializeInspectionCommand(json: unknown): AnyMongoInspectionCommand 
   }
 }
 
+function deserializeCheckSource(json: Record<string, unknown>): MongoMigrationCheckSource {
+  return 'command' in json ? deserializeMongoQueryPlan(json) : deserializeInspectionCommand(json);
+}
+
 function deserializeCheck(json: unknown): MongoMigrationCheck {
   const data = validate(CheckJson, json, 'migration check');
   return {
     description: data.description,
-    source: deserializeInspectionCommand(data.source),
+    source: deserializeCheckSource(data.source),
     filter: deserializeFilterExpr(data.filter),
     expect: data.expect,
     ...ifDefined('object', data.object),

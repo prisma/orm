@@ -1,10 +1,10 @@
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { RawUpdateManyCommand } from '@internal/mongo-query-ast/execution';
 
-/** A document rewrite the planner plans: `renameField` or `unsetField`. */
+/** A document rewrite the planner plans: `renameField`, `unsetField` or `castField`. */
 export interface FieldRewrite {
   readonly collection: string;
-  /** The field the rewrite renames or removes, by its old name. */
+  /** The field the rewrite renames, removes or casts, by its old name. */
   readonly field: string;
   readonly command: RawUpdateManyCommand;
 }
@@ -18,9 +18,22 @@ function onlyKey(value: unknown): string | undefined {
   return keys.length === 1 ? key : undefined;
 }
 
+/** The field an update sets or changes: one `$rename` or `$unset` of one field, or a pipeline of one `$set` of one field. */
+function rewrittenField(update: RawUpdateManyCommand['update']): string | undefined {
+  if (Array.isArray(update)) {
+    const [stage, ...others] = update;
+    return others.length === 0 && onlyKey(stage) === '$set'
+      ? onlyKey(Reflect.get(stage ?? {}, '$set'))
+      : undefined;
+  }
+  const operator = onlyKey(update);
+  if (operator === undefined || !FIELD_OPERATORS.has(operator)) return undefined;
+  return onlyKey(Reflect.get(update, operator));
+}
+
 /**
  * The planner's field rewrite an operation is, if it is one: a single `updateMany` that skips
- * validation and renames or unsets one field.
+ * validation and renames, unsets or casts one field.
  */
 export function fieldRewriteOf(operation: MigrationPlanOperation): FieldRewrite | undefined {
   const run: unknown = Reflect.get(operation, 'run');
@@ -31,8 +44,6 @@ export function fieldRewriteOf(operation: MigrationPlanOperation): FieldRewrite 
   if (!(command instanceof RawUpdateManyCommand) || command.bypassDocumentValidation !== true) {
     return undefined;
   }
-  const operator = onlyKey(command.update);
-  if (operator === undefined || !FIELD_OPERATORS.has(operator)) return undefined;
-  const field = onlyKey(Reflect.get(command.update, operator));
+  const field = rewrittenField(command.update);
   return field === undefined ? undefined : { collection: command.collection, field, command };
 }

@@ -119,6 +119,8 @@ export type { MongoValueObjectInput } from '../ir/mongo-value-object';
 export { MongoValueObject } from '../ir/mongo-value-object';
 export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
+export type { MongoModelReference } from '../model-collections';
+export { collectionOfModel, embeddingModelOf, modelFieldStoredAs } from '../model-collections';
 export { mongoValueSetsOf } from '../mongo-enum';
 export { modelAndBasesOf, mongoModelsOf } from '../mongo-models';
 export type {
@@ -145,5 +147,14 @@ export {
   validatorEnumMemberRefusalOf,
   validatorEnumRefusalOf,
 } from '../validator-enum-refusal';
-export type { ValidatorRootShape, ValidatorShape } from '../validator-shapes';
-export { validatorFieldNamesOf, validatorRootShapesOf } from '../validator-shapes';
+export type {
+  ValidatorDiscriminator,
+  ValidatorDocumentShape,
+  ValidatorRootShape,
+  ValidatorShape,
+} from '../validator-shapes';
+export {
+  validatorDocumentShapesOf,
+  validatorFieldNamesOf,
+  validatorRootShapesOf,
+} from '../validator-shapes';

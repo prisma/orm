@@ -20,6 +20,7 @@ export type {
   OpFactoryCall,
 } from '../core/migrations/op-factory-call';
 export {
+  CheckDocumentsCall,
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,

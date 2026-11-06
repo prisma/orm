@@ -17,6 +17,8 @@
  * interface and the `OpFactoryCall` union.
  */
 
+import { CliStructuredError } from '@internal/errors/control';
+import { errorUnfilledPlaceholder } from '@internal/errors/migration';
 import type {
   OpFactoryCall as FrameworkOpFactoryCall,
   MigrationOperationClass,
@@ -26,6 +28,7 @@ import type {
   CollModOptions,
   CreateCollectionOptions,
   CreateIndexOptions,
+  MongoDmlOperation,
   MongoIndexKey,
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
@@ -39,11 +42,17 @@ import type { Document } from '@internal/mongo-value';
 import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  type CastFieldOptions,
+  type CheckDocumentsOptions,
+  castField,
+  checkDocuments,
   collMod,
   createCollection,
   createIndex,
   dropCollection,
   dropIndex,
+  type FillFieldOptions,
+  fillField,
   renameCollection,
   renameField,
   unsetField,
@@ -53,6 +62,8 @@ export interface CollModMeta {
   readonly id?: string;
   readonly label?: string;
   readonly operationClass?: MigrationOperationClass;
+  /** Whether the operation first checks that every document fits the new validator, and stops if one does not. */
+  readonly checkDocuments?: boolean;
 }
 
 /**
@@ -68,7 +79,7 @@ abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFact
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;
-  abstract toOp(): AnyMongoMigrationOperation;
+  abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
     return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
@@ -268,6 +279,144 @@ export class UnsetFieldCall extends OpFactoryCallNode {
   }
 }
 
+export class CastFieldCall extends OpFactoryCallNode {
+  readonly factoryName = 'castField' as const;
+  readonly collection: string;
+  readonly field: string;
+  readonly options: CastFieldOptions;
+  readonly operationClass: MigrationOperationClass;
+  readonly label: string;
+
+  constructor(options: CastFieldOptions) {
+    super();
+    this.collection = options.collection;
+    this.field = options.field;
+    this.options = options;
+    const op = this.toOp();
+    this.operationClass = op.operationClass;
+    this.label = op.label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return castField(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `castField(${jsonToTsSource(this.options)})`;
+  }
+}
+
+/**
+ * A data transform the planner scaffolds for a field: its check and its run's filter select the
+ * documents still to change, and its update is a placeholder the user fills in `migration.ts`.
+ * Until then `toOp()` rejects with `MIGRATION.UNFILLED_PLACEHOLDER`, naming the operation it stands
+ * for, so the plan's other operations still list.
+ */
+export class DataTransformCall extends OpFactoryCallNode {
+  readonly factoryName = 'dataTransform' as const;
+  readonly operationClass = 'data' as const;
+  readonly name: string;
+  readonly collection: string;
+  readonly filter: Document;
+  readonly label: string;
+
+  constructor(name: string, collection: string, filter: Document) {
+    super();
+    this.name = name;
+    this.collection = collection;
+    this.filter = filter;
+    this.label = `Data transform: ${name}`;
+    this.freeze();
+  }
+
+  get slot(): string {
+    return `${this.name}:update`;
+  }
+
+  toOp(): Promise<never> {
+    const unfilled = errorUnfilledPlaceholder(this.slot);
+    const operation = Promise.reject(
+      new CliStructuredError(unfilled.code, unfilled.message, {
+        ...ifDefined('why', unfilled.why),
+        ...ifDefined('fix', unfilled.fix),
+        meta: {
+          slot: this.slot,
+          operation: {
+            id: `data_transform.${this.name}`,
+            label: this.label,
+            operationClass: this.operationClass,
+          },
+        },
+      }),
+    );
+    operation.catch(() => undefined);
+    return operation;
+  }
+
+  renderTypeScript(): string {
+    const collection = jsonToTsSource(this.collection);
+    const filter = jsonToTsSource(this.filter);
+    return [
+      `dataTransform(${jsonToTsSource(this.name)}, {`,
+      `  check: { source: () => rawAggregate(${collection}, [{ $match: ${filter} }, { $limit: 1 }]) },`,
+      `  run: () => rawUpdateMany(${collection}, ${filter}, placeholder(${jsonToTsSource(this.slot)}), { bypassDocumentValidation: true }),`,
+      '})',
+    ].join('\n');
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return ['dataTransform', 'rawAggregate', 'rawUpdateMany', 'placeholder'].map((symbol) => ({
+      moduleSpecifier: TARGET_MIGRATION_MODULE,
+      symbol,
+    }));
+  }
+}
+
+export class FillFieldCall extends OpFactoryCallNode {
+  readonly factoryName = 'fillField' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: FillFieldOptions;
+  readonly label: string;
+
+  constructor(options: FillFieldOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return fillField(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `fillField(${jsonToTsSource(this.options)})`;
+  }
+}
+
+export class CheckDocumentsCall extends OpFactoryCallNode {
+  readonly factoryName = 'checkDocuments' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: CheckDocumentsOptions;
+  readonly label: string;
+
+  constructor(options: CheckDocumentsOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoMigrationPlanOperation {
+    return checkDocuments(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `checkDocuments(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -305,6 +454,10 @@ export type OpFactoryCall =
   | RenameCollectionCall
   | RenameFieldCall
   | UnsetFieldCall
+  | CastFieldCall
+  | DataTransformCall
+  | FillFieldCall
+  | CheckDocumentsCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {
