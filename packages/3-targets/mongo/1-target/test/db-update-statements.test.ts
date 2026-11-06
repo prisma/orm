@@ -59,7 +59,8 @@ const marker: ContractMarkerRecord = {
 const family = {
   familyId: 'mongo',
   readAllMarkers: async () => new Map([['app', marker]]),
-  introspect: async () => new MongoSchemaIR([new MongoSchemaCollection({ name: 'Profile' })]),
+  introspect: async () =>
+    new MongoSchemaIR([new MongoSchemaCollection({ name: 'Profile' })], { fromDatabase: false }),
   deserializeContract: (json: unknown) => json as Contract,
   toOperationPreview: () => ({ statements: [] }),
 } as unknown as ControlFamilyInstance<'mongo', unknown>;

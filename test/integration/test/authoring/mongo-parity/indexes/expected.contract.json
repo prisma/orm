@@ -132,6 +132,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "email_1",
                   "unique": true
                 },
                 {
@@ -146,6 +147,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "tenantId_1_email_1",
                   "unique": true
                 },
                 {
@@ -155,7 +157,8 @@
                       "field": "name"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "name_-1"
                 },
                 {
                   "keys": [
@@ -164,7 +167,8 @@
                       "field": "metadata.$**"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "metadata.$**_1"
                 },
                 {
                   "expireAfterSeconds": 3600,
@@ -174,7 +178,8 @@
                       "field": "expiresAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "expiresAt_1"
                 },
                 {
                   "collation": {
@@ -187,7 +192,8 @@
                       "field": "status"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "status_1"
                 },
                 {
                   "keys": [
@@ -197,6 +203,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "name_1",
                   "partialFilterExpression": {
                     "status": "active"
                   }
@@ -213,6 +220,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "title_text_body_text",
                   "weights": {
                     "body": 1,
                     "title": 10
@@ -285,7 +293,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "8447894a94f011257c8550411eeb53a63235ccf273bce5a7cc4af91231673c94"
+    "storageHash": "0f80b8286b20ff9d4d547f784637c3ae328b2c157fb4bc6c8d0202e2e4e134cb"
   },
   "capabilities": {},
   "extensions": {},

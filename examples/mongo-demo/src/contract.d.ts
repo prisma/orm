@@ -23,7 +23,7 @@ import type {
 } from '@prisma/orm-mongo/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'406b672b68a6b01f04c0d6f910f5fefa4ac16d48b26e6c91b43856cd42c8cc5d'>;
+  StorageHashBase<'61c3f027c298b11d22e875ed76ab6460d2b4396afa94bdf58d85e26aded3416c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -148,6 +148,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'authorId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'authorId_1';
                 },
                 {
                   readonly keys: readonly [
@@ -155,10 +156,12 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'authorId' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_-1_authorId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'summary' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'summary_1';
                   readonly partialFilterExpression: { readonly kind: 'article' };
                   readonly unique: true;
                 },

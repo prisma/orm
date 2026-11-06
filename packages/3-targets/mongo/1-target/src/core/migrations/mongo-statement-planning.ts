@@ -449,6 +449,7 @@ function renameInSchema(schema: MongoSchemaIR, from: string, to: string): MongoS
           })
         : collection,
     ),
+    { fromDatabase: schema.fromDatabase },
   );
 }
 

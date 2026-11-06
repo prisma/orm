@@ -109,6 +109,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },

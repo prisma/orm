@@ -1,47 +1,26 @@
 [
   {
-    "id": "index.users.create(email:1)",
-    "label": "Create index on users (email:1)",
+    "id": "index.users.create(email_1)",
+    "label": "Create index email_1 on users (email:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on users",
+        "description": "no index named email_1 exists on users",
         "source": {
           "kind": "listIndexes",
           "collection": "users"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "email": 1
-          }
+          "value": "email_1"
         },
         "expect": "notExists",
-        "object": "an index on { email: 1 } in \"users\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"email_1\" in \"users\""
+      },
       {
-        "description": "create index on users",
-        "command": {
-          "kind": "createIndex",
-          "collection": "users",
-          "keys": [
-            {
-              "field": "email",
-              "direction": 1
-            }
-          ],
-          "unique": true,
-          "name": "email_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on users",
+        "description": "no index with the same keys and options exists on users",
         "source": {
           "kind": "listIndexes",
           "collection": "users"
@@ -91,6 +70,93 @@
               "kind": "exists",
               "field": "collation",
               "exists": false
+            }
+          ]
+        },
+        "expect": "notExists",
+        "object": "an index on { email: 1 } in \"users\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index email_1 on users",
+        "command": {
+          "kind": "createIndex",
+          "collection": "users",
+          "keys": [
+            {
+              "field": "email",
+              "direction": 1
+            }
+          ],
+          "unique": true,
+          "name": "email_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index email_1 exists on users",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "users"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "email_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "email": 1
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "unique",
+                  "op": "$eq",
+                  "value": true
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
             }
           ]
         },

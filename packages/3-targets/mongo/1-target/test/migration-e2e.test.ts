@@ -243,7 +243,10 @@ describe('migration file E2E', () => {
           validator: { $jsonSchema: { required: ['email'] } },
           validationLevel: 'strict',
         }),
-        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], { unique: true }),
+        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], {
+          name: 'email_1',
+          unique: true,
+        }),
       ];
 
       const tsSource = renderCallsToTypeScript(calls, defaultMeta);
@@ -550,7 +553,10 @@ describe('migration file E2E', () => {
       );
       const calls = [
         new CreateCollectionCall('users'),
-        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], { unique: true }),
+        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], {
+          name: 'email_1',
+          unique: true,
+        }),
       ];
 
       const directRunMeta = {

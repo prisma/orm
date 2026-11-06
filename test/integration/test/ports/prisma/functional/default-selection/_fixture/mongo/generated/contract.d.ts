@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b3aa4824e50739d258a1bae8ba11729a450c18c6276f6008bdf5276d6f5ed8f5'>;
+  StorageHashBase<'13f511b3546f6aed2860b7b49d3b140f649a3574f3602a0b1a483445e5c74419'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -115,6 +115,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'otherId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'otherId_1';
                   readonly unique: true;
                 },
               ];
