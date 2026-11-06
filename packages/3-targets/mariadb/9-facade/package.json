@@ -1,0 +1,70 @@
+{
+  "name": "@internal/mariadb",
+  "private": true,
+  "version": "8.0.0-rc.22",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "MariaDB configuration, control client and migration classes for Prisma 8",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/adapter-mariadb": "workspace:8.0.0-rc.22",
+    "@internal/cli": "workspace:8.0.0-rc.22",
+    "@internal/config": "workspace:8.0.0-rc.22",
+    "@internal/driver-mariadb": "workspace:8.0.0-rc.22",
+    "@internal/family-sql": "workspace:8.0.0-rc.22",
+    "@internal/mysql": "workspace:8.0.0-rc.22",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.22",
+    "@internal/target-mysql": "workspace:8.0.0-rc.22",
+    "@internal/utils": "workspace:8.0.0-rc.22",
+    "pathe": "^2.0.3"
+  },
+  "devDependencies": {
+    "@internal/contract": "workspace:8.0.0-rc.22",
+    "@internal/driver-mysql": "workspace:8.0.0-rc.22",
+    "@internal/framework-components": "workspace:8.0.0-rc.22",
+    "@internal/migration-tools": "workspace:8.0.0-rc.22",
+    "@internal/sql-contract": "workspace:8.0.0-rc.22",
+    "@internal/sql-schema-ir": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./config": "./dist/config.mjs",
+    "./control": "./dist/control.mjs",
+    "./migration": "./dist/migration.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-targets/mariadb/9-facade"
+  }
+}
