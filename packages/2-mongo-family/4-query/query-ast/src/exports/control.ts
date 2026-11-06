@@ -31,8 +31,9 @@ export type {
   MongoDmlCheck,
   MongoDmlOperation,
   MongoMigrationCheck,
+  MongoMigrationCheckSource,
   MongoMigrationPlanOperation,
   MongoMigrationStep,
 } from '../migration-operation-types';
-export { isMongoDmlOperation } from '../migration-operation-types';
+export { isInspectionCheckSource, isMongoDmlOperation } from '../migration-operation-types';
 export type { MongoFilterVisitor } from '../visitors';

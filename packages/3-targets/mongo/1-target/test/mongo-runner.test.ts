@@ -21,10 +21,12 @@ import type {
   MongoLoweredDraft,
   MongoQueryable,
 } from '@internal/mongo-lowering';
-import type {
-  AnyMongoInspectionCommand,
-  AnyMongoMigrationOperation,
-  MongoInspectionCommandVisitor,
+import {
+  type AnyMongoInspectionCommand,
+  type AnyMongoMigrationOperation,
+  CollModCommand,
+  MongoExistsExpr,
+  type MongoInspectionCommandVisitor,
 } from '@internal/mongo-query-ast/control';
 import {
   AggregateCommand,
@@ -982,6 +984,65 @@ describe('MongoMigrationRunner, a DDL precheck that does not hold', () => {
         },
       },
     });
+  });
+});
+
+describe('MongoMigrationRunner, a DDL precheck that reads documents', () => {
+  function validatorWithDocumentCheck(): AnyMongoMigrationOperation {
+    return {
+      id: 'validator.users.update',
+      label: 'Update validator on users',
+      operationClass: 'widening',
+      precheck: [
+        {
+          description: 'no document in users matches',
+          source: makeCheckPlan(),
+          filter: MongoExistsExpr.exists('_id'),
+          expect: 'notExists',
+        },
+      ],
+      execute: [
+        {
+          description: 'update validator on users',
+          command: new CollModCommand(RUN_COLLECTION, { validator: { $jsonSchema: {} } }),
+        },
+      ],
+      postcheck: [],
+    };
+  }
+
+  it('reads the documents through the adapter and the driver, and runs the operation when none match', async () => {
+    const harness = makeHarness();
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.ok).toBe(true);
+    expect(harness.log.entries).toEqual([
+      `dml:aggregate:${RUN_COLLECTION}`,
+      `ddl:collMod:${RUN_COLLECTION}`,
+    ]);
+    expect(harness.inspectionExecutor.calls).toEqual([]);
+  });
+
+  it('fails the precheck when a document matches, and runs nothing', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 'u1' }]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().code).toBe('MIGRATION.PRECHECK_FAILED');
+    expect(harness.ddlCalls).toEqual([]);
+  });
+
+  it('rejects a document check that writes', async () => {
+    const harness = makeHarness();
+    const op = validatorWithDocumentCheck();
+
+    await expect(
+      execute(harness, [
+        { ...op, precheck: [{ ...op.precheck[0]!, source: makeWriteCheckPlan() }] },
+      ] as AnyMongoMigrationOperation[]),
+    ).rejects.toMatchObject({ code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY' });
   });
 });
 

@@ -14,13 +14,15 @@ import {
   type MongoValidator,
   type MongoValidatorInput,
 } from '@internal/mongo-contract';
-import type {
-  CollModCommand,
-  CreateCollectionCommand,
-  CreateIndexCommand,
-  DropCollectionCommand,
-  DropIndexCommand,
-  MongoMigrationPlanOperation,
+import {
+  type CollModCommand,
+  type CreateCollectionCommand,
+  type CreateIndexCommand,
+  type DropCollectionCommand,
+  type DropIndexCommand,
+  ListCollectionsCommand,
+  ListIndexesCommand,
+  type MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
 import {
   MongoSchemaCollection,
@@ -425,14 +427,14 @@ describe('MongoMigrationPlanner', () => {
       const op = plan.operations[0] as MongoMigrationPlanOperation;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.precheck[0]!.expect).toBe('notExists');
 
       expect(op.execute).toHaveLength(1);
       expect(op.execute[0]!.command.kind).toBe('createIndex');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.postcheck[0]!.expect).toBe('exists');
     });
 
@@ -443,14 +445,14 @@ describe('MongoMigrationPlanner', () => {
       const op = plan.operations[0] as MongoMigrationPlanOperation;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
 
       expect(op.execute).toHaveLength(1);
       expect(op.execute[0]!.command.kind).toBe('dropIndex');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.postcheck[0]!.expect).toBe('notExists');
     });
 
@@ -647,11 +649,11 @@ describe('MongoMigrationPlanner', () => {
       )!;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listCollections');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listCollections');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.postcheck[0]!.expect).toBe('exists');
     });
 
@@ -673,7 +675,7 @@ describe('MongoMigrationPlanner', () => {
       )!;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listCollections');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
 
       expect(op.postcheck).toHaveLength(0);

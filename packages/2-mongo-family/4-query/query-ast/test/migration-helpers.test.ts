@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { ListCollectionsCommand, ListIndexesCommand } from '../src/inspection-commands';
 import { buildIndexOpId, defaultMongoIndexName, keysToKeySpec } from '../src/migration-helpers';
-import { isMongoDmlOperation } from '../src/migration-operation-types';
+import { isInspectionCheckSource, isMongoDmlOperation } from '../src/migration-operation-types';
+import { RawAggregateCommand } from '../src/raw-commands';
 
 describe('buildIndexOpId', () => {
   it('produces deterministic create ID for single key', () => {
@@ -82,5 +84,20 @@ describe('isMongoDmlOperation', () => {
       }),
       isMongoDmlOperation({ ...common, operationClass: 'data', name: 'data', run: [] }),
     ]).toEqual([false, true, true]);
+  });
+});
+
+describe('isInspectionCheckSource', () => {
+  it('tells a catalog inspection from a read of documents', () => {
+    const documents = {
+      collection: 'users',
+      command: new RawAggregateCommand('users', [{ $limit: 1 }]),
+      meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
+    };
+    expect([
+      isInspectionCheckSource(new ListCollectionsCommand()),
+      isInspectionCheckSource(new ListIndexesCommand('users')),
+      isInspectionCheckSource(documents),
+    ]).toEqual([true, true, false]);
   });
 });

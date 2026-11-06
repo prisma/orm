@@ -4,12 +4,28 @@ import type {
 } from '@internal/framework-components/control';
 import type { AnyMongoDdlCommand } from './ddl-commands';
 import type { MongoFilterExpr } from './filter-expressions';
-import type { AnyMongoInspectionCommand } from './inspection-commands';
+import {
+  type AnyMongoInspectionCommand,
+  ListCollectionsCommand,
+  ListIndexesCommand,
+} from './inspection-commands';
 import type { MongoQueryPlan } from './query-plan';
+
+/**
+ * What a DDL operation's check reads: the catalog, through an inspection command, or the documents
+ * of a collection, through an aggregate.
+ */
+export type MongoMigrationCheckSource = AnyMongoInspectionCommand | MongoQueryPlan;
+
+export function isInspectionCheckSource(
+  source: MongoMigrationCheckSource,
+): source is AnyMongoInspectionCommand {
+  return source instanceof ListCollectionsCommand || source instanceof ListIndexesCommand;
+}
 
 export interface MongoMigrationCheck {
   readonly description: string;
-  readonly source: AnyMongoInspectionCommand;
+  readonly source: MongoMigrationCheckSource;
   readonly filter: MongoFilterExpr;
   readonly expect: 'exists' | 'notExists';
   /** The object the check expects to exist or not, as a reader names it (`collection "orders"`), when the check is about one object. */

@@ -33,11 +33,16 @@ import type {
   AnyMongoMigrationOperation,
   MongoDmlCheck,
   MongoDmlOperation,
+  MongoFilterExpr,
   MongoInspectionCommandVisitor,
   MongoMigrationCheck,
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
-import { isMongoDmlOperation, RenameCollectionCommand } from '@internal/mongo-query-ast/control';
+import {
+  isInspectionCheckSource,
+  isMongoDmlOperation,
+  RenameCollectionCommand,
+} from '@internal/mongo-query-ast/control';
 import {
   type MongoQueryPlan,
   RawAggregateCommand,
@@ -485,17 +490,12 @@ export class MongoMigrationRunner {
     wrote: () => void,
   ): Promise<{ executed: boolean; failure?: MongoMigrationRunnerResult }> {
     if (runPostchecks && runIdempotency && op.postcheck.length > 0) {
-      const allSatisfied = await this.evaluateDmlChecks(
-        op.postcheck,
-        adapter,
-        driver,
-        filterEvaluator,
-      );
+      const allSatisfied = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
       if (allSatisfied) return { executed: false };
     }
 
     if (runPrechecks && op.precheck.length > 0) {
-      const passed = await this.evaluateDmlChecks(op.precheck, adapter, driver, filterEvaluator);
+      const passed = await this.evaluateDmlChecks(op.precheck, filterEvaluator);
       if (!passed) {
         return {
           executed: false,
@@ -530,7 +530,7 @@ export class MongoMigrationRunner {
     }
 
     if (runPostchecks && op.postcheck.length > 0) {
-      const passed = await this.evaluateDmlChecks(op.postcheck, adapter, driver, filterEvaluator);
+      const passed = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
       if (!passed) {
         return {
           executed: false,
@@ -550,39 +550,42 @@ export class MongoMigrationRunner {
 
   private async evaluateDmlChecks(
     checks: readonly MongoDmlCheck[],
-    adapter: MongoAdapter,
-    driver: MongoQueryable,
     filterEvaluator: FilterEvaluator,
   ): Promise<boolean> {
     for (const check of checks) {
-      const commandKind = check.source.command.kind;
-      if (!READ_ONLY_CHECK_COMMAND_KINDS.has(commandKind)) {
-        throw mongoTargetError(
-          'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
-          `Data-transform check rejected: command kind "${commandKind}" is not read-only`,
-          {
-            why: 'Data-transform checks must use aggregate or rawAggregate commands so the pre/postcheck path cannot mutate the database.',
-            fix: 'Author the check.source as an aggregate pipeline (or rawAggregate) rather than a DML write command.',
-            meta: {
-              checkDescription: check.description,
-              commandKind,
-              collection: check.source.collection,
-            },
-          },
-        );
-      }
-      const wireCommand = await adapter.lower(check.source, {});
-      let matchFound = false;
-      for await (const row of driver.execute<Record<string, unknown>>(wireCommand)) {
-        if (filterEvaluator.evaluate(check.filter, row)) {
-          matchFound = true;
-          break;
-        }
-      }
+      const matchFound = await this.documentsMatch(check, check.source, filterEvaluator);
       const passed = check.expect === 'exists' ? matchFound : !matchFound;
       if (!passed) return false;
     }
     return true;
+  }
+
+  private async documentsMatch(
+    check: { readonly description: string; readonly filter: MongoFilterExpr },
+    source: MongoQueryPlan,
+    filterEvaluator: FilterEvaluator,
+  ): Promise<boolean> {
+    const commandKind = source.command.kind;
+    if (!READ_ONLY_CHECK_COMMAND_KINDS.has(commandKind)) {
+      throw mongoTargetError(
+        'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+        `Data-transform check rejected: command kind "${commandKind}" is not read-only`,
+        {
+          why: 'Data-transform checks must use aggregate or rawAggregate commands so the pre/postcheck path cannot mutate the database.',
+          fix: 'Author the check.source as an aggregate pipeline (or rawAggregate) rather than a DML write command.',
+          meta: {
+            checkDescription: check.description,
+            commandKind,
+            collection: source.collection,
+          },
+        },
+      );
+    }
+    const wireCommand = await this.deps.adapter.lower(source, {});
+    for await (const row of this.deps.driver.execute<Record<string, unknown>>(wireCommand)) {
+      if (filterEvaluator.evaluate(check.filter, row)) return true;
+    }
+    return false;
   }
 
   private async evaluateChecks(
@@ -601,8 +604,11 @@ export class MongoMigrationRunner {
     filterEvaluator: FilterEvaluator,
   ): Promise<MongoMigrationCheck | undefined> {
     for (const check of checks) {
-      const documents = await check.source.accept(inspectionExecutor);
-      const matchFound = documents.some((doc) => filterEvaluator.evaluate(check.filter, doc));
+      const matchFound = isInspectionCheckSource(check.source)
+        ? (await check.source.accept(inspectionExecutor)).some((doc) =>
+            filterEvaluator.evaluate(check.filter, doc),
+          )
+        : await this.documentsMatch(check, check.source, filterEvaluator);
       const passed = check.expect === 'exists' ? matchFound : !matchFound;
       if (!passed) return check;
     }
