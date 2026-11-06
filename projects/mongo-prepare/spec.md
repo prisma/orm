@@ -138,7 +138,7 @@ The positions listed under non-goals keep their current types.
 SQL picks a rows handle or a statistics handle at prepare time from the plan's declared result. MongoDB picks at prepare time too, from the command kind. The kind is a static part of the plan type (`MongoQueryPlan<Row, Command>`), and the draft carries it.
 
 - **`MongoPreparedStatement<Params, Row>`** has `.query(target, params, options?)`, which returns `AsyncIterableResult<Row>`. Every plan except the four below gets this class.
-- **A second class** (name open, see below) is for `updateOne`, `updateMany`, `deleteOne` and `deleteMany`, the four commands that report statement statistics. It has `.query(...)`, which yields the driver's result row as `runtime.query(plan)` does today, and `.execute(target, params, options?)`, which returns the statistics `runtime.execute(plan)` returns.
+- **A second class** (name open, see below) is for the commands that report statement statistics: `updateOne`, `updateMany`, `deleteOne` and `deleteMany`, from the query builder or the raw lane. This is the same rule ad-hoc `execute` uses, which decides from the wire command kind. It has `.query(...)`, which yields the driver's result row as `runtime.query(plan)` does today, and `.execute(target, params, options?)`, which returns the statistics `runtime.execute(plan)` returns.
 
 The second class has both methods because a MongoDB update or delete plan supports both today, while a SQL affected-count plan supports `execute` only.
 
