@@ -15,7 +15,7 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { documentsNotOfType } from './migration-factories';
+import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
 import { collectionOf, modelAt, variantFilter } from './mongo-statement-planning';
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';
@@ -192,7 +192,10 @@ export function backfillTransform(
     call: new DataTransformCall(
       fieldStatementText(input.contract, statement.field),
       collection,
-      withFilter(variantFilter(input.contract, statement.field), { [storedName]: null }),
+      withFilter(
+        variantFilter(input.contract, statement.field),
+        documentsMissingOrNull(storedName),
+      ),
     ),
   };
 }

@@ -324,13 +324,26 @@ export interface CastFieldOptions {
   readonly filter?: Document;
 }
 
-/** The documents whose field holds a value, or a list element, of none of the BSON types `types`. */
+/**
+ * The documents whose field holds a value of none of the BSON types `types`, or, for a list, an
+ * element of none of them. A single value is read with `$expr`, since a query's `$type` and `$ne`
+ * look at the elements of a list.
+ */
 export function documentsNotOfType(
   field: string,
   shape: { readonly types: readonly string[]; readonly list: boolean },
 ): Document {
-  const another = { $ne: null, $not: { $type: [...shape.types] } };
-  return { [field]: shape.list ? { $elemMatch: another } : another };
+  if (shape.list) {
+    return { [field]: { $elemMatch: { $ne: null, $not: { $type: [...shape.types] } } } };
+  }
+  return {
+    $expr: { $not: { $in: [{ $type: `$${field}` }, ['missing', 'null', ...shape.types]] } },
+  };
+}
+
+/** The documents where the field is missing or holds `null`, read with `$expr` so a list holding `null` is not one. */
+export function documentsMissingOrNull(field: string): Document {
+  return { $expr: { $in: [{ $type: `$${field}` }, ['missing', 'null']] } };
 }
 
 function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
@@ -421,7 +434,7 @@ export function fillField(options: FillFieldOptions): MongoDmlOperation {
   const { collection: collectionName, field, value, filter } = options;
   assertRewritableField(collectionName, field);
   const id = `field.${collectionName}.${field}.fill${idSuffix(filter)}`;
-  const unfilled = { [field]: null };
+  const unfilled = documentsMissingOrNull(field);
   const toFill = filter === undefined ? unfilled : { $and: [filter, unfilled] };
   return {
     id,

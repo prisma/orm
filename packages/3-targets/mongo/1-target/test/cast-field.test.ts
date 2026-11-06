@@ -8,7 +8,7 @@ const PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' };
 
 describe('castField', () => {
   it('casts a field to its new BSON type where it holds another one, skipping validation', () => {
-    const toCast = { age: { $ne: null, $not: { $type: ['long'] } } };
+    const toCast = { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'long']] } } };
 
     expect(castField('users', 'age', { from: ['int'], to: 'long' })).toEqual({
       id: 'field.users.age.cast(long)',
@@ -86,7 +86,12 @@ describe('castField', () => {
         'Cast field size in collection items from int to long in documents whose kind is "box"',
     });
     expect(op.run[0]?.command).toMatchObject({
-      filter: { $and: [{ kind: 'box' }, { size: { $ne: null, $not: { $type: ['long'] } } }] },
+      filter: {
+        $and: [
+          { kind: 'box' },
+          { $expr: { $not: { $in: [{ $type: '$size' }, ['missing', 'null', 'long']] } } },
+        ],
+      },
     });
   });
 

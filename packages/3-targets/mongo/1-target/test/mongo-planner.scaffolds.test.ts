@@ -113,8 +113,8 @@ describe('MongoMigrationPlanner, --convert of a field whose type changes', () =>
       compact(
         [
           'dataTransform("User.age", {',
-          '  check: { source: () => rawAggregate("users", [{ $match: { age: { $ne: null, $not: { $type: ["int"] } } } }, { $limit: 1 }]) },',
-          '  run: () => rawUpdateMany("users", { age: { $ne: null, $not: { $type: ["int"] } } }, placeholder("User.age:update"), { bypassDocumentValidation: true }),',
+          '  check: { source: () => rawAggregate("users", [{ $match: { $expr: { $not: { $in: [{ $type: "$age" }, ["missing", "null", "int"]] } } } }, { $limit: 1 }]) },',
+          '  run: () => rawUpdateMany("users", { $expr: { $not: { $in: [{ $type: "$age" }, ["missing", "null", "int"]] } } }, placeholder("User.age:update"), { bypassDocumentValidation: true }),',
           '})',
         ].join('\n'),
       ),
@@ -155,7 +155,7 @@ describe('MongoMigrationPlanner, --convert of a field whose type changes', () =>
       ),
     ).toContain(
       compact(
-        'rawAggregate("tasks", [{ $match: { $and: [{ type: "bug" }, { severity: { $ne: null, $not: { $type: ["int"] } } }] } }, { $limit: 1 }])',
+        'rawAggregate("tasks", [{ $match: { $and: [{ type: "bug" }, { $expr: { $not: { $in: [{ $type: "$severity" }, ["missing", "null", "int"]] } } }] } }, { $limit: 1 }])',
       ),
     );
   });
@@ -200,7 +200,7 @@ describe('MongoMigrationPlanner, --backfill of a required field', () => {
     });
     expect(migrationTs(result)).toContain(
       compact(
-        'run: () => rawUpdateMany("users", { plan: null }, placeholder("User.plan:update"), { bypassDocumentValidation: true })',
+        'run: () => rawUpdateMany("users", { $expr: { $in: [{ $type: "$plan" }, ["missing", "null"]] } }, placeholder("User.plan:update"), { bypassDocumentValidation: true })',
       ),
     );
   });

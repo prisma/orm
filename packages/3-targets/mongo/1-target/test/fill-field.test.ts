@@ -24,7 +24,7 @@ describe('fillField', () => {
           collection: 'users',
           command: new RawUpdateManyCommand(
             'users',
-            { age: null },
+            { $expr: { $in: [{ $type: '$age' }, ['missing', 'null']] } },
             [{ $set: { age: { $toLong: 0 } } }],
             { bypassDocumentValidation: true },
           ),
@@ -36,7 +36,10 @@ describe('fillField', () => {
           description: 'no document in users has age missing or null',
           source: {
             collection: 'users',
-            command: new RawAggregateCommand('users', [{ $match: { age: null } }, { $limit: 1 }]),
+            command: new RawAggregateCommand('users', [
+              { $match: { $expr: { $in: [{ $type: '$age' }, ['missing', 'null']] } } },
+              { $limit: 1 },
+            ]),
             meta: RAW_META,
           },
           filter: MongoExistsExpr.exists('_id'),
@@ -58,7 +61,14 @@ describe('fillField', () => {
       id: 'field.tasks.severity.fill.where({"type":"bug"})',
       label:
         'Fill field severity in collection tasks where it is missing or null in documents whose type is "bug"',
-      filter: { filter: { $and: [{ type: 'bug' }, { severity: null }] } },
+      filter: {
+        filter: {
+          $and: [
+            { type: 'bug' },
+            { $expr: { $in: [{ $type: '$severity' }, ['missing', 'null']] } },
+          ],
+        },
+      },
     });
   });
 
@@ -73,7 +83,7 @@ describe('fillField', () => {
       roundTrip: [op],
       field: 'plan',
       preview: [
-        'db.getCollection("users").updateMany({"plan":null}, [{"$set":{"plan":{"$literal":""}}}], { bypassDocumentValidation: true })',
+        'db.getCollection("users").updateMany({"$expr":{"$in":[{"$type":"$plan"},["missing","null"]]}}, [{"$set":{"plan":{"$literal":""}}}], { bypassDocumentValidation: true })',
       ],
     });
   });
