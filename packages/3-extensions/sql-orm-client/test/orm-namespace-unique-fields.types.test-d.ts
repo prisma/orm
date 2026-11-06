@@ -304,6 +304,22 @@ test('each User facet resolves select/distinct/cursor/conflictOn fields within i
   writeDb.auth.User.createAll([{ token: 'tok' }], { onConflict: 'skip', conflictOn: ['token'] });
 });
 
+test('each User facet rejects the other namespace fields in select/distinct/cursor/conflictOn', () => {
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.select('email');
+  // @ts-expect-error `token` belongs to auth.User, not public.User
+  writeDb.public.User.select('token');
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.distinct('email');
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.orderBy((user) => user.id.asc()).cursor({ email: 'a@example.com' });
+  writeDb.auth.User.createAll([{ token: 'tok' }], {
+    onConflict: 'skip',
+    // @ts-expect-error `email` belongs to public.User, not auth.User
+    conflictOn: ['email'],
+  });
+});
+
 test('the auth-namespace User facet resolves upsert update input to its own field `token`', async () => {
   await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'tok-2' } });
 });

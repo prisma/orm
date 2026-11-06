@@ -209,8 +209,6 @@ describe('explicit namespaced accessors end-to-end (PGlite)', () => {
             token: 'auth-tok',
           });
 
-          // Field lists resolve against the model in its own namespace, not
-          // only the fields both `User` models share.
           expect(await orm.public.User.select('email').first()).toEqual({ email: 'alice@x.io' });
           expect(await orm.auth.User.select('token').first()).toEqual({ token: 'auth-tok' });
           expect(await orm.auth.User.distinct('token').select('token').all()).toEqual([
