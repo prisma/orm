@@ -113,6 +113,23 @@ class LibSqlTransaction extends LibSqlQueryable<TransactionClient> implements Tr
 
     try {
       await this.client.commit()
+    } catch (error) {
+      // A failed COMMIT leaves the underlying connection inside an open write
+      // transaction, holding the SQLite write lock indefinitely: the transaction
+      // manager does not send a real COMMIT/ROLLBACK for phantom-query adapters,
+      // so this is the only place that can clean it up. Best-effort: a secondary
+      // rollback failure must not replace the original commit error.
+      try {
+        await this.client.rollback()
+      } catch (rollbackError) {
+        debug('Error while cleaning up connection after failed commit: %O', rollbackError)
+        try {
+          this.client.close()
+        } catch (closeError) {
+          debug('Error while closing transaction after failed cleanup rollback: %O', closeError)
+        }
+      }
+      throw error
     } finally {
       this.#unlockParent()
     }
