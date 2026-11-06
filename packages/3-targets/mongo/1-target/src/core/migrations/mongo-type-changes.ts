@@ -1,7 +1,6 @@
 import type { ContractField, ContractWithDomain } from '@internal/contract/types';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
-  describeMigrationStatement,
   type FieldCoordinate,
   fieldStatementText,
   type MigrationPlannerConflict,
@@ -306,23 +305,4 @@ export function typeChangeConverted(
   return changes.find(
     (change) => change.destination !== undefined && sameField(change.destination, statement.field),
   );
-}
-
-/** A convert statement of a type change: refused until `migration plan` writes the conversion. */
-export function convertRefusal(
-  statement: ResolvedFieldConvertStatement,
-  change: TypeChange,
-  fromContract: ContractWithDomain,
-  contract: ContractWithDomain,
-): MigrationPlannerConflict {
-  const field = fieldStatementText(contract, statement.field);
-  return {
-    kind: 'statementRefused',
-    summary: `Cannot ${describeMigrationStatement(statement, fromContract, contract)}: migration plan does not write a MongoDB conversion yet`,
-    why:
-      change.cast === undefined
-        ? "MongoDB has no cast for this type change either. Leave the field's type as it was."
-        : `Answer with --delete ${field} instead, which casts the values with $convert, or leave the field's type as it was.`,
-    refusedStatement: statement,
-  };
 }

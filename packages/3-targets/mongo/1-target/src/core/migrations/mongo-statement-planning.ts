@@ -41,6 +41,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
   type CastFieldCall,
+  type DataTransformCall,
   type OpFactoryCall,
   RenameCollectionCall,
   RenameFieldCall,
@@ -199,7 +200,12 @@ export interface StatementCalls {
   /** Run first. */
   readonly collectionRenames: readonly RenameCollectionCall[];
   /** Run after index drops and before index creates. */
-  readonly rewrites: readonly (RenameFieldCall | CastFieldCall | UnsetFieldCall)[];
+  readonly rewrites: readonly (
+    | RenameFieldCall
+    | CastFieldCall
+    | DataTransformCall
+    | UnsetFieldCall
+  )[];
 }
 
 export interface StatementPlan {

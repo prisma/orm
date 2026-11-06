@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { asNamespaceId, type ControlPolicy } from '@internal/contract/types';
 import type {
   MigrationOperationPolicy,
@@ -155,7 +156,7 @@ export function contract(
       },
     },
     storage: {
-      storageHash: `storage-${seed}`,
+      storageHash: createHash('sha256').update(seed).digest('hex'),
       namespaces: {
         __unbound__: {
           id: '__unbound__',

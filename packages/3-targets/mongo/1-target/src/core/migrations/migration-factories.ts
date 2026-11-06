@@ -323,9 +323,17 @@ export interface CastFieldOptions {
   readonly filter?: Document;
 }
 
+/** The documents whose field holds a value, or a list element, of none of the BSON types `types`. */
+export function documentsNotOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  const another = { $ne: null, $not: { $type: [...shape.types] } };
+  return { [field]: shape.list ? { $elemMatch: another } : another };
+}
+
 function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
-  const another = { $ne: null, $not: { $type: [to] } };
-  const condition = { [field]: options.list === true ? { $elemMatch: another } : another };
+  const condition = documentsNotOfType(field, { types: [to], list: options.list === true });
   return options.filter === undefined ? condition : { $and: [options.filter, condition] };
 }
 

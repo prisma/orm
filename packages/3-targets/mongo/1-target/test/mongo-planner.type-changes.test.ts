@@ -1,4 +1,3 @@
-import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 import {
@@ -66,12 +65,6 @@ function liveUsers(fields: Record<string, FieldTypeSpec>, collection = 'users') 
     ),
   });
 }
-
-const convertAge: ResolvedMigrationStatement = {
-  kind: 'convert',
-  entity: 'field',
-  field: { namespaceId: NS, model: 'User', field: 'age' },
-};
 
 describe('MongoMigrationPlanner, a field whose type changes', () => {
   describe('with the origin contract', () => {
@@ -278,26 +271,6 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           summary:
             'Cannot cast field "age" of model "User" in collection "people": model "Admin" stores it in the same collection',
           why: 'Collection "people" stores several models and no discriminator tells their documents apart, so casting the field would cast it in the documents of "Admin" too. To change it in "User" documents only, move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents.',
-        },
-      ]);
-    });
-
-    it('refuses --convert of the field with a plain reason until migration plan writes the conversion', () => {
-      const conflicts = refusal(
-        plan({
-          from: users('from', { age: STRING }),
-          to: users('to', { age: INT }),
-          schema: [liveUsers({ age: STRING })],
-          statements: [convertAge],
-        }),
-      );
-
-      expect(conflicts).toEqual([
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot convert field "User.age": migration plan does not write a MongoDB conversion yet',
-          why: "Answer with --delete User.age instead, which casts the values with $convert, or leave the field's type as it was.",
         },
       ]);
     });

@@ -18,7 +18,6 @@ import {
   type MigrationSubject,
   type ModelCoordinate,
   type PlanOrigin,
-  type ResolvedFieldConvertStatement,
   type ResolvedMigrationStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
@@ -39,6 +38,11 @@ import { deepEqual } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {
+  backfillTransform,
+  convertTransform,
+  type PlannedTransform,
+} from './mongo-data-transforms';
+import {
   type CollectionControl,
   collectionControlOf,
   collectionOf,
@@ -52,7 +56,6 @@ import {
   timeSeriesRemovalRefusals,
 } from './mongo-statement-planning';
 import {
-  convertRefusal,
   noCastRefusals,
   planFieldTypeChanges,
   planValidatorTypeChanges,
@@ -523,9 +526,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     >(options.schema);
     const fromContract = options.fromContract;
     const unsupported = options.statements.find(
-      (statement) =>
-        statement.kind !== 'rename' &&
-        !(statement.kind === 'convert' && statement.entity === 'field'),
+      (statement) => statement.kind !== 'rename' && statement.entity !== 'field',
     );
     if (unsupported !== undefined) {
       return {
@@ -570,23 +571,34 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
             ),
           });
-    const converts = options.statements.filter(
-      (statement): statement is ResolvedFieldConvertStatement =>
-        statement.kind === 'convert' && statement.entity === 'field',
+    const contracts = { fromContract: fromContract ?? contract, contract };
+    const converted = options.statements.flatMap((statement) =>
+      statement.kind === 'convert' && statement.entity === 'field'
+        ? [{ statement, change: typeChangeConverted(statement, typeChanges) }]
+        : [],
     );
-    const converted = converts.map((statement) => ({
-      statement,
-      change: typeChangeConverted(statement, typeChanges),
-    }));
     const unconverted = typeChanges.filter(
       (change) => !converted.some((each) => each.change === change),
     );
     const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
+    const transforms = options.statements.flatMap((statement): PlannedTransform[] => {
+      if (statement.kind === 'convert' && statement.entity === 'field') {
+        const change = typeChangeConverted(statement, typeChanges);
+        return [{ statement, outcome: convertTransform(statement, change, contracts) }];
+      }
+      if (statement.kind === 'backfill' && statement.entity === 'field') {
+        return [
+          {
+            statement,
+            outcome: backfillTransform(statement, { fromContract, contract, schema, renames }),
+          },
+        ];
+      }
+      return [];
+    });
     const refusals = [
-      ...converted.map(({ statement, change }) =>
-        change === undefined
-          ? unsupportedStatementConflict(statement, fromContract ?? contract, contract)
-          : convertRefusal(statement, change, fromContract ?? contract, contract),
+      ...transforms.flatMap(({ outcome }) =>
+        outcome.kind === 'refused' ? [outcome.conflict] : [],
       ),
       ...noCastRefusals(unconverted, contract),
       ...timeSeriesRemovalRefusals(removals, schema),
@@ -596,12 +608,30 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
     const castCalls = casts.flatMap((change) => (change.cast === undefined ? [] : [change.cast]));
+    const callOf = new Map<ResolvedMigrationStatement, OpFactoryCall | undefined>([
+      ...renames.map((statement, index) => [statement, callOfStatement[index]] as const),
+      ...transforms.map(({ statement, outcome }) =>
+        outcome.kind === 'transform'
+          ? ([statement, outcome.call] as const)
+          : ([statement, undefined] as const),
+      ),
+    ]);
+    const transformCalls = (kind: 'convert' | 'backfill') =>
+      transforms.flatMap(({ statement, outcome }) =>
+        statement.kind === kind && outcome.kind === 'transform' ? [outcome.call] : [],
+      );
     const result = this.planCalls({
       ...options,
       statementCalls: {
         schema,
         collectionRenames,
-        rewrites: [...fieldRenames, ...castCalls, ...removals.map((removal) => removal.call)],
+        rewrites: [
+          ...fieldRenames,
+          ...castCalls,
+          ...transformCalls('convert'),
+          ...transformCalls('backfill'),
+          ...removals.map((removal) => removal.call),
+        ],
       },
     });
     if (result.kind === 'failure') return result;
@@ -636,8 +666,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         },
         options.snapshotsImportPath,
       ),
-      appliedStatements: options.statements.map((statement, index) => {
-        const call = callOfStatement[index];
+      appliedStatements: options.statements.map((statement) => {
+        const call = callOf.get(statement);
         return { statement, operationIndexes: call === undefined ? [] : [calls.indexOf(call)] };
       }),
       dataLoss: [
