@@ -797,8 +797,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       }),
     },
   ],
-  // No query runtime yet: the facade carries contracts, migrations and the
-  // control plane only.
   [
     '@prisma/orm-mariadb',
     {
