@@ -13,6 +13,7 @@ import {
   type StatementActivityRun,
   streamStatement,
 } from '@internal/framework-components/runtime';
+import type { MongoCodecTypesBase } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type {
   AnyMongoCommand,
@@ -44,7 +45,6 @@ import {
   mongoPreparedQuery,
 } from './prepared/prepared-statement';
 import type {
-  MongoCodecTypesBase,
   MongoDeclaration,
   MongoParamsFromDeclaration,
   MongoPlaceholders,

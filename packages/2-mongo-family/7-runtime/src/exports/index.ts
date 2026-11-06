@@ -33,7 +33,6 @@ export {
   flattenMongoParamRefs,
 } from '../param-ref-mutator';
 export type {
-  MongoCodecTypesBase,
   MongoDeclaration,
   MongoParamSpec,
   MongoParamsFromDeclaration,

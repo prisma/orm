@@ -33,6 +33,7 @@ export type {
   ExtractMongoTypeMaps,
   InferModelRow,
   MongoCodecInput,
+  MongoCodecTypesBase,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoIndexAuthoringInput,

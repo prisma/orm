@@ -4,7 +4,7 @@ import type {
   RuntimeExecuteOptions,
   RuntimeStatementStats,
 } from '@internal/framework-components/runtime';
-import type { MongoCodecInput } from '@internal/mongo-contract';
+import type { MongoCodecInput, MongoCodecTypesBase } from '@internal/mongo-contract';
 import type {
   AnyMongoCommand,
   DeleteManyCommand,
@@ -19,8 +19,6 @@ import type {
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
 import type { MongoPreparedParamRef } from '@internal/mongo-value';
-
-export type MongoCodecTypesBase = Record<string, { readonly output: unknown }>;
 
 export type MongoParamSpec<CT = MongoCodecTypesBase> =
   | (keyof CT & string)
