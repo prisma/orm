@@ -19,7 +19,7 @@ import pg from 'pg'
 import { name as packageName } from '../package.json'
 import { FIRST_NORMAL_OBJECT_ID } from './constants'
 import { customParsers, fieldToColumnType, mapArg, UnsupportedNativeDataType } from './conversion'
-import { convertDriverError } from './errors'
+import { convertDriverError, isDriverError } from './errors'
 
 const types = pg.types
 
@@ -132,6 +132,8 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  #releaseError: Error | undefined
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -145,14 +147,21 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     debug(`[js::commit]`)
 
     this.cleanup?.()
-    this.client.release()
+    this.client.release(this.#releaseError)
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
     this.cleanup?.()
-    this.client.release()
+    this.client.release(this.#releaseError)
+  }
+
+  protected onError(error: unknown): never {
+    if (this.#releaseError === undefined && !isDriverError(error)) {
+      this.#releaseError = error instanceof Error ? error : new Error(String(error))
+    }
+    super.onError(error)
   }
 
   async createSavepoint(name: string): Promise<void> {
