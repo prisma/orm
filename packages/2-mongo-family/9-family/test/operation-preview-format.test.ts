@@ -182,6 +182,32 @@ describe('formatMongoOperations', () => {
     ]);
   });
 
+  it('formats a cast, whose update is a pipeline, as updateMany', () => {
+    const cast = {
+      id: 'field.users.age.cast(int)',
+      label: 'Cast field age in collection users from string to int',
+      operationClass: 'destructive' as const,
+      name: 'field.users.age.cast(int)',
+      precheck: [],
+      run: [
+        {
+          collection: 'users',
+          command: new RawUpdateManyCommand(
+            'users',
+            { age: { $ne: null, $not: { $type: ['int'] } } },
+            [{ $set: { age: { $convert: { input: '$age', to: 'int' } } } }],
+            { bypassDocumentValidation: true },
+          ),
+          meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
+        },
+      ],
+      postcheck: [],
+    };
+    expect(formatMongoOperations([cast])).toEqual([
+      'db.getCollection("users").updateMany({"age":{"$ne":null,"$not":{"$type":["int"]}}}, [{"$set":{"age":{"$convert":{"input":"$age","to":"int"}}}}], { bypassDocumentValidation: true })',
+    ]);
+  });
+
   it('renders nothing for a user data transform, even one with an updateMany step', () => {
     const meta = { target: 'mongo', storageHash: 'h', lane: 'mongo-raw' };
     const transform = {
