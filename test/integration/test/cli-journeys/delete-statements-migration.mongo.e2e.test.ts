@@ -3,7 +3,7 @@
  *
  * Dropping a collection loses its documents, so `migration plan` and `db update` ask what the drop means; `--delete <Model>` answers. The MongoDB planner refuses rename statements in this release.
  *
- * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 follows, as printed, the refusal of a field rename whose model keeps its name while its collection changes. Journey S6 follows, through `db update`, the question about a collection whose model keeps its name, and keeps its documents.
+ * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal; the existing document gets a temporary value. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 follows, as printed, the refusal of a field rename whose model keeps its name while its collection changes. Journey S6 follows, through `db update`, the question about a collection whose model keeps its name, and keeps its documents.
  */
 
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -215,8 +215,7 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
     expect(await collections(dbName), 'S2.05: the collection is gone').toEqual(['users']);
   });
 
-  // Fails at the validator's document check until db update fills a new required field with a temporary value.
-  it.fails('S3: db update adds a required field to a collection with documents without asking', async () => {
+  it('S3: db update adds a required field to a collection with documents without asking', async () => {
     const dbName = 'mongo_delete_required';
     const ctx = setupPslProject(withDatabase(replSet.getUri(), dbName));
     created.add(ctx.testDir);
@@ -229,6 +228,10 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
 
     const update = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(update.exitCode, `S3.04: db update adds the field: ${update.stdout}`).toBe(0);
+    expect(
+      parseJsonOutput<{ temporaryValues?: unknown }>(update).temporaryValues,
+      'S3.04: db update reports the temporary value it wrote',
+    ).toEqual([{ field: 'User.nickname', value: '""' }]);
     const [users] = await client
       .db(dbName)
       .listCollections({ name: 'users' }, { nameOnly: false })
@@ -243,8 +246,8 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
       .collection('users')
       .find({}, { projection: { _id: 0 } })
       .toArray();
-    expect(documents, 'S3.05: the existing document is kept').toEqual([
-      { email: 'a@example.com', name: 'a' },
+    expect(documents, 'S3.05: the existing document is kept, with the temporary value').toEqual([
+      { email: 'a@example.com', name: 'a', nickname: '' },
     ]);
   });
 

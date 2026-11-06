@@ -1,14 +1,14 @@
 /**
  * `--convert` and `--backfill` write a data transform to fill in (MongoDB).
  *
- * Journey D1 changes `User.age` from `String` to `Int` and plans it with `--convert User.age`: `migration.ts` has the data transform with its check and filter written and its update as a placeholder. The journey fills the update, runs the file, and applies it; the validator change's document check then passes. Journey D2 adds a required `User.plan` and plans it with `--backfill User.plan` the same way. Journey D3 gives both statements to `db update`, which refuses them, since only a migration file can hold the code to fill in.
+ * Journey D1 changes `User.age` from `String` to `Int` and plans it with `--convert User.age`: `migration.ts` has the data transform with its check and filter written and its update as a placeholder. The journey fills the update, runs the file, and applies it; the validator change's document check then passes. Journey D2 adds a required `User.plan` and plans it with `--backfill User.plan` the same way. Journey D3 gives both statements to `db update`, which refuses them, since only a migration file can hold the code to fill in. Journey D4 adds a required `Int64` field without `--backfill`: the plan fills it with a temporary value and reports it.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { timeouts } from '@repo/test-utils';
-import { MongoClient } from 'mongodb';
+import { Long, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
@@ -210,6 +210,55 @@ describe('Journeys (MongoDB): --convert and --backfill write a data transform to
       .find({}, { projection: { _id: 0, plan: 1 } })
       .toArray();
     expect(plans, 'D2.02: every document has a plan').toEqual([{ plan: 'free' }, { plan: 'free' }]);
+  });
+
+  it('D4: without --backfill, migration plan fills a new required field with a temporary value', async () => {
+    const dbName = 'mongo_scaffold_fill';
+    const ctx = setupProject(withDatabase(replSet.getUri(), dbName));
+    created.add(ctx.testDir);
+    const origin = await initialize(ctx, '');
+    await client
+      .db(dbName)
+      .collection('users')
+      .insertMany(
+        [{ email: 'ada@example.com' }, { email: 'bo@example.com', visits: Long.fromNumber(3) }],
+        {
+          bypassDocumentValidation: true,
+        },
+      );
+
+    await emitFields(ctx, '  visits Int64', 'D4.01');
+    const planned = await runMigrationPlan(ctx, ['--name', 'visits', '--from', origin, '--json']);
+    expect(planned.exitCode, `D4.02: plan: ${planned.stderr}`).toBe(0);
+    expect(
+      parseJsonOutput<{ temporaryValues?: unknown }>(planned).temporaryValues,
+      'D4.03: the plan reports the temporary value',
+    ).toEqual([{ field: 'User.visits', value: '0' }]);
+    const migrationTs = readFileSync(
+      join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx), 'migration.ts'),
+      'utf-8',
+    );
+    expect(migrationTs.replace(/\s+/g, ''), 'D4.04: migration.ts fills the field').toContain(
+      "fillField({collection:'users',field:'visits',value:{$toLong:0}})",
+    );
+
+    const applied = await runMigrate(ctx);
+    expect(applied.exitCode, `D4.05: db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+    const visits = await client
+      .db(dbName)
+      .collection('users')
+      .aggregate([
+        { $sort: { email: 1 } },
+        { $project: { _id: 0, visits: 1, type: { $type: '$visits' } } },
+      ])
+      .toArray();
+    expect(
+      visits,
+      'D4.06: the document without visits gets a long 0, the other keeps its value',
+    ).toEqual([
+      { visits: 0, type: 'long' },
+      { visits: 3, type: 'long' },
+    ]);
   });
 
   it('D3: db update refuses --convert and --backfill, which need a migration file', async () => {
