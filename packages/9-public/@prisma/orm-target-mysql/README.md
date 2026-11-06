@@ -4,7 +4,7 @@ The concrete MySQL target of Prisma 8: the target descriptor (DDL planning, code
 
 Applications receive it as an exact-pinned dependency of `@prisma/orm-mysql`; app developers install that facade. Extension authors targeting MySQL and decomposed installs import this package directly.
 
-MySQL support is early. This package carries the control plane (emitting contracts, planning and applying migrations, `db verify`, `db sign` and introspection) and the runtime that reads: the SQL renderer and the runtime driver, which runs every statement on the `mariadb` package. The package writes each value into the statement with its own escaping, in one round trip, under the session settings the driver sets and checks: no `NO_BACKSLASH_ESCAPES`, and `utf8mb4`. Writing rows through the ORM or the SQL builder is not supported on MySQL yet.
+MySQL support is early. This package carries the control plane (emitting contracts, planning and applying migrations, `db verify`, `db sign` and introspection) and the runtime: the SQL renderer and the runtime driver, which runs every statement on the `mariadb` package. The package writes each value into the statement with its own escaping, in one round trip, under the session settings the driver sets and checks: no `NO_BACKSLASH_ESCAPES`, and `utf8mb4`. The renderer writes inserts, updates, deletes and upserts (`INSERT … AS new ON DUPLICATE KEY UPDATE`), and refuses `RETURNING`, row locks and `LATERAL` joins.
 
 ## Entrypoints
 
