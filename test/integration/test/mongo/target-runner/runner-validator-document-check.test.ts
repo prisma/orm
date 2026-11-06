@@ -253,6 +253,54 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
   );
 
   it(
+    'names a field one variant newly requires though another variant already required it',
+    async () => {
+      const variants = (bRequires: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id', 'kind'],
+        properties: { _id: { bsonType: 'objectId' }, kind: { bsonType: 'string' } },
+        oneOf: [
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              kind: { enum: ['a'] },
+              x: { bsonType: 'string' },
+            },
+            required: ['kind', 'x'],
+            additionalProperties: false,
+          },
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              kind: { enum: ['b'] },
+              x: { bsonType: 'string' },
+            },
+            required: ['kind', ...bRequires],
+            additionalProperties: false,
+          },
+        ],
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: variants([]) } });
+      await db.collection('users').insertOne({ kind: 'b' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: variants(['x']) } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.meta['documentsFailingValidator']).toMatchObject({
+        requires: ['x'],
+        retypes: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'applies the validator when every document fits',
     async () => {
       await db.createCollection('users');

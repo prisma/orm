@@ -250,38 +250,83 @@ function mongoshValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-/** The fields a validator change makes required, and those whose accepted values it changes, read from the root shapes of the two validators. */
+/** The required fields and the property schemas, in canonical form, of one kind of document a validator describes. */
+interface DocumentShape {
+  readonly key: string;
+  readonly required: ReadonlySet<string>;
+  readonly properties: ReadonlyMap<string, string>;
+}
+
+/** The discriminator value a variant branch names: its one property whose schema allows exactly one value. */
+function variantKey(properties: Readonly<Record<string, unknown>>): string | undefined {
+  const named = Object.entries(properties).flatMap(([field, schema]) => {
+    const values: unknown =
+      typeof schema === 'object' && schema !== null ? Reflect.get(schema, 'enum') : undefined;
+    return Array.isArray(values) && values.length === 1 ? [[field, values[0]]] : [];
+  });
+  return named.length === 1 ? JSON.stringify(named[0]) : undefined;
+}
+
+/**
+ * Each kind of document a validator's `$jsonSchema` describes: each root model, or, where a root has
+ * variants, each variant with the root's own required fields and properties.
+ */
+function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
+  return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex) => {
+    const shape = (
+      key: string,
+      required: readonly string[],
+      properties: Readonly<Record<string, unknown>>,
+    ): DocumentShape => ({
+      key,
+      required: new Set([...root.required, ...required]),
+      properties: new Map(
+        Object.entries({ ...root.properties, ...properties }).map(
+          ([field, schema]) => [field, canonicalize(schema)] as const,
+        ),
+      ),
+    });
+    if (root.variants.length === 0) return [shape(`${rootIndex}`, [], {})];
+    return root.variants.map((variant, variantIndex) =>
+      shape(
+        `${rootIndex}:${variantKey(variant.properties) ?? variantIndex}`,
+        variant.required,
+        variant.properties,
+      ),
+    );
+  });
+}
+
+const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };
+
+/**
+ * The fields a validator change makes required, and those whose accepted values it changes, each
+ * kind of document compared with the same kind under the validator the collection has. A kind the
+ * collection's validator does not describe is not compared; with no validator, every field it
+ * requires is new.
+ */
 function fieldsTouched(
   before: unknown,
   after: unknown,
 ): { readonly requires: readonly string[]; readonly retypes: readonly string[] } {
-  const shapes = (jsonSchema: unknown) => validatorRootShapesOf(jsonSchema);
-  const required = (jsonSchema: unknown) =>
-    new Set(shapes(jsonSchema).flatMap((root) => root.required));
-  const properties = (jsonSchema: unknown) =>
-    new Map(
-      shapes(jsonSchema).flatMap((root) =>
-        Object.entries(root.properties).map(
-          ([field, schema]) => [field, canonicalize(schema)] as const,
-        ),
-      ),
-    );
-  const requiredBefore = required(before);
-  const propertiesBefore = properties(before);
-  const requires = [...required(after)]
-    .filter((field) => field !== '_id' && !requiredBefore.has(field))
-    .sort();
+  const shapesBefore = documentShapes(before);
+  const requires = new Set<string>();
+  const retypes = new Set<string>();
+  for (const shape of documentShapes(after)) {
+    const previous =
+      shapesBefore.length === 0 ? NO_SHAPE : shapesBefore.find(({ key }) => key === shape.key);
+    if (previous === undefined) continue;
+    for (const field of shape.required) {
+      if (field !== '_id' && !previous.required.has(field)) requires.add(field);
+    }
+    for (const [field, schema] of shape.properties) {
+      const schemaBefore = previous.properties.get(field);
+      if (schemaBefore !== undefined && schemaBefore !== schema) retypes.add(field);
+    }
+  }
   return {
-    requires,
-    retypes: [...properties(after)]
-      .filter(
-        ([field, schema]) =>
-          !requires.includes(field) &&
-          propertiesBefore.has(field) &&
-          propertiesBefore.get(field) !== schema,
-      )
-      .map(([field]) => field)
-      .sort(),
+    requires: [...requires].sort(),
+    retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
   };
 }
 
