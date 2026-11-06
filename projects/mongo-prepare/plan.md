@@ -40,4 +40,5 @@ Every dispatch: tests first, then implementation. Follow `CLAUDE.md` golden rule
 ## Open items
 
 - Name of the second handle class (spec D6). Working name `MongoPreparedExecution`; Will to confirm.
+- Slice 2 (D9): decide what a placeholder does in a filter-expression `where` on a non-scalar field. Today that path passes values through without a codec-match check, and the adapter refuses a bare placeholder with `PREPARE_BIND_ON_ADHOC`.
 - Follow-ups in [deferred.md](deferred.md).
