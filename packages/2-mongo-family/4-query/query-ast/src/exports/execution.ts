@@ -38,6 +38,8 @@ export {
   MongoNotExpr,
   MongoOrExpr,
 } from '../filter-expressions';
+export type { OrmCode } from '../orm-errors';
+export { ormError } from '../orm-errors';
 export type { MongoQueryExecutor } from '../query-executor';
 export type { MongoQueryPlan } from '../query-plan';
 export type { RawMongoCommand } from '../raw-commands';
