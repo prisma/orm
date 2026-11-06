@@ -18,10 +18,10 @@ describe('mongo defineContract extensions', () => {
   it('records the extension packs it is given (factory form)', () => {
     const result = defineContract(
       { extensions: { shout: shoutPack } },
-      ({ model: m, field: f }) => ({
+      ({ model: m, field: f, type: t }) => ({
         models: {
           Greeting: m('Greeting', {
-            fields: { _id: f.objectId(), text: f.scalar('shout/text@1') },
+            fields: { _id: f.scalar(t.ObjectId()), text: f.scalar(t.shout.Text()) },
           }),
         },
       }),
