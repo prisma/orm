@@ -1,12 +1,13 @@
 import mongoAdapter from '@internal/adapter-mongo/control';
 import type {
+  ConfigSettings,
   ContractConfig,
-  FormatterConfig,
   PrismaNextConfig,
 } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
+  pickConfigSettings,
 } from '@internal/config/config-types';
 import mongoDriver from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
@@ -19,18 +20,11 @@ import mongoTargetPack from '@internal/target-mongo/pack';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
-export interface MongoConfigOptions {
+export interface MongoConfigOptions extends ConfigSettings {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma6Schema(...)`. */
   readonly contract: string | ContractConfig;
   readonly output?: string;
-  readonly db?: {
-    readonly connection?: string;
-  };
   readonly extensions?: readonly ControlExtensionDescriptor<'mongo', 'mongo'>[];
-  readonly migrations?: {
-    readonly dir?: string;
-  };
-  readonly formatter?: FormatterConfig;
 }
 
 function contractConfigFromPath(
@@ -82,8 +76,6 @@ export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mon
     driver: mongoDriver,
     extensions,
     contract: contractConfig,
-    ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
-    ...ifDefined('formatter', options.formatter),
+    ...pickConfigSettings(options),
   });
 }

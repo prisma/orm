@@ -1,12 +1,13 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type {
+  ConfigSettings,
   ContractConfig,
-  FormatterConfig,
   PrismaNextConfig,
 } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
+  pickConfigSettings,
 } from '@internal/config/config-types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
@@ -20,18 +21,11 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
-export interface PostgresConfigOptions {
+export interface PostgresConfigOptions extends ConfigSettings {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma7Schema(...)`. */
   readonly contract: string | ContractConfig;
   readonly output?: string;
-  readonly db?: {
-    readonly connection?: string;
-  };
   readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'postgres'>[];
-  readonly migrations?: {
-    readonly dir?: string;
-  };
-  readonly formatter?: FormatterConfig;
 }
 
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
@@ -73,8 +67,6 @@ export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'
     driver: postgresDriver,
     extensions,
     contract: contractConfig,
-    ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
-    ...ifDefined('formatter', options.formatter),
+    ...pickConfigSettings(options),
   });
 }
