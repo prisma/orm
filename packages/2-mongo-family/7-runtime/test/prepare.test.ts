@@ -360,6 +360,47 @@ describe('running a prepared statement', () => {
     ]);
   });
 
+  describe('execute', () => {
+    async function preparedUpdate() {
+      const fixture = preparedRuntime({
+        driver: createMockDriver([{ matchedCount: 1, modifiedCount: 1 }]),
+      });
+      const update = await fixture.runtime.prepare({ status: 'test/string@1' }, (p) => ({
+        collection: 'users',
+        command: new UpdateManyCommand('users', MongoFieldFilter.eq('status', p.status), {
+          $set: { seen: true },
+        }),
+        meta: baseMeta,
+      }));
+      return { ...fixture, update };
+    }
+
+    it('refuses a missing param before the driver', async () => {
+      const { runtime, driver, update } = await preparedUpdate();
+      await expect(update.execute(runtime, {} as { status: string })).rejects.toMatchObject({
+        code: 'RUNTIME.PREPARE_MISSING_PARAM',
+        details: { name: 'status' },
+      });
+      expect(driver.execute).not.toHaveBeenCalled();
+    });
+
+    it('refuses a run whose signal is already aborted', async () => {
+      const { runtime, driver, update } = await preparedUpdate();
+      await expect(
+        update.execute(runtime, { status: 'new' }, { signal: AbortSignal.abort() }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
+      expect(driver.execute).not.toHaveBeenCalled();
+    });
+
+    it('refuses a target without the prepared statement execute bridge', async () => {
+      const { runtime, update } = await preparedUpdate();
+      const target = { query: runtime.query.bind(runtime), execute: runtime.execute.bind(runtime) };
+      expect(() => update.execute(target, { status: 'new' })).toThrow(
+        'MongoQueryExecutor is missing the prepared statement execute bridge',
+      );
+    });
+  });
+
   it('refuses a target without the prepared statement bridge', async () => {
     const { runtime } = preparedRuntime();
     const statement = await runtime.prepare({ email: 'test/string@1' }, byEmail);
