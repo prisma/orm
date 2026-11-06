@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import {
   contractSnapshotDir,
+  singleLineDeclarations,
   writeContractSnapshot,
 } from '@internal/migration-tools/contract-snapshot-store';
 
@@ -22,9 +23,7 @@ export async function refreshContractSnapshot(migrationsDir, storageHash, input)
   const dir = contractSnapshotDir(migrationsDir, storageHash);
   if (existsSync(dir)) {
     const freshJson = `${canonicalizeJson(input.contractJson)}\n`;
-    const freshDts = input.contractDts.endsWith('\n')
-      ? input.contractDts
-      : `${input.contractDts}\n`;
+    const freshDts = singleLineDeclarations(input.contractDts);
     const upToDate =
       readIfPresent(join(dir, 'contract.json')) === freshJson &&
       readIfPresent(join(dir, 'contract.d.ts')) === freshDts;

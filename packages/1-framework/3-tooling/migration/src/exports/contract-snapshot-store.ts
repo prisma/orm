@@ -6,6 +6,7 @@ export {
   readContractSnapshotJsonTolerant,
   type SnapshotCanonicalizationHooks,
   type SnapshotContentVerifier,
+  singleLineDeclarations,
   snapshotsImportPathFrom,
   writeContractSnapshot,
 } from '../contract-snapshot-store';

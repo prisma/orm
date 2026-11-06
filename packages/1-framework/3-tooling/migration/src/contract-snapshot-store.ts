@@ -91,6 +91,23 @@ export interface ContractSnapshotInput {
   readonly contractDts: string;
 }
 
+/**
+ * `text` on one line ending in a newline: leading `//` comment lines become one block comment, and every other line
+ * break with the indentation that follows it becomes one space.
+ */
+export function singleLineDeclarations(text: string): string {
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const firstCodeLine = lines.findIndex((line) => !line.startsWith('//'));
+  const headerLength = firstCodeLine === -1 ? lines.length : firstCodeLine;
+  const header = lines
+    .slice(0, headerLength)
+    .map((line) => line.slice('//'.length).trim())
+    .filter((line) => line !== '');
+  const code = lines.slice(headerLength).filter((line) => line !== '');
+  const parts = header.length > 0 ? [`/* ${header.join(' ')} */`, ...code] : code;
+  return `${parts.join(' ')}\n`;
+}
+
 export async function writeContractSnapshot(
   migrationsDir: string,
   storageHash: string,
@@ -125,9 +142,7 @@ export async function writeContractSnapshot(
   await mkdir(tmpDir, { recursive: true });
 
   const jsonContent = `${canonicalizeJson(input.contractJson)}\n`;
-  const dtsContent = input.contractDts.endsWith('\n')
-    ? input.contractDts
-    : `${input.contractDts}\n`;
+  const dtsContent = singleLineDeclarations(input.contractDts);
 
   try {
     await writeFile(join(tmpDir, CONTRACT_JSON_FILE), jsonContent);
