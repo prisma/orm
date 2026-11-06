@@ -17,6 +17,8 @@
  * interface and the `OpFactoryCall` union.
  */
 
+import { CliStructuredError } from '@internal/errors/control';
+import { errorUnfilledPlaceholder } from '@internal/errors/migration';
 import type {
   OpFactoryCall as FrameworkOpFactoryCall,
   MigrationOperationClass,
@@ -73,7 +75,7 @@ abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFact
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;
-  abstract toOp(): AnyMongoMigrationOperation;
+  abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
     return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
@@ -302,6 +304,72 @@ export class CastFieldCall extends OpFactoryCallNode {
   }
 }
 
+/**
+ * A data transform the planner scaffolds for a field: its check and its run's filter select the
+ * documents still to change, and its update is a placeholder the user fills in `migration.ts`.
+ * Until then `toOp()` rejects with `MIGRATION.UNFILLED_PLACEHOLDER`, naming the operation it stands
+ * for, so the plan's other operations still list.
+ */
+export class DataTransformCall extends OpFactoryCallNode {
+  readonly factoryName = 'dataTransform' as const;
+  readonly operationClass = 'data' as const;
+  readonly name: string;
+  readonly collection: string;
+  readonly filter: Document;
+  readonly label: string;
+
+  constructor(name: string, collection: string, filter: Document) {
+    super();
+    this.name = name;
+    this.collection = collection;
+    this.filter = filter;
+    this.label = `Data transform: ${name}`;
+    this.freeze();
+  }
+
+  get slot(): string {
+    return `${this.name}:update`;
+  }
+
+  toOp(): Promise<never> {
+    const unfilled = errorUnfilledPlaceholder(this.slot);
+    const operation = Promise.reject(
+      new CliStructuredError(unfilled.code, unfilled.message, {
+        ...ifDefined('why', unfilled.why),
+        ...ifDefined('fix', unfilled.fix),
+        meta: {
+          slot: this.slot,
+          operation: {
+            id: `data_transform.${this.name}`,
+            label: this.label,
+            operationClass: this.operationClass,
+          },
+        },
+      }),
+    );
+    operation.catch(() => undefined);
+    return operation;
+  }
+
+  renderTypeScript(): string {
+    const collection = jsonToTsSource(this.collection);
+    const filter = jsonToTsSource(this.filter);
+    return [
+      `dataTransform(${jsonToTsSource(this.name)}, {`,
+      `  check: { source: () => rawAggregate(${collection}, [{ $match: ${filter} }, { $limit: 1 }]) },`,
+      `  run: () => rawUpdateMany(${collection}, ${filter}, placeholder(${jsonToTsSource(this.slot)}), { bypassDocumentValidation: true }),`,
+      '})',
+    ].join('\n');
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return ['dataTransform', 'rawAggregate', 'rawUpdateMany', 'placeholder'].map((symbol) => ({
+      moduleSpecifier: TARGET_MIGRATION_MODULE,
+      symbol,
+    }));
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -340,6 +408,7 @@ export type OpFactoryCall =
   | RenameFieldCall
   | UnsetFieldCall
   | CastFieldCall
+  | DataTransformCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): CreateIndexOptions {

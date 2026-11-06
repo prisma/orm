@@ -11,6 +11,7 @@ import {
   planned,
   plan as planStatementsFixture,
   schemaCollection,
+  settledOperations,
 } from './mongo-statement-fixtures';
 
 const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
@@ -90,10 +91,10 @@ function plan(
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
   expectDataLossMatchesDestructive(
     result,
-    (result.plan as PlannerProducedMongoMigration).operations,
+    settledOperations(result.plan as PlannerProducedMongoMigration),
   );
   return {
-    operations: (result.plan as PlannerProducedMongoMigration).operations.map(
+    operations: settledOperations(result.plan as PlannerProducedMongoMigration).map(
       (operation) => operation.label,
     ),
     dataLoss: result.dataLoss,

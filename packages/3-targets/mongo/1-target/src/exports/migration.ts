@@ -20,6 +20,8 @@ export {
   dataTransform,
   dropCollection,
   dropIndex,
+  rawAggregate,
+  rawUpdateMany,
   renameCollection,
   renameField,
   setValidation,

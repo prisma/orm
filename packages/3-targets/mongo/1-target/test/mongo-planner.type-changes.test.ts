@@ -10,6 +10,7 @@ import {
   refusal,
   renameField,
   schemaCollection,
+  settledOperations,
 } from './mongo-statement-fixtures';
 
 const OBJECT_ID: FieldTypeSpec = { codecId: 'mongo/objectId@1' };
@@ -154,7 +155,9 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         classes: ['widening', 'widening'],
       });
       const [cast] =
-        result.kind === 'success' ? (result.plan as PlannerProducedMongoMigration).operations : [];
+        result.kind === 'success'
+          ? settledOperations(result.plan as PlannerProducedMongoMigration)
+          : [];
       expect(cast).toMatchObject({
         run: [{ command: { update: [{ $set: { scores: { $map: { input: '$scores' } } } }] } }],
       });

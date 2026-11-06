@@ -5,6 +5,7 @@ import type {
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
+import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -236,9 +237,32 @@ export function plan(input: {
   });
 }
 
+/** The operations of a plan with no unfilled placeholder. */
+export function settledOperations(
+  migration: PlannerProducedMongoMigration,
+): readonly AnyMongoMigrationOperation[] {
+  return migration.operations.map((operation) => {
+    if (operation instanceof Promise) throw new Error('Expected no unfilled placeholder');
+    return operation;
+  });
+}
+
+/** The id, label and class of each operation of a plan, an unfilled placeholder by the operation it stands for. */
+export async function listedOperations(migration: PlannerProducedMongoMigration) {
+  const settled = await Promise.allSettled(migration.operations);
+  return settled.map((entry) => {
+    if (entry.status === 'fulfilled') {
+      const { id, label, operationClass } = entry.value;
+      return { id, label, operationClass };
+    }
+    const meta: unknown = Reflect.get(entry.reason, 'meta');
+    return Reflect.get(meta ?? {}, 'operation');
+  });
+}
+
 export function planned(result: ReturnType<typeof plan>) {
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
-  const operations = (result.plan as PlannerProducedMongoMigration).operations;
+  const operations = settledOperations(result.plan as PlannerProducedMongoMigration);
   return {
     labels: operations.map((operation) => operation.label),
     classes: operations.map((operation) => operation.operationClass),

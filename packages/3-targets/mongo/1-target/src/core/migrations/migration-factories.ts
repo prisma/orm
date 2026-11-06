@@ -116,6 +116,32 @@ export function dataTransform(
   };
 }
 
+/** A raw `aggregate` on a collection, as a data transform's check reads documents. */
+export function rawAggregate(
+  collectionName: string,
+  pipeline: readonly Document[],
+): MongoQueryPlan {
+  return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
+}
+
+/** A raw `updateMany` on a collection, which a data transform's run can make skip document validation. */
+export function rawUpdateMany(
+  collectionName: string,
+  filter: Document,
+  update: Document | readonly Document[],
+  options?: { readonly bypassDocumentValidation?: boolean },
+): MongoQueryPlan {
+  return rewritePlan(
+    collectionName,
+    new RawUpdateManyCommand(
+      collectionName,
+      filter,
+      update,
+      ifDefined('bypassDocumentValidation', options?.bypassDocumentValidation),
+    ),
+  );
+}
+
 export interface FieldRewriteOptions {
   readonly filter?: Document;
 }
