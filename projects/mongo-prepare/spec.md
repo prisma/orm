@@ -250,7 +250,7 @@ Each mirrors a SQL prepare test listed in the research file, section 1.10, where
 - Abort set before a run, and abort during encoding, as on the ad-hoc path.
 - Every row of the D10 table, and a raw plan with no placeholders prepared and run.
 - The walk-parity test extended with a placeholder.
-- Type tests: unknown codec ids; run param types, including nullable; `.execute` present on update and delete handles and absent on others; a `MongoRuntime` is a target and the `mongo()` client is not; `mongoStatic()` has no `prepare`; `limit` with a non-integer codec is rejected; slice 2's `where` rules (codec match, nullability, list fields).
+- Type tests: unknown codec ids; run param types, including nullable; `.execute` present on update and delete handles and absent on others; a `MongoRuntime` is a target and the `mongo()` client is not; `mongoStatic()` has no `prepare`; `limit` with a codec whose input is not a number is rejected; slice 2's `where` rules (codec match, nullability, list fields).
 - Integration tests against an in-memory replica set, through `mongo()` and through `createMongoRuntime` directly.
 
 ## Definition of done
