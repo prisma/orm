@@ -13,6 +13,7 @@ import type {
   TransactionOptions,
 } from '@prisma/driver-adapter-utils'
 import { Debug, DriverAdapterError } from '@prisma/driver-adapter-utils'
+import { Mutex } from 'async-mutex'
 // @ts-ignore: this is used to avoid the `Module '"<path>/node_modules/@types/pg/index"' has no default export.` error.
 import pg from 'pg'
 
@@ -98,7 +99,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
     const { sql, args } = query
     const values = args.map((arg, i) => mapArg(arg, query.argTypes[i]))
 
@@ -132,6 +133,10 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  // pg.PoolClient does not support concurrent queries on the same connection,
+  // so we serialize all performIO calls with a mutex.
+  #mutex = new Mutex()
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -139,6 +144,10 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     readonly cleanup?: () => void,
   ) {
     super(client, pgOptions)
+  }
+
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    return this.#mutex.runExclusive(() => super.performIO(query))
   }
 
   async commit(): Promise<void> {
