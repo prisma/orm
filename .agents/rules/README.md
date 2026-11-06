@@ -49,7 +49,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `namespace-diagnostic-wording.mdc` — User-facing wording for unrecognized/unavailable PSL namespaces
 - `avoid-cleavage-in-prose.mdc` — Don't use "cleavage" as a metaphor in prose; prefer split/boundary/distinction
 - `git-staging.mdc` — Git commit best practices: stage files explicitly, avoid `git add -A`, sign off
-- `running-tests.mdc` — How to run tests (and other slow verification commands): no repo-wide builds or checks locally (shared machine); save output to a file once, read the file; don't re-run to grep different lines
+- `running-tests.mdc` — How to run tests (and other slow verification commands): never run whole test suites locally (shared machine); save output to a file once, read the file; don't re-run to grep different lines
 - `fix-the-class-not-the-instance.mdc` — A review comment names a class of defect; sweep the whole diff for the class, fix every instance in one round
 
 ## Testing
@@ -135,7 +135,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 
 ## Git, CI & workflow
 - `ci-failure-classification.mdc` — Classify CI failures from evidence: frozen install first, non-inert controls, known flake fingerprints
-- `running-tests.mdc` — How to run tests (and other slow verification commands): no repo-wide builds or checks locally (shared machine); save output to a file once, read the file; don't re-run to grep different lines
+- `running-tests.mdc` — How to run tests (and other slow verification commands): never run whole test suites locally (shared machine); save output to a file once, read the file; don't re-run to grep different lines
 - `no-target-branches.mdc` — Don't branch on target; use adapters
 - `no-pull-request-target.mdc` — Never add `pull_request_target` to GitHub Actions workflows
 - `no-linear-sub-issues.mdc` — Never create Linear sub-issues; use projects/milestones/relations/labels
