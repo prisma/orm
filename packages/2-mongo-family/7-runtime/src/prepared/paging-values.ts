@@ -1,7 +1,7 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { MongoLoweredDraft } from '@internal/mongo-lowering';
-import { ormError } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { ormError } from '../orm-errors';
 
 function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void {
   if (!(value instanceof MongoParamRef)) return;
