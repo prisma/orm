@@ -109,17 +109,27 @@ Each check composes three pieces:
 ```ts
 interface MongoMigrationCheck {
   readonly description: string;
-  readonly source: AnyMongoInspectionCommand;
+  readonly source: AnyMongoInspectionCommand | MongoQueryPlan;
   readonly filter: MongoFilterExpr;
   readonly expect: 'exists' | 'notExists';
 }
 ```
 
-- **`source`** — an inspection command (`ListIndexesCommand`, `ListCollectionsCommand`) that queries the database and returns result documents.
+- **`source`** — an inspection command (`ListIndexesCommand`, `ListCollectionsCommand`) that queries the database and returns result documents, or an aggregate over a collection's documents (a read-only `MongoQueryPlan`), which the runner reads through the adapter and driver, as it reads a DML check.
 - **`filter`** — a `MongoFilterExpr` applied client-side to the results. This reuses the existing filter expression AST from `@internal/mongo-query-ast` — the same `$eq`, `$and`, `$or`, `$not`, `$exists`, `$gt`, `$in` vocabulary used in query `$match` stages. We reuse it because it's already built, tested, serializable, and familiar to anyone who knows MongoDB query syntax.
 - **`expect`** — `'exists'` means at least one result matches; `'notExists'` means none match.
 
 This gives checks the same expressive power as MongoDB query filters, without inventing a separate vocabulary.
+
+### A validator change can check the documents
+
+A validator change is a `collMod`. Left alone, MongoDB applies it over documents that no longer fit, and each of them then fails its next update. So a validator change can check the documents first. `setValidation(collection, schema, { checkDocuments: true })`, or `collMod` with `checkDocuments: true` in its meta, adds a precheck that aggregates over the collection:
+
+```ts
+{ $match: { $nor: [{ $jsonSchema: schema }] } }, { $limit: 1 }
+```
+
+It passes when nothing matches. When a document matches, the runner counts them and stops with `MIGRATION.PRECHECK_FAILED`, naming what the change touches, one `_id`, and the `mongosh` query that finds the rest. The planner writes `checkDocuments: true` for every validator it adds or changes. The check stays a DDL check: the operation is still a `collMod`, and its postcheck still lets a re-run skip it once the validator is set. Without the option, the operation is as before.
 
 ### DML operations and unified check shape
 
@@ -168,6 +178,19 @@ dataTransform('backfill-status', {
 ```
 
 The factory resolves this into a precheck with `expect: 'exists'` (violations found — run the transform) and a postcheck with `expect: 'notExists'` (no violations remain — transform succeeded). This gives idempotency and verification from a single check specification. Omitting `check` entirely produces empty arrays — always run, no idempotency guard.
+
+#### The planner writes the check of a transform it scaffolds
+
+For `--convert` and `--backfill`, the planner knows which documents still need the change, so it writes the check and the filter and leaves only the update to the user:
+
+```ts
+dataTransform('User.age', {
+  check: { source: () => rawAggregate('users', [{ $match: AGE_NOT_INT }, { $limit: 1 }]) },
+  run: () => rawUpdateMany('users', AGE_NOT_INT, placeholder('User.age:update'), { bypassDocumentValidation: true }),
+})
+```
+
+The run skips document validation because the collection still has the old validator, which rejects the new shape. Until the update is filled, the planner's call yields an unfilled placeholder operation, so the rest of the plan still lists. The planner's own rewrites, `castField` and `fillField`, are DML operations of the same envelope, classed by their effect like `renameField`.
 
 #### DML execution
 
