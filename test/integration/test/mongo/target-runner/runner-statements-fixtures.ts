@@ -44,6 +44,8 @@ export interface ModelSpec {
   readonly base?: string;
   /** The model whose documents embed this one's. */
   readonly owner?: string;
+  /** The codec of each field that is not a string. */
+  readonly codecs?: Readonly<Record<string, string>>;
   readonly variants?: Readonly<Record<string, string>>;
 }
 
@@ -70,7 +72,10 @@ export function contract(
                 fields: Object.fromEntries(
                   spec.fields.map((field) => [
                     field,
-                    { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+                    {
+                      type: { kind: 'scalar', codecId: spec.codecs?.[field] ?? 'mongo/string@1' },
+                      nullable: false,
+                    },
                   ]),
                 ),
                 relations: {},
@@ -191,6 +196,7 @@ export function useStatementsDatabase(dbName: string) {
     from: MongoContract,
     to: MongoContract,
     statements: readonly ResolvedMigrationStatement[] = [],
+    frameworkComponents: Parameters<MongoMigrationPlanner['plan']>[0]['frameworkComponents'] = [],
   ) {
     await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
       storageHash: from.storage.storageHash,
@@ -203,7 +209,7 @@ export function useStatementsDatabase(dbName: string) {
       fromContract: from,
       origin: { storageHash: from.storage.storageHash },
       statements,
-      frameworkComponents: [],
+      frameworkComponents,
       snapshotsImportPath: '../../snapshots',
     });
     if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts, null, 2));

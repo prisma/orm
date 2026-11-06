@@ -215,6 +215,34 @@ function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undef
   return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
 }
 
+/**
+ * The collection and validator a document check reads: a validator change's own, or, for the check
+ * before a collection's first rewrite, the relaxed validator its aggregate matches against.
+ */
+function documentsCheckedBy(
+  op: MongoMigrationPlanOperation,
+  source: MongoQueryPlan,
+):
+  | {
+      readonly collection: string;
+      readonly validator: Readonly<Record<string, unknown>>;
+      readonly beforeRewrites: boolean;
+    }
+  | undefined {
+  const collMod = validatorSetBy(op);
+  if (collMod?.validator !== undefined) {
+    return { collection: collMod.collection, validator: collMod.validator, beforeRewrites: false };
+  }
+  if (op.execute.length > 0 || !(source.command instanceof RawAggregateCommand)) return undefined;
+  const match: unknown = Reflect.get(source.command.pipeline[0] ?? {}, '$match');
+  const nor: unknown =
+    typeof match === 'object' && match !== null ? Reflect.get(match, '$nor') : undefined;
+  const [validator] = Array.isArray(nor) ? nor : [];
+  return typeof validator === 'object' && validator !== null && !Array.isArray(validator)
+    ? { collection: source.command.collection, validator, beforeRewrites: true }
+    : undefined;
+}
+
 function bsonTypeOf(value: object): unknown {
   return Reflect.get(value, '_bsontype');
 }
@@ -267,6 +295,8 @@ function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
   }));
 }
 
+const ANY_VALUE = canonicalize({});
+
 const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };
 
 /**
@@ -291,7 +321,9 @@ function fieldsTouched(
     }
     for (const [field, schema] of shape.properties) {
       const schemaBefore = previous.properties.get(field);
-      if (schemaBefore !== undefined && schemaBefore !== schema) retypes.add(field);
+      if (schemaBefore !== undefined && schemaBefore !== schema && schema !== ANY_VALUE) {
+        retypes.add(field);
+      }
     }
   }
   return {
@@ -501,6 +533,8 @@ export class MongoMigrationRunner {
     const filterEvaluator = new FilterEvaluator();
 
     let operationsExecuted = 0;
+    const rewritesRan = new Map<string, string[]>();
+    const ranOn = (collection: string): readonly string[] => rewritesRan.get(collection) ?? [];
 
     for (const [operationIndex, operation] of operations.entries()) {
       options.callbacks?.onOperationStart?.(operation);
@@ -520,6 +554,10 @@ export class MongoMigrationRunner {
           if (result.failure) return result.failure;
           if (result.executed) {
             operationsExecuted += 1;
+            const collection = operation.run[0]?.collection;
+            if (collection !== undefined) {
+              rewritesRan.set(collection, [...ranOn(collection), operation.label]);
+            }
           }
           continue;
         }
@@ -543,7 +581,7 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
-              (await this.documentsFailingValidatorRefusal(operation, failing)) ??
+              (await this.documentsFailingValidatorRefusal(operation, failing, ranOn)) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
                 `Operation ${operation.id} failed during precheck: ${failing.description}`,
@@ -774,19 +812,23 @@ export class MongoMigrationRunner {
   }
 
   /**
-   * The failure when a validator change's before-check finds documents the new validator rejects:
-   * how many, one `_id`, and the query that finds them all.
+   * The failure when a validator change's before-check, or the check before a collection's first
+   * rewrite, finds documents the new validator rejects: how many, one `_id`, and the query that finds
+   * them all.
    */
   private async documentsFailingValidatorRefusal(
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
+    ranOn: (collection: string) => readonly string[],
   ): Promise<MongoMigrationRunnerResult | undefined> {
-    const collMod = validatorSetBy(op);
-    if (collMod === undefined || isInspectionCheckSource(failed.source)) return undefined;
-    const failing = { $nor: [collMod.validator] };
+    if (isInspectionCheckSource(failed.source)) return undefined;
+    const checked = documentsCheckedBy(op, failed.source);
+    if (checked === undefined) return undefined;
+    const { collection, validator, beforeRewrites } = checked;
+    const failing = { $nor: [validator] };
     const counted = await this.firstRow({
       ...failed.source,
-      command: new RawAggregateCommand(collMod.collection, [
+      command: new RawAggregateCommand(collection, [
         { $match: failing },
         { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
       ]),
@@ -794,10 +836,10 @@ export class MongoMigrationRunner {
     const documents = Number(counted?.['documents'] ?? 0);
     if (documents === 0) return undefined;
     const documentId = mongoshValue(counted?.['documentId']);
-    const query = `db.getCollection(${JSON.stringify(collMod.collection)}).find(${JSON.stringify(failing)})`;
+    const query = `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(failing)})`;
     const [current] = (
       await this.deps.inspectionExecutor.listCollections(new ListCollectionsCommand())
-    ).filter((info) => info['name'] === collMod.collection);
+    ).filter((info) => info['name'] === collection);
     const options: unknown = current?.['options'];
     const validatorBefore: unknown =
       typeof options === 'object' && options !== null
@@ -805,17 +847,23 @@ export class MongoMigrationRunner {
         : undefined;
     const touched = fieldsTouched(
       Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
-      Reflect.get(collMod.validator ?? {}, '$jsonSchema'),
+      Reflect.get(validator, '$jsonSchema'),
     );
+    const one = documents === 1;
+    const found = `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh.`;
+    const ran = ranOn(collection);
+    const why = beforeRewrites
+      ? `${found} No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten. Change them so they fit the new validator, then run the command again.`
+      : `${found} Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed.${ran.length === 0 ? '' : ` These operations of this apply already changed collection ${collection} and stay applied: ${ran.join('; ')}.`} Once the documents are fixed, run the command again; operations that already ran are skipped.`;
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
-      `Operation ${op.id} stopped: ${documents} ${documents === 1 ? 'document' : 'documents'} in collection ${collMod.collection} ${documents === 1 ? 'does' : 'do'} not fit the new validator`,
+      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'does' : 'do'} not fit the new validator${beforeRewrites ? `, and no rewrite of this plan makes ${one ? 'it' : 'them'} fit` : ''}`,
       {
-        why: `${touchedSentence(touched)}${documents === 1 ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+        why,
         meta: {
           operationId: op.id,
           documentsFailingValidator: {
-            collection: collMod.collection,
+            collection,
             documents,
             documentId,
             query,

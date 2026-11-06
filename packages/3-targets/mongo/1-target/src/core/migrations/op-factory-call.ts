@@ -43,7 +43,9 @@ import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/
 import { ifDefined } from '@internal/utils/defined';
 import {
   type CastFieldOptions,
+  type CheckDocumentsOptions,
   castField,
+  checkDocuments,
   collMod,
   createCollection,
   createIndex,
@@ -393,6 +395,28 @@ export class FillFieldCall extends OpFactoryCallNode {
   }
 }
 
+export class CheckDocumentsCall extends OpFactoryCallNode {
+  readonly factoryName = 'checkDocuments' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: CheckDocumentsOptions;
+  readonly label: string;
+
+  constructor(options: CheckDocumentsOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoMigrationPlanOperation {
+    return checkDocuments(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `checkDocuments(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -433,6 +457,7 @@ export type OpFactoryCall =
   | CastFieldCall
   | DataTransformCall
   | FillFieldCall
+  | CheckDocumentsCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {

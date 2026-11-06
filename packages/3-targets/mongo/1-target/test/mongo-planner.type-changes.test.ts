@@ -14,6 +14,7 @@ import {
 
 const OBJECT_ID: FieldTypeSpec = { codecId: 'mongo/objectId@1' };
 const INT: FieldTypeSpec = { codecId: 'mongo/int32@1' };
+const CHECK_USERS = 'Check that the documents in users can fit the new validator';
 const BIG_INT: FieldTypeSpec = { codecId: 'mongo/int64@1' };
 const STRING: FieldTypeSpec = { codecId: 'mongo/string@1' };
 const DATE: FieldTypeSpec = { codecId: 'mongo/date@1' };
@@ -81,10 +82,11 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         ),
       ).toEqual({
         labels: [
+          CHECK_USERS,
           'Cast field age in collection users from int to long',
           'Update validator on users (changed: age)',
         ],
-        classes: ['widening', 'widening'],
+        classes: ['widening', 'widening', 'widening'],
         applied: [],
         dataLoss: [],
       });
@@ -119,14 +121,15 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         ),
       ).toEqual({
         labels: [
+          CHECK_USERS,
           'Cast field age in collection users from string to int',
           'Update validator on users (changed: age)',
         ],
-        classes: ['destructive', 'widening'],
+        classes: ['widening', 'destructive', 'widening'],
         applied: [],
         dataLoss: [
           {
-            operationIndex: 0,
+            operationIndex: 1,
             subject: { kind: 'field', namespaceId: NS, model: 'User', field: 'age' },
             loss: 'typeChange',
             label: 'Cast field age in collection users from string to int',
@@ -144,12 +147,13 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
 
       expect(planned(result)).toMatchObject({
         labels: [
+          CHECK_USERS,
           'Cast field scores in collection users from int to double',
           'Update validator on users (changed: scores)',
         ],
-        classes: ['widening', 'widening'],
+        classes: ['widening', 'widening', 'widening'],
       });
-      const [cast] =
+      const [, cast] =
         result.kind === 'success'
           ? settledOperations(result.plan as PlannerProducedMongoMigration)
           : [];
@@ -199,6 +203,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           }),
         ).labels,
       ).toEqual([
+        CHECK_USERS,
         'Rename field age to years in collection users',
         'Cast field years in collection users from int to long',
         'Remove field nickname from collection users',
@@ -309,14 +314,15 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         ),
       ).toEqual({
         labels: [
+          CHECK_USERS,
           'Cast field age in collection users from string to int',
           'Update validator on users (changed: age)',
         ],
-        classes: ['destructive', 'widening'],
+        classes: ['widening', 'destructive', 'widening'],
         applied: [],
         dataLoss: [
           {
-            operationIndex: 0,
+            operationIndex: 1,
             subject: { kind: 'storage', name: 'users.age' },
             loss: 'typeChange',
             label: 'Cast field age in collection users from string to int',
@@ -421,7 +427,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
             to: destination,
             schema: [schemaCollection('tasks', { jsonSchema: tasks('int') })],
           }),
-        ).labels[0],
+        ).labels[1],
       ).toBe(
         'Cast field severity in collection tasks from int to long in documents whose type is "bug"',
       );
@@ -456,6 +462,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       );
 
       expect(planned(plan({ from: null, to: destination, schema: [live] })).labels).toEqual([
+        CHECK_USERS,
         'Cast field age in collection users from int to long',
         'Cast field scores in collection users from int to long',
         'Update validator on users (changed: age, scores, meta)',

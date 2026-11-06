@@ -853,6 +853,70 @@ function documentsFitValidator(
   };
 }
 
+function isSchemaNode(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `schema` with each of `fields` optional and allowed to hold any value, at the top of the document
+ * and in each root model and variant branch.
+ */
+function relaxedSchema(
+  schema: Readonly<Record<string, unknown>>,
+  fields: readonly string[],
+): Record<string, unknown> {
+  const relaxed: Record<string, unknown> = { ...schema };
+  const required = schema['required'];
+  if (Array.isArray(required)) {
+    relaxed['required'] = required.filter((field) => !fields.includes(field));
+  }
+  const properties = schema['properties'];
+  if (isSchemaNode(properties) || schema['additionalProperties'] === false) {
+    relaxed['properties'] = {
+      ...(isSchemaNode(properties) ? properties : {}),
+      ...Object.fromEntries(fields.map((field) => [field, {}])),
+    };
+  }
+  for (const branches of ['anyOf', 'oneOf']) {
+    const entries = schema[branches];
+    if (Array.isArray(entries)) {
+      relaxed[branches] = entries.map((entry) =>
+        isSchemaNode(entry) ? relaxedSchema(entry, fields) : entry,
+      );
+    }
+  }
+  return relaxed;
+}
+
+export interface CheckDocumentsOptions {
+  readonly collection: string;
+  /** The `$jsonSchema` of the validator the plan sets on the collection. */
+  readonly validator: Readonly<Record<string, unknown>>;
+  /** The stored names the plan's rewrites change on the collection, a renamed field's old and new name both. */
+  readonly rewrittenFields: readonly string[];
+}
+
+/**
+ * Checks, before the plan rewrites a collection's documents, that each fits the new validator once
+ * the fields the plan rewrites are left out of it. A document that does not fit fails for a reason no
+ * rewrite of the plan fixes, so the apply stops before any rewrite runs.
+ */
+export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
+  const { collection } = options;
+  return {
+    id: `collection.${collection}.checkDocuments`,
+    label: `Check that the documents in ${collection} can fit the new validator`,
+    operationClass: 'widening',
+    precheck: [
+      documentsFitValidator(collection, {
+        $jsonSchema: relaxedSchema(options.validator, options.rewrittenFields),
+      }),
+    ],
+    execute: [],
+    postcheck: [],
+  };
+}
+
 /**
  * Matches the collection's validator body. MongoDB returns the validator through `listCollections`
  * with its keys in the order given, so the order-sensitive comparison holds once the collMod ran; a

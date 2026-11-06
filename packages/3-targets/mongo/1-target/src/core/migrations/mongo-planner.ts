@@ -72,11 +72,14 @@ import {
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
 import type { OpFactoryCall } from './op-factory-call';
 import {
+  CheckDocumentsCall,
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
+  FillFieldCall,
+  type RenameFieldCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
 } from './op-factory-call';
@@ -454,6 +457,57 @@ function comparableIndexes(
   };
 }
 
+function isDocument(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function rewrittenFieldsOf(
+  rewrites: readonly PlannedRewrite[],
+  fieldRenames: readonly RenameFieldCall[],
+): ReadonlyMap<string, readonly string[]> {
+  const fields = new Map<string, Set<string>>();
+  const add = (collection: string, field: string) =>
+    fields.set(collection, (fields.get(collection) ?? new Set()).add(field));
+  for (const rewrite of rewrites) add(rewrite.collection, rewrite.field);
+  for (const rename of fieldRenames) {
+    add(rename.collection, rename.from);
+    add(rename.collection, rename.to);
+  }
+  return new Map([...fields].map(([collection, names]) => [collection, [...names].sort()]));
+}
+
+function rewriteCollection(call: StatementCalls['rewrites'][number]): string {
+  return call instanceof FillFieldCall ? call.options.collection : call.collection;
+}
+
+/**
+ * The rewrites, each collection's preceded by a check that its documents can fit the validator the
+ * plan sets on it, once the fields the rewrites change are left out. Without it a rewrite could run
+ * and leave documents that neither the old validator nor the new one accepts.
+ */
+function withDocumentChecks(
+  statementCalls: StatementCalls | undefined,
+  validatorOps: readonly OpFactoryCall[],
+): readonly OpFactoryCall[] {
+  if (statementCalls === undefined) return [];
+  const checked = new Set<string>();
+  return statementCalls.rewrites.flatMap((call): OpFactoryCall[] => {
+    const collection = rewriteCollection(call);
+    if (checked.has(collection)) return [call];
+    checked.add(collection);
+    const validatorOp = validatorOps.find(
+      (op): op is CollModCall =>
+        op instanceof CollModCall &&
+        op.collection === collection &&
+        op.meta?.checkDocuments === true,
+    );
+    const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
+    const rewrittenFields = statementCalls.rewrittenFields.get(collection) ?? [];
+    if (!isDocument(validator) || rewrittenFields.length === 0) return [call];
+    return [new CheckDocumentsCall({ collection, validator, rewrittenFields }), call];
+  });
+}
+
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
     readonly contract: unknown;
@@ -526,7 +580,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
       ...drops,
-      ...(options.statementCalls?.rewrites ?? []),
+      ...withDocumentChecks(options.statementCalls, validatorOps),
       ...creates,
       ...validatorOps,
       ...mutableOptionOps,
@@ -740,6 +794,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
         ],
+        rewrittenFields: rewrittenFieldsOf(rewrites, fieldRenames),
       },
     });
     if (result.kind === 'failure') return result;

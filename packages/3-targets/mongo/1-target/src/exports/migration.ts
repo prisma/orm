@@ -14,6 +14,7 @@ export { placeholder } from '@internal/errors/migration';
 export { Migration } from '@internal/family-mongo/migration';
 export {
   castField,
+  checkDocuments,
   collMod,
   createCollection,
   createIndex,

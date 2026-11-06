@@ -340,3 +340,28 @@ describe('MongoMigrationRunner, every kind of rewrite on an empty collection', (
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a validator change whose documents a rewrite did not make fit', () => {
+  it(
+    'lists the operations of the apply that already changed the collection',
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([{ name: 'Ada' }]);
+      const properties = { name: { bsonType: 'string' }, nickname: { bsonType: 'string' } };
+
+      const result = await run(
+        [
+          fillField({ collection: 'users', field: 'nickname', value: 0 }),
+          validatorChange(properties),
+        ],
+        usersContract(properties),
+      );
+
+      if (result.ok) throw new Error('Expected the validator change to stop');
+      expect(result.failure.why).toContain(
+        'These operations of this apply already changed collection users and stay applied: Fill field nickname in collection users where it is missing or null.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

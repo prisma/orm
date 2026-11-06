@@ -225,6 +225,8 @@ export interface StatementCalls {
     | FillFieldCall
     | UnsetFieldCall
   )[];
+  /** For each collection, the stored names its rewrites change, a renamed field's old and new name both. */
+  readonly rewrittenFields: ReadonlyMap<string, readonly string[]>;
 }
 
 export interface StatementPlan {
