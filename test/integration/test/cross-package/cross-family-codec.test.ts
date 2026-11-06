@@ -1,7 +1,7 @@
 import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
-import { resolveValue } from '../../../../packages/3-mongo-target/2-mongo-adapter/src/resolve-value';
+import { resolveValue } from '../../../../packages/3-targets/mongo/2-adapter/src/resolve-value';
 import { defineTestCodec } from './test-codec';
 
 // T4.1 — cross-family codec parity proof

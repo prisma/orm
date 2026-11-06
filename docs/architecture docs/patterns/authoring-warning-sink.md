@@ -36,7 +36,7 @@ export interface AuthoringWarningSink {
 }
 ```
 
-- **Push sites mint fully-formed warnings.** The concrete vocabulary (`exactNameBodyWarning(subject, exactName)` in [`index-naming.ts`](../../../packages/2-sql/1-core/contract/src/index-naming.ts)) lives beside the emitter and never travels as a type — only `AuthoringWarning` crosses layers.
+- **Push sites mint fully-formed warnings.** The concrete vocabulary (`exactNameBodyWarning(subject, exactName)` in [`index-naming.ts`](../../../packages/2-sql-family/1-core/contract/src/index-naming.ts)) lives beside the emitter and never travels as a type — only `AuthoringWarning` crosses layers.
 - **The accumulating layer owns a plain array** (an `AuthoringWarning[]` satisfies the sink structurally) and threads it through `AuthoringEntityContext.warnings`. A producer that runs before the build (the PSL interpreter) hands its batch to the build on the producer→builder IR (`ContractDefinition.warnings`).
 - **Exactly one flush per build** — which may emit more than one warning. `flushAuthoringWarnings` groups on `code` AND `summary` and applies the batch threshold per group: at or below it, every `message` is emitted; above it, one batched warning — `"<count> <summary>"` over the `item` lines. Warnings batch together iff both keys match, so a mixed batch renders one summary per distinct summary text.
 
@@ -48,11 +48,11 @@ The framework must not learn family or target vocabulary (`no-family-vocabulary-
 
 | Implementation | Path | Demonstrates |
 |---|---|---|
-| Exact-name body-comparison warning | [`packages/2-sql/1-core/contract/src/index-naming.ts`](../../../packages/2-sql/1-core/contract/src/index-naming.ts) | Minting beside the emitter; shared by index lowering and the Postgres policy factory |
-| Duplicate-index warnings | [`packages/2-sql/1-core/contract/src/index-deduplication.ts`](../../../packages/2-sql/1-core/contract/src/index-deduplication.ts) | A contract-build pass pushing `PN_INDEX_DUPLICATE` and `PN_INDEX_REDUNDANT` into the build's sink |
-| Required unmapped column warning | [`packages/2-sql/2-authoring/contract-ts/src/unmapped-column-warnings.ts`](../../../packages/2-sql/2-authoring/contract-ts/src/unmapped-column-warnings.ts) | A contract-build pass pushing `PN_COLUMN_REQUIRED_UNMAPPED` for a required column with no default that a table node adds to a table some model maps |
-| PSL interpreter accumulation | [`packages/2-sql/2-authoring/contract-psl/src/interpreter.ts`](../../../packages/2-sql/2-authoring/contract-psl/src/interpreter.ts) | The array-as-sink, seeded into the build via `ContractDefinition.warnings` |
-| Per-build flush | [`packages/2-sql/2-authoring/contract-ts/src/build-contract.ts`](../../../packages/2-sql/2-authoring/contract-ts/src/build-contract.ts) | One flush at the end of `buildSqlContractFromDefinition` covering indexes and policies |
+| Exact-name body-comparison warning | [`packages/2-sql-family/1-core/contract/src/index-naming.ts`](../../../packages/2-sql-family/1-core/contract/src/index-naming.ts) | Minting beside the emitter; shared by index lowering and the Postgres policy factory |
+| Duplicate-index warnings | [`packages/2-sql-family/1-core/contract/src/index-deduplication.ts`](../../../packages/2-sql-family/1-core/contract/src/index-deduplication.ts) | A contract-build pass pushing `PN_INDEX_DUPLICATE` and `PN_INDEX_REDUNDANT` into the build's sink |
+| Required unmapped column warning | [`packages/2-sql-family/2-authoring/contract-ts/src/unmapped-column-warnings.ts`](../../../packages/2-sql-family/2-authoring/contract-ts/src/unmapped-column-warnings.ts) | A contract-build pass pushing `PN_COLUMN_REQUIRED_UNMAPPED` for a required column with no default that a table node adds to a table some model maps |
+| PSL interpreter accumulation | [`packages/2-sql-family/2-authoring/contract-psl/src/interpreter.ts`](../../../packages/2-sql-family/2-authoring/contract-psl/src/interpreter.ts) | The array-as-sink, seeded into the build via `ContractDefinition.warnings` |
+| Per-build flush | [`packages/2-sql-family/2-authoring/contract-ts/src/build-contract.ts`](../../../packages/2-sql-family/2-authoring/contract-ts/src/build-contract.ts) | One flush at the end of `buildSqlContractFromDefinition` covering indexes and policies |
 
 ## Related patterns
 

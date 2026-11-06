@@ -35,13 +35,19 @@ export {
 } from '../fragments';
 export { GroupedCollection } from '../grouped-collection';
 export { createModelAccessor } from '../model-accessor';
-export type { CollectionClasses, NoCollectionClasses, OrmOptions } from '../orm';
+export type {
+  CollectionClasses,
+  NoCollectionClasses,
+  OrmClientRootMembers,
+  OrmOptions,
+} from '../orm';
 export { checkCollectionClasses, orm } from '../orm';
 export type { PreparedCollection } from '../prepared-collection';
 export {
   createPreparedRowQuery,
   type PreparedFrom,
   type PreparedRowQuery,
+  type PrepareMember,
   prepareQuery,
 } from '../prepared-row-query';
 export type { AliasedTable, TableScope, TableStorageCoordinate } from '../table-scope';

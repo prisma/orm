@@ -1,5 +1,6 @@
 import {
   MongoSchemaCollection,
+  MongoSchemaIndex,
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
@@ -15,17 +16,20 @@ const branch = (properties: Record<string, unknown>, required: readonly string[]
 
 function validatorFieldLabels(jsonSchema: Record<string, unknown>): readonly string[] {
   const view = mongoSchemaToView(
-    new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        indexes: [],
-        validator: new MongoSchemaValidator({
-          jsonSchema,
-          validationLevel: 'strict',
-          validationAction: 'error',
+    new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          indexes: [],
+          validator: new MongoSchemaValidator({
+            jsonSchema,
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]),
+      ],
+      { fromDatabase: false },
+    ),
   );
   const collection = view.root.children?.[0];
   const validator = collection?.children?.find((child) => child.id === 'validator-users');
@@ -63,5 +67,31 @@ describe('mongoSchemaToView', () => {
         ],
       }),
     ).toEqual(['_id: objectId (required)', 'value: string,null,int']);
+  });
+});
+
+describe('mongoSchemaToView indexes', () => {
+  it('identifies each index by its name, so two indexes on the same keys stay apart', () => {
+    const keys = [{ field: 'email', direction: 1 as const }];
+    const view = mongoSchemaToView(
+      new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({ name: 'User_email_key', keys, unique: true }),
+              new MongoSchemaIndex({ name: 'User_email_idx', keys }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      ),
+    );
+    expect(
+      view.root.children?.[0]?.children?.map((node) => [node.id, node.meta?.['name']]),
+    ).toEqual([
+      ['index-users-User_email_key', 'User_email_key'],
+      ['index-users-User_email_idx', 'User_email_idx'],
+    ]);
   });
 });

@@ -70,7 +70,7 @@ Because the lowering is the same, one equation holds: lowering a model with a fi
 
 The reader lowers an `@ignore` field to a column node on the model's table with the field's type, nullability and default, and an `@@ignore` model to a table node with its columns, keys, indexes and foreign keys. A relation field pointing at an ignored model is still left out of the domain, but the foreign key under it is kept, targeting the table by name, because Prisma 7 created that constraint. An index or unique over an ignored field is valid storage and is kept. A primary key over an ignored field is refused, because the model would then have no identity among its fields and could not be updated, deleted or related.
 
-A column whose Prisma 7 type has no Prisma 8 codec cannot become a column node, since every storage column carries a codec. The reader refuses it, whether or not it is ignored, because a contract that left it out would describe a different table and a later migration could drop the column. `@ignore` and `@@ignore` are therefore no longer a way around a missing codec, and the reader's messages stop offering them. Supporting such columns is its own decision.
+A column whose Prisma 7 type has no Prisma 8 codec cannot become a column node, since every storage column carries a codec. That is now only a `@db.*` native type with no codec. The reader refuses it, whether or not it is ignored, because a contract that left it out would describe a different table and a later migration could drop the column. `@ignore` and `@@ignore` are therefore no longer a way around a missing codec, and the reader's messages stop offering them. An `Unsupported("...")` field is read as a raw column, which has a codec, and becomes a column node with no field, as an `@ignore` field does (ADR 273).
 
 `_prisma_migrations` is Prisma 7's record of applied migrations, and it is not declared in the contract. It is the earlier tool's bookkeeping, not the application's schema, as Prisma 8's own `prisma_contract` schema is not: Prisma 7's `db pull` never introspects it either. The Postgres adapter's introspection leaves it out of the application's schema unless a contract declares a table of that name, so `db verify`, strict included, and `contract infer` never see it. Declaring it would put a table with no model into every Prisma 7 contract, change every such project's storage hash, and make `contract print` refuse every Prisma 7 contract at cutover.
 
@@ -107,7 +107,7 @@ A junction table that a many-to-many relation goes through is a model. The lower
 - A column name passed where a field name belongs is an error at runtime as well as in the types.
 - `ContractDefinition` carries column nodes and table nodes beside models, and one lowering produces every column and table.
 - A junction table a relation goes through is a model, which closes the question ADR 174 left open.
-- A column whose type has no codec is not covered. That is its own decision.
+- A column whose type has no codec is not covered. ADR 273 covers `Unsupported("...")` columns with a raw data type; a `@db.*` type with no codec is still refused.
 - Prisma 8 PSL and the TypeScript DSL cannot yet declare an extra column or a table with no model. That is its own decision.
 - MongoDB's storage plane declares collections and indexes, not fields, so a field the application must not see has no storage representation to declare; this decision is SQL-only.
 

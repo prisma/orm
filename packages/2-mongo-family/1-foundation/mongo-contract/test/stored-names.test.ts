@@ -1,6 +1,6 @@
-import { asNamespaceId, crossRef } from '@internal/contract/types';
+import { asNamespaceId, type ContractModel, crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import type { MongoModelDefinition } from '../src/contract-types';
+import type { MongoModelStorage } from '../src/contract-types';
 import { modelAndBasesOf, mongoModelsOf } from '../src/mongo-models';
 import {
   hasOwnFieldStoredAs,
@@ -14,7 +14,7 @@ import {
 } from '../src/stored-names';
 import { scalarField } from './derive-json-schema-helpers';
 
-const user: MongoModelDefinition = {
+const user: ContractModel<MongoModelStorage> = {
   fields: { id: scalarField('mongo/objectId@1'), email: scalarField('mongo/string@1') },
   relations: {
     addresses: { to: crossRef('Address'), cardinality: '1:N' },
@@ -27,7 +27,7 @@ const user: MongoModelDefinition = {
   },
 };
 
-const admin: MongoModelDefinition = {
+const admin: ContractModel<MongoModelStorage> = {
   fields: { level: scalarField('mongo/int32@1') },
   relations: {},
   storage: { collection: 'users', fields: { level: { field: 'admin_level' } } },

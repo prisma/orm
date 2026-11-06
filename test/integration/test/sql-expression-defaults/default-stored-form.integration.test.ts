@@ -29,7 +29,7 @@ const EXPLANATION = `The database reads this default back as sql\`${STORED}\`; t
 async function contractWithDefault(expression: string): Promise<Contract<SqlStorage>> {
   const authored = await authorSqlContractFromPsl(`model Event {
   id Int      @id
-  at DateTime @default(sql\`${expression}\`)
+  at TimestamptzTemporal @default(sql\`${expression}\`)
 }`);
   expect(authored.diagnostics).toEqual([]);
   if (authored.contract === undefined) throw new Error('authoring produced no contract');
@@ -126,13 +126,12 @@ describe('a raw SQL default the database stores in its own form', { concurrent: 
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.failure.code).toBe('MIGRATION.SCHEMA_VERIFY_FAILED');
-      const issues = result.failure.meta?.['issues'];
+      const issues = result.failure.meta.schemaIssues;
       expect(
-        Array.isArray(issues) &&
-          issues.map((issue) => ({
-            path: issue.path.join('/'),
-            explanation: issue.explanation,
-          })),
+        issues?.map((issue) => ({
+          path: issue.path.join('/'),
+          explanation: issue.explanation,
+        })),
       ).toEqual([
         {
           path: 'database/public/Event/column:at/default',

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { guideChanges, patternsOf } from '../guide-detections';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '../../../../..');
@@ -11,26 +12,30 @@ interface Change {
   readonly patterns: readonly RegExp[];
 }
 
+const GUIDE_PATH =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md';
+
+const FRAGMENT_CHANGES: Record<string, (id: string) => boolean> = {
+  'postgres-postchecks-check-full-definition': (id) =>
+    id.startsWith('postgres-postcheck-') || id === 'postgres-alter-column-type-unchanged-refused',
+  'postgres-autoincrement-sequence-follows-column-type': (id) =>
+    id === 'postgres-autoincrement-sequence-follows-column-type',
+};
+
 function changesOf(fragment: string): readonly Change[] {
-  const guide = readFileSync(
-    join(repoRoot, 'upgrade-instructions/pending', fragment, 'app/instructions.md'),
-    'utf-8',
-  );
-  return guide
-    .split(/\n {2}- id: /)
-    .slice(1)
-    .map((block) => ({
-      id: block.slice(0, block.indexOf('\n')),
-      patterns: [...block.matchAll(/^ {8}- '(.*)'$/gm)].map(
-        ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-      ),
-    }));
+  const belongs = FRAGMENT_CHANGES[fragment];
+  if (belongs === undefined) throw new Error(`No changes listed for ${fragment}`);
+  const changes = guideChanges(GUIDE_PATH).filter(({ id }) => belongs(id));
+  if (changes.length === 0) throw new Error(`The guide lists no change of ${fragment}`);
+  return changes.map((change) => ({ id: change.id, patterns: patternsOf(change) }));
 }
 
 function opsJsonChanges(fragment: string): readonly Change[] {
-  return changesOf(fragment).filter(
+  const changes = changesOf(fragment).filter(
     ({ id }) => id !== 'postgres-alter-column-type-unchanged-refused',
   );
+  if (changes.length === 0) throw new Error(`The guide lists no ops.json change of ${fragment}`);
+  return changes;
 }
 
 const fixture = (name: string) => readFileSync(join(here, 'fixtures', name), 'utf-8');

@@ -47,6 +47,25 @@ describe('createGeneratorHelpers', () => {
     });
   });
 
+  it('reads the argument keys of a signature written as a function of the data types', () => {
+    const declaresByFunction = {
+      id: 'target-with-integers',
+      generatorFunctions: [
+        {
+          name: 'cuid',
+          signature: () =>
+            ({
+              documentation: 'cuid',
+              positional: [{ key: 'version', type: { _out: undefined as 2 | undefined } }],
+            }) as const,
+          bindings: [],
+        },
+      ],
+    } as const;
+    const gen = createGeneratorHelpers([declaresByFunction]);
+    expect(gen.cuid(2)).toEqual({ name: 'cuid', args: { version: 2 } });
+  });
+
   it('gives no helper for a function the components do not declare', () => {
     const gen = createGeneratorHelpers([target]);
     expect(Object.keys(gen)).toEqual([]);

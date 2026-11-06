@@ -159,16 +159,13 @@ describe('migration new', () => {
     });
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('prints the directory it scaffolded', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
-    const run = await harness(project).run(['migration', 'new'], {
-      cwd: project.dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(project).run(['migration', 'new'], { cwd: project.dir });
+    const [dirName] = await scaffoldedDirs(project);
 
-    expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirName ?? '')}\n`);
   });
 
   it('takes the db ref as the origin when --from is absent', async () => {

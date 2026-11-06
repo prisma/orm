@@ -20,14 +20,15 @@ import { stampSkillMetadata } from './set-version-utils.ts';
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 /**
- * The packages the skill ships in: the three targets an application depends
- * on directly. Shipping from the direct dependencies is what lets a consumer's
+ * The packages the skill ships in: the database facades an application
+ * depends on directly. Shipping from the direct dependencies is what lets a consumer's
  * `prisma skills sync` resolve the skill by package name instead of searching
  * `node_modules` for skill files.
  */
 export const SKILL_ANCHOR_PACKAGES: ReadonlyMap<string, string> = new Map([
   ['@prisma/orm-postgres', 'packages/9-public/@prisma/orm-postgres'],
   ['@prisma/orm-sqlite', 'packages/9-public/@prisma/orm-sqlite'],
+  ['@prisma/orm-mysql', 'packages/9-public/@prisma/orm-mysql'],
   ['@prisma/orm-mongo', 'packages/9-public/@prisma/orm-mongo'],
 ]);
 

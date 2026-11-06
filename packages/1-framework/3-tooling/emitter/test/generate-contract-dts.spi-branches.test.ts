@@ -60,6 +60,13 @@ function makeEnumContract(opts: {
   return createTestContract({ namespaces: { public: publicNs } });
 }
 
+describe('generateContractDts contract type', () => {
+  it('writes profileHash on the line after meta, with no blank line between them', () => {
+    const dts = generateContractDts(createTestContract(), createMockSpi(), [], HASHES);
+    expect(dts).toMatch(/readonly meta: [^\n]*;\n {2}readonly profileHash: ProfileHash;/);
+  });
+});
+
 describe('generateContractDts SPI hook plumbing', () => {
   it('omits extra storage exports when the SPI has no getStorageTypeExports hook', () => {
     const spi: EmissionSpi = createMockSpi();

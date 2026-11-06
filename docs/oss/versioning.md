@@ -1,19 +1,32 @@
 # Versioning
 
-This page covers the **version contract** Prisma 8 offers to its users and ecosystem, and the **mechanism** that delivers it. The first half is the policy you can rely on; the second half is the procedure maintainers follow to honour it.
+This page says which versions of Prisma ORM are maintained and what each one receives, then how Prisma 8 is versioned and published. The procedures at the end are for maintainers.
 
-## Pre-1.0: deliberately unstable
+## Supported versions
 
-> **Note:** releases now ship on the v8 RC line (`8.0.0-rc.N`) rather than as `0.x` minors — see [The v8 RC line](#the-v8-rc-line) below. The latitude described here carries over: RC respins may include breaking changes until `8.0.0` final ships.
+| Version | Branch | Status | Maintained until |
+| --- | --- | --- | --- |
+| Prisma 8 | `main` | Release candidate | Not yet announced |
+| Prisma 7 | `v7` | Maintenance | 18 months after Prisma `8.0.0` is released |
 
-Prisma 8 is in early access and is deliberately pre-`1.0`. Per [SemVer §4](https://semver.org/#spec-item-4), the `0.x` range carries no backwards-compatibility promise, and we use that latitude. Concretely:
+**Prisma 8** is where all new development happens. Until `8.0.0`, its releases are release candidates, described [below](#release-candidates).
 
-- **Breaking changes ship in regular minor bumps.** A `0.7.0` to `0.8.0` upgrade may include API removals, semantic changes to existing APIs, or contract-format changes.
-- **Releases are frequent.** The cadence is "ship a minor whenever the next batch of work is cohesive enough to warrant one", not a fixed weekly/monthly schedule. Expect minors more often than you would expect them from a 1.x project.
-- **There are no patch releases of older minors.** Once `0.8.0` ships, `0.7.x` receives no further updates — no security patches, no regression fixes, no cherry-picks. If you hit a regression in the latest `latest` we may cut a `0.8.1`, but you are expected to keep up rather than pin and wait.
-- **Agent-driven upgrade guides help consumers keep current.** Feature PRs contribute independent, unversioned instructions. Release preparation assembles one guide per audience, alongside release notes, and archives the originals outside published packages. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
+**Prisma 7** is in maintenance. The Prisma maintainers fix bugs and security issues in it, and do not build new features for it. A feature contributed by the community can still be accepted, if it fits Prisma 7's design and meets the project's quality standards. A [maintainer](./governance.md#maintainer-team) decides whether a contribution does; passing the [mechanical requirements](./pr-triage.md#step-4--mechanical-requirements) in PR triage is required but is not enough on its own. Pull requests for Prisma 7 target the `v7` branch.
 
-If your project cannot tolerate this cadence today, Prisma 8 is not the right choice yet. The promise we make instead is that you can always read a single number — the root `package.json` `version` of any commit — and know exactly what you have.
+[`SECURITY.md`](../../SECURITY.md#supported-versions) says which releases receive security fixes. The decision is recorded in [ADR 295](../architecture%20docs/adrs/ADR%20295%20-%20New%20features%20do%20not%20land%20on%20Prisma%207.md).
+
+## Release candidates
+
+Until `8.0.0` is released, Prisma 8 ships as release candidates: `8.0.0-rc.1`, `8.0.0-rc.2`, and so on. A release candidate carries no backwards-compatibility promise. Concretely:
+
+- **Any release candidate may contain breaking changes:** API removals, changes to how an existing API behaves, or changes to the contract format.
+- **Releases are frequent.** A new release candidate ships whenever the next batch of work is ready, not on a fixed schedule.
+- **Only the latest release candidate is maintained.** A fix ships in the next release candidate; older ones get no patches, including security patches.
+- **Upgrade guides help you keep current.** Each release ships with an upgrade guide, which the `prisma-8` skill can apply for you. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
+
+If your project cannot keep up with this, wait for `8.0.0`. What you can rely on: the root `package.json` `version` of any commit says exactly which release it is.
+
+Before the release candidates, Prisma 8 shipped as `0.x` minors under the same terms. [The v8 RC line](#the-v8-rc-line) describes the version numbers in detail.
 
 ## Lockstep across the workspace
 
@@ -21,7 +34,7 @@ Every workspace package — publishable, private, the workspace root, and exampl
 
 This invariant has consequences that ecosystem participants need to plan for:
 
-- **Agent skills, the upgrade instructions, and any other tooling we ship alongside the framework version in lockstep with it.** A skill installed at the same time as `@internal/postgres@0.8.0` is a `0.8.0` skill and reasons about a `0.8.0` contract. There is no separate skill-version axis to track. This is now physical rather than conventional: the `prisma-8` skill ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-mongo` tarballs (copied in by each package's `prepack`), and `scripts/set-version.ts` stamps its `metadata.library_version` frontmatter with the version being published. Getting the skill and getting the code are one install, and a consumer can compare the stamp on its synced copy against its installed packages.
+- **Agent skills, the upgrade instructions, and any other tooling we ship alongside the framework version in lockstep with it.** A skill installed at the same time as `@internal/postgres@0.8.0` is a `0.8.0` skill and reasons about a `0.8.0` contract. There is no separate skill-version axis to track. This is now physical rather than conventional: the `prisma-8` skill ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` and `@prisma/orm-mongo` tarballs (copied in by each package's `prepack`), and `scripts/set-version.ts` stamps its `metadata.library_version` frontmatter with the version being published. Getting the skill and getting the code are one install, and a consumer can compare the stamp on its synced copy against its installed packages.
 - **Extension authors that depend on internal framework packages must pin those dependencies to the framework version their consumers will use.** If your extension depends on `@internal/sql-core` (an internal framework package), publish each version of your extension targeting one specific Prisma 8 minor and pin to it exactly (`"@internal/sql-core": "0.8.0"`, not `"^0.8.0"`). Internal packages do not promise inter-minor compatibility — `0.8.x` and `0.9.x` may have incompatible internals even when the user-visible surface looks similar. The extension's published version range communicates which framework minor it targets.
 - **Internal packages are never published, but they still version in lockstep** so a contributor cloning the repo at any commit sees one consistent answer to "what version is this code?" The `private: true` flag means `pnpm publish` skips them.
 
@@ -31,7 +44,7 @@ If lockstep ever broke — if a private package or example carried a different v
 
 Prisma 8 ships as a release-candidate line ahead of `8.0.0` final: releases are versioned `8.0.0-rc.1`, `8.0.0-rc.2`, … with the counter advancing on every release publish. "The v8 RC" is the product name; the version number underneath iterates freely, and there is no promise that the final RC is literally numbered `rc.1`. Versions are immutable on npm — a botched publish burns a counter value, which is fine; skip it and never reuse a number.
 
-For every package this repository publishes, **`latest` tracks the newest release — RC or stable**. These package names have no pre-v8 stable audience to protect: a bare `npm install` of any of them is an early-access install, and early-access users are expected to keep up (see the pre-1.0 policy above). Existing installs are unaffected — lockfiles pin resolved versions, and `^0.x` ranges can never resolve to an RC (pre-releases don't match stable ranges), so nobody is moved onto the RC line by `npm update`; new installs simply get the newest RC.
+For every package this repository publishes, **`latest` tracks the newest release — RC or stable**. These package names have no pre-v8 stable audience to protect: a bare `npm install` of any of them is an early-access install, and early-access users are expected to keep up (see [Release candidates](#release-candidates)). Existing installs are unaffected — lockfiles pin resolved versions, and `^0.x` ranges can never resolve to an RC (pre-releases don't match stable ranges), so nobody is moved onto the RC line by `npm update`; new installs simply get the newest RC.
 
 The frozen-`latest` concern — never surprising an existing stable audience — applies to the bare `prisma` package, which this repository does not publish. Its v8 bin shim lives in [prisma/prisma-cli](https://github.com/prisma/prisma-cli); that repository publishes v8 builds under `next` while `latest` stays on Prisma 7 (published from the `v7` branch's pipeline) until `8.0.0` final.
 
@@ -86,7 +99,7 @@ If the publish needs to be re-run (transient registry failure, etc.), a maintain
 
 ## Procedure: patch the current minor
 
-**On the RC line there are no patch releases** — a fix ships as the next `rc.N` via the routine procedure above. This section applies only while releases are stable versions (before the RC transition, or after `8.0.0` final). Patches are not part of the routine cadence and only apply to the **current** minor (per the pre-1.0 policy above — older minors are not maintained). If a freshly-published `latest` ships a regression that must be addressed before the next minor:
+**On the RC line there are no patch releases** — a fix ships as the next `rc.N` via the routine procedure above. This section applies only while releases are stable versions (before the RC transition, or after `8.0.0` final). Patches are not part of the routine cadence and only apply to the **current** minor; older minors are not maintained. If a freshly-published `latest` ships a regression that must be addressed before the next minor:
 
 1. Land the fix as a small PR.
 2. On a follow-up PR, run `node scripts/set-version.ts <major>.<minor>.<patch+1>` to advance every workspace package to the patch version.
@@ -101,6 +114,6 @@ The publish workflow's `dry-run` mode (the input default) can be invoked from an
 
 ## Non-goals
 
-- **Maintenance of older minors.** Stated above as policy: in the `0.x` range, you upgrade. There is no tooling for cutting a `0.7.x` patch after `0.8.0` ships, and that is intentional.
+- **Maintenance of older Prisma 8 releases.** You upgrade to the latest. There is no tooling for patching an older release candidate, and that is intentional. Prisma 7 is the one older line that is maintained (see [Supported versions](#supported-versions)).
 - **A scripted `beta` cadence.** The `beta` dist-tag exists but cutting beta builds is a manual `workflow_dispatch`. (The RC cadence, by contrast, *is* the routine scripted path — see the RC-line section above.)
 - **Independent per-package versioning.** Lockstep is the invariant the rest of the contract is built on; per-package versions would require redesigning `set-version.ts`, the publish flow, and the upgrade-skill recipe model.

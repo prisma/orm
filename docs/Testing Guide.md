@@ -1072,9 +1072,19 @@ MongoDB tests use `mongodb-memory-server` to run a real MongoDB instance in-proc
 
 ### Dependencies
 
-- `mongodb-memory-server` (`^10.4.0`) — in-process MongoDB server
-- `mongodb` (`^6.16.0`, via pnpm catalog) — MongoDB driver
-- Listed in `pnpm-workspace.yaml` under `allowBuilds`
+- `mongodb-memory-server` (via pnpm catalog) — in-process MongoDB server
+- `mongodb` (via pnpm catalog) — MongoDB driver
+- Listed in `pnpm-workspace.yaml` under `allowBuilds`, so `pnpm install` downloads the `mongod` binary once
+
+### The `mongod` binary in CI
+
+Each CI job that runs MongoDB tests uses `.github/actions/mongod-binary` after installing. It restores the binary from the Actions cache, or downloads it with `scripts/download-mongod-binary.mjs`, before any test starts. Tests then never download it. Without this, test packages that start in parallel each download the binary into one folder and fail on its lock file (`Cannot unlock file …/mongodb-binaries/<version>.lock`).
+
+The script retries a failed download up to four times. Before each retry it deletes lock files and any binary that does not run.
+
+### Retrying CI setup steps
+
+CI setup steps that fetch over the network run through `scripts/retry-command.mjs`, which runs a command up to three times. Its `--before-retry` option undoes what a failed attempt left behind, as `supabase stop --no-backup` does before `supabase start` runs again. `pnpm install` retries failed package downloads five times (`fetchRetries` in `pnpm-workspace.yaml`). Wrap any new setup step that downloads or pulls images the same way.
 
 ### Test setup helpers
 

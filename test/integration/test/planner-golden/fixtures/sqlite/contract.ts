@@ -28,12 +28,9 @@ const varcharLength = {
   codecId: 'sql/varchar@1',
   typeParams: { length: 255 },
 } as const;
-const shortText = { kind: 'codec-instance', ...varcharLength } as const;
+const ShortText = field.column(varcharLength);
 
 export const contract = defineContract({
-  types: {
-    ShortText: shortText,
-  },
   models: {
     Scalar: model('Scalar', {
       fields: {
@@ -52,7 +49,7 @@ export const contract = defineContract({
         charLength: field.column(charLength),
         varchar: field.column(varchar),
         varcharLength: field.column(varcharLength),
-        shortText: field.namedType(shortText),
+        shortText: ShortText,
       },
     }).sql({ table: 'scalar' }),
   },

@@ -111,7 +111,7 @@ export interface CodecCallContext {
   readonly signal?: AbortSignal;
 }
 
-// packages/2-sql/4-lanes/relational-core/src/ast/codec-types.ts
+// packages/2-sql-family/4-lanes/relational-core/src/ast/codec-types.ts
 export interface SqlColumnRef {
   readonly table: string;
   readonly name: string;

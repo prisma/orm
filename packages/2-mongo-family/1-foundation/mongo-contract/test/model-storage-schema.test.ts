@@ -4,6 +4,7 @@ import { MongoContractSchema } from '../src/contract-schema';
 
 function contractWithUserStorage(storage: unknown) {
   return {
+    target: 'mongo',
     targetFamily: 'mongo',
     roots: {},
     domain: {

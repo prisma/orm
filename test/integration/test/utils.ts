@@ -11,6 +11,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   Log,
   Runtime,
+  RuntimeMode,
   SqlMiddleware,
   SqlRuntimeExtensionDescriptor,
   VerifyMarkerOption,
@@ -25,7 +26,7 @@ export interface CreateTestRuntimeOptions {
   readonly verifyMarker?: VerifyMarkerOption;
   readonly extensions?: readonly SqlRuntimeExtensionDescriptor<'postgres'>[];
   readonly middleware?: readonly SqlMiddleware[];
-  readonly mode?: 'strict' | 'permissive';
+  readonly mode?: RuntimeMode;
   readonly log?: Log;
 }
 
@@ -103,7 +104,7 @@ export async function createTestRuntimeFromClient(
   return createTestRuntime(
     contract,
     {
-      binding: { kind: 'pgClient', client },
+      binding: { kind: 'pgClient', client, ownedByDriver: false },
       cursor: { disabled: true },
     },
     options,

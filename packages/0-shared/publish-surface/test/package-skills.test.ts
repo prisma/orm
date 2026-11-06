@@ -25,7 +25,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { publicShells, type ShellName } from '../src/shells';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
-const facades: ShellName[] = ['@prisma/orm-postgres', '@prisma/orm-sqlite', '@prisma/orm-mongo'];
+const facades: ShellName[] = [
+  '@prisma/orm-postgres',
+  '@prisma/orm-sqlite',
+  '@prisma/orm-mysql',
+  '@prisma/orm-mongo',
+];
 const SKILL_NAME = 'prisma-8';
 
 interface Manifest {

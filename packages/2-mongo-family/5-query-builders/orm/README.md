@@ -4,7 +4,7 @@ MongoDB ORM client for Prisma 8.
 
 ## Responsibilities
 
-- **ORM client factory**: `mongoOrm()` creates a typed client with root-based collection accessors; it takes the contract's enum accessors (`enums`, from `buildMongoEnums(contract, context.codecs)` in `@internal/mongo-runtime`) and refuses a written value outside a field's enum
+- **ORM client factory**: `mongoOrm({ context, runtime })` creates a typed client with root-based collection accessors, as the SQL `orm({ context, runtime })` does. It fills generated fields through the context and refuses a written value outside a field's enum, checking it against enum accessors it builds from the context once per client with the framework's `buildNamespacedEnums`. `createMongoCollection({ context, runtime }, modelName)` creates one collection the same way
 - **Typed queries**: `findMany` with equality filters (`MongoWhereFilter`) and reference includes (`MongoIncludeSpec`)
 - **Row type inference**: `InferFullRow` (scalar fields + embedded documents), `InferRootRow` (discriminated union for polymorphic roots), `IncludeResultFields`
 - **Polymorphic narrowing**: Discriminator field carries literal variant values, enabling TypeScript `switch`/`if` narrowing

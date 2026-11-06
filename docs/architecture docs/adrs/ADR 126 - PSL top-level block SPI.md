@@ -41,6 +41,8 @@ const policySelectDescriptor: AuthoringPslBlockDescriptor = {
 };
 ```
 
+> Note 2026-10-22: this example predates the current descriptor, which declares a block's parameters with an attribute specification in `spec` ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). Its `option` parameter kind is not the authoring argument kind of the same name, which [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) removed with field presets.
+
 No parsing or printing code runs from the extension. The descriptor is registered on `AuthoringContributions.pslBlockDescriptors`, paired with a matching `AuthoringContributions.entityTypes` factory under the same `discriminator`; the parsed block lowers to an IR class instance through that factory.
 
 ## Why describe blocks as data

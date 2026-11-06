@@ -1187,6 +1187,36 @@ describe('funcCall with a signature', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('names the callee by its label in a binding diagnostic', () => {
+    const { expr, ctx } = argOf('cuid()');
+    const cuid = funcCall(
+      'cuid',
+      {
+        documentation: 'Calls the named value generator.',
+        positional: [
+          { key: 'version', type: int(), documentation: 'The value bound to this slot.' },
+        ],
+      },
+      { label: 'Default function "cuid"' },
+    );
+
+    const result = cuid.parse(expr, ctx);
+
+    expect(result.ok ? [] : result.failure.map((diagnostic) => diagnostic.message)).toEqual([
+      'Default function "cuid" is missing required argument "version"',
+    ]);
+  });
+
+  it('names the callee as an attribute when it has no label', () => {
+    const { expr, ctx } = argOf('nanoid(16, 2)');
+
+    const result = nanoid().parse(expr, ctx);
+
+    expect(result.ok ? [] : result.failure.map((diagnostic) => diagnostic.message)).toEqual([
+      'Attribute "nanoid" received too many positional arguments',
+    ]);
+  });
+
   it('still rejects a callee that differs from the pinned name', () => {
     const { expr, ctx } = argOf('cuid(16)');
 

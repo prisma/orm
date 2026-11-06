@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Host.net\" has type Unsupported(...), so the Prisma 8 model has no field for it, but relation field \"Host.network\" joins on it, and Prisma 8 relations join on fields. Mark relation field \"Host.network\" @ignore: Prisma 7's next migration is then empty, the relation field disappears from the Prisma 7 client, and Prisma 8 keeps its foreign key while leaving the relation out of the contract's models."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Network.prefix\" has type Unsupported(...), so the Prisma 8 model has no field for it, but relation field \"Host.network\" joins on it, and Prisma 8 relations join on fields. Mark relation field \"Host.network\" @ignore: Prisma 7's next migration is then empty, the relation field disappears from the Prisma 7 client, and Prisma 8 keeps its foreign key while leaving the relation out of the contract's models."
+  }
+]

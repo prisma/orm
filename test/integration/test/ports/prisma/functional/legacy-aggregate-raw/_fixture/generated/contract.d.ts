@@ -22,7 +22,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b526e2b6ed8a01696c69a9d9aca9d5279dda1363d669e1a3bbcb8e9338512e75'>;
+  StorageHashBase<'42b06daf0a9b1400be3fff8ced3f1bbdec6e2315b7b0e2fc4d73fec31dd6b24d'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -37,14 +37,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -119,6 +121,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'email' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'email_1';
                   readonly unique: true;
                 },
               ];
@@ -265,7 +268,6 @@ type ContractBase = Omit<
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

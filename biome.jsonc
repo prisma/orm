@@ -89,6 +89,12 @@
         }
       }
     },
+    // An upgrade script fixture holds the files a script reads and writes, byte for byte.
+    {
+      "includes": ["**/upgrade-instructions/*/fixtures/**"],
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
     {
       "includes": ["**/*.config.ts"],
       "linter": {

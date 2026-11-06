@@ -1,4 +1,4 @@
-import type { ContractWithDomain, NamespaceId } from '@internal/contract/types';
+import { asNamespaceId, type ContractWithDomain, type NamespaceId } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '../ir/namespace';
 
 /** A model: its namespace and its name as the contract source writes it, never a table name. */
@@ -12,6 +12,20 @@ export interface ModelCoordinate {
  * field's name in the contract source or its stored name in every family is not settled yet.
  */
 export interface FieldCoordinate extends ModelCoordinate {
+  readonly field: string;
+}
+
+/** A member of an enum the contract declares, named as the contract source names it, never by its stored value. */
+export interface EnumValueCoordinate {
+  readonly namespaceId: NamespaceId;
+  readonly enum: string;
+  readonly member: string;
+}
+
+/** A field of a value object; `namespaceId` is the storage namespace the value object lives in. */
+export interface ValueObjectFieldCoordinate {
+  readonly namespaceId: NamespaceId;
+  readonly valueObject: string;
   readonly field: string;
 }
 
@@ -29,8 +43,37 @@ export interface ResolvedFieldRenameStatement {
   readonly to: FieldCoordinate;
 }
 
+/** A member of an enum renamed: `from` names it in the origin contract and `to` in the destination, in the same enum. */
+export interface ResolvedEnumValueRenameStatement {
+  readonly kind: 'rename';
+  readonly entity: 'enumValue';
+  readonly from: EnumValueCoordinate;
+  readonly to: EnumValueCoordinate;
+}
+
+/** A field of a value object renamed: `from` names it in the origin contract and `to` in the destination, in the same value object. */
+export interface ResolvedValueObjectFieldRenameStatement {
+  readonly kind: 'rename';
+  readonly entity: 'valueObjectField';
+  readonly from: ValueObjectFieldCoordinate;
+  readonly to: ValueObjectFieldCoordinate;
+}
+
+/** A namespace renamed: `from` is a namespace of the origin contract and `to` one of the destination. */
+export interface ResolvedNamespaceRenameStatement {
+  readonly kind: 'rename';
+  readonly entity: 'namespace';
+  readonly from: NamespaceId;
+  readonly to: NamespaceId;
+}
+
 /** A rename: `from` is a coordinate of the origin contract and `to` one of the destination contract. */
-export type ResolvedRenameStatement = ResolvedModelRenameStatement | ResolvedFieldRenameStatement;
+export type ResolvedRenameStatement =
+  | ResolvedNamespaceRenameStatement
+  | ResolvedModelRenameStatement
+  | ResolvedFieldRenameStatement
+  | ResolvedEnumValueRenameStatement
+  | ResolvedValueObjectFieldRenameStatement;
 
 /** A field whose values the migration converts to its new type with code the user writes. */
 export interface ResolvedFieldConvertStatement {
@@ -48,6 +91,22 @@ export interface ResolvedFieldBackfillStatement {
   readonly field: FieldCoordinate;
 }
 
+/** A required field of a value object whose values in existing data the migration fills with a value the user writes. */
+export interface ResolvedValueObjectFieldBackfillStatement {
+  readonly kind: 'backfill';
+  readonly entity: 'valueObjectField';
+  /** The field as the destination contract names it. */
+  readonly field: ValueObjectFieldCoordinate;
+}
+
+/** A variant whose discriminator value changed, whose stored discriminator values the migration rewrites to the new one. */
+export interface ResolvedVariantConvertStatement {
+  readonly kind: 'convert';
+  readonly entity: 'model';
+  /** The variant as the destination contract names it. */
+  readonly model: ModelCoordinate;
+}
+
 /**
  * A statement resolved against the origin and destination contracts into domain coordinates. `kind`
  * names what the statement asks the plan to do, and `entity` the kind of coordinate it names.
@@ -55,7 +114,9 @@ export interface ResolvedFieldBackfillStatement {
 export type ResolvedMigrationStatement =
   | ResolvedRenameStatement
   | ResolvedFieldConvertStatement
-  | ResolvedFieldBackfillStatement;
+  | ResolvedFieldBackfillStatement
+  | ResolvedValueObjectFieldBackfillStatement
+  | ResolvedVariantConvertStatement;
 
 export function isRenameStatement(
   statement: ResolvedMigrationStatement,
@@ -72,6 +133,8 @@ export function isRenameStatement(
 export type MigrationSubject =
   | ({ readonly kind: 'model' } & ModelCoordinate)
   | ({ readonly kind: 'field' } & FieldCoordinate)
+  | ({ readonly kind: 'enumValue' } & EnumValueCoordinate)
+  | ({ readonly kind: 'valueObjectField' } & ValueObjectFieldCoordinate)
   | { readonly kind: 'storage'; readonly name: string };
 
 /** A key that is equal for two subjects exactly when they name the same thing. */
@@ -81,6 +144,15 @@ export function migrationSubjectKey(subject: MigrationSubject): string {
       return JSON.stringify(['model', subject.namespaceId, subject.model]);
     case 'field':
       return JSON.stringify(['field', subject.namespaceId, subject.model, subject.field]);
+    case 'enumValue':
+      return JSON.stringify(['enumValue', subject.namespaceId, subject.enum, subject.member]);
+    case 'valueObjectField':
+      return JSON.stringify([
+        'valueObjectField',
+        subject.namespaceId,
+        subject.valueObject,
+        subject.field,
+      ]);
     case 'storage':
       return JSON.stringify(['storage', subject.name]);
   }
@@ -92,12 +164,9 @@ export interface MigrationOperationSubject {
   readonly subject: MigrationSubject;
 }
 
-/** An operation that changes who can read or write the rows of its subject. */
+/** An operation that changes who can read or write its subject's data. */
 export interface MigrationAccessChange extends MigrationOperationSubject {
-  /**
-   * True when it lets more people read or write, such as disabling row-level security; false when
-   * the change can go either way, such as dropping a policy.
-   */
+  /** True when it lets more people read or write; false when the change can go either way. */
   readonly widens: boolean;
 }
 
@@ -115,6 +184,16 @@ export interface MigrationDataLoss extends MigrationOperationSubject {
   readonly label: string;
   /** How to keep the data instead, in the target's words, when no statement can say so. */
   readonly keepDataAdvice?: string;
+  /** The edit to a planned `migration.ts` that keeps the data instead, when no statement can say so. */
+  readonly keepDataEdit?: KeepDataEdit;
+}
+
+/** An edit to a `migration.ts`: the call `remove`, as the target writes it, replaced by `replaceWith`. */
+export interface KeepDataEdit {
+  readonly remove: string;
+  readonly replaceWith: string;
+  /** Whether the edit moves stored values between members that trade them, through a temporary value. */
+  readonly swapsValues?: boolean;
 }
 
 /**
@@ -138,9 +217,20 @@ export interface MigrationPlanSubjects<
   /** Each operation that loses data, in plan order, with what it loses. */
   readonly dataLoss: readonly TLoss[];
   /** Each operation that changes who can read or write data, in plan order, with what it is about. */
-  readonly accessWidening: readonly TAccess[];
+  readonly accessChanges: readonly TAccess[];
   /** Each new required field whose existing rows the plan gives a temporary value, in plan order. */
   readonly temporaryValues: readonly TTemporary[];
+}
+
+/**
+ * The namespaces a plan changes, by namespace id: `removed` are those of the origin contract whose
+ * tables the plan drops with them because the destination no longer declares them, and `added`
+ * are those the destination declares and the origin does not. A planner without namespaces reports
+ * neither.
+ */
+export interface MigrationPlanNamespaces {
+  readonly removed: readonly string[];
+  readonly added: readonly string[];
 }
 
 /**
@@ -179,6 +269,22 @@ export function fieldStatementText(contract: ContractWithDomain, field: FieldCoo
   return `${modelStatementText(contract, field)}.${field.field}`;
 }
 
+/** An enum member as a statement names it, through its enum: `Status.ARCHIVED`, or `app.Status.ARCHIVED` when the contract has several namespaces. */
+export function enumValueStatementText(
+  contract: ContractWithDomain,
+  value: EnumValueCoordinate,
+): string {
+  return `${modelStatementText(contract, { namespaceId: value.namespaceId, model: value.enum })}.${value.member}`;
+}
+
+/** A value object field as a statement names it, through its value object: `GeoPoint.lat`, or `app.GeoPoint.lat` when the contract has several namespaces. */
+export function valueObjectFieldStatementText(
+  contract: ContractWithDomain,
+  field: ValueObjectFieldCoordinate,
+): string {
+  return `${modelStatementText(contract, { namespaceId: field.namespaceId, model: field.valueObject })}.${field.field}`;
+}
+
 /** A model coordinate in JSON output: `namespaceId` is left out for the unbound namespace. */
 export interface ModelCoordinateJson {
   readonly namespaceId?: NamespaceId;
@@ -190,8 +296,28 @@ export interface FieldCoordinateJson extends ModelCoordinateJson {
   readonly field: string;
 }
 
+/** An enum member coordinate in JSON output: `namespaceId` is left out for the unbound namespace. */
+export interface EnumValueCoordinateJson {
+  readonly namespaceId?: NamespaceId;
+  readonly enum: string;
+  readonly member: string;
+}
+
+/** A value object field coordinate in JSON output: `namespaceId` is left out for the unbound namespace. */
+export interface ValueObjectFieldCoordinateJson {
+  readonly namespaceId?: NamespaceId;
+  readonly valueObject: string;
+  readonly field: string;
+}
+
 /** A resolved statement in JSON output, with each coordinate written as `*CoordinateJson`. */
 export type MigrationStatementJson =
+  | {
+      readonly kind: 'rename';
+      readonly entity: 'namespace';
+      readonly from: { readonly namespaceId: NamespaceId };
+      readonly to: { readonly namespaceId: NamespaceId };
+    }
   | {
       readonly kind: 'rename';
       readonly entity: 'model';
@@ -205,20 +331,58 @@ export type MigrationStatementJson =
       readonly to: FieldCoordinateJson;
     }
   | {
+      readonly kind: 'rename';
+      readonly entity: 'enumValue';
+      readonly from: EnumValueCoordinateJson;
+      readonly to: EnumValueCoordinateJson;
+    }
+  | {
+      readonly kind: 'rename';
+      readonly entity: 'valueObjectField';
+      readonly from: ValueObjectFieldCoordinateJson;
+      readonly to: ValueObjectFieldCoordinateJson;
+    }
+  | {
       readonly kind: 'convert' | 'backfill';
       readonly entity: 'field';
       readonly field: FieldCoordinateJson;
+    }
+  | {
+      readonly kind: 'backfill';
+      readonly entity: 'valueObjectField';
+      readonly field: ValueObjectFieldCoordinateJson;
+    }
+  | {
+      readonly kind: 'convert';
+      readonly entity: 'model';
+      readonly model: ModelCoordinateJson;
     };
 
 /** A subject in JSON output: `namespaceId` is left out for the unbound namespace. */
 export type MigrationSubjectJson =
   | ({ readonly kind: 'model' } & ModelCoordinateJson)
   | ({ readonly kind: 'field' } & FieldCoordinateJson)
+  | ({ readonly kind: 'enumValue' } & EnumValueCoordinateJson)
+  | ({ readonly kind: 'valueObjectField' } & ValueObjectFieldCoordinateJson)
   | { readonly kind: 'storage'; readonly name: string };
 
-function coordinateJson<T extends ModelCoordinate>(
+/** An enum value coordinate read from its JSON form, in which the unbound namespace is left out. */
+export function enumValueCoordinateFromJson(json: EnumValueCoordinateJson): EnumValueCoordinate {
+  return {
+    namespaceId: json.namespaceId ?? asNamespaceId(UNBOUND_NAMESPACE_ID),
+    enum: json.enum,
+    member: json.member,
+  };
+}
+
+/** An enum value coordinate in its JSON form, which leaves out the unbound namespace. */
+export function enumValueCoordinateJson(value: EnumValueCoordinate): EnumValueCoordinateJson {
+  return coordinateJson(value);
+}
+
+function coordinateJson<T extends { readonly namespaceId: NamespaceId }>(
   coordinate: T,
-): Omit<T, 'namespaceId'> & ModelCoordinateJson {
+): Omit<T, 'namespaceId'> & { readonly namespaceId?: NamespaceId } {
   if (coordinate.namespaceId !== UNBOUND_NAMESPACE_ID) return coordinate;
   const { namespaceId: _unbound, ...rest } = coordinate;
   return rest;
@@ -229,13 +393,51 @@ export function migrationStatementJson(
   statement: ResolvedMigrationStatement,
 ): MigrationStatementJson {
   switch (statement.kind) {
-    case 'rename':
-      return statement.entity === 'model'
-        ? { ...statement, from: coordinateJson(statement.from), to: coordinateJson(statement.to) }
-        : { ...statement, from: coordinateJson(statement.from), to: coordinateJson(statement.to) };
     case 'convert':
+      return statement.entity === 'model'
+        ? { ...statement, model: coordinateJson(statement.model) }
+        : { ...statement, field: coordinateJson(statement.field) };
     case 'backfill':
-      return { ...statement, field: coordinateJson(statement.field) };
+      return statement.entity === 'field'
+        ? { ...statement, field: coordinateJson<FieldCoordinate>(statement.field) }
+        : { ...statement, field: coordinateJson<ValueObjectFieldCoordinate>(statement.field) };
+    case 'rename':
+      return renameStatementJson(statement);
+  }
+}
+
+function renameStatementJson(statement: ResolvedRenameStatement): MigrationStatementJson {
+  switch (statement.entity) {
+    case 'namespace':
+      return {
+        ...statement,
+        from: { namespaceId: statement.from },
+        to: { namespaceId: statement.to },
+      };
+    case 'model':
+      return {
+        ...statement,
+        from: coordinateJson(statement.from),
+        to: coordinateJson(statement.to),
+      };
+    case 'field':
+      return {
+        ...statement,
+        from: coordinateJson(statement.from),
+        to: coordinateJson(statement.to),
+      };
+    case 'enumValue':
+      return {
+        ...statement,
+        from: coordinateJson(statement.from),
+        to: coordinateJson(statement.to),
+      };
+    case 'valueObjectField':
+      return {
+        ...statement,
+        from: coordinateJson(statement.from),
+        to: coordinateJson(statement.to),
+      };
   }
 }
 
@@ -256,14 +458,39 @@ export function migrationSubjectJson(subject: MigrationSubject): MigrationSubjec
           field: subject.field,
         }),
       };
+    case 'enumValue':
+      return {
+        kind: 'enumValue',
+        ...coordinateJson({
+          namespaceId: subject.namespaceId,
+          enum: subject.enum,
+          member: subject.member,
+        }),
+      };
+    case 'valueObjectField':
+      return {
+        kind: 'valueObjectField',
+        ...coordinateJson({
+          namespaceId: subject.namespaceId,
+          valueObject: subject.valueObject,
+          field: subject.field,
+        }),
+      };
     case 'storage':
       return subject;
   }
 }
 
+function qualifiedModelText(coordinate: ModelCoordinate): string {
+  return coordinate.namespaceId === UNBOUND_NAMESPACE_ID
+    ? coordinate.model
+    : `${coordinate.namespaceId}.${coordinate.model}`;
+}
+
 /**
  * The text that reports a statement, in domain names: a model or field is named with its
- * namespace only when its contract has more than one. A renamed field is named through its model as
+ * namespace only when its contract has more than one, and a model moved to another namespace always
+ * is. A renamed field is named through its model as
  * the destination contract names it, as the statement itself is written.
  */
 export function describeMigrationStatement(
@@ -271,12 +498,43 @@ export function describeMigrationStatement(
   fromContract: ContractWithDomain,
   contract: ContractWithDomain,
 ): string {
-  if (statement.kind !== 'rename') {
-    return `${statement.kind} field "${modelStatementText(contract, statement.field)}.${statement.field.field}"`;
+  if (statement.kind !== 'rename') return describeDataStatement(statement, contract);
+  if (statement.entity === 'namespace') {
+    return `rename namespace "${statement.from}" to "${statement.to}"`;
+  }
+  if (statement.entity === 'enumValue') {
+    return `rename enum value "${enumValueStatementText(fromContract, statement.from)}" to "${enumValueStatementText(contract, statement.to)}"`;
+  }
+  if (statement.entity === 'valueObjectField') {
+    return `rename value object field "${valueObjectFieldStatementText(fromContract, statement.from)}" to "${valueObjectFieldStatementText(contract, statement.to)}"`;
   }
   if (statement.entity === 'model') {
-    return `rename model "${modelStatementText(fromContract, statement.from)}" to "${modelStatementText(contract, statement.to)}"`;
+    const { from, to } = statement;
+    if (from.namespaceId === to.namespaceId) {
+      return `rename model "${modelStatementText(fromContract, from)}" to "${modelStatementText(contract, to)}"`;
+    }
+    if (from.model === to.model) {
+      return `move model "${qualifiedModelText(from)}" to namespace "${to.namespaceId}"`;
+    }
+    return `rename model "${qualifiedModelText(from)}" to "${qualifiedModelText(to)}"`;
   }
   const model = modelStatementText(contract, statement.to);
   return `rename field "${model}.${statement.from.field}" to "${model}.${statement.to.field}"`;
+}
+
+function describeDataStatement(
+  statement: Exclude<ResolvedMigrationStatement, ResolvedRenameStatement>,
+  contract: ContractWithDomain,
+): string {
+  if (statement.entity === 'field') {
+    return `${statement.kind} field "${fieldStatementText(contract, statement.field)}"`;
+  }
+  if (statement.entity === 'valueObjectField') {
+    return `${statement.kind} value object field "${valueObjectFieldStatementText(contract, statement.field)}"`;
+  }
+  if (statement.kind === 'convert') {
+    return `convert variant "${modelStatementText(contract, statement.model)}"`;
+  }
+  const unknown: never = statement;
+  return unknown;
 }

@@ -30,7 +30,7 @@ describe('InsertChunked', () => {
       insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
     ]);
 
-    expect(await counted.execute({}, run)).toBe(4);
+    expect(await counted.execute({}, run)).toEqual({ affectedRows: 4 });
     expect(run.executed).toEqual(counted.asts);
     expect(run.queried).toEqual([]);
   });

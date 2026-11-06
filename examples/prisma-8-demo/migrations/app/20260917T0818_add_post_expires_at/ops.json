@@ -16,7 +16,11 @@
       {
         "description": "ensure column \"expiresAt\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "expiresAt"]
+        "params": ["public", "post", "expiresAt"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"expiresAt\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -29,7 +33,11 @@
       {
         "description": "verify column \"expiresAt\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "expiresAt"]
+        "params": ["public", "post", "expiresAt"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"expiresAt\" on \"post\""
+        }
       },
       {
         "description": "verify column \"expiresAt\" has type \"timestamp with time zone\"",

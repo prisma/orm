@@ -19,11 +19,11 @@ import type {
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7fe8a5ef11abf3a2db023b5af601b57e7c00e94563ef45301135e34b64182696'>;
+  StorageHashBase<'13f511b3546f6aed2860b7b49d3b140f649a3574f3602a0b1a483445e5c74419'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -31,15 +31,15 @@ export type ProfileHash =
 export type CodecTypes = MongoCodecTypes;
 
 type ParameterizedOutputTypeFunctions = MongoParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -62,14 +62,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -113,6 +115,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'otherId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'otherId_1';
                   readonly unique: true;
                 },
               ];
@@ -177,6 +180,16 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly valueObject: {
+            readonly Composite: {
+              readonly fields: {
+                readonly value: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -198,7 +211,13 @@ type ContractBase = Omit<
             readonly fields: {
               readonly composite: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Composite' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Composite';
+                };
               };
               readonly enum: {
                 readonly nullable: false;
@@ -281,16 +300,6 @@ type ContractBase = Omit<
             };
           };
         };
-        readonly valueObjects: {
-          readonly Composite: {
-            readonly fields: {
-              readonly value: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-            };
-          };
-        };
         readonly enum: {
           readonly Enum: {
             readonly codecId: 'mongo/string@1';
@@ -312,16 +321,6 @@ type ContractBase = Omit<
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-  readonly valueObjects: {
-    readonly Composite: {
-      readonly fields: {
-        readonly value: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

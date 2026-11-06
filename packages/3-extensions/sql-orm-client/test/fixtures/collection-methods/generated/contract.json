@@ -211,6 +211,13 @@
         "entries": {
           "table": {
             "notes": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('memo')",
+                  "name": "notes_kind_check_97646eca",
+                  "prefix": "notes_kind_check"
+                }
+              ],
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
@@ -225,7 +232,13 @@
                 "kind": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Note.kind",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "pinned": {
                   "codecId": "pg/bool@1",
@@ -288,7 +301,9 @@
                   "codecId": "pg/vector@1",
                   "dataType": "pgvector/vector",
                   "nullable": true,
-                  "typeRef": "Embedding3"
+                  "typeParams": {
+                    "length": 3
+                  }
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -337,23 +352,21 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Note.kind": {
+              "kind": "valueSet",
+              "values": [
+                "memo"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1d7498824aaec4864eebeecab12912101510d4f14ce6fa794c49cbc779a1227f",
-    "types": {
-      "Embedding3": {
-        "codecId": "pg/vector@1",
-        "dataType": "pgvector/vector",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 3
-        }
-      }
-    }
+    "storageHash": "87d224586379cdc42fda508d70ac88410eb9795e164b6031ef5a9dd9a5a1b759"
   },
   "capabilities": {
     "postgres": {
@@ -374,6 +387,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

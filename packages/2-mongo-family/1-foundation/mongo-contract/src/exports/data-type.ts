@@ -4,7 +4,6 @@ export type {
   MongoDataTypeSpec,
 } from '../mongo-data-type';
 export {
-  assertMongoFieldTypeParams,
   bsonTypesOfCodec,
   codecTypeParamsProblem,
   isMongoDataType,

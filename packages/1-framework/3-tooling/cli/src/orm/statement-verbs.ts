@@ -11,7 +11,7 @@ const verbs = {
   },
   allow: {
     arity: 1,
-    brief: 'Let the command widen who can read or write the rows of a model: --allow Model',
+    brief: "Let the command change who can read or write a model's data: --allow Model",
   },
   convert: {
     arity: 1,

@@ -51,6 +51,43 @@ function loadContract(relativePath: string): Contract<SqlStorage> {
  */
 const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }> = [
   {
+    name: 'value objects with nested, list, enum and self-referring members, and a discriminator, each with its derived check',
+    schema: readFileSync(
+      join(
+        repoRoot,
+        'test/integration/test/sql-orm-client/fixtures/value-object-checks/contract.prisma',
+      ),
+      'utf-8',
+    ).replace('// use prisma-8\n', ''),
+  },
+  {
+    name: 'a value object field of a variant that shares the base table, whose column is nullable',
+    schema: `type Geo {
+  lat Float
+  lng Float
+}
+
+model Shape {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Circle {
+  center Geo
+
+  @@base(Shape, "circle")
+}
+
+model Square {
+  side Int
+
+  @@base(Shape, "square")
+}
+`,
+  },
+  {
     name: 'a model control policy',
     schema: `model Ledger {
   id Int @id
@@ -127,8 +164,8 @@ model Pair {
   zoned TimestamptzString(3)
   js    TimestamptzJsDate(3)
   time  TimeString(3)
-  big   BigIntNumber
-  huge  UnboundedInt
+  big   Int8Number
+  huge  NumericBigInt
 }
 `,
   },
@@ -212,6 +249,33 @@ policy_select p_read {
 `,
   },
   {
+    name: 'a value object nested in another, a list of nested value objects, and an enum member',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Geo {
+  lat Float
+  lng Float
+}
+
+type Address {
+  street  String
+  country Country
+  geo     Geo
+  stops   Geo[]
+}
+
+model Person {
+  id    Int       @id
+  home  Address
+  homes Address[]
+}
+`,
+  },
+  {
     name: 'a list of value objects',
     schema: `type Address {
   street String
@@ -243,8 +307,8 @@ model Person {
   {
     name: 'value-object members with type parameters, single and list',
     schema: `type Price {
-  amount  Numeric(65, 30)
-  history Numeric(65, 30)[]
+  amount  NumericString(65, 30)
+  history NumericString(65, 30)[]
 }
 
 model Product {
@@ -329,6 +393,79 @@ model Tagged {
 `,
   },
   {
+    name: 'enum members that are not text: numbers, NaN and infinities, dates and times, an interval, an address, a uuid, and bare members',
+    schema: `enum Level {
+  @@type("pg/int4@1")
+  Low  = 1
+  High = 2
+}
+
+enum Ratio {
+  @@type("pg/numeric@1")
+  Half  = 0.5
+  Whole = 1.50
+}
+
+enum Reading {
+  @@type("pg/float8@1")
+  Nan      = NaN
+  Up       = Infinity
+  Down     = -Infinity
+  Fraction = 2.25
+}
+
+enum Launch {
+  @@type("pg/date-temporal@1")
+  First = date\`2024-01-02\`
+}
+
+enum Instant {
+  @@type("pg/timestamptz-temporal@1")
+  Start = timestamptz\`2024-01-02T03:04:05.5Z\`
+}
+
+enum Slot {
+  @@type("pg/time-temporal@1")
+  Morning = time\`03:04:05.5\`
+}
+
+enum Span {
+  @@type("pg/interval@1")
+  Day  = interval\`P1D\`
+  Hour = interval\`PT1H\`
+}
+
+enum Network {
+  @@type("pg/inet@1")
+  Private = "10.0.0.0/8"
+}
+
+enum Key {
+  @@type("pg/uuid@1")
+  Only = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+}
+
+enum Color {
+  Red
+  Green
+}
+
+model Sample {
+  id      Int      @id
+  level   Level
+  ratio   Ratio
+  reading Reading
+  launch  Launch
+  instant Instant
+  slot    Slot
+  span    Span
+  network Network
+  key     Key
+  color   Color
+}
+`,
+  },
+  {
     name: 'a model in the unbound namespace',
     schema: `namespace unbound {
   model Setting {
@@ -389,7 +526,7 @@ describe('a value-object member typed by a named type', () => {
     async () => {
       const authored = await readPsl(`// use prisma-8
 types {
-  Short = VarChar(10)
+  Short = Varchar(10)
 }
 
 type Label {
@@ -406,7 +543,7 @@ model Product {
       const printed = await printAndReadBack(authored);
 
       expect(printContract(authored).text).toMatch(
-        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+        /type Label \{\s+code\s+String\(storage: varchar, length: 10\)\s+codes\s+String\(storage: varchar, length: 10\)\[\]/,
       );
       expect(serializedWithoutCapabilities(printed)).toEqual(
         serializedWithoutCapabilities(authored),

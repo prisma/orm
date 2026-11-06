@@ -15,6 +15,7 @@ The framework imports live at `@internal/framework-components/codec`:
 - `CodecImpl<Id, TTraits, TWire, TInput>` — abstract codec base class.
 - `CodecDescriptorImpl<P>` — abstract descriptor base class; `CodecDescriptorTemplateImpl<P>` is the same shape for a codec whose data type the adapting target names.
 - `dataType(id, spec)` — declares a data type with the `read` function for its values and its casts; `DataType`, `DataTypeId`, `DataTypeReader`, `Cast`. A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type` instead, which adds how the type is written — see [Declaring a data type](#declaring-a-data-type).
+- Helpers for declaring data types and their PSL entries (ADR 254): the casts `castUnchanged`, `asNumeralText` and `asFloat`, and `refuseWrongShape` for a cast's own refusals; `createNumberClassifier` and `signedRange` for the plain-number entry; `parseJsonText` and `printJsonText`; `numeralText` and `storedNumeralText`; `dateTimeStoredText` and `isoDateStringText`, which build the stored form of date and time types.
 - `DataTypeValue` — a value of a data type, `{ type, params, value }`, whose `value` is the JSON `contract.json` stores.
 - `ColumnHelperFor<D>` / `ColumnHelperForStrict<D>` — `satisfies` shapes for per-codec helpers.
 - `column(codecFactory, codecId, typeParams)` — column-spec packager. The contract takes the column's data type from the codec.
@@ -51,11 +52,11 @@ One limit remains: **float codecs need `extra_float_digits >= 1`.** `pg/float4@1
 
 A value in a contract, a literal default or an enum member, converts to the value a query returns for it: `fromDataTypeValue` of the stored value equals what `fromWire` gives for the same value in a row, and `db.enums` compares with that value ([ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). The stored form need not be the text the database prints: `pg/bytea` stores base64 where PostgreSQL prints hex, and the timestamp types store ISO 8601. Where the database normalises how a value is written, the stored form is the database's spelling, which the data type writes and its `read` requires: `pg/uuid` stores lower case, the integer types and `pg/numeric` drop leading zeros and the minus sign on zero, a `numeric(10,2)` value has two fraction digits, and `pg/inet` drops `/32` or `/128` on a host address and writes IPv6 in lower case with PostgreSQL's zero compression.
 
-An enum compares values with its members, so every enum authoring surface (`enumType` in `defineContract` and the PSL enum block, in both families) refuses a codec whose descriptor does not declare the `equality` trait. A codec that declares it, but whose values read back can never equal a member as the contract stores it, sets `enumRefusal` on its descriptor: one or two sentences saying why, ending with what to use instead. A codec without equality may set it too, to replace the generic reason. `enumRefusalOf` from `@internal/framework-components/codec` reads both rules, and every surface refuses through it. On Postgres, `pg/timestamp-string@1` and `pg/timestamptz-string@1` set it, because they read PostgreSQL's own text while the contract stores ISO 8601; `pg/bytea@1`, because its CHECK would compare a value with the bytes of the stored base64 text; `pg/tsquery@1`, because PostgreSQL normalises the query text; and `pg/json@1`, to name `pg/jsonb@1`.
+An enum compares values with its members, so every enum authoring surface (`enumType` in `defineContract` and the PSL enum block, in both families) refuses a codec whose descriptor does not declare the `equality` trait. A codec that declares it, but whose values read back can never equal a member as the contract stores it, sets `enumRefusal` on its descriptor: one or two sentences saying why, ending with what to use instead. A codec without equality may set it too, to replace the generic reason. `enumRefusalOf` from `@internal/framework-components/codec` reads both rules, and every surface refuses through it. On Postgres, `pg/bytea@1` sets it, because its CHECK would compare a value with the bytes of the stored base64 text; `pg/tsquery@1`, because PostgreSQL normalises the query text; `pg/json@1`, because its type has no equality operator; `pg/jsonb@1` and `arktype/json@1`, because a CHECK cannot compare their stored members with `jsonb`; `pg/enum@1`, which types a native enum's column; `pg/vector@1`, whose members no CHECK can list; and `pg/geometry@1`, until a test proves a shape reads back as its member. Each names a text enum, or for `pg/enum@1` a native enum, as what to use instead.
 
-The consumer-facing [`BigInt`, `BigIntNumber`, and `UnboundedInt` representation choices](./integer-representation-types.md), are documented separately from this contributor guide.
+The consumer-facing [`BigInt` representation choices](./integer-representation-types.md) are documented separately from this contributor guide.
 
-The PostgreSQL temporal codecs pair a `Temporal`-valued codec with a raw-text one for each native type — `pg/timestamptz-temporal@1` reads a `Temporal.Instant`, `pg/timestamptz-string@1` reads PostgreSQL's own text, and the contract names which one a column uses. A text codec's `fromWire` keeps PostgreSQL's year text, ` BC` included, and its `toWire` converts the stored ISO year into it.
+The PostgreSQL temporal codecs pair a `Temporal`-valued codec with a text one for each native type — `pg/timestamptz-temporal@1` reads a `Temporal.Instant`, `pg/timestamptz-string@1` reads ISO 8601 text, and the contract names which one a column uses. A type may have more codecs: `timestamptz` and `timestamp` also have a `Date` codec, `timestamp` a second `Temporal` codec, `pg/timestamp-instant@1`, that reads the stored date and time as a UTC `Temporal.Instant`, and `interval` a codec that reads an ISO 8601 duration string. A codec of one type differs from its siblings only in the application value, so a new one is a codec, never a new data type. A text codec's application value is its data type's stored form: its `fromWire` reads the text PostgreSQL prints under `DateStyle=ISO` into that form, converting a `timestamptz` offset to UTC and a ` BC` or long year to the signed ISO year, and refuses text printed under another `DateStyle` with `RUNTIME.DATE_STYLE_NOT_ISO`, as every Postgres codec that reads a date or timestamp does. Its `toDataTypeValue` takes only the stored form, and its `toWire` converts the stored ISO year into PostgreSQL's year text. A value beyond the stored form's range, such as `24:00:00` or a seven-digit year, reads in the same ISO shape.
 
 ## Three case studies
 
@@ -95,6 +96,7 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
     return expression;
   }
   override readonly dataType = pgText.id;
+  override readonly jsonType = 'string' as const;
   override readonly codecId = 'pg/text@1' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
@@ -147,6 +149,7 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgvectorVector.id;
+  override readonly jsonType = 'array' as const;
   override readonly codecId = 'pg/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema: StandardSchemaV1<VectorParams> = pgvectorVectorParams;
@@ -233,6 +236,7 @@ export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTy
     return CastExpr.as(expression, 'text');
   }
   override readonly dataType = pgJsonb.id;
+  override readonly jsonType = 'any' as const;
   override readonly codecId = 'arktype/json@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = type({
@@ -288,7 +292,7 @@ import { pgVectorDescriptor } from './codecs';
 export const codecDescriptors = definePostgresCodecs([pgVectorDescriptor]);
 ```
 
-The descriptor does not say how its column type is written: the data type it represents does, for DDL, schema verification and PostgreSQL's parameter casts alike. `jsonProjection(expression, params)` declares the scalar AST transformation. Identity is an explicit, behavior-preserving declaration during the 0.17 transition, not an implicit default.
+The descriptor does not say how its column type is written: the data type it represents does, for DDL, schema verification and PostgreSQL's parameter casts alike. `jsonProjection(expression, params)` declares the scalar AST transformation. `jsonType` declares the JSON type the codec's value is written as inside a JSON document: `'string'`, `'number'`, `'boolean'`, `'object'`, `'array'`, or `'any'` for a value that can be any JSON value, including `null`. The derived check of a value object column requires a member to be of its codec's JSON type, and a required member is never JSON `null` unless the type is `'any'`. A registry accepts a descriptor that declares none, but a contract build refuses a value object member whose codec declares none, with `CONTRACT.CODEC_JSON_TYPE_MISSING`. Identity is an explicit, behavior-preserving declaration during the 0.17 transition, not an implicit default.
 
 The public `projectJson(expression, ref)` method validates parameters and dispatches scalar versus stored-array projection. For `ref.many === true`, the default `jsonArrayProjection` binds the input expression once, unnests with ordinality, applies the scalar hook to each non-null element, and preserves a null array, an empty array, null elements, and element order. Override `jsonArrayProjection` only when the target codec has an equivalent optimized transformation.
 
@@ -306,7 +310,7 @@ const postgresSqlIntDescriptor = postgresCodec(sqlIntDescriptor, {
 });
 ```
 
-The adapter delegates the wrapped descriptor's codec id, traits, literals and renderers, and builds codecs with the `factory` it is given, which receives the adapted descriptor, the data type and the column's parameters. A template's own factory builds no codec, because it names no data type. A target may pass a subclass of the family codec with its own wire rules, as PostgreSQL does for `int4`. The adapter's parameter schema is the data type's `params`, not the wrapped descriptor's, so a parameter's bound is declared once, on the data type. It adds the PostgreSQL discriminant and target methods.
+The adapter delegates the wrapped descriptor's codec id, traits, JSON type, literals and renderers, and builds codecs with the `factory` it is given, which receives the adapted descriptor, the data type and the column's parameters. A template's own factory builds no codec, because it names no data type. A target may pass a subclass of the family codec with its own wire rules, as PostgreSQL does for `int4`. The adapter's parameter schema is the data type's `params`, not the wrapped descriptor's, so a parameter's bound is declared once, on the data type. It adds the PostgreSQL discriminant and target methods.
 
 ### SQLite
 
@@ -422,11 +426,11 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 | Module | Holds |
 | --- | --- |
 | `@internal/target-mongo/codec-ids` | the codec id constants (`MONGO_INT64_CODEC_ID`, …) |
-| `@internal/target-mongo/codecs` | the codecs built with `mongoCodec(...)`, their descriptors (`mongoCodecDescriptors`, `mongoDescriptorById`), `mongoStandardCodecs` and `buildStandardCodecRegistry` |
+| `@internal/target-mongo/codecs` | the codecs built with `mongoCodec(...)`, and their descriptors (`mongoCodecDescriptors`, `mongoDescriptorById`) |
 | `@internal/target-mongo/data-types` | the data type each codec represents |
 | `@internal/target-mongo/codec-types` | the `CodecTypes` map emitted `contract.d.ts` files import |
 
-The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step. `BsonScalar`, `BsonValue` and `BsonInputValue` are declared once in `@internal/mongo-value`, which both maps import, and `@internal/target-mongo/codec-types` re-exports them.
+The source lives in `packages/3-targets/mongo/1-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The target's descriptors list the codec descriptors, built with `mongoCodecDescriptor` from `@internal/mongo-codec`, and the adapter's runtime and control descriptors encode with the codecs `assembleMongoCodecRegistry` takes from the descriptors of the whole stack. A MongoDB extension declares its codecs the same way, once, in `types.codecTypes.codecDescriptors`. The adapter's control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-targets/mongo/2-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step. `BsonScalar`, `BsonValue` and `BsonInputValue` are declared once in `@internal/mongo-value`, which both maps import, and `@internal/target-mongo/codec-types` re-exports them.
 
 The PSL name, TS helper, BSON storage types and application type of every Mongo codec are listed in [Scalar types](scalar-types.md#mongodb). What that page does not list is the JSON form `contract.json` stores for each codec's values, which its data type reads and the codec's `toDataTypeValue` returns:
 
@@ -588,7 +592,9 @@ A codec's `paramsSchema` is its data type's `params`, referenced and never resta
 
 A codec with parameters of its own sets `paramsSchema` to `dataType.params.and(ownKeys)`, or to its own keys alone when the data type declares no `params`, as `arktype/json@1` does. `postgresCodec(...)` and `sqliteCodec(...)` take the adapted codec's params schema from the data type they are given.
 
-A type constructor maps its arguments onto the parameters and names only the codec; the data type follows from the codec. An argument that becomes a data type parameter carries no `minimum` or `maximum`, because the parameter's schema checks it. `inferred: true` marks the constructor written for a column of the data type when no schema names one: `contract infer` writes it, and the Prisma 7 reader will. `contract print` writes it when it produces the column's codec, and otherwise the first constructor in the stack that does, so a `timestamptz` column with the `Temporal` codec prints `DateTime`. It is called with the fewest arguments that give the column's parameters in normal form, so a `numeric(10,0)` column is written `Numeric(10)`. At most one constructor per data type carries the mark. A data type with no marked constructor, such as `pg/tsquery`, is still recognised, but `contract infer` cannot write a column of it and fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED`.
+A type constructor maps its arguments onto the parameters and names only the codec; the data type follows from the codec. Every argument of a type constructor is a value argument, `{ kind: 'value', dataType }`, and assembly refuses any other kind with `CONTRACT.PACK_CONTRIBUTION_INVALID`. A value argument is a value of the named data type, read and cast as an attribute argument is (ADR 254), so `Vector(1536)` reads `1536` as a `pg/int2` and casts it to `pg/int4`, and `Vector("1536")` is refused. On Postgres every length, precision, scale and SRID is a `pg/int4`, the type of a typmod. A value argument carries no bounds, because the parameter's schema checks the value it gives. Assembly refuses a value argument whose data type no component registers (`CONTRACT.DATA_TYPE_UNREGISTERED`) or that no contract source can write (`CONTRACT.DATA_TYPE_NOT_WRITABLE`). In the TypeScript builder, the pack that registers a data type declares the TypeScript value an argument of it takes as `__dataTypeArguments` in its type, such as `{ 'pg/int4': { argument: number; parameter: number } }`: `argument` is what an author passes, and `parameter` is the type parameter the data type's reader gives for it, and `contract print` writes each argument as a literal of its data type. `inferred: true` marks the constructor written for a column of the data type when no schema names one: `contract infer` and the Prisma 7 reader write it. `contract print` writes it when it produces the column's codec, and otherwise the first constructor in the stack that does, so a `timestamptz` column with the `Temporal` codec prints `TimestamptzTemporal`. It is called with the fewest arguments that give the column's parameters in normal form, so a `numeric(10,0)` column's explicit type is `NumericString(10)`, which `contract print` writes as the convenience call `Decimal(precision: 10)`. Mark the constructor a convenience type's default gives for the data type, such as `Int8BigInt` for `int8` and `NumericString` for `numeric`, so the tools write the bare convenience name. The Prisma 7 reader builds a contract rather than printing PSL, so it passes every parameter the Prisma 7 column gives. At most one constructor per data type carries the mark. A data type with no marked constructor, such as `pg/tsquery`, is still recognised, but `contract infer` cannot write a column of it and fails with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED`.
+
+A type choice (`kind: 'typeChoice'`) is a second kind of type declaration, for a type named after what a field means rather than a column type ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)). It names no codec. It declares option arguments, `{ kind: 'option', name, values, default, optional: true }`, written as bare names (the option kind exists only for type choice arguments), and value arguments it passes on by name, such as `precision`; and `choices`, a table whose rows map one value of each option to the name of a type constructor the same component contributes at the same level of the namespace, with `defaults` for passed-on arguments the call leaves out. A call resolves to its row's constructor, called with the passed-on arguments, so the contract records only that constructor's codec and parameters. A combination with no row, and a passed-on argument the chosen constructor does not take, are refused at the argument. Every argument is optional, so a type choice is also written bare, as its default row. Assembly refuses a table that names a constructor the component does not contribute beside the choice, a value or default an option does not list, defaults with no row, a row default for an argument the choice does not pass on, a row whose constructor requires an argument that the row gives no default and the choice does not pass on, and a passed-on argument of another data type than its constructor's. The order of the rows matters in one place: when the default type of a column cannot read the column's own default, `contract infer` takes the first row with the same storage whose type can. A type choice is never marked `inferred`. A constructor kept under an old name sets `deprecated: { replacement }`, never `inferred`, and is declared after its replacement, so `contract print` never picks it; the PSL interpreters of both families report `PSL_DEPRECATED_SCALAR_NAME` as a warning where it is written (ADR 257). Where a call of a type choice becomes the constructor that `contract print` or `contract infer` writes for a column, they write the type choice call instead, by name, with only the arguments that differ from its defaults, and only when that call gives the same column; otherwise they write the constructor. In the TypeScript builder its `type.*` helper takes the same arguments as one object keyed by name, such as `type.DateTime({ as: 'string', precision: 6 })`, and is typed as one overload per row.
 
 ```ts
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
@@ -598,7 +604,7 @@ export const pgvectorAuthoringTypes = {
     Vector: {
       kind: 'typeConstructor',
       inferred: true,
-      args: [{ kind: 'number', name: 'length', integer: true }],
+      args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
       output: {
         codecId: 'pg/vector@1',
         typeParams: {
@@ -640,7 +646,7 @@ export const pgEnum = sqlDataType('pg/enum', {
 
 ```ts
 const asNumeralText: Cast = (value) =>
-  typeof value === 'number' ? numeralText(value) : wrongShape(value, 'a number');
+  typeof value === 'number' ? numeralText(value) : refuseWrongShape(value, 'a number');
 ```
 
 There is no list data type. A written list on a list column is checked element by element against the column's own type. A type whose single value holds several elements takes a written list through `listCast` instead: `of` is the element types it takes, and `cast` receives their stored forms in written order.
@@ -734,9 +740,9 @@ The control stack assembles every pack's data types, codec descriptors and autho
 
 The reverse of the fourth is not required: a type may be reachable only through casts. These checks span packs, which is why they run at assembly — `pgvector/vector` taking `pg/numeric` values is valid only when the Postgres target that owns `pg/numeric` is in the stack. Within a pack, refer to a type by its constant rather than by string, so a misspelt id fails to compile.
 
-Type constructors and field presets are checked at assembly too. Each failure is an `InternalError` naming the contributor and the id:
+Type constructors are checked at assembly too. Each failure is an `InternalError` naming the contributor and the id:
 
-5. **A type constructor or field preset names a codec no component registers.**
+5. **A type constructor names a codec no component registers.**
 6. **A type constructor maps an argument onto a parameter** that neither the codec's data type's `params` nor the codec's own parameters declare.
 7. **Two type constructors of one data type are both marked `inferred`.**
 
@@ -837,7 +843,7 @@ class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
 
 This keeps target ownership explicit: adaptation is for a reusable descriptor with its existing id; target-owned subclassing is for a PostgreSQL codec with PostgreSQL identity or behavior. In both cases the result satisfies the PostgreSQL descriptor protocol and can participate in `definePostgresCodecs(...)`.
 
-See [packages/3-targets/3-targets/postgres/src/core/codecs.ts](../../packages/3-targets/3-targets/postgres/src/core/codecs.ts) (`postgresSqlCharDescriptor`, `PgCharDescriptor`) for both patterns.
+See [packages/3-targets/postgres/1-target/src/core/codecs.ts](../../packages/3-targets/postgres/1-target/src/core/codecs.ts) (`postgresSqlCharDescriptor`, `PgCharDescriptor`) for both patterns.
 
 ## Aggregate result codecs
 
@@ -845,7 +851,7 @@ What an aggregate returns is a declaration of its target, not a property of the 
 
 ## Heterogeneous storage at the runtime layer
 
-The framework's descriptor registry is keyed by `codecId: string` and stores type-erased descriptor instances. The canonical erasure type is `AnyCodecDescriptor` (defined in `packages/1-framework/1-core/framework-components/src/shared/codec-descriptor.ts`). An excerpt of the SQL registry's interface (`packages/2-sql/4-lanes/relational-core/src/query-lane-context.ts`):
+The framework's descriptor registry is keyed by `codecId: string` and stores type-erased descriptor instances. The canonical erasure type is `AnyCodecDescriptor` (defined in `packages/1-framework/1-core/framework-components/src/shared/codec-descriptor.ts`). An excerpt of the SQL registry's interface (`packages/2-sql-family/4-lanes/relational-core/src/query-lane-context.ts`):
 
 ```ts
 import type { CodecDescriptor } from '@internal/framework-components/codec';
@@ -871,9 +877,9 @@ The class hierarchy does not preserve literal types; the per-codec helpers' dire
 
 ## Reference implementations in the repo
 
-- **Non-parameterized base codecs** (text, int, float, bool, etc.): `packages/2-sql/4-lanes/relational-core/src/ast/sql-codecs.ts`.
-- **PostgreSQL target codecs and generic descriptor adapters**: `packages/3-targets/3-targets/postgres/src/core/codecs.ts`.
-- **SQLite target codecs and generic descriptor adapters**: `packages/3-targets/3-targets/sqlite/src/core/codecs.ts`.
+- **Non-parameterized base codecs** (text, int, float, bool, etc.): `packages/2-sql-family/4-lanes/relational-core/src/ast/sql-codecs.ts`.
+- **PostgreSQL target codecs and generic descriptor adapters**: `packages/3-targets/postgres/1-target/src/core/codecs.ts`.
+- **SQLite target codecs and generic descriptor adapters**: `packages/3-targets/sqlite/1-target/src/core/codecs.ts`.
 - **Parameterized codec with literal preservation** (pgvector): `packages/3-extensions/pgvector/src/core/codecs.ts`.
 - **Parameterized codec with typed schema** (arktype-json): `packages/3-extensions/arktype-json/src/core/arktype-json-codec.ts`.
 

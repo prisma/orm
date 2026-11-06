@@ -8,11 +8,7 @@ import type { Varchar } from '@prisma/orm-postgres/target/codec-types';
 import type { Numeric } from '@prisma/orm-postgres/target/codec-types';
 import type { Bit } from '@prisma/orm-postgres/target/codec-types';
 import type { VarBit } from '@prisma/orm-postgres/target/codec-types';
-import type { Timestamp } from '@prisma/orm-postgres/target/codec-types';
-import type { Timestamptz } from '@prisma/orm-postgres/target/codec-types';
-import type { Time } from '@prisma/orm-postgres/target/codec-types';
 import type { Timetz } from '@prisma/orm-postgres/target/codec-types';
-import type { Interval } from '@prisma/orm-postgres/target/codec-types';
 import type { QueryOperationTypes as PgAdapterQueryOps } from '@prisma/orm-postgres/adapter/operation-types';
 
 import type {

@@ -1,7 +1,7 @@
 import type {
   ContractField,
-  ContractValueObject,
-  ContractValueObjectDefinitions,
+  ContractValueObjectAt,
+  ValueObjectReference,
 } from '@internal/contract/types';
 import type {
   AnyMongoTypeMaps,
@@ -52,7 +52,7 @@ type ValueObjectFieldKeys<
 > = {
   [K in keyof MongoModelsMap<TContract>[ModelName]['fields'] &
     string]: MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-    readonly type: { readonly kind: 'valueObject'; readonly name: string };
+    readonly type: ValueObjectReference;
   }
     ? K
     : never;
@@ -93,26 +93,12 @@ export type FieldExpression<T = unknown, NumericOperand = NumericOperandOf<T>> =
   pop(end: 1 | -1): FieldOperation;
 } & ([NumericOperand] extends [never] ? unknown : NumericOps<NumericOperand>);
 
-type HasValueObjects = MongoContract;
-
-type MergedContractValueObjects<TContract extends HasValueObjects> =
-  ContractValueObjectDefinitions<TContract> &
-    (TContract extends { readonly valueObjects?: infer VOs }
-      ? VOs extends Record<string, ContractValueObject>
-        ? VOs
-        : Record<string, never>
-      : Record<string, never>);
-
-type VOFields<
-  TContract extends HasValueObjects,
-  VOName extends string,
-> = VOName extends keyof MergedContractValueObjects<TContract>
-  ? MergedContractValueObjects<TContract>[VOName] extends {
-      readonly fields: infer F extends Record<string, ContractField>;
-    }
+type VOFields<TContract extends MongoContract, Reference extends ValueObjectReference> =
+  ContractValueObjectAt<TContract['storage'], Reference> extends {
+    readonly fields: infer F extends Record<string, ContractField>;
+  }
     ? F
-    : never
-  : never;
+    : never;
 
 type VOScalarFieldKeys<Fields extends Record<string, ContractField>> = {
   [K in keyof Fields & string]: Fields[K] extends { readonly type: { readonly kind: 'scalar' } }
@@ -122,23 +108,36 @@ type VOScalarFieldKeys<Fields extends Record<string, ContractField>> = {
 
 type VOValueObjectFieldKeys<Fields extends Record<string, ContractField>> = {
   [K in keyof Fields & string]: Fields[K] extends {
-    readonly type: { readonly kind: 'valueObject'; readonly name: string };
+    readonly type: ValueObjectReference;
   }
     ? K
     : never;
 }[keyof Fields & string];
 
+/** A value object's storage coordinate as one string, so the value objects a path has entered form a union. */
+type ValueObjectKey<Reference extends ValueObjectReference> =
+  `${Reference['namespaceId']}.${Reference['entityName']}`;
+
+/** The dot paths into a value object's fields. A path ends at a value object it has already entered, so a value object that contains itself gives finitely many paths. */
 type VODotPaths<
-  TContract extends HasValueObjects,
+  TContract extends MongoContract,
   Fields extends Record<string, ContractField>,
   Prefix extends string,
+  Entered extends string,
 > =
   | { [K in VOScalarFieldKeys<Fields>]: `${Prefix}${K}` }[VOScalarFieldKeys<Fields>]
   | {
       [K in VOValueObjectFieldKeys<Fields>]: Fields[K] extends {
-        readonly type: { readonly kind: 'valueObject'; readonly name: infer N extends string };
+        readonly type: infer Reference extends ValueObjectReference;
       }
-        ? VODotPaths<TContract, VOFields<TContract, N>, `${Prefix}${K}.`>
+        ? ValueObjectKey<Reference> extends Entered
+          ? never
+          : VODotPaths<
+              TContract,
+              VOFields<TContract, Reference>,
+              `${Prefix}${K}.`,
+              Entered | ValueObjectKey<Reference>
+            >
         : never;
     }[VOValueObjectFieldKeys<Fields>];
 
@@ -150,9 +149,9 @@ export type DotPath<
     TContract,
     ModelName
   >]: MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-    readonly type: { readonly kind: 'valueObject'; readonly name: infer N extends string };
+    readonly type: infer Reference extends ValueObjectReference;
   }
-    ? VODotPaths<TContract, VOFields<TContract, N>, `${K}.`>
+    ? VODotPaths<TContract, VOFields<TContract, Reference>, `${K}.`, ValueObjectKey<Reference>>
     : never;
 }[ValueObjectFieldKeys<TContract, ModelName>];
 

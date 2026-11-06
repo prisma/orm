@@ -10,7 +10,7 @@
  * `for await` / `.toArray()` consumer below therefore sees plain `T` values, not
  * `Promise<T>`.
  *
- * See `packages/2-sql/5-runtime/src/codecs/decoding.ts` for the decode-once-
+ * See `packages/2-sql-family/5-runtime/src/codecs/decoding.ts` for the decode-once-
  * per-row contract; this file is the consumer side of that contract. See also
  * ADR 030 (codecs registry & decode boundary) and `test/codec-async.types.test-d.ts`.
  */

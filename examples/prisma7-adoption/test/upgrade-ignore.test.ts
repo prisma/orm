@@ -91,7 +91,7 @@ async function upgradeAfterHandover(
       const v7 = (...args: string[]) =>
         run(dir, connectionString, 'prisma7', [...args, '--config', 'prisma7.config.ts']);
       const v8: Prisma8 = async (...args) =>
-        resultEnvelope(await run(dir, connectionString, 'prisma', args)).result;
+        resultEnvelope(await run(dir, connectionString, 'prisma', [...args, '--json'])).result;
       const useSchema = (text: string) => writeFileSync(join(dir, 'prisma/schema.prisma'), text);
 
       await v7('migrate', 'deploy');
@@ -140,7 +140,10 @@ describe('upgrading a project whose Prisma 7 schema uses @ignore, after the hand
           hashes,
         );
         expect(await v8('db', 'sign')).toMatchObject({
-          spaces: [{ status: 'updated', contract: { storageHash: hashes.upgraded } }],
+          spaces: [
+            { space: 'app', status: 'updated', contract: { storageHash: hashes.upgraded } },
+            { space: 'citext', status: 'unchanged' },
+          ],
         });
         expect(await v8('db', 'migrate')).toMatchObject({ ok: true, migrationsApplied: 0 });
       }),
@@ -184,7 +187,13 @@ describe('upgrading a project whose Prisma 7 schema uses @ignore, after the hand
     () =>
       upgradeAfterHandover(async (v8, hashes, prisma) => {
         await v8('db', 'sign');
-        const refused = await prisma('migration', 'plan', '--name', 'keep-ignored-objects');
+        const refused = await prisma(
+          'migration',
+          'plan',
+          '--name',
+          'keep-ignored-objects',
+          '--json',
+        );
         expect(refused.status, refused.output).not.toBe(0);
         expect(resultEnvelope(refused.output)).toMatchObject({
           ok: false,

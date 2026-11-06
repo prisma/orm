@@ -205,6 +205,18 @@ describe('migrate --to resolves the apply contract', () => {
     expect(appliedContractHash()).toBe(C1);
   });
 
+  it('hands the client the --to of the run, which the advice after a failure repeats', async () => {
+    const cwd = await buildAppliedProject();
+
+    await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', C1, '--json'], { cwd });
+
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invocation: expect.objectContaining({ rerunArgs: ['--to', C1] }),
+      }),
+    );
+  });
+
   it('applies the emitted contract when --to is omitted', async () => {
     const cwd = await buildAppliedProject();
 

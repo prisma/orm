@@ -7,7 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
+import { flag, noDataLines } from '@prisma/cli-engine';
 import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
@@ -230,7 +230,9 @@ function verifyPresentations(inputs: {
   const warnings = document.schema?.warnings ?? [];
   const unclaimed = document.unclaimed ?? [];
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,
@@ -295,7 +297,9 @@ function schemaPresentations(inputs: {
   readonly strict: boolean;
 }): Presentations {
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,

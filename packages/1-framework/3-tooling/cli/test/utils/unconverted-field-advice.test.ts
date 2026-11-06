@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mapDbUpdateFailure } from '../../src/utils/db-update-failure';
-import { mapMigrateFailure } from '../../src/utils/migrate-failure';
+import { dbUpdateError, migrateError } from './runner-failure-errors';
 
 const runnerFailed = {
-  code: 'RUNNER_FAILED',
   summary: 'Operation alterType.user.age failed during execution: alter type of "age"',
   why: 'invalid input syntax for type integer: "abc"',
-  meta: {},
 } as const;
 
 const FROM = 'a'.repeat(64);
@@ -16,7 +13,7 @@ const FROM_PROJECT = { cwd: PROJECT, configPath: undefined, dbGiven: false };
 describe('the advice for a type change whose cast failed', () => {
   it('points db update to a migration with --convert, from the contract the database is at', () => {
     expect(
-      mapDbUpdateFailure(
+      dbUpdateError(
         {
           ...runnerFailed,
           conflicts: undefined,
@@ -32,7 +29,7 @@ describe('the advice for a type change whose cast failed', () => {
 
   it('points db migrate to writing a conversion in the failed migration, or to planning it again from its origin with --convert', () => {
     expect(
-      mapMigrateFailure(
+      migrateError(
         {
           ...runnerFailed,
           failedTypeChange: { field: 'My Model.age', by: 'cast', reason: 'value' },
@@ -44,13 +41,13 @@ describe('the advice for a type change whose cast failed', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `A value of field "My Model.age" cannot be converted to its new type by the database's cast. The failed apply changed nothing. \`migrations/app/20261012T1041_lossy/migration.ts\` has no conversion for field "My Model.age": write one there, run \`node migrations/app/20261012T1041_lossy/migration.ts\`, and re-run \`{bin} db migrate\`. Or delete \`migrations/app/20261012T1041_lossy\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name lossy --convert 'My Model.age'\` and its other statements except any \`--delete 'My Model.age'\`, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\`.`,
+      `A value of field "My Model.age" cannot be converted to its new type by the database's cast. \`migrations/app/20261012T1041_lossy/migration.ts\` has no conversion for field "My Model.age": write one there, run \`node migrations/app/20261012T1041_lossy/migration.ts\`, and re-run \`{bin} db migrate\`. Or: Delete \`migrations/app/20261012T1041_lossy\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name lossy --convert 'My Model.age'\`, adding any other statements you planned it with except any \`--delete 'My Model.age'\`, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\`.`,
     );
   });
 
   it('says the database has no cast between the types when it has none', () => {
     expect([
-      mapDbUpdateFailure(
+      dbUpdateError(
         {
           ...runnerFailed,
           conflicts: undefined,
@@ -58,7 +55,7 @@ describe('the advice for a type change whose cast failed', () => {
         },
         FROM_PROJECT,
       ).fix,
-      mapMigrateFailure(
+      migrateError(
         { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
         FROM_PROJECT,
       ).fix,
@@ -74,7 +71,7 @@ describe('the advice for a type change whose cast failed', () => {
 
   it('points db migrate to the conversion in the failed migration when the conversion left a value the new type cannot hold', () => {
     expect(
-      mapMigrateFailure(
+      migrateError(
         {
           ...runnerFailed,
           failedTypeChange: { field: 'User.age', by: 'conversion', reason: 'invalidResult' },
@@ -86,13 +83,13 @@ describe('the advice for a type change whose cast failed', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      'The conversion of field "User.age" left a value its new type cannot hold. The failed apply changed nothing. Fix the conversion in `migrations/app/20261012T1041_age/migration.ts`, run `node migrations/app/20261012T1041_age/migration.ts`, and re-run `{bin} db migrate`.',
+      'The conversion of field "User.age" left a value its new type cannot hold. Fix the conversion in `migrations/app/20261012T1041_age/migration.ts`, run `node migrations/app/20261012T1041_age/migration.ts`, and re-run `{bin} db migrate`.',
     );
   });
 
   it('says to run the migration.ts with node before db migrate when the failed migration is unknown', () => {
     expect(
-      mapMigrateFailure(
+      migrateError(
         { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
         FROM_PROJECT,
       ).fix,
@@ -103,7 +100,7 @@ describe('the advice for a type change whose cast failed', () => {
 
   it('says whether the conversion failed on a value, left one, or has an error in its expression', () => {
     const advice = (reason: 'value' | 'invalidResult' | 'expressionError') =>
-      mapMigrateFailure(
+      migrateError(
         {
           ...runnerFailed,
           failedTypeChange: { field: 'User.age', by: 'conversion', reason },
@@ -112,7 +109,7 @@ describe('the advice for a type change whose cast failed', () => {
         { cwd: PROJECT, configPath: 'prisma.config.ts', dbGiven: true },
       ).fix;
     const rest =
-      ' The failed apply changed nothing. Fix the conversion in `migrations/app/20261012T1041_age/migration.ts`, run `node migrations/app/20261012T1041_age/migration.ts --config prisma.config.ts`, and re-run `{bin} db migrate --config prisma.config.ts --db <url>`.';
+      ' Fix the conversion in `migrations/app/20261012T1041_age/migration.ts`, run `node migrations/app/20261012T1041_age/migration.ts --config prisma.config.ts`, and re-run `{bin} db migrate --config prisma.config.ts --db <url>`.';
     expect([advice('value'), advice('invalidResult'), advice('expressionError')]).toEqual([
       `The conversion of field "User.age" failed on a value its new type cannot hold.${rest}`,
       `The conversion of field "User.age" left a value its new type cannot hold.${rest}`,
@@ -122,22 +119,22 @@ describe('the advice for a type change whose cast failed', () => {
 
   it('keeps the general advice for any other runner failure', () => {
     expect([
-      mapDbUpdateFailure({ ...runnerFailed, conflicts: undefined }, FROM_PROJECT).fix,
-      mapMigrateFailure(runnerFailed, FROM_PROJECT).fix,
+      dbUpdateError({ ...runnerFailed, conflicts: undefined }, FROM_PROJECT).fix,
+      migrateError(runnerFailed, FROM_PROJECT).fix,
     ]).toEqual([
-      'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`',
-      'Fix the issue and re-run `{bin} db migrate --to <contract>` — previously applied migrations are preserved.',
+      'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`.',
+      'Fix the issue and re-run `{bin} db migrate --to <contract>`.',
     ]);
   });
 
   it('repeats --config and --db in the general advice', () => {
     const invocation = { cwd: '/work', configPath: 'app/prisma.config.ts', dbGiven: true };
     expect([
-      mapDbUpdateFailure({ ...runnerFailed, conflicts: undefined }, invocation).fix,
-      mapMigrateFailure(runnerFailed, invocation).fix,
+      dbUpdateError({ ...runnerFailed, conflicts: undefined }, invocation).fix,
+      migrateError(runnerFailed, invocation).fix,
     ]).toEqual([
-      'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update --config app/prisma.config.ts --db <url>`',
-      'Fix the issue and re-run `{bin} db migrate --to <contract> --config app/prisma.config.ts --db <url>` — previously applied migrations are preserved.',
+      'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update --config app/prisma.config.ts --db <url>`.',
+      'Fix the issue and re-run `{bin} db migrate --to <contract> --config app/prisma.config.ts --db <url>`.',
     ]);
   });
 });

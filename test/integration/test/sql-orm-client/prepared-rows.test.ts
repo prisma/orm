@@ -71,7 +71,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
   const instance = instantiateExecutionStack(stack);
   const driver = instance.driver;
   if (!driver) throw new Error('driver missing');
-  await driver.connect({ kind: 'pgClient', client });
+  await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
   const lower = vi.fn(instance.adapter.lower.bind(instance.adapter));
   const driverQuery = vi.spyOn(driver, 'query');
   const runtime = new PostgresRuntimeImpl({

@@ -6,10 +6,13 @@ import { geometry } from '../src/exports/column-types';
 import postgis from '../src/exports/pack';
 
 function buildWithLocation(descriptor: ColumnTypeDescriptor) {
-  return defineContract({ extensions: { postgis } }, ({ field, model }) => ({
+  return defineContract({ extensions: { postgis } }, ({ field, model, gen, type }) => ({
     models: {
       Place: model('Place', {
-        fields: { id: field.id.uuidv4String(), location: field.column(descriptor) },
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          location: field.column(descriptor),
+        },
       }),
     },
   }));

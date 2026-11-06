@@ -5,10 +5,11 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import { testContract } from './fixtures/test-contract';
 
 describe('stored names', () => {
-  const accounts = () => mongoQuery({ contract: testContract }).from('accounts');
+  const accounts = () => mongoQuery({ context: contextOf(testContract) }).from('accounts');
 
   it('keys the result shape of a model read by stored name', () => {
     expect(accounts().build().resultShape).toEqual({

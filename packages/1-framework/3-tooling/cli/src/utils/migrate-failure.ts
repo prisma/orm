@@ -1,32 +1,19 @@
-import { ifDefined } from '@internal/utils/defined';
-import type { MigrateFailure } from '../control-api/types';
+import type { MigrationRunnerFailure } from '@internal/framework-components/control';
+import type { RunnerFailureFacts } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
-import { errorPathUnreachable, errorRunnerFailed } from './cli-errors';
-import { failedPrecheckWhy } from './failed-precheck-advice';
 import type { CliInvocation } from './printed-command';
-import { migrateFix } from './runner-failure-advice';
-import { schemaCheckWhy } from './schema-issues';
+import { type FailedMigrationOnDisk, migrateAdvice } from './runner-failure-advice';
+import { runnerFailureError } from './runner-failure-error';
 
 /**
- * A `migrate` apply failure as the CLI's structured error; its advice prints paths and commands
- * that work from where the CLI ran, with the `--config` it was given.
+ * A failed `db migrate` apply as the CLI reports it; its advice prints paths and commands that work
+ * from where the CLI ran, with the `--config` it was given.
  */
-export function mapMigrateFailure(
-  failure: MigrateFailure,
+export function migrateRunnerFailureError(
+  failure: MigrationRunnerFailure,
+  facts: RunnerFailureFacts,
+  failedMigration: FailedMigrationOnDisk | undefined,
   invocation: CliInvocation,
 ): CliStructuredError {
-  if (failure.code === 'MIGRATION_PATH_NOT_FOUND') {
-    return errorPathUnreachable(failure);
-  }
-  return errorRunnerFailed(failure.summary, {
-    why:
-      schemaCheckWhy(failure.schemaIssues) ??
-      failure.why ??
-      (failure.failedPrecheck === undefined
-        ? 'Migration runner failed'
-        : failedPrecheckWhy(failure.failedPrecheck)),
-    fix: migrateFix(failure, invocation),
-    meta: failure.meta ?? {},
-    ...ifDefined('cause', failure.cause),
-  });
+  return runnerFailureError(failure, migrateAdvice(failure, facts, failedMigration, invocation));
 }

@@ -50,7 +50,7 @@ Concretely:
    - `decodeField` is single-armed: call codec → await → run JSON-Schema validation on the resolved value → return plain value.
    - Rows yielded to user code (one-shot `.first()` / `.all()` and streaming via `AsyncIterableResult`) carry plain field values. No `Promise`-typed fields ever reach user code.
 
-4. **Build-time stays synchronous.** `validateContract<Contract>(contractJson)` returns synchronously. `postgres({...})` and equivalent client constructors stay synchronous. Build-time `decodeJson` / `encodeJson` are not awaited anywhere on the load path.
+4. **Build-time stays synchronous.** `contractFromJson<Contract>(contractJson)` returns synchronously. `postgres({...})` and equivalent client constructors stay synchronous. Build-time `decodeJson` / `encodeJson` are not awaited anywhere on the load path.
 
 5. **ORM client type surfaces are uniform.** `DefaultModelRow` / `InferRootRow` field types are plain `T`. Write surfaces (`MutationUpdateInput`, `CreateInput`, `UniqueConstraintCriterion`, `ShorthandWhereFilter`, `DefaultModelInputRow`) accept plain `T`. Read and write share **one** field type-map.
 
@@ -224,7 +224,7 @@ The single-path always-await design does not preclude either mitigation; both ca
 
 Mongo decode is **in place**: the Mongo runtime walks a structural `MongoResultShape` attached to `MongoQueryPlan` / `MongoExecutionPlan` (see `packages/2-mongo-family/4-query/query-ast/src/result-shape.ts`), dispatches leaf decodes via `Promise.all` per row, and maps failures to `RUNTIME.DECODE_FAILED` with `{ collection, path, codec, wirePreview }`. Lanes populate `resultShape` for flat typed reads; raw commands omit it so rows pass through unchanged. SQL continues to use `meta.annotations` / `meta.projectionTypes`; Mongo does not use those fields for decode.
 
-Mongo's codec registry is now aggregated by the framework's execution-stack composition machinery (matching the SQL pattern that has been in place since ADR 152): component descriptors declare codecs on `ComponentMetadata.types.codecTypes.codecDescriptors`, and `createMongoExecutionContext({ contract, stack })` walks the stack to fold them into a single `MongoCodecRegistry` exposed on `context.codecs`. `MongoRuntimeOptions` no longer accepts a `codecs` field — users do not construct or thread a registry. See `packages/2-mongo-family/7-runtime/src/mongo-execution-stack.ts` for the Mongo-side implementation and `packages/2-sql/5-runtime/src/sql-context.ts` for the SQL counterpart.
+Mongo's codec registry is now aggregated by the framework's execution-stack composition machinery (matching the SQL pattern that has been in place since ADR 152): component descriptors declare codecs on `ComponentMetadata.types.codecTypes.codecDescriptors`, and `createMongoExecutionContext({ contract, stack })` walks the stack to fold them into a single `MongoCodecRegistry` exposed on `context.codecs`. `MongoRuntimeOptions` no longer accepts a `codecs` field — users do not construct or thread a registry. See `packages/2-mongo-family/7-runtime/src/mongo-execution-stack.ts` for the Mongo-side implementation and `packages/2-sql-family/5-runtime/src/sql-context.ts` for the SQL counterpart.
 
 The earlier "Mongo decode out of scope" note below is **historical** — it described the state before this work landed.
 

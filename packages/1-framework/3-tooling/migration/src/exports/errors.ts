@@ -8,5 +8,6 @@ export {
   errorNoInvariantPath,
   errorUnknownInvariant,
   MigrationToolsError,
+  type NoInvariantPathExtensionSpace,
   type NoInvariantPathStructuralEdge,
 } from '../errors';

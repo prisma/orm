@@ -8,7 +8,7 @@ import {
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import type { Client } from 'pg';
-import { createTestPostgresControlAdapter } from '../../../packages/3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { createTestPostgresControlAdapter } from '../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
 const postgresControlAdapter = createTestPostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),

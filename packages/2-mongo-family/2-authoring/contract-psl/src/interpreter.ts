@@ -2,55 +2,52 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
-import {
-  type Contract,
-  type ContractEnum,
-  type ContractField,
-  type ContractReferenceRelation,
-  type ContractValueObject,
-  type CrossReference,
-  crossRef,
-  type ExecutionMutationDefault,
-  type ExecutionMutationDefaultPhases,
-  type ExecutionMutationDefaultValue,
-  type ValueSetRef,
+import type {
+  Contract,
+  ContractField,
+  ContractReferenceRelation,
+  ExecutionMutationDefaultPhases,
+  ExecutionMutationDefaultValue,
+  ValueSetRef,
 } from '@internal/contract/types';
 import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
   AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
   DataTypeSupport,
-  EnumBlockSite,
   ParsedPslExtensionBlock,
+  WrittenValue,
 } from '@internal/framework-components/authoring';
 import {
-  encodeEnumMembers,
-  enumMemberProblemDiagnostic,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookupWithDescriptors, TypeLookups } from '@internal/framework-components/codec';
-import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  ExtensionPackRef,
+  GeneratorFunctionRegistry,
+  TargetPackRef,
+} from '@internal/framework-components/components';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import {
-  applyPolymorphicScopeToMongoIndex,
-  buildMongoStorage,
   DOCUMENT_ID,
-  deriveCollectionValidators,
-  type MongoCollectionInput,
-  type MongoContractRefusal,
-  MongoIndex,
   type MongoIndexKeyDirection,
-  mongoContractRefusalsOf,
-  mongoValueSetsOf,
-  ownStoredNameOf,
-  unsupportedStoredNameReason,
+  type MongoIndexOptionsInput,
 } from '@internal/mongo-contract';
-import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
+import {
+  type BuildRefusal,
+  buildMongoContractFromDefinition,
+  type ContractDefinition,
+  type FieldNode,
+  type IndexNode,
+  type ModelNode,
+  mergeRedundantIndexes,
+  nameIndexes,
+  type RelationNode,
+  type RemovedIndex,
+  type ValueObjectNode,
+} from '@internal/mongo-contract-ts/contract-builder';
 import type {
   AttributeSpecContext,
   Binder,
@@ -61,8 +58,10 @@ import type {
   InferAttr,
   ModelSymbol,
   NamespaceSymbol,
+  ParsedWrittenScalar,
   PslSpan,
   Resolution,
+  ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
 import {
@@ -71,10 +70,12 @@ import {
   type DiagnosticSource,
   diagnosticSource,
   interpretExtensionBlocks,
+  isContributedTypeChoice,
   mapPslDiagnostics,
   nodePslSpan,
-  type PslDiagnostic,
   type PslDiagnosticCollector,
+  refuseRepeatedTypeAliasAttributes,
+  typeAttributeSpecContextOfField,
   typeReferenceNode,
 } from '@internal/psl-parser';
 import {
@@ -83,7 +84,6 @@ import {
   fkRelationPairKey,
   type InvalidFkPairing,
   isBareTypeConstructor,
-  reportPresetNotCalled,
   reportTypeConstructorNotCalled,
   unsupportedBlockDiagnostic,
 } from '@internal/psl-parser/interpret';
@@ -99,12 +99,8 @@ import {
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import {
-  type FieldPresetContext,
-  type PresetWithoutEffect,
-  resolveFieldPreset,
-} from './field-presets';
 import {
   interpretFieldAttribute,
   interpretModelAttribute,
@@ -116,13 +112,33 @@ import {
   pairMongoBackRelations,
 } from './pair-back-relations';
 import { defaultCollectionName, getAttribute } from './psl-helpers';
+import {
+  type EnumSite,
+  type FieldSite,
+  fieldSiteKey,
+  type IndexSite,
+  type ModelSites,
+  refusalDiagnostic,
+  type SchemaSites,
+  type Site,
+} from './refusal-diagnostics';
+import {
+  lowerGeneratorAttribute,
+  type ResolvedTypeAlias,
+  type ResolvedTypeAliases,
+  resolveMongoTypeAliases,
+  scalarTypeOfChoice,
+  scalarTypeOfConstructor,
+} from './type-aliases';
 
 export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  /** The target and extension packs of the stack, which the contract records. */
+  readonly target: TargetPackRef<'mongo', string>;
+  readonly extensionPacks?: Readonly<Record<string, ExtensionPackRef<string, string>>>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   /** The stack's generator functions, which `@onCreate(fn())` and `@onUpdate(fn())` resolve through. */
   readonly generatorFunctions: GeneratorFunctionRegistry;
@@ -171,51 +187,11 @@ interface ScalarNames {
   ) => void;
 }
 
-/**
- * Reports `PSL_PRESET_WITHOUT_EFFECT` for a preset call that fills nothing, such as `temporal.timestamp()` with no phase: it is stored exactly like the scalar type with the same codec, which the warning names.
- */
-function presetWithoutEffectWarner(input: {
-  readonly types: AuthoringTypeNamespace | undefined;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+/** What resolving a field's type reports to. */
+interface FieldResolutionContext {
   readonly sources: PslSources;
-  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
-}): (preset: PresetWithoutEffect) => void {
-  const { reportWarning } = input;
-  if (reportWarning === undefined) return () => {};
-  return ({ field, entityLabel, helperPath, descriptor, codecId }) => {
-    const typeName = [...input.scalarTypeCodecIds].find(([name, id]) => {
-      const type = input.types?.[name];
-      const deprecated =
-        type !== undefined &&
-        isAuthoringTypeConstructorDescriptor(type) &&
-        type.deprecated !== undefined;
-      return id === codecId && !deprecated;
-    })?.[0];
-    if (typeName === undefined) return;
-    const phases = (descriptor.args ?? []).flatMap((arg) =>
-      arg.kind === 'option' && arg.name !== undefined
-        ? [{ name: arg.name, value: arg.values[0] }]
-        : [],
-    );
-    const without =
-      phases.length === 0 ? '' : ` without ${phases.map(({ name }) => name).join(' or ')}`;
-    const pass =
-      phases.length === 0
-        ? ''
-        : `, or pass ${phases.map(({ name, value }) => `${name}: ${value}`).join(' or ')}`;
-    const call = field.typeConstructor?.span;
-    const [warning] = mapPslDiagnostics(
-      [
-        {
-          code: 'PSL_PRESET_WITHOUT_EFFECT',
-          message: `${entityLabel} uses ${helperPath}()${without}, so nothing fills it and it is stored exactly like ${typeName}. Write ${typeName}${pass}.`,
-          ...diagnosticSource(input.sources, field.node.syntax).at(call ?? field.span),
-        },
-      ],
-      input.sources,
-    );
-    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
-  };
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly dataTypes: DataTypeSupport;
 }
 
 /**
@@ -237,22 +213,6 @@ function validateNamespaceBlocksForMongoTarget(input: {
       });
     }
   }
-}
-
-function relationNullabilityMismatchDiagnostic(
-  modelName: string,
-  field: FieldSymbol,
-  sources: PslSources,
-): PslDiagnostic {
-  const source = diagnosticSource(sources, field.node.syntax);
-  const fieldLabel = `Relation field "${modelName}.${field.name}"`;
-  return {
-    code: 'PSL_RELATION_NULLABILITY_MISMATCH',
-    message: field.optional
-      ? `${fieldLabel} is optional but every field in @relation(fields: [...]) is required. Make one of those fields optional with "?" or remove "?" from "${field.name}".`
-      : `${fieldLabel} is required but a field in @relation(fields: [...]) is optional. Add "?" to "${field.name}" or make those fields required.`,
-    ...source.at(field.span),
-  };
 }
 
 function resolvePhysicalNames(input: {
@@ -287,7 +247,11 @@ function resolvePhysicalNames(input: {
             ...specContext,
             field,
             typeResolution: fieldTypeResolution(field, binder),
-            typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+            contributedType: contributedTypeOf(
+              fieldTypeResolution(field, binder),
+              binder,
+              field.typeConstructor,
+            ),
           }),
           model,
           field,
@@ -310,61 +274,56 @@ function physicalName(
   return name;
 }
 
-interface MongoModelEntry {
-  readonly fields: Record<string, ContractField>;
-  readonly relations: Record<string, ContractReferenceRelation>;
-  readonly storage: {
-    readonly collection: string;
-    readonly fields: Readonly<Record<string, { readonly field: string }>>;
-  };
-  readonly discriminator?: { readonly field: string };
-  readonly variants?: Record<string, CrossReference>;
-  readonly base?: CrossReference;
+/**
+ * The `@@discriminator` and `@@base` attributes already reported: one that failed to parse, by its model, and the base a `@@base` that failed to parse names, as written. No orphan diagnostic is added for them.
+ */
+interface ReportedPolymorphism {
+  readonly discriminators: Set<string>;
+  readonly baseTargets: Set<string>;
 }
 
-type DiscriminatorDeclaration = {
-  readonly fieldName: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-};
-type BaseDeclaration = {
-  readonly base: ModelSymbol;
-  readonly value: string;
-  readonly collectionName: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-};
-
-function isStringTyped(
-  field: FieldSymbol,
-  stringCodecId: string | undefined,
-  binder: Binder,
-): boolean {
-  const scalar = contributedTypeOf(fieldTypeResolution(field, binder), binder);
-  return (
-    stringCodecId !== undefined &&
-    scalar?.descriptor.kind === 'typeConstructor' &&
-    scalar.descriptor.output.codecId === stringCodecId
-  );
+interface PolymorphismDeclarations {
+  readonly discriminators: ReadonlyMap<ModelSymbol, Site & { readonly fieldName: string }>;
+  readonly bases: ReadonlyMap<
+    ModelSymbol,
+    Site & {
+      readonly base: ModelSymbol;
+      readonly written: WrittenValue;
+      readonly valueSpan: PslSpan;
+    }
+  >;
+  readonly reported: ReportedPolymorphism;
 }
 
-function collectPolymorphismDeclarations(
-  models: readonly ModelSymbol[],
-  specContextFor: (model: ModelSymbol) => AttributeSpecContext,
-  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
-  sources: PslSources,
-  binder: Binder,
-  stringCodecId: string | undefined,
-  diagnostics: PslDiagnosticCollector,
-): {
-  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
-  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
-} {
-  const discriminatorDeclarations = new Map<ModelSymbol, DiscriminatorDeclaration>();
-  const baseDeclarations = new Map<ModelSymbol, BaseDeclaration>();
+/** A `@@base` value as it is written; the grammar reads only a quoted string there. */
+function writtenBaseValue(written: ParsedWrittenScalar): WrittenValue {
+  if (written.written === undefined) {
+    throw new InternalError('A @@base value is a quoted string, never a tagged literal.');
+  }
+  return written.written;
+}
 
-  for (const model of models) {
-    const specContext = specContextFor(model);
+function collectPolymorphismDeclarations(input: {
+  readonly models: readonly ModelSymbol[];
+  readonly specContextFor: (model: ModelSymbol) => AttributeSpecContext;
+  readonly sources: PslSources;
+  readonly binder: Binder;
+  readonly diagnostics: PslDiagnosticCollector;
+}): PolymorphismDeclarations {
+  const { sources, binder, diagnostics } = input;
+  const discriminators = new Map<ModelSymbol, Site & { readonly fieldName: string }>();
+  const bases = new Map<
+    ModelSymbol,
+    Site & {
+      readonly base: ModelSymbol;
+      readonly written: WrittenValue;
+      readonly valueSpan: PslSpan;
+    }
+  >();
+  const reported: ReportedPolymorphism = { discriminators: new Set(), baseTargets: new Set() };
+
+  for (const model of input.models) {
+    const specContext = input.specContextFor(model);
     const discNode = model.attributes.find((attr) => attr.name === 'discriminator')?.node;
     if (discNode) {
       const parsed = interpretModelAttribute({
@@ -377,25 +336,17 @@ function collectPolymorphismDeclarations(
         diagnostics,
       });
       if (parsed) {
-        const fieldName = parsed.field;
-        const discField = model.fields[fieldName];
-        // Semantic check — stays: the discriminator field must be a String.
-        if (discField && !isStringTyped(discField, stringCodecId, binder)) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Discriminator field "${fieldName}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
-            ...diagnosticSource(sources, discNode.syntax).at(nodePslSpan(discNode.syntax, sources)),
-          });
-        } else {
-          discriminatorDeclarations.set(model, {
-            fieldName,
-            source: diagnosticSource(sources, discNode.syntax),
-            span: nodePslSpan(discNode.syntax, sources),
-          });
-        }
+        discriminators.set(model, {
+          fieldName: parsed.field,
+          source: diagnosticSource(sources, discNode.syntax),
+          span: nodePslSpan(discNode.syntax, sources),
+        });
+      } else {
+        reported.discriminators.add(model.name);
       }
     }
-    const baseNode = model.attributes.find((attr) => attr.name === 'base')?.node;
+    const baseAttribute = model.attributes.find((attr) => attr.name === 'base');
+    const baseNode = baseAttribute?.node;
     if (baseNode) {
       const parsed = interpretModelAttribute({
         symbols: specContext.symbols,
@@ -407,262 +358,20 @@ function collectPolymorphismDeclarations(
         diagnostics,
       });
       if (parsed) {
-        const collectionName = physicalName(physicalNames, model);
-        baseDeclarations.set(model, {
+        bases.set(model, {
           base: parsed.base.declaration,
-          value: parsed.value,
-          collectionName,
+          written: writtenBaseValue(parsed.value),
+          valueSpan: parsed.value.span,
           source: diagnosticSource(sources, baseNode.syntax),
           span: nodePslSpan(baseNode.syntax, sources),
         });
-      }
-    }
-  }
-
-  return { discriminatorDeclarations, baseDeclarations };
-}
-
-function resolvePolymorphism(input: {
-  models: Record<string, MongoModelEntry>;
-  roots: Record<string, CrossReference>;
-  collections: Record<string, Record<string, unknown>>;
-  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
-  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
-  indexSpans: Map<MongoIndex, PslSpan>;
-  modelIndexesByName: Map<string, readonly MongoIndex[]>;
-  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
-  indexSources: ReadonlyMap<MongoIndex, DiagnosticSource>;
-  sources: PslSources;
-  namespaceId: string;
-}): {
-  models: Record<string, MongoModelEntry>;
-  roots: Record<string, CrossReference>;
-  collections: Record<string, Record<string, unknown>>;
-  diagnostics: PslDiagnosticCollector;
-} {
-  const {
-    discriminatorDeclarations,
-    baseDeclarations,
-    physicalNames,
-    indexSpans,
-    modelIndexesByName,
-    indexSources,
-  } = input;
-  let patched = input.models;
-  let roots = input.roots;
-  let collections = input.collections;
-  const diagnostics = createPslDiagnosticCollector(input.sources);
-
-  for (const [declaration, decl] of discriminatorDeclarations) {
-    const modelName = declaration.name;
-    if (baseDeclarations.has(declaration)) {
-      diagnostics.push({
-        code: 'PSL_DISCRIMINATOR_AND_BASE',
-        message: `Model "${modelName}" cannot have both @@discriminator and @@base`,
-        ...decl.source.at(decl.span),
-      });
-      continue;
-    }
-
-    const model = patched[modelName];
-    if (!model) continue;
-
-    if (!Object.hasOwn(model.fields, decl.fieldName)) {
-      diagnostics.push({
-        code: 'PSL_DISCRIMINATOR_FIELD_NOT_FOUND',
-        message: `Discriminator field "${decl.fieldName}" is not a field on model "${modelName}"`,
-        ...decl.source.at(decl.span),
-      });
-      continue;
-    }
-
-    const variants: Record<string, CrossReference> = {};
-    for (const [variant, baseDecl] of baseDeclarations) {
-      if (baseDecl.base !== declaration) continue;
-      const existingVariant = variants[baseDecl.value];
-      if (existingVariant !== undefined) {
-        diagnostics.push({
-          code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
-          message: `Discriminator value "${baseDecl.value}" is used by both "${existingVariant.model}" and "${variant.name}" on base model "${modelName}"`,
-          ...baseDecl.source.at(baseDecl.span),
-        });
-        continue;
-      }
-      variants[baseDecl.value] = crossRef(variant.name, input.namespaceId);
-    }
-
-    if (Object.keys(variants).length === 0) {
-      diagnostics.push({
-        code: 'PSL_ORPHANED_DISCRIMINATOR',
-        message: `Model "${modelName}" has @@discriminator but no variant models declare @@base(${modelName}, ...)`,
-        ...decl.source.at(decl.span),
-      });
-      continue;
-    }
-
-    patched = {
-      ...patched,
-      [modelName]: { ...model, discriminator: { field: decl.fieldName }, variants },
-    };
-  }
-
-  for (const [variant, baseDecl] of baseDeclarations) {
-    const variantName = variant.name;
-    const baseName = baseDecl.base.name;
-    if (!discriminatorDeclarations.has(baseDecl.base)) {
-      diagnostics.push({
-        code: 'PSL_ORPHANED_BASE',
-        message: `Model "${variantName}" declares @@base(${baseName}, ...) but "${baseName}" has no @@discriminator`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
-
-    if (discriminatorDeclarations.has(variant)) {
-      continue;
-    }
-
-    const baseModel = patched[baseName];
-    const hasExplicitMap = getAttribute(variant.attributes, 'map') !== undefined;
-
-    if (hasExplicitMap && baseModel && baseDecl.collectionName !== baseModel.storage.collection) {
-      diagnostics.push({
-        code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION',
-        message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseName}". Mongo only supports single-collection polymorphism.`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
-
-    const baseCollection = baseModel?.storage.collection ?? baseDecl.collectionName;
-    const variantModel = patched[variantName];
-    if (variantModel) {
-      patched = {
-        ...patched,
-        [variantName]: {
-          ...variantModel,
-          base: crossRef(baseName, input.namespaceId),
-          storage: { ...variantModel.storage, collection: baseCollection },
-        },
-      };
-    }
-
-    const variantCollectionName = physicalName(physicalNames, variant);
-    if (roots[variantCollectionName]?.model === variantName) {
-      if (variantCollectionName === baseCollection && baseModel) {
-        roots = { ...roots, [variantCollectionName]: crossRef(baseName, input.namespaceId) };
       } else {
-        roots = Object.fromEntries(
-          Object.entries(roots).filter(([key]) => key !== variantCollectionName),
-        );
-      }
-    }
-
-    const variantOwnIndexes = modelIndexesByName.get(variantName) ?? [];
-    const baseColl = collections[baseCollection];
-
-    const baseModelEntry = patched[baseName];
-    const discriminatorDomainField = baseModelEntry?.discriminator?.field;
-    const discriminatorField =
-      baseModelEntry === undefined || discriminatorDomainField === undefined
-        ? undefined
-        : ownStoredNameOf(baseModelEntry, discriminatorDomainField);
-    const scopedVariantIndexes: MongoIndex[] = [];
-    if (discriminatorField) {
-      for (const idx of variantOwnIndexes) {
-        const result = applyPolymorphicScopeToMongoIndex(idx, {
-          discriminatorField,
-          discriminatorValue: baseDecl.value,
-        });
-        if (result.kind === 'conflict') {
-          const span = indexSpans.get(idx) ?? baseDecl.span;
-          diagnostics.push({
-            code: 'PSL_INVALID_INDEX',
-            message: `Variant "${variantName}" index conflicts with discriminator scope: ${result.reason}`,
-            ...(indexSources.get(idx) ?? baseDecl.source).at(span),
-          });
-          continue;
-        }
-        if (result.index !== idx) {
-          indexSpans.set(result.index, indexSpans.get(idx) ?? baseDecl.span);
-        }
-        scopedVariantIndexes.push(result.index);
-      }
-    } else {
-      scopedVariantIndexes.push(...variantOwnIndexes);
-    }
-
-    if (variantCollectionName !== baseCollection) {
-      const filtered = Object.fromEntries(
-        Object.entries(collections).filter(([key]) => key !== variantCollectionName),
-      );
-      if (scopedVariantIndexes.length > 0 && baseColl) {
-        const baseIndexes = collectionIndexes(baseColl);
-        collections = {
-          ...filtered,
-          [baseCollection]: {
-            ...baseColl,
-            indexes: [...baseIndexes, ...scopedVariantIndexes],
-          },
-        };
-      } else {
-        collections = filtered;
-      }
-    } else if (baseColl) {
-      const existingIndexes = collectionIndexes(baseColl);
-      const variantIndexSet = new Set<MongoIndex>(variantOwnIndexes);
-      const withoutUnscopedVariants = existingIndexes.filter((idx) => !variantIndexSet.has(idx));
-      const mergedIndexes = [...withoutUnscopedVariants];
-      for (const idx of scopedVariantIndexes) {
-        const idxKey = canonicalJson(idx);
-        const isDuplicate = withoutUnscopedVariants.some(
-          (existing) => canonicalJson(existing) === idxKey,
-        );
-        if (!isDuplicate) {
-          mergedIndexes.push(idx);
-        }
-      }
-      if (
-        mergedIndexes.length !== existingIndexes.length ||
-        mergedIndexes.some((idx, i) => idx !== existingIndexes[i])
-      ) {
-        const next: Record<string, unknown> = { ...baseColl };
-        if (mergedIndexes.length > 0) {
-          next['indexes'] = mergedIndexes;
-        } else {
-          delete next['indexes'];
-        }
-        collections = { ...collections, [baseCollection]: next };
+        const target = baseAttribute?.args[0]?.value;
+        if (target !== undefined) reported.baseTargets.add(target);
       }
     }
   }
-
-  return { models: patched, roots, collections, diagnostics };
-}
-
-function collectionIndexes(collection: Record<string, unknown>): MongoIndex[] {
-  return blindCast<
-    MongoIndex[],
-    'Mongo collection indexes are constructed as MongoIndex arrays by this interpreter'
-  >(collection['indexes'] ?? []);
-}
-
-// Property-order-stable serialization for structural equality of plain
-// JSON-compatible values. Used for comparing MongoIndex shapes in
-// the variant-merge dedup path where a future change to the spread order
-// would otherwise produce JSON-stringify mismatches even though the
-// indexes are structurally identical.
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
+  return { discriminators, bases, reported };
 }
 
 type ParsedIndexField =
@@ -705,52 +414,37 @@ interface SpecCollationArgs {
   readonly collationNormalization?: boolean;
 }
 
-function buildCollationFromSpec(args: SpecCollationArgs): CollationOptions | null | undefined {
-  const locale = args.collationLocale;
-  if (locale === undefined) {
-    const hasAnyCollationArg =
-      args.collationStrength !== undefined ||
-      args.collationCaseLevel !== undefined ||
-      args.collationCaseFirst !== undefined ||
-      args.collationNumericOrdering !== undefined ||
-      args.collationAlternate !== undefined ||
-      args.collationMaxVariable !== undefined ||
-      args.collationBackwards !== undefined ||
-      args.collationNormalization !== undefined;
-    return hasAnyCollationArg ? null : undefined;
-  }
-
-  const collation: CollationOptions = { locale };
-  if (args.collationStrength !== undefined) collation.strength = args.collationStrength;
-  if (args.collationCaseLevel !== undefined) collation.caseLevel = args.collationCaseLevel;
-  if (args.collationCaseFirst !== undefined) collation.caseFirst = args.collationCaseFirst;
-  if (args.collationNumericOrdering !== undefined)
-    collation.numericOrdering = args.collationNumericOrdering;
-  if (args.collationAlternate !== undefined) collation.alternate = args.collationAlternate;
-  if (args.collationMaxVariable !== undefined) collation.maxVariable = args.collationMaxVariable;
-  if (args.collationBackwards !== undefined) collation.backwards = args.collationBackwards;
-  if (args.collationNormalization !== undefined)
-    collation.normalization = args.collationNormalization;
-  return collation;
+/** The collation the index arguments name, or undefined when they name none. A collation without `collationLocale` is passed on for the builder to refuse. */
+function buildCollationFromSpec(args: SpecCollationArgs): Record<string, unknown> | undefined {
+  const collation: Record<string, unknown> = {
+    ...ifDefined('locale', args.collationLocale),
+    ...ifDefined('strength', args.collationStrength),
+    ...ifDefined('caseLevel', args.collationCaseLevel),
+    ...ifDefined('caseFirst', args.collationCaseFirst),
+    ...ifDefined('numericOrdering', args.collationNumericOrdering),
+    ...ifDefined('alternate', args.collationAlternate),
+    ...ifDefined('maxVariable', args.collationMaxVariable),
+    ...ifDefined('backwards', args.collationBackwards),
+    ...ifDefined('normalization', args.collationNormalization),
+  };
+  return Object.keys(collation).length === 0 ? undefined : collation;
 }
 
 type NormalIndexArgs = InferAttr<ReturnType<typeof mongoAttributeSpecs.model.index>>;
 type TextIndexArgs = InferAttr<ReturnType<typeof mongoAttributeSpecs.model.textIndex>>;
 
 interface IndexBuildContext {
-  readonly pslModel: ModelSymbol;
-  readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
-  readonly indexableFieldNames: ReadonlySet<string>;
   readonly source: DiagnosticSource;
   readonly span: PslSpan;
   readonly diagnostics: PslDiagnosticCollector;
 }
 
 interface ResolvedIndexKeys {
-  readonly keys: readonly { readonly field: string; readonly direction: MongoIndexKeyDirection }[];
+  readonly fields: Record<string, MongoIndexKeyDirection>;
   readonly hasWildcard: boolean;
 }
 
+/** The index keys by field name, as the builder takes them: a wildcard is `$**` or `<field>.$**`. */
 function resolveIndexKeys(
   parsedFields: readonly ParsedIndexField[],
   defaultDirection: MongoIndexKeyDirection,
@@ -765,29 +459,15 @@ function resolveIndexKeys(
     });
     return undefined;
   }
-
+  const fields: Record<string, MongoIndexKeyDirection> = {};
   for (const field of parsedFields) {
-    const fieldName = field.kind === 'wildcard' ? field.scope : field.name;
-    if (fieldName !== undefined && !ctx.indexableFieldNames.has(fieldName)) {
-      ctx.diagnostics.push({
-        code: 'PSL_INDEX_FIELD_NOT_FOUND',
-        message: `Index on model "${ctx.pslModel.name}" references unknown field "${fieldName}"`,
-        ...ctx.source.at(ctx.span),
-      });
-      return undefined;
+    if (field.kind === 'wildcard') {
+      fields[field.scope === undefined ? '$**' : `${field.scope}.$**`] = defaultDirection;
+    } else {
+      fields[field.name] = field.direction ?? defaultDirection;
     }
   }
-
-  const keys = parsedFields.map((field) => {
-    if (field.kind === 'wildcard') {
-      if (field.scope === undefined) return { field: '$**', direction: defaultDirection };
-      const mappedScope = physicalName(ctx.physicalNames, ctx.pslModel.fields[field.scope]);
-      return { field: `${mappedScope}.$**`, direction: defaultDirection };
-    }
-    const mappedName = physicalName(ctx.physicalNames, ctx.pslModel.fields[field.name]);
-    return { field: mappedName, direction: field.direction ?? defaultDirection };
-  });
-  return { keys, hasWildcard: wildcardCount === 1 };
+  return { fields, hasWildcard: wildcardCount === 1 };
 }
 
 function buildProjection(
@@ -805,70 +485,30 @@ function buildProjection(
     return null;
   }
   const fields = include ?? exclude;
-  if (fields === undefined) return undefined;
-  if (!hasWildcard) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'include/exclude options are only valid when the index contains a wildcard() field',
-      ...ctx.source.at(ctx.span),
-    });
-    return null;
-  }
-  if (fields.length === 0) return undefined;
+  if (fields === undefined || (fields.length === 0 && hasWildcard)) return undefined;
   const value = include === undefined ? 0 : 1;
   const projection: Record<string, 0 | 1> = {};
   for (const field of fields) projection[field] = value;
   return projection;
 }
 
+/** Index options as the attribute specs read them, which are the values MongoDB takes. */
+function indexOptions(options: Record<string, unknown>): MongoIndexOptionsInput {
+  return blindCast<
+    MongoIndexOptionsInput,
+    'the index attribute specs read each option as the value MongoDB takes for it'
+  >(options);
+}
+
 function buildNormalIndex(
   parsed: NormalIndexArgs,
   unique: boolean,
   ctx: IndexBuildContext,
-): MongoIndex | undefined {
+): IndexNode | undefined {
   const parsedFields = parsed.fields.map(normalizeIndexField);
   if (parsedFields.length === 0) return undefined;
-  const defaultDirection = parsed.type ?? 1;
-  const resolved = resolveIndexKeys(parsedFields, defaultDirection, ctx);
+  const resolved = resolveIndexKeys(parsedFields, parsed.type ?? 1, ctx);
   if (!resolved) return undefined;
-
-  if (unique && resolved.hasWildcard) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'Unique indexes cannot use wildcard() fields',
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-  if (
-    resolved.hasWildcard &&
-    typeof defaultDirection === 'string' &&
-    ['hashed', '2dsphere', '2d'].includes(defaultDirection)
-  ) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: `wildcard() fields cannot be combined with type: ${defaultDirection}`,
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-  if (defaultDirection === 'hashed' && parsedFields.length > 1) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'Hashed indexes must have exactly one field',
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-  if (resolved.hasWildcard && parsed.expireAfterSeconds !== undefined) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'expireAfterSeconds cannot be combined with wildcard() fields',
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-
   const wildcardProjection = buildProjection(
     parsed.include,
     parsed.exclude,
@@ -877,31 +517,23 @@ function buildNormalIndex(
   );
   if (wildcardProjection === null) return undefined;
   const collation = buildCollationFromSpec(parsed);
-  if (collation === null) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'collationLocale is required when using collation options',
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-
-  return new MongoIndex({
-    keys: resolved.keys,
-    ...(unique && { unique: true }),
-    ...(parsed.sparse !== undefined && { sparse: parsed.sparse }),
-    ...(parsed.expireAfterSeconds !== undefined && {
-      expireAfterSeconds: parsed.expireAfterSeconds,
+  return {
+    fields: resolved.fields,
+    options: indexOptions({
+      ...ifDefined('name', parsed.map),
+      ...(unique && { unique: true }),
+      ...ifDefined('sparse', parsed.sparse),
+      ...ifDefined('expireAfterSeconds', parsed.expireAfterSeconds),
+      ...ifDefined('partialFilterExpression', parsed.filter),
+      ...ifDefined('wildcardProjection', wildcardProjection),
+      ...ifDefined('collation', collation),
+      ...ifDefined('default_language', parsed.default_language),
+      ...ifDefined('language_override', parsed.languageOverride),
     }),
-    ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
-    ...(wildcardProjection !== undefined && { wildcardProjection }),
-    ...(collation !== undefined && { collation }),
-    ...(parsed.default_language !== undefined && { default_language: parsed.default_language }),
-    ...(parsed.languageOverride !== undefined && { language_override: parsed.languageOverride }),
-  });
+  };
 }
 
-function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoIndex | undefined {
+function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): IndexNode | undefined {
   const parsedFields = parsed.fields.map(normalizeIndexField);
   if (parsedFields.length === 0) return undefined;
   const resolved = resolveIndexKeys(parsedFields, 'text', ctx);
@@ -914,25 +546,18 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
     });
     return undefined;
   }
-
   const collation = buildCollationFromSpec(parsed);
-  if (collation === null) {
-    ctx.diagnostics.push({
-      code: 'PSL_INVALID_INDEX',
-      message: 'collationLocale is required when using collation options',
-      ...ctx.source.at(ctx.span),
-    });
-    return undefined;
-  }
-
-  return new MongoIndex({
-    keys: resolved.keys,
-    ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
-    ...(collation !== undefined && { collation }),
-    ...ifDefined('weights', parsed.weights),
-    ...(parsed.language !== undefined && { default_language: parsed.language }),
-    ...(parsed.languageOverride !== undefined && { language_override: parsed.languageOverride }),
-  });
+  return {
+    fields: resolved.fields,
+    options: indexOptions({
+      ...ifDefined('name', parsed.map),
+      ...ifDefined('partialFilterExpression', parsed.filter),
+      ...ifDefined('collation', collation),
+      ...ifDefined('weights', parsed.weights),
+      ...ifDefined('default_language', parsed.language),
+      ...ifDefined('language_override', parsed.languageOverride),
+    }),
+  };
 }
 
 function nestedIndexPath(
@@ -967,27 +592,22 @@ function nestedIndexPathMessage(
     : `${label} is a dotted path, but "${root}" is not a field of "${pslModel.name}" whose type is a composite type, so the path names no field. List fields of "${pslModel.name}" by name.`;
 }
 
+/**
+ * A model's indexes as the schema writes them, with where each is written: a field's `@unique` first, then `@@index`, `@@unique` and `@@textIndex` in the order the model lists them.
+ */
 function collectIndexes(
   pslModel: ModelSymbol,
   specContext: AttributeSpecContext,
-  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
-  indexSpans: Map<MongoIndex, PslSpan>,
-  indexSources: Map<MongoIndex, DiagnosticSource>,
-): MongoIndex[] {
-  const indexes: MongoIndex[] = [];
-  let textIndexCount = 0;
-  const indexableFieldNames = new Set<string>();
-  for (const field of Object.values(pslModel.fields)) {
-    if (fieldTypeResolution(field, binder)?.kind !== 'model') indexableFieldNames.add(field.name);
-  }
-
+): IndexSite[] {
+  const indexes: IndexSite[] = [];
   for (const field of Object.values(pslModel.fields)) {
     if (fieldTypeResolution(field, binder)?.kind === 'model') continue;
-    const uniqueNode = field.attributes.find((attr) => attr.name === 'unique')?.node;
-    if (!uniqueNode) continue;
+    const uniqueAttribute = field.attributes.find((attr) => attr.name === 'unique');
+    const uniqueNode = uniqueAttribute?.node;
+    if (!uniqueAttribute || !uniqueNode) continue;
     const unique = interpretFieldAttribute({
       symbols: specContext.symbols,
       node: uniqueNode,
@@ -995,7 +615,11 @@ function collectIndexes(
         ...specContext,
         field,
         typeResolution: fieldTypeResolution(field, binder),
-        typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+        contributedType: contributedTypeOf(
+          fieldTypeResolution(field, binder),
+          binder,
+          field.typeConstructor,
+        ),
       }),
       model: pslModel,
       field,
@@ -1004,28 +628,28 @@ function collectIndexes(
       diagnostics,
     });
     if (unique === undefined) continue;
-    const mappedName = physicalName(physicalNames, field);
-    const fieldUniqueIndex = new MongoIndex({
-      keys: [{ field: mappedName, direction: 1 }],
-      unique: true,
+    const source = diagnosticSource(sources, uniqueNode.syntax);
+    const span = nodePslSpan(uniqueNode.syntax, sources);
+    if (unique.map === '') {
+      reportEmptyIndexMap(diagnostics, source, span);
+      continue;
+    }
+    indexes.push({
+      index: {
+        fields: { [field.name]: 1 },
+        options: { unique: true, ...ifDefined('name', unique.map) },
+      },
+      source,
+      span,
+      label: `${attributeText('@', uniqueAttribute)} on field "${pslModel.name}.${field.name}"`,
     });
-    indexes.push(fieldUniqueIndex);
-    indexSpans.set(fieldUniqueIndex, nodePslSpan(uniqueNode.syntax, sources));
-    indexSources.set(fieldUniqueIndex, diagnosticSource(sources, uniqueNode.syntax));
   }
 
   for (const attr of pslModel.attributes) {
     if (attr.name !== 'index' && attr.name !== 'unique' && attr.name !== 'textIndex') continue;
     const node = attr.node;
     const source = diagnosticSource(sources, node.syntax);
-    const ctx: IndexBuildContext = {
-      pslModel,
-      physicalNames,
-      indexableFieldNames,
-      source,
-      span: attr.span,
-      diagnostics,
-    };
+    const ctx: IndexBuildContext = { source, span: attr.span, diagnostics };
 
     const nested = nestedIndexPath(node);
     if (nested !== undefined) {
@@ -1037,7 +661,7 @@ function collectIndexes(
       continue;
     }
 
-    let index: MongoIndex | undefined;
+    let index: IndexNode | undefined;
     if (attr.name === 'textIndex') {
       const parsed = interpretModelAttribute({
         symbols: specContext.symbols,
@@ -1049,15 +673,6 @@ function collectIndexes(
         diagnostics,
       });
       if (!parsed || parsed.fields.length === 0) continue;
-      textIndexCount++;
-      if (textIndexCount > 1) {
-        diagnostics.push({
-          code: 'PSL_INVALID_INDEX',
-          message: `Only one @@textIndex is allowed per collection (model "${pslModel.name}")`,
-          ...source.at(attr.span),
-        });
-        continue;
-      }
       index = buildTextIndex(parsed, ctx);
     } else {
       const unique = attr.name === 'unique';
@@ -1075,13 +690,40 @@ function collectIndexes(
       if (!parsed) continue;
       index = buildNormalIndex(parsed, unique, ctx);
     }
-
-    if (!index) continue;
-    indexes.push(index);
-    indexSpans.set(index, attr.span);
-    indexSources.set(index, source);
+    if (index === undefined) continue;
+    if (index.options?.name === '') {
+      reportEmptyIndexMap(diagnostics, source, attr.span);
+      continue;
+    }
+    indexes.push({
+      index,
+      source,
+      span: attr.span,
+      label: `${attributeText('@@', attr)} on model "${pslModel.name}"`,
+    });
   }
   return indexes;
+}
+
+/** An attribute as the schema writes it, with its arguments as written. */
+function attributeText(prefix: '@' | '@@', attribute: ResolvedAttribute): string {
+  if (attribute.args.length === 0) return `${prefix}${attribute.name}`;
+  const args = attribute.args.map((arg) =>
+    arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value,
+  );
+  return `${prefix}${attribute.name}(${args.join(', ')})`;
+}
+
+function reportEmptyIndexMap(
+  diagnostics: PslDiagnosticCollector,
+  source: DiagnosticSource,
+  span: PslSpan,
+): void {
+  diagnostics.push({
+    code: 'PSL_INVALID_INDEX',
+    message: 'The `map` argument of an index cannot be an empty string.',
+    ...source.at(span),
+  });
 }
 
 function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | undefined {
@@ -1089,77 +731,19 @@ function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | u
   return node === undefined ? undefined : binder.symbolForNode(node);
 }
 
-interface PresetExecutionDefault {
-  readonly modelName: string;
-  readonly field: FieldSymbol;
-  readonly storedField: string;
-  readonly phases: ExecutionMutationDefaultPhases;
-  readonly fromPreset: boolean;
-}
-
-/**
- * Keys each preset's execution defaults by collection and stored field. Rejects presets on variant fields, since a default keyed by collection applies to every document in it, and merges identical defaults that two models declare for the same collection field.
- */
-function resolvePresetExecutionDefaults(input: {
-  readonly defaults: readonly PresetExecutionDefault[];
-  readonly models: Readonly<Record<string, MongoModelEntry>>;
-  readonly sources: PslSources;
-  readonly diagnostics: PslDiagnosticCollector;
-  readonly namespaceId: string;
-}): ExecutionMutationDefault[] {
-  const byRef = new Map<
-    string,
-    { readonly owner: PresetExecutionDefault; readonly phasesKey: string }
-  >();
-  const resolved: ExecutionMutationDefault[] = [];
-  for (const preset of input.defaults) {
-    const model = input.models[preset.modelName];
-    if (model === undefined) continue;
-    const collection = model.storage.collection;
-    const call = preset.field.typeConstructor;
-    const presetPath = call?.path.join('.') ?? preset.field.typeName;
-    const at = diagnosticSource(input.sources, preset.field.node.syntax).at(
-      call?.span ?? preset.field.span,
-    );
-    const source = preset.fromPreset ? `Preset "${presetPath}"` : 'Generated value';
-    if (model.base !== undefined) {
-      input.diagnostics.push({
-        code: 'PSL_PRESET_ON_VARIANT_FIELD',
-        message: `${source} on variant "${preset.modelName}" field "${preset.field.name}": execution defaults apply to every document in collection "${collection}", so declare them on the base model.`,
-        ...at,
-      });
-      continue;
-    }
-    const refKey = JSON.stringify([collection, preset.storedField]);
-    const phasesKey = canonicalJson(preset.phases);
-    const existing = byRef.get(refKey);
-    if (existing === undefined) {
-      byRef.set(refKey, { owner: preset, phasesKey });
-      resolved.push({
-        ref: { namespace: input.namespaceId, entry: collection, field: preset.storedField },
-        ...preset.phases,
-      });
-      continue;
-    }
-    if (existing.phasesKey !== phasesKey) {
-      input.diagnostics.push({
-        code: 'PSL_PRESET_CONFLICT',
-        message: `${source} on "${preset.modelName}.${preset.field.name}" sets different execution defaults than "${existing.owner.modelName}.${existing.owner.field.name}" for field "${preset.storedField}" of collection "${collection}". Generate the same values on both models.`,
-        ...at,
-      });
-    }
-  }
-  return resolved;
-}
-
 const GENERATOR_PHASES = ['onCreate', 'onUpdate'] as const;
 
+interface LoweredGeneratorAttributes {
+  /** The generators the attributes resolve to; undefined when the field has none or one is refused. */
+  readonly values: ExecutionMutationDefaultPhases | undefined;
+  readonly sites: FieldSite['generatorAttributes'];
+}
+
 /**
- * The generators a field's `@onCreate(fn())` and `@onUpdate(fn())` resolve to, `undefined` for a field with neither, or `'invalid'` when one is refused.
+ * The generators a field's `@onCreate(fn())` and `@onUpdate(fn())` resolve to, and where each attribute is written. An attribute written twice, or one whose call is refused, is reported here.
  */
 function lowerGeneratorAttributes(input: {
   readonly field: FieldSymbol;
-  readonly model: ModelSymbol;
   readonly modelName: string;
   readonly resolved: ResolvedNonRelationField;
   readonly specContext: FieldAttributeSpecContext;
@@ -1167,91 +751,89 @@ function lowerGeneratorAttributes(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
-}): ExecutionMutationDefaultPhases | 'invalid' | undefined {
+}): LoweredGeneratorAttributes {
   const { field, modelName, diagnostics } = input;
-  const fieldLabel = `Field "${modelName}.${field.name}"`;
   const phases: {
     onCreate?: ExecutionMutationDefaultValue;
     onUpdate?: ExecutionMutationDefaultValue;
   } = {};
+  const sites: Partial<Record<'onCreate' | 'onUpdate', { span: PslSpan; argument: string }>> = {};
+  let refused = false;
   for (const phase of GENERATOR_PHASES) {
     const [attribute, duplicate] = field.attributes.filter(({ name }) => name === phase);
     if (attribute === undefined) continue;
+    sites[phase] = {
+      span: attribute.span,
+      argument: attribute.args.find((arg) => arg.kind === 'positional')?.value.trim() ?? '',
+    };
     if (duplicate !== undefined) {
       diagnostics.push({
         code: 'PSL_DUPLICATE_ATTRIBUTE',
         message: `\`@${phase}\` declared more than once on field "${modelName}.${field.name}".`,
         ...diagnosticSource(input.sources, field.node.syntax).at(duplicate.span),
       });
-      return 'invalid';
-    }
-    const at = diagnosticSource(input.sources, field.node.syntax).at(attribute.span);
-    const argument = attribute.args.find((arg) => arg.kind === 'positional')?.value.trim() ?? '';
-    if (field.list) {
-      diagnostics.push({
-        code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-        message: `${fieldLabel} is a list and cannot use @${phase}(${argument}). Lists have no per-element generated values; remove @${phase}(...).`,
-        ...at,
-      });
-      return 'invalid';
-    }
-    if (field.optional) {
-      diagnostics.push({
-        code: 'PSL_OPTIONAL_EXECUTION_DEFAULT_UNSUPPORTED',
-        message: `${fieldLabel} is optional, and a generated value needs a required field in MongoDB. Remove "?" or remove @${phase}(...).`,
-        ...at,
-      });
-      return 'invalid';
-    }
-    if (input.resolved.executionDefaults?.[phase] !== undefined) {
-      const phaseText = phase === 'onCreate' ? 'on create' : 'on update';
-      diagnostics.push({
-        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-        message: `${fieldLabel} uses a field-preset call that already generates a value ${phaseText}, so @${phase}(...) cannot set one too. Remove @${phase}(...) or use a preset without an ${phase} generator.`,
-        ...at,
-      });
-      return 'invalid';
-    }
-    const interpreted = interpretFieldAttribute({
-      symbols: input.specContext.symbols,
-      node: attribute.node,
-      spec: mongoAttributeSpecs.field[phase](input.specContext),
-      model: input.model,
-      field,
-      sources: input.sources,
-      binder: input.binder,
-      diagnostics,
-    });
-    if (interpreted === undefined) return 'invalid';
-    const type = input.resolved.field.type;
-    const call = interpreted.value;
-    const resolution =
-      type.kind === 'scalar'
-        ? input.generatorFunctions.resolve(
-            { name: call.fn, args: call.args },
-            { codecId: type.codecId, typeParams: type.typeParams },
-          )
-        : undefined;
-    if (resolution?.ok === true) {
-      phases[phase] = resolution.generator;
+      refused = true;
       continue;
     }
-    diagnostics.push({
-      code: 'PSL_GENERATOR_NOT_APPLICABLE',
-      message:
-        resolution?.reason === 'refused'
-          ? `${fieldLabel}: ${resolution.message}`
-          : `${fieldLabel}: ${call.fn}() does not apply to this field's type.`,
-      ...diagnosticSource(input.sources, field.node.syntax).at(call.span),
+    const generator = lowerGeneratorAttribute({
+      phase,
+      attribute,
+      specContext: typeAttributeSpecContextOfField(input.specContext),
+      type: input.resolved.field.type,
+      symbols: input.specContext.symbols,
+      binder: input.binder,
+      sources: input.sources,
+      generatorFunctions: input.generatorFunctions,
+      diagnostics,
     });
-    return 'invalid';
+    if (generator === undefined) {
+      refused = true;
+      continue;
+    }
+    phases[phase] = generator;
   }
-  return phases.onCreate === undefined && phases.onUpdate === undefined ? undefined : phases;
+  const none = phases.onCreate === undefined && phases.onUpdate === undefined;
+  return { values: refused || none ? undefined : phases, sites };
 }
 
 interface ResolvedNonRelationField {
   readonly field: ContractField;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
+  /** The type alias the field is typed by. */
+  readonly typeAlias?: ResolvedTypeAlias;
+}
+
+function fieldOfTypeAlias(
+  field: FieldSymbol,
+  typeAlias: ResolvedTypeAlias,
+): ResolvedNonRelationField {
+  return {
+    field: {
+      type: typeAlias.type,
+      nullable: field.optional,
+      many: field.list ? { elementNullable: field.elementOptional } : false,
+      ...ifDefined('valueSet', typeAlias.valueSet),
+    },
+    typeAlias,
+  };
+}
+
+/**
+ * Whether a field may take what its type alias carries: it repeats none of the alias's attributes. Reports each refusal at the field.
+ */
+function acceptsTypeAlias(input: {
+  readonly field: FieldSymbol;
+  readonly modelName: string;
+  readonly typeAlias: ResolvedTypeAlias;
+  readonly sources: PslSources;
+  readonly diagnostics: PslDiagnosticCollector;
+}): boolean {
+  return !refuseRepeatedTypeAliasAttributes({
+    field: input.field,
+    fieldPath: `${input.modelName}.${input.field.name}`,
+    alias: input.typeAlias.alias,
+    sources: input.sources,
+    diagnostics: input.diagnostics,
+  });
 }
 
 function resolveNonRelationField(
@@ -1259,14 +841,22 @@ function resolveNonRelationField(
   owner: { readonly name: string; readonly kind: 'model' | 'compositeType' },
   resolution: Resolution | undefined,
   codecIdByEnumName: ReadonlyMap<string, string>,
-  presetContext: FieldPresetContext,
+  context: FieldResolutionContext,
   scalarNames: ScalarNames,
+  typeAliases: ResolvedTypeAliases,
+  codecLookup: CodecLookupWithDescriptors,
 ): ResolvedNonRelationField | undefined {
   const ownerName = owner.name;
   if (resolution?.kind === 'compositeType') {
     return {
       field: {
-        type: { kind: 'valueObject', name: resolution.symbol.name },
+        type: {
+          kind: 'valueObject',
+          plane: 'storage',
+          namespaceId: resolution.namespace.id,
+          entityKind: 'valueObject',
+          entityName: resolution.symbol.name,
+        },
         nullable: field.optional,
         many: field.list ? { elementNullable: field.elementOptional } : false,
       },
@@ -1292,50 +882,71 @@ function resolveNonRelationField(
     };
   }
 
+  if (resolution?.kind === 'namedType') {
+    if (field.typeConstructor !== undefined) {
+      context.diagnostics.push({
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message: `Field "${ownerName}.${field.name}" calls "${field.typeConstructor.path.join('.')}", which is a type alias, not a type constructor. Remove the arguments.`,
+        ...diagnosticSource(context.sources, field.node.syntax).at(field.span),
+      });
+      return undefined;
+    }
+    const typeAlias = typeAliases.ofResolution(resolution);
+    return typeAlias === undefined ? undefined : fieldOfTypeAlias(field, typeAlias);
+  }
+
   if (
     resolution?.kind === 'model' ||
-    resolution?.kind === 'namedType' ||
     resolution?.kind === 'block' ||
     resolution?.kind === 'crossSpace'
   ) {
-    presetContext.diagnostics.push({
+    context.diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
       message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
-      ...diagnosticSource(presetContext.sources, field.node.syntax).at(field.span),
+      ...diagnosticSource(context.sources, field.node.syntax).at(field.span),
     });
     return undefined;
   }
   if (resolution?.kind !== 'contributedType') {
     return undefined;
   }
-  const { descriptor, path } = resolution.symbol;
   const call = field.typeConstructor;
   const entityLabel = `Field "${ownerName}.${field.name}"`;
-  const source = diagnosticSource(presetContext.sources, field.node.syntax);
-  if (descriptor.kind === 'fieldPreset') {
-    if (call === undefined) {
-      reportPresetNotCalled({
-        entityLabel,
-        presetPath: path.join('.'),
-        source,
-        span: field.span,
-        diagnostics: presetContext.diagnostics,
+  const source = diagnosticSource(context.sources, field.node.syntax);
+  if (isContributedTypeChoice(resolution.symbol)) {
+    const type = scalarTypeOfChoice({
+      symbol: resolution.symbol,
+      call,
+      span: field.span,
+      codecLookup,
+      diagnostics: context.diagnostics,
+      source,
+      entityLabel,
+      dataTypes: context.dataTypes,
+    });
+    return type === undefined
+      ? undefined
+      : {
+          field: {
+            type,
+            nullable: field.optional,
+            many: field.list ? { elementNullable: field.elementOptional } : false,
+          },
+        };
+  }
+  const { descriptor, path } = resolution.symbol;
+  if (descriptor.kind === 'typeAlias') {
+    if (call !== undefined) {
+      context.diagnostics.push({
+        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+        message: `${path.join('.')} is a type alias and takes no arguments.`,
+        ...source.at(call.span),
       });
       return undefined;
     }
-    const preset = resolveFieldPreset({
-      field,
-      call,
-      descriptor,
-      ownerName,
-      ownerKind: owner.kind,
-      context: presetContext,
-    });
-    if (preset.kind === 'invalid') return undefined;
-    return {
-      field: preset.field,
-      ...ifDefined('executionDefaults', preset.executionDefaults),
-    };
+    const typeAlias = typeAliases.ofResolution(resolution);
+    invariant(typeAlias !== undefined, 'A contributed type alias always resolves');
+    return fieldOfTypeAlias(field, typeAlias);
   }
   if (call === undefined && !isBareTypeConstructor(descriptor)) {
     reportTypeConstructorNotCalled({
@@ -1344,7 +955,7 @@ function resolveNonRelationField(
       descriptor,
       source,
       span: field.span,
-      diagnostics: presetContext.diagnostics,
+      diagnostics: context.diagnostics,
     });
     return undefined;
   }
@@ -1352,79 +963,10 @@ function resolveNonRelationField(
   if (call === undefined) scalarNames.warnDeprecated(field, descriptor);
   return {
     field: {
-      type: { kind: 'scalar', codecId: descriptor.output.codecId },
+      type: scalarTypeOfConstructor(descriptor, call),
       nullable: field.optional,
       many: field.list ? { elementNullable: field.elementOptional } : false,
     },
-  };
-}
-
-interface EnumSite {
-  readonly sourceId: string;
-  readonly codecSpan: PslSpan;
-  readonly memberSpans: Readonly<Record<string, PslSpan>>;
-}
-
-function fieldKey(owner: string, fieldName: string): string {
-  return JSON.stringify([owner, fieldName]);
-}
-
-/** The diagnostic for an enum a collection validator cannot describe, at its `@@type` or member. */
-function enumRefusalDiagnostic(
-  refusal: MongoContractRefusal,
-  sites: ReadonlyMap<string, EnumSite>,
-): ContractSourceDiagnostic | undefined {
-  if (
-    refusal.kind !== 'enumBsonType' &&
-    refusal.kind !== 'enumNotListable' &&
-    refusal.kind !== 'enumMemberNotListable'
-  ) {
-    return undefined;
-  }
-  const site = sites.get(refusal.enumName);
-  assertDefined(site, `Built enum "${refusal.enumName}" has a declaration site`);
-  const subject = `enum "${refusal.enumName}"`;
-  if (refusal.kind === 'enumBsonType') {
-    return {
-      code: 'PSL_EXTENSION_INVALID_VALUE',
-      message: `${subject} ${refusal.refusal.reason}`,
-      sourceId: site.sourceId,
-      span: site.codecSpan,
-    };
-  }
-  if (refusal.kind === 'enumNotListable') {
-    return {
-      code: 'PSL_EXTENSION_INVALID_VALUE',
-      message: `${subject} @@type codec "${refusal.codecId}" ${refusal.reason}`,
-      sourceId: site.sourceId,
-      span: site.codecSpan,
-    };
-  }
-  return {
-    code: 'PSL_EXTENSION_INVALID_VALUE',
-    message: `${subject} member "${refusal.member}" ${refusal.reason}`,
-    sourceId: site.sourceId,
-    span: site.memberSpans[refusal.member] ?? site.codecSpan,
-  };
-}
-
-/** MongoDB PSL has no control policies, so every collection is managed. */
-const MONGO_PSL_CONTROL_POLICIES = { collections: {}, defaultControlPolicy: undefined } as const;
-
-/** The diagnostic for a field a collection validator cannot describe, at the field. */
-function fieldRefusalDiagnostic(
-  refusal: MongoContractRefusal,
-  fieldSymbols: ReadonlyMap<string, FieldSymbol>,
-  sources: PslSources,
-): PslDiagnostic | undefined {
-  if (refusal.kind !== 'fieldBsonType' && refusal.kind !== 'documentId') return undefined;
-  const owner = refusal.kind === 'fieldBsonType' ? refusal.owner.name : refusal.modelName;
-  const field = fieldSymbols.get(fieldKey(owner, refusal.fieldName));
-  assertDefined(field, `Field "${owner}.${refusal.fieldName}" has a declaration`);
-  return {
-    code: refusal.kind === 'fieldBsonType' ? 'PSL_UNSUPPORTED_FIELD_TYPE' : 'PSL_MONGO_ID_INVALID',
-    message: `Field "${owner}.${field.name}" ${refusal.kind === 'fieldBsonType' ? refusal.refusal.reason : refusal.reason}`,
-    ...diagnosticSource(sources, field.node.syntax).at(field.span),
   };
 }
 
@@ -1432,16 +974,15 @@ function processEnumDeclarations(input: {
   readonly enumSymbols: readonly BlockSymbol[];
   readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly sources: PslSources;
-  readonly binder: Binder;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly entityContext: AuthoringEntityContext;
   readonly diagnostics: PslDiagnosticCollector;
-  /** Filled with where each built enum is declared, for diagnostics about it. */
+  /** Filled with where each enum is declared, for diagnostics about it. */
   readonly sites: Map<string, EnumSite>;
-}): Record<string, ContractEnum> {
-  const builtEnums: Record<string, ContractEnum> = {};
+}): Record<string, EnumTypeHandle> {
+  const handles: Record<string, EnumTypeHandle> = {};
 
-  if (input.enumSymbols.length === 0) return builtEnums;
+  if (input.enumSymbols.length === 0) return handles;
 
   const enumDescriptor =
     input.authoringContributions?.entityTypes?.['enum'] !== undefined &&
@@ -1458,7 +999,7 @@ function processEnumDeclarations(input: {
         ...source.at(enumSymbol.span),
       });
     }
-    return builtEnums;
+    return handles;
   }
 
   for (const enumSymbol of input.enumSymbols) {
@@ -1474,56 +1015,111 @@ function processEnumDeclarations(input: {
     );
 
     if (handle === undefined || handle === null) continue;
-
-    const encoded = encodeEnumMembers(handle, input.entityContext.codecLookup);
-    if (!encoded.ok) {
-      const site: EnumBlockSite = {
+    handles[envelope.name] = handle;
+    const typeAttribute = envelope.attributes['type'];
+    input.sites.set(envelope.name, {
+      block: {
         enumName: envelope.name,
         codecId: handle.codecId,
         sourceId: sourceFile.filename,
         span: envelope.span,
         memberSpans: envelope.parameterSpans,
-      };
-      input.diagnostics.pushExternal(
-        ...encoded.failure.map((problem) => enumMemberProblemDiagnostic(problem, site)),
-      );
-      continue;
-    }
-    builtEnums[envelope.name] = { codecId: handle.codecId, members: encoded.value };
-    const typeAttribute = envelope.attributes['type'];
-    input.sites.set(envelope.name, {
-      sourceId: sourceFile.filename,
+      },
       codecSpan: typeAttribute?.argSpans?.['codecId'] ?? typeAttribute?.span ?? envelope.span,
-      memberSpans: envelope.parameterSpans,
     });
   }
 
-  return builtEnums;
+  return handles;
+}
+
+function withoutMergedIndexSites(
+  modelSites: ReadonlyMap<string, ModelSites>,
+  removedIndexes: readonly RemovedIndex[],
+): ReadonlyMap<string, ModelSites> {
+  return new Map(
+    [...modelSites].map(([modelName, sites]) => {
+      const removed = new Set(
+        removedIndexes.filter(({ model }) => model === modelName).map(({ position }) => position),
+      );
+      return [
+        modelName,
+        { ...sites, indexes: sites.indexes.filter((_, position) => !removed.has(position)) },
+      ];
+    }),
+  );
+}
+
+/** Whether PSL already reported the cause of a refusal, so the builder's refusal would repeat it. */
+function alreadyReported(
+  refusal: BuildRefusal,
+  dropped: ReadonlySet<string>,
+  reported: ReportedPolymorphism,
+): boolean {
+  switch (refusal.kind) {
+    case 'indexFieldUnknown':
+      return dropped.has(fieldSiteKey(refusal.key.model, refusal.fieldName));
+    case 'relationLocalFieldUnknown':
+      return dropped.has(fieldSiteKey(refusal.key.model, refusal.fieldName));
+    case 'discriminatorFieldUnknown':
+      return dropped.has(fieldSiteKey(refusal.key.model, refusal.fieldName));
+    case 'discriminatorWithoutVariants':
+      return reported.baseTargets.has(refusal.key.model);
+    case 'baseWithoutDiscriminator':
+      return reported.discriminators.has(refusal.baseModel);
+    default:
+      return false;
+  }
+}
+
+function enumNameOf(field: ContractField): string | undefined {
+  return field.valueSet?.entityKind === 'enum' ? field.valueSet.entityName : undefined;
+}
+
+function fieldNodeOf(
+  fieldName: string,
+  storedName: string,
+  resolved: ResolvedNonRelationField,
+  generatedValues: ExecutionMutationDefaultPhases | undefined,
+): FieldNode {
+  const { field } = resolved;
+  const executionDefaults = resolved.typeAlias?.executionDefaults;
+  return {
+    fieldName,
+    ...(storedName === fieldName ? {} : { storedName }),
+    type: field.type,
+    nullable: field.nullable,
+    many: field.many ?? false,
+    ...ifDefined('enumName', enumNameOf(field)),
+    ...ifDefined('executionDefaults', executionDefaults),
+    ...ifDefined('generatedValues', generatedValues),
+  };
+}
+
+function relationNodeOf(fieldName: string, relation: ContractReferenceRelation): RelationNode {
+  if (relation.cardinality === 'N:M') {
+    throw new InternalError('A paired MongoDB back-relation is one-to-one or one-to-many.');
+  }
+  return {
+    relationName: fieldName,
+    toModel: relation.to.model,
+    cardinality: relation.cardinality,
+    on: relation.on,
+    nullable: 'nullable' in relation ? relation.nullable : undefined,
+  };
 }
 
 export function interpretPslDocumentToMongoContract(
   input: InterpretPslDocumentToMongoContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
-  const { symbolTable, sources, scalarTypeCodecIds, codecLookup } = input;
+  const { symbolTable, sources, codecLookup } = input;
   const diagnostics = createPslDiagnosticCollector(sources);
-  const presetContext: FieldPresetContext = {
-    authoringContributions: input.authoringContributions,
+  const fieldResolution: FieldResolutionContext = {
     sources,
     diagnostics,
-    typeLookups: { codecLookup, dataTypeLookup: input.dataTypes.lookup },
-    warnPresetWithoutEffect: presetWithoutEffectWarner({
-      types: input.authoringContributions?.type,
-      scalarTypeCodecIds,
-      sources,
-      reportWarning: input.reportWarning,
-    }),
+    dataTypes: input.dataTypes,
   };
-  const presetExecutionDefaults: PresetExecutionDefault[] = [];
   const scalarNames: ScalarNames = {
-    warnDeprecated: deprecatedScalarWarner({
-      sources,
-      reportWarning: input.reportWarning,
-    }),
+    warnDeprecated: deprecatedScalarWarner({ sources, reportWarning: input.reportWarning }),
   };
   const { binder } = input;
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
@@ -1577,19 +1173,18 @@ export function interpretPslDocumentToMongoContract(
   );
 
   const enumSites = new Map<string, EnumSite>();
-  const builtEnums = processEnumDeclarations({
+  const enumHandles = processEnumDeclarations({
     sites: enumSites,
     enumSymbols: topLevelEnumSymbols,
     parsedBlocks,
     sources,
-    binder,
     authoringContributions: input.authoringContributions,
     entityContext: {
       family: 'mongo',
       target: 'mongo',
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
       codecLookup,
-      dataTypeLookup: input.dataTypes.lookup,
+      dataTypes: input.dataTypes,
       diagnostics: {
         push: (d) => {
           diagnostics.pushExternal(
@@ -1602,39 +1197,59 @@ export function interpretPslDocumentToMongoContract(
   });
 
   const codecIdByEnumName: Map<string, string> = new Map(
-    Object.entries(builtEnums).map(([name, e]) => [name, e.codecId]),
+    Object.entries(enumHandles).map(([name, handle]) => [name, handle.codecId]),
   );
+  const typeAliases = resolveMongoTypeAliases({
+    declarations: Object.values(symbolTable.namedTypes),
+    symbols: symbolTable,
+    binder,
+    sources,
+    diagnostics,
+    codecIdByEnumName,
+    defaultFunctionRegistry: input.defaultFunctionRegistry,
+    generatorFunctions,
+    dataTypes: input.dataTypes,
+    codecLookup: input.codecLookup,
+    authoringTypes: input.authoringContributions?.type,
+  });
 
-  const models: Record<string, MongoModelEntry> = {};
-  const collections: Record<string, Record<string, unknown>> = {};
-  const roots: Record<string, CrossReference> = {};
+  const polymorphism = collectPolymorphismDeclarations({
+    models: allModels,
+    specContextFor,
+    sources,
+    binder,
+    diagnostics,
+  });
+
   const allFkRelations: MongoForeignKeyRelation[] = [];
-  const indexSpans = new Map<MongoIndex, PslSpan>();
-  const indexSources = new Map<MongoIndex, DiagnosticSource>();
-  const modelIndexesByName = new Map<string, readonly MongoIndex[]>();
-
   const backrelationCandidates: MongoBackRelationCandidate[] = [];
   const invalidFkPairings: InvalidFkPairing[] = [];
-
-  const validatorLookups: TypeLookups = {
-    codecLookup,
-    dataTypeLookup: input.dataTypes.lookup,
-  };
-
-  const fieldSymbols = new Map<string, FieldSymbol>();
+  const fieldSites = new Map<string, FieldSite>();
+  const modelSites = new Map<string, ModelSites>();
+  const droppedFields = new Set<string>();
+  const relationsByModel = new Map<string, RelationNode[]>();
+  const modelDrafts: {
+    readonly symbol: ModelSymbol;
+    readonly node: Omit<ModelNode, 'relations'>;
+  }[] = [];
 
   for (const pslModel of allModels) {
-    const collectionName = physicalName(physicalNames, pslModel);
     const specContext = specContextFor(pslModel);
-
-    const fields: Record<string, ContractField> = {};
-    const storageFields: Record<string, { readonly field: string }> = {};
-    const fieldsByStoredName = new Map<string, string>();
-    const relations: Record<string, ContractReferenceRelation> = {};
+    const fields: FieldNode[] = [];
+    const relations: RelationNode[] = [];
+    relationsByModel.set(pslModel.name, relations);
 
     for (const field of Object.values(pslModel.fields)) {
+      const source = diagnosticSource(sources, field.node.syntax);
+      const siteKey = fieldSiteKey(pslModel.name, field.name);
       const resolution = fieldTypeResolution(field, binder);
       if (resolution?.kind === 'model') {
+        fieldSites.set(siteKey, {
+          symbol: field,
+          source,
+          generatorAttributes: {},
+          storedName: field.name,
+        });
         const target = resolution.symbol;
         const relationNode = field.attributes.find((attr) => attr.name === 'relation')?.node;
         const relation = relationNode
@@ -1645,7 +1260,11 @@ export function interpretPslDocumentToMongoContract(
                 ...specContext,
                 field,
                 typeResolution: fieldTypeResolution(field, binder),
-                typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+                contributedType: contributedTypeOf(
+                  fieldTypeResolution(field, binder),
+                  binder,
+                  field.typeConstructor,
+                ),
               }),
               model: pslModel,
               field,
@@ -1667,42 +1286,35 @@ export function interpretPslDocumentToMongoContract(
           continue;
         }
 
-        if (relation?.fields && relation?.references) {
-          const nullability = resolveToOneRelationNullable({
-            declaredNullable: field.optional,
-            localFieldNullability: relation.fields.map(
-              (localFieldName) => pslModel.fields[localFieldName]?.optional === true,
-            ),
-            ownsReference: true,
-          });
-          if (nullability.contradiction !== undefined) {
-            diagnostics.push(relationNullabilityMismatchDiagnostic(pslModel.name, field, sources));
-            invalidFkPairings.push({
-              pairKey: fkRelationPairKey(pslModel.name, target.name),
-              ...ifDefined('relationName', relation.name),
-            });
-            continue;
-          }
-          if (!physicalNames.has(target)) continue;
-
-          relations[field.name] = {
-            to: crossRef(target.name, defaultNamespace.id),
-            cardinality: 'N:1' as const,
-            nullable: field.optional,
-            on: {
-              localFields: relation.fields,
-              targetFields: relation.references,
-            },
-          };
-
-          allFkRelations.push({
-            declaringModel: pslModel.name,
-            targetModel: target.name,
+        if (!physicalNames.has(target)) continue;
+        relations.push({
+          relationName: field.name,
+          toModel: target.name,
+          cardinality: 'N:1',
+          on: { localFields: relation.fields, targetFields: relation.references },
+          nullable: field.optional,
+        });
+        const nullability = resolveToOneRelationNullable({
+          declaredNullable: field.optional,
+          localFieldNullability: relation.fields.map(
+            (localFieldName) => pslModel.fields[localFieldName]?.optional === true,
+          ),
+          ownsReference: true,
+        });
+        if (nullability.contradiction !== undefined) {
+          invalidFkPairings.push({
+            pairKey: fkRelationPairKey(pslModel.name, target.name),
             ...ifDefined('relationName', relation.name),
-            localFields: relation.fields,
-            targetFields: relation.references,
           });
+          continue;
         }
+        allFkRelations.push({
+          declaringModel: pslModel.name,
+          targetModel: target.name,
+          ...ifDefined('relationName', relation.name),
+          localFields: relation.fields,
+          targetFields: relation.references,
+        });
         continue;
       }
 
@@ -1711,64 +1323,49 @@ export function interpretPslDocumentToMongoContract(
         { name: pslModel.name, kind: 'model' },
         resolution,
         codecIdByEnumName,
-        presetContext,
+        fieldResolution,
         scalarNames,
+        typeAliases,
+        codecLookup,
       );
-      if (!resolved) continue;
-
-      const mappedName = physicalName(physicalNames, field);
-      const unsupported = unsupportedStoredNameReason(mappedName);
-      if (unsupported !== undefined) {
-        diagnostics.push({
-          code: 'PSL_STORED_NAME_UNSUPPORTED',
-          message: `Field "${pslModel.name}.${field.name}" ${unsupported}. Give the field another stored name with @map.`,
-          ...diagnosticSource(sources, field.node.syntax).at(field.span),
-        });
+      if (
+        resolved === undefined ||
+        (resolved.typeAlias !== undefined &&
+          !acceptsTypeAlias({
+            field,
+            modelName: pslModel.name,
+            typeAlias: resolved.typeAlias,
+            sources,
+            diagnostics,
+          }))
+      ) {
+        droppedFields.add(siteKey);
         continue;
       }
-      const sharingField = fieldsByStoredName.get(mappedName);
-      if (sharingField !== undefined) {
-        diagnostics.push({
-          code: 'PSL_DUPLICATE_STORED_NAME',
-          message: `Fields "${pslModel.name}.${sharingField}" and "${pslModel.name}.${field.name}" are both stored as "${mappedName}". Give each field its own stored name with @map.`,
-          ...diagnosticSource(sources, field.node.syntax).at(field.span),
-        });
-        continue;
-      }
-      fieldsByStoredName.set(mappedName, field.name);
-      fields[field.name] = resolved.field;
-      storageFields[field.name] = { field: mappedName };
-      fieldSymbols.set(fieldKey(pslModel.name, field.name), field);
+      const storedName = physicalName(physicalNames, field);
       const generated = lowerGeneratorAttributes({
         field,
-        model: pslModel,
         modelName: pslModel.name,
         resolved,
         specContext: {
           ...specContext,
           field,
           typeResolution: resolution,
-          typeConstructor: contributedTypeOf(resolution, binder),
+          contributedType: contributedTypeOf(resolution, binder, field.typeConstructor),
         },
         generatorFunctions,
         sources,
         binder,
         diagnostics,
       });
-      if (generated === 'invalid') continue;
-      const phases =
-        resolved.executionDefaults === undefined
-          ? generated
-          : { ...resolved.executionDefaults, ...generated };
-      if (phases !== undefined) {
-        presetExecutionDefaults.push({
-          modelName: pslModel.name,
-          field,
-          storedField: mappedName,
-          phases,
-          fromPreset: resolved.executionDefaults !== undefined,
-        });
-      }
+      fields.push(fieldNodeOf(field.name, storedName, resolved, generated.values));
+      fieldSites.set(siteKey, {
+        symbol: field,
+        source,
+        ...ifDefined('typeAlias', resolved.typeAlias),
+        generatorAttributes: generated.sites,
+        storedName,
+      });
     }
 
     const idFields: FieldSymbol[] = [];
@@ -1782,7 +1379,11 @@ export function interpretPslDocumentToMongoContract(
           ...specContext,
           field,
           typeResolution: fieldTypeResolution(field, binder),
-          typeConstructor: contributedTypeOf(fieldTypeResolution(field, binder), binder),
+          contributedType: contributedTypeOf(
+            fieldTypeResolution(field, binder),
+            binder,
+            field.typeConstructor,
+          ),
         }),
         model: pslModel,
         field,
@@ -1810,59 +1411,73 @@ export function interpretPslDocumentToMongoContract(
       });
     }
 
-    models[pslModel.name] = {
-      fields,
-      relations,
-      storage: { collection: collectionName, fields: storageFields },
-    };
-    const modelIndexes = collectIndexes(
-      pslModel,
-      specContext,
-      physicalNames,
-      sources,
-      binder,
-      diagnostics,
-      indexSpans,
-      indexSources,
-    );
-    modelIndexesByName.set(pslModel.name, modelIndexes);
-    const existingColl = collections[collectionName];
-    if (existingColl && modelIndexes.length > 0) {
-      const existingIndexes = collectionIndexes(existingColl);
-      collections[collectionName] = { indexes: [...existingIndexes, ...modelIndexes] };
-    } else if (!existingColl) {
-      collections[collectionName] = modelIndexes.length > 0 ? { indexes: modelIndexes } : {};
-    }
-    roots[collectionName] = crossRef(pslModel.name, defaultNamespace.id);
+    const indexes = collectIndexes(pslModel, specContext, sources, binder, diagnostics);
+    const discriminator = polymorphism.discriminators.get(pslModel);
+    const base = polymorphism.bases.get(pslModel);
+    modelSites.set(pslModel.name, {
+      indexes,
+      ...ifDefined('discriminator', discriminator),
+      ...ifDefined('base', base),
+    });
+    const inheritsCollection =
+      base !== undefined && getAttribute(pslModel.attributes, 'map') === undefined;
+    modelDrafts.push({
+      symbol: pslModel,
+      node: {
+        modelName: pslModel.name,
+        ...(inheritsCollection ? {} : { collection: physicalName(physicalNames, pslModel) }),
+        fields,
+        indexes: indexes.map(({ index }) => index),
+        ...(discriminator === undefined
+          ? {}
+          : { discriminator: { field: discriminator.fieldName } }),
+        ...(base === undefined ? {} : { base: { model: base.base.name, value: base.written } }),
+      },
+    });
   }
 
-  const valueObjects: Record<string, ContractValueObject> = {};
+  const valueObjects: ValueObjectNode[] = [];
   for (const compositeType of allCompositeTypes) {
-    const fields: Record<string, ContractField> = {};
+    const fields: FieldNode[] = [];
     for (const field of Object.values(compositeType.fields)) {
+      const siteKey = fieldSiteKey(compositeType.name, field.name);
       const fieldMap = field.attributes.find((attr) => attr.name === 'map');
-      if (fieldMap !== undefined) {
-        diagnostics.push({
-          code: 'PSL_MONGO_TYPE_FIELD_MAP_UNSUPPORTED',
-          message: `Field "${compositeType.name}.${field.name}" has @map, but a field of a composite type is stored under its own name. Remove @map, or rename the field to the name it is stored under.`,
-          ...diagnosticSource(sources, fieldMap.node.syntax).at(
-            nodePslSpan(fieldMap.node.syntax, sources),
-          ),
-        });
-      }
       const resolved = resolveNonRelationField(
         field,
         { name: compositeType.name, kind: 'compositeType' },
         fieldTypeResolution(field, binder),
         codecIdByEnumName,
-        presetContext,
+        fieldResolution,
         scalarNames,
+        typeAliases,
+        codecLookup,
       );
-      if (!resolved) continue;
-      fields[field.name] = resolved.field;
-      fieldSymbols.set(fieldKey(compositeType.name, field.name), field);
+      if (resolved === undefined) {
+        droppedFields.add(siteKey);
+        continue;
+      }
+      const storedName = fieldMap?.args[0]?.value.replace(/^"|"$/g, '') ?? field.name;
+      fields.push({
+        ...fieldNodeOf(field.name, field.name, resolved, undefined),
+        ...(fieldMap === undefined ? {} : { storedName }),
+      });
+      fieldSites.set(siteKey, {
+        symbol: field,
+        source: diagnosticSource(sources, field.node.syntax),
+        ...ifDefined('typeAlias', resolved.typeAlias),
+        generatorAttributes: {},
+        ...(fieldMap === undefined
+          ? {}
+          : {
+              map: {
+                source: diagnosticSource(sources, fieldMap.node.syntax),
+                span: nodePslSpan(fieldMap.node.syntax, sources),
+              },
+            }),
+        storedName,
+      });
     }
-    valueObjects[compositeType.name] = { fields };
+    valueObjects.push({ name: compositeType.name, fields });
   }
 
   const paired = pairMongoBackRelations({
@@ -1873,130 +1488,49 @@ export function interpretPslDocumentToMongoContract(
   });
   diagnostics.push(...paired.diagnostics);
   for (const { modelName, fieldName, relation } of paired.relations) {
-    const modelEntry = models[modelName];
-    if (modelEntry) modelEntry.relations[fieldName] = relation;
+    relationsByModel.get(modelName)?.push(relationNodeOf(fieldName, relation));
   }
 
-  const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
-    allModels,
-    specContextFor,
-    physicalNames,
-    sources,
-    binder,
-    scalarTypeCodecIds.get('String'),
-    diagnostics,
-  );
-  const polyResult = resolvePolymorphism({
-    namespaceId: defaultNamespace.id,
-    sources,
-    models,
-    roots,
-    collections,
-    discriminatorDeclarations,
-    baseDeclarations,
-    indexSpans,
-    modelIndexesByName,
-    physicalNames,
-    indexSources,
-  });
-  const executionDefaults = resolvePresetExecutionDefaults({
-    defaults: presetExecutionDefaults,
-    models: polyResult.models,
-    sources,
-    diagnostics,
-    namespaceId: defaultNamespace.id,
-  });
-
-  for (const refusal of mongoContractRefusalsOf({
-    models: polyResult.models,
+  const modelNodes = modelDrafts.map(({ node }) => ({
+    ...node,
+    relations: relationsByModel.get(node.modelName) ?? [],
+  }));
+  const written: ContractDefinition = {
+    target: input.target,
+    ...ifDefined('extensions', input.extensionPacks),
+    // Variants come last, so each collection lists a variant's indexes after its base's, as earlier releases did.
+    models: [
+      ...modelNodes.filter((model) => model.base === undefined),
+      ...modelNodes.filter((model) => model.base !== undefined),
+    ],
     valueObjects,
-    enums: builtEnums,
-    lookups: validatorLookups,
-    controlPolicies: MONGO_PSL_CONTROL_POLICIES,
-  })) {
-    const enumDiagnostic = enumRefusalDiagnostic(refusal, enumSites);
-    if (enumDiagnostic !== undefined) diagnostics.pushExternal(enumDiagnostic);
-    const fieldDiagnostic = fieldRefusalDiagnostic(refusal, fieldSymbols, sources);
-    if (fieldDiagnostic !== undefined) diagnostics.push(fieldDiagnostic);
+    enums: enumHandles,
+    writesCollectionValidators: true,
+    warnings: undefined,
+  };
+  const { definition, removedIndexes } = mergeRedundantIndexes(
+    nameIndexes(written),
+    codecLookup,
+    input.dataTypes,
+  );
+  const sites: SchemaSites = {
+    models: withoutMergedIndexSites(modelSites, removedIndexes),
+    fields: fieldSites,
+    enums: enumSites,
+  };
+  const built = buildMongoContractFromDefinition(definition, codecLookup, input.dataTypes);
+  for (const refusal of built.ok ? [] : built.failure.refusals) {
+    if (alreadyReported(refusal, droppedFields, polymorphism.reported)) continue;
+    const diagnostic = refusalDiagnostic(refusal, sites);
+    if ('range' in diagnostic) diagnostics.push(diagnostic);
+    else diagnostics.pushExternal(diagnostic);
   }
 
-  if (
-    diagnostics.length > 0 ||
-    polyResult.diagnostics.length > 0 ||
-    (input.seedDiagnostics?.length ?? 0) > 0
-  ) {
+  if (!built.ok || diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {
     return notOk({
       summary: 'PSL to Mongo contract interpretation failed',
-      diagnostics: [
-        ...(input.seedDiagnostics ?? []),
-        ...diagnostics.toExternal(),
-        ...polyResult.diagnostics.toExternal(),
-      ],
+      diagnostics: [...(input.seedDiagnostics ?? []), ...diagnostics.toExternal()],
     });
   }
-
-  const resolvedModels = polyResult.models;
-  const resolvedCollections = polyResult.collections;
-
-  const target = 'mongo';
-  const targetFamily = 'mongo';
-  const execution = buildExecutionSection({
-    target,
-    targetFamily,
-    defaults: executionDefaults,
-  });
-
-  const storageValueSets = mongoValueSetsOf(builtEnums);
-
-  const validators = deriveCollectionValidators({
-    models: resolvedModels,
-    lookups: validatorLookups,
-    valueObjects,
-    valueSets: storageValueSets,
-    controlPolicies: MONGO_PSL_CONTROL_POLICIES,
-  });
-  for (const [collectionName, validator] of Object.entries(validators)) {
-    const coll = resolvedCollections[collectionName];
-    if (coll) coll['validator'] = validator;
-  }
-
-  const collectionInputs: Record<string, MongoCollectionInput> = {};
-  for (const [name, coll] of Object.entries(resolvedCollections)) {
-    const raw: Record<string, unknown> = {};
-    if (coll['indexes'] != null) raw['indexes'] = coll['indexes'];
-    if (coll['validator'] != null) raw['validator'] = coll['validator'];
-    if (coll['options'] != null) raw['options'] = coll['options'];
-    collectionInputs[name] = blindCast<
-      MongoCollectionInput,
-      'arktype-validated JSON shapes satisfy MongoCollectionInput by construction'
-    >(raw);
-  }
-  const storage: Contract['storage'] = buildMongoStorage({
-    collections: collectionInputs,
-    valueSets: storageValueSets,
-  });
-  const capabilities: Record<string, Record<string, boolean>> = {};
-
-  const hasEnums = Object.keys(builtEnums).length > 0;
-
-  return ok({
-    targetFamily,
-    target,
-    roots: polyResult.roots,
-    domain: {
-      namespaces: {
-        [defaultNamespace.id]: {
-          models: polyResult.models,
-          ...(Object.keys(valueObjects).length > 0 ? { valueObjects } : {}),
-          ...(hasEnums ? { enum: builtEnums } : {}),
-        },
-      },
-    },
-    storage,
-    extensions: {},
-    capabilities,
-    profileHash: computeProfileHash({ target, targetFamily, capabilities }),
-    meta: {},
-    ...ifDefined('execution', execution),
-  });
+  return ok(built.value.contract);
 }

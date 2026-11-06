@@ -27,7 +27,6 @@
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-postgres/components/control';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
@@ -44,6 +43,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresDataMigrationHeader } from '../utils/journey-workspace-helpers';
 
 const BACKFILLED_NAME = 'unknown';
 
@@ -123,25 +123,8 @@ withTempDir(({ createTempDir }) => {
           readFileSync(join(migrationDir, 'migration.json'), 'utf-8'),
         );
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(manifestInitial.to)}/contract.json`;
         const migrationTs = `
-import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import { Migration, MigrationCLI, col } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+${postgresDataMigrationHeader(manifestInitial.to)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(manifestInitial.from)}, to: ${JSON.stringify(manifestInitial.to)} };

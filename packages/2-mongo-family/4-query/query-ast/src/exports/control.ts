@@ -25,7 +25,7 @@ export {
 } from '../filter-expressions';
 export type { AnyMongoInspectionCommand } from '../inspection-commands';
 export { ListCollectionsCommand, ListIndexesCommand } from '../inspection-commands';
-export { buildIndexOpId, defaultMongoIndexName, keysToKeySpec } from '../migration-helpers';
+export { buildIndexOpId, keysToKeySpec } from '../migration-helpers';
 export type {
   AnyMongoMigrationOperation,
   MongoDmlCheck,

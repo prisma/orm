@@ -58,7 +58,6 @@ const interpretContext = {
     type: {
       Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1' } },
     },
-    field: {},
     entityTypes: {},
     pslBlockDescriptors: {},
     generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
@@ -225,40 +224,16 @@ describe('ProjectArtifacts binder', () => {
     const failed = projectWithSnapshots(
       interpretationDouble(() =>
         notOk({
-          summary: 'preset',
-          diagnostics: [{ sourceId: schemaUri, code: 'UNKNOWN_PRESET', message: 'preset' }],
+          summary: 'refused',
+          diagnostics: [{ sourceId: schemaUri, code: 'INTERPRETER_REFUSAL', message: 'refused' }],
         }),
       ).interpretation,
     );
     failed.set(schemaUri, missing);
     expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
       'PSL_UNRESOLVED_REFERENCE',
-      'UNKNOWN_PRESET',
+      'INTERPRETER_REFUSAL',
     ]);
-  });
-
-  it('resolves a field preset without an interpreter', () => {
-    const { project, set } = projectWithSnapshots(undefined, false, {
-      ...controlStack,
-      authoringContributions: assembleAuthoringContributions([
-        {
-          id: 'fixture',
-          authoring: {
-            type: controlStack.authoringContributions.type,
-            field: {
-              temporal: {
-                createdAt: {
-                  kind: 'fieldPreset',
-                  output: { codecId: 'timestamp' },
-                },
-              },
-            },
-          },
-        },
-      ]),
-    });
-    set(schemaUri, `${directive}model User {\n  id Int\n  createdAt temporal.createdAt()\n}\n`);
-    expect(project.diagnostics(schemaUri)).toEqual([]);
   });
 
   it('describes unsupported attributes with the family describer without an interpreter', () => {

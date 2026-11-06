@@ -111,7 +111,7 @@ describe('an application that installs only the Postgres facade', () => {
     const sources = bundledSources(installedDir);
     expect(sources.length).toBeGreaterThan(0);
     for (const source of sources) {
-      expect(source).toMatch(/^3-extensions\/postgres\//);
+      expect(source).toMatch(/^3-targets\/postgres\/9-facade\//);
     }
   });
 

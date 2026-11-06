@@ -75,6 +75,31 @@ describe('errorNoInvariantPath', () => {
     });
   });
 
+  it('names an extension space and carries the advice written for it', () => {
+    const nextActions = [{ kind: 'user-choice', label: 'Install another version' }] as const;
+    const err = errorNoInvariantPath({
+      required: ['X'],
+      missing: ['X'],
+      structuralPath: baseStructural,
+      extensionSpace: { spaceId: 'audit', why: 'Why for audit', fix: 'Fix for audit', nextActions },
+    });
+    expect({
+      isToolsError: MigrationToolsError.is(err),
+      message: err.message,
+      why: err.why,
+      fix: err.fix,
+      nextActions: err.nextActions,
+      meta: err.meta,
+    }).toEqual({
+      isToolsError: true,
+      message: 'No path covers the required invariants of extension space "audit"',
+      why: 'Why for audit',
+      fix: 'Fix for audit',
+      nextActions,
+      meta: { spaceId: 'audit', required: ['X'], missing: ['X'], structuralPath: baseStructural },
+    });
+  });
+
   it('includes refName on meta when provided', () => {
     const err = errorNoInvariantPath({
       refName: 'prod',

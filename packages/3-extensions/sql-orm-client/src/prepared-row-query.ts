@@ -1,4 +1,6 @@
+import type { Contract } from '@internal/contract/types';
 import type { ResultType, RuntimeExecuteOptions } from '@internal/framework-components/runtime';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
 import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
@@ -17,6 +19,18 @@ export interface PreparedRowQuery<Params, Result> {
   query(target: RuntimeQueryable, params: Params, options?: RuntimeExecuteOptions): Result;
 }
 
+/** The `prepare` member a client and its transactions offer, typed by the client's contract. */
+export interface PrepareMember<TContract extends Contract<SqlStorage>> {
+  prepare<
+    D extends Declaration<CT>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>>;
+}
+
 export type PreparedFrom<Params, Q extends SqlQueryPlan | Preparable<unknown, unknown>> =
   Q extends Preparable<unknown, infer Result>
     ? PreparedRowQuery<Params, Result>
@@ -27,7 +41,7 @@ export async function prepareQuery<
   Q extends SqlQueryPlan | Preparable<unknown, unknown>,
   CT extends CodecTypesBase,
 >(
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'prepare'>,
   declaration: D,
   callback: (params: BindSiteParams<D>) => Q,
 ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {

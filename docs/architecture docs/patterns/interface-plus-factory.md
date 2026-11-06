@@ -53,9 +53,9 @@ The factory's return type is the interface; the class identity does not leak int
 
 | Implementation | Path | Demonstrates |
 |---|---|---|
-| `Runtime` → `createRuntime()` | [`packages/2-sql/5-runtime/src/sql-runtime.ts`](../../../packages/2-sql/5-runtime/src/sql-runtime.ts) | The SQL runtime; private `RuntimeImpl`, factory exported from `exports/index.ts`. |
-| `PostgresAdapter` → `createPostgresAdapter()` | [`packages/3-targets/6-adapters/postgres/src/core/adapter.ts`](../../../packages/3-targets/6-adapters/postgres/src/core/adapter.ts) | The Postgres adapter; private `PostgresAdapterImpl` class, factory wraps with `Object.freeze`. |
-| `PostgresRuntimeDriver` → `postgresRuntimeDriverDescriptor.create() + connect(binding)` | [`packages/3-targets/7-drivers/postgres/src/exports/runtime.ts`](../../../packages/3-targets/7-drivers/postgres/src/exports/runtime.ts) | The Postgres driver; private `PostgresUnboundDriverImpl`, factory exposed via the driver descriptor's `create` method. |
+| `Runtime` → `createRuntime()` | [`packages/2-sql-family/5-runtime/src/sql-runtime.ts`](../../../packages/2-sql-family/5-runtime/src/sql-runtime.ts) | The SQL runtime; private `RuntimeImpl`, factory exported from `exports/index.ts`. |
+| `PostgresAdapter` → `createPostgresAdapter()` | [`packages/3-targets/postgres/2-adapter/src/core/adapter.ts`](../../../packages/3-targets/postgres/2-adapter/src/core/adapter.ts) | The Postgres adapter; private `PostgresAdapterImpl` class, factory wraps with `Object.freeze`. |
+| `PostgresRuntimeDriver` → `postgresRuntimeDriverDescriptor.create() + connect(binding)` | [`packages/3-targets/postgres/3-driver/src/exports/runtime.ts`](../../../packages/3-targets/postgres/3-driver/src/exports/runtime.ts) | The Postgres driver; private `PostgresUnboundDriverImpl`, factory exposed via the driver descriptor's `create` method. |
 
 ## Related ADRs
 

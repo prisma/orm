@@ -11,8 +11,6 @@
  *     JSON output and on-disk migration contain destructive operation class.
  */
 
-import { join } from 'node:path';
-import { readMigrationPackage, readMigrationsDir } from '@prisma/orm-postgres/migration-tools/io';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -29,6 +27,7 @@ import {
   swapContract,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { readAppMigration, readAppMigrations } from '../utils/journey-workspace-helpers';
 
 withTempDir(({ createTempDir }) => {
   // -------------------------------------------------------------------------
@@ -77,19 +76,14 @@ withTempDir(({ createTempDir }) => {
         expect(tableOp, 'H.02: has user table operation').toBeDefined();
 
         // H.03: verify attestation on disk
-        const migrationsRoot = join(ctx.testDir, 'migrations');
-        const appSpaceDir = join(migrationsRoot, 'app');
-        const { packages } = await readMigrationsDir(appSpaceDir, {
-          migrationsDir: migrationsRoot,
-        });
+        const packages = await readAppMigrations(ctx.testDir);
         expect(packages, 'H.03: one migration package').toHaveLength(1);
 
         // `readMigrationPackage`'s load boundary integrates verification:
         // a successful read is proof of attestation, and any tamper throws
         // MIGRATION.HASH_MISMATCH.
-        const pkgDir = join(appSpaceDir, packages[0]!.dirName);
         await expect(
-          readMigrationPackage(pkgDir, { migrationsDir: migrationsRoot }),
+          readAppMigration(ctx.testDir, packages[0]!.dirName),
           'H.03: attestation passes',
         ).resolves.toBeDefined();
 
@@ -166,10 +160,7 @@ withTempDir(({ createTempDir }) => {
         expect(dropEmitResult.exitCode, `I.03: emit drop-email: ${dropEmitResult.stderr}`).toBe(0);
 
         // I.04: verify destructive operation class on disk
-        const migrationsRoot = join(ctx.testDir, 'migrations');
-        const { packages } = await readMigrationsDir(join(migrationsRoot, 'app'), {
-          migrationsDir: migrationsRoot,
-        });
+        const packages = await readAppMigrations(ctx.testDir);
         expect(packages, 'I.04: two migration packages').toHaveLength(2);
 
         const destructivePkg = packages.find((p) => p.metadata.from !== null)!;

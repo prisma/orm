@@ -219,8 +219,7 @@
                     "kind": "literal",
                     "value": "2024-06-30T12:34:56.789Z"
                   },
-                  "nullable": false,
-                  "typeRef": "Stamp"
+                  "nullable": false
                 }
               },
               "foreignKeys": [],
@@ -246,14 +245,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "be4174af061494b515cb3031f75051235fd9307ab05a00c78b5b017c1578b32a",
-    "types": {
-      "Stamp": {
-        "codecId": "sqlite/datetime@1",
-        "dataType": "sqlite/datetime",
-        "kind": "codec-instance"
-      }
-    }
+    "storageHash": "87f816322dd1925839d0a5ac49589f22d308c3d3db34a1585a4b25f699735684"
   },
   "capabilities": {
     "sql": {

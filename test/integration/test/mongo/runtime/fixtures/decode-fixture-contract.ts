@@ -98,7 +98,7 @@ type DecodeFixtureStorage = {
 /**
  * Shared fixture contract for the decode integration tests.
  *
- * Lives in a typed `.ts` so it can drive `mongoQuery({ contract })` row-type
+ * Lives in a typed `.ts` so it can drive `mongoQuery({ context: { contract } })` row-type
  * inference end-to-end. Call sites validate the JSON via the Mongo contract
  * serializer SPI to keep the runtime structural shape honest, then thread
  * `TContract` through `mongoQuery` for the type-level path.
@@ -156,6 +156,7 @@ export type TDecodeFixtureContract = MongoContractWithTypeMaps<
 >;
 
 export const decodeFixtureContractJson = {
+  target: 'mongo' as const,
   targetFamily: 'mongo' as const,
   roots: { users: crossRef('User'), posts: crossRef('Post') },
   domain: {

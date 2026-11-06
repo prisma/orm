@@ -1,7 +1,7 @@
 import {
   crossRef,
   domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
@@ -368,7 +368,18 @@ describe('mongo contract builder', () => {
         }),
       },
     });
-    expect(domainValueObjectsAtDefaultNamespace(contract.domain)).toEqual({
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          Object.fromEntries(
+            valueObjectsWithCoordinates(contract.storage).map(({ coordinate, valueObject }) => [
+              coordinate.entityName,
+              valueObject,
+            ]),
+          ),
+        ),
+      ),
+    ).toEqual({
       Address: {
         fields: {
           street: {
@@ -425,13 +436,23 @@ describe('mongo contract builder', () => {
       users: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'email_1',
+            keys: [{ field: 'email', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'createdAt_1',
             keys: [{ field: 'createdAt', direction: 1 }],
             expireAfterSeconds: 3600,
           },
-          { kind: 'mongo-index', keys: [{ field: 'location', direction: '2dsphere' }] },
+          {
+            kind: 'mongo-index',
+            name: 'location_2dsphere',
+            keys: [{ field: 'location', direction: '2dsphere' }],
+          },
         ],
         validator: strictValidator({
           bsonType: 'object',
@@ -561,9 +582,15 @@ describe('mongo contract builder', () => {
       tasks: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'title', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'title_1',
+            keys: [{ field: 'title', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'expiresAt_1',
             keys: [{ field: 'expiresAt', direction: 1 }],
             expireAfterSeconds: 3600,
             partialFilterExpression: { type: 'derived' },
@@ -589,7 +616,7 @@ describe('mongo contract builder', () => {
     });
   });
 
-  it('rejects duplicate indexes across models sharing the same collection', () => {
+  it('merges a plain index into the unique index another model in the collection declares on the same field', () => {
     const TaskBase = model('TaskBase', {
       collection: 'tasks',
       fields: {
@@ -597,7 +624,7 @@ describe('mongo contract builder', () => {
         type: field.string(),
         title: field.string(),
       },
-      indexes: [index({ title: 1 }, { unique: true })],
+      indexes: [index({ title: 1 })],
     });
 
     const TaskAlt = model('TaskAlt', {
@@ -609,22 +636,26 @@ describe('mongo contract builder', () => {
       indexes: [index({ title: 1 }, { unique: true })],
     });
 
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(
-      'Collection "tasks" defines duplicate index {"fields":{"title":1},"options":{"unique":true}}. First declared on model "TaskBase" and duplicated on model "TaskAlt".',
-    );
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.NAME_DUPLICATE' }));
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { TaskBase, TaskAlt },
+    });
+
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['tasks'],
+        ),
+      )['indexes'],
+    ).toEqual([
+      {
+        kind: 'mongo-index',
+        name: 'title_1',
+        keys: [{ field: 'title', direction: 1 }],
+        unique: true,
+      },
+    ]);
   });
 
   it('rejects indexes on models without collections', () => {
@@ -726,6 +757,33 @@ describe('mongo contract builder', () => {
 
     expect(run).toThrow(/collide with the reserved built-in helper key/);
     expect(run).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
+  });
+
+  it('rejects a pack that registers one path as both an entity and a type alias', () => {
+    const familyPackWithAmbiguousPath = {
+      ...mongoFamilyPack,
+      authoring: {
+        type: {
+          custom: { Thing: { kind: 'typeAlias', output: { type: { codecId: 'mongo/string@1' } } } },
+        },
+        entityTypes: {
+          custom: {
+            Thing: { kind: 'entity', discriminator: 'thing', output: { factory: () => ({}) } },
+          },
+        },
+      },
+    } as unknown as typeof mongoFamilyPack;
+
+    expect(() =>
+      defineContract({ family: familyPackWithAmbiguousPath, target: mongoTargetPack }, () => ({
+        models: {},
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message: expect.stringContaining('Ambiguous authoring registry path "custom.Thing"'),
+      }),
+    );
   });
 
   it('throws once and names the missing field when a multi-key index mixes valid and invalid fields', () => {

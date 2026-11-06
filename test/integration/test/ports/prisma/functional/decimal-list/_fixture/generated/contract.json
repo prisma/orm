@@ -76,7 +76,10 @@
                     "elementNullable": false
                   },
                   "nullable": false,
-                  "typeRef": "D"
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
                 },
                 "id": {
                   "codecId": "pg/text@1",
@@ -99,18 +102,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c6c83c549521a55ba3c48ff5de68cc452e794635ddcb91a995706528c86fc772",
-    "types": {
-      "D": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 65,
-          "scale": 30
-        }
-      }
-    }
+    "storageHash": "279b5b17ef96e317de4d4c1b9ee8996d72478695f5b40c482bcd911e735b1390"
   },
   "execution": {
     "executionHash": "e18dbda8332f8974e92016590064ce897aa2fb8f1ca059429e3460e668f4e488",
@@ -148,6 +140,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

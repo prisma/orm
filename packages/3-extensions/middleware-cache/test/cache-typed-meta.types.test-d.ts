@@ -60,6 +60,26 @@ test('a bare CacheStore holds cached values and fits the middleware', () => {
   expectTypeOf(createCacheMiddleware({ store })).toEqualTypeOf<CacheMiddleware<unknown>>();
 });
 
+test('a caller of a store passes only the fields it needs', () => {
+  const store: CacheStore<TagMeta> = new TagStore();
+
+  store.get({ key: 'user-1' });
+  store.unset({ keys: ['user-1'] });
+  store.unset({ meta: { tags: ['users'] } });
+
+  // @ts-expect-error - the store's meta has tags, not tag
+  store.unset({ meta: { tag: 'users' } });
+});
+
+test('invalidate and cacheAnnotation accept fields that may be undefined', () => {
+  const cache = createCacheMiddleware({ store: new TagStore() });
+  const keys: string[] | undefined = undefined;
+  const meta: TagMeta | undefined = undefined;
+
+  cache.invalidate({ keys, meta });
+  cacheAnnotation<TagMeta>({ key: undefined, meta, bypass: undefined });
+});
+
 test('createCacheMiddleware infers TMeta from the store', () => {
   const cache = createCacheMiddleware({ store: new TagStore() });
 

@@ -1,9 +1,9 @@
 /**
- * Statements that consent to data loss and widened access (Postgres).
+ * Statements that consent to data loss and to access changes (Postgres).
  *
- * A plan that would lose data asks what each such operation means: `--delete <subject>` lets the data go, `--rename <subject>:<new name>` keeps it. `db update` also asks, with `--allow <subject>`, before it widens who can read or write a model's rows. Where nobody can answer, the command fails with `CLI.CONSENT_REQUIRED`, whose next actions name the flags.
+ * A plan that would lose data asks what each such operation means: `--delete <subject>` lets the data go, `--rename <subject>:<new name>` keeps it. `db update` also asks, with `--allow <subject>`, before it changes who can read or write a model's data. Where nobody can answer, the command fails with `CLI.CONSENT_REQUIRED`, whose next actions name the flags.
  *
- * Journey S1 renames `Profile` to `User` and its field `name` to `fullName`, and removes `Legacy`, through `migration plan`: refused without `--delete Legacy`, planned with it, and applied by `migrate` on tables with rows, a unique, a foreign key from `Post`, a secondary index and a check. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents, and the same statements fail on a second run. Journey S3 adds a required field with no refusal. Journey S4 drops a policy: refused without `--allow User`, applied with it, and listed under `accessWidening` by a dry run. Journey S5 drops a model with `db update --db <url>` and no snapshot, so the subject is its storage name.
+ * Journey S1 renames `Profile` to `User` and its field `name` to `fullName`, and removes `Legacy`, through `migration plan`: refused without `--delete Legacy`, planned with it, and applied by `migrate` on tables with rows, a unique, a foreign key from `Post`, a secondary index and a check. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents, and the same statements fail on a second run. Journey S3 adds a required field with no refusal. Journey S4 drops a policy: refused without `--allow User`, applied with it, and listed under `accessChanges` by a dry run. Journey S5 drops a model with `db update --db <url>` and no snapshot, so the subject is its storage name.
  */
 
 import { writeFileSync } from 'node:fs';
@@ -342,11 +342,11 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Journey S4: a policy drop widens access', () => {
+  describe('Journey S4: a policy drop changes access', () => {
     const db = useDevDatabase();
 
     it(
-      'lists the widening on a dry run, refuses without --allow, and applies with it',
+      'lists the access change on a dry run, refuses without --allow, and applies with it',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -361,10 +361,10 @@ withTempDir(({ createTempDir }) => {
 
         const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
         expect(dryRun.exitCode, `S4.04: dry run: ${dryRun.stderr}`).toBe(0);
-        const listed = parseJsonOutput<{ accessWidening: readonly { text: string }[] }>(
+        const listed = parseJsonOutput<{ accessChanges: readonly { text: string }[] }>(
           dryRun,
-        ).accessWidening;
-        expect(listed, 'S4.04: the dry run lists the widening as --allow takes it').toEqual([
+        ).accessChanges;
+        expect(listed, 'S4.04: the dry run lists the access change as --allow takes it').toEqual([
           expect.objectContaining({
             subject: expect.objectContaining({ model: 'User' }),
             text: 'User',

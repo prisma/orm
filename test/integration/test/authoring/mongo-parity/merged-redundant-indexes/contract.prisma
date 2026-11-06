@@ -1,0 +1,21 @@
+// use prisma-8
+
+model User {
+  id    ObjectId @id @map("_id")
+  email String
+  name  String
+
+  @@index([email])
+  @@index([name])
+  @@map("people")
+}
+
+model Admin {
+  id    ObjectId @id @map("_id")
+  email String   @unique
+  name  String
+
+  @@index([email])
+  @@index([name])
+  @@map("people")
+}

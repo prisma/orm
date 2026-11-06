@@ -1,6 +1,6 @@
 import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { and } from '../src/filters';
 import { compileSelect } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';

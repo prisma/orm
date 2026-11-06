@@ -115,6 +115,7 @@ export class PostgisGeometryCodec extends CodecImpl<
 }
 
 export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryParams> {
+  override readonly jsonType = 'object' as const;
   /** The HEXEWKB text PostgreSQL prints for a geometry, which `fromWire` reads as it reads a row. A JSON constructor handed the geometry itself may write GeoJSON instead. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
@@ -122,6 +123,8 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
   override readonly dataType = postgisGeometry.id;
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;
   override readonly traits = ['equality'] as const;
+  override readonly enumRefusal =
+    'Enums over a geometry codec are not supported yet, because no test proves that a shape reads back as its member. Use a text enum that names each shape instead.';
   override readonly paramsSchema: StandardSchemaV1<GeometryParams> = postgisGeometryParams;
   /**
    * Runtime materialization uses an empty parameter object for the

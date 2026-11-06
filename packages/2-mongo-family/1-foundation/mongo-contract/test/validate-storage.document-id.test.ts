@@ -1,5 +1,6 @@
 import {
   asNamespaceId,
+  type ContractModel,
   coreHash,
   profileHash,
   UNBOUND_DOMAIN_NAMESPACE_ID,
@@ -7,7 +8,7 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { MongoContract, MongoModelDefinition } from '../src/contract-types';
+import type { MongoContract, MongoModelStorage } from '../src/contract-types';
 import { documentIdRefusalReason } from '../src/document-id-refusal';
 import { buildMongoNamespace } from '../src/ir/build-mongo-namespace';
 import { MongoCollection } from '../src/ir/mongo-collection';
@@ -24,7 +25,7 @@ const objectIdSchema = {
 };
 
 function contractWith(
-  models: Record<string, MongoModelDefinition>,
+  models: Record<string, ContractModel<MongoModelStorage>>,
   jsonSchema: Record<string, unknown> | undefined,
 ): MongoContract {
   return {
@@ -62,7 +63,7 @@ function contractWith(
   };
 }
 
-const item: MongoModelDefinition = {
+const item: ContractModel<MongoModelStorage> = {
   fields: {},
   storage: { fields: {}, collection: 'items' },
   relations: {},
@@ -104,7 +105,7 @@ describe('validateMongoStorage() and the rules every MongoDB contract source fol
   });
 
   it('refuses a validator whose _id accepts any value, naming the model, field and codec', () => {
-    const withId: MongoModelDefinition = {
+    const withId: ContractModel<MongoModelStorage> = {
       ...item,
       fields: {
         _id: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false, many: false },
@@ -119,7 +120,7 @@ describe('validateMongoStorage() and the rules every MongoDB contract source fol
   });
 
   it('reports a field without a storage entry, not an internal error, when a validator is present', () => {
-    const withId: MongoModelDefinition = {
+    const withId: ContractModel<MongoModelStorage> = {
       ...item,
       fields: {
         _id: {
@@ -139,7 +140,7 @@ describe('validateMongoStorage() and the rules every MongoDB contract source fol
   });
 
   it('names the field stored as _id by its own name', () => {
-    const withId: MongoModelDefinition = {
+    const withId: ContractModel<MongoModelStorage> = {
       ...item,
       fields: {
         id: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false, many: false },
@@ -160,7 +161,7 @@ describe('validateMongoStorage() and the rules every MongoDB contract source fol
   ])(
     'refuses a validator whose _id accepts %s, naming the model, field and codec',
     (_case, codecId, idSchema, forbidden) => {
-      const withId: MongoModelDefinition = {
+      const withId: ContractModel<MongoModelStorage> = {
         ...item,
         fields: { _id: { type: { kind: 'scalar', codecId }, nullable: false, many: false } },
         storage: { collection: 'items', fields: { _id: { field: '_id' } } },

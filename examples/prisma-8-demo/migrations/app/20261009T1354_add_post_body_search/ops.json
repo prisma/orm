@@ -16,7 +16,11 @@
       {
         "description": "ensure column \"body\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "body"]
+        "params": ["public", "post", "body"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"body\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -29,7 +33,11 @@
       {
         "description": "verify column \"body\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "body"]
+        "params": ["public", "post", "body"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"body\" on \"post\""
+        }
       },
       {
         "description": "verify column \"body\" has type \"text\"",
@@ -55,7 +63,11 @@
       {
         "description": "ensure index \"post_search_f03270be\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_search_f03270be\""]
+        "params": ["\"public\".\"post_search_f03270be\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"post_search_f03270be\""
+        }
       }
     ],
     "execute": [

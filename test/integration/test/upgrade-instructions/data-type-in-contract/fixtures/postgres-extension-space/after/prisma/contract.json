@@ -31,7 +31,9 @@
                   "codecId": "pg/vector@1",
                   "dataType": "pgvector/vector",
                   "nullable": true,
-                  "typeRef": "Embedding3"
+                  "typeParams": {
+                    "length": 203
+                  }
                 },
                 "id": {
                   "codecId": "sql/int@1",
@@ -70,17 +72,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ab03042a26032f51c0dc4a04e19d96ece877f22a1e876f238327cb21f480d703",
-    "types": {
-      "Embedding3": {
-        "codecId": "pg/vector@1",
-        "dataType": "pgvector/vector",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 203
-        }
-      }
-    }
+    "storageHash": "adc839d7d404a69ced856b2528efb74e4f4aebb1b5401833b20c4ba144a791a5"
   },
   "capabilities": {
     "sql": {

@@ -198,42 +198,39 @@ type ContractWithVO = MongoContractWithTypeMaps<
                 readonly homeAddress: {
                   readonly nullable: false;
                   readonly many: false;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'Address';
+                  };
                 };
                 readonly workAddress: {
                   readonly nullable: true;
                   readonly many: false;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'Address';
+                  };
                 };
                 readonly previousAddresses: {
                   readonly nullable: false;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'Address';
+                  };
                   readonly many: { readonly elementNullable: false };
                 };
               };
               readonly relations: Record<string, never>;
               readonly storage: { readonly collection: 'users' };
-            };
-          };
-          readonly valueObjects: {
-            readonly Address: {
-              readonly fields: {
-                readonly street: {
-                  readonly nullable: false;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly city: {
-                  readonly nullable: false;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly zip: {
-                  readonly nullable: true;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-              };
             };
           };
         };
@@ -244,7 +241,30 @@ type ContractWithVO = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly users: MongoCollection } };
+          readonly entries: {
+            readonly collection: { readonly users: MongoCollection };
+            readonly valueObject: {
+              readonly Address: {
+                readonly fields: {
+                  readonly street: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly city: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly zip: {
+                    readonly nullable: true;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                };
+              };
+            };
+          };
         };
       };
       readonly storageHash: StorageHashBase<'test-storage'>;

@@ -6,7 +6,7 @@ import type {
 } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
-import type { CliStructuredError } from '@internal/errors/control';
+import { CliStructuredError } from '@internal/errors/control';
 import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
@@ -18,14 +18,24 @@ import { isAbsolute, relative } from 'pathe';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { cliErrorFromStructured } from './caught-errors';
 
+/** The contract the configured source produced, and the warnings it reported. */
+export interface LoadedContractSource {
+  readonly contract: Contract;
+  readonly warnings: readonly ContractSourceDiagnostic[];
+}
+
 /**
- * Why the configured source produced no contract: the error to report, and
- * the diagnostics the source returned, when it returned any.
+ * Why the configured source produced no contract: the error to report, the
+ * diagnostics the source returned, when it returned any, and the warnings it
+ * reported before it failed.
  */
 export interface ContractSourceLoadFailure {
   readonly error: CliStructuredError;
   readonly sourceDiagnostics?: ContractSourceDiagnostics;
+  readonly warnings: readonly ContractSourceDiagnostic[];
 }
+
+type SourceRefusal = Omit<ContractSourceLoadFailure, 'warnings'>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -145,7 +155,7 @@ function sourceDiagnosticsToFindings(
  */
 export function sourceWarningDiagnostic(
   raw: ContractSourceDiagnostic,
-  cwd: string,
+  cwd: string | undefined,
 ): Diagnostic | undefined {
   const finding = sourceDiagnosticToFinding(raw, 'warn', cwd);
   if (finding === undefined) return undefined;
@@ -173,9 +183,9 @@ function mapDiagnosticsToIssues(
   return issues;
 }
 
-type ContractSourceLoadResult = Result<Contract, ContractSourceLoadFailure>;
+type SourceResult = Result<Contract, SourceRefusal>;
 
-function failedWith(error: CliStructuredError): ContractSourceLoadResult {
+function failedWith(error: CliStructuredError): SourceResult {
   return notOk({ error });
 }
 
@@ -186,7 +196,7 @@ function failedWith(error: CliStructuredError): ContractSourceLoadResult {
 function validateProviderResult(
   providerResult: Result<Contract, ContractSourceDiagnostics>,
   cwd: string | undefined,
-): ContractSourceLoadResult {
+): SourceResult {
   const raw: unknown = providerResult;
   if (!isRecord(raw) || typeof raw['ok'] !== 'boolean') {
     return failedWith(
@@ -259,22 +269,63 @@ function validateProviderResult(
  * Every command that loads a contract source goes through here, so each
  * reports a bad source the same way.
  *
+ * The warnings the source reports come back on both sides of the result, for the caller to report as it reports the rest of its output.
+ *
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
-export async function loadContractSourceWithStack(inputs: {
+export async function loadContractSourceWithStack(
+  inputs: LoadContractSourceInputs,
+): Promise<Result<LoadedContractSource, ContractSourceLoadFailure>> {
+  const warnings: ContractSourceDiagnostic[] = [];
+  const loaded = await askSource(inputs, (diagnostic) => {
+    warnings.push(diagnostic);
+  });
+  return loaded.ok
+    ? ok({ contract: loaded.value, warnings })
+    : notOk({ ...loaded.failure, warnings });
+}
+
+interface LoadContractSourceInputs {
   readonly stack: ControlStack;
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
-  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
   /** The directory the returned error shows locations relative to; `undefined` shows a source's paths as it gave them. */
   readonly cwd: string | undefined;
-}): Promise<ContractSourceLoadResult> {
+}
+
+/** The error with the source's warnings added after its own findings, as `warn` findings. */
+export function withWarningFindings(
+  error: CliStructuredError,
+  warnings: readonly ContractSourceDiagnostic[],
+  cwd: string | undefined,
+): CliStructuredError {
+  if (warnings.length === 0) return error;
+  const warningFindings = warnings.flatMap(
+    (warning) => sourceWarningDiagnostic(warning, cwd) ?? [],
+  );
+  return new CliStructuredError(error.code, error.message, {
+    severity: error.severity,
+    diagnostics: [...(error.diagnostics ?? []), ...warningFindings],
+    ...ifDefined('why', error.why),
+    ...ifDefined('fix', error.fix),
+    ...ifDefined('nextActions', error.nextActions),
+    ...ifDefined('where', error.where),
+    ...ifDefined('meta', error.meta),
+    ...ifDefined('docsUrl', error.docsUrl),
+    ...ifDefined('cause', error.cause),
+  });
+}
+
+async function askSource(
+  inputs: LoadContractSourceInputs,
+  reportWarning: (diagnostic: ContractSourceDiagnostic) => void,
+): Promise<SourceResult> {
   const { stack, source } = inputs;
   const signal = inputs.signal ?? new AbortController().signal;
   const unlessAborted = abortable(signal);
 
   const sourceContext = {
-    ...ifDefined('reportWarning', inputs.reportWarning),
+    reportWarning,
     composedExtensions: stack.extensions.map((p) => p.id),
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
@@ -332,29 +383,28 @@ export function requireSourceProvider(contractConfig: ContractConfig): void {
   }
 }
 
-/** What a contract source reported when it could not produce a contract. */
+/** What a contract source reported when it could not produce a contract, with the warnings it reported first. */
 export interface ContractSourceFailure {
   readonly summary: string;
   readonly diagnostics: readonly unknown[];
   readonly meta: unknown;
+  readonly warnings: readonly ContractSourceDiagnostic[];
 }
 
 /**
  * Runs the config's contract source and stops there: nothing is emitted or
  * written. A source that reports diagnostics is a `notOk` carrying them.
+ * Either side carries the warnings the source reported.
  *
  * @throws {CliStructuredError} the error `contract emit` raises, when the
- * config has no contract source or the source is malformed or throws
+ * config has no contract source or the source is malformed or throws; the
+ * source's warnings follow its findings as `warn` findings
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
 export async function loadContractSource(
   config: PrismaNextConfig,
-  options: {
-    readonly signal?: AbortSignal;
-    /** Receives each warning the source reports. */
-    readonly onWarning?: (diagnostic: ContractSourceDiagnostic) => void;
-  } = {},
-): Promise<Result<Contract, ContractSourceFailure>> {
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<Result<LoadedContractSource, ContractSourceFailure>> {
   const contractConfig = requireContractConfig(config);
   requireSourceProvider(contractConfig);
   const loaded = await loadContractSourceWithStack({
@@ -362,14 +412,14 @@ export async function loadContractSource(
     source: contractConfig.source,
     cwd: undefined,
     ...ifDefined('signal', options.signal),
-    ...ifDefined('reportWarning', options.onWarning),
   });
   if (loaded.ok) return loaded;
-  const { error, sourceDiagnostics } = loaded.failure;
-  if (sourceDiagnostics === undefined) throw error;
+  const { error, sourceDiagnostics, warnings } = loaded.failure;
+  if (sourceDiagnostics === undefined) throw withWarningFindings(error, warnings, undefined);
   return notOk({
     summary: sourceDiagnostics.summary,
     diagnostics: sourceDiagnostics.diagnostics,
     meta: sourceDiagnostics.meta,
+    warnings,
   });
 }

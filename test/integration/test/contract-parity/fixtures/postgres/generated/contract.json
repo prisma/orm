@@ -149,6 +149,19 @@
                 "value": "paid"
               }
             ]
+          },
+          "Ratio": {
+            "codecId": "pg/numeric@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": "0.5"
+              },
+              {
+                "name": "Whole",
+                "value": "1.50"
+              }
+            ]
           }
         },
         "models": {
@@ -910,6 +923,19 @@
                   "plane": "domain"
                 }
               },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Ratio",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
               "seenAt": {
                 "nullable": false,
                 "type": {
@@ -1112,6 +1138,9 @@
                 },
                 "plan": {
                   "column": "plan"
+                },
+                "ratio": {
+                  "column": "ratio"
                 },
                 "seenAt": {
                   "column": "seenAt"
@@ -1852,6 +1881,11 @@
                   "expression": "\"plan\" IN ('free', 'paid')",
                   "name": "users_plan_check_af7dbeb0",
                   "prefix": "users_plan_check"
+                },
+                {
+                  "expression": "\"ratio\" IN ('0.5', '1.50')",
+                  "name": "users_ratio_check_adc94216",
+                  "prefix": "users_ratio_check"
                 }
               ],
               "columns": {
@@ -1924,6 +1958,17 @@
                     "plane": "storage"
                   }
                 },
+                "ratio": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Ratio",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
                 "seenAt": {
                   "codecId": "pg/timestamptz-date@1",
                   "dataType": "pg/timestamptz",
@@ -1960,7 +2005,9 @@
                   "codecId": "pg/timestamp-string@1",
                   "dataType": "pg/timestamp",
                   "nullable": false,
-                  "typeRef": "TimestampString3"
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1982,7 +2029,9 @@
                   "codecId": "pg/timestamptz-string@1",
                   "dataType": "pg/timestamptz",
                   "nullable": true,
-                  "typeRef": "TimestamptzString3"
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "ulid": {
                   "codecId": "sql/char@1",
@@ -2061,6 +2110,13 @@
                 "free",
                 "paid"
               ]
+            },
+            "Ratio": {
+              "kind": "valueSet",
+              "values": [
+                "0.5",
+                "1.50"
+              ]
             }
           }
         },
@@ -2068,28 +2124,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7b726ff2c750b13ac5dd2966b8a7c42317a368c40faae5b2231611ac56a0dc59",
-    "types": {
-      "TimestampString3": {
-        "codecId": "pg/timestamp-string@1",
-        "dataType": "pg/timestamp",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 3
-        }
-      },
-      "TimestamptzString3": {
-        "codecId": "pg/timestamptz-string@1",
-        "dataType": "pg/timestamptz",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 3
-        }
-      }
-    }
+    "storageHash": "4e5aa929c76c9181dd640f59692e6743a0626b5ab9023a02e5960ec96509c225"
   },
   "execution": {
-    "executionHash": "4c8b52aa880ed951466684d8a101a1fc3992151da635fe969fe2926dbd8964eb",
+    "executionHash": "4a96a7146e13898bf97aa37dba3cc7c9cae8e2599993a25be7fe3bdb78b45b9e",
     "mutations": {
       "defaults": [
         {
@@ -2307,7 +2345,10 @@
         {
           "onCreate": {
             "id": "instantNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "ref": {
             "entry": "users",
@@ -2318,11 +2359,17 @@
         {
           "onCreate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "users",
@@ -2366,6 +2413,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

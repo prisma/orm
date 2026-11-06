@@ -166,8 +166,29 @@ describe('migration show', () => {
         roots: [{ label: '1 operation(s)', children: [{ label: 'Add column' }] }],
       },
     ]);
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+  });
+
+  it('prints key-tab-value data lines, one operation line per operation, and leaves out an absent from', async () => {
+    const dir = await projectDir();
+    await seedProject(dir);
+
+    const run = await harness(ormConfig('contract.json')).run(
+      ['migration', 'show', MIGRATION_DIR],
+      { cwd: dir },
+    );
+    const document = run.presented?.data as { migration: { hash: string } };
+
+    expect(run.stdout).toBe(
+      [
+        `name\t${MIGRATION_DIR}`,
+        'space\tapp',
+        `to\t${HASH_A}`,
+        `hash\t${document.migration.hash}`,
+        'created\t2025-01-01T00:00:00.000Z',
+        'operation\tschema.add_column\tadditive\tAdd column',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('drops blank preview statements and keeps multi-line statements unwrapped', async () => {

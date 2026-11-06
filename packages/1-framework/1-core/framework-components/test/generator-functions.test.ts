@@ -34,7 +34,7 @@ function component(
 
 const registers = (...generatorIds: string[]) => component('runtime', [], generatorIds);
 
-const textField = { codecId: 'text@1', typeParams: undefined };
+const textField = { codecId: 'text@1', typeParams: undefined, length: undefined };
 const call = (name: string, args: Record<string, unknown> = {}) => ({ name, args });
 
 describe('assembleGeneratorFunctions', () => {
@@ -53,7 +53,11 @@ describe('assembleGeneratorFunctions', () => {
 
     expect({
       text: registry.resolve(call('uuid'), textField),
-      char: registry.resolve(call('uuid'), { codecId: 'char@1', typeParams: undefined }),
+      char: registry.resolve(call('uuid'), {
+        codecId: 'char@1',
+        typeParams: undefined,
+        length: undefined,
+      }),
     }).toEqual({
       text: { ok: true, generator: { kind: 'generator', id: 'uuidv4' } },
       char: { ok: true, generator: { kind: 'generator', id: 'uuidv4' } },
@@ -100,7 +104,11 @@ describe('assembleGeneratorFunctions', () => {
 
     expect({
       unknown: registry.resolve(call('foo'), textField),
-      notBound: registry.resolve(call('uuid'), { codecId: 'bytes@1', typeParams: undefined }),
+      notBound: registry.resolve(call('uuid'), {
+        codecId: 'bytes@1',
+        typeParams: undefined,
+        length: undefined,
+      }),
     }).toEqual({
       unknown: { ok: false, reason: 'unknown-function', boundCodecIds: [] },
       notBound: { ok: false, reason: 'not-bound', boundCodecIds: ['char@1', 'text@1'] },
@@ -179,7 +187,7 @@ describe('assembleGeneratorFunctions', () => {
       slugid: registry.callFor({ kind: 'generator', id: 'slugid' }, textField),
       otherCodec: registry.callFor(
         { kind: 'generator', id: 'uuidv7' },
-        { codecId: 'bytes@1', typeParams: undefined },
+        { codecId: 'bytes@1', typeParams: undefined, length: undefined },
       ),
     }).toEqual({
       uuidv7: { call: { name: 'uuid', args: { version: 7 } }, text: 'uuid(7)' },
@@ -330,9 +338,12 @@ describe('singleGeneratorBinding', () => {
     expect({
       withPrecision: binding.resolve({
         args: {},
-        field: { codecId: 'time@1', typeParams: { precision: 3 } },
+        field: { codecId: 'time@1', typeParams: { precision: 3 }, length: undefined },
       }),
-      without: binding.resolve({ args: {}, field: { codecId: 'time@1', typeParams: undefined } }),
+      without: binding.resolve({
+        args: {},
+        field: { codecId: 'time@1', typeParams: undefined, length: undefined },
+      }),
     }).toEqual({
       withPrecision: {
         ok: true,
@@ -343,7 +354,7 @@ describe('singleGeneratorBinding', () => {
   });
 
   it('writes no arguments for its generator and nothing for another', () => {
-    const field = { codecId: 'time@1', typeParams: undefined };
+    const field = { codecId: 'time@1', typeParams: undefined, length: undefined };
     expect({
       own: binding.printArguments({ kind: 'generator', id: 'timeNow' }, field),
       other: binding.printArguments({ kind: 'generator', id: 'dateNow' }, field),

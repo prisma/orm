@@ -138,7 +138,7 @@ function describeValue(value: unknown): string {
  *
  * - The codec is an explicit required argument — the `codecId` is taken
  *   from the passed `ColumnTypeDescriptor` (e.g. `{ codecId: 'pg/text@1' }`
- *   from a field preset output or a direct inline object).
+ *   from a column type constant or a direct inline object).
  * - `const` generics on the members spread preserve the ordered literal
  *   value tuple so `Role.values` is `readonly ['user','admin']`, not
  *   `string[]`.
@@ -251,7 +251,9 @@ export function enumType(
 export function duplicateMemberError(enumName: string, duplicate: DuplicateStoredValue) {
   return contractError(
     'CONTRACT.ENUM_INVALID',
-    `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" both store ${JSON.stringify(duplicate.stored)}. Member values must be unique as their codec stores them.`,
+    duplicate.earlierStored === undefined
+      ? `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" both store ${JSON.stringify(duplicate.stored)}. Member values must be unique as their codec stores them.`
+      : `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" store ${JSON.stringify(duplicate.earlierStored)} and ${JSON.stringify(duplicate.stored)}, which the database holds equal. Member values must be unique as their data type compares them.`,
     {
       meta: {
         enumName,

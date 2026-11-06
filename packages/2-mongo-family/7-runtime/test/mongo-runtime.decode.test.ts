@@ -1,6 +1,6 @@
 import type { PlanMeta } from '@internal/contract/types';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
@@ -11,6 +11,7 @@ import {
   type MongoRuntimeAdapterInstance,
 } from '../src/mongo-execution-stack';
 import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -38,18 +39,21 @@ function runtimeOver(driver: MongoDriver) {
       familyId: 'mongo',
       targetId: 'mongo',
       version: '0.0.1',
-      codecs: () => {
-        const registry = newMongoCodecRegistry();
-        registry.register(
-          mongoCodec({
-            typeId: 'test/upper@1',
-            fromWire: (wire: string) => wire.toUpperCase(),
-            toWire: (value: string) => value,
-            dataType: textType,
-            fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
-          }),
-        );
-        return registry;
+      types: {
+        codecTypes: {
+          codecDescriptors: [
+            mongoCodecDescriptor(
+              mongoCodec({
+                typeId: 'test/upper@1',
+                fromWire: (wire: string) => wire.toUpperCase(),
+                toWire: (value: string) => value,
+                dataType: textType,
+                fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+              }),
+              { traits: [] },
+            ),
+          ],
+        },
       },
       create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
     },
@@ -59,12 +63,11 @@ function runtimeOver(driver: MongoDriver) {
       familyId: 'mongo',
       targetId: 'mongo',
       version: '0.0.1',
-      codecs: () => newMongoCodecRegistry(),
       create: () => adapterInstance,
     },
   });
-  const context = createMongoExecutionContext({ contract: {}, stack });
-  return createMongoRuntime({ context, driver });
+  const context = createMongoExecutionContext({ contract: testContract, stack });
+  return createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 }
 
 function driverYielding(rows: readonly Record<string, unknown>[]): MongoDriver {

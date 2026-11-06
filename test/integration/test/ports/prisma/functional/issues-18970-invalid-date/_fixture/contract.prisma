@@ -10,6 +10,6 @@
 
 model User {
   id   String    @id @onCreate(cuid(2))
-  date DateTime?
+  date TimestamptzTemporal?
   @@map("user")
 }

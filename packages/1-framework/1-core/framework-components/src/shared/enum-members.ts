@@ -122,6 +122,7 @@ export function encodeEnumMembers(
   }
   for (const duplicate of duplicateStoredMembers(
     members.map(({ name, value }) => ({ name, stored: value })),
+    codec.dataType.equalityKey,
   )) {
     problems.push({ kind: 'duplicate-member-value', ...duplicate });
   }

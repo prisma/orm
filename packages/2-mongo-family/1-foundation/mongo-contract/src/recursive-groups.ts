@@ -1,33 +1,43 @@
-import type { ContractField, ContractValueObject } from '@internal/contract/types';
+import {
+  type ContractField,
+  type EntityCoordinate,
+  type StorageBase,
+  valueObjectsWithCoordinates,
+} from '@internal/contract/types';
 import type { ValidatorModel } from './derive-json-schema';
 import { isEmbedRelation } from './relation-fields';
 
-export function typeKey(kind: 'valueObject' | 'model', name: string): string {
-  return `${kind}:${name}`;
+export function modelKey(name: string): string {
+  return `model:${name}`;
+}
+
+/** The key of a value object, by its storage coordinate, so value objects of one name in two namespaces stay apart. */
+export function valueObjectKey(reference: EntityCoordinate<'storage', 'valueObject'>): string {
+  return `valueObject:${JSON.stringify([reference.namespaceId, reference.entityName])}`;
 }
 
 function referencesOf(fields: Record<string, ContractField>): string[] {
   return Object.values(fields).flatMap((field) =>
-    field.type.kind === 'valueObject' ? [typeKey('valueObject', field.type.name)] : [],
+    field.type.kind === 'valueObject' ? [valueObjectKey(field.type)] : [],
   );
 }
 
 /**
- * The recursive groups of value objects and embedded models: each set of types that can reach each other through value-object fields and embed relations (a strongly connected component of that graph), and each type that refers to itself. Maps the {@link typeKey} of every type in such a group to the group's number; a type in no recursive group is absent.
+ * The recursive groups of value objects and embedded models: each set of types that can reach each other through value-object fields and embed relations (a strongly connected component of that graph), and each type that refers to itself. Maps the {@link valueObjectKey} or {@link modelKey} of every type in such a group to the group's number; a type in no recursive group is absent.
  */
 export function recursiveGroupsOf(
-  valueObjects: Record<string, ContractValueObject>,
+  storage: Pick<StorageBase, 'namespaces'>,
   models: Record<string, Pick<ValidatorModel, 'fields' | 'relations'>>,
 ): ReadonlyMap<string, number> {
   const edges = new Map<string, readonly string[]>();
-  for (const [name, valueObject] of Object.entries(valueObjects)) {
-    edges.set(typeKey('valueObject', name), referencesOf(valueObject.fields));
+  for (const { coordinate, valueObject } of valueObjectsWithCoordinates(storage)) {
+    edges.set(valueObjectKey(coordinate), referencesOf(valueObject.fields));
   }
   for (const [name, model] of Object.entries(models)) {
     const embeds = Object.values(model.relations).flatMap((relation) =>
-      isEmbedRelation(relation) ? [typeKey('model', relation.to.model)] : [],
+      isEmbedRelation(relation) ? [modelKey(relation.to.model)] : [],
     );
-    edges.set(typeKey('model', name), [...referencesOf(model.fields), ...embeds]);
+    edges.set(modelKey(name), [...referencesOf(model.fields), ...embeds]);
   }
 
   const groups = new Map<string, number>();

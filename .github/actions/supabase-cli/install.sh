@@ -16,7 +16,7 @@ readonly supabase_config=examples/supabase/supabase/config.toml
 
 download_verified_cli_tarball() {
   local tarball=$1
-  curl --fail --silent --show-error --location --output "$tarball" \
+  curl --fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 5 --output "$tarball" \
     "https://github.com/supabase/cli/releases/download/v${cli_version}/supabase_linux_amd64.tar.gz"
   echo "$cli_tarball_sha256  $tarball" | sha256sum --check --strict -
 }

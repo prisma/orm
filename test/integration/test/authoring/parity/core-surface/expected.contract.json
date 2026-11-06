@@ -266,8 +266,7 @@
                 "email": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false,
-                  "typeRef": "Email"
+                  "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -326,14 +325,7 @@
         "id": "public"
       }
     },
-    "storageHash": "b56cf4366991811599174a61a05f149d07cd45829f09a42c74b6f35d4ac804ea",
-    "types": {
-      "Email": {
-        "codecId": "pg/text@1",
-        "dataType": "pg/text",
-        "kind": "codec-instance"
-      }
-    }
+    "storageHash": "b60197ba0e9779c7c785990c9524fc797efa398eb7450c82509ad22a11c58cd3"
   },
   "capabilities": {
     "postgres": {
@@ -353,6 +345,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

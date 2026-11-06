@@ -7,19 +7,24 @@ import {
   executeStatement,
   RuntimeCore,
   type RuntimeExecuteOptions,
+  type RuntimeMode,
   type RuntimeStatementStats,
   runtimeError,
   type StatementActivityRun,
   streamStatement,
 } from '@internal/framework-components/runtime';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoCodecLookup,
+  MongoExecutionContext,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import { decodeMongoRow } from './codecs/decoding';
 import { computeMongoContentHash } from './content-hash';
 import type { MongoExecutionPlan } from './mongo-execution-plan';
-import type { MongoCodecLookup, MongoExecutionContext } from './mongo-execution-stack';
 import type { MongoMiddleware, MongoMiddlewareContext } from './mongo-middleware';
 import {
   createMongoParamRefMutator,
@@ -60,22 +65,24 @@ function invalidStatisticsResult(commandKind: string, countField: string): Error
   );
 }
 
+function runtimeClosedError(): StructuredError {
+  return structuredError('DRIVER.NOT_CONNECTED', 'Runtime is closed', {
+    why: 'close() was called on this runtime, or on the client or connection that owns it. An await using scope calls close() when it ends.',
+    fix: 'Await every query before close(). The usual cause is a query returned without await from an await using scope.',
+  });
+}
+
 /**
  * Mongo runtime options.
  *
- * The runtime takes a {@link MongoExecutionContext} (built via
- * `createMongoExecutionContext`) and a driver. Codec resolution flows from
- * the context — there is no `codecs` field on this options bag. The adapter
- * is reached via `context.stack.adapter` (instantiated lazily through the
- * stack's `create(stack)` factory). See ADR — Mongo result-shape as a
- * structural plan field, § Codec registry: stack aggregation, not user
- * threading.
+ * The runtime takes a {@link MongoExecutionContext} (built via `createMongoExecutionContext`), an adapter, and a driver, as the SQL runtime does. Codecs and the target come from the context. See ADR — Mongo result-shape as a structural plan field, § Codec registry: stack aggregation, not user threading.
  */
 export interface MongoRuntimeOptions {
   readonly context: MongoExecutionContext;
-  readonly driver: MongoDriver;
+  readonly adapter: MongoAdapter;
+  readonly driver: MongoDriver<unknown>;
   readonly middleware?: readonly MongoMiddleware[];
-  readonly mode?: 'strict' | 'permissive';
+  readonly mode?: RuntimeMode;
 }
 
 export interface MongoRuntime {
@@ -110,15 +117,15 @@ class MongoRuntimeImpl
   implements MongoRuntime
 {
   readonly #adapter: MongoAdapter;
-  readonly #driver: MongoDriver;
+  readonly #driver: MongoDriver<unknown>;
   readonly #codecs: MongoCodecLookup;
   readonly #contextFields: ActivityContextFields<MongoMiddlewareContext>;
+  #closed = false;
 
   constructor(options: MongoRuntimeOptions) {
     const middleware = options.middleware ?? [];
-    const targetId = options.context.stack.target.targetId;
     for (const mw of middleware) {
-      checkMiddlewareCompatibility(mw, 'mongo', targetId);
+      checkMiddlewareCompatibility(mw, 'mongo', options.context.contract.target);
     }
 
     const ctx: ActivityContextFields<MongoMiddlewareContext> = {
@@ -144,9 +151,7 @@ class MongoRuntimeImpl
     super({ middleware, ctx });
     this.#contextFields = ctx;
 
-    const adapterDescriptor = options.context.stack.adapter;
-    const adapterInstance = adapterDescriptor.create(options.context.stack);
-    this.#adapter = adapterInstance;
+    this.#adapter = options.adapter;
     this.#driver = options.driver;
     this.#codecs = options.context.codecs;
   }
@@ -165,6 +170,9 @@ class MongoRuntimeImpl
   /* v8 ignore stop */
 
   protected override runDriver(exec: MongoExecutionPlan): AsyncIterable<Record<string, unknown>> {
+    if (this.#closed) {
+      throw runtimeClosedError();
+    }
     return this.#driver.execute<Record<string, unknown>>(exec.command);
   }
 
@@ -271,6 +279,9 @@ class MongoRuntimeImpl
   }
 
   async #readDriverStatistics(exec: MongoExecutionPlan): Promise<RuntimeStatementStats> {
+    if (this.#closed) {
+      throw runtimeClosedError();
+    }
     const countField = statisticsCountField(exec.command.kind);
     if (countField === undefined) {
       throw runtimeError(
@@ -298,6 +309,7 @@ class MongoRuntimeImpl
   }
 
   override async close(): Promise<void> {
+    this.#closed = true;
     await this.#driver.close();
   }
 }

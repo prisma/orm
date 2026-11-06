@@ -13,7 +13,7 @@ import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import { createTestPostgresControlAdapter } from '../../../packages/3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { createTestPostgresControlAdapter } from '../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import {
   defineContract,
   field,

@@ -70,6 +70,7 @@ export type {
   RuntimeExecutor,
   RuntimeLog,
   RuntimeMiddleware,
+  RuntimeMode,
   RuntimeStatementStats,
   StartActivity,
   StatementActivity,

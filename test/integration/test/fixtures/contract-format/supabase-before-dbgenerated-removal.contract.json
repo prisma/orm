@@ -4926,14 +4926,12 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "instance_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "ip_address": {
                   "codecId": "sql/varchar@1",
@@ -4943,13 +4941,14 @@
                   },
                   "nativeType": "character varying",
                   "nullable": false,
-                  "typeRef": "IpAddress2"
+                  "typeParams": {
+                    "length": 64
+                  }
                 },
                 "payload": {
                   "codecId": "pg/json@1",
                   "nativeType": "json",
-                  "nullable": true,
-                  "typeRef": "Payload"
+                  "nullable": true
                 }
               },
               "foreignKeys": [],
@@ -5137,8 +5136,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "identifier": {
                   "codecId": "pg/text@1",
@@ -5303,8 +5301,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "invite_token": {
                   "codecId": "pg/text@1",
@@ -5314,14 +5311,12 @@
                 "linking_target_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "oauth_client_state_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "provider_access_token": {
                   "codecId": "pg/text@1",
@@ -5351,8 +5346,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 }
               },
               "foreignKeys": [],
@@ -5398,8 +5392,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "identity_data": {
                   "codecId": "pg/jsonb@1",
@@ -5429,8 +5422,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 }
               },
               "foreignKeys": [
@@ -5482,8 +5474,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "raw_base_config": {
                   "codecId": "pg/text@1",
@@ -5498,8 +5489,7 @@
                 "uuid": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 }
               },
               "foreignKeys": [],
@@ -5525,14 +5515,12 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "session_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -5578,20 +5566,17 @@
                 "factor_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "ip_address": {
                   "codecId": "pg/inet@1",
                   "nativeType": "inet",
-                  "nullable": false,
-                  "typeRef": "IpAddress"
+                  "nullable": false
                 },
                 "otp_code": {
                   "codecId": "pg/text@1",
@@ -5667,8 +5652,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "last_challenged_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -5712,14 +5696,12 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "web_authn_aaguid": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "web_authn_credential": {
                   "codecId": "pg/jsonb@1",
@@ -5831,8 +5813,7 @@
                 "client_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "code_challenge": {
                   "codecId": "pg/text@1",
@@ -5874,8 +5855,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "nonce": {
                   "codecId": "pg/text@1",
@@ -5941,8 +5921,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 }
               },
               "foreignKeys": [
@@ -6013,8 +5992,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "provider_type": {
                   "codecId": "pg/text@1",
@@ -6111,8 +6089,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "logo_uri": {
                   "codecId": "pg/text@1",
@@ -6186,8 +6163,7 @@
                 "client_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "granted_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6201,8 +6177,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "revoked_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6217,8 +6192,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 }
               },
               "foreignKeys": [
@@ -6296,14 +6270,12 @@
                     "kind": "function"
                   },
                   "nativeType": "timestamp",
-                  "nullable": false,
-                  "typeRef": "CreatedAt"
+                  "nullable": false
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "relates_to": {
                   "codecId": "pg/text@1",
@@ -6336,14 +6308,12 @@
                     "kind": "function"
                   },
                   "nativeType": "timestamp",
-                  "nullable": false,
-                  "typeRef": "CreatedAt"
+                  "nullable": false
                 },
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 }
               },
               "foreignKeys": [
@@ -6406,14 +6376,15 @@
                 "instance_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "parent": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "revoked": {
                   "codecId": "pg/bool@1",
@@ -6423,14 +6394,15 @@
                 "session_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "token": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6441,7 +6413,9 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "foreignKeys": [
@@ -6532,8 +6506,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "metadata_url": {
                   "codecId": "pg/text@1",
@@ -6553,8 +6526,7 @@
                 "sso_provider_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6612,8 +6584,7 @@
                 "flow_state_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "for_email": {
                   "codecId": "pg/text@1",
@@ -6623,8 +6594,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "redirect_to": {
                   "codecId": "pg/text@1",
@@ -6639,8 +6609,7 @@
                 "sso_provider_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6707,7 +6676,9 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": false,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "foreignKeys": [],
@@ -6748,20 +6719,17 @@
                 "factor_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "ip": {
                   "codecId": "pg/inet@1",
                   "nativeType": "inet",
-                  "nullable": true,
-                  "typeRef": "IpAddress"
+                  "nullable": true
                 },
                 "not_after": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6771,8 +6739,7 @@
                 "oauth_client_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "refresh_token_counter": {
                   "codecId": "pg/int8@1",
@@ -6787,8 +6754,7 @@
                 "refreshed_at": {
                   "codecId": "pg/timestamp-temporal@1",
                   "nativeType": "timestamp",
-                  "nullable": true,
-                  "typeRef": "CreatedAt"
+                  "nullable": true
                 },
                 "scopes": {
                   "codecId": "pg/text@1",
@@ -6813,8 +6779,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 }
               },
               "foreignKeys": [
@@ -6896,14 +6861,12 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "sso_provider_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6966,8 +6929,7 @@
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "resource_id": {
                   "codecId": "pg/text@1",
@@ -7011,7 +6973,9 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "banned_until": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7027,7 +6991,9 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "confirmed_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7048,13 +7014,17 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "email_change": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "email_change_confirm_status": {
                   "codecId": "pg/int2@1",
@@ -7063,8 +7033,7 @@
                     "value": 0
                   },
                   "nativeType": "int2",
-                  "nullable": true,
-                  "typeRef": "EmailChangeConfirmStatus"
+                  "nullable": true
                 },
                 "email_change_sent_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7079,13 +7048,17 @@
                   },
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "email_change_token_new": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "email_confirmed_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7096,19 +7069,19 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "instance_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "invited_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7170,7 +7143,9 @@
                   },
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "phone_confirmed_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7200,7 +7175,9 @@
                   },
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "recovery_sent_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7211,13 +7188,17 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "role": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": true,
-                  "typeRef": "Parent"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7324,8 +7305,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "session_data": {
                   "codecId": "pg/jsonb@1",
@@ -7335,8 +7315,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 }
               },
               "foreignKeys": [
@@ -7378,8 +7357,7 @@
                 "aaguid": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "attestation_type": {
                   "codecId": "pg/text@1",
@@ -7438,8 +7416,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "last_used_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7481,8 +7458,7 @@
                 "user_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 }
               },
               "foreignKeys": [
@@ -7685,8 +7661,7 @@
                 "owner": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "owner_id": {
                   "codecId": "pg/text@1",
@@ -7776,8 +7751,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
@@ -7889,8 +7863,7 @@
                 "catalog_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7908,8 +7881,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "metadata": {
                   "codecId": "pg/jsonb@1",
@@ -7974,8 +7946,7 @@
                 "catalog_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -7993,8 +7964,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "location": {
                   "codecId": "pg/text@1",
@@ -8009,8 +7979,7 @@
                 "namespace_id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "remote_table_id": {
                   "codecId": "pg/text@1",
@@ -8094,14 +8063,15 @@
                     "kind": "function"
                   },
                   "nativeType": "timestamp",
-                  "nullable": true,
-                  "typeRef": "CreatedAt"
+                  "nullable": true
                 },
                 "hash": {
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": false,
-                  "typeRef": "Hash"
+                  "typeParams": {
+                    "length": 40
+                  }
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -8112,7 +8082,9 @@
                   "codecId": "sql/varchar@1",
                   "nativeType": "character varying",
                   "nullable": false,
-                  "typeRef": "Name"
+                  "typeParams": {
+                    "length": 100
+                  }
                 }
               },
               "foreignKeys": [],
@@ -8151,8 +8123,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "last_accessed_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -8176,8 +8147,7 @@
                 "owner": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
-                  "nullable": true,
-                  "typeRef": "Id"
+                  "nullable": true
                 },
                 "owner_id": {
                   "codecId": "pg/text@1",
@@ -8373,8 +8343,7 @@
                     "kind": "function"
                   },
                   "nativeType": "uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "key": {
                   "codecId": "pg/text@1",
@@ -8547,66 +8516,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d33b83c8764b7f9df5d102b77ce04546770d7f9780d3cefc4cc0fd7b876dfdde",
-    "types": {
-      "CreatedAt": {
-        "codecId": "pg/timestamp-temporal@1",
-        "kind": "codec-instance",
-        "nativeType": "timestamp"
-      },
-      "EmailChangeConfirmStatus": {
-        "codecId": "pg/int2@1",
-        "kind": "codec-instance",
-        "nativeType": "int2"
-      },
-      "Hash": {
-        "codecId": "sql/varchar@1",
-        "kind": "codec-instance",
-        "nativeType": "character varying",
-        "typeParams": {
-          "length": 40
-        }
-      },
-      "Id": {
-        "codecId": "pg/uuid@1",
-        "kind": "codec-instance",
-        "nativeType": "uuid"
-      },
-      "IpAddress": {
-        "codecId": "pg/inet@1",
-        "kind": "codec-instance",
-        "nativeType": "inet"
-      },
-      "IpAddress2": {
-        "codecId": "sql/varchar@1",
-        "kind": "codec-instance",
-        "nativeType": "character varying",
-        "typeParams": {
-          "length": 64
-        }
-      },
-      "Name": {
-        "codecId": "sql/varchar@1",
-        "kind": "codec-instance",
-        "nativeType": "character varying",
-        "typeParams": {
-          "length": 100
-        }
-      },
-      "Parent": {
-        "codecId": "sql/varchar@1",
-        "kind": "codec-instance",
-        "nativeType": "character varying",
-        "typeParams": {
-          "length": 255
-        }
-      },
-      "Payload": {
-        "codecId": "pg/json@1",
-        "kind": "codec-instance",
-        "nativeType": "json"
-      }
-    }
+    "storageHash": "543e8325f4b29b5b3269bbfe37b2aeed36746fac1bd2012499c4edfbace5cce7"
   },
   "capabilities": {
     "postgres": {

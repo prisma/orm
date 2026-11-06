@@ -223,6 +223,19 @@ describe('migration check', () => {
       });
     });
 
+    it('prints one data line per failure: space, code and the file it is about', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'));
+      await seedUnloadableDirectory(join(dir, 'migrations'));
+
+      const run = await harness(ormConfig()).run(['migration', 'check'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.stdout.split('\n')[0]).toBe(
+        'app\tMIGRATION.CHECK_FILE_MISSING\tmigrations/app/20250102T0000_broken/migration.json',
+      );
+    });
+
     it('points each diagnostic at the file it is about and keeps its next actions', async () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));

@@ -1,10 +1,10 @@
-import type {
-  Contract,
-  ContractEnum,
-  ContractModelBase,
-  ContractValueObject,
+import {
+  type Contract,
+  type ContractEnum,
+  type ContractModelBase,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import { type CodecLookup, readContractValue } from '@internal/framework-components/codec';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import {
   type EmissionSpi,
   type GenerateContractTypesOptions,
@@ -23,9 +23,9 @@ import {
   generateImportLines,
   generateModelsType,
   generateRootsType,
-  generateValueObjectsDescriptorType,
   generateValueObjectTypeAliases,
   parameterizedOutputTypeFunctionsAlias,
+  renderValueLiteralType,
   serializeExecutionType,
   serializeObjectKey,
   serializeValue,
@@ -46,36 +46,22 @@ function generateEnumBlockType(enums: Record<string, ContractEnum>): string {
 }
 
 /**
- * Types each enum member as the value a query returns for it: the literal its codec reads from the stored form, or the codec's output type when that value has no literal type or the lookup has no codec.
+ * Types each enum member as the value a query returns for it: the literal its codec renders for the stored form, or the codec's output type when the codec renders none.
  */
 function generateEnumMemberTypesBlock(
   enums: Record<string, ContractEnum>,
   codecLookup: CodecLookup | undefined,
 ): string {
   const entries = Object.entries(enums).map(([name, entry]) => {
-    const codec = codecLookup?.get(entry.codecId);
     const memberTupleItems = entry.members.map((m) => {
-      const literal =
-        codec === undefined ? undefined : literalType(readContractValue(codec, m.value, undefined));
-      const valueType = literal ?? `CodecTypes[${serializeValue(entry.codecId)}]["output"]`;
+      const valueType =
+        renderValueLiteralType(m.value, entry.codecId, 'output', codecLookup) ??
+        `CodecTypes[${serializeValue(entry.codecId)}]["output"]`;
       return `{ readonly name: ${serializeValue(m.name)}; readonly value: ${valueType} }`;
     });
     return `readonly ${serializeObjectKey(name)}: readonly [${memberTupleItems.join(', ')}]`;
   });
   return `{ ${entries.join('; ')} }`;
-}
-
-function literalType(value: unknown): string | undefined {
-  switch (typeof value) {
-    case 'string':
-    case 'boolean':
-    case 'bigint':
-      return serializeValue(value);
-    case 'number':
-      return Number.isFinite(value) ? serializeValue(value) : undefined;
-    default:
-      return undefined;
-  }
 }
 
 export function generateContractDts(
@@ -128,42 +114,24 @@ export function generateContractDts(
 
   const rootsType = generateRootsType(contract.roots);
 
-  // Flatten value objects across all namespaces — first-name-wins on collision.
-  const flatValueObjects: Record<string, ContractValueObject> = {};
-  const valueObjectNamespaces: Array<readonly [string, string]> = [];
-  for (const [nsId, ns] of namespaceEntries) {
-    for (const [voName, vo] of Object.entries(
-      blindCast<
-        Record<string, ContractValueObject>,
-        'ns.valueObjects is a ContractValueObject record in the emitted IR (default to {} when absent)'
-      >(ns.valueObjects ?? {}),
-    )) {
-      if (!(voName in flatValueObjects)) {
-        flatValueObjects[voName] = vo;
-        valueObjectNamespaces.push([voName, nsId]);
-      }
-    }
+  const firstNamespaceOfValueObject = new Map<string, string>();
+  for (const {
+    coordinate: { namespaceId, entityName: name },
+  } of valueObjectsWithCoordinates(contract.storage)) {
+    if (!firstNamespaceOfValueObject.has(name)) firstNamespaceOfValueObject.set(name, namespaceId);
   }
-  const valueObjects = Object.keys(flatValueObjects).length > 0 ? flatValueObjects : undefined;
+  const valueObjectNamespaces = [...firstNamespaceOfValueObject];
+  const hasValueObjects = valueObjectNamespaces.length > 0;
   const valueObjectTypeAliases = generateValueObjectTypeAliases(valueObjectNamespaces);
-  const valueObjectsDescriptor = generateValueObjectsDescriptorType(valueObjects);
 
-  // Per-namespace models, value objects, and enum types for the domain.namespaces section.
+  // Per-namespace models and enum types for the domain.namespaces section.
   const perNamespaceTypes: Array<
-    readonly [string, string, string | undefined, string | undefined, string | undefined]
+    readonly [string, string, string | undefined, string | undefined]
   > = namespaceEntries.map(([nsId, ns]) => {
     const nsModels = ns.models;
     const nsModelsType = generateModelsType(nsModels, (name, model) =>
       emitter.generateModelStorageType(name, model),
     );
-    const nsValueObjects = blindCast<
-      Record<string, ContractValueObject> | undefined,
-      'ns.valueObjects is an optional ContractValueObject record in the emitted IR'
-    >(ns.valueObjects);
-    const nsValueObjectsDescriptor =
-      nsValueObjects !== undefined && Object.keys(nsValueObjects).length > 0
-        ? generateValueObjectsDescriptorType(nsValueObjects)
-        : undefined;
     const nsEnums = blindCast<
       Record<string, ContractEnum> | undefined,
       'ns.enum is an optional ContractEnum record in the emitted IR'
@@ -173,27 +141,17 @@ export function generateContractDts(
     const nsEnumMemberTypesBlock = hasEnums
       ? generateEnumMemberTypesBlock(nsEnums, codecLookup)
       : undefined;
-    return [
-      nsId,
-      nsModelsType,
-      nsValueObjectsDescriptor,
-      nsEnumBlock,
-      nsEnumMemberTypesBlock,
-    ] as const;
+    return [nsId, nsModelsType, nsEnumBlock, nsEnumMemberTypesBlock] as const;
   });
 
   const domainNamespacesType = perNamespaceTypes
-    .map(([nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock, nsEnumMemberTypesBlock]) => {
-      const voLine =
-        nsValueObjectsDescriptor !== undefined
-          ? `\n        readonly valueObjects: ${nsValueObjectsDescriptor};`
-          : '';
+    .map(([nsId, nsModelsType, nsEnumBlock, nsEnumMemberTypesBlock]) => {
       const enumLine = nsEnumBlock !== undefined ? `\n        readonly enum: ${nsEnumBlock};` : '';
       const enumMemberTypesLine =
         nsEnumMemberTypesBlock !== undefined
           ? `\n        readonly enumMemberTypes?: ${nsEnumMemberTypesBlock};`
           : '';
-      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${voLine}${enumLine}${enumMemberTypesLine}\n      }`;
+      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${enumLine}${enumMemberTypesLine}\n      }`;
     })
     .join(';\n');
 
@@ -252,7 +210,6 @@ ${domainNamespacesType};
   readonly capabilities: ${serializeValue(contract.capabilities)};
   readonly extensions: ${serializeValue(contract.extensions)};${executionClause}
   readonly meta: ${serializeValue(contract.meta)};
-  ${valueObjects ? `readonly valueObjects: ${valueObjectsDescriptor};` : ''}
   readonly profileHash: ProfileHash;
 };
 
@@ -276,7 +233,7 @@ import type {
   FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
-  StorageHashBase,${valueObjects ? '\n  ValueObjectTypesFromDomain,' : ''}
+  StorageHashBase,${hasValueObjects ? '\n  ValueObjectTypesFromStorage,' : ''}
 } from '${resolveImportSpecifier('@internal/contract/types')}';
 
 ${body}`;

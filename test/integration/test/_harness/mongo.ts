@@ -1,7 +1,7 @@
 import mongoAdapterControl from '@internal/adapter-mongo/control';
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { createMongoDriver } from '@internal/driver-mongo';
 import mongoDriverControl from '@internal/driver-mongo/control';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import {
@@ -18,7 +18,6 @@ import type {
 import type { MongoOrmClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
 import {
-  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
@@ -156,18 +155,15 @@ export async function withMongoPort<
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
+      driver: mongoRuntimeDriver,
     });
     const context = createMongoExecutionContext({ contract, stack });
-    const driver = await createMongoDriver(connectionUri, dbName);
-    const runtime = createMongoRuntime({ context, driver });
+    const driver = stack.driver.create();
+    await driver.connect({ kind: 'url', url: connectionUri, dbName });
+    const runtime = createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
 
     try {
-      const db = mongoOrm<TContract>({
-        contract,
-        executor: runtime,
-        mutationDefaults: context,
-        enums: buildMongoEnums(contract, context.codecs),
-      });
+      const db = mongoOrm<TContract>({ context, runtime: runtime });
       const mongoDb = client.db(dbName);
       await fn({ db, client, mongoDb, contract });
     } finally {

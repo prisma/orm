@@ -1,5 +1,10 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import {
+  migrationRunnerFailure,
+  type SchemaDiffIssue,
+  schemaCheckWhy,
+} from '@internal/framework-components/control';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
@@ -7,8 +12,14 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import {
+  dbInitPlanningFailedError,
+  dbInitRunnerFailureError,
+} from '../../src/utils/db-init-failure';
+import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
@@ -20,6 +31,13 @@ function refusedDefault(): Error {
     meta: { reason: 'default-not-canonical', column: 'at' },
   });
 }
+
+const MISSING_COLUMN: SchemaDiffIssue = {
+  path: ['public', 'event', 'id'],
+  expected: { id: 'id', nodeKind: 'sql-column', isEqualTo: () => false, children: () => [] },
+};
+
+const WARNING = { kind: 'suppressed', summary: 'control policy suppressed: table "auth.x"' };
 
 const mocks = {
   connect: vi.fn(),
@@ -395,15 +413,7 @@ describe('db init', () => {
   });
 
   it('maps a planning failure to its migration code', async () => {
-    mocks.dbInit.mockResolvedValue(
-      notOk({
-        code: 'PLANNING_FAILED',
-        summary: 'planning failed',
-        why: undefined,
-        conflicts: [],
-        meta: undefined,
-      }),
-    );
+    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError([])));
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
       cwd: projectDir,
@@ -418,20 +428,16 @@ describe('db init', () => {
 
   it('points a planning failure the additive policy caused at db update', async () => {
     mocks.dbInit.mockResolvedValue(
-      notOk({
-        code: 'PLANNING_FAILED',
-        summary: 'planning failed',
-        why: undefined,
-        conflicts: [
+      notOk(
+        dbInitPlanningFailedError([
           {
             kind: 'policy-violation',
             summary: 'destructive operation disallowed: Add validator on events',
             why: "Policy does not allow 'destructive' operations",
             refusedOperationClass: 'destructive',
           },
-        ],
-        meta: undefined,
-      }),
+        ]),
+      ),
     );
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
@@ -466,15 +472,7 @@ describe('db init', () => {
   }
 
   function refusePlanning(...conflicts: ReturnType<typeof refusedClass>[]) {
-    mocks.dbInit.mockResolvedValue(
-      notOk({
-        code: 'PLANNING_FAILED',
-        summary: 'planning failed',
-        why: undefined,
-        conflicts,
-        meta: undefined,
-      }),
-    );
+    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError(conflicts)));
   }
 
   it('points a widening refusal at db update without mentioning confirmation', async () => {
@@ -540,28 +538,127 @@ describe('db init', () => {
     });
   });
 
-  it('maps an origin mismatch to the marker code, naming both hashes', async () => {
+  function failWithPlannerWarning() {
+    mocks.dbInit.mockImplementation(async (options: Parameters<ControlClient['dbInit']>[0]) => {
+      options.onPlannerWarnings?.([WARNING]);
+      return notOk(
+        dbInitRunnerFailureError(
+          migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
+          {},
+          { cwd: projectDir, configPath: undefined, dbGiven: false },
+        ),
+      );
+    });
+  }
+
+  function succeedWithPlannerWarning() {
+    mocks.dbInit.mockImplementation(async (options: Parameters<ControlClient['dbInit']>[0]) => {
+      options.onPlannerWarnings?.([WARNING]);
+      return ok(applySuccess());
+    });
+  }
+
+  it('shows the planner`s warnings when the apply succeeds', async () => {
+    succeedWithPlannerWarning();
+
+    const run = await harness(ormConfig()).run(['db', 'init'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const blocks = run.presented?.presentation.human ?? [];
+
+    expect(run.exitCode).toBe(0);
+    expect(blocks).toContainEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
+    expect(blocks).toContainEqual({ kind: 'list', items: [WARNING.summary] });
+  });
+
+  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
+    succeedWithPlannerWarning();
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+    const frames = stdoutFrames(run.stdout);
+
+    expect({
+      exitCode: run.exitCode,
+      messages: frames.filter((frame) => frame['kind'] === 'message'),
+      warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
+        .warnings,
+    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+  });
+
+  it('shows the planner`s warnings when the apply fails', async () => {
+    failWithPlannerWarning();
+
+    const run = await harness(ormConfig()).run(['db', 'init'], {
+      cwd: projectDir,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(run.events).toContainEqual({ kind: 'message', severity: 'warn', text: WARNING.summary });
+    expect(stripAnsi(run.stderr)).toContain(WARNING.summary);
+  });
+
+  it('writes the planner`s warnings of a failed apply as warn frames before the --json error', async () => {
+    failWithPlannerWarning();
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+    const frames = stdoutFrames(run.stdout);
+
+    expect({
+      exitCode: run.exitCode,
+      kinds: frames.map((frame) => frame['kind']),
+      first: frames[0],
+    }).toEqual({
+      exitCode: 2,
+      kinds: ['message', 'result'],
+      first: expect.objectContaining({ kind: 'message', severity: 'warn', text: WARNING.summary }),
+    });
+  });
+
+  it('reports a runner failure with the runner code and meta, and the advice', async () => {
+    const runnerFailure = migrationRunnerFailure(
+      'MIGRATION.SCHEMA_VERIFY_FAILED',
+      'Database schema does not satisfy contract',
+      {
+        why: schemaCheckWhy([MISSING_COLUMN]),
+        meta: { schemaIssues: [MISSING_COLUMN], failingSpace: 'app' },
+      },
+    );
     mocks.dbInit.mockResolvedValue(
-      notOk({
-        code: 'MIGRATION.MARKER_ORIGIN_MISMATCH',
-        summary: 'marker mismatch',
-        why: undefined,
-        conflicts: undefined,
-        meta: undefined,
-        marker: { storageHash: 'was-here' },
-        destination: { storageHash: 'wanted' },
-      }),
+      notOk(
+        dbInitRunnerFailureError(runnerFailure, runnerFailureFacts(runnerFailure, []), {
+          cwd: projectDir,
+          configPath: undefined,
+          dbGiven: false,
+        }),
+      ),
     );
 
-    const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
-      cwd: projectDir,
-    });
-    const settled = JSON.stringify(run.json.at(-1));
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
 
     expect(run.exitCode).toBe(2);
-    expect(settled).toContain('MIGRATION.MARKER_ORIGIN_MISMATCH');
-    expect(settled).toContain('was-here');
-    expect(settled).toContain('wanted');
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        summary: 'Database schema does not satisfy contract',
+        why: 'The schema check after apply found: missing: public/event/id.',
+        nextActions: [
+          {
+            kind: 'edit-file',
+            label:
+              'Change the contract source to resolve the issues listed, re-run `prisma-test contract emit`, then re-run `prisma-test db init`',
+          },
+        ],
+        meta: { schemaIssues: [{ path: ['public', 'event', 'id'] }], failingSpace: 'app' },
+      },
+    });
+    expect(stdoutErrorMeta(run.stdout)).toEqual(JSON.parse(JSON.stringify(runnerFailure.meta)));
+    expect(mocks.dbInit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+      }),
+    );
   });
 
   describe('a close that fails on the way out', () => {

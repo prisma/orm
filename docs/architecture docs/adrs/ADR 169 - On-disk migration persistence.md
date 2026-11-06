@@ -45,7 +45,7 @@ Key tensions:
 
 `migration plan` reuses the existing `PostgresMigrationPlanner` (same planner `db init` uses). Instead of introspecting a live database for the "from" schema IR, it converts the "from" contract to a `SqlSchemaIR` via `contractToSchemaIR(contract, options) → SqlSchemaIR`.
 
-The conversion is intentionally lossy in the contract→schemaIR direction (drops `codecId`, `typeParams`, `typeRef`), but the planner only needs structural information (native types, nullability, defaults, constraints) to produce correct diffs. No second diff engine is required.
+The conversion is intentionally lossy in the contract→schemaIR direction (drops `codecId` and `typeParams`), but the planner only needs structural information (native types, nullability, defaults, constraints) to produce correct diffs. No second diff engine is required.
 
 The `contractToSchemaIR` function lives in the SQL family tooling layer (`@internal/family-sql`). The CLI accesses it via `TargetMigrationsCapability.contractToSchema()`, respecting the layering boundary.
 

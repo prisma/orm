@@ -112,10 +112,9 @@ export interface MigrationResult {
 }
 
 function formatFailure(f: MigrationRunnerFailure): string {
-  const parts = [`[${f.code}] ${f.summary}`];
+  const parts = [`[${f.code}] ${f.message}`];
   if (f.why) parts.push(`  why: ${f.why}`);
-  const issues = f.meta?.['issues'];
-  if (Array.isArray(issues)) for (const i of issues) parts.push(`  - ${JSON.stringify(i)}`);
+  for (const i of f.meta.schemaIssues ?? []) parts.push(`  - ${JSON.stringify(i)}`);
   return parts.join('\n');
 }
 

@@ -1,6 +1,6 @@
 import { int4Column, rawColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, rel, sql } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -10,13 +10,13 @@ import { timeouts, withPushedContractRuntime } from './integration-helpers';
 const ShelfBase = model('Shelf', {
   fields: {
     id: field.column(int4Column).id(),
-    search: field.column(rawColumn('tsvector')),
-    area: field.column(rawColumn('circle')),
-    size: field.column(rawColumn('integer')),
-    open: field.column(rawColumn('boolean')),
-    net: field.column(rawColumn('cidr')).optional(),
-    nets: field.column(rawColumn('cidr')).many(),
-    codes: field.column(rawColumn('character varying(3)')).many(),
+    search: field.column(rawColumn(sql`tsvector`)),
+    area: field.column(rawColumn(sql`circle`)),
+    size: field.column(rawColumn(sql`integer`)),
+    open: field.column(rawColumn(sql`boolean`)),
+    net: field.column(rawColumn(sql`cidr`)).optional(),
+    nets: field.column(rawColumn(sql`cidr`)).many(),
+    codes: field.column(rawColumn(sql`character varying(3)`)).many(),
   },
 }).sql({ table: 'raw_shelves' });
 
@@ -24,7 +24,7 @@ const Book = model('Book', {
   fields: {
     id: field.column(int4Column).id(),
     shelfId: field.column(int4Column).column('shelf_id'),
-    search: field.column(rawColumn('tsvector')),
+    search: field.column(rawColumn(sql`tsvector`)),
   },
   relations: { shelf: rel.belongsTo(ShelfBase, { from: 'shelfId', to: 'id' }) },
 }).sql({ table: 'raw_books' });

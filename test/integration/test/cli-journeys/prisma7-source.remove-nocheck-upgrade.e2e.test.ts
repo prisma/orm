@@ -1,10 +1,8 @@
 /**
- * The upgrade of a Prisma 7 project whose database was signed under the previous release, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The test writes that stored contract and signs the database with its hash, then follows the app upgrade fragment `upgrade-instructions/pending/remove-nocheck/app/instructions.md` step by step: run the script, `prisma db sign --db "$DATABASE_URL"`, `prisma contract emit`. `db verify` then passes with no migration.
+ * The upgrade of a Prisma 7 project whose database was signed under the previous release, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The test writes that stored contract and signs the database with its hash, then follows the app upgrade guide `skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md` step by step: run the script, `prisma db sign --db "$DATABASE_URL"`, `prisma contract emit`. `db verify` then passes with no migration.
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { computeStorageHash } from '@prisma/orm-postgres/contract/hashing';
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
@@ -19,6 +17,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresStorageHash } from '../utils/journey-workspace-helpers';
 
 const PRISMA7_FIXTURES = join(__dirname, '../fixtures/prisma7-source');
 const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
@@ -52,11 +51,10 @@ function previousReleaseContract(json: JsonRecord): {
         if (typeof field['many'] === 'object' && field['many'] !== null)
           field['many'] = { elementNullable: false };
   const { storageHash: _new, ...withoutHash } = storage;
-  const hash = computeStorageHash({
+  const hash = postgresStorageHash({
     target: String(contract['target']),
     targetFamily: String(contract['targetFamily']),
     storage: withoutHash,
-    ...new PostgresContractSerializer().hashCanonicalizationHooks,
   });
   storage['storageHash'] = hash;
   return { json: contract, hash };

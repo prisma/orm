@@ -30,16 +30,16 @@ const type = {
   DateTime: scalar('mongo/date@1', 'Date'),
 };
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map(
+const scalarTypes: ReadonlyMap<string, string> = new Map(
   Object.entries(type).map(([name, descriptor]) => [name, descriptor.output.codecId]),
 );
 
-const authoringContributions = { type, field: {} } as unknown as AuthoringContributions;
+const authoringContributions = { type } as unknown as AuthoringContributions;
 
 function interpret(schema: string) {
   const warnings: ContractSourceDiagnostic[] = [];
   const result = interpretMongoContract(schema, {
-    scalarTypeCodecIds,
+    scalarTypes,
     authoringContributions,
     codecLookup: mongoCodecLookup,
     dataTypes: mongoDataTypeSupport,
@@ -87,7 +87,7 @@ describe('deprecated Mongo PSL scalar names', () => {
 
   it('accepts a deprecated name when no warning sink is supplied', () => {
     const result = interpretMongoContract(schemaWith('Int'), {
-      scalarTypeCodecIds,
+      scalarTypes,
       authoringContributions,
       codecLookup: mongoCodecLookup,
       dataTypes: mongoDataTypeSupport,

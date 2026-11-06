@@ -143,7 +143,7 @@ describe('a column that stores nativeType beside the current list form', () => {
     const upgraded = JSON.parse(readFileSync(path, 'utf8'));
     expect({ status: run.status, storageHash: upgraded.storage.storageHash }).toEqual({
       status: 0,
-      storageHash: 'd62b8870dbdf094852fc52602a70a3954108beda99942e46bfab2a30ce0216bc',
+      storageHash: '94dc16e11b8812291239d3628e8bd2e0017dbcb8e2ad0b68594640b903175fb9',
     });
   });
 });
