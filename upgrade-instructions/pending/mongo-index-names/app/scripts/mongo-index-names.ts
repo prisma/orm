@@ -20,11 +20,15 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function walk(dir: string, found: string[]): void {
+function walk(dir: string, found: string[], links: string[]): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (!SKIPPED_DIRECTORIES.has(entry.name)) walk(path, found);
+      if (!SKIPPED_DIRECTORIES.has(entry.name)) walk(path, found, links);
+      continue;
+    }
+    if (entry.isSymbolicLink()) {
+      links.push(path);
       continue;
     }
     if (!entry.isFile()) continue;
@@ -216,7 +220,8 @@ function keysText(index: JsonObject): string {
 function main(): number {
   const root = resolve(process.argv[2] ?? '.');
   const files: string[] = [];
-  walk(root, files);
+  const links: string[] = [];
+  walk(root, files, links);
   const contracts: {
     readonly path: string;
     readonly original: string;
@@ -255,7 +260,10 @@ function main(): number {
 
   const changed: string[] = [];
   const notes: string[] = [];
-  const warnings: string[] = [];
+  const warnings: string[] = links.map(
+    (link) =>
+      `${relative(root, link)}: is a symbolic link, so the script did not read it; if it holds migration snapshots, run the script on the folder it points to.`,
+  );
   for (const { path, original, contract } of contracts) {
     const project = projectNames(isSnapshot(path) ? migrationsParentOf(path) : dirname(path));
     const nameFor: NameFor = (collection, index) => {

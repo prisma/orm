@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
@@ -128,6 +136,25 @@ describe('a monorepo project whose contract was never re-emitted, beside a proje
         stderr: '',
       },
       tree: { ...readTree(join(fixtures, 'monorepo', 'after')), ...packageJsonFiles },
+    });
+  });
+});
+
+describe('a project whose migrations folder is a symbolic link', () => {
+  const root = copyFixture('after');
+  const target = copyFixture('before');
+  symlinkSync(join(target, 'migrations'), join(root, 'linked-migrations'));
+  const result = run(root);
+
+  it('names the link, exits 1, and leaves the folder it points to alone', () => {
+    expect({ result, target: readTree(target) }).toEqual({
+      result: {
+        status: 1,
+        stdout: 'Nothing to change.\n',
+        stderr:
+          'linked-migrations: is a symbolic link, so the script did not read it; if it holds migration snapshots, run the script on the folder it points to.\n',
+      },
+      target: readTree(join(fixtures, 'project', 'before')),
     });
   });
 });
