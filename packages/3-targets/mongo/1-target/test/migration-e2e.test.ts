@@ -311,6 +311,43 @@ describe('migration file E2E', () => {
       expect(ops[0].execute[0].command.kind).toBe('collMod');
     });
 
+    it('reproduces a collMod that checks the documents', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CollModCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const call = new CollModCall(
+        'users',
+        {
+          validator: { $jsonSchema: { required: ['email'] } },
+          validationLevel: 'strict',
+          validationAction: 'error',
+        },
+        {
+          id: 'validator.users.update',
+          label: 'Update validator on users',
+          operationClass: 'widening',
+          checkDocuments: true,
+        },
+      );
+
+      const tsSource = renderCallsToTypeScript([call], defaultMeta);
+      const resolvedSource = tsSource.replace(
+        "'@internal/target-mongo/migration'",
+        `'${factoryExport}'`,
+      );
+      await writeFile(join(tmpDir, 'migration.ts'), resolvedSource);
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+
+      const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+      expect(ops).toEqual(JSON.parse(serializeMongoOps([call.toOp()])));
+      expect(ops[0].precheck.at(-1).source.command.pipeline[0]).toEqual({
+        $match: { $nor: [{ $jsonSchema: { required: ['email'] } }] },
+      });
+    });
+
     it('reproduces the renameCollection operation in ops.json', async () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { RenameCollectionCall } = await import('../src/core/migrations/op-factory-call');

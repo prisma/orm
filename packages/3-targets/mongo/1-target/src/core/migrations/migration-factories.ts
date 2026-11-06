@@ -20,6 +20,7 @@ import {
   MongoAndExpr,
   MongoExistsExpr,
   MongoFieldFilter,
+  type MongoMigrationCheck,
   type MongoMigrationPlanOperation,
   MongoNotExpr,
   RenameCollectionCommand,
@@ -590,24 +591,50 @@ export function renameCollection(from: string, to: string): MongoMigrationPlanOp
 export function setValidation(
   collectionName: string,
   schema: Record<string, unknown>,
-  options?: { validationLevel?: 'strict' | 'moderate'; validationAction?: 'error' | 'warn' },
+  options?: {
+    validationLevel?: 'strict' | 'moderate';
+    validationAction?: 'error' | 'warn';
+    /** Whether to check first that every document fits the new validator, and stop if one does not. */
+    checkDocuments?: boolean;
+  },
 ): MongoMigrationPlanOperation {
+  const validator: CollModOptions = {
+    validator: { $jsonSchema: schema },
+    ...ifDefined('validationLevel', options?.validationLevel),
+    ...ifDefined('validationAction', options?.validationAction),
+  };
+  const checks =
+    options?.checkDocuments === true
+      ? collMod(collectionName, validator, { checkDocuments: true })
+      : { precheck: [], postcheck: [] };
   return {
     id: `collection.${collectionName}.setValidation`,
     label: `Set validation on ${collectionName}`,
     operationClass: 'widening',
-    precheck: [],
+    precheck: checks.precheck,
     execute: [
       {
         description: `set validation on ${collectionName}`,
-        command: new CollModCommand(collectionName, {
-          validator: { $jsonSchema: schema },
-          ...ifDefined('validationLevel', options?.validationLevel),
-          ...ifDefined('validationAction', options?.validationAction),
-        }),
+        command: new CollModCommand(collectionName, validator),
       },
     ],
-    postcheck: [],
+    postcheck: checks.postcheck,
+  };
+}
+
+/** The check that no document of the collection fails `validator`. */
+function documentsFitValidator(
+  collectionName: string,
+  validator: Readonly<Record<string, unknown>>,
+): MongoMigrationCheck {
+  return {
+    description: `every document in ${collectionName} fits the new validator`,
+    source: rewritePlan(
+      collectionName,
+      new RawAggregateCommand(collectionName, [{ $match: { $nor: [validator] } }, { $limit: 1 }]),
+    ),
+    filter: MATCH_ALL_FILTER,
+    expect: 'notExists',
   };
 }
 
@@ -647,6 +674,9 @@ export function collMod(
               expect: 'exists' as const,
               object: `collection "${collectionName}"`,
             },
+            ...(meta?.checkDocuments === true
+              ? [documentsFitValidator(collectionName, options.validator)]
+              : []),
           ]
         : [],
     execute: [

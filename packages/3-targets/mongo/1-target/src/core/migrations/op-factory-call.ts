@@ -53,6 +53,8 @@ export interface CollModMeta {
   readonly id?: string;
   readonly label?: string;
   readonly operationClass?: MigrationOperationClass;
+  /** Whether the operation first checks that every document fits the new validator, and stops if one does not. */
+  readonly checkDocuments?: boolean;
 }
 
 /**

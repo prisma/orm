@@ -117,6 +117,25 @@ describe('Mongo call classes', () => {
       );
     });
 
+    it('CollModCall carries checkDocuments into the operation and the rendered call', () => {
+      const meta = {
+        id: 'validator.users.update',
+        label: 'Update validator on users',
+        operationClass: 'widening',
+        checkDocuments: true,
+      } as const;
+      const call = new CollModCall(
+        'users',
+        { validator: { $jsonSchema: { type: 'object' } } },
+        meta,
+      );
+
+      expect(call.toOp()).toEqual(
+        collMod('users', { validator: { $jsonSchema: { type: 'object' } } }, meta),
+      );
+      expect(call.renderTypeScript()).toContain('checkDocuments: true');
+    });
+
     it('CollModCall honors caller-supplied meta.label and meta.operationClass and passes meta through toOp', () => {
       const call = new CollModCall(
         'users',

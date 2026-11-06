@@ -16,6 +16,7 @@ import {
   MongoNotExpr,
   RenameCollectionCommand,
 } from '@internal/mongo-query-ast/control';
+import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { MongoSchemaCollection, MongoSchemaCollectionOptions } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import {
@@ -359,6 +360,80 @@ describe('setValidation', () => {
     expect(json.execute[0].command.validator).toEqual({
       $jsonSchema: { required: ['email'] },
     });
+  });
+});
+
+describe('setValidation, checking the documents first', () => {
+  const schema = { bsonType: 'object', required: ['email'] };
+  const documentCheck = {
+    description: 'every document in users fits the new validator',
+    source: {
+      collection: 'users',
+      command: new RawAggregateCommand('users', [
+        { $match: { $nor: [{ $jsonSchema: schema }] } },
+        { $limit: 1 },
+      ]),
+      meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
+    },
+    filter: MongoExistsExpr.exists('_id'),
+    expect: 'notExists',
+  };
+
+  it('is the operation of today when checkDocuments is false or left out', () => {
+    const today = setValidation('users', schema, { validationLevel: 'strict' });
+
+    expect(
+      setValidation('users', schema, { validationLevel: 'strict', checkDocuments: false }),
+    ).toEqual(today);
+    expect(today.precheck).toEqual([]);
+    expect(today.postcheck).toEqual([]);
+  });
+
+  it('checks before it runs that no document fails the new validator', () => {
+    const op = setValidation('users', schema, { checkDocuments: true });
+
+    expect(op).toMatchObject({
+      id: 'collection.users.setValidation',
+      label: 'Set validation on users',
+      operationClass: 'widening',
+    });
+    expect(op.precheck.at(-1)).toEqual(documentCheck);
+    expect(op.execute).toEqual(setValidation('users', schema).execute);
+  });
+
+  it('is skipped on a re-run once the validator is set', () => {
+    const op = setValidation('users', schema, {
+      validationLevel: 'strict',
+      validationAction: 'error',
+      checkDocuments: true,
+    });
+
+    expect(op.postcheck).toEqual(
+      collMod('users', {
+        validator: { $jsonSchema: schema },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      }).postcheck,
+    );
+  });
+
+  it('collMod checks the documents when its meta asks', () => {
+    const op = collMod(
+      'users',
+      { validator: { $jsonSchema: schema } },
+      { id: 'validator.users.update', checkDocuments: true },
+    );
+
+    expect(op.precheck).toEqual([
+      ...collMod('users', { validator: { $jsonSchema: schema } }).precheck,
+      documentCheck,
+    ]);
+  });
+
+  it('collMod without checkDocuments is the operation of today', () => {
+    expect(
+      collMod('users', { validator: { $jsonSchema: schema } }, { checkDocuments: false }),
+    ).toEqual(collMod('users', { validator: { $jsonSchema: schema } }, {}));
   });
 });
 
