@@ -44,8 +44,10 @@ function database(name) {
   );
 }
 
-function reasons() {
-  return findLayeringViolations(base).map(({ reason, where }) => `${reason} (${where})`);
+function reasons(databaseExtends) {
+  return findLayeringViolations(base, databaseExtends).map(
+    ({ reason, where }) => `${reason} (${where})`,
+  );
 }
 
 beforeEach(() => {
@@ -100,6 +102,44 @@ describe('findLayeringViolations', () => {
     );
     assert.deepEqual(reasons(), [
       'beta/3-driver depends on alpha/1-target, a package of another database (packages/3-targets/beta/3-driver/src/driver.ts)',
+    ]);
+  });
+
+  test('accepts a database that extends another depending on its packages numbered no higher', () => {
+    pkg('beta/1-target', {
+      name: '@internal/target-beta',
+      dependencies: { '@internal/target-alpha': 'workspace:*' },
+    });
+    pkg(
+      'beta/2-adapter',
+      { name: '@internal/adapter-beta' },
+      {
+        'src/adapter.ts':
+          "import { a } from '@internal/adapter-alpha/control';\nimport { t } from '@internal/target-alpha/pack';",
+      },
+    );
+    assert.deepEqual(reasons({ beta: 'alpha' }), []);
+  });
+
+  test('rejects a package of an extending database depending on a higher-numbered package of the database it extends', () => {
+    pkg(
+      'beta/1-target',
+      { name: '@internal/target-beta' },
+      { 'src/target.ts': "import { a } from '@internal/adapter-alpha/control';" },
+    );
+    assert.deepEqual(reasons({ beta: 'alpha' }), [
+      'beta/1-target depends on alpha/2-adapter, which is numbered higher in the database it extends (packages/3-targets/beta/1-target/src/target.ts)',
+    ]);
+  });
+
+  test('rejects the extended database depending on the database that extends it', () => {
+    pkg(
+      'alpha/2-adapter',
+      { name: '@internal/adapter-alpha' },
+      { 'src/adapter.ts': "import { t } from '@internal/target-beta/pack';" },
+    );
+    assert.deepEqual(reasons({ beta: 'alpha' }), [
+      'alpha/2-adapter depends on beta/1-target, a package of another database (packages/3-targets/alpha/2-adapter/src/adapter.ts)',
     ]);
   });
 

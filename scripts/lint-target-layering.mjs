@@ -12,6 +12,8 @@ const PRODUCTION_DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies', 'optio
 const MODULE_SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])([^'"\n]+)\1/g;
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const DECLARATION_FILE = /\.d\.[mc]?ts$/;
+/** Maps each database that extends another to the database it extends. Its packages may depend on that database's packages numbered no higher than their own. */
+export const DATABASE_EXTENDS = { mariadb: 'mysql' };
 
 const repoRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
@@ -88,7 +90,12 @@ export function siblingDependencies(baseDir = repoRoot) {
   );
 }
 
-function violationReason({ from, to }) {
+function violationReason({ from, to }, databaseExtends) {
+  if (from.database !== to.database && databaseExtends[from.database] === to.database) {
+    return to.number > from.number
+      ? `${from.database}/${from.folder} depends on ${to.database}/${to.folder}, which is numbered higher in the database it extends`
+      : undefined;
+  }
   if (from.database !== to.database)
     return `${from.database}/${from.folder} depends on ${to.database}/${to.folder}, a package of another database`;
   if (to.number >= from.number)
@@ -96,9 +103,9 @@ function violationReason({ from, to }) {
   return undefined;
 }
 
-export function findLayeringViolations(baseDir = repoRoot) {
+export function findLayeringViolations(baseDir = repoRoot, databaseExtends = DATABASE_EXTENDS) {
   return siblingDependencies(baseDir).flatMap((edge) => {
-    const reason = violationReason(edge);
+    const reason = violationReason(edge, databaseExtends);
     return reason === undefined ? [] : [{ ...edge, reason }];
   });
 }
@@ -107,7 +114,7 @@ export function main(baseDir = repoRoot) {
   const violations = findLayeringViolations(baseDir);
   if (violations.length === 0) {
     console.log(
-      `Every package under ${TARGETS_ROOT}/<database>/ depends only on lower-numbered packages of its own database.`,
+      `Every package under ${TARGETS_ROOT}/<database>/ depends only on lower-numbered packages of its own database, and on packages of the database it extends numbered no higher.`,
     );
     return 0;
   }
@@ -115,7 +122,7 @@ export function main(baseDir = repoRoot) {
   for (const { reason, specifier, where } of violations)
     console.error(`  ${reason}: ${specifier} (${where})`);
   console.error(
-    `\nA package under ${TARGETS_ROOT}/<database>/ may depend only on packages of the same database with a lower number, so the target never reaches its adapter or driver, and no database reaches another.`,
+    `\nA package under ${TARGETS_ROOT}/<database>/ may depend only on packages of the same database with a lower number, so the target never reaches its adapter or driver, and no database reaches another. A database that extends another, listed in DATABASE_EXTENDS with the database it extends, may also depend on that database's packages numbered no higher than its own.`,
   );
   return 1;
 }

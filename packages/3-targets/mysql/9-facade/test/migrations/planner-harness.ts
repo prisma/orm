@@ -26,6 +26,13 @@ export function createAdapter(): SqlControlAdapter<'mysql'> {
   return mysqlAdapter.create(controlStack);
 }
 
+export function createPlanner() {
+  return createMysqlMigrationPlanner(createAdapter(), {
+    targetId: mysql.targetId,
+    migrationModule: '@internal/mysql/migration',
+  });
+}
+
 export const ADDITIVE: MigrationOperationPolicy = { allowedOperationClasses: ['additive'] };
 export const EVERY_CLASS: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
@@ -37,7 +44,7 @@ export function planFrom(
   contract: Contract<SqlStorage>,
   policy: MigrationOperationPolicy = EVERY_CLASS,
 ): MysqlPlanResult {
-  return createMysqlMigrationPlanner(createAdapter()).plan({
+  return createPlanner().plan({
     contract,
     schema: mysql.migrations.contractToSchema(from, frameworkComponents),
     policy,

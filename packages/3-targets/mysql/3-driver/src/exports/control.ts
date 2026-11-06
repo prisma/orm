@@ -1,1 +1,5 @@
-export { default, MysqlControlDriver } from '../core/migrations/control-driver';
+export {
+  createMysqlControlDriverDescriptor,
+  default,
+  MysqlControlDriver,
+} from '../core/migrations/control-driver';

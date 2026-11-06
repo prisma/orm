@@ -9,7 +9,7 @@ import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { type Connection, createConnection } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
 import { mysqlConnectionOptions } from '../connection-options';
-import { mysqlDriverDescriptorMeta } from '../descriptor-meta';
+import { mysqlDriverDescriptorMetaFor } from '../descriptor-meta';
 import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
 import { applySessionSettings, sessionSettingsStatement } from '../session-settings';
 import { statementFor } from '../statement';
@@ -17,13 +17,17 @@ import { statementFor } from '../statement';
 /**
  * A MySQL connection for the control plane. It runs every statement as the runtime driver does, a user's `rawSql` migration step included: in one round trip over the text protocol, the package writing its values into it, one at a time in the order sent, under the runtime driver's per-client lock.
  */
-export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
+export class MysqlControlDriver<TargetId extends string = 'mysql'>
+  implements SqlControlDriverInstance<TargetId>
+{
   readonly familyId = 'sql' as const;
-  readonly targetId = 'mysql' as const;
 
   #lost: Error | undefined;
 
-  constructor(private readonly connection: Connection) {
+  constructor(
+    private readonly connection: Connection,
+    readonly targetId: TargetId,
+  ) {
     connection.on('error', (error: Error) => {
       this.#lost = error;
     });
@@ -68,34 +72,47 @@ export class MysqlControlDriver implements SqlControlDriverInstance<'mysql'> {
   }
 }
 
-const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver> = {
-  ...mysqlDriverDescriptorMeta,
-  async create(url: string, options?: ControlDriverConnectOptions): Promise<MysqlControlDriver> {
-    const connectionOptions = mysqlConnectionOptions(url, {
-      connectTimeoutMs: options?.connectTimeoutMs,
-    });
-    const settings = sessionSettingsStatement(options?.sessionSettings ?? {});
-    try {
-      const connection = await createConnection(connectionOptions);
-      if (settings !== undefined) {
-        await applySessionSettings(connection, settings).catch(async (error: unknown) => {
-          await connection.end().catch(() => {});
-          throw error;
-        });
-      }
-      return new MysqlControlDriver(connection);
-    } catch (error) {
-      const normalized = normalizeMysqlError(error);
-      throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
-        why: normalized instanceof Error ? normalized.message : String(normalized),
-        fix:
-          connectionFix(error) ??
-          'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
-        meta: { ...redactDatabaseUrl(url) },
-        cause: error,
+/** The control driver descriptor of MySQL, or of a target that extends it, whose drivers carry `targetId`. */
+export function createMysqlControlDriverDescriptor<TargetId extends string>(
+  targetId: TargetId,
+): ControlDriverDescriptor<'sql', TargetId, MysqlControlDriver<TargetId>> {
+  return {
+    ...mysqlDriverDescriptorMetaFor(targetId),
+    create: (url, options) => connectControlDriver(url, options, targetId),
+  };
+}
+
+async function connectControlDriver<TargetId extends string>(
+  url: string,
+  options: ControlDriverConnectOptions | undefined,
+  targetId: TargetId,
+): Promise<MysqlControlDriver<TargetId>> {
+  const connectionOptions = mysqlConnectionOptions(url, {
+    connectTimeoutMs: options?.connectTimeoutMs,
+  });
+  const settings = sessionSettingsStatement(options?.sessionSettings ?? {});
+  try {
+    const connection = await createConnection(connectionOptions);
+    if (settings !== undefined) {
+      await applySessionSettings(connection, settings).catch(async (error: unknown) => {
+        await connection.end().catch(() => {});
+        throw error;
       });
     }
-  },
-};
+    return new MysqlControlDriver(connection, targetId);
+  } catch (error) {
+    const normalized = normalizeMysqlError(error);
+    throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
+      why: normalized instanceof Error ? normalized.message : String(normalized),
+      fix:
+        connectionFix(error) ??
+        'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
+      meta: { ...redactDatabaseUrl(url) },
+      cause: error,
+    });
+  }
+}
+
+const mysqlDriverDescriptor = createMysqlControlDriverDescriptor('mysql');
 
 export default mysqlDriverDescriptor;

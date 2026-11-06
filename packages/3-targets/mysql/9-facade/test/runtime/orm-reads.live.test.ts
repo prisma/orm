@@ -1,6 +1,8 @@
-import { MysqlControlAdapter } from '@internal/adapter-mysql/control';
-import { assembleMysqlCodecRegistry } from '@internal/target-mysql/codecs';
-import { mysqlDataTypes } from '@internal/target-mysql/data-types';
+import mysqlAdapter from '@internal/adapter-mysql/control';
+import mysqlDriver from '@internal/driver-mysql/control';
+import sql from '@internal/family-sql/control';
+import { createControlStack } from '@internal/framework-components/control';
+import mysqlTarget from '@internal/target-mysql/control';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
@@ -169,7 +171,14 @@ describe('MySQL reads through the ORM and the SQL builder', {
       };
       const missing = await warnings();
 
-      const adapter = new MysqlControlAdapter(assembleMysqlCodecRegistry({}, []), mysqlDataTypes);
+      const adapter = mysqlAdapter.create(
+        createControlStack({
+          family: sql,
+          target: mysqlTarget,
+          adapter: mysqlAdapter,
+          driver: mysqlDriver,
+        }),
+      );
       for (const node of adapter.bootstrapControlTableQueries()) {
         const { sql, params } = await adapter.lowerToExecuteRequest(node);
         await driver.query(sql, params);

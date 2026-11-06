@@ -14,7 +14,7 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 
 ## Responsibilities
 
-- **`defineConfig`** (`./config`): a MySQL project's configuration. A `.prisma` contract types a text `enum` block as a native MySQL enum (`mysql/enum@1`) and an integer one as `int`.
+- **`defineConfig`** (`./config`): a MySQL project's configuration. A `.prisma` contract types a text `enum` block as a native MySQL enum (`mysql/enum@1`) and an integer one as `int`. `createMysqlDefineConfig` builds the `.prisma` part of that function from a target's pack, control target, adapter and driver, so a target that extends MySQL, such as MariaDB, gets its own `defineConfig` without a copy. It refuses any other contract path with `CONFIG.VALIDATION_FAILED`; only MySQL's `defineConfig` also reads a TypeScript contract. It is for the facades of databases that extend MySQL, not for applications, which use `defineConfig`.
 - **`defineContract`** (`./contract-builder`): the TypeScript contract builder bound to the MySQL packs.
 - **`createMysqlControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MySQL `migration.ts` imports: `Migration`, `MigrationCLI` and the column and constraint helpers.
@@ -42,4 +42,4 @@ The ORM's writes also need these:
 
 ## Testing
 
-`test/fixtures/` holds the project's example contract in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need `MYSQL_URL` and are skipped without it. `docker compose up mysql` starts MySQL 8.4 for them: `MYSQL_URL='mysql://root:root@127.0.0.1:3307/mysql?allowPublicKeyRetrieval=true' pnpm test`. The server has no TLS, so the URL lets the driver fetch its public key to sign in with `caching_sha2_password`.
+`test/fixtures/` holds the project's example contract in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need `MYSQL_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it. `docker compose up mysql` starts MySQL 8.4 for them: `MYSQL_URL='mysql://root:root@127.0.0.1:3307/mysql?allowPublicKeyRetrieval=true' pnpm test`. The server has no TLS, so the URL lets the driver fetch its public key to sign in with `caching_sha2_password`.

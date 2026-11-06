@@ -6,7 +6,7 @@ import { LEDGER_TABLE_NAME, MARKER_TABLE_NAME } from '@internal/target-mysql/con
 import { quoteIdentifier } from '@internal/target-mysql/sql-utils';
 import { parseJsonColumn, tableExists } from '../marker-read';
 
-type Driver = SqlControlDriverInstance<'mysql'>;
+type Driver = SqlControlDriverInstance<string>;
 
 const LEDGER_COLUMNS =
   'space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations, created_at';
@@ -60,15 +60,35 @@ export interface MarkerDestination {
   readonly invariants?: readonly string[];
 }
 
-const MARKER_INSERT = `INSERT INTO ${quoteIdentifier(MARKER_TABLE_NAME)} (space, core_hash, profile_hash, contract_json, canonical_version, updated_at, app_tag, meta, invariants) VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP(3), NULL, '{}', ?)`;
+/** The SQL a marker column is written with, or the value bound for it from the destination. */
+type MarkerValue = string | ((destination: MarkerDestination) => unknown);
 
-function markerInsertParams(space: string, destination: MarkerDestination): readonly unknown[] {
-  return [
-    space,
-    destination.storageHash,
-    destination.profileHash,
-    JSON.stringify(destination.invariants ?? []),
-  ];
+/** Every column of the marker row except its key, `space`, with what both the insert and the upsert's update write to it. */
+const MARKER_COLUMNS: readonly (readonly [column: string, value: MarkerValue])[] = [
+  ['core_hash', (destination) => destination.storageHash],
+  ['profile_hash', (destination) => destination.profileHash],
+  ['contract_json', 'NULL'],
+  ['canonical_version', 'NULL'],
+  ['updated_at', 'CURRENT_TIMESTAMP(3)'],
+  ['app_tag', 'NULL'],
+  ['meta', "'{}'"],
+  ['invariants', (destination) => JSON.stringify(destination.invariants ?? [])],
+];
+
+function markerValueSql(value: MarkerValue): string {
+  return typeof value === 'string' ? value : '?';
+}
+
+const MARKER_INSERT = `INSERT INTO ${quoteIdentifier(MARKER_TABLE_NAME)} (space, ${MARKER_COLUMNS.map(([column]) => column).join(', ')}) VALUES (?, ${MARKER_COLUMNS.map(([, value]) => markerValueSql(value)).join(', ')})`;
+
+const MARKER_UPDATE = MARKER_COLUMNS.map(
+  ([column, value]) => `${column} = ${markerValueSql(value)}`,
+).join(', ');
+
+function markerColumnParams(destination: MarkerDestination): readonly unknown[] {
+  return MARKER_COLUMNS.flatMap(([, value]) =>
+    typeof value === 'string' ? [] : [value(destination)],
+  );
 }
 
 /** Inserts the marker row of `space`; fails when the space already has one. */
@@ -77,19 +97,21 @@ export async function insertMarkerRow(
   space: string,
   destination: MarkerDestination,
 ): Promise<void> {
-  await driver.query(MARKER_INSERT, markerInsertParams(space, destination));
+  await driver.query(MARKER_INSERT, [space, ...markerColumnParams(destination)]);
 }
 
-/** Writes the marker row of `space`, replacing the row the space already has. */
+/** Writes the marker row of `space`, replacing the row the space already has. The update binds the values again instead of naming a row alias, which MariaDB does not accept, or `VALUES()`, which MySQL deprecates. */
 export async function upsertMarkerRow(
   driver: Driver,
   space: string,
   destination: MarkerDestination,
 ): Promise<void> {
-  await driver.query(
-    `${MARKER_INSERT} AS incoming ON DUPLICATE KEY UPDATE core_hash = incoming.core_hash, profile_hash = incoming.profile_hash, contract_json = incoming.contract_json, canonical_version = incoming.canonical_version, updated_at = CURRENT_TIMESTAMP(3), app_tag = incoming.app_tag, meta = incoming.meta, invariants = incoming.invariants`,
-    markerInsertParams(space, destination),
-  );
+  const params = markerColumnParams(destination);
+  await driver.query(`${MARKER_INSERT} ON DUPLICATE KEY UPDATE ${MARKER_UPDATE}`, [
+    space,
+    ...params,
+    ...params,
+  ]);
 }
 
 function invariantsOf(text: unknown): readonly string[] {

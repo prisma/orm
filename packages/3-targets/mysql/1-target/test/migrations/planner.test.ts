@@ -7,8 +7,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import mysqlControlTarget from '../../src/core/migrations/control-target';
-import { createMysqlMigrationPlanner } from '../../src/core/migrations/planner';
-import { contractOf, frameworkComponents, int, stubLowerer, text } from './fixtures';
+import { contractOf, createMysqlPlanner, frameworkComponents, int, text } from './fixtures';
 
 const A = 'a'.repeat(64);
 const B = 'b'.repeat(64);
@@ -40,7 +39,7 @@ function plan(
     readonly schema?: unknown;
   } = {},
 ) {
-  return createMysqlMigrationPlanner(stubLowerer).plan({
+  return createMysqlPlanner().plan({
     contract: to,
     schema:
       options.schema ?? mysqlControlTarget.migrations.contractToSchema(from, frameworkComponents),
@@ -368,7 +367,7 @@ describe('MysqlMigrationPlanner', () => {
   });
 
   it('scaffolds an empty migration for migration new', () => {
-    const empty = createMysqlMigrationPlanner(stubLowerer).emptyMigration(
+    const empty = createMysqlPlanner().emptyMigration(
       { packageDir: '/p', fromHash: A, toHash: B, snapshotsImportPath: '../s' },
       'app',
     );

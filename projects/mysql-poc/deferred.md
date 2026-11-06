@@ -66,3 +66,19 @@ When the capability is absent the ORM sends an upsert with no conflict columns, 
 ## A statement sent after release runs on Postgres (slice 4 system-design review, D20)
 
 The MySQL driver refuses a statement sent on a held connection after `release()`, or still waiting for it then, with `DRIVER.NOT_CONNECTED`. The Postgres driver runs it on the client after it went back to the pool, possibly inside another caller's session. MySQL does not force the difference; it fixes a defect both drivers share. Linear TML-2333 ("invalidate wrappers on teardown") covers the same fix at the runtime layer; give the Postgres driver the same rule there.
+
+## Split `returning` by statement kind (slice 6a, 2026-11-06)
+
+MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING` but not `UPDATE … RETURNING`. MariaDB reports `returning: false`, as MySQL does, and every ORM write works through the slice 4 read-back (probed on 10.11). Splitting the capability would save a round trip on MariaDB inserts and deletes. It touches about ten places in `sql-orm-client`, the SQL builder's typed `ReturningCapability` and its three checks, and the Postgres and SQLite capability lists: about 400–700 lines of shared code, additive only if `returning` keeps its meaning for every statement kind.
+
+## MariaDB JSON and boolean columns (slice 6a, 2026-11-06)
+
+MariaDB stores `JSON` as `longtext` with a `CHECK (json_valid(col))` constraint, and booleans as `tinyint(1)`. MySQL has neither data type yet, so nothing breaks today. When MySQL gets them, MariaDB needs its own data types that read these catalog forms.
+
+## MariaDB sessions set `tx_isolation`, which MariaDB 11.1 and later deprecate (slice 6a code review, 2026-11-06)
+
+MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 10.11 has no `transaction_isolation`. On MariaDB 11.4, `SET SESSION tx_isolation = 'READ-COMMITTED'` works but raises warning 1287: the variable is deprecated and will be removed. From 11.1 both names exist. When the oldest supported MariaDB is 11.1 or later, switch to `transaction_isolation`; before that, a future MariaDB that removes `tx_isolation` makes every connection fail, unless the driver picks the name from the server version at connect. The example README says only that it is tested on 10.11.
+
+## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06)
+
+`mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.

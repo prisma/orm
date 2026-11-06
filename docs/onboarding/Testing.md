@@ -18,7 +18,7 @@ pnpm coverage:report          # Report package policy results from the existing 
 
 Package coverage policies live in `coverage.config.json` beside each package's `vitest.config.ts`. A local root run executes all package Vitest projects in one process. CI executes four native Vitest shards with partial-run thresholds disabled, uploads their blobs, and has `Coverage` verify and merge all four before applying thresholds. A lightweight final `Test` job requires package shards, coverage, and examples to pass while preserving the required status name. Each entry in `coverage/coverage-final.json` is attributed to the package that owns the entry's source path. Examples do not contribute to package coverage. Root warning-only entries relax thresholds only; Vitest assertion failures always block.
 
-> Integration tests (`test/integration`) run against each package's built `dist`, not its source. After changing a package's source, rebuild it (e.g. `pnpm --filter <pkg> build`) before running a bare `vitest` filter, or the test will exercise stale output. The full `pnpm test:integration` pretest builds automatically, so this only bites targeted runs.
+> Integration tests (`test/integration`) run against each package's built `dist`, not its source. After changing a package's source, run `pnpm build` at the root before running a bare `vitest` filter, or the test will exercise stale output. The full `pnpm test:integration` pretest builds automatically, so this only bites targeted runs.
 
 ## CI
 

@@ -46,17 +46,35 @@ const FOREIGN_KEYS = `SELECT k.TABLE_NAME AS table_name, k.CONSTRAINT_NAME AS co
   WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL
   ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`;
 
+/** The `information_schema` queries the catalog is read with, one for each kind of row. */
+export interface MysqlCatalogQueries {
+  readonly tables: string;
+  readonly columns: string;
+  readonly indexes: string;
+  readonly constraints: string;
+  readonly foreignKeys: string;
+}
+
+export const MYSQL_CATALOG_QUERIES: MysqlCatalogQueries = {
+  tables: TABLES,
+  columns: COLUMNS,
+  indexes: INDEXES,
+  constraints: CONSTRAINTS,
+  foreignKeys: FOREIGN_KEYS,
+};
+
 /** Reads the catalog rows of the connection's database, leaving out the runner's control tables. */
 export async function readMysqlCatalog(
-  driver: SqlControlDriverInstance<'mysql'>,
+  driver: SqlControlDriverInstance<string>,
+  queries: MysqlCatalogQueries = MYSQL_CATALOG_QUERIES,
 ): Promise<MysqlCatalogRows> {
   const keep = <Row extends { readonly table_name: string }>(rows: readonly Row[]) =>
     rows.filter((row) => !CONTROL_TABLE_NAMES.has(row.table_name));
-  const tables = await driver.query<{ table_name: string }>(TABLES);
-  const columns = await driver.query<MysqlColumnRow>(COLUMNS);
-  const indexes = await driver.query<MysqlIndexRow>(INDEXES);
-  const constraints = await driver.query<MysqlConstraintRow>(CONSTRAINTS);
-  const foreignKeys = await driver.query<MysqlForeignKeyRow>(FOREIGN_KEYS);
+  const tables = await driver.query<{ table_name: string }>(queries.tables);
+  const columns = await driver.query<MysqlColumnRow>(queries.columns);
+  const indexes = await driver.query<MysqlIndexRow>(queries.indexes);
+  const constraints = await driver.query<MysqlConstraintRow>(queries.constraints);
+  const foreignKeys = await driver.query<MysqlForeignKeyRow>(queries.foreignKeys);
   return {
     tables: keep(tables.rows).map((row) => row.table_name),
     columns: keep(columns.rows),

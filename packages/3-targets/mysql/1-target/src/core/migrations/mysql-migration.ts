@@ -23,28 +23,29 @@ import type { Op } from './operations';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
 
 /**
- * The base class of a MySQL `migration.ts`. Each protected method returns the operation its name says, rendered through the MySQL control adapter the migration CLI builds from `prisma.config.ts`.
+ * The base class of a `migration.ts` for MySQL or a target that extends it, such as MariaDB. Each protected method returns the operation its name says, for the target `targetId` names, rendered through the control adapter the migration CLI builds from `prisma.config.ts`.
  */
-export abstract class MysqlMigration<
+export abstract class MysqlMigrationBase<
+  TargetId extends string,
   Start extends Contract<SqlStorage> = Contract<SqlStorage>,
   End extends Contract<SqlStorage> = Contract<SqlStorage>,
-> extends SqlMigration<MysqlPlanTargetDetails, 'mysql', Start, End> {
-  readonly targetId = 'mysql' as const;
+> extends SqlMigration<MysqlPlanTargetDetails, TargetId, Start, End> {
+  abstract override readonly targetId: TargetId;
 
-  protected readonly controlAdapter: SqlControlAdapter<'mysql'> | undefined;
+  protected readonly controlAdapter: SqlControlAdapter<TargetId> | undefined;
 
-  constructor(stack?: ControlStack<'sql', 'mysql'>) {
+  constructor(stack?: ControlStack<'sql', TargetId>) {
     super(stack);
     this.controlAdapter =
       stack?.adapter === undefined
         ? undefined
         : blindCast<
-            SqlControlAdapter<'mysql'>,
-            'the MySQL adapter descriptor creates a SqlControlAdapter<mysql>; the framework types it as the wider ControlAdapterInstance'
+            SqlControlAdapter<TargetId>,
+            'the target adapter descriptor creates a SqlControlAdapter for its target; the framework types it as the wider ControlAdapterInstance'
           >(stack.adapter.create(stack));
   }
 
-  private adapterFor(operation: string): SqlControlAdapter<'mysql'> {
+  private adapterFor(operation: string): SqlControlAdapter<TargetId> {
     if (this.controlAdapter === undefined) throw mysqlMigrationStackMissing(operation);
     return this.controlAdapter;
   }
@@ -56,22 +57,26 @@ export abstract class MysqlMigration<
   }): Promise<Op> {
     return new CreateTableCall(options.table, options.columns, options.constraints ?? []).toOp(
       this.adapterFor('createTable'),
+      this.targetId,
     );
   }
 
   protected dropTable(options: { readonly table: string }): Op {
-    return new DropTableCall(options.table).toOp();
+    return new DropTableCall(options.table).toOp(undefined, this.targetId);
   }
 
   protected addColumn(options: {
     readonly table: string;
     readonly column: DdlColumn;
   }): Promise<Op> {
-    return new AddColumnCall(options.table, options.column).toOp(this.adapterFor('addColumn'));
+    return new AddColumnCall(options.table, options.column).toOp(
+      this.adapterFor('addColumn'),
+      this.targetId,
+    );
   }
 
   protected dropColumn(options: { readonly table: string; readonly column: string }): Op {
-    return new DropColumnCall(options.table, options.column).toOp();
+    return new DropColumnCall(options.table, options.column).toOp(undefined, this.targetId);
   }
 
   protected createIndex(options: {
@@ -85,11 +90,11 @@ export abstract class MysqlMigration<
       options.index,
       options.columns,
       options.unique === true,
-    ).toOp();
+    ).toOp(undefined, this.targetId);
   }
 
   protected dropIndex(options: { readonly table: string; readonly index: string }): Op {
-    return new DropIndexCall(options.table, options.index).toOp();
+    return new DropIndexCall(options.table, options.index).toOp(undefined, this.targetId);
   }
 
   protected addUnique(options: {
@@ -97,11 +102,14 @@ export abstract class MysqlMigration<
     readonly name: string;
     readonly columns: readonly string[];
   }): Op {
-    return new AddUniqueCall(options.table, options.name, options.columns).toOp();
+    return new AddUniqueCall(options.table, options.name, options.columns).toOp(
+      undefined,
+      this.targetId,
+    );
   }
 
   protected dropUnique(options: { readonly table: string; readonly name: string }): Op {
-    return new DropUniqueCall(options.table, options.name).toOp();
+    return new DropUniqueCall(options.table, options.name).toOp(undefined, this.targetId);
   }
 
   protected addForeignKey(options: {
@@ -118,10 +126,18 @@ export abstract class MysqlMigration<
       references: options.references,
       ...ifDefined('onDelete', options.onDelete),
       ...ifDefined('onUpdate', options.onUpdate),
-    }).toOp();
+    }).toOp(undefined, this.targetId);
   }
 
   protected dropForeignKey(options: { readonly table: string; readonly name: string }): Op {
-    return new DropForeignKeyCall(options.table, options.name).toOp();
+    return new DropForeignKeyCall(options.table, options.name).toOp(undefined, this.targetId);
   }
+}
+
+/** The base class of a MySQL `migration.ts`. */
+export abstract class MysqlMigration<
+  Start extends Contract<SqlStorage> = Contract<SqlStorage>,
+  End extends Contract<SqlStorage> = Contract<SqlStorage>,
+> extends MysqlMigrationBase<'mysql', Start, End> {
+  readonly targetId = 'mysql' as const;
 }

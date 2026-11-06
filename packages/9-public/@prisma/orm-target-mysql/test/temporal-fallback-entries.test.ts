@@ -22,6 +22,7 @@ describeTemporalFallbackEntries({
     '@prisma/orm-mysql ./contract-builder',
   ],
   entriesThatLoadThePolyfill: [
+    '@prisma/orm-target-mysql ./target',
     '@prisma/orm-target-mysql ./target/control',
     '@prisma/orm-mysql ./config',
     '@prisma/orm-mysql ./control',

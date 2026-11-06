@@ -1,0 +1,57 @@
+{
+  "name": "@prisma/orm-target-mariadb",
+  "version": "8.0.0-rc.22",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Prisma 8 MariaDB target: target descriptor, control adapter, driver",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "lint": "biome check . --error-on-warnings",
+    "clean": "rm -rf dist src-gen"
+  },
+  "dependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.22",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.22",
+    "@prisma/orm-target-mysql": "workspace:8.0.0-rc.22"
+  },
+  "devDependencies": {
+    "@internal/adapter-mariadb": "workspace:8.0.0-rc.22",
+    "@internal/driver-mariadb": "workspace:8.0.0-rc.22",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.22",
+    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./adapter": "./dist/adapter.mjs",
+    "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
+    "./adapter/control": "./dist/adapter__control.mjs",
+    "./driver": "./dist/driver.mjs",
+    "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
+    "./target": "./dist/target.mjs",
+    "./target/control": "./dist/target__control.mjs",
+    "./target/migration": "./dist/target__migration.mjs",
+    "./target/pack": "./dist/target__pack.mjs",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/9-public/@prisma/orm-target-mariadb"
+  }
+}

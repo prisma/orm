@@ -1,11 +1,10 @@
 import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import mysql from '@internal/target-mysql/control';
-import { createMysqlMigrationPlanner } from '@internal/target-mysql/migration';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 import { frameworkComponents, loadExampleContract } from '../example-contract';
 import { contractWithNickname } from './contracts';
-import { ADDITIVE, createAdapter, EVERY_CLASS, executedSql, planFrom } from './planner-harness';
+import { ADDITIVE, createPlanner, EVERY_CLASS, executedSql, planFrom } from './planner-harness';
 
 function accountWith(
   email: 'String' | 'Int' | 'optional String' | 'String with default' | 'no email',
@@ -177,7 +176,7 @@ describe('the MySQL planner', () => {
 
   it('refuses a statement such as a rename as not yet supported on MySQL', () => {
     const rename = { kind: 'rename' } as unknown as ResolvedMigrationStatement;
-    const result = createMysqlMigrationPlanner(createAdapter()).plan({
+    const result = createPlanner().plan({
       contract: loadExampleContract(),
       schema: mysql.migrations.contractToSchema(null, frameworkComponents),
       policy: EVERY_CLASS,
