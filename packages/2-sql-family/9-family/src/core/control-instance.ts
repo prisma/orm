@@ -1,4 +1,8 @@
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import {
+  type AuthoringEntityTypeNamespace,
+  isAuthoringEntityTypeDescriptor,
+} from '@internal/framework-components/authoring';
 import type {
   TargetBoundComponentDescriptor,
   TargetDescriptor,
@@ -35,6 +39,7 @@ import { isPlainRecord } from '@internal/framework-components/ir';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { requiresNameUniqueAcrossNamespaces } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -445,6 +450,46 @@ export function assertNoCrossSpaceFkReverseReferences(
   }
 }
 
+/** The discriminators of the composed entity types whose names are unique across namespaces. */
+function entityKindsNamedOnce(entityTypes: AuthoringEntityTypeNamespace): readonly string[] {
+  return Object.values(entityTypes).flatMap((value) => {
+    if (!isAuthoringEntityTypeDescriptor(value)) return entityKindsNamedOnce(value);
+    return requiresNameUniqueAcrossNamespaces(value.output) ? [value.discriminator] : [];
+  });
+}
+
+/**
+ * Refuses two extension packs that declare the same entity of a kind whose names are unique across namespaces, such as a Postgres extension, in whatever namespaces they declare it.
+ */
+export function assertPackEntitiesDeclaredOnce(
+  extensions: readonly CrossSpaceFkView[],
+  entityTypes: AuthoringEntityTypeNamespace,
+): void {
+  for (const kind of entityKindsNamedOnce(entityTypes)) {
+    const declaringPack = new Map<string, string>();
+    for (const ext of extensions) {
+      const namespaces = ext.contractSpace?.contractJson?.storage?.namespaces;
+      if (!isObjectRecord(namespaces)) continue;
+      for (const ns of Object.values(namespaces)) {
+        if (!isObjectRecord(ns) || !isObjectRecord(ns['entries'])) continue;
+        const declared = ns['entries'][kind];
+        if (!isObjectRecord(declared)) continue;
+        for (const name of Object.keys(declared)) {
+          const earlier = declaringPack.get(name);
+          if (earlier !== undefined && earlier !== ext.id) {
+            throw sqlFamilyError(
+              'CONTRACT.PACK_CONTRIBUTION_INVALID',
+              `Extension packs "${earlier}" and "${ext.id}" both declare ${kind} "${name}". Each ${kind} can be declared by one contract space only; compose only one of these packs.`,
+              { meta: { entityKind: kind, entityName: name, extensionIds: [earlier, ext.id] } },
+            );
+          }
+          declaringPack.set(name, ext.id);
+        }
+      }
+    }
+  }
+}
+
 export function createSqlFamilyInstance<TTargetId extends string>(
   stack: ControlStack<'sql', TTargetId>,
 ): SqlFamilyInstance {
@@ -491,6 +536,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   }
 
   assertNoCrossSpaceFkReverseReferences(extensions);
+  assertPackEntitiesDeclaredOnce(extensions, stack.authoringContributions.entityTypes);
 
   const { codecTypeImports, extensionIds } = stack;
 

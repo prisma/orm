@@ -100,6 +100,17 @@ describe('extension() in the Postgres contract builder', () => {
     );
   });
 
+  it('writes the unbound namespace as unbound when one extension is declared in two namespaces', () => {
+    expect(() =>
+      defineContract({
+        models: { User },
+        entities: [extension('vector'), extension('vector', { namespace: unbound })],
+      }),
+    ).toThrow(
+      'defineContract: extension "vector" is declared in namespaces "public" and "unbound"; declare it in one namespace only.',
+    );
+  });
+
   it('refuses one extension declared twice in one namespace', () => {
     expect(() =>
       defineContract({ models: { User }, entities: [extension('vector'), extension('vector')] }),

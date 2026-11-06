@@ -11,7 +11,10 @@ import type {
 } from '@internal/framework-components/authoring';
 import { temporalTypeAliases } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import {
+  type ContributedPslDiagnosticCode,
+  UNBOUND_PSL_NAMESPACE_NAME,
+} from '@internal/framework-components/psl-ast';
 import type {
   AttributeSpecContext,
   BlockSpecContext,
@@ -993,9 +996,15 @@ export function postgresLowerEntityHandles(
         }
         if (declaredIn !== undefined) {
           const namespaces = [declaredIn, namespaceId].sort();
+          const namespaceNames = namespaces.map((id) =>
+            id === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : id,
+          );
           throw postgresError(
             'CONTRACT.NAME_DUPLICATE',
-            `defineContract: extension "${extensionHandle.name}" is declared in namespaces ${namespaces.map((id) => `"${id}"`).join(' and ')}; declare it in one namespace only.`,
+            `defineContract: extension "${extensionHandle.name}" is declared in namespaces ${namespaceNames
+              .sort()
+              .map((name) => `"${name}"`)
+              .join(' and ')}; declare it in one namespace only.`,
             { meta: { kind: 'extension', name: extensionHandle.name, namespaces } },
           );
         }

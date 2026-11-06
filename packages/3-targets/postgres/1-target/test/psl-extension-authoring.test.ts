@@ -45,13 +45,16 @@ const postgresTarget = {
   defaultNamespaceId: 'public',
 };
 
-function interpret(source: string) {
+function interpret(
+  source: string,
+  composedExtensionContracts: ReadonlyMap<string, Contract> = new Map(),
+) {
   const bound = bindPslSchema(source, {
     sourceId: 'psl-extension-authoring.test.psl',
     context: {
-      composedExtensions: [],
+      composedExtensions: [...composedExtensionContracts.keys()],
       defaultNamespaceId: 'public',
-      composedExtensionContracts: new Map(),
+      composedExtensionContracts,
       authoringContributions: {
         ...assembled,
         type: {
@@ -90,6 +93,24 @@ function interpret(source: string) {
 function extensionsOf(result: ReturnType<typeof interpret>, namespaceId: string) {
   if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
   return (result.value.storage.namespaces[namespaceId] as PostgresSchema).extension;
+}
+
+function packDeclaring(extension: string): Contract {
+  return blindCast<Contract, 'only the storage of a composed pack contract is read here'>({
+    target: 'postgres',
+    targetFamily: 'sql',
+    storage: {
+      namespaces: {
+        __unbound__: postgresCreateNamespace({
+          id: '__unbound__',
+          entries: {
+            table: {},
+            extension: { [extension]: new PostgresExtension({ name: extension }) },
+          },
+        }),
+      },
+    },
+  });
 }
 
 describe('PSL extension blocks', () => {
@@ -183,6 +204,58 @@ model User {
           'extension "postgis" is declared in namespaces "extensions" and "public"; declare it in one namespace only.',
       }),
     ]);
+  });
+
+  it('writes the unbound namespace as unbound when one extension is declared twice', () => {
+    const result = interpret(`
+extension pg_trgm {}
+
+namespace unbound {
+  extension pg_trgm {}
+}
+
+model User {
+  id Int @id
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
+        message:
+          'extension "pg_trgm" is declared in namespaces "public" and "unbound"; declare it in one namespace only.',
+      }),
+    ]);
+  });
+
+  it.each([
+    ['at the top level', 'extension vector {}', '"public"'],
+    ['in a named namespace', 'namespace extensions {\n  extension vector {}\n}', '"extensions"'],
+    ['in namespace unbound', 'namespace unbound {\n  extension vector {}\n}', '"unbound"'],
+  ])('refuses an extension a composed pack declares, declared %s', (_, declaration, namespace) => {
+    const result = interpret(
+      `${declaration}\n\nmodel User {\n  id Int @id\n}\n`,
+      new Map([['pgvector', packDeclaring('vector')]]),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENTITY_DECLARED_BY_PACK',
+        message: `extension "vector" is declared in namespace ${namespace}, and extension pack "pgvector" declares it in namespace "unbound". Remove this declaration; the pack installs the extension.`,
+      }),
+    ]);
+  });
+
+  it('accepts an extension no composed pack declares', () => {
+    const result = interpret(
+      'extension pg_trgm {}\n\nmodel User {\n  id Int @id\n}\n',
+      new Map([['pgvector', packDeclaring('vector')]]),
+    );
+    expect(extensionsOf(result, 'public')).toEqual({
+      pg_trgm: new PostgresExtension({ name: 'pg_trgm' }),
+    });
   });
 
   it('refuses a member in an extension block', () => {

@@ -5,7 +5,7 @@ import {
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, type SchemaOwnership } from '@internal/framework-components/control';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -96,6 +96,7 @@ function plan(input: {
   readonly contract: Contract<SqlStorage>;
   readonly schema: PostgresDatabaseSchemaNode;
   readonly fromContract?: Contract<SqlStorage>;
+  readonly ownership?: SchemaOwnership;
 }) {
   return createPostgresMigrationPlanner(lowerer).plan({
     contract: input.contract,
@@ -107,8 +108,18 @@ function plan(input: {
     frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
+    ...(input.ownership === undefined ? {} : { ownership: input.ownership }),
   });
 }
+
+/** A composition in which an extension pack declares `vector` in the unbound namespace. */
+const PGVECTOR_COMPOSED: SchemaOwnership = {
+  declaresEntity: (coordinate) =>
+    coordinate.namespaceId === UNBOUND &&
+    coordinate.entityKind === 'extension' &&
+    coordinate.entityName === 'vector',
+  namespaceDeclaringSpaces: (namespaceId) => (namespaceId === UNBOUND ? ['pgvector'] : []),
+};
 
 async function plannedOperations(input: Parameters<typeof plan>[0]) {
   const result = plan(input);
@@ -316,5 +327,57 @@ describe('planning an unbound extension', () => {
     expect(operations.map((op) => op.execute)).toEqual([['DROP EXTENSION "vector"']]);
     expect(typeScript).toContain('this.dropExtension({ extension: "vector" })');
     expect(JSON.stringify(operations)).not.toContain(UNBOUND);
+  });
+});
+
+describe('planning an application beside a pack that declares the extension', () => {
+  it.each([
+    ['a named namespace', 'extensions'],
+    ['the default namespace', 'public'],
+  ])('refuses an application that declares it in %s', (_, namespaceId) => {
+    const result = plan({
+      contract: contractDeclaring({ vector: namespaceId }),
+      schema: liveDatabase({}, undefined),
+      ownership: PGVECTOR_COMPOSED,
+    });
+    expect(result).toMatchObject({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary: `Extension "vector" is declared in namespace "${namespaceId}" by this contract, and an extension pack declares it in namespace "unbound". Remove this declaration; the pack installs the extension.`,
+        },
+      ],
+    });
+  });
+
+  it('plans no drop when the application stops declaring it', async () => {
+    const { operations } = await plannedOperations({
+      contract: contractDeclaring({}),
+      fromContract: contractDeclaring({ vector: 'public' }),
+      schema: liveDatabase({ vector: 'public' }, SUPABASE_SEARCH_PATH),
+      ownership: PGVECTOR_COMPOSED,
+    });
+    expect(operations).toEqual([]);
+  });
+
+  it("never drops the pack's extension installed in another schema", async () => {
+    const { operations } = await plannedOperations({
+      contract: contractDeclaring({}),
+      fromContract: contractDeclaring({ vector: 'extensions' }),
+      schema: liveDatabase({ vector: 'extensions' }, SUPABASE_SEARCH_PATH),
+      ownership: PGVECTOR_COMPOSED,
+    });
+    expect(operations).toEqual([]);
+  });
+
+  it('still drops an extension no space declares', async () => {
+    const { operations } = await plannedOperations({
+      contract: contractDeclaring({}),
+      fromContract: contractDeclaring({ pg_trgm: 'public' }),
+      schema: liveDatabase({ pg_trgm: 'public' }, SUPABASE_SEARCH_PATH),
+      ownership: PGVECTOR_COMPOSED,
+    });
+    expect(operations.map((op) => op.id)).toEqual(['dropExtension.pg_trgm']);
   });
 });

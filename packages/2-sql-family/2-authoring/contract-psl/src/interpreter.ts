@@ -48,7 +48,8 @@ import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { elementCoordinates, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { Binder, ParsedWrittenScalar } from '@internal/psl-parser';
 import {
   type AttributeSpecContext,
@@ -257,6 +258,11 @@ function validateNamespaceBlocksForSqlTarget(input: {
       });
     }
   }
+}
+
+/** How PSL writes a namespace: the unbound namespace is `unbound`. */
+function pslNamespaceName(namespaceId: string): string {
+  return namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : namespaceId;
 }
 
 /**
@@ -2443,19 +2449,42 @@ export function interpretPslDocumentToSqlContract(
         namespacesByName.set(name, [...(namespacesByName.get(name) ?? []), namespaceId]);
       }
     }
-    for (const [name, namespaceIds] of namespacesByName) {
-      if (namespaceIds.length < 2) continue;
-      const sorted = [...namespaceIds].sort();
+    const blockDeclaring = (name: string, namespaceId: string) => {
       const block = [...extensionBlocksByNamespace]
-        .filter(([namespace]) => namespace.id === sorted[sorted.length - 1])
+        .filter(([namespace]) => namespace.id === namespaceId)
         .flatMap(([, blocks]) => Object.values(blocks))
         .find((candidate) => candidate.name === name);
       invariant(block !== undefined, 'A lowered entity has an owning block');
+      return block;
+    };
+    for (const [name, namespaceIds] of namespacesByName) {
+      if (namespaceIds.length < 2) continue;
+      const sorted = [...namespaceIds].sort();
+      const block = blockDeclaring(name, sorted[sorted.length - 1] ?? defaultNamespaceId);
       diagnostics.pushUnlocated({
         code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
-        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted.map((namespaceId) => `"${namespaceId}"`).join(' and ')}; declare it in one namespace only.`,
+        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted
+          .map(pslNamespaceName)
+          .sort()
+          .map((namespaceName) => `"${namespaceName}"`)
+          .join(' and ')}; declare it in one namespace only.`,
         ...diagnosticSource(input.sources, block.node.syntax).at(),
       });
+    }
+    for (const [spaceId, packContract] of composedExtensionContracts) {
+      for (const coordinate of elementCoordinates(packContract.storage)) {
+        if (coordinate.entityKind !== descriptor.discriminator) continue;
+        for (const namespaceId of namespacesByName.get(coordinate.entityName) ?? []) {
+          diagnostics.pushUnlocated({
+            code: 'PSL_ENTITY_DECLARED_BY_PACK',
+            message: `${descriptor.discriminator} "${coordinate.entityName}" is declared in namespace "${pslNamespaceName(namespaceId)}", and extension pack "${spaceId}" declares it in namespace "${pslNamespaceName(coordinate.namespaceId)}". Remove this declaration; the pack installs the ${descriptor.discriminator}.`,
+            ...diagnosticSource(
+              input.sources,
+              blockDeclaring(coordinate.entityName, namespaceId).node.syntax,
+            ).at(),
+          });
+        }
+      }
     }
   }
 
