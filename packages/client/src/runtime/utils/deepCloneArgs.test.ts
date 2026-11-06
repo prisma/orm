@@ -51,6 +51,21 @@ describe('deepCloneArgs', () => {
     expect(cloned.data.field).toBe(crossBundleDbNull)
   })
 
+  test('preserves class instances with a toJSON method', () => {
+    class Id {
+      constructor(readonly equals: string) {}
+      toJSON() {
+        return 'from-toJSON'
+      }
+    }
+    const id = new Id('from-field')
+    const args = { where: { id } }
+
+    const cloned = deepCloneArgs(args) as Record<string, any>
+
+    expect(cloned.where.id).toBe(id)
+  })
+
   test('still deep clones regular objects', () => {
     const inner = { foo: 'bar' }
     const args = { data: inner }

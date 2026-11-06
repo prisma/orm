@@ -8,6 +8,7 @@ import { JsArgs, JsInputValue } from '../core/types/exported/JsApi'
 import { RawQueryArgs } from '../core/types/exported/RawQueryArgs'
 import { isDate } from './date'
 import { isDecimalJsLike } from './decimalJsLike'
+import { isJSONConvertible } from './jsonConvertible'
 
 export function deepCloneArgs(args: JsArgs | RawQueryArgs): JsArgs | RawQueryArgs {
   if (args instanceof Sql) {
@@ -67,6 +68,10 @@ function deepCloneValue(x: JsInputValue): JsInputValue {
       copy[k] = deepCloneValue(x[k])
     }
     return copy
+  }
+
+  if (isJSONConvertible(x)) {
+    return x
   }
 
   if (typeof x === 'object') {
