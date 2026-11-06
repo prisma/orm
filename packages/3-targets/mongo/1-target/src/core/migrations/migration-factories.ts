@@ -129,9 +129,10 @@ export function rawAggregate(
 }
 
 /**
- * A raw `updateMany` on a collection, which a data transform's run can make skip document validation.
- * `update` is an update document, such as `{ $set: { age: 0 } }`, or an aggregation pipeline, such as
- * `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own values.
+ * A raw `updateMany` on a collection, which a data transform's run can make skip document
+ * validation. `update` is an update document, such as `{ $set: { age: 0 } }`, or an aggregation
+ * pipeline, such as `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own
+ * values.
  */
 export function rawUpdateMany(
   collectionName: string,
@@ -903,8 +904,8 @@ export interface CheckDocumentsOptions {
 
 /**
  * Checks, before the plan rewrites a collection's documents, that each fits the new validator once
- * the fields the plan rewrites are left out of it. A document that does not fit fails for a reason no
- * rewrite of the plan fixes, so the apply stops before any rewrite runs.
+ * the fields the plan rewrites are left out of it. A document that does not fit fails for a reason
+ * no rewrite of the plan fixes, so the apply stops before any rewrite runs.
  */
 export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
   const { collection } = options;

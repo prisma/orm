@@ -95,9 +95,10 @@ function embeddedModelChanges(
 
 /**
  * The changes the plan does not rewrite the documents for, and that are not statements: a change to
- * a field of an embedded model, a field of a value object whose type changes, a field that moves to another value object or between a scalar
- * and a value object, and a field that gains an enum or changes enum. Each is a warning that names the field; the validator change's
- * document check then fails the apply until the documents fit.
+ * a field of an embedded model, a field of a value object whose type changes, a field that moves to
+ * another value object or between a scalar and a value object, and a field that gains an enum or
+ * changes enum. Each is a warning that names the field; the validator change's document check then
+ * fails the apply until the documents fit.
  */
 export function documentsNotRewrittenWarnings(
   input: ModelMatchInput,

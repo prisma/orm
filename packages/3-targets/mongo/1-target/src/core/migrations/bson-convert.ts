@@ -1,12 +1,15 @@
 const NUMBERS = ['double', 'int', 'long', 'decimal'] as const;
 
 /**
- * For each BSON type a field can be cast to, the BSON types whose `$convert` result is what casting the value means. `$convert` accepts more pairs than these; each one left off gives a result the value did not mean:
+ * For each BSON type a field can be cast to, the BSON types whose `$convert` result is what casting
+ * the value means. `$convert` accepts more pairs than these; each one left off gives a result the
+ * value did not mean:
  *
  * - `string` to `bool` is `true` for every non-empty string, `"false"` and `"no"` included.
  * - `objectId` or `date` to `bool` is always `true`.
  * - `bool` to a number is `1` or `0`, which a number field does not mean.
- * - `date` to `double`, `long` or `decimal` is milliseconds since the epoch, and a number to `date` reads the number that way, a unit the value does not name.
+ * - `date` to `double`, `long` or `decimal` is milliseconds since the epoch, and a number to `date`
+ *   reads the number that way, a unit the value does not name.
  * - `objectId` to `date` is the time the id was made, not a date the document holds.
  *
  * See the MongoDB `$convert` reference.
