@@ -1,13 +1,13 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { MongoLoweredDraft } from '@internal/mongo-lowering';
 import { MongoParamRef } from '@internal/mongo-value';
-import { structuredError } from '@internal/utils/structured-error';
+import { ormError } from '../orm-errors';
 
 function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void {
   if (!(value instanceof MongoParamRef)) return;
   const n = value.value;
   if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
-    throw structuredError(
+    throw ormError(
       'ORM.ARGUMENT_INVALID',
       `${stageName === '$limit' ? 'limit' : 'skip'} must be a non-negative integer`,
     );
