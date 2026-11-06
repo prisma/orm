@@ -122,7 +122,7 @@ changes:
         - 'import\s+(?:type\s+)?\{[^}]*(?<![\w$])Interval(?![\w$])[^}]*\}\s*from\s*[\x27"]@prisma/orm-postgres/(?:contract-builder|target/codec-types)[\x27"]'
   - id: branded-time-types-removed
     summary: |
-      The string types `Timestamp`, `Timestamptz`, `Time` and `Interval` are no longer exported from `@prisma/orm-postgres/target/codec-types` (and `Interval` no longer from `@prisma/orm-postgres/contract-builder`). No column was typed by the first three. Remove each of these names from the import that names it, and delete the import if it names nothing else. A `contract.d.ts` written by an earlier release, such as one in a migration snapshot, imports them without using them, so removing them from its import is the only change it needs.
+      The string types `Timestamp`, `Timestamptz`, `Time` and `Interval` are no longer exported from `@prisma/orm-postgres/target/codec-types` (and `Interval` no longer from `@prisma/orm-postgres/contract-builder`). No column was typed by the first three. Remove each of these names from the import that names it, and delete the import if it names nothing else. An emitted `contract.d.ts` imports them without using them. Re-emit it with `prisma contract emit`; do not edit it by hand. Only a frozen copy in a migration snapshot, `migrations/snapshots/<hash>/contract.d.ts`, is never re-emitted: remove the names from its import by hand, and change nothing else in it.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -136,7 +136,7 @@ changes:
         - '(?<![\s\S])(?![\s\S]*import\s+(?:type\s+)?\{[^}]*(?<![\w$])Temporal(?![\w$])(?!\s+as(?![\w$]))[^}]*\}\s*from\s*[\x27"]temporal-spec[\x27"])[\s\S]*toEqualTypeOf<\s*Temporal\.'
   - id: contract-types-list-new-aggregates
     summary: |
-      Optional. An emitted `contract.d.ts` lists the aggregates of every codec in the stack, so `prisma contract emit` now adds rows for the three new codecs to it, and the contract itself does not change. Re-emit when you next change the contract; until then the existing `contract.d.ts` keeps working. A migration snapshot's `contract.d.ts` does not need the new rows; it needs only the import change `branded-time-types-removed` describes.
+      Optional. An emitted `contract.d.ts` lists the aggregates of every codec in the stack, so `prisma contract emit` now adds rows for the three new codecs to it, and the contract itself does not change. Re-emit when you next change the contract; until then the existing `contract.d.ts` keeps working. A frozen `contract.d.ts` in a migration snapshot, `migrations/snapshots/<hash>/contract.d.ts`, is never re-emitted and does not need the new rows; it needs only the hand edit to its import that `branded-time-types-removed` describes.
   - id: iso-string-date-time-values
     summary: |
       The PostgreSQL text date and time types (`TimestamptzString`, `TimestampString`, `DateString`, `TimeString`, `Timetz`) read and write ISO 8601, the form the contract stores, instead of the text PostgreSQL prints. A `timestamptz` reads as the instant in UTC whatever the session's time zone, as in `2024-01-01T00:00:00Z`. A literal default or enum member on these types must be written in that form.
@@ -219,7 +219,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 6. Run `prisma db sign` against every database when the project reads a Prisma 6 MongoDB schema whose storage hash changed (`mongo-prisma6-merged-indexes`).
 7. On Postgres and SQLite, answer the question about a removed enum value the next time you run `migration plan` or `db update` (`removed-enum-value-questions`).
 8. Change the application code: await client calls inside `try` blocks (`client-members-reject-instead-of-throwing`), stop using a runtime captured before `close()` (`close-ends-the-client-not-your-pool`), catch the connection error for a bad SQLite path (`sqlite-open-failure-is-a-connection-error`), pass `markerLocation` to `verifyContractSpaces` (`verify-contract-spaces-marker-location`), and, in code that calls the control API, drop `refuseMarkerOutsideGraph`, pass `invocation` to `executeMigrateShowPlan` and read the new `MIGRATION.MARKER_MISMATCH` fields (`refuse-marker-outside-graph-removed`, `execute-migrate-show-plan-requires-invocation`, `marker-mismatch-meta`).
-9. Change the code that uses PostgreSQL date and time values: remove the date and time types no longer exported from imports, including those in migration snapshots (`branded-time-types-removed`, `interval-with-precision-typed-as-parts`), import `Temporal` from `temporal-spec` in type tests (`temporal-types-from-temporal-spec`), read text date and time values as ISO 8601 (`iso-string-date-time-values`), and remove any statement that sets a `DateStyle` other than `ISO` (`date-style-iso-required`).
+9. Change the code that uses PostgreSQL date and time values: remove the date and time types no longer exported from the imports in your own source files and, by hand, in the frozen `contract.d.ts` copies under `migrations/snapshots/<hash>/`; every other `contract.d.ts` was re-emitted in step 5 (`branded-time-types-removed`, `interval-with-precision-typed-as-parts`), import `Temporal` from `temporal-spec` in type tests (`temporal-types-from-temporal-spec`), read text date and time values as ISO 8601 (`iso-string-date-time-values`), and remove any statement that sets a `DateStyle` other than `ISO` (`date-style-iso-required`).
 
 ## `mongoContract` takes the target pack
 
@@ -462,7 +462,7 @@ const span: PgInterval = row.span; // an IntervalParts(6) column
 
 ### `branded-time-types-removed`
 
-Remove the four names from the import, and leave the rest of the file as it is:
+In source files you wrote, remove the four names from the import. Re-emit every emitted `contract.d.ts` with `prisma contract emit` instead of editing it. The only `contract.d.ts` files to edit by hand are the frozen copies in migration snapshots, `migrations/snapshots/<hash>/contract.d.ts`, which are never re-emitted. In those, remove the four names from the import and leave the rest of the file as it is:
 
 ```ts
 import type {
