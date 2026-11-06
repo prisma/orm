@@ -175,6 +175,8 @@ authoring: {
 | `time` | `sqlite/time` | the SQLite target |
 | `duration` | `sqlite/duration` | the SQLite target |
 | `blob` | `sqlite/blob`; the body is hex, `` blob`68656c6c6f` `` | the SQLite target |
+| `datetime`, `timestamp`, `date`, `time` | the MySQL type of the same name | the MySQL target |
+| `duration` | `mysql/duration` | the MySQL target |
 | `json` | `mongo/json` | the MongoDB target |
 | `date` | `mongo/date`; the body is ISO 8601 with a UTC offset, stored as the text `Date.toISOString()` writes | the MongoDB target |
 | `binary` | `mongo/binary`; the body is base64, as MongoDB prints bytes, `` binary`aGVsbG8=` `` | the MongoDB target |
@@ -301,6 +303,10 @@ SQLite stores text, integers, reals and blobs, so its target declares `sqlite/te
 
 `sqlite/datetime@1` represents `sqlite/datetime` and `sqlite/json@1` represents `sqlite/json`. `sqlite/integer@1`, `sqlite/bigint@1`, `sqlite/bigintnumber@1` and `sql/int@1` all represent `sqlite/integer`: SQLite enforces no narrower integer range, so whether the application holds a `bigint` or a `number` is a codec's choice.
 
+### MySQL's date and time types
+
+The MySQL target declares `mysql/datetime`, `mysql/timestamp`, `mysql/date` and `mysql/time`, the column types of the same names, each but `date` with an optional `precision` from 0 to 6, and `mysql/duration`, an ISO 8601 duration stored as `varchar(191)`, because MySQL has no interval type. Every instant is UTC: the driver sets each session's `time_zone` to `+00:00`, so a `timestamp` holds the instant's UTC date and time, in the form `mysql/datetime` stores. `mysql/datetime@1`, `mysql/timestamp-date@1` and the `-temporal` and `-string` codecs of each type represent them ([ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)).
+
 A type is stored as its own database type only when the database can record it. Declaring a SQLite column `DATETIME` or `JSON` would let introspection tell the types apart, but `JSON` gives the column numeric affinity, and SQLite would then store the document `"42"` as the integer 42.
 
 **Comparing column types.** Two columns have the same type when they are stored as the same data type, with equal parameters in its normal form, and are both lists or both not. The rule is the same whether one column comes from the database or both come from contracts, as when the migration planner compares two contracts or the contract validator checks a many-to-many join table; without the stack's data types, the validator compares parameters as written. The database side's type is the one that claims what the database reports: by its texts, or for an enum by the kind of the type, read from the catalog with its schema and name, so the result does not depend on the search path. A column whose reported type no data type in the stack claims never equals another, and its mismatch names the reported type: `The database column is "point", which no data type in the configured stack declares.`, or for a SQLite column declared with no type, `The database column has no declared type.` After `ALTER COLUMN TYPE`, the Postgres planner checks the new type the same way: a type with texts by comparing `format_type` with its catalog text for the type as written (a bare `timestamptz` is `timestamp with time zone`, though its normal form counts the omitted precision as 6), an enum by identity, `atttypid = to_regtype(...)`, or the element type's `typarray` for a list. A column in the unbound namespace whose enum type lives outside `public` does not compare equal; this is a known limit.
@@ -344,8 +350,13 @@ Each date and time type has a tag named after it, listed under "How PSL writes a
 | `sqlite/date` | `2024-01-01` | `0000-01-01` | `9999-12-31` |
 | `sqlite/time` | the time with three fraction digits: `12:34:56.000` | | |
 | `sqlite/duration` | an ISO 8601 duration, as written: `PT1H30M` | | |
+| `mysql/datetime` | `2024-01-01T12:34:56` | `1000-01-01T00:00:00` | `9999-12-31T23:59:59.999999` |
+| `mysql/timestamp` | the instant in UTC, without an offset: `2024-01-01T12:34:56` | `1970-01-01T00:00:01` | `2038-01-19T03:14:07.999999` |
+| `mysql/date` | `2024-01-01` | `1000-01-01` | `9999-12-31` |
+| `mysql/time` | a time of day: `12:34:56` | `00:00:00` | `23:59:59.999999` |
+| `mysql/duration` | an ISO 8601 duration, as written: `PT1H30M` | | |
 
-- Seconds are always written. On the Postgres types a fraction of a second has no trailing zeros and at most six digits, because those types hold microseconds. On `sqlite/datetime` and `sqlite/time` the fraction always has three digits, because that is what `toISOString()` and SQLite's `strftime('%f')` write, and SQLite compares the text byte by byte. `sqlite/date` holds years 0000 to 9999, the years SQLite's `date()` reads and whose text sorts in date order.
+- Seconds are always written. On the Postgres and MySQL types a fraction of a second has no trailing zeros and at most six digits, because those types hold microseconds. A MySQL literal with more fraction digits than its column's precision is refused, because MySQL would round it. MySQL's `time` also holds negative times and hours past 23, which are no time of day, so `mysql/time` refuses them. On `sqlite/datetime` and `sqlite/time` the fraction always has three digits, because that is what `toISOString()` and SQLite's `strftime('%f')` write, and SQLite compares the text byte by byte. `sqlite/date` holds years 0000 to 9999, the years SQLite's `date()` reads and whose text sorts in date order.
 - `sqlite/datetime` reads text without an offset as UTC, as SQLite's own date functions do, so reading a value never depends on the machine's time zone.
 - A year from 0000 to 9999 has four digits. Any other year is a sign and six digits: `-000043-03-15`, `+012026-01-02`. Years count as ISO 8601 counts them, with year 0000 as 1 BC.
 - An offset is `+HH:MM`, or `+HH:MM:SS` when it has seconds. `pg/timetz` holds offsets up to 15:59 either way.

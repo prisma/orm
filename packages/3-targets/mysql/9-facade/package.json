@@ -10,7 +10,7 @@
     "build": "tsdown",
     "emit": "node ../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
@@ -34,20 +34,24 @@
     "@internal/target-mysql": "workspace:8.0.0-rc.22",
     "@internal/utils": "workspace:8.0.0-rc.22",
     "arktype": "catalog:",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
     "@internal/migration-tools": "workspace:8.0.0-rc.22",
+    "@internal/psl-parser": "workspace:8.0.0-rc.22",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.22",
     "@prisma/cli-engine": "0.9.0",
     "@repo/test-utils": "workspace:8.0.0-rc.22",
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

@@ -10,6 +10,18 @@ import {
   mysqlSqlVarcharDescriptor,
   mysqlTextDescriptor,
 } from '../src/core/codecs';
+import {
+  mysqlDateStringDescriptor,
+  mysqlDateTemporalDescriptor,
+  mysqlDatetimeStringDescriptor,
+  mysqlDatetimeTemporalDescriptor,
+  mysqlDurationStringDescriptor,
+  mysqlTimeStringDescriptor,
+  mysqlTimestampDateDescriptor,
+  mysqlTimestampStringDescriptor,
+  mysqlTimestampTemporalDescriptor,
+  mysqlTimeTemporalDescriptor,
+} from '../src/core/date-time-codecs';
 
 const column = ColumnRef.of('rows', 'value');
 
@@ -40,6 +52,26 @@ describe('MySQL codecs project a column into JSON as the row form reads it', () 
       }),
     ).toBe(column);
   });
+
+  it.each([
+    ['mysql/datetime-temporal@1', mysqlDatetimeTemporalDescriptor, { precision: 6 }],
+    ['mysql/datetime-string@1', mysqlDatetimeStringDescriptor, { precision: 6 }],
+    ['mysql/timestamp-date@1', mysqlTimestampDateDescriptor, { precision: 3 }],
+    ['mysql/timestamp-temporal@1', mysqlTimestampTemporalDescriptor, { precision: 6 }],
+    ['mysql/timestamp-string@1', mysqlTimestampStringDescriptor, { precision: 6 }],
+    ['mysql/date-string@1', mysqlDateStringDescriptor, undefined],
+    ['mysql/date-temporal@1', mysqlDateTemporalDescriptor, undefined],
+    ['mysql/time-string@1', mysqlTimeStringDescriptor, { precision: 6 }],
+    ['mysql/time-temporal@1', mysqlTimeTemporalDescriptor, { precision: 6 }],
+    ['mysql/duration-string@1', mysqlDurationStringDescriptor, { length: 191 }],
+  ] as const)(
+    'passes %s through, whose JSON text the codec reads as the row form',
+    (codecId, descriptor, typeParams) => {
+      expect(
+        descriptor.projectJson(column, { codecId, ...(typeParams ? { typeParams } : {}) }),
+      ).toBe(column);
+    },
+  );
 
   it('refuses a raw column, whose JSON form no codec knows', () => {
     expect(() =>

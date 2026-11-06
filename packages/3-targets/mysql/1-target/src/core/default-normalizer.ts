@@ -4,11 +4,26 @@
 
 import type { ColumnDefault } from '@internal/contract/types';
 import type { DefaultResolverColumn, ReportedLiteralDefault } from '@internal/family-sql/control';
+import {
+  MYSQL_DATE_NOW,
+  MYSQL_INSTANT_NOW,
+  MYSQL_TIME_NOW,
+  mysqlCurrentValueFor,
+} from './now-expression';
 
 const AUTOINCREMENT = { kind: 'function', expression: 'autoincrement()' } as const;
-const NOW = { kind: 'function', expression: 'now()' } as const;
 const CURRENT_TIMESTAMP =
   /^(?:current_timestamp|now|localtime|localtimestamp)(?:\s*\(\s*\d*\s*\))?$/i;
+const CURRENT_DATE = /^(?:curdate|current_date)(?:\s*\(\s*\))?$/i;
+const CURRENT_TIME = /^(?:curtime|current_time)(?:\s*\(\s*\d*\s*\))?$/i;
+
+/** The name of the current value `expression` writes: `now()` for the current instant, and its own name for the current date and the current time of day, which hold different values. `undefined` for any other expression. */
+function currentValueNamed(expression: string): string | undefined {
+  if (CURRENT_TIMESTAMP.test(expression)) return MYSQL_INSTANT_NOW;
+  if (CURRENT_DATE.test(expression)) return MYSQL_DATE_NOW;
+  if (CURRENT_TIME.test(expression)) return MYSQL_TIME_NOW;
+  return undefined;
+}
 
 /** What a column's reported default is: a function, or a literal the column's codec reads. */
 export type MysqlReportedDefault =
@@ -71,7 +86,7 @@ function extraFlags(extra: string): readonly string[] {
 }
 
 /**
- * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`. `auto_increment` is `autoincrement()`; a string with a character set introducer, the form MySQL reports for a literal default on a text, blob or JSON column, is that literal; an expression default that writes the current time, such as `CURRENT_TIMESTAMP(3)`, is `now()`; any other expression default is a function default kept as reported; and anything else is a literal. `undefined` when the column has no default.
+ * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`. `auto_increment` is `autoincrement()`; a string with a character set introducer, the form MySQL reports for a literal default on a text, blob or JSON column, is that literal; an expression default that writes the current instant, such as `CURRENT_TIMESTAMP(3)`, is `now()`, and one that writes the current date or time of day, `curdate()` or `curtime(6)`, is `CURRENT_DATE` or `CURRENT_TIME`; any other expression default is a function default kept as reported; and anything else is a literal. `undefined` when the column has no default.
  */
 export function readMysqlDefault(
   columnDefault: string | null,
@@ -86,18 +101,23 @@ export function readMysqlDefault(
       return { kind: 'literal', literal: { kind: 'value', body: introduced } };
     }
     const expression = columnDefault.trim();
-    return CURRENT_TIMESTAMP.test(expression) ? NOW : { kind: 'function', expression };
+    return { kind: 'function', expression: currentValueNamed(expression) ?? expression };
   }
   return { kind: 'literal', literal: { kind: 'value', body: columnDefault } };
 }
 
 /**
- * Names a contract's expression default the way {@link readMysqlDefault} names the same function in the database, so `` sql`CURRENT_TIMESTAMP(3)` `` and the database's `now()` compare equal. Every other default passes through unchanged.
+ * Names a contract's expression default the way {@link readMysqlDefault} names the same function in the database, so `` sql`CURRENT_TIMESTAMP(3)` `` and the database's `now()` compare equal. A `now()` default is named as the current value its column's data type writes, so a `now()` on a `date` column and one on a `datetime` column differ, as the values they write do. Every other default passes through unchanged.
  */
 export function mysqlResolveDefault(
   def: ColumnDefault,
-  _column: DefaultResolverColumn,
+  column: DefaultResolverColumn,
 ): ColumnDefault {
   if (def.kind !== 'function') return def;
-  return CURRENT_TIMESTAMP.test(def.expression.trim()) ? NOW : def;
+  const expression = def.expression.trim();
+  const named =
+    expression === MYSQL_INSTANT_NOW
+      ? mysqlCurrentValueFor(column.dataTypeId)
+      : currentValueNamed(expression);
+  return named === undefined ? def : { kind: 'function', expression: named };
 }
