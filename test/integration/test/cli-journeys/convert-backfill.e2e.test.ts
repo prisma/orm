@@ -12,7 +12,7 @@
  * `migration.ts` the journey filled reproduces its `ops.json`.
  */
 
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -419,6 +419,36 @@ withTempDir(({ createTempDir }) => {
         const rows = await sql(db.connectionString, `SELECT id, age FROM "user"`);
         expect(rows.rows).toEqual([{ id: 1, age: 3 }]);
         await expectSettled(ctx);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Postgres: db update --convert with no snapshot of the database contract', () => {
+    const db = useDevDatabase();
+
+    it(
+      'is refused as needing a migration file, not for want of the origin contract',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        await emit(ctx, contractWith('  age   String\n'));
+        const created = await runDbUpdate(ctx, ['--db', db.connectionString, '--json']);
+        expect(created.exitCode, `db update --db: ${created.stderr}`).toBe(0);
+        expect(existsSync(join(ctx.testDir, 'migrations', 'snapshots'))).toBe(false);
+
+        await emit(ctx, contractWith('  age   Int\n'));
+        const refused = await runDbUpdate(ctx, [
+          '--db',
+          db.connectionString,
+          '--convert',
+          'User.age',
+          '--json',
+        ]);
+        expect(engineError(refused)?.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
       },
       timeouts.spinUpPpgDev,
     );
