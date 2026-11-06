@@ -2,6 +2,7 @@ import { ormConfigSection } from '@internal/config-loader';
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
+  type DatabasePolicies,
   type DatabasePolicyDifference,
   databasePoliciesOf,
   databasePolicyDifferences,
@@ -32,7 +33,6 @@ import {
   loadContractRawSafely,
   refusePackageCorruptionOnAggregate,
 } from '../../control-api/operations/contract-space-aggregate-loader';
-import { databasePoliciesInForce } from '../../control-api/operations/database-policies';
 import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
   refuseMissingInvariantPath,
@@ -461,6 +461,24 @@ export const migrationStatusCommand = defineOrmCommand({
     let totalPending = 0;
 
     let reportedUnreadablePolicies = false;
+    /** The database's policies, or undefined when they cannot be read, which is reported once as a finding. */
+    const appPoliciesInForce = (): DatabasePolicies | undefined => {
+      const read = databasePoliciesOf(database.markersBySpace.get(aggregate.app.spaceId));
+      if (read.ok) return read.value;
+      if (!reportedUnreadablePolicies) {
+        reportedUnreadablePolicies = true;
+        findings.push(
+          markerPoliciesUnreadableFinding(
+            errorMarkerPoliciesCorrupt({
+              why: read.failure.why,
+              space: aggregate.app.spaceId,
+              markerLocation,
+            }),
+          ),
+        );
+      }
+      return undefined;
+    };
     for (const entry of scopedSpaces) {
       const space: AggregateContractSpace | undefined = aggregate.space(entry.space);
       if (space === undefined) {
@@ -489,27 +507,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
       if (markerDiverged) {
         divergedMarker ??= { space: entry.space, markerHash: readMarker.storageHash };
-        const policiesInForce = databasePoliciesOf(
-          database.markersBySpace.get(aggregate.app.spaceId),
-        );
-        if (!policiesInForce.ok && !reportedUnreadablePolicies) {
-          reportedUnreadablePolicies = true;
-          findings.push(
-            markerPoliciesUnreadableFinding(
-              errorMarkerPoliciesCorrupt({
-                why: policiesInForce.failure.why,
-                space: aggregate.app.spaceId,
-                markerLocation,
-              }),
-            ),
-          );
-        }
-        findings.push(
-          markerNotInHistoryFinding(
-            entry.space,
-            policiesInForce.ok ? policiesInForce.value.change : undefined,
-          ),
-        );
+        findings.push(markerNotInHistoryFinding(entry.space, appPoliciesInForce()?.change));
       }
       if (
         origin !== undefined &&
@@ -589,13 +587,12 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
+    const declaredPolicies = connects ? activeRefEntry?.policies : undefined;
+    const policiesToCompare = declaredPolicies === undefined ? undefined : appPoliciesInForce();
     const differences: readonly DatabasePolicyDifference[] | undefined =
-      connects && activeRefEntry?.policies !== undefined
-        ? databasePolicyDifferences(
-            activeRefEntry.policies,
-            databasePoliciesInForce(database.markersBySpace, aggregate.app.spaceId, markerLocation),
-          )
-        : undefined;
+      declaredPolicies === undefined || policiesToCompare === undefined
+        ? undefined
+        : databasePolicyDifferences(declaredPolicies, policiesToCompare);
 
     const rendered = renderMigrationGraphSpaceTrees(renderInputs);
     const treesBySpace = new Map(

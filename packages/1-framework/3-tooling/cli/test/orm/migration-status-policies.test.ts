@@ -79,6 +79,17 @@ describe('migration status --to <ref>, the ref declares policies', () => {
     });
   });
 
+  it('reports policies it cannot read as a finding, without differences, and still gives its report', async () => {
+    const run = await statusAgainst({ policies: { change: 'nope' }, json: true });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.diagnostics).toMatchObject([
+      { code: 'CONTRACT.MARKER_ROW_CORRUPT', severity: 'warn' },
+    ]);
+    expect(run.presented?.data).toMatchObject({ summary: 'Up to date' });
+    expect(run.presented?.data).not.toHaveProperty('policyDifferences');
+  });
+
   it('reports no differences when the database records what the ref declares', async () => {
     const run = await statusAgainst({
       policies: { change: ['migrate'], dataProtection: { dataLoss: 'data-loss-forbidden' } },

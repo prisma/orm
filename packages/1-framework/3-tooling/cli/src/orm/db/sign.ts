@@ -4,6 +4,7 @@ import type { Contract } from '@internal/contract/types';
 import {
   APP_SPACE_ID,
   createControlStack,
+  sameMarkerHashes,
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
@@ -263,7 +264,7 @@ function markerConflictDiagnostic(
   rerun: string,
 ): Diagnostic {
   const { expected, found } = outcome;
-  const changedBack = expected !== null && found?.storageHash === expected.storageHash;
+  const changedBack = expected !== null && sameMarkerHashes(found, expected);
   return {
     code: 'MIGRATION.MARKER_CAS_FAILURE',
     severity: 'error',

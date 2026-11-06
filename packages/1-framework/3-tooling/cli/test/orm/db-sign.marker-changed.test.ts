@@ -120,6 +120,29 @@ describe('db sign when a marker changes while it runs', () => {
     ]);
   });
 
+  it('reports a marker whose profile hash alone moved as moved, not changed back', async () => {
+    const dir = await projectDir();
+    const previous = { storageHash: HASH_PREVIOUS, profileHash: 'profile' };
+    mocks.dbSign.mockResolvedValue(
+      ok({
+        spaces: [
+          {
+            ...conflictSpace('app', HASH_A),
+            expected: previous,
+            found: { storageHash: HASH_PREVIOUS, profileHash: 'other-profile' },
+          },
+          signedSpace('pgvector', HASH_EXT),
+        ],
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run)).toMatchObject([
+      { code: 'MIGRATION.MARKER_CAS_FAILURE', meta: { reason: 'storageHash' } },
+    ]);
+  });
+
   it('repeats the contract and ref arguments in the command to sign again', async () => {
     const dir = await projectDir();
     await writeRef(refsDirOf(dir), 'production', { hash: HASH_A, invariants: [] });
