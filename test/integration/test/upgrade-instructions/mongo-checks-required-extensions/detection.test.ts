@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns, guideChange, guideChanges, patternsOf } from '../guide-detections';
 
 const APP_NOTE =
-  'upgrade-instructions/pending/mongo-checks-required-extensions/app/instructions.md';
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md';
 const EXTENSION_NOTE =
-  'upgrade-instructions/pending/mongo-checks-required-extensions/extension/instructions.md';
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md';
 
 const matcher = (path: string, id: string) => (content: string) =>
   detectionPatterns(path, id).some((pattern) => pattern.test(content));
@@ -242,9 +242,9 @@ describe('every detection in the MongoDB required-extensions notes', () => {
     `{"targetFamily": "mongo", ${'"x": 1, '.repeat(120_000)}}`,
   ];
   const patterns = [APP_NOTE, EXTENSION_NOTE].flatMap((note) =>
-    guideChanges(note).flatMap((change) =>
-      patternsOf(change).map((pattern) => ({ id: change.id, pattern })),
-    ),
+    guideChanges(note)
+      .filter((change) => change.detection?.matches !== undefined)
+      .flatMap((change) => patternsOf(change).map((pattern) => ({ id: change.id, pattern }))),
   );
 
   it.each(adversarial.map((input, index) => ({ index, input })))(

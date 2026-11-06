@@ -2,8 +2,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { timeouts } from '@repo/test-utils';
-import { describe, expect, it } from 'vitest';
+import { build } from 'esbuild';
+import { describe, expect, it, vi } from 'vitest';
 import { loadContractFromTs } from '../src/load-ts-contract';
+
+vi.mock('esbuild', async (importOriginal) => {
+  const esbuild = await importOriginal<typeof import('esbuild')>();
+  return { ...esbuild, build: vi.fn(esbuild.build) };
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, 'fixtures');
@@ -27,12 +33,13 @@ describe('loadContractFromTs', () => {
   it(
     'imports the framework the contract uses from where it is installed instead of bundling a copy',
     async () => {
+      vi.mocked(build).mockClear();
       await loadContractFromTs(join(fixturesDir, 'valid-contract.ts'));
 
-      const recorded: unknown = Reflect.get(globalThis, Symbol.for('prisma.orm.frameworkCopies'));
-      expect([...(recorded instanceof Set ? recorded : [])]).not.toContainEqual(
-        expect.stringContaining('prisma-8-contract-'),
-      );
+      const bundled = await vi.mocked(build).mock.results[0]?.value;
+      const bundle: string = bundled?.outputFiles?.[0]?.text ?? '';
+      expect(bundle).toMatch(/from "file:\/\/[^"]*\/framework-components\/[^"]*"/);
+      expect(bundle).not.toContain('function defineContract(');
     },
     timeouts.typeScriptCompilation,
   );

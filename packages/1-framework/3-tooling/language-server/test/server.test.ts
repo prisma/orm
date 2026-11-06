@@ -9,8 +9,6 @@ import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/compon
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
-  type CreateControlStackInput,
-  createControlStack,
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
@@ -34,6 +32,7 @@ import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
 import { type ParseDiagnostic, parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -4276,29 +4275,20 @@ describe('language server config failure surfacing', {
     ]);
   });
 
-  it('publishes the cause and the fix of a refusal to load a second framework copy', async () => {
-    const recorded: unknown = Reflect.get(globalThis, Symbol.for('prisma.orm.frameworkCopies'));
-    if (!(recorded instanceof Set)) throw new Error('The framework copies record is missing');
-    const secondCopy =
-      'file:///elsewhere/node_modules/@prisma/orm-framework/dist/framework-copies.mjs';
+  it('publishes the why and fix of a plain structured error that is not a CLI error', async () => {
     harness = startHarness(async () => {
-      recorded.add(secondCopy);
-      try {
-        createControlStack({} as CreateControlStackInput<'sql', 'postgres'>);
-      } finally {
-        recorded.delete(secondCopy);
-      }
-      throw new Error('createControlStack accepted a second framework copy');
+      throw structuredError('CONFIG.LOAD_FAILED', 'Config failed', {
+        why: 'The adapter package is missing',
+        fix: 'Install the adapter package',
+      });
     });
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
 
-    const [published] = await harness.waitForDiagnostics(configUri);
-    expect(published).toMatchObject({ code: CONFIG_LOAD_FAILED_CODE });
-    expect(published?.message).toContain(
-      '/elsewhere/node_modules/@prisma/orm-framework/dist/framework-copies.mjs',
-    );
-    expect(published?.message).toContain('`npm ls @prisma/orm-framework`');
+    const published = await harness.waitForDiagnostics(configUri);
+    expect(published).toEqual([
+      expectedConfigFailure('The adapter package is missing\nInstall the adapter package'),
+    ]);
   });
 
   it('publishes the config diagnostic exactly once when two documents await the same load', async () => {
