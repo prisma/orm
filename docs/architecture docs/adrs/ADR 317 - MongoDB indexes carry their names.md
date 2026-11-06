@@ -43,7 +43,7 @@ MongoDB cannot rename an index. Changing a name means dropping the index and cre
 
 **No written name.** The index gets the name MongoDB gives an index created without one: each key's field and direction, joined by underscores, such as `email_1` or `title_text`. `defaultMongoIndexName` in `@internal/mongo-contract` builds it. Because this is MongoDB's own rule, an index created without a name already holds this name in the database.
 
-**Two indexes with one name.** When two indexes in one collection end up with the same name, written or not, the schema is refused. The message asks for a name with `map:` or `name`. No second name is invented, because an invented name would depend on the order the indexes are written in, or change when another index appears. Either would drop and rebuild an index the user did not touch, since MongoDB cannot rename one.
+**Two indexes with one name.** Prisma 8 PSL and `defineContract` first merge an index that another index with the same name makes redundant, as described under "Where naming sits in the pipeline". When two indexes in one collection still have the same name after that, written or not, the schema is refused. The message asks for a name with `map:` or `name`. No second name is invented, because an invented name would depend on the order the indexes are written in, or change when another index appears. Either would drop and rebuild an index the user did not touch, since MongoDB cannot rename one.
 
 **Prisma 6 schemas.** The Prisma 6 reader gives each index the name Prisma 6 gives it, so that a database Prisma 6 built verifies as it is. The name is `map:` (or `name:` on `@@index`) when written. Otherwise it is the collection name, then the stored field names, joined by underscores, with `_key` for a unique index and `_idx` for any other, such as `User_email_key` or `User_email_idx`. The part before the suffix is cut so the whole name fits in 127 bytes. This follows prisma-engines 6.19.3 `ConstraintNames`. The reader refuses what Prisma 6 refuses: two indexes of one model with one name, an empty `map`, and a `map` longer than 127 bytes.
 
@@ -106,7 +106,7 @@ Both factories accept a call without a name. Then the index is named after its k
 ## Consequences
 
 - An index's name is part of the contract's storage section, so it is part of the storage hash. Renaming an index changes the hash.
-- A schema with two unnamed indexes on the same keys and different options is refused until one of them is named.
+- A schema with two unnamed indexes on the same keys and different options is refused until one of them is named, unless one makes the other redundant and they merge. Naming one keeps both apart; the builder still refuses them if their content is identical.
 - The schema IR's index, `MongoSchemaIndex`, carries `name`, and its `id` is the name. Introspection reads it from `listIndexes`.
 - A collation field the contract does not write may hold any value in the database, because the rewrite strips unwritten fields before comparing. Removing a field from a contract's collation, such as `strength`, is seen by `migration plan`, which compares two contracts, but not by `db update` or `db verify`.
 - A MongoDB contract snapshot under `migrations/snapshots/` may hold a storage hash its content does not recompute to, because database markers, the ledger and every migration's `from` and `to` refer to that hash. A content check of MongoDB snapshots must allow this.

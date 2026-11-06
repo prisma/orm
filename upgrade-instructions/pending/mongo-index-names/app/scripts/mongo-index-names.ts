@@ -8,15 +8,7 @@
 // name earlier releases gave it in the database, its keys and directions such as `email_1`, and the script says so.
 // Usage: node mongo-index-names.ts [<root>]
 
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', 'build']);
@@ -29,18 +21,18 @@ function isObject(value: unknown): value is JsonObject {
 }
 
 function walk(dir: string, found: string[]): void {
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    const stats = statSync(path);
-    if (stats.isDirectory()) {
-      if (!SKIPPED_DIRECTORIES.has(entry)) walk(path, found);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!SKIPPED_DIRECTORIES.has(entry.name)) walk(path, found);
       continue;
     }
-    if (entry.endsWith(TEMPORARY_SUFFIX)) {
+    if (!entry.isFile()) continue;
+    if (entry.name.endsWith(TEMPORARY_SUFFIX)) {
       rmSync(path);
       continue;
     }
-    if (entry.endsWith('.json')) found.push(path);
+    if (entry.name.endsWith('.json')) found.push(path);
   }
 }
 
