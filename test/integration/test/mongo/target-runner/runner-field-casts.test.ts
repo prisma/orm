@@ -166,7 +166,7 @@ async function types(field: string): Promise<unknown[]> {
 
 describe('MongoMigrationRunner, a cast of a field', () => {
   it(
-    'casts Int to BigInt in every document, and the validator change then finds every document fits',
+    'casts Int to Int64 in every document, and the validator change then finds every document fits',
     async () => {
       await db.createCollection('users');
       await db.collection('users').insertMany([

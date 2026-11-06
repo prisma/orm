@@ -31,7 +31,7 @@ Today every row of this table is planned as a validator change and nothing else.
 
 | Change in the schema | After this slice | Proven by |
 | --- | --- | --- |
-| Field type change that MongoDB's cast keeps every value of (`Int` to `Float`, `Int` to `BigInt`) | The values are cast with `$convert`, nothing asked, as SQL plans `int4` to `int8` | `convert-backfill.mongo.e2e.test.ts` C4 |
+| Field type change that MongoDB's cast keeps every value of (`Int` to `Float`, `Int` to `Int64`) | The values are cast with `$convert`, nothing asked, as SQL plans `int4` to `int8` | `convert-backfill.mongo.e2e.test.ts` C4 |
 | Field type change to `Bson`, or to `Json` from a type `Json` holds (string, number, boolean, list, object) | Validator only; the new validator accepts every old value | C5 |
 | Any other field type change | Asked. `--convert User.age` writes a data transform with a placeholder (`migration plan` only). `--delete User.age` casts the values with `$convert`; a value MongoDB cannot cast fails the apply and the advice points to `--convert`. Both commands, optional and required fields | C1 to C3 |
 | Required field added | Filled with a temporary value where documents lack it or hold `null`, nothing asked. A type with no temporary value is left to the document check (next row). `--backfill User.plan` writes a slot to fill instead | B1, B2 |
@@ -121,13 +121,13 @@ PR 1 changes what every MongoDB validator change does, so it is reviewed alone. 
 | A partial apply, then a re-run | Each rewrite's postcheck lets the re-run skip it; the document check runs again |
 | An empty collection | Every rewrite matches nothing and passes; the document check passes |
 | A document the old validator already rejects (drift) | The document check fails on it; the message names the changed fields only as what the change touches |
-| `Int` to `BigInt` | A cast that keeps every value, nothing asked (decision 2) |
+| `Int` to `Int64` | A cast that keeps every value, nothing asked (decision 2) |
 | No origin contract (`db update` without a snapshot) | Type changes come from the validators and are named `<collection>.<field>`, with the type change wording, not "would lose the data"; every convert and rename fails, as on SQL; `--delete` works |
 
 ## Done when
 
 - Every journey named above passes through `migration plan` then `migrate`, and through `db update` where the statement is allowed there, on collections with documents. Afterwards every document accepts an update, a further plan is empty, and `db verify --schema-only` is clean.
-- The tests cover: numeric temporary values for `Int`, `BigInt`, `Float` and `Boolean`; a nullable value object holding `null`, a missing one, a list with a `null` element, an empty list, an element with both keys; a key inside an embedded model and inside a list of embedded models; a shared collection refusal; a re-run after a partial apply; an empty collection.
+- The tests cover: numeric temporary values for `Int`, `Int64`, `Float` and `Boolean`; a nullable value object holding `null`, a missing one, a list with a `null` element, an empty list, an element with both keys; a key inside an embedded model and inside a list of embedded models; a shared collection refusal; a re-run after a partial apply; an empty collection.
 - Re-running every `migration.ts` the tests write reproduces its `ops.json`.
 - `git grep -n "MongoDB does not rename value object fields\|MongoDB does not rename enum values\|MongoDB does not apply"` finds nothing.
 

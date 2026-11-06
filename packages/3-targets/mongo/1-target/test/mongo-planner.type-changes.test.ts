@@ -15,7 +15,7 @@ import {
 const OBJECT_ID: FieldTypeSpec = { codecId: 'mongo/objectId@1' };
 const INT: FieldTypeSpec = { codecId: 'mongo/int32@1' };
 const CHECK_USERS = 'Check that the documents in users can fit the new validator';
-const BIG_INT: FieldTypeSpec = { codecId: 'mongo/int64@1' };
+const INT64: FieldTypeSpec = { codecId: 'mongo/int64@1' };
 const STRING: FieldTypeSpec = { codecId: 'mongo/string@1' };
 const DATE: FieldTypeSpec = { codecId: 'mongo/date@1' };
 const BOOLEAN: FieldTypeSpec = { codecId: 'mongo/bool@1' };
@@ -71,12 +71,12 @@ function liveUsers(fields: Record<string, FieldTypeSpec>, collection = 'users') 
 
 describe('MongoMigrationPlanner, a field whose type changes', () => {
   describe('with the origin contract', () => {
-    it('casts Int to BigInt with nothing asked, before the validator change', () => {
+    it('casts Int to Int64 with nothing asked, before the validator change', () => {
       expect(
         planned(
           plan({
             from: users('from', { age: INT }),
-            to: users('to', { age: BIG_INT }),
+            to: users('to', { age: INT64 }),
             schema: [liveUsers({ age: INT })],
           }),
         ),
@@ -183,7 +183,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         planned(
           plan({
             from: tasks('from', INT),
-            to: tasks('to', BIG_INT),
+            to: tasks('to', INT64),
             schema: [schemaCollection('tasks')],
           }),
         ).labels,
@@ -197,7 +197,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         planned(
           plan({
             from: users('from', { age: INT, nickname: STRING }),
-            to: users('to', { years: BIG_INT }),
+            to: users('to', { years: INT64 }),
             schema: [liveUsers({ age: INT, nickname: STRING })],
             statements: [renameField('User', 'age', 'User', 'years')],
           }),
@@ -254,7 +254,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         refusal(
           plan({
             from: users('from', { age: INT }, 'readings'),
-            to: users('to', { age: BIG_INT }, 'readings'),
+            to: users('to', { age: INT64 }, 'readings'),
             schema: [schemaCollection('readings', { timeseries: true })],
           }),
         ),
@@ -287,7 +287,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
         refusal(
           plan({
             from: people('from', INT),
-            to: people('to', BIG_INT),
+            to: people('to', INT64),
             schema: [schemaCollection('people')],
           }),
         ),
