@@ -8,6 +8,7 @@ import {
   PARADEDB_BASELINE_MIGRATION_NAME,
   PARADEDB_INSTALL_MIGRATION_NAME,
   PARADEDB_INVARIANTS,
+  PARADEDB_SEARCH_PATH_MIGRATION_NAME,
   PARADEDB_SPACE_ID,
   PARADEDB_UPGRADE_MIGRATION_NAME,
 } from '../src/core/constants';
@@ -15,6 +16,7 @@ import paradedbExtensionDescriptor from '../src/exports/control';
 
 const space = paradedbExtensionDescriptor.contractSpace!;
 const headHash = space.contractJson.storage.storageHash;
+const publicHeadHash = migration(PARADEDB_SEARCH_PATH_MIGRATION_NAME).metadata.from;
 
 function migration(dirName: string) {
   const found = space.migrations.find((m) => m.dirName === dirName);
@@ -24,10 +26,10 @@ function migration(dirName: string) {
 
 describe('paradedb extension descriptor', () => {
   it('declares the pg_search extension', () => {
-    const publicNamespace = space.contractJson.storage.namespaces['public'] as {
+    const unboundNamespace = space.contractJson.storage.namespaces['__unbound__'] as {
       readonly entries: Record<string, Record<string, unknown>>;
     };
-    expect(publicNamespace.entries).toEqual({
+    expect(unboundNamespace.entries).toEqual({
       extension: { pg_search: { kind: 'extension', name: 'pg_search' } },
       table: {},
     });
@@ -40,11 +42,11 @@ describe('paradedb extension descriptor', () => {
     expect(baseline.metadata.providedInvariants).toEqual([PARADEDB_INVARIANTS.installPgSearch]);
   });
 
-  it('moves the old head to the new head by creating the extension if missing', () => {
+  it('moves the first head to the public head by creating the extension if missing', () => {
     const upgrade = migration(PARADEDB_UPGRADE_MIGRATION_NAME);
     expect(upgrade.metadata).toMatchObject({
       from: migration(PARADEDB_BASELINE_MIGRATION_NAME).metadata.to,
-      to: headHash,
+      to: publicHeadHash,
       providedInvariants: [],
     });
     expect(upgrade.ops.map((op) => [op.id, op.invariantId])).toEqual([
@@ -54,8 +56,18 @@ describe('paradedb extension descriptor', () => {
 
   it('builds a new database in one migration that records no invariant', () => {
     const install = migration(PARADEDB_INSTALL_MIGRATION_NAME);
-    expect(install.metadata).toMatchObject({ from: null, to: headHash, providedInvariants: [] });
+    expect(install.metadata).toMatchObject({
+      from: null,
+      to: publicHeadHash,
+      providedInvariants: [],
+    });
     expect(install.ops.map((op) => op.id)).toEqual(['schema.public', 'extension.pg_search']);
+  });
+
+  it('moves the public head to the head with no operation, since the search path finds the extension', () => {
+    const searchPath = migration(PARADEDB_SEARCH_PATH_MIGRATION_NAME);
+    expect(searchPath.metadata).toMatchObject({ to: headHash, providedInvariants: [] });
+    expect(searchPath.ops).toEqual([]);
   });
 
   it('takes an empty database to the head through the one-step migration', () => {
@@ -65,7 +77,7 @@ describe('paradedb extension descriptor', () => {
     });
     expect(
       outcome.kind === 'ok' ? outcome.decision.selectedPath.map((edge) => edge.dirName) : outcome,
-    ).toEqual([PARADEDB_INSTALL_MIGRATION_NAME]);
+    ).toEqual([PARADEDB_INSTALL_MIGRATION_NAME, PARADEDB_SEARCH_PATH_MIGRATION_NAME]);
   });
 
   it('points the head ref at the contract and requires no invariant', () => {
@@ -75,7 +87,7 @@ describe('paradedb extension descriptor', () => {
   it("records each migration's hash of its contents", () => {
     const hashes = (hash: (m: (typeof space.migrations)[number]) => string) =>
       Object.fromEntries(space.migrations.map((m) => [m.dirName, hash(m)]));
-    expect(space.migrations).toHaveLength(3);
+    expect(space.migrations).toHaveLength(4);
     expect(hashes((m) => computeMigrationHash(m.metadata, m.ops))).toEqual(
       hashes((m) => m.metadata.migrationHash),
     );

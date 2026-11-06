@@ -89,6 +89,18 @@ function upgradeMigrationOf(pack: PackCase): string {
   return upgrade.dirName;
 }
 
+/** The migration from the head that declared the extension in `public` to the head that declares it in the unbound namespace, which the search path locates. */
+function searchPathMigrationOf(pack: PackCase) {
+  const publicHead = contractSpaceOf(pack).migrations.find(
+    (m) => m.dirName === upgradeMigrationOf(pack),
+  )?.metadata.to;
+  const searchPath = contractSpaceOf(pack).migrations.find((m) => m.metadata.from === publicHead);
+  if (publicHead === undefined || searchPath === undefined) {
+    throw new Error(`${pack.descriptor.id} has no search-path migration`);
+  }
+  return { publicHead, dirName: searchPath.dirName, ops: searchPath.ops };
+}
+
 async function removeExtension(connectionString: string, pack: PackCase): Promise<void> {
   await withClient(connectionString, async (client) => {
     if (pack.installedByPglite) {
@@ -198,7 +210,34 @@ withTempDir(({ createTempDir }) => {
           });
           expect(await appliedMigrations(connectionString, spaceId)).toEqual([
             upgradeMigrationOf(pack),
+            searchPathMigrationOf(pack).dirName,
           ]);
+
+          const verify = await runOnEngine(project, ['db', 'verify', '--strict']);
+          expect(verify.exitCode, `db verify --strict: ${verify.stderr}`).toBe(0);
+        });
+      },
+      JOURNEY_TIMEOUT,
+    );
+
+    it(
+      'moves a database whose marker declares the extension in public to the new head with a migration that has no operations',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = await setUpOnOldHead(connectionString);
+          const { publicHead, dirName, ops } = searchPathMigrationOf(pack);
+          await withClient(connectionString, (client) =>
+            client.query('UPDATE prisma_contract.marker SET core_hash = $1 WHERE space = $2', [
+              publicHead,
+              spaceId,
+            ]),
+          );
+
+          const migrate = await runOnEngine(project, ['db', 'migrate']);
+          expect(migrate.exitCode, `db migrate: ${migrate.stderr}`).toBe(0);
+          expect(ops).toEqual([]);
+          expect(await appliedMigrations(connectionString, spaceId)).toEqual([dirName]);
+          expect((await markers(connectionString))[spaceId]?.hash).toBe(headHash);
 
           const verify = await runOnEngine(project, ['db', 'verify', '--strict']);
           expect(verify.exitCode, `db verify --strict: ${verify.stderr}`).toBe(0);
@@ -224,6 +263,7 @@ withTempDir(({ createTempDir }) => {
             });
             expect(await appliedMigrations(connectionString, spaceId)).toEqual([
               upgradeMigrationOf(pack),
+              searchPathMigrationOf(pack).dirName,
             ]);
 
             const verify = await runOnEngine(project, ['db', 'verify', '--strict']);

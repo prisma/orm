@@ -13,7 +13,7 @@
   },
   "storage": {
     "namespaces": {
-      "public": {
+      "__unbound__": {
         "entries": {
           "extension": {
             "vector": {
@@ -23,11 +23,18 @@
           },
           "table": {}
         },
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
+      },
+      "public": {
+        "entries": {
+          "table": {}
+        },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "698fc52f21eb891517203ef4b229823d17c49c3f802e2374be292a9b6a560c97",
+    "storageHash": "e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15",
     "types": {
       "vector": {
         "codecId": "pg/vector@1",

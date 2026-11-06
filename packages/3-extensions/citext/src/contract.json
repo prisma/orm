@@ -13,7 +13,7 @@
   },
   "storage": {
     "namespaces": {
-      "public": {
+      "__unbound__": {
         "entries": {
           "extension": {
             "citext": {
@@ -23,11 +23,18 @@
           },
           "table": {}
         },
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
+      },
+      "public": {
+        "entries": {
+          "table": {}
+        },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "62dbb8d4183a5d944c332f5122eb9cea170bb06fa21f7c01fc9093cd074ffbfa",
+    "storageHash": "d4b1506484b9bdc7faf420bf5d126e61a22f193c94cdb9bb0f41eff0402e9d25",
     "types": {
       "citext": {
         "codecId": "pg/citext@1",

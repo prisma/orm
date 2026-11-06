@@ -35,8 +35,11 @@ import {
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
-import { isPlainRecord } from '@internal/framework-components/ir';
-import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import { isPlainRecord, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import {
+  type PslDocumentAst,
+  UNBOUND_PSL_NAMESPACE_NAME,
+} from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { requiresNameUniqueAcrossNamespaces } from '@internal/sql-contract/entity-handle-lowering-hook';
@@ -459,7 +462,7 @@ function entityKindsNamedOnce(entityTypes: AuthoringEntityTypeNamespace): readon
 }
 
 /**
- * Refuses two extension packs that declare the same entity of a kind whose names are unique across namespaces, such as a Postgres extension, in whatever namespaces they declare it.
+ * Checks the packs' entities of a kind whose names are unique across namespaces, such as a Postgres extension: each must be in the unbound namespace, and no two packs may declare the same one.
  */
 export function assertPackEntitiesDeclaredOnce(
   extensions: readonly CrossSpaceFkView[],
@@ -470,11 +473,18 @@ export function assertPackEntitiesDeclaredOnce(
     for (const ext of extensions) {
       const namespaces = ext.contractSpace?.contractJson?.storage?.namespaces;
       if (!isObjectRecord(namespaces)) continue;
-      for (const ns of Object.values(namespaces)) {
+      for (const [namespaceId, ns] of Object.entries(namespaces)) {
         if (!isObjectRecord(ns) || !isObjectRecord(ns['entries'])) continue;
         const declared = ns['entries'][kind];
         if (!isObjectRecord(declared)) continue;
         for (const name of Object.keys(declared)) {
+          if (namespaceId !== UNBOUND_NAMESPACE_ID) {
+            throw sqlFamilyError(
+              'CONTRACT.PACK_CONTRIBUTION_INVALID',
+              `Extension pack "${ext.id}" declares ${kind} "${name}" in namespace "${namespaceId}". A pack declares each ${kind} in namespace "${UNBOUND_PSL_NAMESPACE_NAME}", so the connection's search path finds it.`,
+              { meta: { entityKind: kind, entityName: name, extensionId: ext.id, namespaceId } },
+            );
+          }
           const earlier = declaringPack.get(name);
           if (earlier !== undefined && earlier !== ext.id) {
             throw sqlFamilyError(

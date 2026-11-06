@@ -147,11 +147,17 @@ describe('loading packs that declare entities unique across namespaces', () => {
     ).not.toThrow();
   });
 
-  it('refuses two packs that declare the same extension, whatever their namespaces', () => {
+  it('refuses a pack that declares an extension in a named namespace', () => {
+    expect(() => load([pack('pgvector', { extensions: { extension: ['vector'] } })])).toThrow(
+      'Extension pack "pgvector" declares extension "vector" in namespace "extensions". A pack declares each extension in namespace "unbound", so the connection\'s search path finds it.',
+    );
+  });
+
+  it('refuses two packs that declare the same extension', () => {
     expect(() =>
       load([
         pack('pgvector', { [UNBOUND_NAMESPACE_ID]: { extension: ['vector'] } }),
-        pack('vector-copy', { extensions: { extension: ['vector'] } }),
+        pack('vector-copy', { [UNBOUND_NAMESPACE_ID]: { extension: ['vector'] } }),
       ]),
     ).toThrow(
       'Extension packs "pgvector" and "vector-copy" both declare extension "vector". Each extension can be declared by one contract space only; compose only one of these packs.',
