@@ -91,10 +91,11 @@ function debugCreate(namespace: string) {
 
   const debugCall = (...args: any[]) => {
     const { enabled, namespace, color, log } = instanceProps
+    const isEnabled = topProps.enabled(namespace) || enabled
 
-    // we push the args to our history of args
+    // Keep error report history without retaining large objects when logging is disabled.
     if (args.length !== 0) {
-      argsHistory.push([namespace, ...args])
+      argsHistory.push([namespace, ...(isEnabled ? args : args.map(summarizeArg))])
     }
 
     // if it is too big, then we remove some
@@ -102,7 +103,7 @@ function debugCreate(namespace: string) {
       argsHistory.shift()
     }
 
-    if (topProps.enabled(namespace) || enabled) {
+    if (isEnabled) {
       const stringArgs = args.map((arg) => {
         if (typeof arg === 'string') {
           return arg
@@ -132,6 +133,18 @@ const Debug = new Proxy(debugCreate, {
   get: (_, prop) => topProps[prop],
   set: (_, prop, value) => (topProps[prop] = value),
 }) as typeof debugCreate & typeof topProps
+
+function summarizeArg(arg: unknown): unknown {
+  if (arg instanceof Error) {
+    return `${arg.name}: ${arg.message}`
+  }
+
+  if ((typeof arg === 'object' && arg !== null) || typeof arg === 'function') {
+    return '[Object]'
+  }
+
+  return arg
+}
 
 function safeStringify(value: any, indent = 2) {
   const cache = new Set<any>()
