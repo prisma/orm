@@ -14,9 +14,11 @@ import type {
 import {
   convertedColumnOf,
   fieldOfColumn,
+  keepRowsEdit,
+  removalsOfMigration,
   requiredColumnsOfMigration,
+  rowsHoldingValueFailure,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
   rowsWithoutValueFailure,
   runnerFailure,
   runnerSuccess,
@@ -25,7 +27,6 @@ import {
 import type {
   FailedConversion,
   MigrationRunnerResult,
-  RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
@@ -46,9 +47,10 @@ import { notOk, ok, okVoid } from '@internal/utils/result';
 import { sqliteError } from '../errors';
 import { quoteIdentifier } from '../sql-utils';
 import { verifySqliteDatabaseSchema } from './diff-database-schema';
+import { holdingStoredValue } from './operations/stored-values';
 import { affinityStorageClasses, conversionCopyOf, rebuiltTableName } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
-import { keepRowsEdit } from './stored-value-calls';
+import { sqliteMarkedRemoval, sqliteStoredValueCallClasses } from './stored-value-calls';
 
 const NOT_NULL_VIOLATION_SQLSTATE = '23502';
 
@@ -288,7 +290,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
       'MIGRATION.FOREIGN_KEY_VIOLATION',
       `Foreign key integrity check failed after migration: ${result.rows.length} violation(s).`,
       {
-        why: 'PRAGMA foreign_key_check reported violations after applying recreate-table operations.',
+        why: `PRAGMA foreign_key_check reported violations after the migration ran with foreign keys off: ${violatedReferences(result.rows)} rows that a recreate-table or deleteRows operation removed, and no cascade ran. Delete or change the referencing rows first.`,
         meta: { violations: result.rows },
       },
     );
@@ -335,7 +337,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
             operation.precheck,
             operation,
             'precheck',
-            { contract: options.destinationContract, operationIndex: ops.indexOf(operation) },
+            {
+              contract: options.destinationContract,
+              operationIndex: ops.indexOf(operation),
+              operations: ops,
+              edges: options.migrationEdges,
+            },
           );
           if (!precheckResult.ok) {
             return precheckResult;
@@ -358,7 +365,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
             operation.postcheck,
             operation,
             'postcheck',
-            { contract: options.destinationContract, operationIndex: ops.indexOf(operation) },
+            {
+              contract: options.destinationContract,
+              operationIndex: ops.indexOf(operation),
+              operations: ops,
+              edges: options.migrationEdges,
+            },
           );
           if (!postcheckResult.ok) {
             return postcheckResult;
@@ -390,7 +402,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     steps: readonly SqlMigrationPlanOperationStep[],
     operation: SqlMigrationPlanOperation<SqlitePlanTargetDetails>,
     phase: 'precheck' | 'postcheck',
-    plan?: { readonly contract: Contract<SqlStorage>; readonly operationIndex: number },
+    plan?: PlanPosition,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     for (const step of steps) {
       const result = await driver.query(step.sql, step.params ?? []);
@@ -407,12 +419,12 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
         };
         const holding =
           phase === 'precheck' && plan !== undefined
-            ? await this.rowsHoldingValue(driver, step, operation, plan.operationIndex)
+            ? await this.rowsHoldingValue(driver, step, operation, plan)
             : undefined;
         if (holding !== undefined) {
           return runnerFailure(code, holding.summary, {
             why: `Operation ${operation.id} failed during ${phase}: ${step.description}`,
-            meta: { failedCheck, rowsHoldingValue: holding.report },
+            meta: { failedCheck, rowsHoldingValue: holding.reports },
           });
         }
         const unconverted =
@@ -458,39 +470,33 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
 
   /**
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
-   * marks the check. A count that fails leaves the failure without it.
+   * marks the check, then those of every other removal of its migration whose check fails. A count
+   * of the failed check that fails leaves the failure without it.
    */
-  private async rowsHoldingValue(
+  private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<SqlitePlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<SqlitePlanTargetDetails>,
-    operationIndex: number,
-  ): Promise<{ readonly summary: string; readonly report: RowsHoldingValue } | undefined> {
+    plan: PlanPosition,
+  ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
-    const details = operation.target.details;
-    const stored = step.params?.[0];
-    if (mark === undefined || details?.table === undefined) return undefined;
-    if (typeof stored !== 'string' && typeof stored !== 'number') return undefined;
-    let rows: number;
-    try {
-      const counted = await driver.query<{ rows: number }>(
-        `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(details.table)} WHERE ${quoteIdentifier(details.name)} = ?`,
-        [stored],
-      );
-      rows = Number(counted.rows[0]?.rows ?? 0);
-    } catch {
-      return undefined;
-    }
-    return {
-      summary: rowsHoldingValueSummary(details.table, details.name, stored, rows),
-      report: {
-        enumValue: mark.enumValue,
-        value: stored,
-        rows,
-        operationIndex,
-        keepDataEdit: keepRowsEdit(details.table, details.name, mark),
+    if (mark === undefined) return Promise.resolve(undefined);
+    return rowsHoldingValueFailure({
+      failed: { operation, operationIndex: plan.operationIndex, check: step, mark },
+      others: removalsOfMigration(plan.operations, plan.edges, plan.operationIndex),
+      checkFails: async ({ check }) =>
+        !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
+      count: async ({ mark: counted }) => {
+        const holding = holdingStoredValue(counted.column, counted.storedValue, counted.path);
+        const rows = await driver.query<{ rows: number }>(
+          `SELECT COUNT(*) AS rows FROM ${quoteIdentifier(counted.table)} WHERE ${holding.condition}`,
+          holding.params,
+        );
+        return Number(rows.rows[0]?.rows ?? 0);
       },
-    };
+      keepDataEdit: ({ mark: kept }) =>
+        keepRowsEdit(sqliteMarkedRemoval(kept), kept, sqliteStoredValueCallClasses),
+    });
   }
 
   /** Names the first value of a retyped column that kept a storage class its new type does not hold. */
@@ -920,4 +926,22 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
   ): Promise<void> {
     await driver.query(statement.sql, statement.params);
   }
+}
+
+/** The rows `PRAGMA foreign_key_check` reports, as how many rows of each table reference rows of another. */
+function violatedReferences(rows: readonly Record<string, unknown>[]): string {
+  const counts = new Map<string, { table: string; parent: string; rows: number }>();
+  for (const row of rows) {
+    const table = String(row['table']);
+    const parent = String(row['parent']);
+    const key = JSON.stringify([table, parent]);
+    const counted = counts.get(key) ?? { table, parent, rows: 0 };
+    counts.set(key, { ...counted, rows: counted.rows + 1 });
+  }
+  return [...counts.values()]
+    .map(
+      ({ table, parent, rows: count }) =>
+        `${count} ${count === 1 ? 'row' : 'rows'} of "${table}" ${count === 1 ? 'references' : 'reference'} "${parent}"`,
+    )
+    .join(', ');
 }

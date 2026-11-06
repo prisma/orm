@@ -1,4 +1,5 @@
 import type { MongoControlAdapterDescriptor } from '@internal/family-mongo/control-adapter';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 
 export { introspectSchema } from '../core/introspect-schema';
@@ -30,8 +31,14 @@ export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
       },
     },
   },
-  create(_stack) {
-    return new MongoControlAdapterImpl();
+  create(stack) {
+    return new MongoControlAdapterImpl(
+      assembleMongoCodecRegistry([
+        stack.target,
+        ...(stack.adapter === undefined ? [] : [stack.adapter]),
+        ...stack.extensions,
+      ]),
+    );
   },
 };
 

@@ -1,7 +1,11 @@
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import {
+  assembleMongoCodecRegistry,
+  mongoCodec,
+  newMongoCodecRegistry,
+} from '@internal/mongo-codec';
 import { MongoParamRef, type MongoValue } from '@internal/mongo-value';
-import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
@@ -328,9 +332,11 @@ describe('resolveValue', () => {
 
     it('adds the parameter label to a structured RUNTIME.ENCODE_FAILED from a codec, keeping its details', async () => {
       const ref = new MongoParamRef('12.5E', { codecId: 'mongo/decimal128@1', name: 'price' });
-      const rejection = await resolveValue(ref, buildStandardCodecRegistry(), noCtx).catch(
-        (e: unknown) => e,
-      );
+      const rejection = await resolveValue(
+        ref,
+        assembleMongoCodecRegistry([mongoRuntimeTarget]),
+        noCtx,
+      ).catch((e: unknown) => e);
       const err = rejection as RuntimeErrorShape;
       expect({ code: err.code, message: err.message, details: err.details }).toEqual({
         code: 'RUNTIME.ENCODE_FAILED',
@@ -352,9 +358,11 @@ describe('resolveValue', () => {
         name: 'price',
         collection: 'products',
       });
-      const rejection = await resolveValue(ref, buildStandardCodecRegistry(), noCtx).catch(
-        (e: unknown) => e,
-      );
+      const rejection = await resolveValue(
+        ref,
+        assembleMongoCodecRegistry([mongoRuntimeTarget]),
+        noCtx,
+      ).catch((e: unknown) => e);
       const err = rejection as RuntimeErrorShape;
       expect({ code: err.code, message: err.message, details: err.details }).toEqual({
         code: 'RUNTIME.ENCODE_FAILED',

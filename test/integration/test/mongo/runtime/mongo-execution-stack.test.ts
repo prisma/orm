@@ -1,7 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -56,7 +56,6 @@ describe('createMongoExecutionStack', () => {
       familyId: 'mongo',
       targetId: 'mongo',
       version: '0.0.1',
-      codecs: () => newMongoCodecRegistry(),
       create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
     };
     const stack = createMongoExecutionStack({
@@ -69,7 +68,7 @@ describe('createMongoExecutionStack', () => {
 });
 
 describe('createMongoExecutionContext', () => {
-  it('aggregates the standard wire-type codecs from the adapter descriptor', () => {
+  it('aggregates the standard wire-type codecs from the target descriptor', () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
@@ -94,10 +93,8 @@ describe('createMongoExecutionContext', () => {
       familyId: 'mongo',
       targetId: 'mongo',
       version: '0.0.1',
-      codecs: () => {
-        const registry = newMongoCodecRegistry();
-        registry.register(customCodec);
-        return registry;
+      types: {
+        codecTypes: { codecDescriptors: [mongoCodecDescriptor(customCodec, { traits: [] })] },
       },
       create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
     };
@@ -125,10 +122,8 @@ describe('createMongoExecutionContext', () => {
       familyId: 'mongo',
       targetId: 'mongo',
       version: '0.0.1',
-      codecs: () => {
-        const registry = newMongoCodecRegistry();
-        registry.register(conflictingCodec);
-        return registry;
+      types: {
+        codecTypes: { codecDescriptors: [mongoCodecDescriptor(conflictingCodec, { traits: [] })] },
       },
       create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
     };
@@ -179,12 +174,16 @@ describe('createMongoExecutionContext', () => {
   });
 });
 
-describe('runtime adapter descriptor', () => {
-  it('surfaces the standard Mongo codecs through its codecs() registry', () => {
-    const codecIds = [...mongoRuntimeAdapter.codecs()].map((codec) => codec.id).sort();
+describe('runtime target descriptor', () => {
+  it('declares the standard Mongo codecs as codec descriptors', () => {
+    const codecIds = (mongoRuntimeTarget.types?.codecTypes?.codecDescriptors ?? [])
+      .map((descriptor) => descriptor.codecId)
+      .sort();
     expect(codecIds).toEqual([...STANDARD_CODEC_IDS].sort());
   });
+});
 
+describe('runtime adapter descriptor', () => {
   it('create(stack) returns an instance whose lower() delegates to the standard adapter', async () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,

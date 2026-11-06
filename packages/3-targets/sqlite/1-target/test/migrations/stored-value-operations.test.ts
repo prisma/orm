@@ -184,6 +184,9 @@ describe('a planned removal', () => {
           enumValue: { enum: 'Status', member: 'ARCHIVED' },
           value: 'archived',
           codecRef: { codecId: 'sqlite/text@1' },
+          table: 'task',
+          column: 'state',
+          storedValue: 'archived',
         },
       },
     });

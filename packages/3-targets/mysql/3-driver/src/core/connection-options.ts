@@ -163,6 +163,11 @@ export function mysqlConnectionOptions(
   return connectionOptions(parsed, parameters, settings?.connectTimeoutMs);
 }
 
+/** How long a connection may stay idle before the pool, and the driver's cancel connection, close it. */
+export function mysqlPoolIdleTimeoutMillis(poolOptions?: MysqlPoolOptions): number {
+  return poolOptions?.idleTimeoutMillis ?? DEFAULT_IDLE_TIMEOUT_MILLIS;
+}
+
 /**
  * The `mariadb` pool options for a `mysql://` URL, sized and timed as the Postgres driver's `pg.Pool`: it opens a connection only when one is needed (`minimumIdle: 0`), closes one idle for `idleTimeoutMillis`, and waits `connectionTimeoutMillis` both to open a connection and for a pooled one to come free.
  */
@@ -173,7 +178,7 @@ export function mysqlPoolOptions(url: string, poolOptions?: MysqlPoolOptions): P
     ...connectionOptions(parsed, parameters, timeoutMs),
     acquireTimeout: timeoutMs,
     minimumIdle: 0,
-    idleTimeout: Math.ceil((poolOptions?.idleTimeoutMillis ?? DEFAULT_IDLE_TIMEOUT_MILLIS) / 1000),
+    idleTimeout: Math.ceil(mysqlPoolIdleTimeoutMillis(poolOptions) / 1000),
     ...ifDefined('connectionLimit', poolOptions?.max),
   };
 }

@@ -85,7 +85,11 @@ abstract class SqliteQueryable implements SqlQueryable {
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
       }
-      return { affectedRows: Number(stmt.run(...sqliteParams(request.params)).changes) };
+      const { changes, lastInsertRowid } = stmt.run(...sqliteParams(request.params));
+      const affectedRows = Number(changes);
+      return affectedRows === 1
+        ? { affectedRows, insertId: String(lastInsertRowid) }
+        : { affectedRows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }

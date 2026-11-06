@@ -14,6 +14,7 @@ import {
   createMongoRuntime,
   type MongoExecutionContext,
   type MongoRuntimeDriverInstance,
+  type MongoRuntimeExtensionDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { ifDefined } from '@internal/utils/defined';
@@ -25,8 +26,7 @@ import {
   resolveOptionalMongoBinding,
 } from './binding';
 import { mongoError } from './mongo-errors';
-
-export type MongoTargetId = 'mongo';
+import type { MongoTargetId } from './mongo-target-id';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
@@ -47,6 +47,7 @@ export interface MongoClient<
 }
 
 export interface MongoOptionsBase {
+  readonly extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[];
   readonly mode?: RuntimeMode;
   /**
    * Optional middleware chain applied to every Mongo execution.
@@ -96,6 +97,7 @@ export default function mongo<
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
     driver: mongoRuntimeDriver,
+    extensions: options.extensions ?? [],
   });
   const { context, query, enums, raw } = buildMongoStaticContext<TContract>(contract, stack);
 

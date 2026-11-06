@@ -47,6 +47,13 @@ describe('contractFromJson', () => {
     );
   });
 
+  it('refuses a contract without a target, as SQL contract validation does', () => {
+    const { target: _target, ...withoutTarget } = fixtureContractJson;
+    expect(() => contractFromJson(withoutTarget)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
+    );
+  });
+
   it('throws the structured validation error for invalid JSON', () => {
     expect(() => contractFromJson({ target: 'mongo' })).toThrow(
       expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),

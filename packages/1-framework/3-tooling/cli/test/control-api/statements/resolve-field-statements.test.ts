@@ -237,14 +237,12 @@ describe('resolveStatements, field renames', () => {
       expect(expectValue(resolve(['Dog.bark:Dog.woof'], origin, destination))).toHaveLength(1);
     });
 
-    it('refuses a field of a value object, saying value object renames are not supported', () => {
+    it('reads a field of a value object as a value object field, not a model field', () => {
       const origin = contractOf({ app: { valueObjects: { Address: ['street'] } } });
       const destination = contractOf({ app: { valueObjects: { Address: ['road'] } } });
-      expectFailure(
-        resolve(['app.Address.street:app.Address.road'], origin, destination),
-        UNRESOLVED,
-        'value object renames are not supported in this release',
-      );
+      expect(
+        expectValue(resolve(['app.Address.street:app.Address.road'], origin, destination)),
+      ).toMatchObject([{ kind: 'rename', entity: 'valueObjectField' }]);
     });
   });
 

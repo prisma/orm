@@ -15,9 +15,11 @@ import {
   enumMemberCodecFor,
   type MongoExecutionContext,
   type MongoExecutionStack,
+  type MongoRuntimeExtensionDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { assertDefined } from '@internal/utils/assertions';
+import type { MongoTargetId } from '../runtime/mongo-target-id';
 import { validateMongoContract } from './contract-from-json';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
@@ -57,10 +59,14 @@ export function buildMongoStaticContext<
  */
 export default function mongoStatic<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: { readonly contract: TContract }): MongoStaticContext<TContract> {
+>(options: {
+  readonly contract: TContract;
+  readonly extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[];
+}): MongoStaticContext<TContract> {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
+    extensions: options.extensions ?? [],
   });
   return buildMongoStaticContext(validateMongoContract(options.contract), stack);
 }

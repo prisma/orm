@@ -81,7 +81,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 2. **The move is its own pull request, before any MySQL code.**
 3. **One path through the system, not a broad MySQL.** A small contract, migrations, `db verify`, `db sign`, and ORM create, read with include, update, delete and upsert, on MySQL 8.4.
 4. **MariaDB is its own target, `mariadb`, that extends the MySQL target.** It subclasses MySQL's classes and overrides what differs. It is built after MySQL.
-5. **Writes return rows on a target without `RETURNING`.** The ORM already reads written rows back by their identity, in the same transaction. A target without `RETURNING` for a statement gets the identity another way: the key values the client generated or the insert id the driver reports for `create`; the keys selected and locked before an `update`; the snapshot `delete` already reads first. Will, 2026-10-22: this is consistent with the principles, because the user asked the ORM for the rows.
+5. **Writes return rows on a target without `RETURNING`.** The ORM already reads written rows back by their identity, in the same transaction. A target without `RETURNING` for a statement gets the identity another way: the key values the client generated or the insert id the driver reports for `create`; the keys selected before an `update`, without a lock, as Postgres's `update()` selects them (slice 4 spec, decision 4); the snapshot `delete` already reads first. Will, 2026-10-22: this is consistent with the principles, because the user asked the ORM for the rows.
 6. **What a failed migration leaves is stated by the target's runner.** The SQL family's promise that a failure rolls back every contract space only holds where DDL is transactional; each runner now reports, per run, whether the database is unchanged. MySQL commits on every DDL statement, so its runner applies and verifies one space at a time and writes each space's marker only after it verifies, as the Mongo runner does. Re-running converges.
 
 ## Non-goals
@@ -91,7 +91,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 - No extension packs on MySQL.
 - No `prisma init` template for MySQL.
 - No MySQL older than 8.4 and no MariaDB older than 10.11.
-- No row locking, isolation levels, `distinctOn`, partial indexes or expression indexes on MySQL. Each is refused through a capability the target does not report.
+- No row locking, isolation level controls (MySQL sessions run at READ COMMITTED, slice 4 decision 6), `distinctOn`, partial indexes or expression indexes on MySQL. Each is refused through a capability the target does not report.
 - No change to Postgres or SQLite behaviour beyond what a shared-code fix requires.
 
 **Added 2026-10-23 (Will): an example app, built first, and the public packages are in scope.** `examples/prisma-8-demo-mysql` imports only the public `@prisma/orm-mysql` facade, so the public `@prisma/orm-mysql` and `@prisma/orm-target-mysql` packages are built in this project. The example is built in slice 2c, right after migrations work, and every later slice extends it: a slice is done only when the example runs what it delivered, in CI. The MariaDB slice runs the same example against MariaDB.

@@ -8,10 +8,13 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { Delete } from '../../src/mutation-graph/delete';
 import type { Edge, NodeId } from '../../src/mutation-graph/edge';
+import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
+import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
+import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
 import type { Node } from '../../src/mutation-graph/node';
 import { Rows } from '../../src/mutation-graph/rows';
 import { Update } from '../../src/mutation-graph/update';
@@ -86,7 +89,25 @@ function printInsert(ast: InsertAst): string {
   return `Insert ${ast.table.name}${rows} on conflict${columns} ${action}`;
 }
 
+function printFindByKeys(node: FindByKeys): string {
+  const keys = node.keyColumns.map(([, target]) => target.alias).join(', ');
+  const find = printFind(node.ast).replace('Find', 'FindByKeys');
+  return `${find} by (${keys}) for ${node.owner.operation}`;
+}
+
+function printInsertReportingKeys(node: InsertReportingKeys): string {
+  const statements = node.asts.map(printInsert).join('; ');
+  const generated = node.generated === undefined ? '' : `, generated ${node.generated.column}`;
+  return `InsertReportingKeys ${statements} keys ${JSON.stringify(node.keys)}${generated}`;
+}
+
 function printNode(node: Node): string {
+  if (node instanceof FindByKeys) {
+    return printFindByKeys(node);
+  }
+  if (node instanceof InsertReportingKeys) {
+    return printInsertReportingKeys(node);
+  }
   if (node instanceof Find) {
     return printFind(node.ast);
   }
@@ -108,7 +129,11 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
     return `Rows ${names.get(edge.from)}`;
   }
   const pairs = edge.columns.map(([source, target]) => `${source.alias}->${target.alias}`);
-  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})`;
+  const changed =
+    edge instanceof FilterData && Object.keys(edge.changed).length > 0
+      ? ` with ${JSON.stringify(edge.changed)}`
+      : '';
+  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})${changed}`;
 }
 
 function printInputs(names: NodeNames, inputs: readonly Edge<unknown>[]): string {

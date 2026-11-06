@@ -1,5 +1,9 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/ast';
+import type {
+  InsertAst,
+  ProjectionItem,
+  SqlStatementStats,
+} from '@internal/sql-relational-core/ast';
 import type { StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run } from './node';
@@ -39,11 +43,11 @@ export class InsertChunked extends StatementNode<NoInputs> {
     );
   }
 
-  async #sumOfCounts(run: Run): Promise<number> {
-    let count = 0;
+  async #sumOfCounts(run: Run): Promise<SqlStatementStats> {
+    let affectedRows = 0;
     for (const ast of this.asts) {
-      count += await run.execute(ast);
+      affectedRows += (await run.execute(ast)).affectedRows;
     }
-    return count;
+    return { affectedRows };
   }
 }
