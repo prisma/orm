@@ -36,7 +36,10 @@ describe.each([
     const node = make();
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await node.execute({ filter: null }, run);
+    const rows = await node.execute(
+      { filter: null, payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(rows).toEqual([{ id: 1 }]);
     expect(run.queried).toEqual([node.ast]);
@@ -45,7 +48,10 @@ describe.each([
   it('adds the conditions of one edge to its where, or between the rows of the edge', async () => {
     const run = recordingRun();
 
-    await make().execute({ filter: [[idIs(7), idIs(8)]] }, run);
+    await make().execute(
+      { filter: [[idIs(7), idIs(8)]], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and (id = 7 or id = 8))"]);
   });
@@ -53,7 +59,10 @@ describe.each([
   it('puts and between the edges', async () => {
     const run = recordingRun();
 
-    await make().execute({ filter: [[idIs(7)], [idIs(8), idIs(9)]] }, run);
+    await make().execute(
+      { filter: [[idIs(7)], [idIs(8), idIs(9)]], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id = 7 and (id = 8 or id = 9))"]);
   });
@@ -61,11 +70,23 @@ describe.each([
   it('returns no rows and runs nothing when an edge has no source row', async () => {
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await make().execute({ filter: [[idIs(7)], []] }, run);
+    const rows = await make().execute(
+      { filter: [[idIs(7)], []], payload: null, state: null, requires: null },
+      run,
+    );
 
     expect(rows).toEqual([]);
     expect(run.queried).toEqual([]);
     expect(run.executed).toEqual([]);
+  });
+
+  it('returns no rows and runs nothing when a node it requires produced no row', async () => {
+    const run = recordingRun([{ id: 1 }]);
+
+    expect(
+      await make().execute({ filter: null, payload: null, state: null, requires: [[]] }, run),
+    ).toEqual([]);
+    expect(run).toMatchObject({ queried: [], executed: [] });
   });
 
   it('gives a node that also returns the columns it is asked for, once each', () => {
@@ -87,7 +108,9 @@ describe.each([
     const node = make();
     const run = recordingRun([], 3);
 
-    expect(await node.execute({ filter: null }, run)).toBe(3);
+    expect(
+      await node.execute({ filter: null, payload: null, state: null, requires: null }, run),
+    ).toBe(3);
     expect(run.executed).toEqual([node.ast]);
     expect(run.queried).toEqual([]);
   });
@@ -95,7 +118,9 @@ describe.each([
   it('returns columns once it is asked to', async () => {
     const run = recordingRun([{ email: 'a@b.c' }]);
 
-    const rows = await make().withReturning(emailColumn).execute({ filter: null }, run);
+    const rows = await make()
+      .withReturning(emailColumn)
+      .execute({ filter: null, payload: null, state: null, requires: null }, run);
 
     expect(rows).toEqual([{ email: 'a@b.c' }]);
     expect(run.executed).toEqual([]);

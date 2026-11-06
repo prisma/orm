@@ -25,6 +25,16 @@ export interface Run {
   execute(ast: StatementAst): Promise<number>;
 }
 
+export type SlotLayout<Inputs extends Slots> = {
+  readonly [Name in keyof Inputs]: Inputs[Name] extends Edge<unknown>[]
+    ? 'list'
+    : Inputs[Name] extends Edge<unknown>
+      ? 'one'
+      : 'list' | 'one';
+};
+
 export abstract class Node<Inputs extends Slots = Slots> {
+  abstract readonly slots: SlotLayout<Inputs>;
+
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 }

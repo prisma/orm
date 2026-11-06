@@ -196,6 +196,7 @@ Postgres and SQLite adapters: both render the insert conflict clause and must re
 - [ ] Nested `create` accepts `{ onConflict: 'skip', conflictOn? }` on one-to-many relations in `create()` and `update()`.
 - [ ] Nested `create` accepts `{ onConflict: 'connect', conflictOn? }` on every relation layout in `create()` and `update()`.
 - [ ] TypeScript authoring rejects a `hasOne` over a foreign key with no unique constraint, with an error that names the relation and the fields; the in-repo fixtures that declared one are fixed; the upgrade instructions describe the change.
+- [ ] A relation's mutator has `variant(value)`, and a nested create through it writes a complete row for a variant stored in the base table and for one stored in its own table, in `create()` and `update()`, shown by integration tests on Postgres and SQLite.
 - [ ] A relation callback may return an array, in both `create()` and `update()`, and operations run in array order.
 - [ ] For each of the three operations, an integration test on Postgres and on SQLite shows an unrelated row that matches the filter or conflict columns is left unchanged.
 - [ ] A nested to-many upsert that conflicts with an unrelated row throws `ORM.NESTED_UPSERT_CONFLICT`, documented in the error reference.

@@ -1,5 +1,3 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -7,9 +5,12 @@ import {
   type ProjectionItem,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
-import { resolvePrimaryKeyColumns, resolveRowIdentityColumns } from '../collection-contract';
+import {
+  resolvePrimaryKeyColumns,
+  resolveRowIdentityColumns,
+  supportsDefaultInInsert,
+} from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
-import { ormError } from '../orm-errors';
 import {
   countMutationWhere,
   deleteAst,
@@ -22,21 +23,27 @@ import {
   updateAssignments,
   updateAst,
   upsertAst,
-} from '../query-plan-mutations';
+} from '../mutation-statements';
+import { ormError } from '../orm-errors';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import { variantReturning } from '../query-plan-source';
+import type { ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import { CrossJoin } from './cross-join';
 import { Delete } from './delete';
 import type { ColumnPair, NodeId } from './edge';
-import { FilterData } from './filter-data';
 import { Find } from './find';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
-import { PayloadData } from './payload-data';
-import { Rows } from './rows';
+import {
+  addAfterWrite,
+  addBeforeWrite,
+  addCreateWithRelations,
+  type BeforeWrite,
+  type KeySource,
+} from './nested-mutations';
 import { UnionAll } from './union-all';
 import { Update } from './update';
 
@@ -45,39 +52,43 @@ export function updateAllGraph(
   set: Readonly<Record<string, unknown>>,
 ): Graph {
   const { context, state } = collection;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   if (Object.keys(set).length === 0) {
-    graph.setResult(graph.add(new Find(selectRowsAst(collection, state)), { filter: [] }));
+    graph.setResult(graph.add(new Find(selectRowsAst(collection, state))));
     return graph;
   }
 
   requireIdentityColumnsForIncludes(collection);
   const update = updateAst(context.contract, state.tables, set, whereOf(collection));
-  const updated = graph.add(new Update(update), { filter: [] });
+  const updated = graph.add(new Update(update));
   graph.setResult(addWithIncludes(graph, collection, updated));
   return graph;
 }
 
 export function deleteAllGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, state } = collection;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   const del = new Delete(deleteAst(context.contract, state.tables, whereOf(collection)));
   if (state.includes.length === 0) {
-    graph.setResult(graph.add(del, { filter: [] }));
+    graph.setResult(graph.add(del));
     return graph;
   }
 
-  graph.setResult(graph.add(new Find(selectRowsAst(collection, state)), { filter: [] }));
-  graph.add(del, { filter: [] });
+  graph.setResult(graph.add(new Find(selectRowsAst(collection, state))));
+  graph.add(del);
   return graph;
 }
 
 export function updateFirstGraph(
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
+  relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
+  if (relationMutations.length > 0) {
+    return updateFirstWithRelationsGraph(collection, set, relationMutations);
+  }
   const { context, state } = collection;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   const nothingToSet = Object.keys(set).length === 0;
   if (!nothingToSet) {
     requireIdentityColumns(collection);
@@ -97,15 +108,79 @@ export function updateFirstGraph(
   }
 
   const update = updateAst(context.contract, state.tables, set, undefined);
-  const updated = graph.add(new Update(update), { filter: [sameRow(find, collection)] });
+  const updated = graph.add(new Update(update));
+  graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
   graph.setResult(addWithIncludes(graph, collection, updated));
   return graph;
+}
+
+function updateFirstWithRelationsGraph(
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  relationMutations: readonly ParsedRelationMutation[],
+): Graph {
+  const { context, modelName, namespaceId, state } = collection;
+  const graph = new Graph(context.contract);
+  requireIdentityColumns(collection);
+  requireIdentityColumnsForIncludes(collection);
+  const model = { namespaceId, modelName, tables: state.tables };
+  const find = graph.add(new Find(selectIdentityAst(collection, { ...state, limit: 1 })));
+  const t = { graph, context, gate: find };
+  const before = addBeforeWrite(t, model, relationMutations);
+  const values = withUpdateDefaults(collection, set, before);
+  const parent =
+    Object.keys(values).length === 0 && before.keys.length === 0
+      ? find
+      : addParentUpdate(graph, collection, find, values, before.keys);
+  addAfterWrite(t, model, parent, relationMutations);
+  graph.setResult(addWithIncludes(graph, collection, parent));
+  return graph;
+}
+
+function addParentUpdate(
+  graph: Graph,
+  collection: DescribeCollectionRowsOptions,
+  find: NodeId,
+  values: Readonly<Record<string, unknown>>,
+  keys: readonly KeySource[],
+): NodeId {
+  const { context, state } = collection;
+  const updated = graph.add(
+    new Update(updateAst(context.contract, state.tables, values, undefined)),
+  );
+  graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
+  for (const { from, columns } of keys) {
+    graph.addPayloadDataEdge(from, updated, columns);
+  }
+  return updated;
+}
+
+function withUpdateDefaults(
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  before: BeforeWrite,
+): Readonly<Record<string, unknown>> {
+  const values: Record<string, unknown> = { ...set, ...before.nullColumns };
+  const setNothingBefore = Object.keys(set).length === 0;
+  const changesNow = Object.keys(values).length > 0 || before.keys.length > 0;
+  if (setNothingBefore && changesNow) {
+    const { namespaceId, tableName } = collection.state.tables.root.storage;
+    for (const applied of collection.context.applyMutationDefaults({
+      op: 'update',
+      entry: tableName,
+      namespace: namespaceId,
+      values,
+    })) {
+      values[applied.field] = applied.value;
+    }
+  }
+  return values;
 }
 
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, state } = collection;
   const withIncludes = state.includes.length > 0;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   requireIdentityColumns(collection);
   const find = addFindOfFirstRow(
     graph,
@@ -117,7 +192,8 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   }
 
   const del = deleteAst(context.contract, state.tables, undefined);
-  const deleted = graph.add(new Delete(del), { filter: [sameRow(find, collection)] });
+  const deleted = graph.add(new Delete(del));
+  graph.addFilterDataEdge(find, deleted, sameRowColumns(collection));
   graph.setResult(withIncludes ? find : deleted);
   return graph;
 }
@@ -128,7 +204,7 @@ export function createAllGraph(
   conflict: InsertConflictSkip | undefined,
 ): Graph {
   const { context, state } = collection;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   if (rows.length === 0) {
     return graph;
   }
@@ -136,21 +212,33 @@ export function createAllGraph(
   const { contract } = context;
   const { root } = state.tables;
   const inserted = supportsDefaultInInsert(contract)
-    ? graph.add(new Insert(insertAst(contract, root, rows, conflict)), { payload: [] })
+    ? graph.add(new Insert(insertAst(contract, root, rows, conflict)))
     : graph.add(
         new InsertChunked(
           groupRowsByColumnSignature(rows).map((group) =>
             insertAst(contract, root, group, conflict),
           ),
         ),
-        {},
       );
   graph.setResult(addWithIncludes(graph, collection, inserted));
   return graph;
 }
 
-function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
-  return contract.capabilities['sql']?.['defaultInInsert'] === true;
+export function createGraph(
+  collection: DescribeCollectionRowsOptions,
+  data: Readonly<Record<string, unknown>>,
+): Graph {
+  const { context, modelName, namespaceId, state } = collection;
+  const graph = new Graph(context.contract);
+  requireIdentityColumnsForIncludes(collection);
+  const created = addCreateWithRelations(
+    { graph, context, gate: undefined },
+    { namespaceId, modelName, tables: state.tables },
+    data,
+    [],
+  );
+  graph.setResult(addWithIncludes(graph, collection, created));
+  return graph;
 }
 
 export interface VariantCreateRow {
@@ -167,7 +255,7 @@ export function createAllVariantGraph(
   const { context, modelName, state } = collection;
   const { contract } = context;
   const { root } = state.tables;
-  const graph = new Graph();
+  const graph = new Graph(contract);
   const keyColumns = resolvePrimaryKeyColumns(
     contract,
     root.storage.namespaceId,
@@ -184,17 +272,16 @@ export function createAllVariantGraph(
 
   const joins = rows.map((row) => {
     const baseInsert = insertAst(contract, root, [row.base], undefined).withReturning(baseColumns);
-    const base = graph.add(new Insert(baseInsert), { payload: [] });
+    const base = graph.add(new Insert(baseInsert));
     const variantInsert = insertAst(contract, variantTable, [row.variant], undefined).withReturning(
       variantColumns,
     );
-    const variant = graph.add(new Insert(variantInsert), {
-      payload: [new PayloadData(base, keyPairs)],
-    });
-    return graph.add(new CrossJoin(), {
-      left: new Rows(base, sameColumns(baseColumns)),
-      right: new Rows(variant, sameColumns(variantColumns)),
-    });
+    const variant = graph.add(new Insert(variantInsert));
+    graph.addPayloadDataEdge(base, variant, keyPairs);
+    const join = graph.add(new CrossJoin());
+    graph.addRowsEdge(base, join, 'left', sameColumns(baseColumns));
+    graph.addRowsEdge(variant, join, 'right', sameColumns(variantColumns));
+    return join;
   });
 
   const [only, ...others] = joins;
@@ -202,9 +289,11 @@ export function createAllVariantGraph(
     graph.setResult(only);
   } else if (only !== undefined) {
     const joined = sameColumns([...baseColumns, ...variantColumns]);
-    graph.setResult(
-      graph.add(new UnionAll(), { rows: joins.map((join) => new Rows(join, joined)) }),
-    );
+    const union = graph.add(new UnionAll());
+    for (const join of joins) {
+      graph.addRowsEdge(join, union, 'rows', joined);
+    }
+    graph.setResult(union);
   }
   return graph;
 }
@@ -221,7 +310,7 @@ export function upsertGraph(
 ): Graph {
   const { context, state } = collection;
   const { root } = state.tables;
-  const graph = new Graph();
+  const graph = new Graph(context.contract);
   requireIdentityColumnsForIncludes(collection);
   const updateSet =
     Object.keys(update).length > 0
@@ -230,7 +319,7 @@ export function upsertGraph(
           conflictColumns.slice(0, 1).map((column) => [column, ColumnRef.of('excluded', column)]),
         );
   const upsert = upsertAst(context.contract, root, create, conflictColumns, updateSet);
-  const upserted = graph.add(new Insert(upsert), { payload: [] });
+  const upserted = graph.add(new Insert(upsert));
   graph.setResult(addWithIncludes(graph, collection, upserted));
   return graph;
 }
@@ -249,7 +338,9 @@ function addWithIncludes(
     selectedFields: state.selectedFields,
     includes: state.includes,
   });
-  return graph.add(new Find(select), { filter: [sameRow(written, collection)] });
+  const find = graph.add(new Find(select));
+  graph.addFilterDataEdge(written, find, sameRowColumns(collection));
+  return find;
 }
 
 function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {
@@ -274,7 +365,7 @@ function addFindOfFirstRow(
   if (state.limit === 0) {
     return undefined;
   }
-  return graph.add(new Find(select(collection, { ...state, limit: 1 })), { filter: [] });
+  return graph.add(new Find(select(collection, { ...state, limit: 1 })));
 }
 
 function requireIdentityColumns(collection: DescribeCollectionRowsOptions): void {
@@ -321,16 +412,10 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
   return resolveRowIdentityColumns(collection.context.contract, namespaceId, tableName);
 }
 
-function sameRow(find: NodeId, collection: DescribeCollectionRowsOptions): FilterData {
+function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnPair[] {
   const { context, state } = collection;
-  const columns = projectTableColumns(
-    context.contract,
-    state.tables.root,
-    identityColumnsOf(collection),
-  );
-  return new FilterData(
-    find,
-    columns.map((column) => [column, column]),
+  return sameColumns(
+    projectTableColumns(context.contract, state.tables.root, identityColumnsOf(collection)),
   );
 }
 

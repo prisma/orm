@@ -9,15 +9,23 @@ import {
 import { combineWhereExprs } from '../where-utils';
 import type { FilterData } from './filter-data';
 import type { Executed, OutputsOf, Run } from './node';
+import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 
-export type Filtered = { filter: FilterData[] };
+export type Filtered = { filter: FilterData[]; state: StateEdge[]; requires: Requires[] };
+
+export const filteredSlots = { filter: 'list', state: 'list', requires: 'list' } as const;
 
 export function executeFiltered(
   ast: SelectAst | UpdateAst | DeleteAst,
-  filter: OutputsOf<Filtered>['filter'],
+  inputs: Pick<OutputsOf<Filtered>, 'filter' | 'requires'>,
   run: Run,
 ): Executed {
+  const { filter } = inputs;
+  if (requirementUnmet(inputs.requires)) {
+    return rowsResult([]);
+  }
   if (filter === null) {
     return executeStatement(ast, run);
   }
