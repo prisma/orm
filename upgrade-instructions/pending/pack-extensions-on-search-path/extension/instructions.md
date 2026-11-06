@@ -7,8 +7,8 @@ changes:
       glob: "**/*.{ts,mts,cts,prisma}"
       matches:
         - '\bextension\((?![^)]*namespace:\s*unbound\b)[^)]*\)'
-        - '^(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
-        - '\bnamespace\s+(?!unbound\b)[A-Za-z_][\w-]*\s*\{(?:[^{}]|\{[^{}]*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
+        - '^(?:(?:"(?:[^"\\\n]|\\.)*"|//[^\n]*(?:\n|$)|[^{}"/]|/(?!/))|\{(?:(?:"(?:[^"\\\n]|\\.)*"|//[^\n]*(?:\n|$)|[^{}"/]|/(?!/))|\{(?:"(?:[^"\\\n]|\\.)*"|//[^\n]*(?:\n|$)|[^{}"/]|/(?!/))*\})*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
+        - '\bnamespace\s+(?!unbound\b)[A-Za-z_][\w-]*\s*\{(?:(?:"(?:[^"\\\n]|\\.)*"|//[^\n]*(?:\n|$)|[^{}"/]|/(?!/))|\{(?:"(?:[^"\\\n]|\\.)*"|//[^\n]*(?:\n|$)|[^{}"/]|/(?!/))*\})*?\bextension\s+[A-Za-z_][\w-]*\s*\{'
 ---
 
 # A pack declares its extension in the unbound namespace
