@@ -1,3 +1,4 @@
+import { scalarTypeNamesOf } from '@internal/family-sql/control';
 import {
   collectScalarTypeConstructors,
   findAuthoringTypeConstructorCall,
@@ -230,6 +231,19 @@ describe('the integer, decimal, float, text, boolean, binary and JSON explicit t
         dataTypeLookup: createDataTypeLookup(postgresDataTypes),
       }),
     ).toBe(typeName);
+  });
+});
+
+describe('the name a fill value problem gives a codec', () => {
+  const nameOf = scalarTypeNamesOf(postgresScalarTypes);
+
+  it.each([
+    ['pg/jsonb@1', 'Json'],
+    ['pg/json@1', 'PlainJson'],
+    ['pg/int4@1', 'Int'],
+    ['pg/int2@1', 'Int2'],
+  ])('is, for %s, %s', (codecId, name) => {
+    expect(nameOf({ codecId })).toBe(name);
   });
 });
 
