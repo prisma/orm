@@ -4,7 +4,6 @@ import { freezeNode } from '@internal/framework-components/ir';
 import { assertNode, SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
-import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresSchemaNodeKind } from './schema-node-kinds';
 
 /**
@@ -28,7 +27,7 @@ export interface PostgresExtensionSchemaNodeInput {
 }
 
 /**
- * Schema-diff node for a Postgres extension. An extension's name is unique in the whole database, so the node sits on the database root and pairs by name alone; its location is compared, so an extension in another schema is one mismatch rather than a missing and an extra extension. An extension the contract leaves to the search path matches an installed one in any schema on the installed node's search path, and any contract-side node, since only a connection decides where it is.
+ * Schema-diff node for a Postgres extension. An extension's name is unique in the whole database, so the node sits on the database root and pairs by name alone; its location is compared, so an extension in another schema is one mismatch rather than a missing and an extra extension. An extension the contract leaves to the search path matches an installed one in any schema on the installed node's search path, and any contract-side node, since only a connection decides where it is. An extension a contract declares in a schema never matches one an earlier contract left to the search path, because it may be in any schema on it: the planner moves it with a checked `ALTER EXTENSION … SET SCHEMA`, which the runner skips when it is already there.
  */
 export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements DiffableNode {
   override readonly nodeKind = PostgresSchemaNodeKind.extension;
@@ -69,14 +68,8 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
     if (this.location.kind === 'searchPath') {
       return node.location.kind !== 'installed' || isOnSearchPath(node.location);
     }
-    return this.location.schemaName === node.schemaNameOrOfflineDefault();
-  }
-
-  /**
-   * The schema the extension is in, or, for an extension the contract leaves to the search path and compared with no connection, `public`: where `CREATE EXTENSION` with no schema puts it under the default search path, unless the extension's control file names a schema.
-   */
-  schemaNameOrOfflineDefault(): string {
-    return this.location.kind === 'searchPath' ? DEFAULT_NAMESPACE_ID : this.location.schemaName;
+    if (node.location.kind === 'searchPath') return false;
+    return this.location.schemaName === node.location.schemaName;
   }
 
   explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
@@ -95,8 +88,14 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
         cause: 'differs',
       };
     }
+    if (node.location.kind === 'searchPath') {
+      return {
+        text: `extension "${this.name}" was left to the search path, so it may be in any schema on it, and the contract declares it in schema "${this.location.schemaName}"`,
+        cause: 'differs',
+      };
+    }
     return {
-      text: `extension "${this.name}" is installed in schema "${node.schemaNameOrOfflineDefault()}", and the contract declares it in schema "${this.location.schemaName}"`,
+      text: `extension "${this.name}" is installed in schema "${node.location.schemaName}", and the contract declares it in schema "${this.location.schemaName}"`,
       cause: 'differs',
     };
   }

@@ -153,7 +153,9 @@ describe('Postgres extensions against a live database', { concurrent: false }, (
   async function installed(): Promise<Readonly<Record<string, string>>> {
     const schema = await introspect();
     return Object.fromEntries(
-      schema.extensions.map((node) => [node.name, node.schemaNameOrOfflineDefault()]),
+      schema.extensions.flatMap((node) =>
+        node.location.kind === 'installed' ? [[node.name, node.location.schemaName]] : [],
+      ),
     );
   }
 
@@ -451,5 +453,69 @@ describe('Postgres extensions in the unbound namespace against a live database',
       kind: 'installed',
       schemaName: 'extensions',
     });
+  });
+
+  async function applyOfflineMove(fromPsl: string, toPsl: string) {
+    const fromContract = contractFromPsl(fromPsl);
+    const contract = contractFromPsl(toPsl);
+    const offlineSchema = postgresTargetDescriptor.migrations.contractToSchema(
+      fromContract,
+      frameworkComponents,
+    ) as SqlSchemaIRNode;
+    PostgresDatabaseSchemaNode.assert(offlineSchema);
+    const planned = postgresTargetDescriptor.createPlanner(controlAdapter).plan({
+      contract,
+      schema: offlineSchema,
+      policy: ALLOW_DESTRUCTIVE,
+      fromContract,
+      origin: null,
+      statements: [],
+      frameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
+    const operations = await Promise.all(planned.plan.operations);
+    const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
+      driver,
+      perSpaceOptions: [
+        {
+          space: APP_SPACE_ID,
+          plan: planned.plan,
+          migrationEdges: synthEdges(planned.plan),
+          driver,
+          destinationContract: contract,
+          policy: ALLOW_DESTRUCTIVE,
+          frameworkComponents,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(`Runner failed:\n${formatRunnerFailure(result.failure)}`);
+    return {
+      moves: operations
+        .filter((op) => op.id === 'setExtensionSchema.vector')
+        .flatMap((op) => op.execute.map((step) => step.sql)),
+      operationsExecuted: result.value.perSpaceResults[0]?.value.operationsExecuted,
+    };
+  }
+
+  it('moves the extension to public on an offline unbound-to-public change, and skips the move once it is there', {
+    timeout: testTimeout,
+  }, async () => {
+    expect((await vectorNode())?.location).toMatchObject({ schemaName: 'extensions' });
+
+    const moved = await applyOfflineMove(UNBOUND_VECTOR, IN_PUBLIC);
+    expect(moved).toEqual({
+      moves: ['ALTER EXTENSION "vector" SET SCHEMA "public"'],
+      operationsExecuted: 1,
+    });
+    expect((await vectorNode())?.location).toMatchObject({ schemaName: 'public' });
+
+    const skipped = await applyOfflineMove(UNBOUND_VECTOR, IN_PUBLIC);
+    expect(skipped).toEqual({
+      moves: ['ALTER EXTENSION "vector" SET SCHEMA "public"'],
+      operationsExecuted: 0,
+    });
+    expect((await vectorNode())?.location).toMatchObject({ schemaName: 'public' });
   });
 });

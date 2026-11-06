@@ -312,14 +312,18 @@ describe('planning an unbound extension', () => {
     expect(operations[1]?.execute).toEqual(['ALTER EXTENSION "vector" SET SCHEMA "extensions"']);
   });
 
-  it('plans nothing offline when the destination names public', async () => {
+  it('moves it to public offline when the destination names public, since it may be in any schema on the search path', async () => {
     const fromContract = contractDeclaring({ vector: UNBOUND });
-    const { operations } = await plannedOperations({
+    const { operations, typeScript } = await plannedOperations({
       contract: contractDeclaring({ vector: 'public' }),
       fromContract,
       schema: offlineSchemaOf(fromContract),
     });
-    expect(operations).toEqual([]);
+    expect(operations.map((op) => op.id)).toEqual(['setExtensionSchema.vector']);
+    expect(operations[0]?.execute).toEqual(['ALTER EXTENSION "vector" SET SCHEMA "public"']);
+    expect(typeScript).toContain(
+      'this.setExtensionSchema({ extension: "vector", schema: "public" })',
+    );
   });
 
   it('drops an unbound extension the destination no longer declares, naming no schema', async () => {
