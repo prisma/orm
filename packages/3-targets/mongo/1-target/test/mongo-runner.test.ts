@@ -43,6 +43,7 @@ import type {
   AnyMongoWireCommand,
 } from '@internal/mongo-wire';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { ObjectId, UUID } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
@@ -1034,7 +1035,7 @@ describe('MongoMigrationRunner, a DDL precheck that reads documents', () => {
     expect(harness.ddlCalls).toEqual([]);
   });
 
-  it('rejects a document check that writes', async () => {
+  it('rejects a document check that writes, in words for any migration check', async () => {
     const harness = makeHarness();
     const op = validatorWithDocumentCheck();
 
@@ -1042,7 +1043,44 @@ describe('MongoMigrationRunner, a DDL precheck that reads documents', () => {
       execute(harness, [
         { ...op, precheck: [{ ...op.precheck[0]!, source: makeWriteCheckPlan() }] },
       ] as AnyMongoMigrationOperation[]),
-    ).rejects.toMatchObject({ code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY' });
+    ).rejects.toMatchObject({
+      code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+      message: 'Migration check rejected: command kind "rawUpdateMany" is not read-only',
+      why: 'A migration check must read with an aggregate or rawAggregate command, so that running it cannot change the database.',
+    });
+  });
+
+  it('gives the plain precheck failure when the documents were fixed before they were counted', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 'u1' }]);
+    harness.driver.queueResponse([]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().message).toBe(
+      'Operation validator.users.update failed during precheck: no document in users matches',
+    );
+  });
+
+  it.each([
+    [new Date('2024-05-01T10:00:00.000Z'), 'ISODate("2024-05-01T10:00:00.000Z")'],
+    [
+      new UUID('3f2a8c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b'),
+      'UUID("3f2a8c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b")',
+    ],
+    [new ObjectId('64b7f0c2a1b2c3d4e5f60718'), 'ObjectId("64b7f0c2a1b2c3d4e5f60718")'],
+    ['ada', '"ada"'],
+    [42, '42'],
+  ])('writes the _id %s as mongosh does', async (documentId, written) => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: documentId }]);
+    harness.driver.queueResponse([{ _id: null, documents: 1, documentId }]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().meta['documentsFailingValidator']).toMatchObject({
+      documentId: written,
+    });
   });
 });
 

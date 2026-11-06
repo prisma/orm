@@ -8,7 +8,7 @@ import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregat
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/control';
-import { collMod, setValidation } from '@internal/target-mongo/migration';
+import { collMod, createIndex, setValidation } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient, ObjectId } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -183,6 +183,34 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
           .find(JSON.parse(printed ?? 'null'))
           .toArray(),
       ).toHaveLength(2);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'says the operations before it stay applied when an index was created first',
+    async () => {
+      await db.createCollection('users');
+      await db
+        .collection('users')
+        .insertOne({ _id: new ObjectId('64b7f0c2a1b2c3d4e5f60718'), name: 'Ada' });
+
+      const result = await run([
+        createIndex('users', [{ field: 'name', direction: 1 }]),
+        addPlanValidator(true),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      const query = `db.getCollection("users").find(${JSON.stringify({ $nor: [{ $jsonSchema: schemaWithPlan }] })})`;
+      expect({
+        why: result.failure.why,
+        databaseUnchanged: result.failure.meta.databaseUnchanged,
+        indexes: (await db.collection('users').indexes()).map(({ name }) => name),
+      }).toEqual({
+        why: `It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        databaseUnchanged: false,
+        indexes: ['_id_', 'name_1'],
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );

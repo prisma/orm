@@ -4,11 +4,7 @@ import type {
 } from '@internal/framework-components/control';
 import type { AnyMongoDdlCommand } from './ddl-commands';
 import type { MongoFilterExpr } from './filter-expressions';
-import {
-  type AnyMongoInspectionCommand,
-  ListCollectionsCommand,
-  ListIndexesCommand,
-} from './inspection-commands';
+import type { AnyMongoInspectionCommand } from './inspection-commands';
 import type { MongoQueryPlan } from './query-plan';
 
 /**
@@ -20,7 +16,7 @@ export type MongoMigrationCheckSource = AnyMongoInspectionCommand | MongoQueryPl
 export function isInspectionCheckSource(
   source: MongoMigrationCheckSource,
 ): source is AnyMongoInspectionCommand {
-  return source instanceof ListCollectionsCommand || source instanceof ListIndexesCommand;
+  return !('command' in source);
 }
 
 export interface MongoMigrationCheck {

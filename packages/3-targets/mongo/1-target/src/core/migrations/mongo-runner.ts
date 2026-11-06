@@ -201,20 +201,40 @@ function renameTargetExistsRefusal(
   );
 }
 
-/** The validator a `collMod` step of the operation sets, when it sets one. */
 function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undefined {
   const step = op.execute.find(({ command }) => command instanceof CollModCommand)?.command;
   return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
 }
 
-/** A value as `mongosh` reads it: an ObjectId as `ObjectId("…")`, anything else as JSON. */
+function bsonTypeOf(value: object): unknown {
+  return Reflect.get(value, '_bsontype');
+}
+
+function uuidText(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-');
+}
+
+/** A value as `mongosh` writes it: `ObjectId("…")`, `ISODate("…")`, `UUID("…")`, anything else as JSON. */
 function mongoshValue(value: unknown): string {
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    Reflect.get(value, '_bsontype') === 'ObjectId'
-  ) {
-    return `ObjectId(${JSON.stringify(String(value))})`;
+  if (value instanceof Date) return `ISODate(${JSON.stringify(value.toISOString())})`;
+  if (typeof value === 'object' && value !== null) {
+    if (bsonTypeOf(value) === 'ObjectId') return `ObjectId(${JSON.stringify(String(value))})`;
+    const bytes: unknown = Reflect.get(value, 'buffer');
+    if (
+      bsonTypeOf(value) === 'Binary' &&
+      Reflect.get(value, 'sub_type') === 4 &&
+      bytes instanceof Uint8Array &&
+      bytes.length === 16
+    ) {
+      return `UUID(${JSON.stringify(uuidText(bytes))})`;
+    }
   }
   return JSON.stringify(value) ?? String(value);
 }
@@ -587,6 +607,7 @@ export class MongoMigrationRunner {
       ]),
     });
     const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
     const documentId = mongoshValue(counted?.['documentId']);
     const query = `db.getCollection(${JSON.stringify(collMod.collection)}).find(${JSON.stringify(failing)})`;
     return runnerFailure(
@@ -636,10 +657,10 @@ export class MongoMigrationRunner {
     if (!READ_ONLY_CHECK_COMMAND_KINDS.has(commandKind)) {
       throw mongoTargetError(
         'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
-        `Data-transform check rejected: command kind "${commandKind}" is not read-only`,
+        `Migration check rejected: command kind "${commandKind}" is not read-only`,
         {
-          why: 'Data-transform checks must use aggregate or rawAggregate commands so the pre/postcheck path cannot mutate the database.',
-          fix: 'Author the check.source as an aggregate pipeline (or rawAggregate) rather than a DML write command.',
+          why: 'A migration check must read with an aggregate or rawAggregate command, so that running it cannot change the database.',
+          fix: "Write the check's source as an aggregate or rawAggregate pipeline, not a command that writes.",
           meta: {
             checkDescription: check.description,
             commandKind,

@@ -622,7 +622,6 @@ export function setValidation(
   };
 }
 
-/** The check that no document of the collection fails `validator`. */
 function documentsFitValidator(
   collectionName: string,
   validator: Readonly<Record<string, unknown>>,
