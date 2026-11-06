@@ -391,6 +391,33 @@ describeMatrix(sqliteOnly, 'SQLite', () => {
     `)
   })
 
+  it('first migration (non-interactive)', async () => {
+    ctx.fixture('schema-only-sqlite')
+    // Unset the CI env vars from setup.ts and beforeEach, only the TTY check should skip the prompt
+    delete process.env.CI
+    delete process.env.GITHUB_ACTIONS
+    // To make sure the terminal is always detected
+    // as non interactive, locally and in CI
+    process.env.TERM = 'dumb'
+
+    const result = MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
+
+    await expect(result).resolves.toMatchInlineSnapshot(`""`)
+    expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
+      "Datasource "my_db": SQLite database "dev.db" <location placeholder>
+
+
+      The following migration(s) have been created and applied from new schema changes:
+
+      prisma/migrations/
+        └─ 20201231000000/
+          └─ migration.sql
+
+      Your database is now in sync with your schema.
+      "
+    `)
+  })
+
   it('draft migration and apply (prompt)', async () => {
     ctx.fixture('schema-only-sqlite')
 
