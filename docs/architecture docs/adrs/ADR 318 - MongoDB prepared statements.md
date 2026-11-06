@@ -99,11 +99,11 @@ Paging is the most common prepared query, and SQL accepts placeholders there, so
 ## Two handles, picked from the command
 
 - `MongoPreparedStatement<Params, Row>` has `query(target, params, options?)`, which returns `AsyncIterableResult<Row>`.
-- `MongoPreparedExecution<Params, Row>` is for `updateOne`, `updateMany`, `deleteOne` and `deleteMany`, the four commands that report statement statistics. It has `query`, which yields the driver's result row as `runtime.query(plan)` does, and `execute(target, params, options?)`, which returns the statistics `runtime.execute(plan)` returns.
+- `MongoPreparedExecution<Params, Row>` is for the commands that report statement statistics: `updateOne`, `updateMany`, `deleteOne` and `deleteMany`, from the query builder or the raw lane. It has `query`, which yields the driver's result row as `runtime.query(plan)` does, and `execute(target, params, options?)`, which returns the statistics `runtime.execute(plan)` returns.
 
-`MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
+`MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. The rule is the one ad-hoc `execute` uses: a raw `updateOne` lowers to an `updateOne` wire command, which `runtime.execute` gives statistics for, so its prepared handle has `execute` too. The raw lane's plans carry their raw command type, so the type agrees. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
 
-The second handle has both methods because a MongoDB update or delete plan supports both `query` and `execute` today. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
 
 ## The runtime is the only target, and the bridge is internal
 

@@ -90,6 +90,16 @@ export function testStructuralLower(plan: MongoQueryPlan): MongoLoweredDraft {
         collection: command.collection,
         filter: lowerFilter(command.filter),
       };
+    case 'rawUpdateMany':
+      return {
+        kind: 'rawUpdateMany',
+        collection: command.collection,
+        filter: command.filter,
+        update: command.update,
+        bypassDocumentValidation: command.bypassDocumentValidation === true,
+      };
+    case 'rawDeleteOne':
+      return { kind: 'rawDeleteOne', collection: command.collection, filter: command.filter };
     case 'rawAggregate':
       return { kind: 'rawAggregate', collection: command.collection, pipeline: command.pipeline };
     default:
@@ -110,7 +120,7 @@ export function preparedRuntime(
     structuralLower: vi.fn(testStructuralLower),
     resolveParams: vi.fn(async (draft: MongoLoweredDraft, _ctx: CodecCallContext) => {
       resolvedDrafts.push(draft);
-      return draft.kind === 'updateMany' || draft.kind === 'deleteMany'
+      return draft.kind !== 'aggregate' && draft.kind !== 'rawAggregate'
         ? new UpdateManyWireCommand(draft.collection, {}, {})
         : new AggregateWireCommand(draft.collection, []);
     }),

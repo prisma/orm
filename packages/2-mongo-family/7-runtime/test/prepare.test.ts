@@ -8,6 +8,8 @@ import {
   MongoMatchStage,
   MongoSkipStage,
   RawAggregateCommand,
+  RawDeleteOneCommand,
+  RawUpdateManyCommand,
   UpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
@@ -95,6 +97,25 @@ describe('runtime.prepare', () => {
       expect(typeof handle.query).toBe('function');
       expect(typeof handle.execute).toBe('function');
     }
+  });
+
+  it('returns an execution handle for raw updateMany and deleteOne, as ad-hoc execute gives them statistics', async () => {
+    const { runtime } = preparedRuntime({
+      driver: createMockDriver([{ matchedCount: 3, modifiedCount: 3 }]),
+    });
+    const update = await runtime.prepare({}, () => ({
+      collection: 'users',
+      command: new RawUpdateManyCommand('users', { status: 'new' }, { $set: { seen: true } }),
+      meta: baseMeta,
+    }));
+    const remove = await runtime.prepare({}, () => ({
+      collection: 'users',
+      command: new RawDeleteOneCommand('users', { status: 'old' }),
+      meta: baseMeta,
+    }));
+
+    expect(typeof remove.execute).toBe('function');
+    await expect(update.execute(runtime, {})).resolves.toEqual({ affectedRows: 3 });
   });
 
   it('refuses an unknown codec id before calling the callback', async () => {

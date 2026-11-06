@@ -11,6 +11,10 @@ import type {
   DeleteOneCommand,
   MongoQueryExecutor,
   MongoQueryPlan,
+  RawDeleteManyCommand,
+  RawDeleteOneCommand,
+  RawUpdateManyCommand,
+  RawUpdateOneCommand,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
@@ -58,7 +62,7 @@ export interface MongoPreparedStatement<Params, Row> {
   ): AsyncIterableResult<Row>;
 }
 
-/** A prepared `updateOne`, `updateMany`, `deleteOne` or `deleteMany`. It also has `execute`, which returns the statement statistics. */
+/** A prepared `updateOne`, `updateMany`, `deleteOne` or `deleteMany`, typed or raw. It also has `execute`, which returns the statement statistics. */
 export interface MongoPreparedExecution<Params, Row> extends MongoPreparedStatement<Params, Row> {
   execute(
     target: MongoQueryExecutor,
@@ -71,7 +75,11 @@ export type MongoStatisticsCommand =
   | UpdateOneCommand
   | UpdateManyCommand
   | DeleteOneCommand
-  | DeleteManyCommand;
+  | DeleteManyCommand
+  | RawUpdateOneCommand
+  | RawUpdateManyCommand
+  | RawDeleteOneCommand
+  | RawDeleteManyCommand;
 
 /** The handle a plan prepares into, picked from the plan's command type. */
 export type MongoPreparedFor<Params, Row, Command> = [Command] extends [never]

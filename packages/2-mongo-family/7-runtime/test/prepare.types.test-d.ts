@@ -6,6 +6,11 @@ import type {
   InsertOneCommand,
   MongoQueryExecutor,
   MongoQueryPlan,
+  RawAggregateCommand,
+  RawDeleteManyCommand,
+  RawDeleteOneCommand,
+  RawUpdateManyCommand,
+  RawUpdateOneCommand,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
@@ -73,6 +78,24 @@ describe('the handle a plan prepares into', () => {
     expectTypeOf<MongoPreparedFor<{ a: string }, unknown, DeleteManyCommand>>().toHaveProperty(
       'execute',
     );
+  });
+
+  test('raw update and delete commands get execute, as ad-hoc execute gives them statistics', () => {
+    expectTypeOf<MongoPreparedFor<{ a: string }, unknown, RawUpdateOneCommand>>().toEqualTypeOf<
+      MongoPreparedExecution<{ a: string }, unknown>
+    >();
+    expectTypeOf<MongoPreparedFor<{ a: string }, unknown, RawUpdateManyCommand>>().toHaveProperty(
+      'execute',
+    );
+    expectTypeOf<MongoPreparedFor<{ a: string }, unknown, RawDeleteOneCommand>>().toHaveProperty(
+      'execute',
+    );
+    expectTypeOf<MongoPreparedFor<{ a: string }, unknown, RawDeleteManyCommand>>().toHaveProperty(
+      'execute',
+    );
+    expectTypeOf<
+      MongoPreparedFor<{ a: string }, unknown, RawAggregateCommand>
+    >().not.toHaveProperty('execute');
   });
 
   test('other commands get query only', () => {
