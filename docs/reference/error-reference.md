@@ -1259,11 +1259,11 @@ Mongo middleware called `ctx.contentHash(plan)` (or `computeMongoContentHash`) d
 
 ### RUNTIME.CONTRACT_FAMILY_MISMATCH
 
-At SQL context construction, the contract's target family (e.g. `mongo`) does not match the runtime stack's family (`sql`): the contract was emitted for a different database family than the stack being assembled. Payload: `actual`, `expected`.
+At SQL or MongoDB context construction, including `mongo()` and `mongoStatic()`, the contract's target family (e.g. `mongo`) does not match the runtime stack's family (e.g. `sql`): the contract was emitted for a different database family than the stack being assembled. Payload: `actual`, `expected`.
 
 ### RUNTIME.CONTRACT_TARGET_MISMATCH
 
-At SQL context construction, the contract's target (e.g. `sqlite`) does not match the runtime stack's target descriptor (e.g. `postgres`): the contract and the adapter/driver stack disagree about the database target. Payload: `actual`, `expected`.
+At SQL or MongoDB context construction, including `mongo()` and `mongoStatic()`, the contract's target (e.g. `sqlite`) does not match the runtime stack's target descriptor (e.g. `postgres`): the contract and the adapter/driver stack disagree about the database target. Payload: `actual`, `expected`.
 
 ### RUNTIME.DATE_STYLE_NOT_ISO
 
@@ -1293,7 +1293,7 @@ Two authoring contributions register the same discriminator key, the same `entit
 
 ### RUNTIME.DUPLICATE_CODEC
 
-Two runtime stack contributors (target pack, extension packs) register a codec with the same id, while the SQL context or Mongo execution stack collects codecs, or while a target codec-descriptor registry (Postgres, SQLite) is composed. Remove the duplicate contribution. Payload: `codecId`; on the Mongo path also `existingOwner`, `incomingOwner`; on the target registry path also `target`.
+Two runtime stack contributors (target pack, extension packs) register a codec with the same id, while the SQL context or the MongoDB execution context collects codecs, while the MongoDB adapter's runtime or control descriptor `create(stack)` assembles the codecs it encodes with, or while a target codec-descriptor registry (Postgres, SQLite) is composed. Remove the duplicate contribution. Payload: `codecId`; on the Mongo path also `existingOwner`, `incomingOwner`; on the target registry path also `target`.
 
 ### RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR
 
@@ -1356,7 +1356,7 @@ A middleware declares a `targetId` (e.g. `postgres`) that differs from the runti
 
 ### RUNTIME.MISSING_EXTENSION_PACK
 
-At SQL context construction, the contract requires one or more extension packs that no component in the runtime stack provides. Add the missing pack(s) to the stack. Payload: `packIds`.
+At SQL or MongoDB context construction, including `mongo()` and `mongoStatic()`, the contract requires one or more extension packs that no component in the runtime stack provides. Add the missing pack(s) to the stack. Payload: `packIds`.
 
 ### RUNTIME.MONGO_STATISTICS_RESULT_INVALID
 

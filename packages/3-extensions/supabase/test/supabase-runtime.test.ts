@@ -101,7 +101,7 @@ describe('SupabaseRuntimeImpl', () => {
       await session.query(stubPlan()).toArray();
       await session.release();
 
-      expect(sessionControlOnConn).toHaveLength(3);
+      expect(sessionControlOnConn).toHaveLength(4);
       expect(queriedOnConn).toHaveLength(1);
       expect(sessionControlOnConn[0]).toBe(queriedOnConn[0]);
     });
@@ -201,13 +201,13 @@ describe('SupabaseRuntimeImpl', () => {
   });
 
   describe('openRoleSession — release', () => {
-    it('release() sends RESET ALL then releases the connection to the pool', async () => {
+    it('release() sends RESET ALL and RESET ROLE, since RESET ALL leaves the role, then releases the connection to the pool', async () => {
       const { runtime, driver } = createTestSetup();
       const resetCalls: string[] = [];
 
       driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
         driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
+        if (request.sql.startsWith('RESET')) {
           resetCalls.push(request.sql);
         }
         return { affectedRows: 0 };
@@ -216,29 +216,34 @@ describe('SupabaseRuntimeImpl', () => {
       const session = await runtime.openRoleSession({ role: 'anon' });
       await session.release();
 
-      expect(resetCalls).toHaveLength(1);
+      expect(resetCalls).toEqual(['RESET ALL', 'RESET ROLE']);
       expect(driver.connection.release).toHaveBeenCalledOnce();
       expect(driver.connection.destroy).not.toHaveBeenCalled();
     });
 
-    it('when RESET ALL fails, destroys the connection instead of releasing', async () => {
-      const { runtime, driver } = createTestSetup();
-      const resetError = new Error('RESET ALL failed');
+    it.each(['RESET ALL', 'RESET ROLE'])(
+      'when %s fails, destroys the connection instead of releasing',
+      async (failing) => {
+        const { runtime, driver } = createTestSetup();
+        const resetError = new Error(`${failing} failed`);
 
-      driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
-        driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
-          throw resetError;
-        }
-        return { affectedRows: 0 };
-      });
+        driver.connection.execute = vi
+          .fn()
+          .mockImplementation(async (request: SqlExecuteRequest) => {
+            driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
+            if (request.sql === failing) {
+              throw resetError;
+            }
+            return { affectedRows: 0 };
+          });
 
-      const session = await runtime.openRoleSession({ role: 'anon' });
-      await session.release();
+        const session = await runtime.openRoleSession({ role: 'anon' });
+        await session.release();
 
-      expect(driver.connection.destroy).toHaveBeenCalledOnce();
-      expect(driver.connection.release).not.toHaveBeenCalled();
-    });
+        expect(driver.connection.destroy).toHaveBeenCalledOnce();
+        expect(driver.connection.release).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('openRoleSession — bind-failure', () => {

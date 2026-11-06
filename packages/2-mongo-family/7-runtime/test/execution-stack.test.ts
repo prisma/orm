@@ -1,5 +1,4 @@
 import type { RuntimeDriverDescriptor } from '@internal/framework-components/execution';
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createMongoExecutionStack,
@@ -15,7 +14,6 @@ function target(sessionSettings?: Record<string, string>): MongoRuntimeTargetDes
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: newMongoCodecRegistry,
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
     ...(sessionSettings === undefined ? {} : { sessionSettings }),
   };
@@ -27,7 +25,6 @@ const adapter: MongoRuntimeAdapterDescriptor<'mongo'> = {
   familyId: 'mongo',
   targetId: 'mongo',
   version: '0.0.1',
-  codecs: newMongoCodecRegistry,
   create: () => {
     throw new Error('the stack never instantiates the adapter');
   },
