@@ -9,7 +9,13 @@ import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregat
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/control';
-import { castField, collMod } from '@internal/target-mongo/migration';
+import {
+  castField,
+  collMod,
+  dataTransform,
+  rawAggregate,
+  rawUpdateMany,
+} from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -17,7 +23,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const controlAdapter = new MongoControlAdapterImpl();
 const policy: MigrationOperationPolicy = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive'],
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
 };
 
 let replSet: MongoMemoryReplSet;
@@ -268,6 +274,49 @@ describe('MongoMigrationRunner, a cast of a field', () => {
         codes: ['int', 'int'],
         ages: ['long', 'long'],
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a data transform filled in by the user', () => {
+  it(
+    'converts the documents, lets the validator change prove them, and is skipped on a re-run',
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([
+        { name: 'Ada', age: '42' },
+        { name: 'Bo', age: 'forty' },
+      ]);
+      const properties = { name: { bsonType: 'string' }, age: { bsonType: 'int' } };
+      const notInt = { age: { $ne: null, $not: { $type: ['int'] } } };
+      const operations = [
+        dataTransform('User.age', {
+          check: { source: () => rawAggregate('users', [{ $match: notInt }, { $limit: 1 }]) },
+          run: () =>
+            rawUpdateMany(
+              'users',
+              notInt,
+              [{ $set: { age: { $convert: { input: '$age', to: 'int', onError: 0 } } } }],
+              { bypassDocumentValidation: true },
+            ),
+        }),
+        validatorChange(properties),
+      ];
+      const contract = usersContract(properties);
+
+      const first = await run(operations, contract);
+      await controlAdapter.updateMarker(new MongoControlDriver(db, client), 'app', 'dest', {
+        storageHash: 'origin',
+        profileHash: 'p1',
+      });
+      const again = await run(operations, contract);
+
+      expect({
+        first: first.ok ? first.value.operationsExecuted : first.failure,
+        again: again.ok ? again.value.operationsExecuted : again.failure,
+        ages: await types('age'),
+      }).toEqual({ first: 2, again: 0, ages: ['int', 'int'] });
     },
     timeouts.spinUpMongoMemoryServer,
   );

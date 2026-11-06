@@ -51,6 +51,7 @@ import {
   createCollection,
   createIndex,
   dataTransform,
+  rawUpdateMany,
   renameCollection,
   renameField,
   unsetField,
@@ -934,6 +935,24 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
         databaseUnchanged: false,
       },
     });
+  });
+
+  it('gives a data transform whose run skips validation the same advice', async () => {
+    const harness = makeHarness();
+    harness.driver.failUpdateManyWith(unauthorized());
+
+    const result = await execute(harness, [
+      dataTransform('User.age', {
+        run: () =>
+          rawUpdateMany('users', { age: null }, [{ $set: { age: 0 } }], {
+            bypassDocumentValidation: true,
+          }),
+      }),
+    ]);
+
+    expect(result.assertNotOk().message).toBe(
+      'Operation data_transform.User.age failed: the database user may not skip document validation',
+    );
   });
 
   it('lets any other failure of a data transform through unchanged', async () => {

@@ -1,7 +1,7 @@
 /**
  * A field whose type changes (MongoDB).
  *
- * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only. Journey T3 changes `Int` to `Int64` through `db update`, which casts every value with nothing asked. Journey T4 plans `--delete User.age` on documents holding `"abc"`, which `db migrate` cannot cast: the failure advises `--convert User.age` once.
+ * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only, and `--convert User.age` then writes the data transform to fill in. Journey T3 changes `Int` to `Int64` through `db update`, which casts every value with nothing asked. Journey T4 plans `--delete User.age` on documents holding `"abc"`, which `db migrate` cannot cast: the failure advises `--convert User.age` once.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -213,6 +213,23 @@ describe('Journeys (MongoDB): a field whose type changes', {
       },
       `T2.02: only --convert is offered: ${text}`,
     ).toEqual({ noCast: true, convert: true, delete: false });
+
+    const converted = await runMigrationPlan(ctx, [
+      '--name',
+      'age-int',
+      '--from',
+      origin,
+      '--convert',
+      'User.age',
+    ]);
+    expect(converted.exitCode, `T2.03: plan with --convert User.age: ${converted.stderr}`).toBe(0);
+    expect(
+      readFileSync(
+        join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx), 'migration.ts'),
+        'utf-8',
+      ),
+      'T2.04: migration.ts has the data transform to fill in',
+    ).toMatch(/placeholder\(['"]User\.age:update['"]\)/);
   });
 
   it('T3: db update casts Int to Int64 with nothing asked', async () => {
