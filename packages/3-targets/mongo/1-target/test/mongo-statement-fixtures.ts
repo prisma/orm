@@ -14,6 +14,7 @@ import {
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
+import { mongoTargetDescriptor } from '../src/core/migrations/control-target';
 import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 
@@ -269,6 +270,10 @@ export function plan(input: {
   readonly policy?: MigrationOperationPolicy;
   /** The origin a migration package asserts; `db update` plans without one. */
   readonly origin?: PlanOrigin | null;
+  /** The composed components, whose codecs and data types the planner reads; the MongoDB target by default. */
+  readonly frameworkComponents?: Parameters<
+    MongoMigrationPlanner['plan']
+  >[0]['frameworkComponents'];
 }) {
   return new MongoMigrationPlanner().plan({
     contract: input.to,
@@ -277,7 +282,7 @@ export function plan(input: {
     fromContract: input.from,
     origin: input.origin ?? null,
     statements: input.statements ?? [],
-    frameworkComponents: [],
+    frameworkComponents: input.frameworkComponents ?? [mongoTargetDescriptor],
     snapshotsImportPath: '../../snapshots',
   });
 }

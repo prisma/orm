@@ -73,6 +73,7 @@ import {
   timeSeriesCastRefusals,
   typeChangeConverted,
 } from './mongo-type-changes';
+import { mongoTypeLookupsOf } from './mongo-type-lookups';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -629,18 +630,24 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
             contract,
             collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
           };
+    const lookups = mongoTypeLookupsOf(options.frameworkComponents);
     const typeChanges: readonly TypeChange[] =
       fromContract === null
         ? planValidatorTypeChanges({ origin: schema, destination: destinationIR, contract })
-        : planFieldTypeChanges({
-            statements: renames,
-            fromContract,
-            contract,
-            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
-            keptCollections: new Set(
-              schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
-            ),
-          });
+        : planFieldTypeChanges(
+            {
+              statements: renames,
+              fromContract,
+              contract,
+              collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+              keptCollections: new Set(
+                schema.collectionNames.filter(
+                  (name) => destinationIR.collection(name) !== undefined,
+                ),
+              ),
+            },
+            lookups,
+          );
     const contracts = { fromContract: fromContract ?? contract, contract };
     const converted: TypeChange[] = [];
     const transforms = options.statements.flatMap((statement): PlannedTransform[] => {
@@ -664,6 +671,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const fills = planFieldFills({
       match,
       contract,
+      lookups,
       schema,
       destination: destinationIR,
       statements: options.statements,

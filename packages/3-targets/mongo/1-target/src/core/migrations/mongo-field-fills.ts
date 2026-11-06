@@ -1,5 +1,5 @@
 import type { ContractField, ContractWithDomain } from '@internal/contract/types';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { TypeLookups } from '@internal/framework-components/codec';
 import {
   type FieldCoordinate,
   fieldStatementText,
@@ -17,8 +17,6 @@ import {
   temporaryValueOfCodec,
 } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { mongoDescriptorById } from '../codecs';
-import { mongoDataTypes } from '../data-types';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
@@ -37,11 +35,6 @@ import {
 } from './mongo-statement-planning';
 import { FillFieldCall } from './op-factory-call';
 
-const MONGO_TYPE_LOOKUPS = {
-  codecLookup: { descriptorFor: mongoDescriptorById },
-  dataTypeLookup: createDataTypeLookup(mongoDataTypes),
-};
-
 const EMPTY_LIST: MongoTemporaryValue = { expression: [], text: '[]' };
 
 /** A new required field the plan fills with a temporary value, where the documents lack it or hold `null`. */
@@ -52,16 +45,20 @@ export interface FieldFill {
   readonly text: string;
 }
 
-function temporaryValueOf(field: ContractField): MongoTemporaryValue | undefined {
+function temporaryValueOf(
+  field: ContractField,
+  lookups: TypeLookups,
+): MongoTemporaryValue | undefined {
   if (field.many !== undefined && field.many !== false) return EMPTY_LIST;
   if (field.type.kind !== 'scalar' || field.valueSet !== undefined || field.dict === true) {
     return undefined;
   }
-  return temporaryValueOfCodec(field.type.codecId, MONGO_TYPE_LOOKUPS);
+  return temporaryValueOfCodec(field.type.codecId, lookups);
 }
 
 interface FillInput {
   readonly contract: MongoContract;
+  readonly lookups: TypeLookups;
   /** How to find a model or field in the origin contract; `undefined` without one. */
   readonly match: ModelMatchInput | undefined;
   /** The schema the plan starts from, with renamed collections under their new names. */
@@ -126,7 +123,7 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         }
         if (backfilled(input.statements, coordinate)) return [];
         if (inOrigin(input, coordinate, collection, storedName)) return [];
-        const value = temporaryValueOf(contractField);
+        const value = temporaryValueOf(contractField, input.lookups);
         if (value === undefined) return [];
         const filter = variantFilter(input.contract, model);
         return [

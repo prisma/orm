@@ -1,5 +1,5 @@
 import type { ContractField, ContractWithDomain } from '@internal/contract/types';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
+import type { TypeLookups } from '@internal/framework-components/codec';
 import {
   type FieldCoordinate,
   fieldStatementText,
@@ -14,8 +14,6 @@ import {
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { mongoDescriptorById } from '../codecs';
-import { mongoDataTypes } from '../data-types';
 import { hasCast, isCastTarget } from './bson-casts';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
 import {
@@ -57,18 +55,16 @@ export interface TypeChange {
   readonly cast: CastFieldCall | undefined;
 }
 
-const MONGO_TYPE_LOOKUPS = {
-  codecLookup: { descriptorFor: mongoDescriptorById },
-  dataTypeLookup: createDataTypeLookup(mongoDataTypes),
-};
-
 function withoutNull(types: readonly string[]): readonly string[] {
   return types.filter((type) => type !== 'null');
 }
 
-function fieldShapeOf(field: ContractField | undefined): FieldShape | undefined {
+function fieldShapeOf(
+  field: ContractField | undefined,
+  lookups: TypeLookups,
+): FieldShape | undefined {
   if (field?.type.kind !== 'scalar' || field.dict === true) return undefined;
-  const types = bsonTypesOfCodec(field.type.codecId, MONGO_TYPE_LOOKUPS);
+  const types = bsonTypesOfCodec(field.type.codecId, lookups);
   return types === undefined
     ? undefined
     : { types: withoutNull(types), list: field.many !== undefined && field.many !== false };
@@ -134,7 +130,10 @@ function typeChange(input: Omit<TypeChange, 'cast'>): TypeChange {
  * Each top-level field of a model or variant, in a collection the plan keeps, whose destination
  * type does not take every value its origin type holds, read from the BSON types of the two codecs.
  */
-export function planFieldTypeChanges(input: FieldRemovalInput): readonly TypeChange[] {
+export function planFieldTypeChanges(
+  input: FieldRemovalInput,
+  lookups: TypeLookups,
+): readonly TypeChange[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
     const model = modelAt(input.fromContract, origin);
     if (model === undefined || model.owner !== undefined) return [];
@@ -150,8 +149,8 @@ export function planFieldTypeChanges(input: FieldRemovalInput): readonly TypeCha
       .flatMap((field): TypeChange[] => {
         const destinationField = destinationFieldOf({ ...origin, field }, input.statements);
         if (!Object.hasOwn(destinationModel.fields, destinationField)) return [];
-        const from = fieldShapeOf(model.fields[field]);
-        const to = fieldShapeOf(destinationModel.fields[destinationField]);
+        const from = fieldShapeOf(model.fields[field], lookups);
+        const to = fieldShapeOf(destinationModel.fields[destinationField], lookups);
         const storedName = ownStoredNameOf(destinationModel, destinationField);
         if (from === undefined || to === undefined || takesEveryValue(from, to)) return [];
         if (unrewritableFieldNameReason(storedName) !== undefined) return [];

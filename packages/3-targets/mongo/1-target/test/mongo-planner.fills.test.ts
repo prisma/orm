@@ -91,6 +91,23 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
     ]);
   });
 
+  it('reads the temporary values from the data types the composed components declare', () => {
+    const planned = (frameworkComponents?: []) =>
+      fills(
+        plan({
+          from: origin,
+          to: users('to', { name: STRING }),
+          schema: live,
+          ...(frameworkComponents === undefined ? {} : { frameworkComponents }),
+        }),
+      ).map(({ label }) => label);
+
+    expect([planned(), planned([])]).toEqual([
+      ['Fill field name in collection users where it is missing or null'],
+      [],
+    ]);
+  });
+
   it('reports each fill as a temporary value of the field', () => {
     const result = plan({
       from: origin,
