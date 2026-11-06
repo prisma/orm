@@ -374,11 +374,11 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Schedule {
-        id       Uuid               @id
-        bookedOn Date               @map("booked_on")
+        id       Uuid                @id
+        bookedOn Date                @map("booked_on")
         slot     Time(precision: 3)
         rating   Int(storage: int2)
-        payload  Json
+        payload  Json(storage: json)
 
         @@map("schedule")
       }
@@ -427,7 +427,7 @@ describe('printPsl', () => {
       model Data {
         id        Int                    @id
         computed  String                 @default(sql\`my_custom_func()\`)
-        payload   Jsonb                  @default(json\`{}\`)
+        payload   Json                   @default(json\`{}\`)
         touchedAt DateTime(precision: 6) @default(sql\`clock_timestamp()\`) @map("touched_at")
 
         @@map("data")

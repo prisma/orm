@@ -1,4 +1,4 @@
-# ADR 316 — An extension pack's extension is found through the connection's search_path
+# ADR 318 — An extension pack's extension is found through the connection's search_path
 
 **Status:** Proposed
 **Date:** 2026-11-06

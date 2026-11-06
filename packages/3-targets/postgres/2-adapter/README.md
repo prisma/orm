@@ -143,7 +143,7 @@ flowchart TD
 - Parameterized helpers: ``rawColumn(sql`tsvector`)`` for a column of a type no other column type covers, its type written as a `sql` literal (ADR 273), `charColumn(length)`, `varcharColumn(length)`, `numericStringColumn(precision, scale?)`, `bitColumn(length)`, `varbitColumn(length)`, `timeTemporalColumn(precision?)`, `timeStringColumn(precision?)`, `timetzColumn(precision?)`, `intervalPartsColumn(precision?)`, `intervalStringColumn(precision?)`
 
 - Exports raw JSON helpers:
-  - `jsonColumn`, `jsonbColumn` — untyped raw JSON / JSONB column descriptors
+  - `plainJsonColumn`, `jsonbColumn` — untyped raw JSON / JSONB column descriptors
   - For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` for arktype). The schema-accepting `json(schema)` / `jsonb(schema)` overloads previously shipped here retired in Phase C of the codec-registry-unification project.
 
 ## Related Subsystems
@@ -308,14 +308,14 @@ table('event', (t) =>
 ### Typed fallback behavior
 
 - For schema-typed columns, use a per-library extension package (e.g. `@internal/extension-arktype-json`). The emit-path renderer reads the schema's `expression` from typeParams and produces a concrete TS type in `contract.d.ts`.
-- For untyped columns (`jsonColumn`, `jsonbColumn`), the emitted type falls back to `JsonValue`.
+- For untyped columns (`plainJsonColumn`, `jsonbColumn`), the emitted type falls back to `JsonValue`.
 - Runtime values still encode/decode as JSON-compatible values.
 
 ## Exports
 
 - `./adapter`: Adapter implementation (`createPostgresAdapter`)
 - `./codec-types`: PostgreSQL codec types (`CodecTypes`, `JsonValue`)
-- `./column-types`: Column type descriptors and authoring helpers (`jsonColumn`, `jsonbColumn`, `textColumn`, `int4Column`, etc.)
+- `./column-types`: Column type descriptors and authoring helpers (`plainJsonColumn`, `jsonbColumn`, `textColumn`, `int4Column`, etc.)
 - `./types`: PostgreSQL-specific types
 - `./control`: Control-plane entry point (adapter descriptor)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

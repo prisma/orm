@@ -5,7 +5,7 @@ import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { isPostgresSchema } from '../postgres-schema';
 
 /**
- * Given the contract's storage and a namespace id, returns the live Postgres DDL schema name that namespace maps to. A named Postgres namespace dispatches to its `ddlSchemaName(storage)`; the unbound sentinel resolves to `DEFAULT_NAMESPACE_ID`, the schema an unqualified table lands in under the default search path; a bare object payload (used by some tests) falls back to the namespace id itself. An extension in the unbound namespace does not go through here: it has no fixed schema, and verification finds it through the connection's search path (ADR 316).
+ * Given the contract's storage and a namespace id, returns the live Postgres DDL schema name that namespace maps to. A named Postgres namespace dispatches to its `ddlSchemaName(storage)`; the unbound sentinel resolves to `DEFAULT_NAMESPACE_ID`, the schema an unqualified table lands in under the default search path; a bare object payload (used by some tests) falls back to the namespace id itself. An extension in the unbound namespace does not go through here: it has no fixed schema, and verification finds it through the connection's search path (ADR 318).
  */
 export function resolveDdlSchemaForNamespaceStorage(
   storage: SqlStorage,

@@ -74,6 +74,8 @@ describe('the language server with the PostgreSQL convenience scalar types', () 
     ],
     ['Big|Int(as: number)', 'BigInt(as: number)', 'Int8Number'],
     ['I|nt', 'Int', 'Int4'],
+    ['Js|on', 'Json', 'Jsonb'],
+    ['Js|on(storage: json)', 'Json(storage: json)', 'PlainJson'],
   ])('hovers %s with the explicit type it becomes', async (marked, call, explicit) => {
     expect(hoverText(field(marked))).toContain(`\`${call}\` is exactly \`${explicit}\`.`);
     expect(await readPsl(`// use prisma-8\n\n${field(explicit)}`)).toEqual(

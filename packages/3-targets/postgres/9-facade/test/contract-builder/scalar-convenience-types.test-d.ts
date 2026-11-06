@@ -19,6 +19,8 @@ test('each scalar convenience call has the type of the explicit type helper it c
     expectTypeOf(type.String({ storage: 'char', length: 3 })).toEqualTypeOf(type.Char(3));
     expectTypeOf(type.Boolean()).toEqualTypeOf(type.Bool());
     expectTypeOf(type.Bytes()).toEqualTypeOf(type.Bytea());
+    expectTypeOf(type.Json()).toEqualTypeOf(type.Jsonb());
+    expectTypeOf(type.Json({ storage: 'json' })).toEqualTypeOf(type.PlainJson());
     return { models: {} };
   });
 });
@@ -29,6 +31,10 @@ test('a scalar convenience call with no row does not compile', () => {
     type.BigInt({ as: 'number', storage: 'numeric' });
     // @ts-expect-error Text takes no length
     type.String({ length: 12 });
+    // @ts-expect-error Json stores only jsonb or json
+    type.Json({ storage: 'text' });
+    // @ts-expect-error Json has no as option
+    type.Json({ as: 'string' });
     return { models: {} };
   });
 });

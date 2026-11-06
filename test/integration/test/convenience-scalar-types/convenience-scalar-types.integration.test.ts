@@ -41,6 +41,9 @@ const rows: readonly (readonly [convenience: string, explicit: string])[] = [
   ['String(storage: char, length: 3)', 'Char(3)'],
   ['Boolean', 'Bool'],
   ['Bytes', 'Bytea'],
+  ['Json', 'Jsonb'],
+  ['Json(storage: json)', 'PlainJson'],
+  ['Json?', 'Jsonb?'],
   ['BigInt[]', 'Int8BigInt[]'],
   ['String?', 'Text?'],
 ];

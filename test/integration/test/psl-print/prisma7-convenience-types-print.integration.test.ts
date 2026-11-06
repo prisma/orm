@@ -93,6 +93,8 @@ model Account {
   small    Float   @db.Real
   active   Boolean
   avatar   Bytes
+  settings Json
+  raw      Json    @db.Json
 }
 `;
 
@@ -112,6 +114,8 @@ describe('a Prisma 7 schema of other scalars printed after prisma7Schema reads i
       small: 'Float(storage: float4)',
       active: 'Boolean',
       avatar: 'Bytes',
+      settings: 'Json',
+      raw: 'Json(storage: json)',
     });
     const printed = await printAndReadBack(contract);
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(contract));

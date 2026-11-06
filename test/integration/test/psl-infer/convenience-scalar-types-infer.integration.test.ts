@@ -1,5 +1,5 @@
 /**
- * `contract infer` writes each integer, decimal, float, text, boolean and binary column as the convenience type that gives its explicit type, with only the arguments that differ from the defaults. The inferred schema emits, verifies clean against the database it was read from, and plans no migration.
+ * `contract infer` writes each integer, decimal, float, text, boolean, binary and JSON column as the convenience type that gives its explicit type, with only the arguments that differ from the defaults. The inferred schema emits, verifies clean against the database it was read from, and plans no migration.
  */
 import postgresAdapter from '@internal/adapter-postgres/control';
 import postgresControlDriver from '@internal/driver-postgres/control';
@@ -36,7 +36,9 @@ const ACCOUNT_TABLE = `CREATE TABLE account (
   code     varchar(12) NOT NULL,
   initials char(3) NOT NULL,
   active   bool NOT NULL DEFAULT true,
-  avatar   bytea NOT NULL
+  avatar   bytea NOT NULL,
+  settings jsonb NOT NULL,
+  payload  json NOT NULL
 )`;
 
 function fieldLines(printed: string): readonly string[] {
@@ -44,13 +46,13 @@ function fieldLines(printed: string): readonly string[] {
     .split('\n')
     .map((line) => line.trim().replace(/\s+/g, ' '))
     .filter((line) =>
-      /^(visits|total|balance|price|priced|small|ratio|name|code|initials|active|avatar) /.test(
+      /^(visits|total|balance|price|priced|small|ratio|name|code|initials|active|avatar|settings|payload) /.test(
         line,
       ),
     );
 }
 
-describe('contract infer over integer, decimal, float, text, boolean and binary columns', {
+describe('contract infer over integer, decimal, float, text, boolean, binary and JSON columns', {
   concurrent: false,
 }, () => {
   let database: DevDatabase | undefined;
@@ -89,6 +91,8 @@ describe('contract infer over integer, decimal, float, text, boolean and binary 
           'initials String(storage: char, length: 3)',
           'active Boolean @default(true)',
           'avatar Bytes',
+          'settings Json',
+          'payload Json(storage: json)',
         ]);
 
         const emitted = await authorSqlContractFromPsl(

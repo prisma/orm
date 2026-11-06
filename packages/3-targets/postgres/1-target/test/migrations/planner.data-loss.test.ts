@@ -49,6 +49,8 @@ const columnTypes = {
   float8: { dataType: 'pg/float8', codecId: 'pg/float8@1', nullable: false },
   text: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
   'text?': { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
+  json: { dataType: 'pg/json', codecId: 'pg/json@1', nullable: false },
+  jsonb: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
 } as const;
 
 interface TableSpec {
@@ -237,6 +239,22 @@ describe('Postgres planner, data loss', () => {
         subject: { kind: 'field', namespaceId: unbound, model: 'User', field: 'age' },
       },
     ]);
+  });
+
+  it('asks about a json column that becomes jsonb, which drops duplicate keys and refuses some escapes', async () => {
+    const from = contract('from', { Event: { columns: { id: 'int4', payload: 'json' } } });
+    const to = contract('to', { Event: { columns: { id: 'int4', payload: 'jsonb' } } });
+
+    const { dataLoss, losses } = await planned(from, to);
+    expect({ dataLoss, losses }).toEqual({
+      dataLoss: [
+        {
+          operation: 'Alter type of "Event"."payload" to jsonb',
+          subject: { kind: 'field', namespaceId: unbound, model: 'Event', field: 'payload' },
+        },
+      ],
+      losses: ['typeChange'],
+    });
   });
 
   it('asks nothing for a type change to text or a wider number, which keeps every value', async () => {

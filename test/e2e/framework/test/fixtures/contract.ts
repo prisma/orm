@@ -11,8 +11,8 @@ import {
   int8BigIntColumn,
   intervalPartsColumn,
   jsonbColumn,
-  jsonColumn,
   numericStringColumn,
+  plainJsonColumn,
   textColumn,
   timestamptzStringColumn,
   timestamptzTemporalColumn,
@@ -60,7 +60,7 @@ export const contract = defineContract(
         createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
         updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         published: field.column(boolColumn),
-        meta: field.column(jsonColumn).optional(),
+        meta: field.column(plainJsonColumn).optional(),
       },
     });
 

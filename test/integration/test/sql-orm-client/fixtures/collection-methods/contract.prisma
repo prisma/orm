@@ -39,7 +39,7 @@ model Tag {
 model Reading {
   id                          Int         @id
   embedding                   Embedding3?
-  payload                     Json?
+  payload                     Json(storage: json)?
   collectionMethodsTestMarker Boolean
 
   @@map("readings")

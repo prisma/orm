@@ -113,7 +113,7 @@ describe('printPsl literal defaults', () => {
           id       Int                                   @id
           stamp    DateTime(storage: timestamp)          @default(timestamp\`2024-01-01T00:00:00\`)
           day      Date                                  @default(date\`2024-01-01\`)
-          jsonNull Jsonb?                                @default(json\`null\`)
+          jsonNull Json?                                 @default(json\`null\`)
           textNull String(storage: varchar, length: 32)? @default(sql\`NULL::character varying\`)
 
           @@map("raw_defaults")

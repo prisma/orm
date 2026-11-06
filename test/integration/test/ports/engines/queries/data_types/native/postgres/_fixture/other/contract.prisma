@@ -10,7 +10,7 @@ model Child {
   id Int @id
   bool Boolean
   byteA Bytes
-  json Json
+  json Json(storage: json)
   jsonb Jsonb
   parent Parent?
   @@map("child")

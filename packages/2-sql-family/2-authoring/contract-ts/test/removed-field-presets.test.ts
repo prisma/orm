@@ -31,6 +31,23 @@ const postgresLike = {
   Char: typeConstructor('sql/char@1'),
   ...generatedIdAliases,
   Jsonb: typeConstructor('pg/jsonb@1'),
+  PlainJson: typeConstructor('pg/json@1'),
+  Json: {
+    kind: 'typeChoice',
+    args: [
+      {
+        kind: 'option',
+        name: 'storage',
+        values: ['jsonb', 'json'],
+        default: 'jsonb',
+        optional: true,
+      },
+    ],
+    choices: [
+      { when: { storage: 'jsonb' }, type: 'Jsonb' },
+      { when: { storage: 'json' }, type: 'PlainJson' },
+    ],
+  },
   Uuid: typeConstructor('pg/uuid@1'),
   TimeTemporal: typeConstructor('pg/time-temporal@1'),
   TimeString: typeConstructor('pg/time-string@1'),
@@ -116,7 +133,7 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
 
   it.each([
     ['text', 'field.column(type.String())'],
-    ['json', 'field.column(type.Jsonb())'],
+    ['json', 'field.column(type.Json())'],
     ['uuidString', 'field.column(type.UuidString())'],
     ['ulid', 'field.column(type.Ulid())'],
     ['cuid2', 'field.column(type.Cuid2())'],
@@ -156,7 +173,7 @@ describe('a read of a removed field preset from the SQL field helpers', () => {
   });
 
   it.each([
-    ['json', 'the stack has no Jsonb'],
+    ['json', 'Json stores another codec'],
     ['text', 'String stores another codec'],
     ['temporal.updatedAt', 'the stack has no temporal.UpdatedAt'],
   ])('names the forms that replace presets for field.%s where %s', (path) => {

@@ -111,7 +111,7 @@ import { createWorkingSchema, type WorkingSchemaCall } from './working-schema';
  * stored adapter, so user migrations can write `this.dataTransform(...)`
  * without threading the adapter through every call.
  *
- * Every method that creates, changes or drops a table, column, index, constraint, type or policy requires an explicit `schema`; a migration does not leave those to whatever `search_path` the connection carries. The one exception is an extension declared in the unbound namespace: `createExtension` and `dropExtension` take an optional `schema`, and without it the extension goes into the connection's current schema, unless the extension's control file names a schema, and the search path finds it (ADR 316).
+ * Every method that creates, changes or drops a table, column, index, constraint, type or policy requires an explicit `schema`; a migration does not leave those to whatever `search_path` the connection carries. The one exception is an extension declared in the unbound namespace: `createExtension` and `dropExtension` take an optional `schema`, and without it the extension goes into the connection's current schema, unless the extension's control file names a schema, and the search path finds it (ADR 318).
  */
 export abstract class PostgresMigration<
   Start extends Contract<SqlStorage> = Contract<SqlStorage>,

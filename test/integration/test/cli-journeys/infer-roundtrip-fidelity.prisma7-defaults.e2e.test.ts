@@ -222,7 +222,7 @@ withTempDir(({ createTempDir }) => {
               negBigInt     BigInt                            @default(-9007199254740993)
               hugeBigInt    BigInt                            @default(9007199254740993)
               stamp         DateTime(storage: timestamp)      @default(timestamp\`2024-01-01T00:00:00\`)
-              jsonNull      Jsonb?                            @default(json\`null\`)
+              jsonNull      Json?                             @default(json\`null\`)
 
               @@map("number_defaults")
             }

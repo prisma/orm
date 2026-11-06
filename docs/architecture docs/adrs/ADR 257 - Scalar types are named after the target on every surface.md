@@ -6,6 +6,8 @@ Status: **Accepted**
 
 **Amended by [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-02):** the PSL name is the database type, plus a suffix naming the application value where the database type has several codecs, such as `Int8BigInt` and `NumericString`. The codec id is a frozen identifier and need not match the PSL name: `Int8BigInt` is `pg/int8@1`, `NumericBigInt` is `pg/unboundedint@1`. A column helper is named after the explicit type it gives, such as `int8BigIntColumn`. The token rule below holds where the names already agree.
 
+**Amended by [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-06):** on PostgreSQL, `Json` is a convenience type that chooses `Jsonb` (a `jsonb` column) by default or `PlainJson` (a `json` column) with `storage: json`. The statements below that `Json` is an explicit type and that PostgreSQL `Json` columns store JSON text now hold for `PlainJson`; `Jsonb` stores PostgreSQL's binary JSON format. `PlainJson` is not named after its database type: the convenience type takes the name `Json`, so ADR 316's naming clause names it by contrast with its sibling `Jsonb`.
+
 ## Decision
 
 A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `field.<token>()`. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
