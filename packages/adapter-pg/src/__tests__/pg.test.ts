@@ -111,6 +111,95 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  describe('releasing the connection after a transaction', () => {
+    const sql = (text: string): SqlQuery => ({ sql: text, args: [], argTypes: [] })
+
+    async function startTransaction(query: ReturnType<typeof vi.fn>) {
+      const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+      const adapter = await new PrismaPgAdapterFactory(config).connect()
+      const mockConnection = {
+        on: vi.fn(),
+        removeListener: vi.fn(),
+        query,
+        release: vi.fn(),
+      }
+      adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+      const transaction = await adapter.startTransaction()
+      return { adapter, transaction, mockConnection }
+    }
+
+    const timeoutOn = (statement: string) =>
+      vi.fn(({ text }: { text: string }) =>
+        text === statement
+          ? Promise.reject(new Error('Query read timeout'))
+          : Promise.resolve({ rows: [], rowCount: 0 }),
+      )
+
+    it('returns the connection to the pool after a ROLLBACK that resolved', async () => {
+      const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn('never'))
+
+      await transaction.executeRaw(sql('ROLLBACK'))
+      await transaction.rollback()
+
+      expect(mockConnection.release).toHaveBeenCalledWith()
+      await adapter.dispose()
+    })
+
+    it('destroys the connection when the ROLLBACK did not resolve', async () => {
+      const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn('ROLLBACK'))
+
+      await expect(transaction.executeRaw(sql('ROLLBACK'))).rejects.toThrow()
+      await transaction.rollback()
+
+      expect(mockConnection.release).toHaveBeenCalledWith(expect.any(Error))
+      await adapter.dispose()
+    })
+
+    it('destroys the connection when the COMMIT did not resolve', async () => {
+      const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn('COMMIT'))
+
+      await expect(transaction.executeRaw(sql('COMMIT'))).rejects.toThrow()
+      await transaction.rollback()
+
+      expect(mockConnection.release).toHaveBeenCalledWith(expect.any(Error))
+      await adapter.dispose()
+    })
+
+    it('destroys the connection when a ROLLBACK sent through queryRaw did not resolve', async () => {
+      const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn('ROLLBACK'))
+
+      await expect(transaction.queryRaw(sql('ROLLBACK'))).rejects.toThrow()
+      await transaction.rollback()
+
+      expect(mockConnection.release).toHaveBeenCalledWith(expect.any(Error))
+      await adapter.dispose()
+    })
+
+    it.each(['rollback work', 'ROLLBACK TRANSACTION', 'COMMIT AND NO CHAIN', 'END', 'ABORT;'])(
+      'destroys the connection when %s did not resolve',
+      async (statement) => {
+        const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn(statement))
+
+        await expect(transaction.executeRaw(sql(statement))).rejects.toThrow()
+        await transaction.rollback()
+
+        expect(mockConnection.release).toHaveBeenCalledWith(expect.any(Error))
+        await adapter.dispose()
+      },
+    )
+
+    it('keeps the connection when only a ROLLBACK TO SAVEPOINT failed', async () => {
+      const { adapter, transaction, mockConnection } = await startTransaction(timeoutOn('ROLLBACK TO SAVEPOINT s1'))
+
+      await expect(transaction.rollbackToSavepoint!('s1')).rejects.toThrow()
+      await transaction.executeRaw(sql('ROLLBACK'))
+      await transaction.rollback()
+
+      expect(mockConnection.release).toHaveBeenCalledWith()
+      await adapter.dispose()
+    })
+  })
+
   it('should pass generated name when statement name generator is provided', async () => {
     const mockGenerator = vi.fn(() => 'test-name')
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost/test', {

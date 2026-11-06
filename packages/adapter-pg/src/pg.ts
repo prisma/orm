@@ -131,7 +131,16 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
   }
 }
 
+// `COMMIT`, `ROLLBACK` and their equivalent forms (`END`, `ABORT`, `... WORK`, `... TRANSACTION`).
+// `ROLLBACK TO SAVEPOINT` and `... AND CHAIN` leave the transaction open, so they don't match.
+const TRANSACTION_END = /^\s*(COMMIT|ROLLBACK|END|ABORT)(\s+(WORK|TRANSACTION))?(\s+AND\s+NO\s+CHAIN)?\s*;?\s*$/i
+
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  // Set when a `COMMIT` or `ROLLBACK` sent through `queryRaw` or `executeRaw` did not resolve,
+  // e.g. after `query_timeout` rejected it. The connection may still be inside the transaction, so
+  // it must not go back to the pool.
+  #endFailed = false
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -141,18 +150,47 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     super(client, pgOptions)
   }
 
+  override queryRaw(query: SqlQuery): Promise<SqlResultSet> {
+    return this.trackEnd(query, () => super.queryRaw(query))
+  }
+
+  override executeRaw(query: SqlQuery): Promise<number> {
+    return this.trackEnd(query, () => super.executeRaw(query))
+  }
+
+  private async trackEnd<T>(query: SqlQuery, run: () => Promise<T>): Promise<T> {
+    if (!TRANSACTION_END.test(query.sql)) {
+      return run()
+    }
+
+    this.#endFailed = true
+    const result = await run()
+    this.#endFailed = false
+    return result
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
     this.cleanup?.()
-    this.client.release()
+    this.release()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
     this.cleanup?.()
-    this.client.release()
+    this.release()
+  }
+
+  private release(): void {
+    if (this.#endFailed) {
+      // `pg-pool` destroys a client released with an error, and the server rolls back the open
+      // transaction when the socket closes.
+      this.client.release(new Error('the transaction did not end cleanly'))
+    } else {
+      this.client.release()
+    }
   }
 
   async createSavepoint(name: string): Promise<void> {
