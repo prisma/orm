@@ -141,3 +141,4 @@ PR 1 changes what every MongoDB validator change does, so it is reviewed alone. 
 - SQL pieces to copy the shape of, not import: `value-object-field-planning.ts`, `value-object-field-fills.ts`, `enum-value-planning.ts`, `variant-planning.ts` in `packages/2-sql-family/9-family/src/core/migrations/`; `operations/stored-keys.ts` in the Postgres target.
 - `deferred.md` line 133 cites an old path for `mongo-statement-planning.ts`; fix it on the way.
 - Reviews of this spec (gitignored): `reviews/architect.md`, `reviews/principal-engineer.md`.
+- `--backfill` is allowed on a field with a default, unlike SQL. A MongoDB default is an execution default: the ORM applies it when it creates a document, and nothing writes it into existing documents, so they still need the backfill (decided during PR 1, dispatch 3).
