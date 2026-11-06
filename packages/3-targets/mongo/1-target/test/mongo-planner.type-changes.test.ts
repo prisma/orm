@@ -328,6 +328,30 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       });
     });
 
+    it('refuses Bson to Json, since a Bson field can hold values Json cannot, pointing to --from', () => {
+      const live = schemaCollection('users', { jsonSchema: closedSchema({ meta: {} }) });
+      const destination = contract(
+        'to',
+        { User: { collection: 'users', fields: ['_id', 'meta'], types: { _id: OBJECT_ID } } },
+        {
+          users: {
+            jsonSchema: closedSchema({
+              meta: { bsonType: ['object', 'array', 'string', 'double', 'int', 'long', 'bool'] },
+            }),
+          },
+        },
+      );
+
+      expect(refusal(plan({ from: null, to: destination, schema: [live] }))).toEqual([
+        {
+          kind: 'typeChangeRefused',
+          summary:
+            'Cannot change the type of field "users.meta" in collection "users" from any value to object, array, string, double, int, long, bool: MongoDB has no cast from any value to object, array, string, double, int, long, bool',
+          why: 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan --from <hash of the migration the database is at> and --convert, and write the conversion in migration.ts.',
+        },
+      ]);
+    });
+
     it('reads null as allowed on both sides, an empty set as any value, and a list through its items', () => {
       const live = schemaCollection('users', {
         jsonSchema: closedSchema({

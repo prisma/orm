@@ -1,3 +1,4 @@
+import { fieldRewriteOf } from '@internal/family-mongo/control';
 import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-contract';
 import type {
   MongoDmlCheck,
@@ -373,20 +374,20 @@ export function castField(
 export function castFieldOf(
   operation: MongoDmlOperation,
 ): { readonly collection: string; readonly field: string; readonly to: string } | undefined {
-  const [step, ...others] = operation.run;
-  const command = step?.command;
-  if (others.length > 0 || !(command instanceof RawUpdateManyCommand)) return undefined;
-  if (!Array.isArray(command.update) || command.update.length !== 1) return undefined;
-  const set: unknown = Reflect.get(command.update[0] ?? {}, '$set');
-  if (typeof set !== 'object' || set === null) return undefined;
-  const [entry, ...rest] = Object.entries(set);
-  if (entry === undefined || rest.length > 0) return undefined;
-  const [field, expression] = entry;
+  const rewrite = fieldRewriteOf(operation);
+  const { update } = rewrite?.command ?? {};
+  if (rewrite === undefined || !Array.isArray(update)) return undefined;
+  const expression: unknown = Reflect.get(
+    Reflect.get(update[0] ?? {}, '$set') ?? {},
+    rewrite.field,
+  );
   const mapped: unknown = Reflect.get(Reflect.get(expression ?? {}, '$map') ?? {}, 'in');
   const convert: unknown = Reflect.get(mapped ?? expression ?? {}, '$convert');
   const to: unknown =
     typeof convert === 'object' && convert !== null ? Reflect.get(convert, 'to') : undefined;
-  return typeof to === 'string' ? { collection: command.collection, field, to } : undefined;
+  return typeof to === 'string'
+    ? { collection: rewrite.collection, field: rewrite.field, to }
+    : undefined;
 }
 
 function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {

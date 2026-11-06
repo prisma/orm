@@ -247,7 +247,7 @@ export function noCastRefusals(
         summary: `Cannot change the type of field "${field}" in collection "${change.collection}" from ${shapeText(change.from)} to ${shapeText(change.to)}: MongoDB has no cast from ${shapeText(change.from)} to ${shapeText(change.to)}`,
         why:
           change.destination === undefined
-            ? 'Its values cannot be cast, so --delete cannot keep the field. Store the snapshot of the contract the database is at, then plan the change with migration plan and --convert, and write the conversion in migration.ts.'
+            ? 'Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan --from <hash of the migration the database is at> and --convert, and write the conversion in migration.ts.'
             : `Its values cannot be cast, so --delete cannot keep the field. Plan the change with migration plan and --convert ${field}, and write the conversion in migration.ts.`,
       };
     });

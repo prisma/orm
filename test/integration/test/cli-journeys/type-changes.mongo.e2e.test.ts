@@ -1,7 +1,7 @@
 /**
  * A field whose type changes (MongoDB).
  *
- * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only. Journey T3 changes `Int` to `Int64` through `db update`, which casts every value with nothing asked.
+ * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only. Journey T3 changes `Int` to `Int64` through `db update`, which casts every value with nothing asked. Journey T4 plans `--delete User.age` on documents holding `"abc"`, which `db migrate` cannot cast: the failure advises `--convert User.age` once.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -153,6 +153,45 @@ describe('Journeys (MongoDB): a field whose type changes', {
     const applied = await runMigrate(ctx);
     expect(applied.exitCode, `T1.05: db migrate: ${applied.stderr}`).toBe(0);
     expect(await ageTypes(dbName), 'T1.06: every age is an int').toEqual(['int', 'int']);
+  });
+
+  it('T4: a value --delete cannot cast fails db migrate, with the advice once', async () => {
+    const dbName = 'mongo_type_change_cast_fails';
+    const ctx = setupProject(withDatabase(replSet.getUri(), dbName), 'String');
+    created.add(ctx.testDir);
+    const origin = await initialize(ctx, 'String');
+    await client
+      .db(dbName)
+      .collection('users')
+      .insertMany([
+        { email: 'ada@example.com', age: '42' },
+        { email: 'bo@example.com', age: 'abc' },
+      ]);
+
+    await emitAge(ctx, 'Int', 'T4.01');
+    const planned = await runMigrationPlan(ctx, [
+      '--name',
+      'age-int',
+      '--from',
+      origin,
+      '--delete',
+      'User.age',
+    ]);
+    expect(planned.exitCode, `T4.02: plan with --delete User.age: ${planned.stderr}`).toBe(0);
+    const failedDir = latestMigrationDirName(ctx);
+
+    const applied = await runMigrate(ctx, ['--json']);
+    const error = engineError(applied);
+    const text = JSON.stringify(error ?? {});
+    expect(applied.exitCode, 'T4.03: db migrate fails on "abc"').not.toBe(0);
+    expect(
+      {
+        code: error?.code,
+        convertMentions: text.split('--convert User.age').length - 1,
+        namesMigrationTs: text.includes(`${failedDir}/migration.ts`),
+      },
+      `T4.04: the advice names --convert once, and the failed migration.ts: ${text}`,
+    ).toEqual({ code: 'MIGRATION.EXECUTION_FAILED', convertMentions: 1, namesMigrationTs: true });
   });
 
   it('T2: refuses DateTime to Int, which MongoDB has no cast for, pointing to --convert only', async () => {

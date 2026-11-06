@@ -47,6 +47,7 @@ import { ObjectId, UUID } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
+  castField,
   createCollection,
   createIndex,
   dataTransform,
@@ -897,12 +898,40 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Renaming or removing a field rewrites documents with bypassDocumentValidation, because the old validator requires the old field. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
         codeName: 'Unauthorized',
         databaseUnchanged: true,
+      },
+    });
+  });
+
+  it('fails a rewrite that MongoDB stops partway, saying the database may have changed', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.failUpdateManyWith(
+      new MongoServerError({
+        ok: 0,
+        code: 11000,
+        codeName: 'DuplicateKey',
+        errmsg: 'Plan executor error during update :: caused by :: E11000 duplicate key error',
+      }),
+    );
+
+    const result = await execute(harness, [
+      castField('users', 'code', { from: ['string'], to: 'int' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message: 'Operation field.users.code.cast(int) failed: E11000 duplicate key error',
+      why: 'Documents the rewrite changed before the error stay changed, and a re-run rewrites the rest. The operations that ran before the failure stay applied.',
+      meta: {
+        operationId: 'field.users.code.cast(int)',
+        mongoCode: 11000,
+        databaseUnchanged: false,
       },
     });
   });

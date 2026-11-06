@@ -264,7 +264,7 @@ function bypassValidationRefusal(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the database user may not skip document validation`,
     {
-      why: `Renaming or removing a field rewrites documents with bypassDocumentValidation, because the old validator requires the old field. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
+      why: `Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_UNAUTHORIZED,
@@ -303,28 +303,37 @@ function fieldStoredAt(
 }
 
 /**
- * The failure when a cast meets a value `$convert` cannot cast: which field, and that only a
- * conversion written with `--convert` keeps such values.
+ * The failure when a planner rewrite fails after MongoDB began it: documents it reached may already
+ * be rewritten. A cast that meets a value `$convert` cannot cast names the field, which the advice
+ * reads to offer `--convert`.
  */
-function castRefusal(
+function rewriteFailure(
   op: MongoDmlOperation,
   error: unknown,
   position: { readonly operationIndex: number; readonly contract: MongoContract },
 ): MongoMigrationRunnerResult | undefined {
+  const rewrite = fieldRewriteOf(op);
+  if (rewrite === undefined || typeof error !== 'object' || error === null) return undefined;
+  const mongoCode: unknown = Reflect.get(error, 'code');
+  if (typeof mongoCode !== 'number') return undefined;
+  const reason = mongoErrorText(error);
   const cast = castFieldOf(op);
-  if (cast === undefined || typeof error !== 'object' || error === null) return undefined;
-  if (Reflect.get(error, 'code') !== MONGO_CONVERSION_FAILURE) return undefined;
+  if (cast === undefined || mongoCode !== MONGO_CONVERSION_FAILURE) {
+    return runnerFailure('MIGRATION.EXECUTION_FAILED', `Operation ${op.id} failed: ${reason}`, {
+      why: 'Documents the rewrite changed before the error stay changed, and a re-run rewrites the rest.',
+      meta: { operationId: op.id, mongoCode },
+    });
+  }
   const field = fieldStoredAt(position.contract, cast.collection, cast.field);
   const named = field.kind === 'field' ? fieldStatementText(position.contract, field) : cast.field;
-  const convert = field.kind === 'field' ? `--convert ${named}` : '--convert';
   return runnerFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
     {
-      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${mongoErrorText(error)}. To keep such values, plan the change with migration plan and ${convert}, and write the conversion in migration.ts.`,
+      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${reason}. Documents cast before that value stay cast, and a re-run casts the rest.`,
       meta: {
         operationId: op.id,
-        mongoCode: MONGO_CONVERSION_FAILURE,
+        mongoCode,
         failedTypeChange: {
           field,
           by: 'cast',
@@ -633,10 +642,10 @@ export class MongoMigrationRunner {
       } catch (error) {
         const refusal = bypassValidationRefusal(op, plan, error);
         if (refusal !== undefined) return { executed: false, failure: refusal };
-        const castFailure = castRefusal(op, error, position);
-        if (castFailure === undefined) throw error;
+        const failure = rewriteFailure(op, error, position);
+        if (failure === undefined) throw error;
         wrote();
-        return { executed: false, failure: castFailure };
+        return { executed: false, failure };
       }
     }
 
