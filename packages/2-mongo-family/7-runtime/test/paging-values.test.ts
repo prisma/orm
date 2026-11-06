@@ -53,7 +53,7 @@ describe('assertPagingValues', () => {
   it('names the stage alone for a value with no parameter name', () => {
     expect(() => assertPagingValues(aggregate({ $limit: new MongoParamRef(-2) }))).toThrow(
       expect.objectContaining({
-        message: 'limit must be a non-negative integer; the value is -2',
+        message: 'limit must be a positive integer; the value is -2',
         meta: { stage: 'limit' },
       }),
     );
@@ -67,6 +67,17 @@ describe('assertPagingValues', () => {
 
   it.each(positions)('accepts a non-negative integer in %s', (_label, stage) => {
     expect(() => assertPagingValues(aggregate(stage(good())))).not.toThrow();
+  });
+
+  it('refuses a limit of zero and accepts a skip of zero', () => {
+    const zero = () => new MongoParamRef(0, { name: 'n', codecId: 'mongo/int32@1' });
+    expect(() => assertPagingValues(aggregate({ $limit: zero() }))).toThrow(
+      expect.objectContaining({
+        message: "limit must be a positive integer; parameter 'n' holds 0",
+        meta: { stage: 'limit', name: 'n' },
+      }),
+    );
+    expect(() => assertPagingValues(aggregate({ $skip: zero() }))).not.toThrow();
   });
 
   it('leaves raw commands and plain numbers alone', () => {

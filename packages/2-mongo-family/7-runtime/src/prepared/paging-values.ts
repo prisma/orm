@@ -11,13 +11,15 @@ function describeValue(value: unknown): string {
 function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void {
   if (!(value instanceof MongoParamRef)) return;
   const n = value.value;
-  if (typeof n === 'number' && Number.isInteger(n) && n >= 0) return;
   const stage = stageName === '$limit' ? 'limit' : 'skip';
+  const lowest = stage === 'limit' ? 1 : 0;
+  if (typeof n === 'number' && Number.isInteger(n) && n >= lowest) return;
   const holder =
     value.name === undefined
       ? `the value is ${describeValue(n)}`
       : `parameter '${value.name}' holds ${describeValue(n)}`;
-  throw ormError('ORM.ARGUMENT_INVALID', `${stage} must be a non-negative integer; ${holder}`, {
+  const rule = stage === 'limit' ? 'a positive integer' : 'a non-negative integer';
+  throw ormError('ORM.ARGUMENT_INVALID', `${stage} must be ${rule}; ${holder}`, {
     stage,
     ...ifDefined('name', value.name),
   });
@@ -53,7 +55,7 @@ function assertPipeline(pipeline: unknown): void {
   }
 }
 
-/** Checks that every parameter in a `$limit` or `$skip` stage holds a non-negative integer, in the pipeline and in every sub-pipeline. Runs after `beforeEncode`, so it covers values middleware replaced. */
+/** Checks that every parameter in a `$limit` stage holds a positive integer and every one in a `$skip` stage a non-negative integer, in the pipeline and in every sub-pipeline. Runs after `beforeEncode`, so it covers values middleware replaced. */
 export function assertPagingValues(draft: MongoLoweredDraft): void {
   if (draft.kind === 'aggregate') {
     assertPipeline(draft.pipeline);

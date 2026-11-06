@@ -111,16 +111,16 @@ describe('MongoLimitStage', () => {
     expect(stage.limit).toBe(10);
   });
 
-  it('accepts zero', () => {
-    expect(new MongoLimitStage(0).limit).toBe(0);
+  it('refuses zero, which MongoDB rejects', () => {
+    expect(() => new MongoLimitStage(0)).toThrow('limit must be a positive integer');
   });
 
   it('rejects negative values', () => {
-    expect(() => new MongoLimitStage(-1)).toThrow('limit must be a non-negative integer');
+    expect(() => new MongoLimitStage(-1)).toThrow('limit must be a positive integer');
   });
 
   it('rejects non-integer values', () => {
-    expect(() => new MongoLimitStage(1.5)).toThrow('limit must be a non-negative integer');
+    expect(() => new MongoLimitStage(1.5)).toThrow('limit must be a positive integer');
   });
 
   it('accepts a placeholder', () => {

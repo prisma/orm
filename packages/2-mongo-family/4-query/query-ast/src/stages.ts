@@ -145,8 +145,8 @@ export class MongoLimitStage extends MongoStageNode {
 
   constructor(limit: number | MongoPreparedParamRef) {
     super();
-    if (!isMongoPreparedParamRef(limit) && !isNonNegativeInteger(limit)) {
-      throw ormError('ORM.ARGUMENT_INVALID', 'limit must be a non-negative integer');
+    if (!isMongoPreparedParamRef(limit) && !(isNonNegativeInteger(limit) && limit > 0)) {
+      throw ormError('ORM.ARGUMENT_INVALID', 'limit must be a positive integer');
     }
     this.limit = limit;
     this.freeze();

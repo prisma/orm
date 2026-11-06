@@ -92,7 +92,7 @@ The query builder does not encode its literal values: `f._id.eq('65f…')` run d
 
 - Every query-builder operator that takes a `MongoValue`: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `type`, each element of `in` and `nin`, `set`, `min`, `max`, `push`, `addToSet`, `pull`, `setOnInsert`, each element of `pullAll`, insert documents, and update pipeline stages.
 - Aggregation literals, through `fn.literal(p.name)`.
-- `limit` and `skip`. They take a number or a non-nullable placeholder whose codec's `input` type is `number` (the query builder's `PagingCount`). `MongoLimitStage.limit` and `MongoSkipStage.skip` are `number | MongoPreparedParamRef`; their constructors still check that a number is a non-negative integer. After `beforeEncode`, each run checks that every parameter in a `$limit` or `$skip` holds a non-negative integer, in the pipeline and in the sub-pipelines of `$lookup`, `$facet`, `$unionWith` and `$merge.whenMatched`, and throws `ORM.ARGUMENT_INVALID` otherwise, as `limit(-1)` does. Checking after middleware covers a value middleware replaced.
+- `limit` and `skip`. They take a number or a non-nullable placeholder whose codec's `input` type is `number` (the query builder's `PagingCount`). `MongoLimitStage.limit` and `MongoSkipStage.skip` are `number | MongoPreparedParamRef`; their constructors still check a number: a limit must be a positive integer, because MongoDB refuses `$limit: 0`, and a skip a non-negative integer. After `beforeEncode`, each run checks every parameter in a `$limit` or `$skip` the same way, in the pipeline and in the sub-pipelines of `$lookup`, `$facet`, `$unionWith` and `$merge.whenMatched`, and throws `ORM.ARGUMENT_INVALID` otherwise, as `limit(-1)` does. The error names the stage, and the parameter when the value came from one (`meta: { stage, name }`). Checking after middleware covers a value middleware replaced.
 
 Paging is the most common prepared query, and SQL accepts placeholders there, so `limit` and `skip` take them even though they are numbers rather than values.
 
@@ -139,7 +139,7 @@ SQL raises `RUNTIME.CODEC_DESCRIPTOR_MISSING` at the first run. MongoDB raises i
 | Declared name not used | `RUNTIME.PREPARE_UNUSED_PARAM` | `prepare` |
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
 | Name missing at run, or params not an object | `RUNTIME.PREPARE_MISSING_PARAM` | run, before the activity |
-| `$limit` or `$skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` | run, after `beforeEncode` |
+| `$limit` value not a positive integer, or `$skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` | run, after `beforeEncode` |
 | Target without the bridge | invariant error | run |
 | Plan with a placeholder run without `prepare` | `RUNTIME.PREPARE_BIND_ON_ADHOC` | ad-hoc run |
 | Codec fails on a value | `RUNTIME.ENCODE_FAILED` | run |
