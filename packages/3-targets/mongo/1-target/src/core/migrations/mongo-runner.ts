@@ -39,6 +39,7 @@ import type {
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
 import {
+  CollModCommand,
   isInspectionCheckSource,
   isMongoDmlOperation,
   RenameCollectionCommand,
@@ -200,6 +201,24 @@ function renameTargetExistsRefusal(
   );
 }
 
+/** The validator a `collMod` step of the operation sets, when it sets one. */
+function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undefined {
+  const step = op.execute.find(({ command }) => command instanceof CollModCommand)?.command;
+  return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
+}
+
+/** A value as `mongosh` reads it: an ObjectId as `ObjectId("…")`, anything else as JSON. */
+function mongoshValue(value: unknown): string {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    Reflect.get(value, '_bsontype') === 'ObjectId'
+  ) {
+    return `ObjectId(${JSON.stringify(String(value))})`;
+  }
+  return JSON.stringify(value) ?? String(value);
+}
+
 const MONGO_UNAUTHORIZED = 13;
 
 /**
@@ -323,6 +342,7 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
+              (await this.documentsFailingValidatorRefusal(operation, failing)) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
                 `Operation ${operation.id} failed during precheck: ${failing.description}`,
@@ -546,6 +566,53 @@ export class MongoMigrationRunner {
     }
 
     return { executed: true };
+  }
+
+  /**
+   * The failure when a validator change's before-check finds documents the new validator rejects:
+   * how many, one `_id`, and the query that finds them all.
+   */
+  private async documentsFailingValidatorRefusal(
+    op: MongoMigrationPlanOperation,
+    failed: MongoMigrationCheck,
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const collMod = validatorSetBy(op);
+    if (collMod === undefined || isInspectionCheckSource(failed.source)) return undefined;
+    const failing = { $nor: [collMod.validator] };
+    const counted = await this.firstRow({
+      ...failed.source,
+      command: new RawAggregateCommand(collMod.collection, [
+        { $match: failing },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    const documentId = mongoshValue(counted?.['documentId']);
+    const query = `db.getCollection(${JSON.stringify(collMod.collection)}).find(${JSON.stringify(failing)})`;
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${op.id} stopped: ${documents} ${documents === 1 ? 'document' : 'documents'} in collection ${collMod.collection} ${documents === 1 ? 'does' : 'do'} not fit the new validator`,
+      {
+        why: `${documents === 1 ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change them so they fit the new validator, or set checkDocuments to false on this operation in migration.ts to apply the validator over them. The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+        meta: {
+          operationId: op.id,
+          documentsFailingValidator: {
+            collection: collMod.collection,
+            documents,
+            documentId,
+            query,
+          },
+        },
+      },
+    );
+  }
+
+  private async firstRow(plan: MongoQueryPlan): Promise<Record<string, unknown> | undefined> {
+    const wireCommand = await this.deps.adapter.lower(plan, {});
+    for await (const row of this.deps.driver.execute<Record<string, unknown>>(wireCommand)) {
+      return row;
+    }
+    return undefined;
   }
 
   private async evaluateDmlChecks(
