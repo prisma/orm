@@ -58,7 +58,7 @@ import {
   contractModelToMongoResultShape,
 } from '@internal/mongo-query-builder';
 import type { MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import { isMongoPreparedParamRef, MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -1197,6 +1197,13 @@ export class MongoCollectionImpl<
   }
 
   #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
+    if (isMongoPreparedParamRef(value)) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `The prepared parameter '${value.name}' cannot be used for '${path}' in collection '${this.#collectionName}'. ORM writes run at once, and value-object literals are built when the query is, so neither can take a prepared parameter.`,
+        { meta: { name: value.name, field: path } },
+      );
+    }
     return new MongoParamRef(value, { codecId, name: path, collection: this.#collectionName });
   }
 

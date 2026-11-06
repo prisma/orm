@@ -1,5 +1,6 @@
 import { defineContract, field, model } from '@internal/mongo/contract-builder';
 import mongo from '@internal/mongo/runtime';
+import { MongoPreparedParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -14,6 +15,13 @@ const contract = defineContract({
         email: field.string(),
         status: field.string(),
         visits: field.int32(),
+      },
+    }),
+    Event: model('Event', {
+      collection: 'events',
+      fields: {
+        _id: field.objectId(),
+        data: field.json(),
       },
     }),
   },
@@ -90,6 +98,17 @@ describe('db.prepare through mongo()', { timeout: timeouts.spinUpMongoMemoryServ
     expect(
       await client.db(dbName).collection('accounts').countDocuments({ status: 'active' }),
     ).toBe(3);
+    await db.close();
+  });
+
+  it('refuses a placeholder in an ORM write to a JSON field, and writes nothing', async () => {
+    const db = mongo({ contract, mongoClient: client, dbName });
+    const placeholder = new MongoPreparedParamRef('data', 'mongo/json@1', false);
+
+    await expect(
+      db.orm.events.create({ data: placeholder as unknown as Record<string, never> }),
+    ).rejects.toMatchObject({ code: 'ORM.ARGUMENT_INVALID', meta: { name: 'data' } });
+    expect(await client.db(dbName).collection('events').countDocuments()).toBe(0);
     await db.close();
   });
 });
