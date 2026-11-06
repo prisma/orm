@@ -18,7 +18,7 @@
               "address": {
                 "nullable": true,
                 "type": {
-                  "codecId": "pg/json@1",
+                  "codecId": "pg/jsonb@1",
                   "kind": "scalar"
                 }
               },
@@ -86,8 +86,8 @@
             "users": {
               "columns": {
                 "address": {
-                  "codecId": "pg/json@1",
-                  "dataType": "pg/json",
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "email": {
@@ -132,7 +132,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "adc9c605ce5349fb142c9945e3bbb87d4b14850666c76f757de6969ea7fe07ee"
+    "storageHash": "e04345b42154e3b1a5a5d3234ab06272f225713e84f9f50b807257f1419e99e9"
   },
   "capabilities": {
     "postgres": {

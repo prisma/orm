@@ -11,12 +11,6 @@
 //
 // Upstream idForProvider(postgresql) is String @id. The id column is provided
 // explicitly in seed data (no auto-generation).
-//
-// Upstream Prisma's `Json` scalar always stores as Postgres `jsonb`, which is
-// why the suite filters with `where: { requiredJson: { not: ... } }`. Prisma 8's
-// PSL `Json` binds to plain `pg/json@1` (no equality comparison; see the
-// 0.16-to-0.17 upgrade note `postgres-json-rebound-to-native-json`) — `Jsonb`
-// is the type that preserves upstream's jsonb-backed, comparable storage.
 model Resource {
   id           String @id
   requiredJson Jsonb

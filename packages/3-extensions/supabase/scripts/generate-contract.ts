@@ -295,7 +295,7 @@ function rewriteFieldTypeNames(
  */
 const NAMED_TYPE_ALIASES: Readonly<Record<string, string>> = {
   Inet: 'IpAddress',
-  Json: 'Payload',
+  'Json(storage: json)': 'Payload',
   'Int(storage: int2)': 'EmailChangeConfirmStatus',
   TimestampString: 'CreatedAt',
   Uuid: 'Id',

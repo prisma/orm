@@ -25,7 +25,7 @@
               "json": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/json@1",
+                  "codecId": "pg/jsonb@1",
                   "kind": "scalar"
                 }
               }
@@ -61,8 +61,8 @@
                   "nullable": false
                 },
                 "json": {
-                  "codecId": "pg/json@1",
-                  "dataType": "pg/json",
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d9e1db971b8964a02e9e51482bafee6666a2b29311b5b819ea102801eae8dfb4"
+    "storageHash": "cb8c3e9e4318794d843a8b74b6bc3b1402861ab3e264b48742e64fdff6e627eb"
   },
   "execution": {
     "executionHash": "1f7886616c73d2fd35992d6b9727bd8478632c592681200c916c78377344059c",

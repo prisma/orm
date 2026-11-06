@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2ffd674a0bf9d6f344ffaba5f405517ea704927d9d89e8180d21d6e3def44466'>;
+  StorageHashBase<'1bf31843703571c5de6c5b8d9e9b27701de5806b8b2b3652f50a0868a87659e5'>;
 export type ExecutionHash =
   ExecutionHashBase<'42f83384ad4ada71e03078c06806ba44e63ca46399abe0028d7d56dae18a6363'>;
 export type ProfileHash =
@@ -343,8 +343,8 @@ type ContractBase = Omit<
             readonly testRecord: {
               columns: {
                 readonly data: {
-                  readonly dataType: 'pg/json';
-                  readonly codecId: 'pg/json@1';
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -384,7 +384,7 @@ type ContractBase = Omit<
             readonly fields: {
               readonly data: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/json@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
               };
               readonly id: {
                 readonly nullable: false;
