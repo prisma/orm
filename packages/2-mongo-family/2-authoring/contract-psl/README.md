@@ -32,6 +32,10 @@ model Post {
 - The Mongo target contributes `temporal.CreatedAt` (`now()` on create) and `temporal.UpdatedAt` (`now()` on create and on update), on `mongo/date@1`, the codec of `DateTime`. They take no arguments. A call to a removed field preset, `temporal.createdAt()`, `temporal.updatedAt()` or `temporal.timestamp(...)`, is refused with `PSL_UNRESOLVED_REFERENCE` and the message names its replacement, such as `Write temporal.CreatedAt.`
 - The `@updatedAt` attribute is refused with the hint `Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.`
 
+## Index names
+
+`map:` on `@@index`, `@@unique`, `@@textIndex` and `@unique` names the index MongoDB stores, for example `@@index([email], map: "by_email")`. An index without `map:` is named after its stored keys and directions, such as `email_1`, as MongoDB names an index created without a name. Two indexes of one collection with one name are refused with `PSL_INVALID_INDEX`, so a unique and a plain index on the same field, or an `@@index` on the same field in two variants of one base, need `map:` on one of them. An empty `map:` is refused. See [ADR 317](../../../../docs/architecture%20docs/adrs/ADR%20317%20-%20MongoDB%20indexes%20carry%20their%20names.md).
+
 ## Index sort directions
 
 Use `sort(field, Asc)` or `sort(field, Desc)` in `@@index`, `@@unique`, and `@@textIndex` field lists, for example `@@index([status, sort(createdAt, Desc)])`. Field references use model names; `@map` is applied to the resulting index keys. Plain fields retain the index's default key type, and explicit sort calls produce ascending or descending keys. Wildcard syntax remains `wildcard()` or `wildcard(field)` where supported. The earlier `field(sort: Desc)` syntax and additional sort options such as null ordering are not supported.

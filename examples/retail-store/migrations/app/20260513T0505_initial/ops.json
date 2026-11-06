@@ -669,48 +669,27 @@
     "postcheck": []
   },
   {
-    "id": "index.carts.create(userId:1)",
-    "label": "Create index on carts (userId:1)",
+    "id": "index.carts.create(userId_1)",
+    "label": "Create index userId_1 on carts (userId:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on carts",
+        "description": "no index named userId_1 exists on carts",
         "source": {
           "kind": "listIndexes",
           "collection": "carts"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "userId": 1
-          }
+          "value": "userId_1"
         },
         "expect": "notExists",
-        "object": "an index on { userId: 1 } in \"carts\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"userId_1\" in \"carts\""
+      },
       {
-        "description": "create index on carts",
-        "command": {
-          "kind": "createIndex",
-          "collection": "carts",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "userId"
-            }
-          ],
-          "unique": true,
-          "name": "userId_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on carts",
+        "description": "no index with the same keys and options exists on carts",
         "source": {
           "kind": "listIndexes",
           "collection": "carts"
@@ -763,57 +742,119 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { userId: 1 } in \"carts\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index userId_1 on carts",
+        "command": {
+          "kind": "createIndex",
+          "collection": "carts",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "userId"
+            }
+          ],
+          "unique": true,
+          "name": "userId_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index userId_1 exists on carts",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "carts"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "userId_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "userId": 1
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "unique",
+                  "op": "$eq",
+                  "value": true
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.events.create(userId:1,timestamp:-1)",
-    "label": "Create index on events (userId:1, timestamp:-1)",
+    "id": "index.events.create(userId_1_timestamp_-1)",
+    "label": "Create index userId_1_timestamp_-1 on events (userId:1, timestamp:-1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on events",
+        "description": "no index named userId_1_timestamp_-1 exists on events",
         "source": {
           "kind": "listIndexes",
           "collection": "events"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "userId": 1,
-            "timestamp": -1
-          }
+          "value": "userId_1_timestamp_-1"
         },
         "expect": "notExists",
-        "object": "an index on { userId: 1, timestamp: -1 } in \"events\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"userId_1_timestamp_-1\" in \"events\""
+      },
       {
-        "description": "create index on events",
-        "command": {
-          "kind": "createIndex",
-          "collection": "events",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "userId"
-            },
-            {
-              "direction": -1,
-              "field": "timestamp"
-            }
-          ],
-          "name": "userId_1_timestamp_-1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on events",
+        "description": "no index with the same keys and options exists on events",
         "source": {
           "kind": "listIndexes",
           "collection": "events"
@@ -870,53 +911,126 @@
             }
           ]
         },
-        "expect": "exists"
-      }
-    ]
-  },
-  {
-    "id": "index.events.create(timestamp:1)",
-    "label": "Create index on events (timestamp:1)",
-    "operationClass": "additive",
-    "precheck": [
-      {
-        "description": "index does not already exist on events",
-        "source": {
-          "kind": "listIndexes",
-          "collection": "events"
-        },
-        "filter": {
-          "kind": "field",
-          "field": "key",
-          "op": "$eq",
-          "value": {
-            "timestamp": 1
-          }
-        },
         "expect": "notExists",
-        "object": "an index on { timestamp: 1 } in \"events\""
+        "object": "an index on { userId: 1, timestamp: -1 } in \"events\""
       }
     ],
     "execute": [
       {
-        "description": "create index on events",
+        "description": "create index userId_1_timestamp_-1 on events",
         "command": {
           "kind": "createIndex",
           "collection": "events",
           "keys": [
             {
               "direction": 1,
+              "field": "userId"
+            },
+            {
+              "direction": -1,
               "field": "timestamp"
             }
           ],
-          "expireAfterSeconds": 7776000,
-          "name": "timestamp_1"
+          "name": "userId_1_timestamp_-1"
         }
       }
     ],
     "postcheck": [
       {
-        "description": "index exists on events",
+        "description": "index userId_1_timestamp_-1 exists on events",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "events"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "userId_1_timestamp_-1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "userId": 1,
+                    "timestamp": -1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.events.create(timestamp_1)",
+    "label": "Create index timestamp_1 on events (timestamp:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "no index named timestamp_1 exists on events",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "events"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "timestamp_1"
+        },
+        "expect": "notExists",
+        "object": "an index named \"timestamp_1\" in \"events\""
+      },
+      {
+        "description": "no index with the same keys and options exists on events",
         "source": {
           "kind": "listIndexes",
           "collection": "events"
@@ -973,52 +1087,123 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { timestamp: 1 } in \"events\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index timestamp_1 on events",
+        "command": {
+          "kind": "createIndex",
+          "collection": "events",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "timestamp"
+            }
+          ],
+          "expireAfterSeconds": 7776000,
+          "name": "timestamp_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index timestamp_1 exists on events",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "events"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "timestamp_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "timestamp": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "expireAfterSeconds",
+                  "op": "$eq",
+                  "value": 7776000
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.invoices.create(orderId:1)",
-    "label": "Create index on invoices (orderId:1)",
+    "id": "index.invoices.create(orderId_1)",
+    "label": "Create index orderId_1 on invoices (orderId:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on invoices",
+        "description": "no index named orderId_1 exists on invoices",
         "source": {
           "kind": "listIndexes",
           "collection": "invoices"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "orderId": 1
-          }
+          "value": "orderId_1"
         },
         "expect": "notExists",
-        "object": "an index on { orderId: 1 } in \"invoices\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"orderId_1\" in \"invoices\""
+      },
       {
-        "description": "create index on invoices",
-        "command": {
-          "kind": "createIndex",
-          "collection": "invoices",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "orderId"
-            }
-          ],
-          "name": "orderId_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on invoices",
+        "description": "no index with the same keys and options exists on invoices",
         "source": {
           "kind": "listIndexes",
           "collection": "invoices"
@@ -1074,53 +1259,121 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { orderId: 1 } in \"invoices\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index orderId_1 on invoices",
+        "command": {
+          "kind": "createIndex",
+          "collection": "invoices",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "orderId"
+            }
+          ],
+          "name": "orderId_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index orderId_1 exists on invoices",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "invoices"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "orderId_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "orderId": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.invoices.create(issuedAt:-1)",
-    "label": "Create index on invoices (issuedAt:-1)",
+    "id": "index.invoices.create(issuedAt_-1)",
+    "label": "Create index issuedAt_-1 on invoices (issuedAt:-1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on invoices",
+        "description": "no index named issuedAt_-1 exists on invoices",
         "source": {
           "kind": "listIndexes",
           "collection": "invoices"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "issuedAt": -1
-          }
+          "value": "issuedAt_-1"
         },
         "expect": "notExists",
-        "object": "an index on { issuedAt: -1 } in \"invoices\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"issuedAt_-1\" in \"invoices\""
+      },
       {
-        "description": "create index on invoices",
-        "command": {
-          "kind": "createIndex",
-          "collection": "invoices",
-          "keys": [
-            {
-              "direction": -1,
-              "field": "issuedAt"
-            }
-          ],
-          "sparse": true,
-          "name": "issuedAt_-1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on invoices",
+        "description": "no index with the same keys and options exists on invoices",
         "source": {
           "kind": "listIndexes",
           "collection": "invoices"
@@ -1173,61 +1426,119 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { issuedAt: -1 } in \"invoices\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index issuedAt_-1 on invoices",
+        "command": {
+          "kind": "createIndex",
+          "collection": "invoices",
+          "keys": [
+            {
+              "direction": -1,
+              "field": "issuedAt"
+            }
+          ],
+          "sparse": true,
+          "name": "issuedAt_-1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index issuedAt_-1 exists on invoices",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "invoices"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "issuedAt_-1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "issuedAt": -1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "sparse",
+                  "op": "$eq",
+                  "value": true
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.locations.create(city:1,country:1)",
-    "label": "Create index on locations (city:1, country:1)",
+    "id": "index.locations.create(city_1_country_1)",
+    "label": "Create index city_1_country_1 on locations (city:1, country:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on locations",
+        "description": "no index named city_1_country_1 exists on locations",
         "source": {
           "kind": "listIndexes",
           "collection": "locations"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "city": 1,
-            "country": 1
-          }
+          "value": "city_1_country_1"
         },
         "expect": "notExists",
-        "object": "an index on { city: 1, country: 1 } in \"locations\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"city_1_country_1\" in \"locations\""
+      },
       {
-        "description": "create index on locations",
-        "command": {
-          "kind": "createIndex",
-          "collection": "locations",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "city"
-            },
-            {
-              "direction": 1,
-              "field": "country"
-            }
-          ],
-          "name": "city_1_country_1",
-          "collation": {
-            "locale": "en",
-            "strength": 2
-          }
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on locations",
+        "description": "no index with the same keys and options exists on locations",
         "source": {
           "kind": "listIndexes",
           "collection": "locations"
@@ -1291,52 +1602,137 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { city: 1, country: 1 } in \"locations\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index city_1_country_1 on locations",
+        "command": {
+          "kind": "createIndex",
+          "collection": "locations",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "city"
+            },
+            {
+              "direction": 1,
+              "field": "country"
+            }
+          ],
+          "name": "city_1_country_1",
+          "collation": {
+            "locale": "en",
+            "strength": 2
+          }
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index city_1_country_1 exists on locations",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "locations"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "city_1_country_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "city": 1,
+                    "country": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "field",
+                  "field": "collation.locale",
+                  "op": "$eq",
+                  "value": "en"
+                },
+                {
+                  "kind": "field",
+                  "field": "collation.strength",
+                  "op": "$eq",
+                  "value": 2
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.orders.create(userId:1)",
-    "label": "Create index on orders (userId:1)",
+    "id": "index.orders.create(userId_1)",
+    "label": "Create index userId_1 on orders (userId:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on orders",
+        "description": "no index named userId_1 exists on orders",
         "source": {
           "kind": "listIndexes",
           "collection": "orders"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "userId": 1
-          }
+          "value": "userId_1"
         },
         "expect": "notExists",
-        "object": "an index on { userId: 1 } in \"orders\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"userId_1\" in \"orders\""
+      },
       {
-        "description": "create index on orders",
-        "command": {
-          "kind": "createIndex",
-          "collection": "orders",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "userId"
-            }
-          ],
-          "name": "userId_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on orders",
+        "description": "no index with the same keys and options exists on orders",
         "source": {
           "kind": "listIndexes",
           "collection": "orders"
@@ -1392,58 +1788,121 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { userId: 1 } in \"orders\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index userId_1 on orders",
+        "command": {
+          "kind": "createIndex",
+          "collection": "orders",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "userId"
+            }
+          ],
+          "name": "userId_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index userId_1 exists on orders",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "orders"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "userId_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "userId": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.products.create(name:text,description:text)",
-    "label": "Create index on products (name:text, description:text)",
+    "id": "index.products.create(name_text_description_text)",
+    "label": "Create index name_text_description_text on products (name:text, description:text)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on products",
+        "description": "no index named name_text_description_text exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
         },
         "filter": {
           "kind": "field",
-          "field": "key._fts",
+          "field": "name",
           "op": "$eq",
-          "value": "text"
+          "value": "name_text_description_text"
         },
         "expect": "notExists",
-        "object": "a text index in \"products\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"name_text_description_text\" in \"products\""
+      },
       {
-        "description": "create index on products",
-        "command": {
-          "kind": "createIndex",
-          "collection": "products",
-          "keys": [
-            {
-              "direction": "text",
-              "field": "name"
-            },
-            {
-              "direction": "text",
-              "field": "description"
-            }
-          ],
-          "name": "name_text_description_text",
-          "weights": {
-            "description": 1,
-            "name": 10
-          }
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on products",
+        "description": "no index with the same keys and options exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
@@ -1521,57 +1980,151 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "a text index in \"products\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index name_text_description_text on products",
+        "command": {
+          "kind": "createIndex",
+          "collection": "products",
+          "keys": [
+            {
+              "direction": "text",
+              "field": "name"
+            },
+            {
+              "direction": "text",
+              "field": "description"
+            }
+          ],
+          "name": "name_text_description_text",
+          "weights": {
+            "description": 1,
+            "name": 10
+          }
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index name_text_description_text exists on products",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "products"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "name_text_description_text"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "_fts": "text",
+                    "_ftsx": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                },
+                {
+                  "kind": "field",
+                  "field": "weights",
+                  "op": "$eq",
+                  "value": {
+                    "description": 1,
+                    "name": 10
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "default_language",
+                  "op": "$eq",
+                  "value": "english"
+                },
+                {
+                  "kind": "field",
+                  "field": "language_override",
+                  "op": "$eq",
+                  "value": "language"
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.products.create(brand:1,subCategory:1)",
-    "label": "Create index on products (brand:1, subCategory:1)",
+    "id": "index.products.create(brand_1_subCategory_1)",
+    "label": "Create index brand_1_subCategory_1 on products (brand:1, subCategory:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on products",
+        "description": "no index named brand_1_subCategory_1 exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "brand": 1,
-            "subCategory": 1
-          }
+          "value": "brand_1_subCategory_1"
         },
         "expect": "notExists",
-        "object": "an index on { brand: 1, subCategory: 1 } in \"products\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"brand_1_subCategory_1\" in \"products\""
+      },
       {
-        "description": "create index on products",
-        "command": {
-          "kind": "createIndex",
-          "collection": "products",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "brand"
-            },
-            {
-              "direction": 1,
-              "field": "subCategory"
-            }
-          ],
-          "name": "brand_1_subCategory_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on products",
+        "description": "no index with the same keys and options exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
@@ -1628,52 +2181,126 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { brand: 1, subCategory: 1 } in \"products\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index brand_1_subCategory_1 on products",
+        "command": {
+          "kind": "createIndex",
+          "collection": "products",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "brand"
+            },
+            {
+              "direction": 1,
+              "field": "subCategory"
+            }
+          ],
+          "name": "brand_1_subCategory_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index brand_1_subCategory_1 exists on products",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "products"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "brand_1_subCategory_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "brand": 1,
+                    "subCategory": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.products.create(code:hashed)",
-    "label": "Create index on products (code:hashed)",
+    "id": "index.products.create(code_hashed)",
+    "label": "Create index code_hashed on products (code:hashed)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on products",
+        "description": "no index named code_hashed exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "code": "hashed"
-          }
+          "value": "code_hashed"
         },
         "expect": "notExists",
-        "object": "an index on { code: \"hashed\" } in \"products\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"code_hashed\" in \"products\""
+      },
       {
-        "description": "create index on products",
-        "command": {
-          "kind": "createIndex",
-          "collection": "products",
-          "keys": [
-            {
-              "direction": "hashed",
-              "field": "code"
-            }
-          ],
-          "name": "code_hashed"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on products",
+        "description": "no index with the same keys and options exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
@@ -1729,53 +2356,121 @@
             }
           ]
         },
+        "expect": "notExists",
+        "object": "an index on { code: \"hashed\" } in \"products\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index code_hashed on products",
+        "command": {
+          "kind": "createIndex",
+          "collection": "products",
+          "keys": [
+            {
+              "direction": "hashed",
+              "field": "code"
+            }
+          ],
+          "name": "code_hashed"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index code_hashed exists on products",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "products"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "code_hashed"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "code": "hashed"
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            }
+          ]
+        },
         "expect": "exists"
       }
     ]
   },
   {
-    "id": "index.users.create(email:1)",
-    "label": "Create index on users (email:1)",
+    "id": "index.users.create(email_1)",
+    "label": "Create index email_1 on users (email:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on users",
+        "description": "no index named email_1 exists on users",
         "source": {
           "kind": "listIndexes",
           "collection": "users"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "email": 1
-          }
+          "value": "email_1"
         },
         "expect": "notExists",
-        "object": "an index on { email: 1 } in \"users\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"email_1\" in \"users\""
+      },
       {
-        "description": "create index on users",
-        "command": {
-          "kind": "createIndex",
-          "collection": "users",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "email"
-            }
-          ],
-          "unique": true,
-          "name": "email_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on users",
+        "description": "no index with the same keys and options exists on users",
         "source": {
           "kind": "listIndexes",
           "collection": "users"
@@ -1825,6 +2520,93 @@
               "kind": "exists",
               "field": "collation",
               "exists": false
+            }
+          ]
+        },
+        "expect": "notExists",
+        "object": "an index on { email: 1 } in \"users\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index email_1 on users",
+        "command": {
+          "kind": "createIndex",
+          "collection": "users",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "email"
+            }
+          ],
+          "unique": true,
+          "name": "email_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index email_1 exists on users",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "users"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "email_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "email": 1
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "unique",
+                  "op": "$eq",
+                  "value": true
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
             }
           ]
         },

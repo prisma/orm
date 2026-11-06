@@ -25,5 +25,5 @@ model Post {
   createdAt temporal.CreatedAt
   updatedAt temporal.UpdatedAt
 
-  @@index([authorId])
+  @@index([authorId], map: "Post_authorId_idx")
 }

@@ -50,3 +50,15 @@ node scripts/rewrite-mongo-field-types.ts
 ```
 
 Pass files or directories to limit it. Fix by hand each line the script reports, then type-check the project.
+
+A field typed by your extension's own codec, written `field.scalar('shout/text@1')` before, needs a type constructor in your extension descriptor's `authoring.type`, under your namespace. The contract then writes `field.scalar(type.shout.Text())`:
+
+```ts
+authoring: {
+  type: {
+    shout: { Text: { kind: 'typeConstructor', output: { codecId: 'shout/text@1' } } },
+  },
+},
+```
+
+The script reports such a call and leaves it, because it cannot know the constructor's name.

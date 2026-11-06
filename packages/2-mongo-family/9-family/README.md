@@ -54,8 +54,10 @@ const result = await familyInstance.emitContract({ contract });
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {
@@ -121,7 +123,7 @@ class AddUsersCollection extends Migration {
         validator: { $jsonSchema: { required: ["email"] } },
         validationLevel: "strict",
       }),
-      createIndex("users", [{ field: "email", direction: 1 }], { unique: true }),
+      createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true }),
     ]
   }
 }

@@ -128,7 +128,13 @@ export function contractToPostgresDatabaseSchemaNode(
       extensions.push(
         new PostgresExtensionSchemaNode({
           name: extension.name,
-          schemaName: resolveDdlSchemaForNamespaceStorage(contract.storage, ns.id),
+          location:
+            ns.id === UNBOUND_NAMESPACE_ID
+              ? { kind: 'searchPath' }
+              : {
+                  kind: 'declared',
+                  schemaName: resolveDdlSchemaForNamespaceStorage(contract.storage, ns.id),
+                },
           control: extension.control,
         }),
       );

@@ -76,8 +76,9 @@ describe('stored names in the Mongo contract builder', () => {
     const models = domainModelsAtDefaultNamespace(contract.domain);
     expect(models['Task']?.discriminator).toEqual({ field: 'kind' });
     expect(collection(contract, 'tasks')?.indexes).toEqual([
-      new MongoIndex({ keys: [{ field: 'task_title', direction: 1 }] }),
+      new MongoIndex({ name: 'task_title_1', keys: [{ field: 'task_title', direction: 1 }] }),
       new MongoIndex({
+        name: 'level_-1',
         keys: [{ field: 'level', direction: -1 }],
         partialFilterExpression: { task_kind: 'bug' },
       }),

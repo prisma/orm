@@ -4,7 +4,10 @@ import {
   type ContractWithDomain,
   type ControlPolicy,
 } from '@internal/contract/types';
-import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import {
+  canonicalizeSchemasForVerification,
+  contractToMongoSchemaIR,
+} from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   describeMigrationStatement,
@@ -28,13 +31,11 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type {
-  MongoSchemaCollection,
   MongoSchemaCollectionOptions,
   MongoSchemaIndex,
-  MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
-import { deepEqual } from '@internal/mongo-schema-ir';
+import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -293,10 +294,14 @@ function callsOf(diff: CollectionDiff): readonly OpFactoryCall[] {
   ];
 }
 
+/**
+ * The calls for one collection. Indexes are paired in `originColl` and `destColl`, which may hold indexes in the form the verifier compares; each create is built from the contract's index as written, in `writtenDestColl`.
+ */
 function planCollectionDiff(
   collName: string,
   originColl: MongoSchemaCollection | undefined,
   destColl: MongoSchemaCollection | undefined,
+  writtenDestColl: MongoSchemaCollection | undefined,
 ): CollectionDiff {
   const collCreates: OpFactoryCall[] = [];
   const drops: OpFactoryCall[] = [];
@@ -360,14 +365,18 @@ function planCollectionDiff(
   }
 
   for (const [lookupKey, idx] of originLookup) {
-    if (!destLookup.has(lookupKey)) {
-      drops.push(new DropIndexCall(collName, idx.keys));
+    if (destLookup.get(lookupKey)?.name !== idx.name) {
+      drops.push(new DropIndexCall(collName, idx.keys, schemaIndexToCreateIndexOptions(idx)));
     }
   }
 
   for (const [lookupKey, idx] of destLookup) {
-    if (!originLookup.has(lookupKey)) {
-      creates.push(new CreateIndexCall(collName, idx.keys, schemaIndexToCreateIndexOptions(idx)));
+    if (originLookup.get(lookupKey)?.name !== idx.name) {
+      const asWritten =
+        writtenDestColl?.indexes.find((written) => written.name === idx.name) ?? idx;
+      creates.push(
+        new CreateIndexCall(collName, asWritten.keys, schemaIndexToCreateIndexOptions(asWritten)),
+      );
     }
   }
   return { collCreates, drops, creates, validatorOps, mutableOptionOps, collDrops, conflicts };
@@ -395,6 +404,37 @@ function suppressedCallWarning(
   };
 }
 
+function withIndexesOf(schema: MongoSchemaIR, indexesFrom: MongoSchemaIR): MongoSchemaIR {
+  return new MongoSchemaIR(
+    schema.collections.map(
+      (collection) =>
+        new MongoSchemaCollection({
+          name: collection.name,
+          indexes: indexesFrom.collection(collection.name)?.indexes ?? collection.indexes,
+          ...ifDefined('validator', collection.validator),
+          ...ifDefined('options', collection.options),
+        }),
+    ),
+    { fromDatabase: schema.fromDatabase },
+  );
+}
+
+/**
+ * The origin and destination with indexes the planner can pair by content. A database reports a text index's keys as `_fts` and `_ftsx` and fills in its weights and languages and a collation's unwritten fields, so the indexes of a database origin are compared as the verifier compares them. A contract origin is compared exactly.
+ */
+function comparableIndexes(
+  origin: MongoSchemaIR,
+  destination: MongoSchemaIR,
+  fromDatabase: boolean,
+): { readonly origin: MongoSchemaIR; readonly destination: MongoSchemaIR } {
+  if (!fromDatabase) return { origin, destination };
+  const canonical = canonicalizeSchemasForVerification(origin, destination);
+  return {
+    origin: withIndexesOf(origin, canonical.live),
+    destination: withIndexesOf(destination, canonical.expected),
+  };
+}
+
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
     readonly contract: unknown;
@@ -410,13 +450,16 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       MongoContract,
       'framework planner passes the Mongo contract selected for the mongo target'
     >(options.contract);
-    const originIR =
-      options.statementCalls?.schema ??
-      blindCast<
-        MongoSchemaIR,
-        'framework planner passes the inspected Mongo schema IR selected for the mongo target'
-      >(options.schema);
-    const destinationIR = contractToMongoSchemaIR(contract);
+    const schema = blindCast<
+      MongoSchemaIR,
+      'framework planner passes the inspected Mongo schema IR selected for the mongo target'
+    >(options.schema);
+    const writtenDestinationIR = contractToMongoSchemaIR(contract);
+    const { origin: originIR, destination: destinationIR } = comparableIndexes(
+      options.statementCalls?.schema ?? schema,
+      writtenDestinationIR,
+      schema.fromDatabase,
+    );
 
     const collCreates: OpFactoryCall[] = [];
     const drops: OpFactoryCall[] = [];
@@ -434,7 +477,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 
     for (const collName of [...allCollectionNames].sort()) {
       const originColl = originIR.collection(collName);
-      const planned = planCollectionDiff(collName, originColl, destinationIR.collection(collName));
+      const planned = planCollectionDiff(
+        collName,
+        originColl,
+        destinationIR.collection(collName),
+        writtenDestinationIR.collection(collName),
+      );
       const control = collectionControlOf(contract, options.fromContract, collName);
       if (!plansChangesTo(control.policy, originColl !== undefined)) {
         warnings.push(

@@ -190,11 +190,18 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
   function mongoOrigin(
     elements: TypeScript.NodeArray<TypeScript.BindingElement | TypeScript.ImportSpecifier>,
     exportsType: boolean,
-    where: TypeScript.Node,
   ): Origin {
     const existing = elements.find((element) => propertyNameOf(element) === 'type');
     if (existing !== undefined && ts.isIdentifier(existing.name)) {
       return { kind: 'mongo', typeText: existing.name.text, bind: undefined, ownType: existing };
+    }
+    const last = elements[elements.length - 1];
+    if (!exportsType || last === undefined) {
+      return {
+        kind: 'unknown',
+        reason:
+          'this module exports no type, so import type from @prisma/orm-mongo/contract-builder',
+      };
     }
     let bound = false;
     return {
@@ -204,14 +211,6 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       bind: () => {
         if (bound) return;
         bound = true;
-        const last = elements[elements.length - 1];
-        if (!exportsType || last === undefined) {
-          const line = file.getLineAndCharacterOfPosition(where.getStart(file)).line + 1;
-          reports.push(
-            `line ${line}: this module does not export type; import type from @prisma/orm-mongo/contract-builder.`,
-          );
-          return;
-        }
         if (ts.isBindingElement(last) && last.dotDotDotToken !== undefined) {
           edits.push({ start: last.getStart(file), end: last.getStart(file), text: 'type, ' });
         } else {
@@ -229,7 +228,6 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       | TypeScript.ObjectBindingPattern
       | TypeScript.Identifier
       | undefined,
-    where: TypeScript.Node,
   ): void {
     if (names === undefined) return;
     const isMongo = BUILDER_MODULE.test(module);
@@ -248,7 +246,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       if (imported === 'field') {
         add(fields, element.name.text, {
           value: isMongo
-            ? mongoOrigin(names.elements, TYPE_EXPORTING_MODULE.test(module), where)
+            ? mongoOrigin(names.elements, TYPE_EXPORTING_MODULE.test(module))
             : isOtherBuilder
               ? { kind: 'other' }
               : UNKNOWN,
@@ -263,10 +261,9 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
       const module = moduleOf(node);
       const bindings = node.importClause?.namedBindings;
       if (module !== undefined && node.importClause?.isTypeOnly !== true) {
-        if (bindings !== undefined && ts.isNamedImports(bindings))
-          bindModule(module, bindings, node);
+        if (bindings !== undefined && ts.isNamedImports(bindings)) bindModule(module, bindings);
         if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-          bindModule(module, bindings.name, node);
+          bindModule(module, bindings.name);
         }
       }
     }
@@ -276,7 +273,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
         module !== undefined &&
         (ts.isObjectBindingPattern(node.name) || ts.isIdentifier(node.name))
       ) {
-        bindModule(module, node.name, node);
+        bindModule(module, node.name);
       }
     }
     ts.forEachChild(node, collectModules);
@@ -382,8 +379,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
     for (const element of pattern.elements) {
       if (propertyNameOf(element) !== 'field' || !ts.isIdentifier(element.name)) continue;
       add(fields, element.name.text, {
-        value:
-          define === 'mongo' ? mongoOrigin(pattern.elements, true, pattern) : { kind: 'other' },
+        value: define === 'mongo' ? mongoOrigin(pattern.elements, true) : { kind: 'other' },
         scope,
       });
     }
@@ -512,7 +508,7 @@ function rewrite(file: TypeScript.SourceFile): FileResult {
           report(node, origin.reason);
         } else if (typeof typeCall === 'string') {
           report(node, typeCall);
-        } else if (holdsComment(callee.end, node.end)) {
+        } else if (holdsComment(callee.expression.end, node.end)) {
           report(node, 'a comment inside it would be lost');
         } else if (origin.typeText === 'type' && typeIsTaken(node, origin)) {
           report(node, 'type names another value here');

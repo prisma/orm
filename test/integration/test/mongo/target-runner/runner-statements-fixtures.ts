@@ -105,7 +105,11 @@ export function contract(
 
 export function closedCollection(fields: readonly string[], unique: readonly string[] = []) {
   return new MongoCollection({
-    indexes: unique.map((field) => ({ keys: [{ field, direction: 1 as const }], unique: true })),
+    indexes: unique.map((field) => ({
+      name: `${field}_1`,
+      keys: [{ field, direction: 1 as const }],
+      unique: true,
+    })),
     validator: {
       jsonSchema: closedSchema(fields),
       validationLevel: 'strict',

@@ -51,4 +51,6 @@ node scripts/rewrite-mongo-field-types.ts
 
 Pass files or directories to limit it. Fix by hand each line the script reports, then type-check the project.
 
+A field written with an extension's codec id, such as `field.scalar('shout/text@1')`, is one the script reports: write the type constructor the extension contributes, such as `field.scalar(type.shout.Text())`.
+
 MongoDB PSL gains `Vector` and `Vector(length)` for `mongo/vector@1`, which had no PSL name before. It now reads the arguments of a type call, so `Vector(3)` keeps its length. A type that takes no arguments, written with one, such as `String(5)`, used to have the argument ignored and is now refused with a message naming the argument; remove the argument.

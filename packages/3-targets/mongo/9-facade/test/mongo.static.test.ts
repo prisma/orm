@@ -93,15 +93,17 @@ describe('mongoStatic({ contract })', () => {
 });
 
 describe('mongoStatic({ contract, extensions })', () => {
-  const shoutContract = defineContract({
-    extensions: { shout: shoutPack },
-    models: {
-      Greeting: model('Greeting', {
-        collection: 'greetings',
-        fields: { _id: field.objectId(), text: field.scalar('shout/text@1') },
-      }),
-    },
-  });
+  const shoutContract = defineContract(
+    { extensions: { shout: shoutPack } },
+    ({ field, model, type }) => ({
+      models: {
+        Greeting: model('Greeting', {
+          collection: 'greetings',
+          fields: { _id: field.scalar(type.ObjectId()), text: field.scalar(type.shout.Text()) },
+        }),
+      },
+    }),
+  );
 
   it('refuses a contract that requires an extension it is not given', () => {
     expect(() => mongoStatic({ contract: shoutContract })).toThrow(

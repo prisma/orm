@@ -5,9 +5,9 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureGeneratorFunctions } from './fixture-generator-functions';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 
@@ -15,7 +15,7 @@ function interpret(schema: string) {
   return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: { type: postgresScalarAuthoringTypes },
+    authoringContributions: { type: fixturePostgresTypeNamespace },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     ...fixtureInterpreterTypes,

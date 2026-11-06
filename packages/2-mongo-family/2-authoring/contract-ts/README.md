@@ -13,8 +13,9 @@ This package provides the Mongo `contract.ts` DSL:
 It also holds the builder every MongoDB contract source calls ([ADR 306](../../../../docs/architecture%20docs/adrs/ADR%20306%20-%20One%20plain-data%20definition%20and%20one%20builder%20per%20family.md)):
 
 - `ContractDefinition` (`src/contract-definition.ts`) is a contract as plain data, with every name resolved. `defineContract` lowers its builder objects to it (`src/contract-lowering.ts`); Mongo PSL and the Prisma 6 reader produce it from their schemas.
-- `buildMongoContractFromDefinition(definition, codecLookup, dataTypes)` (`src/build-contract.ts`, with stages in the `build-*.ts` files) checks every MongoDB family rule and returns the contract with its warnings, or every refusal with its warnings. Each refusal names its subject by a key the definition carries (`src/build-refusals.ts`). `defineContract` throws the first refusal as a `CONTRACT.*` error (`src/refusal-errors.ts`) and reports the warnings the source collected. The builder merges nothing: two identical indexes in one collection are refused (`indexDuplicate`).
-- `mergeRedundantIndexes(definition, codecLookup, dataTypes)` (`src/merge-redundant-indexes.ts`) returns the definition without the indexes another index in the same collection makes unnecessary: the later of two identical indexes, or a non-unique index beside a unique one that is otherwise identical. It compares storage indexes with `indexLookupKey`, after variant scoping, and leaves indexes the builder refuses for the builder. `defineContract` and Mongo PSL call it before the builder; the Prisma 6 reader does not.
+- `buildMongoContractFromDefinition(definition, codecLookup, dataTypes)` (`src/build-contract.ts`, with stages in the `build-*.ts` files) checks every MongoDB family rule and returns the contract with its warnings, or every refusal with its warnings. Each refusal names its subject by a key the definition carries (`src/build-refusals.ts`). `defineContract` throws the first refusal as a `CONTRACT.*` error (`src/refusal-errors.ts`) and reports the warnings the source collected. The builder merges nothing: two identical indexes in one collection are refused (`indexDuplicate`), and so are two indexes with one name (`indexNameDuplicate`). It takes each index's name from `options.name` and throws for an index without one.
+- `nameIndexes(definition)` (`src/name-indexes.ts`) names each index written without a name after its stored keys and directions, such as `email_1`, as MongoDB names an index created without one. `defineContract` and Mongo PSL call it before `mergeRedundantIndexes`; the Prisma 6 reader names indexes as Prisma 6 did. In `defineContract`, the index option `name` names an index: `index({ email: 1 }, { sparse: true, name: 'email_sparse' })`.
+- `mergeRedundantIndexes(definition, codecLookup, dataTypes)` (`src/merge-redundant-indexes.ts`) returns the definition without the indexes another index with the same name in the same collection makes unnecessary: the later of two identical indexes, or a non-unique index beside a unique one that is otherwise identical. It compares storage indexes with `indexLookupKey`, after variant scoping, and leaves indexes the builder refuses for the builder. `defineContract` and Mongo PSL call it before the builder; the Prisma 6 reader does not.
 
 ## Current Slice
 
@@ -41,8 +42,10 @@ This first slice does not yet cover union or dict authoring, or Mongo validator 
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {

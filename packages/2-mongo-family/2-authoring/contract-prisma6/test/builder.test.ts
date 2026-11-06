@@ -34,9 +34,15 @@ describe('the Prisma 6 reader on the contract builder', () => {
       'same-fields-other-order',
       'User',
       [
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: -1 }], unique: true },
         {
           kind: 'mongo-index',
+          name: 'User_email_key',
+          keys: [{ field: 'email', direction: -1 }],
+          unique: true,
+        },
+        {
+          kind: 'mongo-index',
+          name: 'User_email_name_idx',
           keys: [
             { field: 'email', direction: 1 },
             { field: 'name', direction: 1 },
@@ -44,12 +50,13 @@ describe('the Prisma 6 reader on the contract builder', () => {
         },
         {
           kind: 'mongo-index',
+          name: 'User_name_email_idx',
           keys: [
             { field: 'name', direction: 1 },
             { field: 'email', direction: 1 },
           ],
         },
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
+        { kind: 'mongo-index', name: 'User_email_idx', keys: [{ field: 'email', direction: 1 }] },
       ],
     ],
     [
@@ -57,8 +64,13 @@ describe('the Prisma 6 reader on the contract builder', () => {
       'unique-and-index-sort-asc',
       'User',
       [
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
+        {
+          kind: 'mongo-index',
+          name: 'User_email_key',
+          keys: [{ field: 'email', direction: 1 }],
+          unique: true,
+        },
+        { kind: 'mongo-index', name: 'User_email_idx', keys: [{ field: 'email', direction: 1 }] },
       ],
     ],
     [
@@ -66,9 +78,14 @@ describe('the Prisma 6 reader on the contract builder', () => {
       'unique-on-later-model',
       'people',
       [
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }] },
-        { kind: 'mongo-index', keys: [{ field: 'name', direction: 1 }] },
-        { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
+        { kind: 'mongo-index', name: 'people_email_idx', keys: [{ field: 'email', direction: 1 }] },
+        { kind: 'mongo-index', name: 'people_name_idx', keys: [{ field: 'name', direction: 1 }] },
+        {
+          kind: 'mongo-index',
+          name: 'people_email_key',
+          keys: [{ field: 'email', direction: 1 }],
+          unique: true,
+        },
       ],
     ],
   ])('keeps every index for %s', async (_, caseName, collection, indexes) => {

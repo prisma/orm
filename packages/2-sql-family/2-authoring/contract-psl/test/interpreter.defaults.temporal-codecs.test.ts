@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { postgresScalarAuthoringTypes, postgresScalarTypeDescriptors } from './fixtures';
+import { fixturePostgresTypeNamespace, postgresScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
@@ -13,7 +13,7 @@ describe('a temporal type constructor with generator attributes', () => {
     interpretPostgresSchema(schema, {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       controlMutationDefaults: builtinControlMutationDefaults,
-      authoringContributions: { type: postgresScalarAuthoringTypes },
+      authoringContributions: { type: fixturePostgresTypeNamespace },
     });
 
   const columnAndDefaults = (schema: string) => {

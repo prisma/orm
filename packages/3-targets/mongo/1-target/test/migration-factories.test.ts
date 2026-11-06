@@ -5,14 +5,12 @@ import {
   CreateIndexCommand,
   DropCollectionCommand,
   DropIndexCommand,
-  defaultMongoIndexName,
   keysToKeySpec,
   ListCollectionsCommand,
   ListIndexesCommand,
   MongoAndExpr,
   MongoExistsExpr,
   MongoFieldFilter,
-  type MongoMigrationPlanOperation,
   MongoNotExpr,
   RenameCollectionCommand,
 } from '@internal/mongo-query-ast/control';
@@ -30,128 +28,186 @@ import {
 } from '../src/core/migrations/migration-factories';
 import { schemaCollectionToCreateCollectionOptions } from '../src/core/migrations/op-factory-call';
 
+const email = [{ field: 'email', direction: 1 as const }];
+
+/** The filter `createIndex` and `dropIndex` match a plain or unique index on `email` by. */
+function emailDefinition(unique: boolean) {
+  return MongoAndExpr.of([
+    MongoFieldFilter.eq('key', keysToKeySpec(email)),
+    unique
+      ? MongoFieldFilter.eq('unique', true)
+      : new MongoNotExpr(MongoFieldFilter.eq('unique', true)),
+    new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
+    MongoExistsExpr.notExists('expireAfterSeconds'),
+    MongoExistsExpr.notExists('partialFilterExpression'),
+    MongoExistsExpr.notExists('wildcardProjection'),
+    MongoExistsExpr.notExists('collation'),
+  ]);
+}
+
 describe('createIndex', () => {
-  const keys = [{ field: 'email', direction: 1 as const }];
-
-  it('produces correct operation structure', () => {
-    const op = createIndex('users', keys);
-
-    expect(op.id).toBe(buildIndexOpId('create', 'users', keys));
-    expect(op.label).toBe('Create index on users (email:1)');
-    expect(op.operationClass).toBe('additive');
+  it('creates the index under its name, checking that neither the name nor the content is taken', () => {
+    expect(createIndex('users', email, { name: 'User_email_key', unique: true })).toEqual({
+      id: 'index.users.create(User_email_key)',
+      label: 'Create index User_email_key on users (email:1)',
+      operationClass: 'additive',
+      precheck: [
+        {
+          description: 'no index named User_email_key exists on users',
+          source: new ListIndexesCommand('users'),
+          filter: MongoFieldFilter.eq('name', 'User_email_key'),
+          expect: 'notExists',
+          object: 'an index named "User_email_key" in "users"',
+        },
+        {
+          description: 'no index with the same keys and options exists on users',
+          source: new ListIndexesCommand('users'),
+          filter: emailDefinition(true),
+          expect: 'notExists',
+          object: 'an index on { email: 1 } in "users"',
+        },
+      ],
+      execute: [
+        {
+          description: 'create index User_email_key on users',
+          command: new CreateIndexCommand('users', email, {
+            name: 'User_email_key',
+            unique: true,
+          }),
+        },
+      ],
+      postcheck: [
+        {
+          description: 'index User_email_key exists on users',
+          source: new ListIndexesCommand('users'),
+          filter: MongoAndExpr.of([
+            MongoFieldFilter.eq('name', 'User_email_key'),
+            emailDefinition(true),
+          ]),
+          expect: 'exists',
+        },
+      ],
+    });
   });
 
-  it('includes precheck that index does not exist', () => {
-    const op = createIndex('users', keys);
-
-    expect(op.precheck).toHaveLength(1);
-    expect(op.precheck[0]!.expect).toBe('notExists');
-    expect(op.precheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
-    expect((op.precheck[0]!.source as ListIndexesCommand).collection).toBe('users');
-    expect(op.precheck[0]!.filter).toBeInstanceOf(MongoFieldFilter);
+  it('names an index the call does not name as MongoDB would, as earlier migration files expect', () => {
+    const op = createIndex('users', email, { unique: true });
+    expect({
+      id: op.id,
+      name: (op.execute[0]!.command as CreateIndexCommand).name,
+    }).toEqual({ id: 'index.users.create(email_1)', name: 'email_1' });
   });
 
-  it('includes execute with CreateIndexCommand', () => {
-    const op = createIndex('users', keys, { unique: true });
-
-    expect(op.execute).toHaveLength(1);
-    const cmd = op.execute[0]!.command as CreateIndexCommand;
-    expect(cmd).toBeInstanceOf(CreateIndexCommand);
-    expect(cmd.collection).toBe('users');
-    expect(cmd.keys).toEqual(keys);
-    expect(cmd.unique).toBe(true);
-    expect(cmd.name).toBe(defaultMongoIndexName(keys));
-  });
-
-  it('includes postcheck that index exists', () => {
-    const op = createIndex('users', keys);
-
-    expect(op.postcheck).toHaveLength(1);
-    expect(op.postcheck[0]!.expect).toBe('exists');
-  });
-
-  it('uses key._fts filter for text indexes', () => {
-    const textKeys = [{ field: 'content', direction: 'text' as const }];
-    const op = createIndex('posts', textKeys);
-
-    const preFilter = op.precheck[0]!.filter as MongoFieldFilter;
-    expect(preFilter.field).toBe('key._fts');
-    expect(preFilter.value).toBe('text');
+  it('gives two indexes on the same keys with different options their own ids', () => {
+    expect([
+      createIndex('users', email, { name: 'User_email_key', unique: true }).id,
+      createIndex('users', email, { name: 'User_email_idx' }).id,
+    ]).toEqual(['index.users.create(User_email_key)', 'index.users.create(User_email_idx)']);
   });
 
   it('passes through all index options', () => {
-    const op = createIndex('users', keys, {
+    const op = createIndex('users', email, {
+      name: 'by_email',
       sparse: true,
       expireAfterSeconds: 3600,
       collation: { locale: 'en' },
     });
 
     const cmd = op.execute[0]!.command as CreateIndexCommand;
-    expect(cmd.sparse).toBe(true);
-    expect(cmd.expireAfterSeconds).toBe(3600);
-    expect(cmd.collation).toEqual({ locale: 'en' });
+    expect(cmd).toEqual(
+      new CreateIndexCommand('users', email, {
+        name: 'by_email',
+        sparse: true,
+        expireAfterSeconds: 3600,
+        collation: { locale: 'en' },
+      }),
+    );
   });
 
-  it('uses key spec filter for non-text indexes', () => {
-    const op = createIndex('users', keys);
+  it('checks a text index by its MongoDB key spec', () => {
+    const textKeys = [{ field: 'content', direction: 'text' as const }];
+    const contentCheck = createIndex('posts', textKeys, { name: 'content_text' }).precheck[1]!;
 
-    const preFilter = op.precheck[0]!.filter as MongoFieldFilter;
-    expect(preFilter.field).toBe('key');
-    expect(preFilter.value).toEqual(keysToKeySpec(keys));
+    expect(contentCheck.object).toBe('a text index in "posts"');
+    expect((contentCheck.filter as MongoAndExpr).exprs[0]).toEqual(
+      MongoFieldFilter.eq('key', { _fts: 'text', _ftsx: 1 }),
+    );
   });
 
-  it('handles compound keys', () => {
+  it('labels compound keys', () => {
     const compoundKeys = [
       { field: 'email', direction: 1 as const },
       { field: 'name', direction: -1 as const },
     ];
-    const op = createIndex('users', compoundKeys);
+    const op = createIndex('users', compoundKeys, { name: 'email_1_name_-1' });
 
-    expect(op.label).toBe('Create index on users (email:1, name:-1)');
-    expect(op.id).toBe(buildIndexOpId('create', 'users', compoundKeys));
+    expect(op.label).toBe('Create index email_1_name_-1 on users (email:1, name:-1)');
+    expect(op.id).toBe(buildIndexOpId('create', 'users', 'email_1_name_-1'));
   });
 });
 
 describe('dropIndex', () => {
-  const keys = [{ field: 'email', direction: 1 as const }];
-
-  it('produces correct operation structure', () => {
-    const op = dropIndex('users', keys);
-
-    expect(op.id).toBe(buildIndexOpId('drop', 'users', keys));
-    expect(op.label).toBe('Drop index on users (email:1)');
-    expect(op.operationClass).toBe('widening');
+  it('drops the index by its name, checking its name and content first and its name after', () => {
+    expect(dropIndex('users', email, { name: 'User_email_key', unique: true })).toEqual({
+      id: 'index.users.drop(User_email_key)',
+      label: 'Drop index User_email_key on users (email:1)',
+      operationClass: 'widening',
+      precheck: [
+        {
+          description: 'index User_email_key exists on users with the expected keys and options',
+          source: new ListIndexesCommand('users'),
+          filter: MongoAndExpr.of([
+            MongoFieldFilter.eq('name', 'User_email_key'),
+            emailDefinition(true),
+          ]),
+          expect: 'exists',
+          object: 'an index named "User_email_key" in "users"',
+        },
+      ],
+      execute: [
+        {
+          description: 'drop index User_email_key on users',
+          command: new DropIndexCommand('users', 'User_email_key'),
+        },
+      ],
+      postcheck: [
+        {
+          description: 'index User_email_key no longer exists on users',
+          source: new ListIndexesCommand('users'),
+          filter: MongoFieldFilter.eq('name', 'User_email_key'),
+          expect: 'notExists',
+          object: 'an index named "User_email_key" in "users"',
+        },
+      ],
+    });
   });
 
-  it('includes precheck that index exists', () => {
-    const op = dropIndex('users', keys);
-
-    expect(op.precheck).toHaveLength(1);
-    expect(op.precheck[0]!.expect).toBe('exists');
+  it('drops the index named after its keys and checks its keys only when the call gives no options, as earlier migration files expect', () => {
+    const op = dropIndex('users', email);
+    expect({
+      id: op.id,
+      name: (op.execute[0]!.command as DropIndexCommand).name,
+      precheck: op.precheck[0]?.filter,
+    }).toEqual({
+      id: 'index.users.drop(email_1)',
+      name: 'email_1',
+      precheck: MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'email_1'),
+        MongoFieldFilter.eq('key', keysToKeySpec(email)),
+      ]),
+    });
   });
 
-  it('includes execute with DropIndexCommand using derived name', () => {
-    const op = dropIndex('users', keys);
-
-    const cmd = op.execute[0]!.command as DropIndexCommand;
-    expect(cmd).toBeInstanceOf(DropIndexCommand);
-    expect(cmd.collection).toBe('users');
-    expect(cmd.name).toBe(defaultMongoIndexName(keys));
-  });
-
-  it('includes postcheck that index no longer exists', () => {
-    const op = dropIndex('users', keys);
-
-    expect(op.postcheck).toHaveLength(1);
-    expect(op.postcheck[0]!.expect).toBe('notExists');
-  });
-
-  it('uses key._fts filter for text indexes', () => {
+  it('checks a text index by its text key when the call gives no options', () => {
     const textKeys = [{ field: 'content', direction: 'text' as const }];
     const op = dropIndex('posts', textKeys);
 
-    const preFilter = op.precheck[0]!.filter as MongoFieldFilter;
-    expect(preFilter.field).toBe('key._fts');
+    expect(op.precheck[0]?.filter).toEqual(
+      MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'content_text'),
+        MongoFieldFilter.eq('key._fts', 'text'),
+      ]),
+    );
   });
 });
 
@@ -541,7 +597,7 @@ describe('serialization round-trip', () => {
     expect(json.id).toBe(op.id);
     expect(json.label).toBe(op.label);
     expect(json.operationClass).toBe(op.operationClass);
-    expect(json.precheck).toHaveLength(1);
+    expect(json.precheck).toHaveLength(2);
     expect(json.execute).toHaveLength(1);
     expect(json.postcheck).toHaveLength(1);
     expect(json.execute[0].command.kind).toBe('createIndex');
@@ -571,53 +627,6 @@ describe('serialization round-trip', () => {
     const json = JSON.parse(JSON.stringify(op));
 
     expect(json.execute[0].command.kind).toBe('dropCollection');
-  });
-
-  it('factory output matches planner-equivalent createIndex structure', () => {
-    const keys = [{ field: 'email', direction: 1 as const }];
-    const factoryOp = createIndex('users', keys, { unique: true });
-
-    const plannerOp: MongoMigrationPlanOperation = {
-      id: buildIndexOpId('create', 'users', keys),
-      label: 'Create index on users (email:1)',
-      operationClass: 'additive',
-      precheck: [
-        {
-          description: 'index does not already exist on users',
-          source: new ListIndexesCommand('users'),
-          filter: MongoFieldFilter.eq('key', keysToKeySpec(keys)),
-          expect: 'notExists',
-          object: 'an index on { email: 1 } in "users"',
-        },
-      ],
-      execute: [
-        {
-          description: 'create index on users',
-          command: new CreateIndexCommand('users', keys, {
-            unique: true,
-            name: defaultMongoIndexName(keys),
-          }),
-        },
-      ],
-      postcheck: [
-        {
-          description: 'index exists on users',
-          source: new ListIndexesCommand('users'),
-          filter: MongoAndExpr.of([
-            MongoFieldFilter.eq('key', keysToKeySpec(keys)),
-            MongoFieldFilter.eq('unique', true),
-            new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
-            MongoExistsExpr.notExists('expireAfterSeconds'),
-            MongoExistsExpr.notExists('partialFilterExpression'),
-            MongoExistsExpr.notExists('wildcardProjection'),
-            MongoExistsExpr.notExists('collation'),
-          ]),
-          expect: 'exists',
-        },
-      ],
-    };
-
-    expect(JSON.stringify(factoryOp)).toBe(JSON.stringify(plannerOp));
   });
 });
 

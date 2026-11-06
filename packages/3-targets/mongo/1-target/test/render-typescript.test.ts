@@ -25,7 +25,10 @@ const renderTypeScript = (
 describe('renderCallsToTypeScript', () => {
   it('generates valid TypeScript with correct imports', () => {
     const calls = [
-      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true }),
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+        unique: true,
+      }),
     ];
 
     const output = renderTypeScript(calls);
@@ -39,7 +42,9 @@ describe('renderCallsToTypeScript', () => {
   });
 
   it('emits the contract-JSON imports + fields and the Migration<Start, End> header (with-start)', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
 
     const output = renderTypeScript(calls, META);
 
@@ -93,7 +98,9 @@ describe('renderCallsToTypeScript', () => {
   });
 
   it('prepends a node shebang as the first line under the default test env', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
 
     const output = renderTypeScript(calls);
 
@@ -103,7 +110,7 @@ describe('renderCallsToTypeScript', () => {
 
   it('only imports used factory functions', () => {
     const calls = [
-      new CreateIndexCall('users', [{ field: 'email', direction: 1 }]),
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
       new DropCollectionCall('legacy'),
     ];
 
@@ -119,6 +126,7 @@ describe('renderCallsToTypeScript', () => {
   it('renders createIndex with options', () => {
     const calls = [
       new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
         unique: true,
         sparse: true,
       }),
@@ -176,11 +184,18 @@ describe('renderCallsToTypeScript', () => {
         validationLevel: 'strict',
         validationAction: 'error',
       }),
-      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true }),
-      new CreateIndexCall('users', [
-        { field: 'name', direction: 1 },
-        { field: 'age', direction: -1 },
-      ]),
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+        unique: true,
+      }),
+      new CreateIndexCall(
+        'users',
+        [
+          { field: 'name', direction: 1 },
+          { field: 'age', direction: -1 },
+        ],
+        { name: 'name_1_age_-1' },
+      ),
     ];
 
     const output = renderTypeScript(calls);
@@ -229,12 +244,16 @@ describe('renderCallsToTypeScript', () => {
 
   it('wraps long arrays onto multiple lines', () => {
     const calls = [
-      new CreateIndexCall('users', [
-        { field: 'first_name', direction: 1 },
-        { field: 'last_name', direction: 1 },
-        { field: 'email_address', direction: 1 },
-        { field: 'phone_number', direction: 1 },
-      ]),
+      new CreateIndexCall(
+        'users',
+        [
+          { field: 'first_name', direction: 1 },
+          { field: 'last_name', direction: 1 },
+          { field: 'email_address', direction: 1 },
+          { field: 'phone_number', direction: 1 },
+        ],
+        { name: 'first_name_1_last_name_1_email_address_1_phone_number_1' },
+      ),
     ];
     const output = renderTypeScript(calls);
     expect(output).toContain('[\n');

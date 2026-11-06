@@ -104,6 +104,7 @@ function familyInstance(valueObjectStorageType: string | undefined) {
       componentIdsByGenerator: new Map(),
     },
     authoringContributions: {
+      entityTypes: {},
       type: {
         Jsonb: { kind: 'typeConstructor', output: { codecId: 't/jsonb@1' } },
         Text: { kind: 'typeConstructor', output: { codecId: 't/text@1' } },
