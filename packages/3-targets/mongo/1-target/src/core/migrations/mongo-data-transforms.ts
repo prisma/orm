@@ -4,10 +4,8 @@ import {
   type FieldCoordinate,
   fieldStatementText,
   type MigrationPlannerConflict,
-  type ModelCoordinate,
   type ResolvedFieldBackfillStatement,
   type ResolvedFieldConvertStatement,
-  type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   type MongoContract,
@@ -18,8 +16,11 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { documentsMissingOrNull, documentsNotOfType } from './migration-factories';
 import {
   collectionOf,
+  type ModelMatchInput,
   modelAt,
   noCollectionReason,
+  originFieldOf,
+  originModelOf,
   variantFilter,
 } from './mongo-statement-planning';
 import type { TypeChange } from './mongo-type-changes';
@@ -85,36 +86,6 @@ export function convertTransform(
   };
 }
 
-export function originModelOf(
-  model: ModelCoordinate,
-  renames: readonly ResolvedRenameStatement[],
-): ModelCoordinate {
-  const renamed = renames.find(
-    (statement) =>
-      statement.entity === 'model' &&
-      statement.to.namespaceId === model.namespaceId &&
-      statement.to.model === model.model,
-  );
-  return renamed?.entity === 'model' ? renamed.from : model;
-}
-
-export function originFieldOf(
-  field: FieldCoordinate,
-  origin: ModelCoordinate,
-  renames: readonly ResolvedRenameStatement[],
-): string {
-  const renamed = renames.find(
-    (statement) =>
-      statement.entity === 'field' &&
-      statement.to.namespaceId === field.namespaceId &&
-      statement.to.model === field.model &&
-      statement.to.field === field.field,
-  );
-  return renamed?.entity === 'field' && renamed.from.model === origin.model
-    ? renamed.from.field
-    : field.field;
-}
-
 /** Whether the origin already had the field and made it required. */
 function requiredInOrigin(
   input: BackfillInput,
@@ -122,25 +93,25 @@ function requiredInOrigin(
   field: FieldCoordinate,
   storedName: string,
 ): boolean {
-  if (input.fromContract === null) {
+  if (input.match === undefined) {
     return validatorRootShapesOf(input.schema.collection(collection)?.validator?.jsonSchema).some(
       (root) => root.required.includes(storedName),
     );
   }
-  const origin = originModelOf(field, input.renames);
-  const model = modelAt(input.fromContract, origin);
-  const originField = originFieldOf(field, origin, input.renames);
+  const origin = originModelOf(field, input.match);
+  const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
+  const originField = originFieldOf(field, input.match.statements);
   return model !== undefined && Object.hasOwn(model.fields, originField)
     ? model.fields[originField]?.nullable === false
     : false;
 }
 
 interface BackfillInput {
-  readonly fromContract: ContractWithDomain | null;
   readonly contract: MongoContract;
   /** The schema the plan starts from, with renamed collections under their new names. */
   readonly schema: MongoSchemaIR;
-  readonly renames: readonly ResolvedRenameStatement[];
+  /** How to find a model or field in the origin contract; `undefined` without one. */
+  readonly match: ModelMatchInput | undefined;
 }
 
 /**
@@ -153,7 +124,7 @@ export function backfillTransform(
   input: BackfillInput,
 ): StatementTransform {
   const contracts = {
-    fromContract: input.fromContract ?? input.contract,
+    fromContract: input.match?.fromContract ?? input.contract,
     contract: input.contract,
   };
   const model = modelAt(input.contract, statement.field);

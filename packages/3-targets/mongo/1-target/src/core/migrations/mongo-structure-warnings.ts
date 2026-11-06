@@ -1,18 +1,20 @@
 import {
   type ContractField,
   type ContractValueObjectField,
-  type ContractWithDomain,
   valueObjectAt,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import {
   fieldStatementText,
   type MigrationPlannerConflict,
-  type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
-import type { MongoContract } from '@internal/mongo-contract';
-import { originFieldOf, originModelOf } from './mongo-data-transforms';
-import { modelAt, modelCoordinates } from './mongo-statement-planning';
+import {
+  type ModelMatchInput,
+  modelAt,
+  modelCoordinates,
+  originFieldOf,
+  originModelOf,
+} from './mongo-statement-planning';
 
 type AnyField = ContractField | ContractValueObjectField;
 
@@ -71,18 +73,16 @@ function untouchedChange(name: string, before: AnyField, after: AnyField): strin
  * and a value object, and a field that gains an enum or changes enum. Each is a warning that names the field; the validator change's
  * document check then fails the apply until the documents fit.
  */
-export function structureChangeWarnings(input: {
-  readonly fromContract: ContractWithDomain;
-  readonly contract: MongoContract;
-  readonly renames: readonly ResolvedRenameStatement[];
-}): readonly MigrationPlannerConflict[] {
+export function structureChangeWarnings(
+  input: ModelMatchInput,
+): readonly MigrationPlannerConflict[] {
   const modelFields = modelCoordinates(input.contract).flatMap((model) => {
     const after = modelAt(input.contract, model);
-    const origin = originModelOf(model, input.renames);
-    const before = modelAt(input.fromContract, origin);
+    const origin = originModelOf(model, input);
+    const before = origin === undefined ? undefined : modelAt(input.fromContract, origin);
     if (after === undefined || before === undefined) return [];
     return Object.entries(after.fields).flatMap(([field, definition]) => {
-      const originField = originFieldOf({ ...model, field }, origin, input.renames);
+      const originField = originFieldOf({ ...model, field }, input.statements);
       if (!Object.hasOwn(before.fields, originField)) return [];
       const previous = before.fields[originField];
       const change =

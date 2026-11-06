@@ -724,7 +724,7 @@ function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
  */
 export function destinationModelOf(
   origin: ModelCoordinate,
-  input: FieldRemovalInput,
+  input: ModelMatchInput,
 ): ModelCoordinate | undefined {
   const renamed = input.statements.find(
     (statement): statement is ResolvedModelRenameStatement =>
@@ -745,11 +745,54 @@ export function destinationModelOf(
   return stored.length === 1 ? only : undefined;
 }
 
-export interface FieldRemovalInput {
+/** What finding a model or field of one contract in the other reads: the renames, both contracts, and the collection each origin collection becomes. */
+export interface ModelMatchInput {
   readonly statements: readonly ResolvedRenameStatement[];
   readonly fromContract: ContractWithDomain;
   readonly contract: MongoContract;
   readonly collectionAfterRenames: (collection: string) => string;
+}
+
+/** The origin model a destination model was, by the rules of `destinationModelOf`, read the other way. */
+export function originModelOf(
+  destination: ModelCoordinate,
+  input: ModelMatchInput,
+): ModelCoordinate | undefined {
+  return modelCoordinates(input.fromContract).find((origin) => {
+    const matched = destinationModelOf(origin, input);
+    return matched !== undefined && sameModel(matched, destination);
+  });
+}
+
+function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {
+  return sameModel(a, b) && a.field === b.field;
+}
+
+/** The name a field of the origin has in the destination: its rename statement's new name, else its own. */
+export function destinationFieldOf(
+  origin: FieldCoordinate,
+  statements: readonly ResolvedRenameStatement[],
+): string {
+  const renamed = statements.find(
+    (statement): statement is ResolvedFieldRenameStatement =>
+      statement.entity === 'field' && sameField(statement.from, origin),
+  );
+  return renamed?.to.field ?? origin.field;
+}
+
+/** The name a field of the destination had in the origin: its rename statement's old name, else its own. */
+export function originFieldOf(
+  destination: FieldCoordinate,
+  statements: readonly ResolvedRenameStatement[],
+): string {
+  const renamed = statements.find(
+    (statement): statement is ResolvedFieldRenameStatement =>
+      statement.entity === 'field' && sameField(statement.to, destination),
+  );
+  return renamed?.from.field ?? destination.field;
+}
+
+export interface FieldRemovalInput extends ModelMatchInput {
   readonly keptCollections: ReadonlySet<string>;
 }
 

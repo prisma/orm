@@ -6,7 +6,6 @@ import {
   type MigrationPlannerConflict,
   type MigrationSubject,
   type ResolvedMigrationStatement,
-  type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   type MongoContract,
@@ -21,12 +20,14 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { mongoDescriptorById } from '../codecs';
 import { mongoDataTypes } from '../data-types';
 import { unrewritableFieldNameReason } from './migration-factories';
-import { originFieldOf, originModelOf } from './mongo-data-transforms';
 import {
   collectionControlPolicy,
   collectionOf,
+  type ModelMatchInput,
   modelAt,
   modelCoordinates,
+  originFieldOf,
+  originModelOf,
   otherModelsReached,
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
@@ -60,18 +61,13 @@ function temporaryValueOf(field: ContractField): MongoTemporaryValue | undefined
 }
 
 interface FillInput {
-  readonly fromContract: ContractWithDomain | null;
   readonly contract: MongoContract;
+  /** How to find a model or field in the origin contract; `undefined` without one. */
+  readonly match: ModelMatchInput | undefined;
   /** The schema the plan starts from, with renamed collections under their new names. */
   readonly schema: MongoSchemaIR;
   readonly destination: MongoSchemaIR;
   readonly statements: readonly ResolvedMigrationStatement[];
-}
-
-function renamesOf(statements: readonly ResolvedMigrationStatement[]) {
-  return statements.filter(
-    (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
-  );
 }
 
 function backfilled(statements: readonly ResolvedMigrationStatement[], field: FieldCoordinate) {
@@ -92,17 +88,17 @@ function inOrigin(
   collection: string,
   storedName: string,
 ) {
-  if (input.fromContract === null) {
+  if (input.match === undefined) {
     const validator = input.schema.collection(collection)?.validator;
     return validator === undefined || validatorFieldNamesOf(validator.jsonSchema).has(storedName);
   }
-  const renames = renamesOf(input.statements);
-  const origin = originModelOf(field, renames);
-  const model = modelAt(input.fromContract, origin);
+  const origin = originModelOf(field, input.match);
+  const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
   return (
+    origin === undefined ||
     model === undefined ||
-    Object.hasOwn(model.fields, originFieldOf(field, origin, renames)) ||
-    storedFieldsOf(input.fromContract, origin).has(storedName)
+    Object.hasOwn(model.fields, originFieldOf(field, input.match.statements)) ||
+    storedFieldsOf(input.match.fromContract, origin).has(storedName)
   );
 }
 

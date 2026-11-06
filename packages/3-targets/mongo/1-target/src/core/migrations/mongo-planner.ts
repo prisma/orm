@@ -55,6 +55,7 @@ import {
   collectionOf,
   type FieldRemoval,
   keepCollectionByHandAdvice,
+  type ModelMatchInput,
   planFieldRemovals,
   planStatements,
   planValidatorFieldRemovals,
@@ -619,6 +620,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
             ),
           });
+    const match: ModelMatchInput | undefined =
+      fromContract === null
+        ? undefined
+        : {
+            statements: renames,
+            fromContract,
+            contract,
+            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+          };
     const typeChanges: readonly TypeChange[] =
       fromContract === null
         ? planValidatorTypeChanges({ origin: schema, destination: destinationIR, contract })
@@ -643,7 +653,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         return [
           {
             statement,
-            outcome: backfillTransform(statement, { fromContract, contract, schema, renames }),
+            outcome: backfillTransform(statement, { contract, schema, match }),
           },
         ];
       }
@@ -652,7 +662,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const unconverted = typeChanges.filter((change) => !converted.includes(change));
     const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
     const fills = planFieldFills({
-      fromContract,
+      match,
       contract,
       schema,
       destination: destinationIR,
@@ -704,9 +714,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const { calls, warnings } = result;
     const allWarnings = [
       ...warnings,
-      ...(fromContract === null
-        ? []
-        : structureChangeWarnings({ fromContract, contract, renames })),
+      ...(match === undefined ? [] : structureChangeWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
       ...removals.map((removal) => ({

@@ -236,6 +236,18 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
         { users: {} },
       );
 
+    it('fills a new field of a model renamed without a statement, matched by its collection, as type changes match it', () => {
+      expect(
+        fills(
+          plan({
+            from: renamedModel('from', 'Profile', ['name']),
+            to: renamedModel('to', 'User', ['name', 'plan']),
+            schema: live,
+          }),
+        ).map(({ label }) => label),
+      ).toEqual(['Fill field plan in collection users where it is missing or null']);
+    });
+
     it('fills no field a rename gives its new name', () => {
       expect(
         fills(

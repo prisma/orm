@@ -21,6 +21,7 @@ import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-
 import {
   collectionControlPolicy,
   collectionOf,
+  destinationFieldOf,
   destinationModelOf,
   type FieldRemovalInput,
   modelAt,
@@ -129,17 +130,6 @@ function typeChange(input: Omit<TypeChange, 'cast'>): TypeChange {
   };
 }
 
-function renamedFieldOf(input: FieldRemovalInput, field: FieldCoordinate): string {
-  const renamed = input.statements.find(
-    (statement) =>
-      statement.entity === 'field' &&
-      statement.from.namespaceId === field.namespaceId &&
-      statement.from.model === field.model &&
-      statement.from.field === field.field,
-  );
-  return renamed?.entity === 'field' ? renamed.to.field : field.field;
-}
-
 /**
  * Each top-level field of a model or variant, in a collection the plan keeps, whose destination
  * type does not take every value its origin type holds, read from the BSON types of the two codecs.
@@ -158,7 +148,7 @@ export function planFieldTypeChanges(input: FieldRemovalInput): readonly TypeCha
     return Object.keys(model.fields)
       .sort()
       .flatMap((field): TypeChange[] => {
-        const destinationField = renamedFieldOf(input, { ...origin, field });
+        const destinationField = destinationFieldOf({ ...origin, field }, input.statements);
         if (!Object.hasOwn(destinationModel.fields, destinationField)) return [];
         const from = fieldShapeOf(model.fields[field]);
         const to = fieldShapeOf(destinationModel.fields[destinationField]);
