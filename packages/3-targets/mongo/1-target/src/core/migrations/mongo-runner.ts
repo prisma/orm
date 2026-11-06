@@ -1,4 +1,4 @@
-import type { ContractMarkerRecord } from '@internal/contract/types';
+import { asNamespaceId, type ContractMarkerRecord } from '@internal/contract/types';
 import { fieldRewriteOf } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
@@ -13,6 +13,7 @@ import {
   type FailedCheck,
   failedPostcheckWhy,
   failedPrecheckWhy,
+  fieldStatementText,
   type MigrationOperationPolicy,
   type MigrationPlan,
   type MigrationPlanOperation,
@@ -20,6 +21,7 @@ import {
   type MigrationRunnerFailure,
   type MigrationRunnerFailureMeta,
   type MigrationRunnerPerSpaceSuccessValue,
+  type MigrationSubject,
   migrationRunnerFailure,
   type OperationContext,
   schemaCheckWhy,
@@ -27,7 +29,7 @@ import {
   withDatabaseUnchanged,
 } from '@internal/framework-components/control';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
-import type { MongoContract } from '@internal/mongo-contract';
+import { type MongoContract, mongoModelsOf, ownStoredNamesOf } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AnyMongoMigrationOperation,
@@ -55,7 +57,9 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
+import { castFieldOf } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
+import { collectionOf } from './mongo-statement-planning';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -270,6 +274,68 @@ function bypassValidationRefusal(
   );
 }
 
+const MONGO_CONVERSION_FAILURE = 241;
+
+/** The innermost cause MongoDB gives in an error's message, without its closing period. */
+function mongoErrorText(error: object): string {
+  const message = String(Reflect.get(error, 'message'));
+  return (message.split(' :: caused by :: ').at(-1) ?? message).replace(/\.+$/, '');
+}
+
+/** The field of the destination contract a collection stores under `storedName`, or the storage name when no model declares it. */
+function fieldStoredAt(
+  contract: MongoContract,
+  collection: string,
+  storedName: string,
+): MigrationSubject {
+  for (const namespaceId of Object.keys(contract.domain?.namespaces ?? {})) {
+    const models = mongoModelsOf(contract.domain, asNamespaceId(namespaceId));
+    for (const [model, definition] of Object.entries(models)) {
+      const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
+      if (collectionOf(contract, coordinate) !== collection) continue;
+      const field = Object.entries(ownStoredNamesOf(definition)).find(
+        ([, stored]) => stored === storedName,
+      )?.[0];
+      if (field !== undefined) return { kind: 'field', ...coordinate, field };
+    }
+  }
+  return { kind: 'storage', name: `${collection}.${storedName}` };
+}
+
+/**
+ * The failure when a cast meets a value `$convert` cannot cast: which field, and that only a
+ * conversion written with `--convert` keeps such values.
+ */
+function castRefusal(
+  op: MongoDmlOperation,
+  error: unknown,
+  position: { readonly operationIndex: number; readonly contract: MongoContract },
+): MongoMigrationRunnerResult | undefined {
+  const cast = castFieldOf(op);
+  if (cast === undefined || typeof error !== 'object' || error === null) return undefined;
+  if (Reflect.get(error, 'code') !== MONGO_CONVERSION_FAILURE) return undefined;
+  const field = fieldStoredAt(position.contract, cast.collection, cast.field);
+  const named = field.kind === 'field' ? fieldStatementText(position.contract, field) : cast.field;
+  const convert = field.kind === 'field' ? `--convert ${named}` : '--convert';
+  return runnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
+    {
+      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${mongoErrorText(error)}. To keep such values, plan the change with migration plan and ${convert}, and write the conversion in migration.ts.`,
+      meta: {
+        operationId: op.id,
+        mongoCode: MONGO_CONVERSION_FAILURE,
+        failedTypeChange: {
+          field,
+          by: 'cast',
+          reason: 'value',
+          operationIndex: position.operationIndex,
+        },
+      },
+    },
+  );
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -322,7 +388,7 @@ export class MongoMigrationRunner {
 
     let operationsExecuted = 0;
 
-    for (const operation of operations) {
+    for (const [operationIndex, operation] of operations.entries()) {
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
@@ -335,6 +401,7 @@ export class MongoMigrationRunner {
             runPrechecks,
             runPostchecks,
             wrote,
+            { operationIndex, contract: options.destinationContract },
           );
           if (result.failure) return result.failure;
           if (result.executed) {
@@ -528,6 +595,7 @@ export class MongoMigrationRunner {
     runPrechecks: boolean,
     runPostchecks: boolean,
     wrote: () => void,
+    position: { readonly operationIndex: number; readonly contract: MongoContract },
   ): Promise<{ executed: boolean; failure?: MongoMigrationRunnerResult }> {
     if (runPostchecks && runIdempotency && op.postcheck.length > 0) {
       const allSatisfied = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
@@ -564,8 +632,11 @@ export class MongoMigrationRunner {
         if (reportedChange || !reportedNoChange) wrote();
       } catch (error) {
         const refusal = bypassValidationRefusal(op, plan, error);
-        if (refusal === undefined) throw error;
-        return { executed: false, failure: refusal };
+        if (refusal !== undefined) return { executed: false, failure: refusal };
+        const castFailure = castRefusal(op, error, position);
+        if (castFailure === undefined) throw error;
+        wrote();
+        return { executed: false, failure: castFailure };
       }
     }
 

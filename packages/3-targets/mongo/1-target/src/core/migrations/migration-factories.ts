@@ -369,6 +369,26 @@ export function castField(
   };
 }
 
+/** The field a `castField` operation casts, and the BSON type it casts it to, if the operation is one. */
+export function castFieldOf(
+  operation: MongoDmlOperation,
+): { readonly collection: string; readonly field: string; readonly to: string } | undefined {
+  const [step, ...others] = operation.run;
+  const command = step?.command;
+  if (others.length > 0 || !(command instanceof RawUpdateManyCommand)) return undefined;
+  if (!Array.isArray(command.update) || command.update.length !== 1) return undefined;
+  const set: unknown = Reflect.get(command.update[0] ?? {}, '$set');
+  if (typeof set !== 'object' || set === null) return undefined;
+  const [entry, ...rest] = Object.entries(set);
+  if (entry === undefined || rest.length > 0) return undefined;
+  const [field, expression] = entry;
+  const mapped: unknown = Reflect.get(Reflect.get(expression ?? {}, '$map') ?? {}, 'in');
+  const convert: unknown = Reflect.get(mapped ?? expression ?? {}, '$convert');
+  const to: unknown =
+    typeof convert === 'object' && convert !== null ? Reflect.get(convert, 'to') : undefined;
+  return typeof to === 'string' ? { collection: command.collection, field, to } : undefined;
+}
+
 function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {
   return keys.map((k) => `${k.field}:${k.direction}`).join(', ');
 }
