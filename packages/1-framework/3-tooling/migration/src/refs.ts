@@ -1,9 +1,11 @@
 import { mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import {
   type DeclaredDatabasePolicies,
-  PartialDatabasePoliciesSchema,
+  type DeclaredDatabasePoliciesIssue,
+  parseDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { type } from 'arktype';
 import { dirname, join, relative } from 'pathe';
 import {
@@ -64,15 +66,30 @@ export function validateRefValue(value: string): boolean {
   return REF_VALUE_PATTERN.test(value);
 }
 
-const RefEntrySchema = type({
+const RefEntryFileSchema = type({
   hash: 'string',
   invariants: 'string[]',
-  'policies?': PartialDatabasePoliciesSchema,
+  'policies?': 'unknown',
 }).narrow((entry, ctx) => {
   if (!validateRefValue(entry.hash))
     return ctx.mustBe(`a valid contract hash (got "${entry.hash}")`);
   return true;
 });
+
+function policiesIssueText({ path, message }: DeclaredDatabasePoliciesIssue): string {
+  return path === '' ? `policies ${message}` : `policies.${message}`;
+}
+
+/** The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. */
+function refEntryOf(parsed: unknown): Result<RefEntry, string> {
+  const entry = RefEntryFileSchema(parsed);
+  if (entry instanceof type.errors) return notOk(entry.summary);
+  const { hash, invariants, policies } = entry;
+  if (policies === undefined) return ok({ hash, invariants });
+  const declared = parseDeclaredDatabasePolicies(policies);
+  if (!declared.ok) return notOk(declared.failure.map(policiesIssueText).join('\n'));
+  return ok({ hash, invariants, policies: declared.value });
+}
 
 function refFilePath(refsDir: string, name: string): string {
   return join(refsDir, `${name}.json`);
@@ -117,12 +134,12 @@ export async function readRef(refsDir: string, name: string): Promise<RefEntry> 
     throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
   }
 
-  const result = RefEntrySchema(parsed);
-  if (result instanceof type.errors) {
-    throw errorInvalidRefFile(filePath, result.summary);
+  const result = refEntryOf(parsed);
+  if (!result.ok) {
+    throw errorInvalidRefFile(filePath, result.failure);
   }
 
-  return result;
+  return result.value;
 }
 
 export async function readRefs(refsDir: string): Promise<Refs> {
@@ -167,12 +184,12 @@ export async function readRefs(refsDir: string): Promise<Refs> {
       throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
     }
 
-    const result = RefEntrySchema(parsed);
-    if (result instanceof type.errors) {
-      throw errorInvalidRefFile(filePath, result.summary);
+    const result = refEntryOf(parsed);
+    if (!result.ok) {
+      throw errorInvalidRefFile(filePath, result.failure);
     }
 
-    refs[name] = result;
+    refs[name] = result.value;
   }
 
   return refs;
@@ -181,7 +198,7 @@ export async function readRefs(refsDir: string): Promise<Refs> {
 /**
  * Read a space's user-authored refs without ever throwing on disk
  * content. A ref whose JSON is unparseable or whose shape fails
- * {@link RefEntrySchema} is omitted from `refs` and reported as a
+ * {@link refEntryOf} is omitted from `refs` and reported as a
  * {@link RefLoadProblem}; the remaining well-formed refs are still
  * returned. A missing `refs/` directory yields no refs and no problems.
  *
@@ -241,13 +258,13 @@ export async function readRefsTolerant(refsDir: string): Promise<TolerantRefsRes
       continue;
     }
 
-    const result = RefEntrySchema(parsed);
-    if (result instanceof type.errors) {
-      problems.push({ refName: name, path: filePath, detail: result.summary });
+    const result = refEntryOf(parsed);
+    if (!result.ok) {
+      problems.push({ refName: name, path: filePath, detail: result.failure });
       continue;
     }
 
-    refs[name] = result;
+    refs[name] = result.value;
   }
 
   return { refs, problems };

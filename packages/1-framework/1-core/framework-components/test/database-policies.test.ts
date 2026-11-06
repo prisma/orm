@@ -12,6 +12,7 @@ import {
   databasePolicyDifferences,
   movedDatabasePoliciesWhy,
   PartialDatabasePoliciesSchema,
+  parseDeclaredDatabasePolicies,
   storedDatabasePolicies,
   withDeclaredDatabasePolicies,
 } from '../src/control/database-policies';
@@ -175,6 +176,32 @@ describe('a policy declaration that is a list', () => {
 
   it('makes a marker that records one unreadable, not the default policies', () => {
     expect(databasePoliciesOf(markerWithMeta({ policies: [] }))).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseDeclaredDatabasePolicies', () => {
+  it('returns the declaration it reads', () => {
+    expect(parseDeclaredDatabasePolicies({ change: ['migrate'] })).toMatchObject({
+      ok: true,
+      value: { change: ['migrate'] },
+    });
+  });
+
+  it('names the path and the problem of each invalid field', () => {
+    expect(parseDeclaredDatabasePolicies({ change: ['migrat'], extra: 1 })).toMatchObject({
+      ok: false,
+      failure: [
+        { path: 'change[0]', message: 'change[0] must be "migrate" or "reconcile" (was "migrat")' },
+        { path: 'extra', message: 'extra must be removed' },
+      ],
+    });
+  });
+
+  it('gives an empty path when the whole declaration is invalid', () => {
+    expect(parseDeclaredDatabasePolicies([])).toMatchObject({
+      ok: false,
+      failure: [{ path: '', message: 'must be an object, not a list (was [])' }],
+    });
   });
 });
 

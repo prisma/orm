@@ -122,6 +122,23 @@ export function withDeclaredDatabasePolicies(
   };
 }
 
+/** One way a policy declaration is invalid: the key path of the field, empty for the whole declaration, and what is wrong with it, beginning with that path. */
+export interface DeclaredDatabasePoliciesIssue {
+  readonly path: string;
+  readonly message: string;
+}
+
+/** Reads a policy declaration, as a ref declares it and a marker records it, rejecting any value the declaration may not hold. */
+export function parseDeclaredDatabasePolicies(
+  value: unknown,
+): Result<DeclaredDatabasePolicies, readonly DeclaredDatabasePoliciesIssue[]> {
+  const declared = PartialDatabasePoliciesSchema(value);
+  if (declared instanceof type.errors) {
+    return notOk(declared.map((error) => ({ path: error.propString, message: error.message })));
+  }
+  return ok(declared);
+}
+
 /** Why a marker's recorded policies cannot be read. */
 export interface DatabasePoliciesUnreadable {
   readonly why: string;
@@ -136,13 +153,14 @@ export function databasePoliciesOf(
 ): Result<DatabasePolicies, DatabasePoliciesUnreadable> {
   const recorded = marker?.meta[DATABASE_POLICIES_META_KEY];
   if (recorded === undefined) return ok(DEFAULT_DATABASE_POLICIES);
-  const declared = PartialDatabasePoliciesSchema(recorded);
-  if (declared instanceof type.errors) {
+  const declared = parseDeclaredDatabasePolicies(recorded);
+  if (!declared.ok) {
+    const issues = declared.failure.map(({ message }) => message).join('\n');
     return notOk({
-      why: `The marker's meta.${DATABASE_POLICIES_META_KEY} is not a valid policy declaration: ${declared.summary}`,
+      why: `The marker's meta.${DATABASE_POLICIES_META_KEY} is not a valid policy declaration: ${issues}`,
     });
   }
-  return ok(withDeclaredDatabasePolicies(DEFAULT_DATABASE_POLICIES, declared));
+  return ok(withDeclaredDatabasePolicies(DEFAULT_DATABASE_POLICIES, declared.value));
 }
 
 /** A setting whose value differs between two sets of policies, named by its key path in a ref's `policies`. */
