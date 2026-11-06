@@ -272,6 +272,18 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     }
   });
 
+  it('deleteAll() rejects an empty where({})', () => {
+    const orm = mongoOrm({
+      contract,
+      executor: ctx.runtime,
+      enums: buildMongoEnums(contract, ctx.codecs),
+    });
+
+    expect(() => orm.users.where({}).deleteAll()).toThrow(
+      '.where({}) has none. Use db.query.from(...).deleteAll() to write every document',
+    );
+  });
+
   it('full flow: ORM -> typed AST -> runtime -> driver -> typed results', async () => {
     const db = ctx.client.db(ctx.dbName);
     const userId = new ObjectId();
