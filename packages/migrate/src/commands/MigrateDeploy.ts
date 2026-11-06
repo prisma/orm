@@ -38,6 +38,7 @@ ${bold('Options')}
   -h, --help   Display this help message
     --config   Custom path to your Prisma config file
     --schema   Custom path to your Prisma schema
+  --no-hints   Hides the hint messages but still outputs errors and warnings
 
 ${bold('Examples')}
 
@@ -65,6 +66,7 @@ export class MigrateDeploy implements Command {
         '-h': '--help',
         '--schema': String,
         '--config': String,
+        '--no-hints': Boolean,
         '--telemetry-information': String,
       },
       false,
@@ -78,12 +80,15 @@ export class MigrateDeploy implements Command {
       return this.help()
     }
 
+    const hideHints = args['--no-hints'] ?? false
+
     const schemaContext = await loadSchemaContext({
       schemaPath: createSchemaPathInput({
         schemaPathFromArgs: args['--schema'],
         schemaPathFromConfig: config.schema,
         baseDir,
       }),
+      printLoadMessage: !hideHints,
     })
     const { migrationsDirPath } = inferDirectoryConfig(schemaContext, config)
 
@@ -92,7 +97,9 @@ export class MigrateDeploy implements Command {
 
     checkUnsupportedDataProxy({ command: cmd, validatedConfig })
 
-    printDatasource({ datasourceInfo: parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig) })
+    if (!hideHints) {
+      printDatasource({ datasourceInfo: parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig) })
+    }
 
     const schemaFilter: MigrateTypes.SchemaFilter = {
       externalTables: config.tables?.external ?? [],
