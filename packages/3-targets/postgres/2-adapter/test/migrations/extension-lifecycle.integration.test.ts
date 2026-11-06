@@ -1,7 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
@@ -20,7 +18,6 @@ import {
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
@@ -72,15 +69,6 @@ const ALLOW_DESTRUCTIVE: MigrationOperationPolicy = {
 
 function contractFromPsl(psl: string): Contract<SqlStorage> {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
-  const scalarTypeDescriptors: ReadonlyMap<string, { codecId: string }> =
-    collectScalarTypeConstructors(postgresScalarAuthoringTypes);
-  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
-    Object.fromEntries(
-      [...scalarTypeDescriptors].map(([name, output]) => [
-        name,
-        { kind: 'typeConstructor' as const, output },
-      ]),
-    );
   const bound = bindPslSchema(psl, {
     sourceId: 'extension-lifecycle.integration.test.psl',
     context: {
@@ -89,7 +77,6 @@ function contractFromPsl(psl: string): Contract<SqlStorage> {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         ...assembled,
-        type: { ...scalarTypeConstructors, ...assembled.type },
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },

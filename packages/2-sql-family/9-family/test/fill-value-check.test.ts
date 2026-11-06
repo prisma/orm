@@ -141,4 +141,36 @@ describe('scalarTypeNamesOf', () => {
       undefined,
     ]);
   });
+
+  it('names a codec by the convenience type whose default makes it, and never by a deprecated name', () => {
+    const nameOf = scalarTypeNamesOf({
+      VarChar: {
+        kind: 'typeConstructor',
+        output: { codecId: 'test/varchar@1' },
+        deprecated: { replacement: 'Varchar' },
+      },
+      Varchar: { kind: 'typeConstructor', output: { codecId: 'test/varchar@1' } },
+      Text: { kind: 'typeConstructor', output: { codecId: 'test/text@1' } },
+      String: {
+        kind: 'typeChoice',
+        args: [
+          {
+            kind: 'option',
+            name: 'storage',
+            values: ['text', 'varchar'],
+            default: 'text',
+            optional: true,
+          },
+        ],
+        choices: [
+          { when: { storage: 'text' }, type: 'Text' },
+          { when: { storage: 'varchar' }, type: 'Varchar' },
+        ],
+      },
+    });
+    expect([nameOf({ codecId: 'test/text@1' }), nameOf({ codecId: 'test/varchar@1' })]).toEqual([
+      'String',
+      'Varchar',
+    ]);
+  });
 });

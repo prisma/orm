@@ -3,7 +3,7 @@ import type {
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { postgresNativeScalarTypeDescriptors, postgresScalarAuthoringTypes } from './fixtures';
+import { fixturePostgresTypeNamespace, postgresNativeScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
@@ -19,7 +19,7 @@ const precision = {
 } as const;
 
 const types = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   TimestampString: {
     kind: 'typeConstructor',
     args: [precision],

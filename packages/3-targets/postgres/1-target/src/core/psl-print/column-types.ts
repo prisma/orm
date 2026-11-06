@@ -6,10 +6,13 @@ import {
 import {
   type AuthoringTypeConstructorCall,
   type AuthoringTypeNamespace,
+  type AuthoringTypeNamespaceMember,
   authoringTypeConstructorArguments,
   type DataTypeSupport,
   findAuthoringTypeConstructorCall,
   getAuthoringTypeConstructor,
+  isAuthoringTypeConstructorDescriptor,
+  isAuthoringTypeDescriptor,
   writtenTypeArguments,
 } from '@internal/framework-components/authoring';
 import type { DataTypeLookup } from '@internal/framework-components/codec';
@@ -92,11 +95,24 @@ function inferredConstructorCall(
   return marked && args && { path: marked.path, args };
 }
 
+/** `namespace` without its deprecated type constructors, which print never writes (ADR 257). */
+function withoutDeprecatedConstructors(namespace: AuthoringTypeNamespace): AuthoringTypeNamespace {
+  const kept: Record<string, AuthoringTypeNamespaceMember> = {};
+  for (const [name, member] of Object.entries(namespace)) {
+    if (!isAuthoringTypeDescriptor(member)) {
+      kept[name] = withoutDeprecatedConstructors(member);
+    } else if (!isAuthoringTypeConstructorDescriptor(member) || member.deprecated === undefined) {
+      kept[name] = member;
+    }
+  }
+  return kept;
+}
+
 /**
  * The PSL type position for a storage column: a call to a type constructor the configured stack
  * contributes that produces exactly the column's codec, native type and type parameters. The
  * constructor `contract infer` writes for the column's data type comes first; otherwise
- * the first one in the stack that produces them, such as `TimestamptzTemporal` or
+ * the first one in the stack that produces them and is not deprecated, such as `TimestamptzTemporal` or
  * `pgvector.Vector(3)`. Where a type choice call becomes that call exactly, the type choice is
  * written instead, by name with only the arguments that differ from its defaults: `DateTime` for
  * `TimestamptzJsDate(3)`, `DateTime(as: temporal)` for `TimestamptzTemporal` (ADR 279). An enum-typed column takes the
@@ -142,7 +158,7 @@ export function buildColumnType(input: {
 
   const call =
     inferredConstructorCall(column, inferredConstructors) ??
-    findAuthoringTypeConstructorCall(authoringTypes, column);
+    findAuthoringTypeConstructorCall(withoutDeprecatedConstructors(authoringTypes), column);
   if (call !== undefined) {
     const convenience = writtenTypeChoiceCall({
       authoringTypes,

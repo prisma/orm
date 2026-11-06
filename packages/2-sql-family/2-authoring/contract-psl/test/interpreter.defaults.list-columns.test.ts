@@ -5,9 +5,9 @@ import { fixtureDataTypeSupport } from './fixture-data-types';
 import { fixtureGeneratorFunctions } from './fixture-generator-functions';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 
@@ -15,7 +15,7 @@ const baseInput = {
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
-    type: postgresScalarAuthoringTypes,
+    type: fixturePostgresTypeNamespace,
     dataTypes: fixtureDataTypeSupport.entries,
   },
   ...fixtureInterpreterTypes,

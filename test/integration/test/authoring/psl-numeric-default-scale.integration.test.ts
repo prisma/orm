@@ -28,7 +28,7 @@ function priceSchema(defaultValue: string): string {
   return `
 model Price {
   id Int            @id
-  n  Numeric(10, 2) @default(${defaultValue})
+  n  NumericString(10, 2) @default(${defaultValue})
 }
 `;
 }
@@ -87,7 +87,7 @@ describe('a numeric default on a column with a scale', () => {
   it('takes the scale of a named type the column is declared with', async () => {
     const aliased = (defaultValue: string) => `
 types {
-  Money = Numeric(10, 2)
+  Money = NumericString(10, 2)
 }
 
 model Price {

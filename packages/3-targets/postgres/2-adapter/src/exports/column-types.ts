@@ -89,7 +89,7 @@ export const int2Column = {
   codecId: PG_INT2_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
-export const int8Column = {
+export const int8BigIntColumn = {
   codecId: PG_INT8_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
@@ -101,24 +101,24 @@ export const float8Column = {
   codecId: PG_FLOAT8_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
-export function numericColumn<const Precision extends number>(
+export function numericStringColumn<const Precision extends number>(
   precision: Precision,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: Precision };
 };
-export function numericColumn<const Precision extends number, const Scale extends number>(
+export function numericStringColumn<const Precision extends number, const Scale extends number>(
   precision: Precision,
   scale: Scale,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: Precision; readonly scale: Scale };
 };
-export function numericColumn(
+export function numericStringColumn(
   precision: number,
   scale?: number,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: number; readonly scale?: number };
 };
-export function numericColumn(
+export function numericStringColumn(
   precision: number,
   scale?: number,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
