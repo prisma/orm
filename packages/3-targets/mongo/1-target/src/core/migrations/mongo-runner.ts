@@ -884,13 +884,15 @@ export class MongoMigrationRunner {
       if (!passed) {
         return {
           executed: false,
-          failure: runnerFailure(
-            'MIGRATION.POSTCHECK_FAILED',
-            `Operation ${op.id} failed during postcheck`,
-            {
-              meta: { operationId: op.id, name: op.name },
-            },
-          ),
+          failure:
+            (await this.documentsStillMatchingFailure(op)) ??
+            runnerFailure(
+              'MIGRATION.POSTCHECK_FAILED',
+              `Operation ${op.id} failed during postcheck`,
+              {
+                meta: { operationId: op.id, name: op.name },
+              },
+            ),
         };
       }
     }
@@ -989,6 +991,45 @@ export class MongoMigrationRunner {
             requires: touched.requires,
             retypes: touched.retypes,
           },
+        },
+      },
+    );
+  }
+
+  /**
+   * The failure when a data transform's check still finds documents after its update: how many, one
+   * `_id`, and the query that finds them all.
+   */
+  private async documentsStillMatchingFailure(
+    op: MongoDmlOperation,
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const [check] = op.postcheck;
+    const command = check?.source.command;
+    if (check?.expect !== 'notExists' || !(command instanceof RawAggregateCommand))
+      return undefined;
+    const match: unknown = Reflect.get(command.pipeline[0] ?? {}, '$match');
+    if (typeof match !== 'object' || match === null) return undefined;
+    const counted = await this.firstRow({
+      ...check.source,
+      command: new RawAggregateCommand(command.collection, [
+        { $match: match },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
+    const one = documents === 1;
+    const documentId = mongoshValue(counted?.['documentId']);
+    const query = `db.getCollection(${JSON.stringify(command.collection)}).find(${JSON.stringify(match)})`;
+    return runnerFailure(
+      'MIGRATION.POSTCHECK_FAILED',
+      `Operation ${op.id} failed: after its update, ${documents} ${one ? 'document' : 'documents'} in collection ${command.collection} still ${one ? 'matches' : 'match'} its check`,
+      {
+        why: `${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped.`,
+        meta: {
+          operationId: op.id,
+          name: op.name,
+          documentsStillMatching: { collection: command.collection, documents, documentId, query },
         },
       },
     );

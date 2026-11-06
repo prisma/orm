@@ -17,7 +17,7 @@ import {
   rawUpdateMany,
 } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
-import { type Db, MongoClient } from 'mongodb';
+import { type Db, MongoClient, ObjectId } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -288,18 +288,14 @@ describe('MongoMigrationRunner, a fill of a list field', () => {
   );
 });
 
-describe('MongoMigrationRunner, every kind of rewrite on an empty collection', () => {
-  function scaffold(
-    name: string,
-    filter: Record<string, unknown>,
-    update: Record<string, unknown>,
-  ) {
-    return dataTransform(name, {
-      check: { source: () => rawAggregate('users', [{ $match: filter }, { $limit: 1 }]) },
-      run: () => rawUpdateMany('users', filter, [update], { bypassDocumentValidation: true }),
-    });
-  }
+function scaffold(name: string, filter: Record<string, unknown>, update: Record<string, unknown>) {
+  return dataTransform(name, {
+    check: { source: () => rawAggregate('users', [{ $match: filter }, { $limit: 1 }]) },
+    run: () => rawUpdateMany('users', filter, [update], { bypassDocumentValidation: true }),
+  });
+}
 
+describe('MongoMigrationRunner, every kind of rewrite on an empty collection', () => {
   it(
     'skips each rewrite on its postcheck before its precheck can ask for documents to change',
     async () => {
@@ -361,6 +357,51 @@ describe('MongoMigrationRunner, a validator change whose documents a rewrite did
       expect(result.failure.why).toContain(
         'These operations of this apply already changed collection users and stay applied: Fill field nickname in collection users where it is missing or null.',
       );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a data transform whose update leaves documents its check still finds', () => {
+  it(
+    'counts them, names one _id and gives the query that finds them',
+    async () => {
+      await db.createCollection('users');
+      const abc = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
+      await db.collection('users').insertMany([
+        { _id: abc, name: 'Ada', age: 'abc' },
+        { _id: new ObjectId('64b7f0c2a1b2c3d4e5f60719'), name: 'Bo', age: '7' },
+      ]);
+      const notInt = { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'int']] } } };
+
+      const result = await run(
+        [
+          scaffold('User.age', notInt, {
+            $set: { age: { $convert: { input: '$age', to: 'int', onError: '$age' } } },
+          }),
+        ],
+        usersContract({ name: { bsonType: 'string' }, age: { bsonType: 'int' } }),
+      );
+
+      if (result.ok) throw new Error('Expected the data transform to fail its check');
+      const query = `db.getCollection("users").find(${JSON.stringify(notInt)})`;
+      expect({
+        code: result.failure.code,
+        message: result.failure.message,
+        why: result.failure.why,
+        meta: result.failure.meta['documentsStillMatching'],
+      }).toEqual({
+        code: 'MIGRATION.POSTCHECK_FAILED',
+        message:
+          'Operation data_transform.User.age failed: after its update, 1 document in collection users still matches its check',
+        why: `It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). Find them all with ${query} in mongosh. Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        meta: {
+          collection: 'users',
+          documents: 1,
+          documentId: 'ObjectId("64b7f0c2a1b2c3d4e5f60718")',
+          query,
+        },
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );
