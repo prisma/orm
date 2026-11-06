@@ -273,13 +273,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     const entry = perSpacePlans.get(spaceId);
     return entry !== undefined && planRequiresExecution(entry);
   });
-  const appPlanForPolicies =
-    policiesToWrite === undefined ? undefined : perSpacePlans.get(aggregate.app.spaceId);
-  if (!hasPendingWork && policiesToWrite !== undefined && appPlanForPolicies !== undefined) {
+  if (!hasPendingWork && policiesToWrite !== undefined) {
     return runPolicyOnly({
       ...options,
       aggregate,
-      appPlan: appPlanForPolicies,
+      plans: new Map([...plansKeptFromRunner, ...perSpacePlans]),
+      canonicalOrder,
       policiesToWrite,
       inForce,
     });
@@ -411,13 +410,19 @@ const MIGRATE_POLICY = {
 async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>(
   args: ExecuteMigrateOptions<TFamilyId, TTargetId> & {
     readonly aggregate: ContractSpaceAggregate;
-    readonly appPlan: PerSpacePlan;
+    /** Every loaded space's plan, none of which has work; the application space's runs to record the policies. */
+    readonly plans: ReadonlyMap<string, PerSpacePlan>;
+    readonly canonicalOrder: readonly string[];
     readonly policiesToWrite: DatabasePoliciesToWrite;
     readonly inForce: DatabasePolicies;
   },
 ): Promise<MigrateResult> {
-  const { aggregate, appPlan, policiesToWrite } = args;
+  const { aggregate, plans, policiesToWrite } = args;
   const appSpaceId = aggregate.app.spaceId;
+  const appPlan = plans.get(appSpaceId);
+  if (appPlan === undefined) {
+    throw new InternalError(`Unreachable: no plan for the application space "${appSpaceId}"`);
+  }
   const perSpacePlans = new Map([[appSpaceId, appPlan]]);
   const applied = await runMigration({
     aggregate,
@@ -437,11 +442,17 @@ async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>
     const facts = runnerFailureFacts(applied.failure, collectOrdered([appSpaceId], perSpacePlans));
     return notOk(migrateRunnerFailureError(applied.failure, facts, undefined, args.invocation));
   }
+  const orderedAll = args.canonicalOrder.flatMap((spaceId) => {
+    const entry = plans.get(spaceId);
+    if (entry === undefined) return [];
+    const fromRunner = applied.value.orderedResolutions.find((r) => r.spaceId === spaceId);
+    return [fromRunner ?? { spaceId, entry }];
+  });
   return ok({
     ...buildSuccess({
       aggregate,
-      orderedResolutions: applied.value.orderedResolutions,
-      perSpace: applied.value.perSpace,
+      orderedResolutions: orderedAll,
+      perSpace: buildPerSpaceBreakdown(orderedAll, appSpaceId, { includeMarkers: true }),
       totalOpsExecuted: 0,
       summary: `Policies updated: ${declaredSettingsText(policiesToWrite.differences)}`,
     }),

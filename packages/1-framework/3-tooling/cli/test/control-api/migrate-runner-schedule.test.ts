@@ -214,6 +214,70 @@ function migrateOptions(args: {
 }
 
 describe('executeMigrate runner schedule', () => {
+  function withPolicyChange(options: ReturnType<typeof migrateOptions>, hash: string) {
+    return {
+      ...options,
+      target: {
+        kind: 'ref' as const,
+        ref: {
+          name: 'production',
+          hash,
+          invariants: [],
+          policies: { change: ['migrate' as const] },
+        },
+      },
+      permitPolicyChange: true,
+    };
+  }
+
+  it('records the policies a ref at the empty contract declares on a database with no marker', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      withPolicyChange(
+        migrateOptions({ migrationsDir, markers: new Map(), migrations }),
+        EMPTY_CONTRACT_HASH,
+      ),
+    );
+
+    expect({ summary: result.ok && result.value.summary, runnerCalls }).toEqual({
+      summary: 'Policies updated: change: migrate',
+      runnerCalls: [['app']],
+    });
+  });
+
+  it('lists every loaded space when a run only records policies', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    await addAllExternalSpace(migrationsDir);
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      withPolicyChange(
+        migrateOptions({
+          migrationsDir,
+          markers: new Map([
+            ['app', markerAt(APP_HEAD)],
+            [EXTERNAL_SPACE, markerAt(EXTERNAL_HEAD)],
+          ]),
+          migrations,
+          extensions: [allExternalExtension()],
+        }),
+        APP_HEAD,
+      ),
+    );
+
+    expect({
+      summary: result.ok && result.value.summary,
+      spaces: result.ok && result.value.perSpace.map((entry) => entry.spaceId),
+      runnerCalls,
+    }).toEqual({
+      summary: 'Policies updated: change: migrate',
+      spaces: expect.arrayContaining(['app', EXTERNAL_SPACE]),
+      runnerCalls: [['app']],
+    });
+  });
+
   it('leaves a database with no marker alone when the target is the empty contract', async () => {
     const migrationsDir = await migrationsDirWithOneAppEdge();
     const { runnerCalls, migrations } = recordingMigrations();

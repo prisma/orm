@@ -8,7 +8,6 @@ import type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import type { NamedRef } from '@internal/migration-tools/refs';
-import { isInternalError } from '@internal/utils/internal-error';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
@@ -259,13 +258,17 @@ describe('executeDbUpdate, database policies', () => {
     expect(result.ok ? result.value : result.failure).not.toHaveProperty('databasePoliciesUpdated');
   });
 
-  it('fails as an internal error when the ref names another contract than the one it reconciles to', async () => {
-    await expect(
-      update({
-        mode: 'plan',
-        markers: new Map(),
-        ref: { name: 'dev', hash: 'elsewhere', invariants: [] },
-      }),
-    ).rejects.toSatisfy(isInternalError);
+  it('refuses a ref that names another contract than the one it reconciles to, saying how to correct it', async () => {
+    const result = await update({
+      mode: 'plan',
+      markers: new Map(),
+      ref: { name: 'dev', hash: 'elsewhere', invariants: [] },
+    });
+
+    expect(result.assertNotOk()).toMatchObject({
+      code: 'MIGRATION.DESTINATION_CONTRACT_MISMATCH',
+      fix: expect.stringContaining('Pass the contract the ref names'),
+      meta: { refName: 'dev', refHash: 'elsewhere' },
+    });
   });
 });

@@ -243,8 +243,20 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   let checkedPolicies: CheckedDatabasePolicies | undefined;
   if (options.action === 'dbUpdate') {
     if (options.ref !== undefined && options.ref.hash !== contract.storage.storageHash) {
-      throw new InternalError(
-        `db update was given ref "${options.ref.name}" at ${options.ref.hash}, but reconciles to ${contract.storage.storageHash}; the ref and the contract must name the same contract.`,
+      return notOk(
+        new CliStructuredError(
+          'MIGRATION.DESTINATION_CONTRACT_MISMATCH',
+          'The ref names another contract than the one db update reconciles to',
+          {
+            why: `db update was given ref "${options.ref.name}" at ${options.ref.hash}, but the contract it reconciles to is ${contract.storage.storageHash}.`,
+            fix: `Pass the contract the ref names, or a ref whose hash is ${contract.storage.storageHash}.`,
+            meta: {
+              refName: options.ref.name,
+              refHash: options.ref.hash,
+              contractStorageHash: contract.storage.storageHash,
+            },
+          },
+        ),
       );
     }
     const checked = checkRunPolicies({
