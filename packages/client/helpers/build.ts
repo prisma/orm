@@ -33,11 +33,16 @@ const shouldMinify = !process.env.DEV && process.env.MINIFY !== 'false'
 const NODE_ESM_BANNER = `\
 import * as __banner_node_module from "node:module";
 import * as __banner_node_path from "node:path";
-import * as process from "node:process";
 import * as __banner_node_url from "node:url";
-const __filename = __banner_node_url.fileURLToPath(import.meta.url);
-globalThis['__dirname'] = __banner_node_path.dirname(__filename);
-const require = __banner_node_module.createRequire(import.meta.url);`
+// \`import.meta.url\` is only set when this file actually runs as ESM. A bundler that
+// re-emits it as CommonJS (e.g. esbuild \`format: 'cjs'\`) leaves it undefined but already
+// provides real \`require\`/\`__filename\`/\`__dirname\`, so only synthesize them for ESM.
+if (import.meta.url) {
+  const __banner_filename = __banner_node_url.fileURLToPath(import.meta.url);
+  globalThis['__filename'] = __banner_filename;
+  globalThis['__dirname'] = __banner_node_path.dirname(__banner_filename);
+  globalThis['require'] = __banner_node_module.createRequire(import.meta.url);
+}`
 
 // we define the config for runtime
 function nodeRuntimeBuildConfig(targetBuildType: typeof TARGET_BUILD_TYPE, format: ModuleFormat): BuildOptions {
