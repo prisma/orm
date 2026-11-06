@@ -86,7 +86,7 @@ export const removedSqlFieldPresets: RemovedFieldPresets = {
   float: removedPresetWrittenAs('Float', 'pg/float8@1'),
   decimal: removedPresetWrittenAs('Decimal', 'pg/numeric@1'),
   boolean: removedPresetWrittenAs('Boolean', 'pg/bool@1'),
-  json: removedPresetWrittenAs('Jsonb', 'pg/jsonb@1'),
+  json: removedPresetWrittenAs('Json', 'pg/jsonb@1'),
   bytes: removedPresetWrittenAs('Bytes', 'pg/bytea@1'),
   dateTime: removedPresetWrittenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1'),
   uuidNative: removedPresetWrittenAs('Uuid', 'pg/uuid@1'),

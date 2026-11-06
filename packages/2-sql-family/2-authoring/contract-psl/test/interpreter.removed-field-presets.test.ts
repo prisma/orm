@@ -97,6 +97,14 @@ const convenienceTypes = {
       { when: { as: 'string', storage: 'timetz' }, type: 'Timetz' },
     ],
   },
+  Json: {
+    kind: 'typeChoice',
+    args: [option('storage', ['jsonb', 'json'])],
+    choices: [
+      { when: { storage: 'jsonb' }, type: 'Jsonb' },
+      { when: { storage: 'json' }, type: 'PlainJson' },
+    ],
+  },
 } as const satisfies AuthoringTypeNamespace;
 
 const postgresTypes: AuthoringTypeNamespace = {
@@ -105,6 +113,7 @@ const postgresTypes: AuthoringTypeNamespace = {
   Char: char,
   ...generatedIdAliases,
   DateString: { kind: 'typeConstructor', output: { codecId: 'pg/date-string@1' } },
+  PlainJson: { kind: 'typeConstructor', output: { codecId: 'pg/json@1' } },
   TimestampString: precisionType('pg/timestamp-string@1'),
   TimestamptzString: precisionType('pg/timestamptz-string@1'),
   TimestamptzJsDate: precisionType('pg/timestamptz-date@1'),
@@ -186,7 +195,7 @@ describe('a removed field preset in a SQL schema', () => {
       ['float()', 'Write Float.'],
       ['decimal()', 'Write Decimal.'],
       ['boolean()', 'Write Boolean.'],
-      ['json()', 'Write Jsonb.'],
+      ['json()', 'Write Json.'],
       ['bytes()', 'Write Bytes.'],
       ['dateTime()', 'Write DateTime(as: temporal).'],
       ['uuidNative()', 'Write Uuid.'],

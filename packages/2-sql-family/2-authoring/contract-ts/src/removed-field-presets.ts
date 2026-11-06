@@ -107,7 +107,7 @@ export const PRESETS: Readonly<Record<string, readonly RemovedFieldPreset[]>> = 
   float: writtenAs(explicit('Float'), 'pg/float8@1'),
   decimal: writtenAs(explicit('Decimal'), 'pg/numeric@1'),
   boolean: writtenAs(explicit('Boolean'), 'pg/bool@1'),
-  json: writtenAs(explicit('Jsonb'), 'pg/jsonb@1'),
+  json: writtenAs(explicit('Json'), 'pg/jsonb@1'),
   bytes: writtenAs(explicit('Bytes'), 'pg/bytea@1'),
   dateTime: writtenAs(TEMPORAL_DATE_TIME, 'pg/timestamptz-temporal@1'),
   uuidNative: writtenAs(explicit('Uuid'), 'pg/uuid@1'),
