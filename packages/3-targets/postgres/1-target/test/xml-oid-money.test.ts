@@ -168,6 +168,7 @@ describe('pg/money', () => {
         code: 'RUNTIME.LC_MONETARY_NOT_C',
         meta: { codecId: 'pg/money@1', received: wire },
         fix: expect.stringContaining('lc_monetary'),
+        why: expect.stringContaining('already committed'),
       });
     });
 
