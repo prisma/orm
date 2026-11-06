@@ -27,7 +27,7 @@ changes:
 
 On PostgreSQL, `Json` is now a convenience type, as `String` and `Bytes` are. Its optional `storage` argument chooses the column: `jsonb`, the default, gives `Jsonb`, and `json` gives `PlainJson`, the explicit type for a plain `json` column. Before this change, `Json` was the explicit type for a `json` column.
 
-So a field written `Json` changes from `json` to `jsonb`. `Jsonb` keeps its name and is not affected. Nothing warns: `prisma contract emit` writes a new storage hash, and `prisma db verify` reports the column.
+So a field written `Json` changes from `json` to `jsonb`. `Jsonb` keeps its name and is not affected. Nothing warns: `prisma contract emit` writes a new storage hash, `prisma db verify` reports a hash mismatch, and `prisma db verify --schema-only` names the column: `The contract column is "jsonb" and the database column is "json"`.
 
 ## `psl-postgres-json-stores-jsonb`
 
