@@ -1,7 +1,7 @@
 const MASK = '****';
 const URL_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
-const LEADING_URL_USERINFO = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/?#\s]+)@/;
-const URL_USERINFO = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#\s]+)@/g;
+const LEADING_URL_USERINFO = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/?#\s]*)@/;
+const URL_USERINFO = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#\s]*)@/g;
 const PASSWORD_QUERY_PARAMETER = /([?&][^=&#\s]*password[^=&#\s]*=)([^&#\s]*)/gi;
 
 export interface UrlUserinfo {
@@ -15,8 +15,9 @@ export function hasUrlScheme(text: string): boolean {
 
 /**
  * Reads the userinfo of a URL without parsing its hosts, so it works for URLs `new URL` rejects,
- * such as a seed list of several `host:port` pairs. The userinfo ends at the last `@` before the
- * first `/`, `?` or `#`.
+ * such as a seed list of several `host:port` pairs or connection URLs with blank host/user
+ * (`postgresql://user@/db`, `postgresql://:secret@/db`, `postgresql://@localhost/db`).
+ * The userinfo ends at the last `@` before the first `/`, `?` or `#`.
  */
 export function urlUserinfo(url: string): UrlUserinfo {
   return splitUserinfo(url.match(LEADING_URL_USERINFO)?.[1] ?? '');
@@ -39,8 +40,12 @@ export function redactUrlCredentials(text: string): string {
   return text
     .replace(
       URL_USERINFO,
-      (_match, scheme: string, userinfo: string) =>
-        `${scheme}${maskUserinfo(splitUserinfo(userinfo))}@`,
+      (match, scheme: string, userinfo: string) => {
+        if (!userinfo) {
+          return match;
+        }
+        return `${scheme}${maskUserinfo(splitUserinfo(userinfo))}@`;
+      },
     )
     .replace(PASSWORD_QUERY_PARAMETER, `$1${MASK}`);
 }

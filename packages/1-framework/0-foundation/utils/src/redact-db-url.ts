@@ -11,8 +11,16 @@ export interface RedactedDatabaseUrl {
   readonly username?: string;
 }
 
+const SCHEME_AUTHORITY_PATH =
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/(?:([^/?#@\s]*)@)?([^/?#:\s]*)(?::(\d+))?(?:\/([^?#\s]*))?/;
+
 /**
  * Redacts a database connection URL to a minimal metadata object.
+ *
+ * Supports PostgreSQL/libpq-style connection URLs where user or host is left
+ * blank (such as `postgresql:///mydb`, `postgresql://user@/mydb`, or
+ * `postgresql://@localhost:5432/mydb`), which standard WHATWG `new URL()`
+ * rejects when userinfo is present without a host.
  *
  * Parsing errors are ignored and result in an empty object so callers never
  * leak raw URLs when the input is malformed.
@@ -25,10 +33,30 @@ export function redactDatabaseUrl(url: string): RedactedDatabaseUrl {
       ...ifDefined('host', parsed.hostname || undefined),
       ...ifDefined('port', parsed.port || undefined),
       ...ifDefined('database', database),
-      ...ifDefined('username', parsed.username || undefined),
+      ...ifDefined('username', parsed.username ? decodeURIComponent(parsed.username) : undefined),
     };
   } catch {
-    // Ignore parsing errors; return empty metadata
-    return {};
+    const match = url.match(SCHEME_AUTHORITY_PATH);
+    if (!match) {
+      return {};
+    }
+    const rawUserinfo = match[1] ?? '';
+    const colonIndex = rawUserinfo.indexOf(':');
+    const rawUsername = colonIndex === -1 ? rawUserinfo : rawUserinfo.slice(0, colonIndex);
+    const host = match[2] || undefined;
+    const port = match[3] || undefined;
+    const database = match[4] || undefined;
+    let username: string | undefined;
+    try {
+      username = rawUsername ? decodeURIComponent(rawUsername) : undefined;
+    } catch {
+      username = rawUsername || undefined;
+    }
+    return {
+      ...ifDefined('host', host),
+      ...ifDefined('port', port),
+      ...ifDefined('database', database),
+      ...ifDefined('username', username),
+    };
   }
 }
