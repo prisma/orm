@@ -107,6 +107,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
         codecLookup: context.codecLookup,
         dataTypes: context.dataTypes,
         ...ifDefined('enumInferenceCodecs', options.enumInferenceCodecs),
+        ...ifDefined('reportWarning', context.reportWarning),
       });
     },
     async load(context) {

@@ -33,6 +33,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 import { getAttribute, storageName } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
@@ -118,6 +119,7 @@ export interface CollectResolvedFieldsInput {
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 /**
@@ -253,6 +255,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     namespaceId,
     namespaceExtensionEntities,
     codecLookup,
+    warnDeprecated,
   } = input;
   const resolvedFields: ResolvedField[] = [];
   const valueObjectStorageTypeName = authoringContributions?.valueObjectStorageType;
@@ -309,6 +312,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       binder,
       codecLookup,
       dataTypes,
+      warnDeprecated,
     };
 
     if (isValueObjectField) {

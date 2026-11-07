@@ -3,13 +3,13 @@ import { expectAbsent, expectPresent } from '@internal/framework-components/cont
 import { extensionExistsAst, extensionInSchemaAst } from '../../../contract-free/checks';
 import { DEFAULT_NAMESPACE_ID } from '../../namespace-ids';
 import { quoteIdentifier } from '../../sql-utils';
-import { type Op, step, targetDetails } from './shared';
+import { type Op, searchPathExtensionTarget, step, targetDetails } from './shared';
 
 /**
- * `CREATE EXTENSION … WITH SCHEMA …` for an extension the contract declares. The precheck states the extension is absent and the postcheck that it is present, so a run that finds it installed skips the operation.
+ * `CREATE EXTENSION … WITH SCHEMA …` for an extension the contract declares; without `schema`, PostgreSQL creates it in the connection's current schema, unless the extension's control file names a schema. The precheck states the extension is absent and the postcheck that it is present, so a run that finds it installed skips the operation.
  */
 export async function createExtension(
-  options: { readonly schema: string; readonly extension: string },
+  options: { readonly schema?: string; readonly extension: string },
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
   const { schema, extension } = options;
@@ -20,7 +20,10 @@ export async function createExtension(
     id: `extension.${extension}`,
     label: `Create extension "${extension}"`,
     operationClass: 'additive',
-    target: targetDetails('dependency', extension, schema),
+    target:
+      schema === undefined
+        ? searchPathExtensionTarget(extension)
+        : targetDetails('dependency', extension, schema),
     precheck: [
       step(
         `verify extension "${extension}" is not installed`,
@@ -32,7 +35,9 @@ export async function createExtension(
     execute: [
       step(
         `create extension "${extension}"`,
-        `CREATE EXTENSION IF NOT EXISTS ${quoteIdentifier(extension)} WITH SCHEMA ${quoteIdentifier(schema)}`,
+        schema === undefined
+          ? `CREATE EXTENSION IF NOT EXISTS ${quoteIdentifier(extension)}`
+          : `CREATE EXTENSION IF NOT EXISTS ${quoteIdentifier(extension)} WITH SCHEMA ${quoteIdentifier(schema)}`,
       ),
     ],
     postcheck: [
@@ -48,7 +53,7 @@ export async function createExtension(
 
 /** `DROP EXTENSION` without `CASCADE`: Postgres refuses it while any object depends on the extension. */
 export async function dropExtension(
-  options: { readonly schema: string; readonly extension: string },
+  options: { readonly schema?: string; readonly extension: string },
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
   const { schema, extension } = options;
@@ -59,7 +64,10 @@ export async function dropExtension(
     id: `dropExtension.${extension}`,
     label: `Drop extension "${extension}"`,
     operationClass: 'destructive',
-    target: targetDetails('dependency', extension, schema),
+    target:
+      schema === undefined
+        ? searchPathExtensionTarget(extension)
+        : targetDetails('dependency', extension, schema),
     precheck: [
       step(
         `verify extension "${extension}" is installed`,

@@ -361,6 +361,21 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
           },
         },
       );
+    case 'indexNameDuplicate':
+      return contractError(
+        'CONTRACT.NAME_DUPLICATE',
+        `Collection "${refusal.collection}" has two indexes named "${refusal.name}": index ${refusal.firstPosition} of model "${refusal.firstModel}" and index ${refusal.key.position} of model "${refusal.key.model}". An index without a name is named after its keys and directions. Give one of them another name with the index option name.`,
+        {
+          meta: {
+            kind: 'index',
+            name: refusal.name,
+            collection: refusal.collection,
+            first: refusal.firstModel,
+            second: refusal.key.model,
+            reason: 'index-name-duplicate',
+          },
+        },
+      );
     case 'generatedOnValueObject':
       return defaultError(
         refusal.key,

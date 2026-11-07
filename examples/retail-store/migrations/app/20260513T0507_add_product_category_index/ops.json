@@ -1,51 +1,26 @@
 [
   {
-    "id": "index.products.create(primaryCategory:1,articleType:1)",
-    "label": "Create index on products (primaryCategory:1, articleType:1)",
+    "id": "index.products.create(primaryCategory_1_articleType_1)",
+    "label": "Create index primaryCategory_1_articleType_1 on products (primaryCategory:1, articleType:1)",
     "operationClass": "additive",
     "precheck": [
       {
-        "description": "index does not already exist on products",
+        "description": "no index named primaryCategory_1_articleType_1 exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
         },
         "filter": {
           "kind": "field",
-          "field": "key",
+          "field": "name",
           "op": "$eq",
-          "value": {
-            "primaryCategory": 1,
-            "articleType": 1
-          }
+          "value": "primaryCategory_1_articleType_1"
         },
         "expect": "notExists",
-        "object": "an index on { primaryCategory: 1, articleType: 1 } in \"products\""
-      }
-    ],
-    "execute": [
+        "object": "an index named \"primaryCategory_1_articleType_1\" in \"products\""
+      },
       {
-        "description": "create index on products",
-        "command": {
-          "kind": "createIndex",
-          "collection": "products",
-          "keys": [
-            {
-              "direction": 1,
-              "field": "primaryCategory"
-            },
-            {
-              "direction": 1,
-              "field": "articleType"
-            }
-          ],
-          "name": "primaryCategory_1_articleType_1"
-        }
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "index exists on products",
+        "description": "no index with the same keys and options exists on products",
         "source": {
           "kind": "listIndexes",
           "collection": "products"
@@ -99,6 +74,100 @@
               "kind": "exists",
               "field": "collation",
               "exists": false
+            }
+          ]
+        },
+        "expect": "notExists",
+        "object": "an index on { primaryCategory: 1, articleType: 1 } in \"products\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index primaryCategory_1_articleType_1 on products",
+        "command": {
+          "kind": "createIndex",
+          "collection": "products",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "primaryCategory"
+            },
+            {
+              "direction": 1,
+              "field": "articleType"
+            }
+          ],
+          "name": "primaryCategory_1_articleType_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index primaryCategory_1_articleType_1 exists on products",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "products"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "primaryCategory_1_articleType_1"
+            },
+            {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "primaryCategory": 1,
+                    "articleType": 1
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
             }
           ]
         },

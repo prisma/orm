@@ -10,7 +10,7 @@ import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   buildSymbolTableInput,
   createBuiltinLikeControlMutationDefaults,
-  postgresScalarAuthoringTypes,
+  fixturePostgresTypeNamespace,
 } from './fixtures';
 
 const SCHEMA = `
@@ -39,7 +39,7 @@ model Session {
 `;
 
 const authoringType = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1' } },
   temporal: {
     CreatedAt: { kind: 'typeAlias', output: { type: { codecId: 'pg/timestamptz@1' } } },

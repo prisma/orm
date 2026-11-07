@@ -4,8 +4,8 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
 } from './fixtures';
@@ -21,7 +21,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
       {
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
-        authoringContributions: { type: postgresScalarAuthoringTypes },
+        authoringContributions: { type: fixturePostgresTypeNamespace },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
         ...fixtureInterpreterTypes,

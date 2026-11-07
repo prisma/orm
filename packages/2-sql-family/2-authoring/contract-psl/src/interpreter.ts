@@ -48,7 +48,8 @@ import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { elementCoordinates, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { Binder, ParsedWrittenScalar } from '@internal/psl-parser';
 import {
   type AttributeSpecContext,
@@ -126,6 +127,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { compareStrings } from './compare-strings';
 import { contractError } from './contract-errors';
 import { defaultTableName } from './default-table-name';
+import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './deprecated-type-names';
 import {
   getAttribute,
   getNamedArgument,
@@ -199,6 +201,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   readonly capabilities: CapabilityMatrix;
+  /** Receives a warning for each field or type alias typed with a deprecated type name. */
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
 function declarationsHoldingModels(namespace: NamespaceSymbol): ReadonlySet<SyntaxNode> {
@@ -257,6 +261,11 @@ function validateNamespaceBlocksForSqlTarget(input: {
       });
     }
   }
+}
+
+/** How PSL writes a namespace: the unbound namespace is `unbound`. */
+function pslNamespaceName(namespaceId: string): string {
+  return namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : namespaceId;
 }
 
 /**
@@ -525,6 +534,7 @@ interface BuildModelNodeInput {
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -637,6 +647,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     namespaceId: modelNamespaceId,
     ...ifDefined('namespaceExtensionEntities', input.namespaceExtensionEntities),
     codecLookup: input.codecLookup,
+    warnDeprecated: input.warnDeprecated,
   });
 
   const inlineIdFields = resolvedFields.filter((field) => field.isId);
@@ -1450,6 +1461,7 @@ interface BuildValueObjectNodesInput {
   >;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly binder: Binder;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNode[] {
@@ -1498,6 +1510,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         binder,
         codecLookup: input.codecLookup,
         dataTypes: input.dataTypes,
+        warnDeprecated: input.warnDeprecated,
       });
       if (!resolved.ok) {
         input.droppedFields.add(field);
@@ -2170,6 +2183,10 @@ export function interpretPslDocumentToSqlContract(
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
   const renamedTypeConstructors = renamedTypeConstructorsOf(input.target.authoring);
+  const warnDeprecated = deprecatedTypeNameWarner({
+    sources: input.sources,
+    reportWarning: input.reportWarning,
+  });
   reportFieldDbAttributes({
     symbolTable: input.symbolTable,
     sources: input.sources,
@@ -2443,19 +2460,42 @@ export function interpretPslDocumentToSqlContract(
         namespacesByName.set(name, [...(namespacesByName.get(name) ?? []), namespaceId]);
       }
     }
-    for (const [name, namespaceIds] of namespacesByName) {
-      if (namespaceIds.length < 2) continue;
-      const sorted = [...namespaceIds].sort();
+    const blockDeclaring = (name: string, namespaceId: string) => {
       const block = [...extensionBlocksByNamespace]
-        .filter(([namespace]) => namespace.id === sorted[sorted.length - 1])
+        .filter(([namespace]) => namespace.id === namespaceId)
         .flatMap(([, blocks]) => Object.values(blocks))
         .find((candidate) => candidate.name === name);
       invariant(block !== undefined, 'A lowered entity has an owning block');
+      return block;
+    };
+    for (const [name, namespaceIds] of namespacesByName) {
+      if (namespaceIds.length < 2) continue;
+      const sorted = [...namespaceIds].sort();
+      const block = blockDeclaring(name, sorted[sorted.length - 1] ?? defaultNamespaceId);
       diagnostics.pushUnlocated({
         code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
-        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted.map((namespaceId) => `"${namespaceId}"`).join(' and ')}; declare it in one namespace only.`,
+        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted
+          .map(pslNamespaceName)
+          .sort()
+          .map((namespaceName) => `"${namespaceName}"`)
+          .join(' and ')}; declare it in one namespace only.`,
         ...diagnosticSource(input.sources, block.node.syntax).at(),
       });
+    }
+    for (const [spaceId, packContract] of composedExtensionContracts) {
+      for (const coordinate of elementCoordinates(packContract.storage)) {
+        if (coordinate.entityKind !== descriptor.discriminator) continue;
+        for (const namespaceId of namespacesByName.get(coordinate.entityName) ?? []) {
+          diagnostics.pushUnlocated({
+            code: 'PSL_ENTITY_DECLARED_BY_PACK',
+            message: `${descriptor.discriminator} "${coordinate.entityName}" is declared in namespace "${pslNamespaceName(namespaceId)}", and extension pack "${spaceId}" declares it in namespace "${pslNamespaceName(coordinate.namespaceId)}". Remove this declaration; the pack installs the ${descriptor.discriminator}.`,
+            ...diagnosticSource(
+              input.sources,
+              blockDeclaring(coordinate.entityName, namespaceId).node.syntax,
+            ).at(),
+          });
+        }
+      }
     }
   }
 
@@ -2499,6 +2539,7 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
     authoringTypes: input.authoringContributions?.type,
     renamedTypeConstructors,
+    warnDeprecated,
   });
 
   const modelNodes = new Map<ModelSymbol, ModelNode>();
@@ -2529,6 +2570,7 @@ export function interpretPslDocumentToSqlContract(
     codecLookup: input.codecLookup,
     dataTypes: input.dataTypes,
     binder,
+    warnDeprecated,
   });
   const valueObjectTypes: ValueObjectTypes = {
     nodes: new Map(valueObjects.map((valueObject) => [valueObject.name, valueObject])),
@@ -2565,6 +2607,7 @@ export function interpretPslDocumentToSqlContract(
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       codecLookup: input.codecLookup,
+      warnDeprecated,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       parsedBlocks,

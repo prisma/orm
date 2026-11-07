@@ -33,8 +33,9 @@ import {
 
 describe('Mongo call classes', () => {
   describe('construction + toOp parity', () => {
-    it('CreateIndexCall freezes, labels from collection + keys, and lowers to createIndex(...)', () => {
+    it('CreateIndexCall freezes, labels from name, collection + keys, and lowers to createIndex(...)', () => {
       const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'User_email_key',
         unique: true,
       });
 
@@ -42,25 +43,32 @@ describe('Mongo call classes', () => {
       expect(call).toMatchObject({
         factoryName: 'createIndex',
         operationClass: 'additive',
-        label: 'Create index on users (email:1)',
+        label: 'Create index User_email_key on users (email:1)',
       });
 
       expect(call.toOp()).toEqual(
-        createIndex('users', [{ field: 'email', direction: 1 }], { unique: true }),
+        createIndex('users', [{ field: 'email', direction: 1 }], {
+          name: 'User_email_key',
+          unique: true,
+        }),
       );
     });
 
     it('DropIndexCall freezes, labels as widening, and lowers to dropIndex(...)', () => {
-      const call = new DropIndexCall('users', [{ field: 'legacy', direction: -1 }]);
+      const call = new DropIndexCall('users', [{ field: 'legacy', direction: -1 }], {
+        name: 'legacy_-1',
+      });
 
       expect(Object.isFrozen(call)).toBe(true);
       expect(call).toMatchObject({
         factoryName: 'dropIndex',
         operationClass: 'widening',
-        label: 'Drop index on users (legacy:-1)',
+        label: 'Drop index legacy_-1 on users (legacy:-1)',
       });
 
-      expect(call.toOp()).toEqual(dropIndex('users', [{ field: 'legacy', direction: -1 }]));
+      expect(call.toOp()).toEqual(
+        dropIndex('users', [{ field: 'legacy', direction: -1 }], { name: 'legacy_-1' }),
+      );
     });
 
     it('CreateCollectionCall freezes, labels additively, and lowers to createCollection(...)', () => {
@@ -142,30 +150,36 @@ describe('Mongo call classes', () => {
   describe('renderTypeScript + importRequirements', () => {
     it('CreateIndexCall emits the factory call with options and imports createIndex only', () => {
       const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
         unique: true,
       });
 
       expect(call.renderTypeScript()).toBe(
-        'createIndex("users", [{ field: "email", direction: 1 }], { unique: true })',
+        'createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true })',
       );
       expect(call.importRequirements()).toEqual([
         { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'createIndex' },
       ]);
     });
 
-    it('CreateIndexCall omits the trailing options argument when no options supplied', () => {
-      const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }]);
+    it('CreateIndexCall always writes the index name', () => {
+      const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+      });
 
       expect(call.renderTypeScript()).toBe(
-        'createIndex("users", [{ field: "email", direction: 1 }])',
+        'createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1" })',
       );
     });
 
-    it('DropIndexCall emits positional args and imports dropIndex only', () => {
-      const call = new DropIndexCall('users', [{ field: 'legacy', direction: 1 }]);
+    it('DropIndexCall emits the name and options and imports dropIndex only', () => {
+      const call = new DropIndexCall('users', [{ field: 'legacy', direction: 1 }], {
+        name: 'User_legacy_key',
+        unique: true,
+      });
 
       expect(call.renderTypeScript()).toBe(
-        'dropIndex("users", [{ field: "legacy", direction: 1 }])',
+        'dropIndex("users", [{ field: "legacy", direction: 1 }], { name: "User_legacy_key", unique: true })',
       );
       expect(call.importRequirements()).toEqual([
         { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'dropIndex' },
