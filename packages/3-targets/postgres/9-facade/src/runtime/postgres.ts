@@ -161,6 +161,7 @@ export default function postgres<
 
     const driver = driverDescriptor.create({
       cursor: toDriverCursorOptions(cursor),
+      preparedStatements: options.prepare !== 'client',
     });
     runtimeDriver = driver;
     // A client is shared by many callers, so its runtime stops admitting work when close() is called.

@@ -9,6 +9,24 @@ import postgresServerless, {
 } from '../src/runtime/postgres-serverless';
 import type { Contract as FixtureContract } from './fixtures/generated/contract';
 
+test('both facades accept only client or database preparation', () => {
+  expectTypeOf<PostgresOptions<TestContract>['prepare']>().toEqualTypeOf<
+    'client' | 'database' | undefined
+  >();
+  expectTypeOf<PostgresServerlessOptions<TestContract>['prepare']>().toEqualTypeOf<
+    'client' | 'database' | undefined
+  >();
+  const contract = {} as TestContract;
+  void postgres({ contract, prepare: 'client' });
+  void postgres({ contract, prepare: 'database' });
+  void postgresServerless({ contract, prepare: 'client' });
+  void postgresServerless({ contract, prepare: 'database' });
+  // @ts-expect-error prepare takes a mode, not a boolean
+  void postgres({ contract, prepare: false });
+  // @ts-expect-error prepare takes a mode, not a boolean
+  void postgresServerless({ contract, prepare: false });
+});
+
 type TestContract = Contract<SqlStorage>;
 type Serverless = PostgresServerlessClient<TestContract>;
 type Connection = Awaited<ReturnType<Serverless['connect']>>;
