@@ -72,3 +72,13 @@ describe('pgConnectionConfig with host in password (regression)', () => {
     expect(config.host).not.toBe('p%26host=x');
   });
 });
+
+describe('pgConnectionConfig with explicit query host equal to placeholder (regression)', () => {
+  it('preserves an explicit query host even if it matches the placeholder string', () => {
+    const config = pgConnectionConfig(
+      { connectionString: 'postgresql://u@/mydb?host=prisma-placeholder.invalid' },
+      {},
+    );
+    expect(config.host).toBe('prisma-placeholder.invalid');
+  });
+});

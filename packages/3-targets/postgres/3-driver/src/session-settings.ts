@@ -42,11 +42,18 @@ export function pgConnectionConfig(
   if (connectionString !== undefined) {
     const { connectionString: normalized, hostWasOmitted } = normalizePostgresAuthority(connectionString);
     const queryHostGiven = /[?&]host=/.test(connectionString);
+    const queryHost = queryHostGiven
+      ? new URLSearchParams(connectionString.slice(connectionString.indexOf('?'))).get('host')
+      : undefined;
     const parsed = parse(normalized);
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
       if (setting === 'host' && queryHostGiven) {
-        if (value !== undefined && value !== '' && value !== omittedPostgresHost) {
+        if (
+          value !== undefined &&
+          value !== '' &&
+          (value !== omittedPostgresHost || value === queryHost)
+        ) {
           Object.assign(merged, { host: value });
         }
         continue;
