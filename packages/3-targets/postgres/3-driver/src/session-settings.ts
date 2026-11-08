@@ -45,6 +45,12 @@ export function pgConnectionConfig(
     const queryHost = queryHostGiven
       ? new URLSearchParams(connectionString.slice(connectionString.indexOf('?'))).get('host')
       : undefined;
+    let explicitAuthorityHost = false;
+    try {
+      explicitAuthorityHost = Reflect.get(parse(connectionString), 'host') === omittedPostgresHost;
+    } catch {
+      // a hostless URL throws in the WHATWG-based parser; the host is then not explicit
+    }
     const parsed = parse(normalized);
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
@@ -60,7 +66,9 @@ export function pgConnectionConfig(
       }
       if (
         (setting === 'host' || setting === 'user') &&
-        (value === '' || value === omittedPostgresHost || (hostWasOmitted && setting === 'host'))
+        (value === '' ||
+          (value === omittedPostgresHost && queryHost !== value && !explicitAuthorityHost) ||
+          (hostWasOmitted && setting === 'host'))
       ) {
         continue;
       }

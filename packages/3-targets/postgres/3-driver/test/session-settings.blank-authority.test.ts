@@ -82,3 +82,13 @@ describe('pgConnectionConfig with explicit query host equal to placeholder (regr
     expect(config.host).toBe('prisma-placeholder.invalid');
   });
 });
+
+describe('pgConnectionConfig with explicit placeholder hostname in authority (regression)', () => {
+  it('preserves an explicit prisma-placeholder.invalid hostname', () => {
+    const config = pgConnectionConfig(
+      { connectionString: 'postgresql://u@prisma-placeholder.invalid/mydb' },
+      {},
+    );
+    expect(config.host).toBe('prisma-placeholder.invalid');
+  });
+});
