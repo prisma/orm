@@ -19,10 +19,12 @@ export interface RedactedDatabaseUrl {
  */
 export function redactDatabaseUrl(url: string): RedactedDatabaseUrl {
   try {
-    const parsed = new URL(url);
+    const normalized = normalizeRedactedUrl(url);
+    const parsed = new URL(normalized.connectionString);
     const database = parsed.pathname?.replace(/^\//, '') || undefined;
+    const omitted = normalized.hostWasOmitted;
     return {
-      ...ifDefined('host', parsed.hostname || undefined),
+      ...ifDefined('host', omitted ? undefined : parsed.hostname || undefined),
       ...ifDefined('port', parsed.port || undefined),
       ...ifDefined('database', database),
       ...ifDefined('username', parsed.username || undefined),
@@ -30,5 +32,20 @@ export function redactDatabaseUrl(url: string): RedactedDatabaseUrl {
   } catch {
     // Ignore parsing errors; return empty metadata
     return {};
+  }
+}
+
+function normalizeRedactedUrl(url: string): { connectionString: string; hostWasOmitted: boolean } {
+  try {
+    new URL(url);
+    return { connectionString: url, hostWasOmitted: false };
+  } catch {
+    const match = /^postgres(?:ql)?:\/\/([^/@]*@)?(:[^/]*)?(\/|$)/.exec(url);
+    if (match === null) return { connectionString: url, hostWasOmitted: false };
+    const afterUserinfo = url.indexOf('//') + 2 + (match[1]?.length ?? 0);
+    return {
+      connectionString: `${url.slice(0, afterUserinfo)}redacted-placeholder.invalid${url.slice(afterUserinfo)}`,
+      hostWasOmitted: true,
+    };
   }
 }

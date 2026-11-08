@@ -198,3 +198,4 @@ export type {
   QueryResult,
 } from '../postgres-driver';
 export { createPgClient, createPgPool } from '../session-settings';
+export { normalizePostgresAuthority, omittedPostgresHost } from '../pg-url-authority';

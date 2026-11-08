@@ -1,6 +1,7 @@
 import type { SessionSettings } from '@internal/framework-components/components';
 import { Client, type ClientBase, type ClientConfig, Pool, type PoolConfig } from 'pg';
 import { parse } from 'pg-connection-string';
+import { normalizePostgresAuthority, omittedPostgresHost } from './pg-url-authority';
 
 /** The settings pg's `ConnectionParameters` reads from a parsed connection string, except `binary`, which a pg client also applies to every query when it is in the client's own settings. Any other query parameter is not a connection setting, and pg ignores it in a connection string. */
 const CONNECTION_SETTINGS = [
@@ -38,9 +39,21 @@ export function pgConnectionConfig(
   const { connectionString, ...rest } = config;
   const merged: ClientConfig = { ...rest };
   if (connectionString !== undefined) {
-    const parsed = parse(connectionString);
+    const { connectionString: normalized, hostWasOmitted } = normalizePostgresAuthority(connectionString);
+    const queryHostGiven = /[?&]host=/.test(connectionString);
+    const parsed = parse(normalized);
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
+      if (setting === 'host' && queryHostGiven) {
+        if (value !== undefined && value !== '') Object.assign(merged, { host: value });
+        continue;
+      }
+      if (
+        (setting === 'host' || setting === 'user') &&
+        (value === '' || value === omittedPostgresHost || (hostWasOmitted && setting === 'host'))
+      ) {
+        continue;
+      }
       if (value !== undefined) Object.assign(merged, { [setting]: value });
     }
   }
