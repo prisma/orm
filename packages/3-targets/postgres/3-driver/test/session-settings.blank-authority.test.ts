@@ -65,3 +65,10 @@ describe('pgConnectionConfig with a query host and an omitted authority', () => 
     expect(config.user).toBe('user');
   });
 });
+
+describe('pgConnectionConfig with host in password (regression)', () => {
+  it('does not let a password containing &host= suppress the placeholder guard', () => {
+    const config = pgConnectionConfig({ connectionString: 'postgresql://u:p%26host=x@/mydb?host=/tmp%20socket' }, {});
+    expect(config.host).not.toBe('p%26host=x');
+  });
+});

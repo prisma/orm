@@ -46,7 +46,9 @@ export function pgConnectionConfig(
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
       if (setting === 'host' && queryHostGiven) {
-        if (value !== undefined && value !== '') Object.assign(merged, { host: value });
+        if (value !== undefined && value !== '' && value !== omittedPostgresHost) {
+          Object.assign(merged, { host: value });
+        }
         continue;
       }
       if (
