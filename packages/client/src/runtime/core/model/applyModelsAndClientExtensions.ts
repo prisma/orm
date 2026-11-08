@@ -1,3 +1,5 @@
+import type { RuntimeDataModel } from '@prisma/client-common'
+
 import type { Client } from '../../getPrismaClient'
 import {
   addObjectProperties,
@@ -14,6 +16,10 @@ import { jsToDMMFModelName } from './utils/jsToDMMFModelName'
 // client instance, so we later can retrieve it
 // via `unapplyModels` methods
 const rawClient = Symbol()
+
+// Generated data models are shared by client instances and extensions. Only
+// schema-derived keys can be shared; model proxies must stay local to each client.
+const modelKeysCache = new WeakMap<RuntimeDataModel, { jsModelKeys: string[]; allKeys: string[] }>()
 
 /**
  * Dynamically creates a model proxy interface for a give name. For each prop
@@ -52,9 +58,14 @@ function rootLayer(client: Client): CompositeProxyLayer {
 }
 
 function modelsLayer(client: Client): CompositeProxyLayer {
-  const dmmfModelKeys = Object.keys(client._runtimeDataModel.models)
-  const jsModelKeys = dmmfModelKeys.map(dmmfToJSModelName)
-  const allKeys = [...new Set(dmmfModelKeys.concat(jsModelKeys))]
+  let modelKeys = modelKeysCache.get(client._runtimeDataModel)
+  if (modelKeys === undefined) {
+    const dmmfModelKeys = Object.keys(client._runtimeDataModel.models)
+    const jsModelKeys = dmmfModelKeys.map(dmmfToJSModelName)
+    modelKeys = { jsModelKeys, allKeys: [...new Set(dmmfModelKeys.concat(jsModelKeys))] }
+    modelKeysCache.set(client._runtimeDataModel, modelKeys)
+  }
+  const { jsModelKeys, allKeys } = modelKeys
 
   return cacheProperties({
     getKeys() {
