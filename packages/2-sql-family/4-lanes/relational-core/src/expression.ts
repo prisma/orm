@@ -4,6 +4,7 @@ import type { ParamSpec } from '@internal/operations';
 import type { QueryOperationReturn, SqlStorage } from '@internal/sql-contract/types';
 import type { SqlLoweringSpec } from '@internal/sql-operations';
 import { invariant } from '@internal/utils/assertions';
+import { ifDefined } from '@internal/utils/defined';
 import type { CodecRef } from './ast/codec-types';
 import type { SqlStatementStats } from './ast/driver-types';
 import type { AnyExpression as AstExpression, RawQueryColumn, RawSqlLiteral } from './ast/types';
@@ -222,11 +223,17 @@ export interface RawSqlBuilder {
 
 /**
  * One column of a raw query's declared result row, as authored: a codec id, or
- * a codec id plus nullability. Mirrors the contract-free lane's
- * `ColumnDescriptor`; contract-column references are sugar layered on top of
- * this form by the contract-typed builder.
+ * a codec id plus nullability and an optional complete codec binding.
+ * Contract-column references carry that binding from storage, including
+ * parameterized codecs and native arrays.
  */
-export type RawRowSpecEntry = string | { readonly codecId: string; readonly nullable?: boolean };
+export type RawRowSpecEntry =
+  | string
+  | {
+      readonly codecId: string;
+      readonly nullable?: boolean;
+      readonly codec?: CodecRef;
+    };
 
 /**
  * Declares the one column name a row spec cannot use. TypeScript types
@@ -404,7 +411,11 @@ function resolveRowSpec(spec: RawRowSpec): Record<string, RawQueryColumn> {
       name,
       typeof entry === 'string'
         ? { codecId: entry, nullable: false }
-        : { codecId: entry.codecId, nullable: entry.nullable ?? false },
+        : {
+            codecId: entry.codecId,
+            nullable: entry.nullable ?? false,
+            ...ifDefined('codec', entry.codec),
+          },
     ]),
   );
 }

@@ -1,5 +1,5 @@
 import { RawQueryAst } from '@internal/sql-relational-core/ast';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
@@ -42,6 +42,38 @@ describe('raw-query decode context', () => {
 });
 
 describe('raw-query row decoding', () => {
+  it('resolves the complete parameterized codec reference', () => {
+    const codec = { codecId: 'test/text@1', typeParams: { length: 8 } };
+    const ast = RawQueryAst.rows(['select code from sample'], {
+      code: { codecId: codec.codecId, nullable: false, codec },
+    });
+    const resolve = vi.spyOn(contractCodecs, 'forCodecRef');
+    try {
+      buildDecodeContext(ast, contractCodecs);
+      expect(resolve).toHaveBeenCalledExactlyOnceWith(codec);
+    } finally {
+      resolve.mockRestore();
+    }
+  });
+
+  it('decodes array elements while preserving null elements and a null array', async () => {
+    const ast = RawQueryAst.rows(['select scores from sample'], {
+      scores: {
+        codecId: 'test/int@1',
+        nullable: true,
+        codec: { codecId: 'test/int@1', many: true },
+      },
+    });
+    const context = buildDecodeContext(ast, contractCodecs);
+
+    expect(
+      await decodeRow({ scores: [2, null, 3] }, context, {}, sqlNativeArrayListDecoder),
+    ).toEqual({ scores: [20, null, 30] });
+    expect(await decodeRow({ scores: null }, context, {}, sqlNativeArrayListDecoder)).toEqual({
+      scores: null,
+    });
+  });
+
   it('decodes each column through the codec its spec declares', async () => {
     const decoded = await decodeRow(
       { id: 4, email: 'a@b.example' },
