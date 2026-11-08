@@ -12,7 +12,7 @@ afterAll(() => {
   Reflect.deleteProperty(globalThis, 'TARGET_BUILD_TYPE')
 })
 
-function clientConstructor(dataModel: RuntimeDataModel) {
+function createClientConstructor(dataModel: RuntimeDataModel) {
   return getPrismaClient({
     runtimeDataModel: dataModel,
     previewFeatures: [],
@@ -29,7 +29,7 @@ const options = { accelerateUrl: 'prisma://localhost/?api_key=test' }
 test('enumerates model names once across client instances and extensions sharing a data model', () => {
   const dataModel = runtimeDataModel({ models: [model('User', []), model('Post', [])] })
   const ownKeys = jest.fn((models: RuntimeDataModel['models']) => Reflect.ownKeys(models))
-  const PrismaClient = clientConstructor({ ...dataModel, models: new Proxy(dataModel.models, { ownKeys }) })
+  const PrismaClient = createClientConstructor({ ...dataModel, models: new Proxy(dataModel.models, { ownKeys }) })
   const client = new PrismaClient(options)
 
   client.$extends({})
@@ -40,7 +40,7 @@ test('enumerates model names once across client instances and extensions sharing
 })
 
 test('keeps model proxies and extension methods local to each client', () => {
-  const PrismaClient = clientConstructor(runtimeDataModel({ models: [model('User', [])] }))
+  const PrismaClient = createClientConstructor(runtimeDataModel({ models: [model('User', [])] }))
   const client = new PrismaClient(options)
   const first = client.$extends({ model: { user: { label: () => 'first' } } })
   const second = client.$extends({ model: { user: { label: () => 'second' } } })
@@ -68,15 +68,15 @@ test('keeps model proxies and extension methods local to each client', () => {
 })
 
 test('keeps model names separate for different runtime data models', () => {
-  const UserClient = clientConstructor(runtimeDataModel({ models: [model('User', [])] }))
-  const PostClient = clientConstructor(runtimeDataModel({ models: [model('Post', [])] }))
+  const UserClient = createClientConstructor(runtimeDataModel({ models: [model('User', [])] }))
+  const PostClient = createClientConstructor(runtimeDataModel({ models: [model('Post', [])] }))
   const userClient = new UserClient(options).$extends({})
   const postClient = new PostClient(options).$extends({})
 
-  expect(Reflect.get(userClient, 'user').$name).toBe('User')
-  expect(Reflect.get(userClient, 'post')).toBeUndefined()
-  expect(Reflect.get(postClient, 'post').$name).toBe('Post')
-  expect(Reflect.get(postClient, 'user')).toBeUndefined()
+  expect(userClient).toHaveProperty('user.$name', 'User')
+  expect(userClient).not.toHaveProperty('post')
+  expect(postClient).toHaveProperty('post.$name', 'Post')
+  expect(postClient).not.toHaveProperty('user')
   expect(Object.keys(userClient)).toContain('user')
   expect(Object.keys(userClient)).not.toContain('post')
   expect(Object.keys(postClient)).toContain('post')
@@ -84,17 +84,17 @@ test('keeps model names separate for different runtime data models', () => {
 })
 
 test('preserves model aliases and enumerability when reusing model keys', () => {
-  const PrismaClient = clientConstructor(
+  const PrismaClient = createClientConstructor(
     runtimeDataModel({ models: [model('User', []), model('post', []), model('URL', [])] }),
   )
   const client = new PrismaClient(options)
 
   for (const instance of [client, client.$extends({}), client.$extends({}).$extends({})]) {
-    expect(Reflect.get(instance, 'User').$name).toBe('User')
-    expect(Reflect.get(instance, 'user').$name).toBe('User')
-    expect(Reflect.get(instance, 'post').$name).toBe('post')
-    expect(Reflect.get(instance, 'URL').$name).toBe('URL')
-    expect(Reflect.get(instance, 'uRL').$name).toBe('URL')
+    expect(instance).toHaveProperty('User.$name', 'User')
+    expect(instance).toHaveProperty('user.$name', 'User')
+    expect(instance).toHaveProperty('post.$name', 'post')
+    expect(instance).toHaveProperty('URL.$name', 'URL')
+    expect(instance).toHaveProperty('uRL.$name', 'URL')
     expect(Object.keys(instance)).toEqual(expect.arrayContaining(['user', 'post', 'uRL']))
     expect(Object.keys(instance)).not.toContain('User')
     expect(Object.keys(instance)).not.toContain('URL')
