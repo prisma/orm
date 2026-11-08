@@ -17,6 +17,7 @@ export interface NormalizedPostgresUrl {
   readonly hostWasOmitted: boolean;
 }
 
+/** Inserts the reserved placeholder host at `hostStart`, so WHATWG's URL parser accepts the URL while `hostWasOmitted` lets callers drop the fabricated value again. */
 function normalizeHostlessAuthority(url: string, hostStart: number): NormalizedPostgresUrl {
   const placeholder = `${url.slice(0, hostStart)}${PLACEHOLDER_HOST}${url.slice(hostStart)}`;
   return { connectionString: placeholder, hostWasOmitted: true };
@@ -43,3 +44,33 @@ export function normalizePostgresAuthority(url: string): NormalizedPostgresUrl {
 
 /** The host the placeholder replaced, when {@link normalizePostgresAuthority} fabricated one. */
 export const omittedPostgresHost = PLACEHOLDER_HOST;
+
+/**
+ * Redacts a postgres URL for error metadata, treating a libpq-valid URL whose authority omits the
+ * host the way {@link redactDatabaseUrl} treats one with a host: the database, port, and username
+ * are reported, while the omitted host is left out rather than crashing the parse or reporting an
+ * empty value.
+ */
+export function redactPostgresUrl(url: string): {
+  host?: string;
+  port?: string;
+  database?: string;
+  username?: string;
+} {
+  const { connectionString, hostWasOmitted } = normalizePostgresAuthority(url);
+  const { parse } = require('pg-connection-string') as typeof import('pg-connection-string');
+  let parsed: URL;
+  try {
+    parsed = new URL(connectionString);
+  } catch {
+    return {};
+  }
+  const config = parse(connectionString);
+  const redacted: { host?: string; port?: string; database?: string; username?: string } = {};
+  if (!hostWasOmitted && parsed.hostname) redacted.host = parsed.hostname;
+  if (parsed.port) redacted.port = parsed.port;
+  const database = parsed.pathname?.replace(/^\//, '');
+  if (database) redacted.database = database;
+  if (config.user) redacted.username = config.user;
+  return redacted;
+}

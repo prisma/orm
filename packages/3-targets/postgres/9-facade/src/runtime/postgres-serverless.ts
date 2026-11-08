@@ -14,8 +14,9 @@ import {
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
-import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
+
 import { postgresError } from '../errors';
+import { redactPostgresUrl } from '@internal/driver-postgres/runtime';
 import { validatePostgresContract } from '../static/contract-from-json';
 import { buildPostgresStaticContext } from '../static/postgres-static';
 import { validatePostgresUrl } from './binding';
@@ -74,7 +75,7 @@ function connectionFailedError(url: string, cause: unknown) {
   return postgresError('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
     why: cause instanceof Error ? cause.message : String(cause),
     fix: 'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
-    meta: { extension: 'postgres', ...redactDatabaseUrl(url) },
+    meta: { extension: 'postgres', ...redactPostgresUrl(url) },
     cause,
   });
 }

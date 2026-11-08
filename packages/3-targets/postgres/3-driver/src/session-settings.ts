@@ -23,6 +23,7 @@ const CONNECTION_SETTINGS = [
   'query_timeout',
 ] as const;
 
+/** Formats each session setting as a `-c name=value` startup option, escaping backslashes and spaces. */
 function startupOptions(sessionSettings: SessionSettings): string {
   return Object.entries(sessionSettings)
     .map(([name, value]) => `-c ${name}=${value.replace(/[\\ ]/g, '\\$&')}`)

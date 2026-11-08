@@ -47,6 +47,11 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+/**
+ * Checks that `url` is a libpq-valid postgres URL, and returns it unchanged. A URL WHATWG's parser
+ * rejects only because its authority omits the host is accepted via the placeholder normalization;
+ * anything else, including a multi-host authority, throws `RUNTIME.BINDING_INVALID`.
+ */
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
