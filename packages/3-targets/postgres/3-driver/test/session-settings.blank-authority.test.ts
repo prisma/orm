@@ -53,3 +53,15 @@ describe('pgConnectionConfig with omitted user or host', () => {
     expect(config.port).toBe('5432');
   });
 });
+
+describe('pgConnectionConfig with a query host and an omitted authority', () => {
+  it('keeps the socket host from the query when the authority omits the host', () => {
+    const config = pgConnectionConfig(
+      { connectionString: 'postgresql://user@?host=/tmp' },
+      {},
+    );
+
+    expect(config.host).toBe('/tmp');
+    expect(config.user).toBe('user');
+  });
+});

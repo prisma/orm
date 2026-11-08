@@ -32,8 +32,11 @@ export function normalizePostgresAuthority(url: string): NormalizedPostgresUrl {
     return { connectionString: url, hostWasOmitted: false };
   }
   const authorityStart = url.indexOf('//', url.indexOf(':') + 1) + 2;
-  const authorityEnd = url.indexOf('/', authorityStart);
-  const authority = url.slice(authorityStart, authorityEnd === -1 ? undefined : authorityEnd);
+  const authorityLength = url.slice(authorityStart).search(/[/?#]/);
+  const authority = url.slice(
+    authorityStart,
+    authorityLength === -1 ? undefined : authorityStart + authorityLength,
+  );
   const atSign = authority.lastIndexOf('@');
   const hostPart = authority.slice(atSign + 1);
   if (hostPart !== '' && !hostPart.startsWith(':')) {

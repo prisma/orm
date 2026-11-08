@@ -94,7 +94,7 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
     );
   }
 
-  if (parsed.hostname === omittedPostgresHost || trimmed.includes(`${omittedPostgresHost}`)) {
+  if (parsed.hostname === omittedPostgresHost) {
     return trimmed;
   }
 
