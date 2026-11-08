@@ -134,5 +134,5 @@ export interface WithAlias<RowType extends Record<string, ScopeField>> {
 }
 
 export interface WithBuild<QC extends QueryContext, RowType extends Record<string, ScopeField>> {
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>;
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes']>>;
 }

@@ -26,9 +26,8 @@ import type {
   Scope,
   ScopeField,
   ScopeTable,
-  StorageTableToScopeTable,
 } from '../scope';
-import type { NamespaceTable, TableProxyContract } from '../types/db';
+import type { TableProxyContract } from '../types/db';
 import type { JoinedTables } from '../types/joined-tables';
 import type { DeleteQuery, InsertQuery, UpdateQuery } from '../types/mutation-query';
 import type { SelectQuery } from '../types/select-query';
@@ -59,9 +58,13 @@ export class TableProxyImpl<
   extends BuilderBase<C['capabilities']>
   implements TableProxy<C, NsId, Name, Alias, AvailableScope, QC>
 {
-  declare readonly [JoinOuterScope]: JoinSource<
-    StorageTableToScopeTable<NamespaceTable<C, NsId, Name>>,
-    Alias
+  declare readonly [JoinOuterScope]: TableProxy<
+    C,
+    NsId,
+    Name,
+    Alias,
+    AvailableScope,
+    QC
   >[typeof JoinOuterScope];
 
   readonly #tableName: string;

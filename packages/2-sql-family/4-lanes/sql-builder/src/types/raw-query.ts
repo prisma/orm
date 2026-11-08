@@ -1,4 +1,5 @@
 import type { ExtractCodecTypes } from '@internal/sql-contract/types';
+import type { CodecRef } from '@internal/sql-relational-core/ast';
 import type {
   Expression,
   NoReservedRowColumn,
@@ -33,7 +34,7 @@ export interface ContractColumnRef<
 > {
   readonly codecId: CodecId;
   readonly nullable: Nullable;
-  readonly [columnOutput]?: Output;
+  readonly [columnOutput]?: { readonly output: Output };
 }
 
 /**
@@ -49,7 +50,11 @@ export interface ContractColumnRef<
  */
 export type ContractRawSpecEntry<CT extends Record<string, { readonly output: unknown }>> =
   | (keyof CT & string)
-  | { readonly codecId: keyof CT & string; readonly nullable?: boolean }
+  | {
+      readonly codecId: keyof CT & string;
+      readonly nullable?: boolean;
+      readonly codec?: CodecRef;
+    }
   | ContractColumnRef;
 
 /**
@@ -75,17 +80,80 @@ type SpecScopeFields<
   [K in keyof Spec]: EntryScopeField<Spec[K]> extends infer F extends ScopeField ? F : never;
 };
 
+/** Distribute over codec bindings before combining their possible shapes. */
+type BindingHasArray<Binding> = Binding extends { readonly many?: infer Many }
+  ? true extends Many
+    ? true
+    : false
+  : false;
+
+/** Whether any complete runtime codec binding can describe an array. */
+type HasArrayCodec<Entry> = Entry extends { readonly codec?: infer Binding }
+  ? true extends BindingHasArray<NonNullable<Binding>>
+    ? true
+    : false
+  : false;
+
+/** A union needs pre-resolution when any member carries richer output. */
+type NeedsPreResolved<Entry> = Entry extends unknown
+  ? typeof columnOutput extends keyof Entry
+    ? true
+    : HasArrayCodec<Entry>
+  : never;
+
 /**
- * The entries whose type the contract already resolved — column references.
- * Everything else resolves from its codec id through the codec-type map, the
- * same route the query builders take.
+ * Standalone descriptors have no storage-column element constraint. Their
+ * complete binding controls scalar versus array output. Distributing over
+ * entries also retains a string codec-id member in a mixed spec union.
+ */
+type StandaloneEntryOutput<
+  Entry,
+  CT extends Record<string, { readonly output: unknown }>,
+> = Entry extends keyof CT
+  ? CT[Entry]['output']
+  : Entry extends { readonly codecId: infer Id extends keyof CT }
+    ? HasArrayCodec<Entry> extends true
+      ? Entry extends { readonly codec: { readonly many: true } }
+        ? readonly (CT[Id]['output'] | null)[]
+        : CT[Id]['output'] | readonly (CT[Id]['output'] | null)[]
+      : CT[Id]['output']
+    : never;
+
+/**
+ * Resolve each union member independently so a generated column keeps its
+ * precise output and a nullable alternative keeps its SQL NULL possibility.
+ * The ordinary non-pre-resolved scalar route remains unchanged.
+ */
+type PreResolvedEntryOutput<
+  Entry,
+  CT extends Record<string, { readonly output: unknown }>,
+> = Entry extends unknown
+  ? typeof columnOutput extends keyof Entry
+    ? NonNullable<Entry[typeof columnOutput & keyof Entry]> extends {
+        readonly output: infer Output;
+      }
+      ? Output
+      : never
+    : 'nullable' extends keyof Entry
+      ? true extends Entry['nullable' & keyof Entry]
+        ? StandaloneEntryOutput<Entry, CT> | null
+        : StandaloneEntryOutput<Entry, CT>
+      : StandaloneEntryOutput<Entry, CT>
+  : never;
+
+/**
+ * Column references retain their precise generated output. Standalone array
+ * descriptors resolve through their actual complete codec binding instead
+ * of borrowing another table's column. Ordinary scalar entries keep the
+ * existing codec-id route through ResolveRow.
  */
 type SpecPreResolved<
   Spec extends ContractRawRowSpec<CT>,
   CT extends Record<string, { readonly output: unknown }>,
 > = {
-  [K in keyof Spec as typeof columnOutput extends keyof Spec[K] ? K : never]: NonNullable<
-    Spec[K][typeof columnOutput & keyof Spec[K]]
+  [K in keyof Spec as true extends NeedsPreResolved<Spec[K]> ? K : never]: PreResolvedEntryOutput<
+    Spec[K],
+    CT
   >;
 };
 
@@ -100,9 +168,9 @@ export type RawRowFor<
  * one column reference. The reference carries the codec id and nullability the
  * entry stated, plus the type the row resolves for that key.
  *
- * A column reference keeps nullability in its own field rather than in the
- * type it carries. These references do the same, so a ref fed back into a row
- * spec resolves the type it came from, whichever form the inner entry took.
+ * A column reference carries its full output type and separately records SQL
+ * nullability. Keep the payload intact: JSON null can be a value even when
+ * SQL NULL is disallowed. A round trip preserves both parts of that contract.
  */
 export type ContractRawRefs<
   Spec extends ContractRawRowSpec<CodecTypes>,
@@ -111,7 +179,7 @@ export type ContractRawRefs<
   readonly [K in keyof Spec]: ContractColumnRef<
     EntryScopeField<Spec[K]>['codecId'],
     EntryScopeField<Spec[K]>['nullable'],
-    NonNullable<RawRowFor<Spec, CodecTypes>[K]>
+    RawRowFor<Spec, CodecTypes>[K]
   >;
 };
 
