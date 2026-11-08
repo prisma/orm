@@ -720,13 +720,23 @@ function renderJsonObjectExpr(
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
-  const args = expr.entries
-    .flatMap((entry): [string, string] => {
-      const key = `'${escapeLiteral(entry.key)}'`;
-      return [key, renderJsonValueProjection(entry.value, contract, pim)];
-    })
-    .join(', ');
-  return `json_build_object(${args})`;
+  const entries = expr.entries.map(
+    (entry) =>
+      `'${escapeLiteral(entry.key)}', ${renderJsonValueProjection(entry.value, contract, pim)}`,
+  );
+  // PostgreSQL accepts 100 function arguments: one key and one value per entry.
+  const maxEntriesPerObject = 50;
+  if (entries.length <= maxEntriesPerObject) {
+    return `json_build_object(${entries.join(', ')})`;
+  }
+
+  const chunks: string[] = [];
+  for (let offset = 0; offset < entries.length; offset += maxEntriesPerObject) {
+    const args = entries.slice(offset, offset + maxEntriesPerObject).join(', ');
+    chunks.push(`left(right(CAST(json_build_object(${args}) AS text), -1), -1)`);
+  }
+  // Text preserves JSON documents and duplicate keys; jsonb concatenation would normalize them.
+  return `CAST('{' || ${chunks.join(" || ', ' || ")} || '}' AS json)`;
 }
 
 function renderOrderByItems(
