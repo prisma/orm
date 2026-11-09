@@ -1,23 +1,27 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { SelectAst } from '@internal/sql-relational-core/ast';
+import type { AnyExpression, SelectAst } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { resolveRowIdentityColumns, supportsDefaultInInsert } from '../collection-contract';
 import type { CollectionTables } from '../collection-tables';
 import {
+  deleteAst,
   groupRowsByColumnSignature,
   type InsertConflictSkip,
   insertAst,
+  updateAst,
 } from '../mutation-statements';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
+import { Delete } from './delete';
 import type { ColumnPair, NodeId } from './edge';
 import type { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
 import type { JunctionWrite } from './junction-write';
 import type { Requires } from './requires';
+import { Update } from './update';
 
 export interface Model {
   readonly namespaceId: string;
@@ -81,4 +85,46 @@ export function selectAstOf(
     return collectionSelectAst(contract, modelName, state);
   }
   return collectionSelectWithIncludesAst(contract, context.aggregateDescriptors, modelName, state);
+}
+
+export interface UpdateRows {
+  readonly where: AnyExpression | undefined;
+  readonly filters: readonly KeySource[];
+  readonly payloads: readonly KeySource[];
+}
+
+export function addUpdateRows(
+  graph: Graph,
+  contract: Contract<SqlStorage>,
+  tables: CollectionTables,
+  values: Readonly<Record<string, unknown>>,
+  { where, filters, payloads }: UpdateRows,
+): NodeId<{ requires: Requires[] }> {
+  const updated = graph.add(new Update(updateAst(contract, tables, values, where)));
+  for (const { from, columns } of filters) {
+    graph.addFilterDataEdge(from, updated, columns);
+  }
+  for (const { from, columns } of payloads) {
+    graph.addPayloadDataEdge(from, updated, columns);
+  }
+  return updated;
+}
+
+export interface DeleteRows {
+  readonly where: AnyExpression | undefined;
+  readonly filters: readonly KeySource[];
+  readonly junction: JunctionWrite | undefined;
+}
+
+export function addDeleteRows(
+  graph: Graph,
+  contract: Contract<SqlStorage>,
+  tables: CollectionTables,
+  { where, filters, junction }: DeleteRows,
+): NodeId<{ requires: Requires[] }> {
+  const deleted = graph.add(new Delete(deleteAst(contract, tables, where), junction));
+  for (const { from, columns } of filters) {
+    graph.addFilterDataEdge(from, deleted, columns);
+  }
+  return deleted;
 }

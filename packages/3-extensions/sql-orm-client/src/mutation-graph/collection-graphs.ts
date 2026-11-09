@@ -16,7 +16,6 @@ import {
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import {
   countMutationWhere,
-  deleteAst,
   groupRowsByColumnSignature,
   type InsertConflictSkip,
   insertAst,
@@ -24,7 +23,6 @@ import {
   projectTableColumns,
   returningProjection,
   updateAssignments,
-  updateAst,
   upsertAst,
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
@@ -34,14 +32,13 @@ import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
 import { CrossJoin } from './cross-join';
-import { Delete } from './delete';
 import type { ColumnPair, NodeId, StorageRow } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertReportingKeys } from './insert-reporting-keys';
-import { addInsertRows, type KeySource, selectAstOf } from './model-statements';
+import { addDeleteRows, addInsertRows, addUpdateRows, selectAstOf } from './model-statements';
 import {
   addAfterWrite,
   addBeforeWrite,
@@ -59,7 +56,6 @@ import {
   withUpdateDefaults,
 } from './storage-rows';
 import { UnionAll } from './union-all';
-import { Update } from './update';
 
 /** What the call returns: the written rows, as `#rowsCall` does, or their count, as `#countCall` does. */
 export type CallReturns = 'rows' | 'count';
@@ -77,18 +73,18 @@ export function updateAllGraph(
   }
 
   requireIdentityColumnsForIncludes(collection);
-  const update = updateAst(context.contract, state.tables, set, whereOf(collection));
+  const update = { where: whereOf(collection), filters: [], payloads: [] };
   if (readsBack(collection, returns)) {
     const { namespaceId, tableName } = state.tables.root.storage;
     readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
     const found = graph.add(new Find(selectIdentityAst(collection, state)));
-    graph.add(new Update(update));
+    addUpdateRows(graph, context.contract, state.tables, set, update);
     graph.setResult(
       addReadBack(graph, collection, found, keyOverrides(collection, set), state.includes),
     );
     return graph;
   }
-  const updated = graph.add(new Update(update));
+  const updated = addUpdateRows(graph, context.contract, state.tables, set, update);
   graph.setResult(addWithIncludes(graph, collection, updated));
   return graph;
 }
@@ -99,14 +95,14 @@ export function deleteAllGraph(
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph(context.contract);
-  const del = new Delete(deleteAst(context.contract, state.tables, whereOf(collection)));
+  const del = { where: whereOf(collection), filters: [], junction: undefined };
   if (state.includes.length === 0 && !readsBack(collection, returns)) {
-    graph.setResult(graph.add(del));
+    graph.setResult(addDeleteRows(graph, context.contract, state.tables, del));
     return graph;
   }
 
   graph.setResult(graph.add(new Find(selectRowsAst(collection, state))));
-  graph.add(del);
+  addDeleteRows(graph, context.contract, state.tables, del);
   return graph;
 }
 
@@ -142,7 +138,11 @@ export function updateFirstGraph(
     return graph;
   }
 
-  const updated = addParentUpdate(graph, collection, find, values, before.keys);
+  const updated = addUpdateRows(graph, context.contract, state.tables, values, {
+    where: undefined,
+    filters: [{ from: find, columns: sameRowColumns(collection) }],
+    payloads: before.keys,
+  });
   if (!t.readsBack) {
     addAfterWrite(t, model, updated, relationMutations);
     graph.setResult(addWithIncludes(graph, collection, updated));
@@ -159,24 +159,6 @@ export function updateFirstGraph(
   return graph;
 }
 
-function addParentUpdate(
-  graph: Graph,
-  collection: DescribeCollectionRowsOptions,
-  find: NodeId,
-  values: Readonly<Record<string, unknown>>,
-  keys: readonly KeySource[],
-): NodeId {
-  const { context, state } = collection;
-  const updated = graph.add(
-    new Update(updateAst(context.contract, state.tables, values, undefined)),
-  );
-  graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
-  for (const { from, columns } of keys) {
-    graph.addPayloadDataEdge(from, updated, columns);
-  }
-  return updated;
-}
-
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, state } = collection;
   const readsRowsFirst = state.includes.length > 0 || readsBack(collection, 'rows');
@@ -191,9 +173,11 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
     return graph;
   }
 
-  const del = deleteAst(context.contract, state.tables, undefined);
-  const deleted = graph.add(new Delete(del));
-  graph.addFilterDataEdge(find, deleted, sameRowColumns(collection));
+  const deleted = addDeleteRows(graph, context.contract, state.tables, {
+    where: undefined,
+    filters: [{ from: find, columns: sameRowColumns(collection) }],
+    junction: undefined,
+  });
   graph.setResult(readsRowsFirst ? find : deleted);
   return graph;
 }

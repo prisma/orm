@@ -5,12 +5,10 @@ import { castAs } from '@internal/utils/casts';
 import { createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
 import {
-  deleteAst,
   type InsertConflictSkip,
   insertAst,
   projectTableColumn,
   projectTableColumns,
-  updateAst,
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
 import { collectionSelectAst } from '../query-plan-select';
@@ -30,16 +28,21 @@ import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from 
 import { emptyState } from '../types';
 import { readBackIdentity, writtenKeys } from '../written-keys';
 import { Assert } from './assert';
-import { Delete } from './delete';
 import type { ColumnPair, NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { InsertReportingKeys } from './insert-reporting-keys';
-import { addInsertRows, type KeySource, type Model, selectAstOf } from './model-statements';
+import {
+  addDeleteRows,
+  addInsertRows,
+  addUpdateRows,
+  type KeySource,
+  type Model,
+  selectAstOf,
+} from './model-statements';
 import type { Requires } from './requires';
 import { createRowOf, withCreateDefaults } from './storage-rows';
-import { Update } from './update';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
 type CreateOrConnect = Exclude<Mutation, { kind: 'disconnect' }>;
@@ -275,9 +278,17 @@ function addChildOwned(
   }
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
-      const where = requiredCriterion(context, related, relation, 'connect', criterion);
-      const update = graph.add(new Update(updateAst(context.contract, related.tables, {}, where)));
-      graph.addPayloadDataEdge(parent, update, fromParent);
+      addUpdateRows(
+        graph,
+        context.contract,
+        related.tables,
+        {},
+        {
+          where: requiredCriterion(context, related, relation, 'connect', criterion),
+          filters: [],
+          payloads: [{ from: parent, columns: fromParent }],
+        },
+      );
     }
     return;
   }
@@ -290,10 +301,11 @@ function addChildOwned(
           requiredCriterion(context, related, relation, 'disconnect', criterion),
         );
   for (const where of wheres) {
-    const update = graph.add(
-      new Update(updateAst(context.contract, related.tables, unlink, where)),
-    );
-    graph.addFilterDataEdge(parent, update, fromParent);
+    addUpdateRows(graph, context.contract, related.tables, unlink, {
+      where,
+      filters: [{ from: parent, columns: fromParent }],
+      payloads: [],
+    });
   }
 }
 
@@ -363,14 +375,14 @@ function addJunctionOwned(
   }
   for (const criterion of criteria) {
     const target = addFindAndAssert(t, related, relation, 'disconnect', criterion, fromTarget);
-    const unlink = graph.add(
-      new Delete(deleteAst(contract, junction, undefined), {
-        relation: relation.relationName,
-        junction: through.table,
-      }),
-    );
-    graph.addFilterDataEdge(parent, unlink, fromParent);
-    graph.addFilterDataEdge(target, unlink, fromTarget);
+    addDeleteRows(graph, contract, junction, {
+      where: undefined,
+      filters: [
+        { from: parent, columns: fromParent },
+        { from: target, columns: fromTarget },
+      ],
+      junction: { relation: relation.relationName, junction: through.table },
+    });
   }
 }
 
