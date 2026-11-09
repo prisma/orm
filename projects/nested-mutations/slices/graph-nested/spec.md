@@ -52,6 +52,11 @@ Rules for the translation, reproducing main except where a decided change says o
 - **Rejections while the graph is built.** Invalid nested input is rejected before any statement, including when the filter matches no row. A relation field that is not a callback is rejected with `ORM.RELATION_MUTATION_INVALID`. `disconnect` in `create()` stays rejected with `ORM.RELATION_MUTATION_UNSUPPORTED`.
 - **Contract validation.** A relation whose link-column lists are empty is rejected by the contract validator (minimum length 1 on `on.localFields`, `on.targetFields` and the three `through` lists). The executor's guards for empty lists are not carried over.
 
+Reading written rows back on a database without `RETURNING` (carried from main's TML-3696, which added it to the executor and to the plain write paths):
+
+- **No order is promised for the rows a write returns.** `createAll()` documents none; SQLite's `RETURNING` order is documented as arbitrary; a split `createAll` already returns rows group by group. So the read-back of written rows is a `Find` whose condition comes from a `FilterData` edge (one condition per written key), with no `ORDER BY`. Tests compare those rows without order. Decided 2026-11-09 over keeping main's `ORDER BY CASE` in `FindByKeys`.
+- Still to decide: where the read-back is added (main's builders take a `returns: 'rows' | 'count'` argument), what becomes of `FindByKeys`' row-count check and its 500-keys-per-statement chunking, and whether `InsertReportingKeys` is a `StatementNode`.
+
 Clean-up that this slice owns:
 
 - `mutation-executor.ts` and the branch on relation callbacks in `create()` and `update()` are removed; `withMutationScope` moves where the runner can import it.
