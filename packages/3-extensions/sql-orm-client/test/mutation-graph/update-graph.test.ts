@@ -189,4 +189,22 @@ describe('updateFirstGraph with relation operations', () => {
       }),
     );
   });
+
+  it('builds a graph with no node after limit(0)', () => {
+    const context = getTestContext();
+    const parsed = parseMutationInput(context.contract, 'public', 'User', {
+      posts: (posts: Mutator) => posts.connect({ id: 10 }),
+    } as never);
+    const state = createCollectionFor('User').collection.where({ id: 1 }).limit(0).state;
+
+    expect(
+      printGraph(
+        updateFirstGraph(
+          { context, state, modelName: 'User', namespaceId: 'public' },
+          { name: 'Ada' },
+          parsed.relationMutations,
+        ),
+      ),
+    ).toBe('result: none');
+  });
 });

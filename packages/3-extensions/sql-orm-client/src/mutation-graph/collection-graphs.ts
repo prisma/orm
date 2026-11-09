@@ -76,7 +76,9 @@ export function updateAllGraph(
     readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
     const found = graph.add(new Find(selectIdentityAst(collection, state)));
     graph.add(new Update(update));
-    graph.setResult(addReadBack(graph, collection, found, keyOverrides(collection, set)));
+    graph.setResult(
+      addReadBack(graph, collection, found, keyOverrides(collection, set), state.includes),
+    );
     return graph;
   }
   const updated = graph.add(new Update(update));
@@ -106,72 +108,56 @@ export function updateFirstGraph(
   set: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
-  if (relationMutations.length > 0) {
-    return updateFirstWithRelationsGraph(collection, set, relationMutations);
-  }
-  const { context, state } = collection;
+  const { context, modelName, namespaceId, state } = collection;
   const graph = new Graph(context.contract);
-  const nothingToSet = Object.keys(set).length === 0;
-  if (!nothingToSet) {
+  const bare = Object.keys(set).length === 0 && relationMutations.length === 0;
+  if (!bare) {
     requireIdentityColumns(collection);
     requireIdentityColumnsForIncludes(collection);
   }
-  const find = addFindOfFirstRow(
-    graph,
-    collection,
-    nothingToSet ? selectRowsAst : selectIdentityAst,
-  );
+  const find = addFindOfFirstRow(graph, collection, bare ? selectRowsAst : selectIdentityAst);
   if (find === undefined) {
     return graph;
   }
-  if (nothingToSet) {
+  if (bare) {
     graph.setResult(find);
     return graph;
   }
 
-  const update = updateAst(context.contract, state.tables, set, undefined);
-  if (readsBack(collection, 'rows')) {
-    graph.addFilterDataEdge(find, graph.add(new Update(update)), sameRowColumns(collection));
-    graph.setResult(addReadBack(graph, collection, find, keyOverrides(collection, set)));
-    return graph;
-  }
-  const updated = graph.add(new Update(update));
-  graph.addFilterDataEdge(find, updated, sameRowColumns(collection));
-  graph.setResult(addWithIncludes(graph, collection, updated));
-  return graph;
-}
-
-function updateFirstWithRelationsGraph(
-  collection: DescribeCollectionRowsOptions,
-  set: Readonly<Record<string, unknown>>,
-  relationMutations: readonly ParsedRelationMutation[],
-): Graph {
-  const { context, modelName, namespaceId, state } = collection;
-  const graph = new Graph(context.contract);
-  requireIdentityColumns(collection);
-  requireIdentityColumnsForIncludes(collection);
   const model = { namespaceId, modelName, tables: state.tables };
-  const find = graph.add(new Find(selectIdentityAst(collection, { ...state, limit: 1 })));
-  const t = { graph, context, gate: find, readsBack: readsBack(collection, 'rows') };
+  const t: Translation = { graph, context, gate: find, readsBack: readsBack(collection, 'rows') };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
-  const parent =
-    Object.keys(values).length === 0 && before.keys.length === 0
-      ? find
-      : addParentUpdate(t, collection, find, values, before.keys);
-  addAfterWrite(t, model, parent, relationMutations);
-  graph.setResult(addWithIncludes(graph, collection, parent));
+  if (Object.keys(values).length === 0 && before.keys.length === 0) {
+    addAfterWrite(t, model, find, relationMutations);
+    graph.setResult(addWithIncludes(graph, collection, find));
+    return graph;
+  }
+
+  const updated = addParentUpdate(graph, collection, find, values, before.keys);
+  if (!t.readsBack) {
+    addAfterWrite(t, model, updated, relationMutations);
+    graph.setResult(addWithIncludes(graph, collection, updated));
+    return graph;
+  }
+  const changed = keyOverrides(collection, values);
+  if (relationMutations.length === 0) {
+    graph.setResult(addReadBack(graph, collection, find, changed, state.includes));
+    return graph;
+  }
+  const updatedRow = addReadBack(graph, collection, find, changed, []);
+  addAfterWrite(t, model, updatedRow, relationMutations);
+  graph.setResult(addWithIncludes(graph, collection, updatedRow));
   return graph;
 }
 
 function addParentUpdate(
-  t: Translation,
+  graph: Graph,
   collection: DescribeCollectionRowsOptions,
   find: NodeId,
   values: Readonly<Record<string, unknown>>,
   keys: readonly KeySource[],
 ): NodeId {
-  const { graph } = t;
   const { context, state } = collection;
   const updated = graph.add(
     new Update(updateAst(context.contract, state.tables, values, undefined)),
@@ -180,26 +166,7 @@ function addParentUpdate(
   for (const { from, columns } of keys) {
     graph.addPayloadDataEdge(from, updated, columns);
   }
-  if (!t.readsBack) {
-    return updated;
-  }
-  const { namespaceId, tableName } = state.tables.root.storage;
-  readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'update()');
-  const updatedRow = graph.add(
-    new Find(
-      selectRowsAst(collection, {
-        ...emptyState(state.tables),
-        selectedFields: state.selectedFields,
-      }),
-    ),
-  );
-  graph.addFilterDataEdge(
-    find,
-    updatedRow,
-    sameRowColumns(collection),
-    keyOverrides(collection, values),
-  );
-  return updatedRow;
+  return updated;
 }
 
 function withUpdateDefaults(
@@ -428,17 +395,20 @@ function addWithIncludes(
   if (collection.state.includes.length === 0) {
     return written;
   }
-  const find = graph.add(new Find(readBackAst(collection)));
+  const find = graph.add(new Find(readBackAst(collection, collection.state.includes)));
   graph.addFilterDataEdge(written, find, sameRowColumns(collection));
   return find;
 }
 
-function readBackAst(collection: DescribeCollectionRowsOptions): SelectAst {
+function readBackAst(
+  collection: DescribeCollectionRowsOptions,
+  includes: CollectionState['includes'],
+): SelectAst {
   const { state } = collection;
   return selectRowsAst(collection, {
     ...emptyState(state.tables),
     selectedFields: state.selectedFields,
-    includes: state.includes,
+    includes,
   });
 }
 
@@ -455,8 +425,9 @@ function addReadBack(
   collection: DescribeCollectionRowsOptions,
   keysFrom: NodeId,
   changed: Readonly<StorageRow>,
+  includes: CollectionState['includes'],
 ): NodeId {
-  const find = graph.add(new Find(readBackAst(collection)));
+  const find = graph.add(new Find(readBackAst(collection, includes)));
   graph.addFilterDataEdge(keysFrom, find, sameColumns(identityProjection(collection)), changed);
   return find;
 }
@@ -469,7 +440,9 @@ function addFindOfWrittenRows(
   owner: WrittenRowOwner,
 ): NodeId {
   const pairs = sameColumns(keyColumns);
-  const found = graph.add(new FindByKeys(readBackAst(collection), pairs, owner));
+  const found = graph.add(
+    new FindByKeys(readBackAst(collection, collection.state.includes), pairs, owner),
+  );
   graph.addRowsEdge(inserted, found, 'keys', pairs);
   return found;
 }
