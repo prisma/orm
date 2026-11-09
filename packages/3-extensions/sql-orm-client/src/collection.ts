@@ -29,7 +29,6 @@ import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/pla
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
-import type { Simplify } from '@internal/utils/types';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
@@ -46,13 +45,9 @@ import {
   assertLockCapability,
   assertReturningCapability,
   columnOfCallerField,
-  getModelAndVariantFieldColumns,
   getModelFieldColumns,
-  getOwnFieldColumns,
   hasCompleteUniqueKey,
   isToOneCardinality,
-  type PolymorphismInfo,
-  type PolymorphismVariantInfo,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -84,7 +79,7 @@ import {
   collectionMethodTable,
   createCollectionMethods,
 } from './collection-methods';
-import { assertModelFieldNames, mapModelDataToStorageRow } from './collection-runtime';
+import { assertModelFieldNames } from './collection-runtime';
 import {
   type CollectionTables,
   createCollectionTables,
@@ -142,10 +137,10 @@ import {
   updateAllGraph,
   updateFirstGraph,
   upsertGraph,
-  type VariantCreateRow,
 } from './mutation-graph/collection-graphs';
 import { Graph } from './mutation-graph/graph';
 import { executeGraph, queryGraph } from './mutation-graph/run-graph';
+import { mtiCreateContextOf, updateValuesOf } from './mutation-graph/storage-rows';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import {
   asPreparedOrmCall,
@@ -162,7 +157,6 @@ import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import { hasRelationFields, parseMutationInput } from './relation-mutations';
-import type { AliasedTable } from './table-scope';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -206,44 +200,6 @@ import { normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
-
-function applyCreateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  rows: Record<string, unknown>[],
-  defaultValueCache = new Map<string, unknown>(),
-): void {
-  for (const row of rows) {
-    const applied = ctx.context.applyMutationDefaults({
-      op: 'create',
-      entry: tableName,
-      namespace: namespaceId,
-      values: row,
-      defaultValueCache,
-    });
-    for (const def of applied) {
-      row[def.field] = def.value;
-    }
-  }
-}
-
-function applyUpdateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  values: Record<string, unknown>,
-): void {
-  const applied = ctx.context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values,
-  });
-  for (const def of applied) {
-    values[def.field] = def.value;
-  }
-}
 
 type WhereDirectInput = WhereArg;
 
@@ -314,20 +270,6 @@ function splitCreateArguments<TContract extends Contract<SqlStorage>, ModelName 
     return { options: undefined, configureCallback: optionsOrConfigure };
   }
   return { options: optionsOrConfigure, configureCallback: configure };
-}
-
-type MtiVariantInfo = Simplify<PolymorphismVariantInfo & { readonly strategy: 'mti' }>;
-
-function isMtiVariantInfo(variant: PolymorphismVariantInfo | undefined): variant is MtiVariantInfo {
-  return variant?.strategy === 'mti';
-}
-
-interface MtiCreateContext {
-  polyInfo: PolymorphismInfo;
-  variant: MtiVariantInfo;
-  baseFieldToColumn: Readonly<Record<string, string>>;
-  variantFieldToColumn: Readonly<Record<string, string>>;
-  mergedFieldToColumn: Readonly<Record<string, string>>;
 }
 
 /** What `fragment` reads from the collection it is called on: its contract, its model and its query state. */
@@ -2131,33 +2073,22 @@ export class CollectionBase<
       readonly Record<string, unknown>[],
       'resolved create inputs are model-field records for storage mapping'
     >(data);
-    const mtiContext = this.#resolveMtiCreateContext();
+    const mtiContext = mtiCreateContextOf(this.#descriptionOptions());
     if (mtiContext) {
       assertReturningCapability(this.contract, 'createAll()');
       const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
       const graph = createAllVariantGraph(
         this.#descriptionWithoutIncludes(),
         variantTable,
-        mtiContext.variant.modelName,
-        this.#variantCreateRows(rows, mtiContext, variantTable),
+        mtiContext,
+        rows,
       );
       return (queryable) =>
         queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
     }
 
-    const graph = createAllGraph(
-      this.#descriptionOptions(),
-      this.#createValues(rows),
-      conflictSkip,
-      'rows',
-    );
+    const graph = createAllGraph(this.#descriptionOptions(), rows, conflictSkip, 'rows');
     return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
-  }
-
-  #createValues(rows: readonly Record<string, unknown>[]): Record<string, unknown>[] {
-    const mappedRows = this.#mapCreateRows(rows);
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, mappedRows);
-    return mappedRows;
   }
 
   #resolveConflictSkip(
@@ -2208,7 +2139,7 @@ export class CollectionBase<
   }
 
   #refuseOnMtiVariant(method: string, message: string): void {
-    if (!this.#resolveMtiCreateContext()) return;
+    if (!mtiCreateContextOf(this.#descriptionOptions())) return;
     throw ormError('ORM.OPERATION_UNSUPPORTED', message, {
       meta: {
         method,
@@ -2226,135 +2157,6 @@ export class CollectionBase<
       this.modelName,
       this.state.variantValue,
     )[1];
-  }
-
-  #resolveMtiCreateContext(): MtiCreateContext | null {
-    const variantValue = this.state.variantValue;
-    if (!variantValue) return null;
-
-    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
-    if (!polyInfo) return null;
-
-    const variant = polyInfo.variants.get(variantValue);
-    if (!isMtiVariantInfo(variant)) return null;
-
-    const baseFieldToColumn = getModelFieldColumns(this.contract, this.namespaceId, this.modelName);
-    const variantFieldToColumn = getOwnFieldColumns(
-      this.contract,
-      variant.namespaceId,
-      variant.modelName,
-    );
-
-    return {
-      polyInfo,
-      variant,
-      baseFieldToColumn,
-      variantFieldToColumn,
-      mergedFieldToColumn: getModelAndVariantFieldColumns(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        variant.value,
-      ),
-    };
-  }
-
-  #variantCreateRows(
-    data: readonly Record<string, unknown>[],
-    mtiCtx: MtiCreateContext,
-    variantTable: AliasedTable,
-  ): VariantCreateRow[] {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, mergedFieldToColumn } =
-      mtiCtx;
-    const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
-    const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
-    const defaultValueCache = new Map<string, unknown>();
-
-    return data.map((row) => {
-      const allMapped: Record<string, unknown> = {};
-      for (const [fieldName, value] of Object.entries(row)) {
-        if (value === undefined) continue;
-        allMapped[
-          columnOfCallerField(
-            this.contract,
-            this.namespaceId,
-            mergedFieldToColumn,
-            variant.modelName,
-            fieldName,
-          )
-        ] = value;
-      }
-      allMapped[polyInfo.discriminatorColumn] = variant.value;
-
-      const baseRow: Record<string, unknown> = {};
-      const variantRow: Record<string, unknown> = {};
-      for (const [column, value] of Object.entries(allMapped)) {
-        if (baseFieldColumns.has(column) || column === polyInfo.discriminatorColumn) {
-          baseRow[column] = value;
-        }
-        if (variantFieldColumns.has(column)) {
-          variantRow[column] = value;
-        }
-      }
-
-      applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, [baseRow], defaultValueCache);
-      applyCreateDefaults(
-        this.ctx,
-        variantTable.storage.namespaceId,
-        variantTable.storage.tableName,
-        [variantRow],
-        defaultValueCache,
-      );
-      return { base: baseRow, variant: variantRow };
-    });
-  }
-
-  #mapCreateRows(data: readonly Record<string, unknown>[]): Record<string, unknown>[] {
-    const variantValue = this.state.variantValue;
-    if (!variantValue) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
-    if (!polyInfo) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const variant = polyInfo.variants.get(variantValue);
-    if (!variant) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const mergedFieldToColumn = getModelAndVariantFieldColumns(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      variant.value,
-    );
-
-    return data.map((row) => {
-      const mapped: Record<string, unknown> = {};
-      for (const [fieldName, value] of Object.entries(row)) {
-        if (value === undefined) continue;
-        mapped[
-          columnOfCallerField(
-            this.contract,
-            variant.namespaceId,
-            mergedFieldToColumn,
-            variant.modelName,
-            fieldName,
-          )
-        ] = value;
-      }
-      mapped[polyInfo.discriminatorColumn] = variant.value;
-      return mapped;
-    });
   }
 
   /**
@@ -2412,12 +2214,7 @@ export class CollectionBase<
       readonly Record<string, unknown>[],
       'resolved create-and-count inputs are model-field records for storage mapping'
     >(data);
-    const graph = createAllGraph(
-      this.#descriptionWithoutIncludes(),
-      this.#createValues(rows),
-      conflictSkip,
-      'count',
-    );
+    const graph = createAllGraph(this.#descriptionWithoutIncludes(), rows, conflictSkip, 'count');
     return this.#countCall(call, graph);
   }
 
@@ -2490,24 +2287,6 @@ export class CollectionBase<
     this.#assertNotMtiVariant('upsert()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
 
-    const mappedCreateRows = this.#mapCreateRows([
-      blindCast<
-        Record<string, unknown>,
-        'resolved upsert create input is a model-field record for storage mapping'
-      >(input.create),
-    ]);
-    const createValues = mappedCreateRows[0] ?? {};
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, [createValues]);
-    const updateValues = mapModelDataToStorageRow(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      input.update,
-    );
-    const hasUpdateValues = Object.keys(updateValues).length > 0;
-    if (hasUpdateValues) {
-      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, updateValues);
-    }
     const conflictColumns = resolveUpsertConflictColumns(
       this.contract,
       this.namespaceId,
@@ -2527,8 +2306,11 @@ export class CollectionBase<
 
     const graph = upsertGraph(
       this.#descriptionOptions(),
-      createValues,
-      updateValues,
+      blindCast<
+        Record<string, unknown>,
+        'resolved upsert create input is a model-field record for storage mapping'
+      >(input.create),
+      input.update,
       conflictColumns,
     );
     return runOrmCall(
@@ -2617,13 +2399,11 @@ export class CollectionBase<
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
     }
     assertModelFieldNames(this.contract, this.namespaceId, this.modelName, parsed.scalarData);
-    const values = this.#updateValues(
-      blindCast<
-        ScalarUpdateInput<TContract, ModelName, State['nsId']>,
-        'the fields that are not relations are the scalar update input'
-      >(parsed.scalarData),
+    const graph = updateFirstGraph(
+      this.#descriptionOptions(),
+      parsed.scalarData,
+      parsed.relationMutations,
     );
-    const graph = updateFirstGraph(this.#descriptionOptions(), values, parsed.relationMutations);
     return consumeFirstRow(queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()));
   }
 
@@ -2664,7 +2444,11 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
-    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'rows');
+    const graph = updateAllGraph(
+      this.#descriptionOptions(),
+      updateValuesOf(this.#descriptionOptions(), data),
+      'rows',
+    );
     return this.#rowsCall('updateAll', annotations, graph);
   }
 
@@ -2710,7 +2494,7 @@ export class CollectionBase<
   ): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const values = this.#updateValues(data);
+    const values = updateValuesOf(this.#descriptionOptions(), data);
     const graph =
       Object.keys(values).length === 0
         ? new Graph(this.contract)
@@ -2805,16 +2589,6 @@ export class CollectionBase<
 
   #descriptionWithoutIncludes() {
     return { ...this.#descriptionOptions(), state: { ...this.state, includes: [] } };
-  }
-
-  #updateValues(
-    data: ScalarUpdateInput<TContract, ModelName, State['nsId']>,
-  ): Record<string, unknown> {
-    const values = mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, data);
-    if (Object.keys(values).length > 0) {
-      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, values);
-    }
-    return values;
   }
 
   #assertIncludeRefinementMode(action: string): void {

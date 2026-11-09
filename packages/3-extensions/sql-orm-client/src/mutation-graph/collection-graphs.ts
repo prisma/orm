@@ -47,9 +47,18 @@ import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
-  type BeforeWrite,
   type Translation,
 } from './nested-mutations';
+import {
+  createRowOf,
+  createRowsOf,
+  type MtiCreateContext,
+  mappedUpdateRow,
+  modelOf,
+  updateValuesOf,
+  variantCreateRowsOf,
+  withUpdateDefaults,
+} from './storage-rows';
 import { UnionAll } from './union-all';
 import { Update } from './update';
 
@@ -104,11 +113,12 @@ export function deleteAllGraph(
 
 export function updateFirstGraph(
   collection: DescribeCollectionRowsOptions,
-  set: Readonly<Record<string, unknown>>,
+  data: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
-  const { context, modelName, namespaceId, state } = collection;
+  const { context, state } = collection;
   const graph = new Graph(context.contract);
+  const set = mappedUpdateRow(collection, data);
   const bare = Object.keys(set).length === 0 && relationMutations.length === 0;
   if (!bare) {
     requireIdentityColumns(collection);
@@ -123,7 +133,7 @@ export function updateFirstGraph(
     return graph;
   }
 
-  const model = { namespaceId, modelName, tables: state.tables };
+  const model = modelOf(collection);
   const t: Translation = { graph, context, gate: find, readsBack: readsBack(collection, 'rows') };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
@@ -168,28 +178,6 @@ function addParentUpdate(
   return updated;
 }
 
-function withUpdateDefaults(
-  collection: DescribeCollectionRowsOptions,
-  set: Readonly<Record<string, unknown>>,
-  before: BeforeWrite,
-): Readonly<Record<string, unknown>> {
-  const values: Record<string, unknown> = { ...set, ...before.nullColumns };
-  const setNothingBefore = Object.keys(set).length === 0;
-  const changesNow = Object.keys(values).length > 0 || before.keys.length > 0;
-  if (setNothingBefore && changesNow) {
-    const { namespaceId, tableName } = collection.state.tables.root.storage;
-    for (const applied of collection.context.applyMutationDefaults({
-      op: 'update',
-      entry: tableName,
-      namespace: namespaceId,
-      values,
-    })) {
-      values[applied.field] = applied.value;
-    }
-  }
-  return values;
-}
-
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, state } = collection;
   const readsRowsFirst = state.includes.length > 0 || readsBack(collection, 'rows');
@@ -213,15 +201,16 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
 
 export function createAllGraph(
   collection: DescribeCollectionRowsOptions,
-  rows: readonly Record<string, unknown>[],
+  data: readonly Readonly<Record<string, unknown>>[],
   conflict: InsertConflictSkip | undefined,
   returns: CallReturns,
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph(context.contract);
-  if (rows.length === 0) {
+  if (data.length === 0) {
     return graph;
   }
+  const rows = createRowsOf(collection, data);
   requireIdentityColumnsForIncludes(collection);
   const { contract } = context;
   const { root } = state.tables;
@@ -264,12 +253,12 @@ export function createGraph(
   collection: DescribeCollectionRowsOptions,
   data: Readonly<Record<string, unknown>>,
 ): Graph {
-  const { context, modelName, namespaceId, state } = collection;
+  const { context } = collection;
   const graph = new Graph(context.contract);
   requireIdentityColumnsForIncludes(collection);
   const created = addCreateWithRelations(
     { graph, context, gate: undefined, readsBack: readsBack(collection, 'rows') },
-    { namespaceId, modelName, tables: state.tables },
+    modelOf(collection),
     data,
     [],
   );
@@ -277,18 +266,15 @@ export function createGraph(
   return graph;
 }
 
-export interface VariantCreateRow {
-  readonly base: Readonly<Record<string, unknown>>;
-  readonly variant: Readonly<Record<string, unknown>>;
-}
-
 export function createAllVariantGraph(
   collection: DescribeCollectionRowsOptions,
   variantTable: AliasedTable,
-  variantModelName: string,
-  rows: readonly VariantCreateRow[],
+  mti: MtiCreateContext,
+  data: readonly Readonly<Record<string, unknown>>[],
 ): Graph {
   const { context, modelName, state } = collection;
+  const variantModelName = mti.variant.modelName;
+  const rows = variantCreateRowsOf(collection, mti, variantTable, data);
   const { contract } = context;
   const { root } = state.tables;
   const graph = new Graph(contract);
@@ -340,11 +326,19 @@ function sameColumns(columns: readonly ProjectionItem[]): ColumnPair[] {
 
 export function upsertGraph(
   collection: DescribeCollectionRowsOptions,
-  create: Readonly<Record<string, unknown>>,
-  update: Readonly<Record<string, unknown>>,
+  createData: Readonly<Record<string, unknown>>,
+  updateData: Readonly<Record<string, unknown>>,
   conflictColumns: readonly string[],
 ): Graph {
   const { context, state } = collection;
+  const create = createRowOf(
+    context,
+    modelOf(collection),
+    state.variantValue,
+    createData,
+    new Map(),
+  );
+  const update = updateValuesOf(collection, updateData);
   const { contract } = context;
   const { root } = state.tables;
   const graph = new Graph(context.contract);

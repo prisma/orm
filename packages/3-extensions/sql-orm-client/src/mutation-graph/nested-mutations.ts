@@ -2,8 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { castAs } from '@internal/utils/casts';
-import { mapModelDataToStorageRow } from '../collection-runtime';
-import { type CollectionTables, createStatementTables } from '../collection-tables';
+import { createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
 import {
   deleteAst,
@@ -37,8 +36,9 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { InsertReportingKeys } from './insert-reporting-keys';
-import { addInsertRows, type KeySource } from './model-statements';
+import { addInsertRows, type KeySource, type Model } from './model-statements';
 import type { Requires } from './requires';
+import { createRowOf, withCreateDefaults } from './storage-rows';
 import { Update } from './update';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
@@ -49,12 +49,6 @@ export interface Translation {
   readonly context: ExecutionContext;
   readonly gate: NodeId | undefined;
   readonly readsBack: boolean;
-}
-
-export interface Model {
-  readonly namespaceId: string;
-  readonly modelName: string;
-  readonly tables: CollectionTables;
 }
 
 export interface BeforeWrite {
@@ -80,7 +74,7 @@ export function addCreateWithRelations(
   }
   const before = addBeforeWrite(t, model, parsed.relationMutations);
   const keys = [...keysFromParent, ...before.keys];
-  const row = storageRowOf(t.context, model, parsed.scalarData);
+  const row = createRowOf(t.context, model, undefined, parsed.scalarData, undefined);
   const parent = t.readsBack
     ? addInsertAndReadBack(t, model, row, keys, gated)
     : addParentInsert(t, model, row, keys, gated);
@@ -333,7 +327,7 @@ function addJunctionOwned(
     through.childColumns,
   );
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
-    const values = withCreateDefaults(context, through.namespaceId, through.table, {});
+    const values = withCreateDefaults(context, through.namespaceId, through.table, {}, undefined);
     addInsertRows(graph, contract, junction.root, [values], {
       conflict,
       keys: [
@@ -386,7 +380,7 @@ function addChildInserts(
   rows: readonly Readonly<Record<string, unknown>>[],
   keys: readonly KeySource[],
 ): void {
-  const values = rows.map((row) => storageRowOf(t.context, model, row));
+  const values = rows.map((row) => createRowOf(t.context, model, undefined, row, undefined));
   if (t.readsBack) {
     for (const row of values) {
       writtenKeysOf(t, model, row, keys);
@@ -397,20 +391,6 @@ function addChildInserts(
     keys,
     junction: undefined,
   });
-}
-
-function storageRowOf(
-  context: ExecutionContext,
-  model: Model,
-  row: Readonly<Record<string, unknown>>,
-): Record<string, unknown> {
-  const { namespaceId, tableName } = model.tables.root.storage;
-  return withCreateDefaults(
-    context,
-    namespaceId,
-    tableName,
-    mapModelDataToStorageRow(context.contract, namespaceId, model.modelName, row),
-  );
 }
 
 function addFindAndAssert(
@@ -495,24 +475,6 @@ function criterionWhere(
     castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
     model.tables.root,
   );
-}
-
-function withCreateDefaults(
-  context: ExecutionContext,
-  namespaceId: string,
-  tableName: string,
-  values: Record<string, unknown>,
-): Record<string, unknown> {
-  const withDefaults = { ...values };
-  for (const applied of context.applyMutationDefaults({
-    op: 'create',
-    entry: tableName,
-    namespace: namespaceId,
-    values,
-  })) {
-    withDefaults[applied.field] = applied.value;
-  }
-  return withDefaults;
 }
 
 function hasRelationCallbacks(

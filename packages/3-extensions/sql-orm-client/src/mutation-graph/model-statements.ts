@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { supportsDefaultInInsert } from '../collection-contract';
+import type { CollectionTables } from '../collection-tables';
 import {
   groupRowsByColumnSignature,
   type InsertConflictSkip,
@@ -13,6 +14,12 @@ import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
 import type { JunctionWrite } from './junction-write';
 import type { Requires } from './requires';
+
+export interface Model {
+  readonly namespaceId: string;
+  readonly modelName: string;
+  readonly tables: CollectionTables;
+}
 
 export interface KeySource {
   readonly from: NodeId;
