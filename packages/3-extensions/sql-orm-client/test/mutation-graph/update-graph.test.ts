@@ -190,6 +190,16 @@ describe('updateFirstGraph with relation operations', () => {
     );
   });
 
+  it('rejects an empty disconnect criterion on a many-to-many relation', () => {
+    expect(() => printUpdate({ tags: (tags: Mutator) => tags.disconnect([{}]) })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        message: 'disconnect() nested mutation for relation "tags" requires non-empty criterion',
+        meta: { kind: 'disconnect', relation: 'tags', problem: 'empty-criterion' },
+      }),
+    );
+  });
+
   it('builds a graph with no node after limit(0)', () => {
     const context = getTestContext();
     const parsed = parseMutationInput(context.contract, 'public', 'User', {

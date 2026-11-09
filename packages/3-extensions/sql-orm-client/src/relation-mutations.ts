@@ -277,17 +277,3 @@ export function hasRelationFields(
   const relationNames = Object.keys(resolveModelRelations(contract, namespaceId, modelName));
   return relationNames.some((name) => data[name] !== undefined);
 }
-
-export function hasNestedMutationCallbacks(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  data: Record<string, unknown>,
-): boolean {
-  const relationNames = new Set(
-    Object.keys(resolveModelRelations(contract, namespaceId, modelName)),
-  );
-  return Object.entries(data).some(
-    ([fieldName, value]) => relationNames.has(fieldName) && isRelationMutationCallback(value),
-  );
-}

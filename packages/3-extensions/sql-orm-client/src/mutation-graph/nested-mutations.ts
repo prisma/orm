@@ -15,7 +15,7 @@ import { collectionSelectAst } from '../query-plan-select';
 import {
   assertJunctionMetadataShape,
   assertJunctionPayloadWritable,
-  hasNestedMutationCallbacks,
+  hasRelationFields,
   type JunctionRelationDefinition,
   type ParsedRelationMutation,
   parseMutationInput,
@@ -267,7 +267,11 @@ function addChildOwned(
   if (mutation.kind === 'create') {
     const keys = [{ from: parent, columns: fromParent }];
     const rows = mutation.data.map((row) => castAs<Readonly<Record<string, unknown>>>(row));
-    if (rows.some((row) => hasRelationCallbacks(context, related, row))) {
+    if (
+      rows.some((row) =>
+        hasRelationFields(context.contract, related.namespaceId, related.modelName, row),
+      )
+    ) {
       for (const row of rows) {
         addCreateWithRelations(t, related, row, keys);
       }
@@ -414,14 +418,7 @@ function addFindAndAssert(
   columns: readonly ColumnPair[],
 ): NodeId {
   const { graph, context } = t;
-  const where = criterionWhere(context, related, criterion);
-  if (where === undefined) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
-      `Nested connect for model "${related.modelName}" requires non-empty criterion`,
-      { meta: { kind: 'connect', model: related.modelName, problem: 'empty-criterion' } },
-    );
-  }
+  const where = requiredCriterion(context, related, relation, kind, criterion);
   const find = graph.add(
     new Find(
       selectAstOf(
@@ -488,16 +485,6 @@ function criterionWhere(
     castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(criterion),
     model.tables.root,
   );
-}
-
-function hasRelationCallbacks(
-  context: ExecutionContext,
-  model: Model,
-  row: Readonly<Record<string, unknown>>,
-): boolean {
-  return hasNestedMutationCallbacks(context.contract, model.namespaceId, model.modelName, {
-    ...row,
-  });
 }
 
 function linkKeyConflict(

@@ -263,6 +263,21 @@ describe('createGraph', () => {
       );
     });
 
+    it('rejects a relation field that is not a callback in a nested child row', () => {
+      expect(() =>
+        createGraph(targetOf('User'), {
+          ...ada,
+          posts: (posts: Mutator) => posts.create([{ ...hello, comments: [] }]),
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          message: 'Relation field "comments" on model "Post" expects a mutator callback',
+          meta: { relation: 'comments', model: 'Post', problem: 'missing-callback' },
+        }),
+      );
+    });
+
     it('rejects a callback that returns no relation operation', () => {
       expect(() =>
         createGraph(targetOf('User'), { ...ada, posts: () => ({ invalid: true }) }),
@@ -297,6 +312,21 @@ describe('createGraph', () => {
           code: 'ORM.RELATION_MUTATION_INVALID',
           message: 'connect() nested mutation for relation "posts" requires non-empty criterion',
           meta: { kind: 'connect', relation: 'posts', problem: 'empty-criterion' },
+        }),
+      );
+    });
+
+    it('rejects an empty connect criterion on a relation the parent holds the key for', () => {
+      expect(() =>
+        createGraph(targetOf('Post'), {
+          ...hello,
+          author: (author: Mutator) => author.connect({}),
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.RELATION_MUTATION_INVALID',
+          message: 'connect() nested mutation for relation "author" requires non-empty criterion',
+          meta: { kind: 'connect', relation: 'author', problem: 'empty-criterion' },
         }),
       );
     });
