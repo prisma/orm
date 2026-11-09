@@ -6,9 +6,9 @@
 
 ## At a glance
 
-Eight slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (five slices) adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
+Nine slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (six slices) first unifies the write builders and redesigns read-backs, then adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
 
-Eight is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
+Nine is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
 
 PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filtered-many-writes` on the executor, is closed without merging. Its mutator types, integration tests and docs are reused in slice 4. PR [#30642](https://github.com/prisma/orm/pull/30642), its ports, is rebased onto slice 4.
 
@@ -36,39 +36,51 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
 
 ### Stage 2 — after stage 1
 
-4. **Slice `filtered-many-writes`** — `projects/nested-mutations/slices/filtered-many-writes/` (slice spec exists; its dispatch plan is for the executor and is rewritten when the slice is picked up)
+4. **Slice `write-builders`** — `projects/nested-mutations/slices/write-builders/` (comes first in stage 2, right after `graph-nested`; every later slice builds on its builders)
+   - **Outcome:** One builder per kind of statement for a model (insert rows, update rows, delete rows, find rows), called the same way at top level and when nested; a nested call is the same call plus edges from the parent (`PayloadData` for values, `FilterData` for limiting). Builders always add read-backs of written rows, and peephole rules collapse a read-back into its write when the contract has `returning`. Results unchanged.
+   - **Builds on:** Slice `graph-nested` (#30734), including main's TML-3696 read-back that it carries as main has it.
+   - **Hands to:** The insert, update, delete and find builders slices `filtered-many-writes`, `nested-variant-creates`, `create-on-conflict` and `nested-upsert` use for their nested operations.
+   - **Focus:** The duplications found in a review of `collection-graphs.ts` and `nested-mutations.ts` after `graph-nested`:
+     - creating rows is built in four places with different nodes and read-backs: `createAllGraph` (`createAll()`, and `create()` without relation callbacks), `addCreateWithRelations` with `addParentInsert`/`addInsertAndReadBack` (`create()` with relation callbacks, parent-held and many-to-many target creates), `addChildInserts` (one `Insert` per column-set group where top level uses `InsertChunked`), and the junction link insert. `create()` has two builders chosen by whether the data has a relation callback; after this slice it always goes through the relation translation, which with no relations is one insert;
+     - mapping fields to columns and applying create and update defaults happens partly in `collection.ts` (`#mapCreateRows`, `applyCreateDefaults`, `#updateValues`) and partly in the builders (`storageRowOf`, `withCreateDefaults`, `withUpdateDefaults`); after this slice only the builders do it;
+     - selects of a model's rows are assembled three ways (`addFindOfFirstRow` with `selectIdentityAst`/`selectRowsAst`, `addFindAndAssert`'s own `collectionSelectAst`, `readBackAst`);
+     - nested child `connect`/`disconnect` and junction `disconnect` build `Update`/`Delete` ASTs directly instead of through the top-level update and delete builders;
+     - row identity is checked by two functions with different errors (`requireIdentityColumns`, `readBackIdentity`).
+     The read-back redesign is decided: builders always add read-backs (`InsertReportingKeys` then a read-back `Find`; `Find` before `Delete`; `Find` before and after `Update`), a peephole rule per pattern collapses the read-back into the write with `RETURNING`, the read-back has no `ORDER BY` since no order is promised for rows a write returns, and builders lose main's `returns: 'rows' | 'count'` argument. It needs the peephole hook back, a graph operation that moves readers from one node to another, and the step that removes unread `Find` nodes (design record D7a), since a count call's read-back is never read.
+
+5. **Slice `filtered-many-writes`** — `projects/nested-mutations/slices/filtered-many-writes/` (slice spec exists; its dispatch plan is for the executor and is rewritten when the slice is picked up)
    - **Outcome:** Inside `update()`, a relation callback can return `r.where(w).updateAll(data)` and `r.where(w).deleteAll()`, with `where` optional, on one-to-many and many-to-many relations; a relation callback can return an array of operations, applied in order, in both `create()` and `update()`. Only rows related to the parent are changed or deleted.
-   - **Builds on:** Slice 3's translation table and state rules.
-   - **Hands to:** The array return and the mutator's `where` step; the peephole that inlines a junction `Find` as `IN (SELECT ...)`. Slice 7 adds `upsert` beside these and uses the array form in its ports.
+   - **Builds on:** Slice `write-builders`' builders and slice `graph-nested`'s translation and table state.
+   - **Hands to:** The array return and the mutator's `where` step; the peephole that inlines a junction `Find` as `IN (SELECT ...)`. Slice `nested-upsert` adds `upsert` beside these and uses the array form in its ports.
    - **Focus:** Translation entries for `updateAll` and `deleteAll`; the inlining peephole, which ships in this slice because many-to-many `updateAll` and `deleteAll` are not usable without it; the row-value form of `IN` for composite keys, added to the SQL AST and both adapters. Reused from #30634: the mutator types for these operations, the integration tests, the README and error-reference text, the upgrade entry. Ports: the 22 tests the slice spec lists, from #30642.
 
-5. **Slice `nested-variant-creates`** — `projects/nested-mutations/slices/nested-variant-creates/`
+6. **Slice `nested-variant-creates`** — `projects/nested-mutations/slices/nested-variant-creates/`
    - **Outcome:** A relation's mutator has `variant(value)`, as collections and include refinements already do: `t.variant('feature').create(…)` takes the base's fields plus that variant's own fields, without the discriminator, and creates a complete row on either storage layout. A variant stored in the base table is one `Insert` with the discriminator filled in; a variant stored in its own table is slice `graph-creates`' chain (base `Insert`, variant `Insert` reading the key by `PayloadData`, `CrossJoin`), linked to the parent as any nested create. Works in `create()` and `update()`, for one row and for an array.
-   - **Builds on:** Slice `graph-nested`'s translation; slice `filtered-many-writes`' mutator shape.
+   - **Builds on:** Slice `write-builders`' insert builder and slice `graph-nested`'s translation; slice `filtered-many-writes`' mutator shape.
    - **Hands to:** Project close-out.
    - **Focus:** The narrowed mutator's types and the translation entry. Open when the slice is specified: whether `t.create(…)` without `variant()` on a polymorphic target becomes a type error as `create` on a polymorphic collection is (consistent, but breaks code that compiles today), and whether `connect`/`disconnect` on a variant are included. Main has no variant handling in nested creates: a variant's own fields are rejected with `ORM.FIELD_UNKNOWN`, and setting the discriminator of a variant stored in its own table writes only the base row. Until this slice lands, that behaviour is kept as on main (decided 2026-11-03).
 
-6. **Slice `create-on-conflict`** — `projects/nested-mutations/slices/create-on-conflict/`
+7. **Slice `create-on-conflict`** — `projects/nested-mutations/slices/create-on-conflict/`
    - **Outcome:** Nested `create` takes `{ onConflict: 'skip' | 'connect', conflictOn? }` in `create()` and `update()`. `'skip'` leaves out colliding rows on one-to-many relations. `'connect'` links the existing row on every relation layout and leaves its other fields unchanged.
-   - **Builds on:** Slice 3's translation table. Independent of slice 4.
+   - **Builds on:** Slice `write-builders`' insert builder. Independent of slice `filtered-many-writes`.
    - **Hands to:** Project close-out. Nothing downstream consumes it.
    - **Focus:** The options argument on nested `create` and its types; `'skip'` rejected on to-one and many-to-many; both values rejected on inheritance variants; `'connect'` not offered on top-level `createAll`; the `Insert` that returns the row on conflict, and the link written from it per layout by a data edge. Ports: `nested_create_many.rs` (5, with the `skipDuplicates` non-ported entry removed), `nested_connect_or_create.rs` (6), `prisma_11731.rs` (2), `if_node_siblig_dep_regression.rs` (1), `nested_pagination.rs` (3), `prisma_27452.rs` (1).
 
-7. **Slice `has-one-unique`** — `projects/nested-mutations/slices/has-one-unique/` (independent of every other slice; can be built during stage 1)
+8. **Slice `has-one-unique`** — `projects/nested-mutations/slices/has-one-unique/` (independent of every other slice; can be built during stage 1)
    - **Outcome:** TypeScript contract authoring rejects a `hasOne` relation whose `by` fields are not covered by a unique constraint on the child model, with an error naming the relation and the fields, as PSL authoring already does.
    - **Builds on:** None.
-   - **Hands to:** The guarantee slice 7 relies on to use the child's foreign key as a conflict target.
+   - **Hands to:** The guarantee slice `nested-upsert` relies on to use the child's foreign key as a conflict target.
    - **Focus:** The rule in `packages/2-sql/2-authoring/contract-ts`; the in-repo contracts that break under it (`test/e2e/framework/test/sqlite/fixtures/contract.ts`, `test/integration/test/sql-builder/fixtures/contract.ts`, `contract-no-pgvector.ts`, and the package's own tests) and their regenerated fixtures; the upgrade-instructions entry for app authors. The contract validator is not changed.
 
-8. **Slice `nested-upsert`** — `projects/nested-mutations/slices/nested-upsert/`
+9. **Slice `nested-upsert`** — `projects/nested-mutations/slices/nested-upsert/`
    - **Outcome:** Inside `update()`, a relation callback can return `r.upsert({ create, update, conflictOn? })`. On a to-one relation it updates the linked row or creates and links one. On a to-many relation it finds the row by conflict columns and updates it only if it is related to the parent; a conflicting unrelated row raises `ORM.NESTED_UPSERT_CONFLICT`. Works on Postgres and SQLite.
-   - **Builds on:** Slice 4's array return and mutator shape; slice 6's unique foreign key on `1:1` relations.
+   - **Builds on:** Slice `filtered-many-writes`' array return and mutator shape; slice `has-one-unique`'s unique foreign key on `1:1` relations.
    - **Hands to:** Project close-out. Nothing downstream consumes it.
    - **Focus:** The condition on the insert conflict action in the SQL AST and its rendering in both adapters; translation entries for the three layouts, with `Assert` on the `Insert` raising the new error; rejection in `create()` and on inheritance variants. The slice's design checks the to-one case against the rule that the graph has no conditional nodes (design record D6). Ports: `nested_upsert_inside_update.rs` (5), `byoid.rs` (2), `multi_field_uniq_mutation.rs` (1), `non_embed_updated_at_should_change.rs` (1), `ref_actions/on_update/set_null.rs` (1), `sharding/relations.rs` (1), `create_then_upsert` from the combining suite, and the three relation-key files that mix `upsert` with `updateMany`/`deleteMany` (12 tests). The two matrix suites among these use the `_fixture/` directory the slice 4 ports share. The `optimistic-concurrency-control` ledger entry is rewritten to name only `increment`.
 
 ## Dependencies (external)
 
-- [ ] **`port-all-tests` project** — owns the port corpus, its checklists and its ledgers, which slices 4, 5 and 7 edit. Edits to the same checklist files from that project and this one can collide.
+- [ ] **`port-all-tests` project** — owns the port corpus, its checklists and its ledgers, which slices `filtered-many-writes`, `create-on-conflict` and `nested-upsert` edit. Edits to the same checklist files from that project and this one can collide.
 - [ ] **Pinned upstream sources** — ports are written from `prisma/prisma-engines` at `e922089b` and `prisma/prisma` at `a6d01554`. Neither is vendored in the repo; each porting slice needs a checkout.
 - [ ] **Integration suite** — it runs in the merge queue, not on pull requests, and this account cannot start the workflow by hand. Stage 1's bar is that suite, so each stage 1 slice runs `pnpm test:integration` locally on both targets before its PR opens.
 - [ ] **Other work on `collection.ts`** — stage 1 rewrites the write half of a 3,385-line file on main. Any other branch that edits its write methods conflicts with slices 1 to 3.
@@ -77,7 +89,7 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
 
 - Stage 1 is cut by write method, so that after each slice a method is wholly on the graph or wholly on main's code, and each PR is one reviewable change: the graph with its simplest users, then inserts and variants, then relations and the removal of the executor.
 - `graph-nested` comes last in stage 1 because nested nodes attach to the plain `create` and `update` graphs, and because removing the executor needs every method that calls it to have moved.
-- Stage 2 waits for stage 1 because each feature is a row in the translation table that slice 3 delivers. Building features on the executor is what PR #30634 did.
+- Stage 2 waits for stage 1 because each feature is a row in the translation that slice `graph-nested` delivers, and starts with `write-builders` so that every feature is built on one builder per statement kind instead of adding further copies. Building features on the executor is what PR #30634 did.
 - `filtered-many-writes` is first in stage 2: most of it is already written and tested against behaviour, its ports exist, and `nested-upsert` needs its array return.
 - `create-on-conflict` and `filtered-many-writes` have no dependency on each other; both add rows to the same translation table and change the mutator's types, so the second to merge rebases over the first.
 - `nested-upsert` waits for `has-one-unique` because of the spec's constraint that the uniqueness rule merges before, or together with, the to-one upsert that depends on it.
