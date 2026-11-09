@@ -241,7 +241,11 @@ export function withUpdateDefaults(
   before: BeforeWrite,
 ): Record<string, unknown> {
   const values: Record<string, unknown> = { ...set, ...before.nullColumns };
-  if (Object.keys(values).length === 0 && before.keys.length === 0) {
+  const keyColumns = before.keys.flatMap(({ columns }) =>
+    columns.map(([, target]) => target.alias),
+  );
+  const written = { ...Object.fromEntries(keyColumns.map((column) => [column, true])), ...values };
+  if (Object.keys(written).length === 0) {
     return values;
   }
   const { namespaceId, tableName } = collection.state.tables.root.storage;
@@ -249,7 +253,7 @@ export function withUpdateDefaults(
     op: 'update',
     entry: tableName,
     namespace: namespaceId,
-    values,
+    values: written,
   })) {
     values[applied.field] = applied.value;
   }
