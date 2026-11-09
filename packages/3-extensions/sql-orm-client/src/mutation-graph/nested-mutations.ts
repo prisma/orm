@@ -12,6 +12,7 @@ import {
   type InsertConflictSkip,
   insertAst,
   projectTableColumn,
+  projectTableColumns,
   updateAst,
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
@@ -30,12 +31,15 @@ import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
+import { readBackIdentity, writtenKeys } from '../written-keys';
 import { Assert } from './assert';
 import { Delete } from './delete';
 import type { ColumnPair, NodeId } from './edge';
 import { Find } from './find';
+import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { Insert } from './insert';
+import { InsertReportingKeys } from './insert-reporting-keys';
 import type { Requires } from './requires';
 import { Update } from './update';
 
@@ -46,6 +50,7 @@ export interface Translation {
   readonly graph: Graph;
   readonly context: ExecutionContext;
   readonly gate: NodeId | undefined;
+  readonly readsBack: boolean;
 }
 
 export interface KeySource {
@@ -81,17 +86,87 @@ export function addCreateWithRelations(
     rejectDisconnect(relation, mutation);
   }
   const before = addBeforeWrite(t, model, parsed.relationMutations);
-  const parent = addInsertOf(
-    t,
-    model,
-    [storageRowOf(t.context, model, parsed.scalarData)],
-    [...keysFromParent, ...before.keys],
-  );
-  if (gated) {
-    requireGate(t, parent);
-  }
+  const keys = [...keysFromParent, ...before.keys];
+  const row = storageRowOf(t.context, model, parsed.scalarData);
+  const parent = t.readsBack
+    ? addInsertAndReadBack(t, model, row, keys, gated)
+    : addParentInsert(t, model, row, keys, gated);
   addAfterWrite(t, model, parent, parsed.relationMutations);
   return parent;
+}
+
+function addParentInsert(
+  t: Translation,
+  model: Model,
+  row: Record<string, unknown>,
+  keys: readonly KeySource[],
+  gated: boolean,
+): NodeId {
+  const insert = addInsertOf(t, model, [row], keys);
+  if (gated) {
+    requireGate(t, insert);
+  }
+  return insert;
+}
+
+function addInsertAndReadBack(
+  t: Translation,
+  model: Model,
+  row: Record<string, unknown>,
+  keys: readonly KeySource[],
+  gated: boolean,
+): NodeId {
+  const { graph, context } = t;
+  const { contract } = context;
+  const { root } = model.tables;
+  const { namespaceId, tableName } = root.storage;
+  const owner = { operation: 'create', modelName: model.modelName };
+  const written = writtenKeysOf(t, model, row, keys);
+  const insert = graph.add(
+    new InsertReportingKeys(
+      [insertAst(contract, root, [row], undefined)],
+      written.keys,
+      written.generated,
+      owner,
+    ),
+  );
+  for (const { from, columns } of keys) {
+    graph.addPayloadDataEdge(from, insert, columns);
+  }
+  if (gated) {
+    requireGate(t, insert);
+  }
+  const identity = readBackIdentity(contract, namespaceId, tableName, model.modelName, 'create()');
+  const identityPairs = projectTableColumns(contract, root, identity).map(
+    (column): ColumnPair => [column, column],
+  );
+  const read = graph.add(
+    new FindByKeys(
+      collectionSelectAst(contract, model.modelName, emptyState(model.tables)),
+      identityPairs,
+      owner,
+    ),
+  );
+  graph.addRowsEdge(insert, read, 'keys', identityPairs);
+  return read;
+}
+
+function writtenKeysOf(
+  t: Translation,
+  model: Model,
+  row: Readonly<Record<string, unknown>>,
+  keys: readonly KeySource[],
+) {
+  const { namespaceId, tableName } = model.tables.root.storage;
+  const fromEdges = keys.flatMap(({ columns }) => columns.map(([, target]) => target.alias));
+  return writtenKeys({
+    context: t.context,
+    namespaceId,
+    tableName,
+    modelName: model.modelName,
+    rows: [{ ...Object.fromEntries(fromEdges.map((column) => [column, true])), ...row }],
+    method: 'create()',
+  });
 }
 
 export function addBeforeWrite(
@@ -315,6 +390,11 @@ function addChildInserts(
   keys: readonly KeySource[],
 ): void {
   const values = rows.map((row) => storageRowOf(t.context, model, row));
+  if (t.readsBack) {
+    for (const row of values) {
+      writtenKeysOf(t, model, row, keys);
+    }
+  }
   const groups = supportsDefaultInInsert(t.context.contract)
     ? [values]
     : groupRowsByColumnSignature(values);

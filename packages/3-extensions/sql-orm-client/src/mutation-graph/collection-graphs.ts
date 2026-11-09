@@ -49,6 +49,7 @@ import {
   addCreateWithRelations,
   type BeforeWrite,
   type KeySource,
+  type Translation,
 } from './nested-mutations';
 import { UnionAll } from './union-all';
 import { Update } from './update';
@@ -151,25 +152,26 @@ function updateFirstWithRelationsGraph(
   requireIdentityColumnsForIncludes(collection);
   const model = { namespaceId, modelName, tables: state.tables };
   const find = graph.add(new Find(selectIdentityAst(collection, { ...state, limit: 1 })));
-  const t = { graph, context, gate: find };
+  const t = { graph, context, gate: find, readsBack: readsBack(collection, 'rows') };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const parent =
     Object.keys(values).length === 0 && before.keys.length === 0
       ? find
-      : addParentUpdate(graph, collection, find, values, before.keys);
+      : addParentUpdate(t, collection, find, values, before.keys);
   addAfterWrite(t, model, parent, relationMutations);
   graph.setResult(addWithIncludes(graph, collection, parent));
   return graph;
 }
 
 function addParentUpdate(
-  graph: Graph,
+  t: Translation,
   collection: DescribeCollectionRowsOptions,
   find: NodeId,
   values: Readonly<Record<string, unknown>>,
   keys: readonly KeySource[],
 ): NodeId {
+  const { graph } = t;
   const { context, state } = collection;
   const updated = graph.add(
     new Update(updateAst(context.contract, state.tables, values, undefined)),
@@ -178,7 +180,26 @@ function addParentUpdate(
   for (const { from, columns } of keys) {
     graph.addPayloadDataEdge(from, updated, columns);
   }
-  return updated;
+  if (!t.readsBack) {
+    return updated;
+  }
+  const { namespaceId, tableName } = state.tables.root.storage;
+  readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'update()');
+  const updatedRow = graph.add(
+    new Find(
+      selectRowsAst(collection, {
+        ...emptyState(state.tables),
+        selectedFields: state.selectedFields,
+      }),
+    ),
+  );
+  graph.addFilterDataEdge(
+    find,
+    updatedRow,
+    sameRowColumns(collection),
+    keyOverrides(collection, values),
+  );
+  return updatedRow;
 }
 
 function withUpdateDefaults(
@@ -285,7 +306,7 @@ export function createGraph(
   const graph = new Graph(context.contract);
   requireIdentityColumnsForIncludes(collection);
   const created = addCreateWithRelations(
-    { graph, context, gate: undefined },
+    { graph, context, gate: undefined, readsBack: readsBack(collection, 'rows') },
     { namespaceId, modelName, tables: state.tables },
     data,
     [],
