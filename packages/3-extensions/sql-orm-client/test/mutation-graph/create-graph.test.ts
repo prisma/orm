@@ -3,7 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createGraph } from '../../src/mutation-graph/collection-graphs';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor } from '../collection-fixtures';
+import { createCollectionFor, withoutDefaultInInsert } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -298,6 +298,51 @@ describe('createGraph', () => {
           message: 'connect() nested mutation for relation "posts" requires non-empty criterion',
           meta: { kind: 'connect', relation: 'posts', problem: 'empty-criterion' },
         }),
+      );
+    });
+  });
+
+  describe('a contract that cannot fill a missing column with DEFAULT', () => {
+    const context = { ...getTestContext(), contract: withoutDefaultInInsert() };
+    const target = {
+      context,
+      state: createCollectionFor('User', context.contract).collection.state,
+      modelName: 'User',
+      namespaceId: 'public',
+    };
+
+    it('inserts the children in one InsertChunked of the runs of rows that set the same columns', () => {
+      expect(
+        printGraph(
+          createGraph(target, {
+            ...ada,
+            posts: (posts: Mutator) => posts.create([hello, { id: 11, title: 'Again' }]),
+          }),
+        ),
+      ).toBe(
+        [
+          'n1 InsertChunked users (1 statement)',
+          'n2 InsertChunked posts (2 statements) <- PayloadData n1 (id->user_id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+
+    it('inserts the target row and the junction row as InsertChunked', () => {
+      expect(
+        printGraph(
+          createGraph(target, {
+            ...ada,
+            tags: (tags: Mutator) => tags.create([{ id: 't1', name: 'SQL' }]),
+          }),
+        ),
+      ).toBe(
+        [
+          'n1 InsertChunked users (1 statement)',
+          'n2 InsertChunked tags (1 statement)',
+          'n3 InsertChunked user_tags (1 statement) <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
+          'result: n1',
+        ].join('\n'),
       );
     });
   });

@@ -41,14 +41,13 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
-import { InsertChunked } from './insert-chunked';
 import { InsertReportingKeys } from './insert-reporting-keys';
+import { addInsertRows, type KeySource } from './model-statements';
 import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
   type BeforeWrite,
-  type KeySource,
   type Translation,
 } from './nested-mutations';
 import { UnionAll } from './union-all';
@@ -252,15 +251,11 @@ export function createAllGraph(
     );
     return graph;
   }
-  const inserted = supportsDefaultInInsert(contract)
-    ? graph.add(new Insert(insertAst(contract, root, rows, conflict)))
-    : graph.add(
-        new InsertChunked(
-          groupRowsByColumnSignature(rows).map((group) =>
-            insertAst(contract, root, group, conflict),
-          ),
-        ),
-      );
+  const inserted = addInsertRows(graph, contract, root, rows, {
+    conflict,
+    keys: [],
+    junction: undefined,
+  });
   graph.setResult(addWithIncludes(graph, collection, inserted));
   return graph;
 }

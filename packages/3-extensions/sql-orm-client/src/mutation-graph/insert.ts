@@ -1,4 +1,4 @@
-import type { InsertAst, ProjectionItem } from '@internal/sql-relational-core/ast';
+import type { InsertAst, ParamRef, ProjectionItem } from '@internal/sql-relational-core/ast';
 import { withColumns } from './filtered-statement';
 import { assertOneValuePerColumn, type JunctionWrite } from './junction-write';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
@@ -9,6 +9,8 @@ import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
 type Payloads = { payload: PayloadData[]; state: StateEdge[]; requires: Requires[] };
+
+type Payload = Readonly<Record<string, ParamRef>>;
 
 export class Insert extends StatementNode<Payloads> {
   readonly slots = { payload: 'list', state: 'list', requires: 'list' } as const;
@@ -42,21 +44,31 @@ export class Insert extends StatementNode<Payloads> {
     if (inputs.payload.some((records) => records.length === 0)) {
       return rowsResult([]);
     }
-    const records = inputs.payload.map(([record]) => record);
-    if (this.junction !== undefined) {
-      assertOneValuePerColumn(
-        records.flatMap((record) =>
-          Object.entries(record ?? {}).map(([column, param]) => [column, param.value] as const),
-        ),
-        this.junction,
-      );
-    }
-    const payload = Object.assign({}, ...records);
-    const rows = this.ast.rows.map((row) => ({ ...row, ...payload }));
-    return executeStatement(this.ast.withRows(rows), run);
+    return executeStatement(withPayload(this.ast, payloadOf(inputs.payload, this.junction)), run);
   }
 
   override withReturning(columns: readonly ProjectionItem[]): Insert {
     return new Insert(this.ast.withReturning(withColumns(this.returns, columns)), this.junction);
   }
+}
+
+/** The values the `PayloadData` edges give every row, each edge's first record. */
+export function payloadOf(
+  payload: readonly (readonly Payload[])[],
+  junction: JunctionWrite | undefined,
+): Payload {
+  const records = payload.map(([record]) => record ?? {});
+  if (junction !== undefined) {
+    assertOneValuePerColumn(
+      records.flatMap((record) =>
+        Object.entries(record).map(([column, param]) => [column, param.value] as const),
+      ),
+      junction,
+    );
+  }
+  return Object.assign({}, ...records);
+}
+
+export function withPayload(ast: InsertAst, payload: Payload): InsertAst {
+  return ast.withRows(ast.rows.map((row) => ({ ...row, ...payload })));
 }

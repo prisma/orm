@@ -2,13 +2,11 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { castAs } from '@internal/utils/casts';
-import { supportsDefaultInInsert } from '../collection-contract';
 import { mapModelDataToStorageRow } from '../collection-runtime';
 import { type CollectionTables, createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
 import {
   deleteAst,
-  groupRowsByColumnSignature,
   type InsertConflictSkip,
   insertAst,
   projectTableColumn,
@@ -38,8 +36,8 @@ import type { ColumnPair, NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
-import { Insert } from './insert';
 import { InsertReportingKeys } from './insert-reporting-keys';
+import { addInsertRows, type KeySource } from './model-statements';
 import type { Requires } from './requires';
 import { Update } from './update';
 
@@ -51,11 +49,6 @@ export interface Translation {
   readonly context: ExecutionContext;
   readonly gate: NodeId | undefined;
   readonly readsBack: boolean;
-}
-
-export interface KeySource {
-  readonly from: NodeId;
-  readonly columns: readonly ColumnPair[];
 }
 
 export interface Model {
@@ -102,7 +95,11 @@ function addParentInsert(
   keys: readonly KeySource[],
   gated: boolean,
 ): NodeId {
-  const insert = addInsertOf(t, model, [row], keys);
+  const insert = addInsertRows(t.graph, t.context.contract, model.tables.root, [row], {
+    conflict: undefined,
+    keys,
+    junction: undefined,
+  });
   if (gated) {
     requireGate(t, insert);
   }
@@ -337,14 +334,14 @@ function addJunctionOwned(
   );
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
     const values = withCreateDefaults(context, through.namespaceId, through.table, {});
-    const link = graph.add(
-      new Insert(insertAst(contract, junction.root, [values], conflict), {
-        relation: relation.relationName,
-        junction: through.table,
-      }),
-    );
-    graph.addPayloadDataEdge(parent, link, fromParent);
-    graph.addPayloadDataEdge(target, link, fromTarget);
+    addInsertRows(graph, contract, junction.root, [values], {
+      conflict,
+      keys: [
+        { from: parent, columns: fromParent },
+        { from: target, columns: fromTarget },
+      ],
+      junction: { relation: relation.relationName, junction: through.table },
+    });
   };
 
   if (mutation.kind === 'create') {
@@ -395,27 +392,11 @@ function addChildInserts(
       writtenKeysOf(t, model, row, keys);
     }
   }
-  const groups = supportsDefaultInInsert(t.context.contract)
-    ? [values]
-    : groupRowsByColumnSignature(values);
-  for (const group of groups) {
-    addInsertOf(t, model, group, keys);
-  }
-}
-
-function addInsertOf(
-  t: Translation,
-  model: Model,
-  values: readonly Record<string, unknown>[],
-  keys: readonly KeySource[],
-) {
-  const insert = t.graph.add(
-    new Insert(insertAst(t.context.contract, model.tables.root, values, undefined)),
-  );
-  for (const { from, columns } of keys) {
-    t.graph.addPayloadDataEdge(from, insert, columns);
-  }
-  return insert;
+  addInsertRows(t.graph, t.context.contract, model.tables.root, values, {
+    conflict: undefined,
+    keys,
+    junction: undefined,
+  });
 }
 
 function storageRowOf(
