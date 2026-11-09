@@ -239,45 +239,15 @@ function collectParamRefsWith<TNode extends Expression>(node: TNode): AnyParamRe
   });
 }
 
-function collectTableSourcesWith<TNode extends Expression>(node: TNode): TableSource[] {
-  return node.fold<TableSource[]>({
-    empty: [],
-    combine: (a, b) => [...a, ...b],
-    select: (ast) => ast.collectTableSources(),
+export function collectTableSources(ast: AnyQueryAst): readonly TableSource[] {
+  const sources: TableSource[] = [];
+  ast.rewrite({
+    tableSource: (source) => {
+      sources.push(source);
+      return source;
+    },
   });
-}
-
-function tableSourcesOfFrom(source: AnyFromSource): TableSource[] {
-  switch (source.kind) {
-    case 'table-source':
-      return [source];
-    case 'derived-table-source':
-      return source.query.collectTableSources();
-    case 'function-source':
-      return source.args.flatMap((arg) => arg.collectTableSources());
-  }
-}
-
-function tableSourcesOfReturning(
-  returning: ReadonlyArray<ProjectionItem> | undefined,
-): TableSource[] {
-  return (returning ?? []).flatMap((item) => item.expr.collectTableSources());
-}
-
-export interface TableCoordinate {
-  readonly namespaceId: string | undefined;
-  readonly name: string;
-}
-
-export function collectTables(ast: AnyQueryAst): readonly TableCoordinate[] {
-  const tables = new Map<string, TableCoordinate>();
-  for (const { namespaceId, name } of ast.collectTableSources()) {
-    const key = JSON.stringify([namespaceId, name]);
-    if (!tables.has(key)) {
-      tables.set(key, Object.freeze({ namespaceId, name }));
-    }
-  }
-  return [...tables.values()];
+  return sources;
 }
 
 function rewriteTableSource(table: TableSource, rewriter: AstRewriter): TableSource {
@@ -382,7 +352,6 @@ abstract class AstNode {
 
 abstract class QueryAst extends AstNode {
   abstract collectParamRefs(): AnyParamRef[];
-  abstract collectTableSources(): TableSource[];
   abstract toQueryAst(): AnyQueryAst;
 }
 
@@ -402,10 +371,6 @@ abstract class Expression extends AstNode implements ExpressionSource {
 
   collectParamRefs(): AnyParamRef[] {
     return collectParamRefsWith(this);
-  }
-
-  collectTableSources(): TableSource[] {
-    return collectTableSourcesWith(this);
   }
 
   baseColumnRef(): ColumnRef {
@@ -1941,24 +1906,6 @@ export class SelectAst extends QueryAst {
     return refs;
   }
 
-  collectTableSources(): TableSource[] {
-    return [
-      ...(this.from === undefined ? [] : tableSourcesOfFrom(this.from)),
-      ...this.projection.flatMap((projection) => projection.expr.collectTableSources()),
-      ...(this.where?.collectTableSources() ?? []),
-      ...(this.having?.collectTableSources() ?? []),
-      ...(this.orderBy ?? []).flatMap((orderItem) => orderItem.expr.collectTableSources()),
-      ...(this.distinctOn ?? []).flatMap((expr) => expr.collectTableSources()),
-      ...(this.groupBy ?? []).flatMap((expr) => expr.collectTableSources()),
-      ...(this.joins ?? []).flatMap((join) => [
-        ...tableSourcesOfFrom(join.source),
-        ...(join.on.kind === 'eq-col-join-on' ? [] : join.on.collectTableSources()),
-      ]),
-      ...(typeof this.limit === 'object' ? this.limit.collectTableSources() : []),
-      ...(typeof this.offset === 'object' ? this.offset.collectTableSources() : []),
-    ];
-  }
-
   collectParamRefs(): AnyParamRef[] {
     const refs: AnyParamRef[] = [];
     const pushRefs = (params: ReadonlyArray<AnyParamRef>) => {
@@ -2148,21 +2095,6 @@ export class InsertAst extends QueryAst {
     );
   }
 
-  override collectTableSources(): TableSource[] {
-    const conflictSet =
-      this.onConflict?.action.kind === 'do-update-set' ? this.onConflict.action.set : {};
-    return [
-      this.table,
-      ...this.rows.flatMap((row) =>
-        Object.values(row).flatMap((value) =>
-          value.kind === 'raw-expr' ? value.collectTableSources() : [],
-        ),
-      ),
-      ...Object.values(conflictSet).flatMap((value) => value.collectTableSources()),
-      ...tableSourcesOfReturning(this.returning),
-    ];
-  }
-
   override collectParamRefs(): AnyParamRef[] {
     const refs: AnyParamRef[] = [];
     for (const row of this.rows) {
@@ -2238,15 +2170,6 @@ export class UpdateAst extends QueryAst {
     );
   }
 
-  override collectTableSources(): TableSource[] {
-    return [
-      this.table,
-      ...Object.values(this.set).flatMap((value) => value.collectTableSources()),
-      ...(this.where?.collectTableSources() ?? []),
-      ...tableSourcesOfReturning(this.returning),
-    ];
-  }
-
   override collectParamRefs(): AnyParamRef[] {
     const refs: AnyParamRef[] = [];
     for (const value of Object.values(this.set)) {
@@ -2304,14 +2227,6 @@ export class DeleteAst extends QueryAst {
       this.where?.rewrite(rewriter),
       this.returning?.map((item) => rewriteProjectionItem(item, rewriter)),
     );
-  }
-
-  override collectTableSources(): TableSource[] {
-    return [
-      this.table,
-      ...(this.where?.collectTableSources() ?? []),
-      ...tableSourcesOfReturning(this.returning),
-    ];
   }
 
   override collectParamRefs(): AnyParamRef[] {
@@ -2423,12 +2338,6 @@ export class RawQueryAst extends QueryAst {
       ),
       result: this.result,
     });
-  }
-
-  override collectTableSources(): TableSource[] {
-    return this.parts.flatMap((part) =>
-      typeof part === 'string' ? [] : part.collectTableSources(),
-    );
   }
 
   override collectParamRefs(): AnyParamRef[] {

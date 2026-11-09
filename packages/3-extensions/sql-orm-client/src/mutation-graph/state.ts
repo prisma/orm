@@ -1,12 +1,12 @@
-import type { TableCoordinate } from '@internal/sql-relational-core/ast';
+import type { TableStorageCoordinate } from '../table-scope';
 import { Edge, type NodeId } from './edge';
 import { type Executed, Node, type OutputsOf, type Run } from './node';
 import { rowsResult } from './run-statement';
 
 export class StateEdge extends Edge<undefined> {
-  readonly table: TableCoordinate;
+  readonly table: TableStorageCoordinate;
 
-  constructor(from: NodeId, table: TableCoordinate) {
+  constructor(from: NodeId, table: TableStorageCoordinate) {
     super(from);
     this.table = table;
     Object.freeze(this);
@@ -23,9 +23,9 @@ type Inputs = { write: StateEdge[] };
 
 export class State extends Node<Inputs> {
   readonly slots = { write: 'list' } as const;
-  readonly table: TableCoordinate;
+  readonly table: TableStorageCoordinate;
 
-  constructor(table: TableCoordinate) {
+  constructor(table: TableStorageCoordinate) {
     super();
     this.table = table;
     Object.freeze(this);

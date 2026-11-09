@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BinaryExpr,
-  collectTables,
+  collectTableSources,
   DeleteAst,
   DerivedTableSource,
   EqColJoinOn,
@@ -29,14 +29,14 @@ function selectFrom(source: TableSource): SelectAst {
   ]);
 }
 
-describe('collectTables', () => {
-  it('gives the table of a FROM by its storage coordinate, not its alias', () => {
-    expect(collectTables(selectFrom(inNamespace('user', 'public', 'u')))).toEqual([
-      { namespaceId: 'public', name: 'user' },
+describe('collectTableSources', () => {
+  it('gives the table source of a FROM', () => {
+    expect(collectTableSources(selectFrom(inNamespace('user', 'public', 'u')))).toEqual([
+      inNamespace('user', 'public', 'u'),
     ]);
   });
 
-  it('gives each table once, in the order it is first named', () => {
+  it('gives every table source in the order it is named, including a repeated table', () => {
     const ast = selectFrom(inNamespace('user', 'public')).withJoins([
       JoinAst.inner(
         inNamespace('post', 'public'),
@@ -48,9 +48,10 @@ describe('collectTables', () => {
       ),
     ]);
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'post' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public'),
+      inNamespace('post', 'public'),
+      inNamespace('user', 'public', 'author'),
     ]);
   });
 
@@ -62,9 +63,9 @@ describe('collectTables', () => {
       ),
     ]);
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'a', name: 'tasks' },
-      { namespaceId: 'b', name: 'tasks' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('tasks', 'a'),
+      inNamespace('tasks', 'b', 'tasks_2'),
     ]);
   });
 
@@ -82,10 +83,10 @@ describe('collectTables', () => {
         ),
       ]);
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'post' },
-      { namespaceId: 'public', name: 'tag' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public'),
+      inNamespace('post', 'public'),
+      inNamespace('tag', 'public'),
     ]);
   });
 
@@ -96,11 +97,11 @@ describe('collectTables', () => {
       .withProjection([ProjectionItem.of('posts', SubqueryExpr.of(nested))])
       .withWhere(ExistsExpr.exists(selectFrom(inNamespace('comment', 'public'))));
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'post' },
-      { namespaceId: 'public', name: 'tag' },
-      { namespaceId: 'public', name: 'comment' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public'),
+      inNamespace('post', 'public'),
+      inNamespace('tag', 'public'),
+      inNamespace('comment', 'public'),
     ]);
   });
 
@@ -116,10 +117,10 @@ describe('collectTables', () => {
         ProjectionItem.of('posts', SubqueryExpr.of(selectFrom(inNamespace('post', 'public')))),
       ]);
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'profile' },
-      { namespaceId: 'public', name: 'post' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public'),
+      inNamespace('profile', 'public'),
+      inNamespace('post', 'public'),
     ]);
   });
 
@@ -128,10 +129,10 @@ describe('collectTables', () => {
       .withSet({ name: SubqueryExpr.of(selectFrom(inNamespace('profile', 'public'))) })
       .withWhere(ExistsExpr.exists(selectFrom(inNamespace('post', 'public'))));
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'profile' },
-      { namespaceId: 'public', name: 'post' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public', 'u'),
+      inNamespace('profile', 'public'),
+      inNamespace('post', 'public'),
     ]);
   });
 
@@ -140,9 +141,9 @@ describe('collectTables', () => {
       ExistsExpr.exists(selectFrom(inNamespace('post', 'public'))),
     );
 
-    expect(collectTables(ast)).toEqual([
-      { namespaceId: 'public', name: 'user' },
-      { namespaceId: 'public', name: 'post' },
+    expect(collectTableSources(ast)).toEqual([
+      inNamespace('user', 'public'),
+      inNamespace('post', 'public'),
     ]);
   });
 
@@ -152,6 +153,6 @@ describe('collectTables', () => {
       SubqueryExpr.of(selectFrom(inNamespace('user', 'public'))),
     ]);
 
-    expect(collectTables(ast)).toEqual([{ namespaceId: 'public', name: 'user' }]);
+    expect(collectTableSources(ast)).toEqual([inNamespace('user', 'public')]);
   });
 });

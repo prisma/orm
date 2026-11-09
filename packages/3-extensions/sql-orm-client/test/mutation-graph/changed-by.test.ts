@@ -3,8 +3,8 @@ import { changedBy } from '../../src/mutation-graph/changed-by';
 import { cascadeContract as contract } from './cascade-contract';
 
 function names(write: 'insert' | 'update' | 'delete', table: string): string[] {
-  return changedBy(contract, write, { namespaceId: 'public', name: table }).map(
-    (changed) => `${changed.namespaceId}.${changed.name}`,
+  return changedBy(contract, write, { namespaceId: 'public', tableName: table }).map(
+    (changed) => `${changed.namespaceId}.${changed.tableName}`,
   );
 }
 

@@ -124,7 +124,7 @@ function printNode(node: Node): string {
     return `InsertChunked ${node.asts[0]?.table.name} (${count} ${count === 1 ? 'statement' : 'statements'})`;
   }
   if (node instanceof State) {
-    return `State ${node.table.name}`;
+    return `State ${node.table.tableName}`;
   }
   return node instanceof Delete ? printDelete(node.ast) : node.constructor.name;
 }

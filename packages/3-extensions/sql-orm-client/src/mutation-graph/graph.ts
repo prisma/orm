@@ -1,12 +1,12 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
-  collectTables,
+  collectTableSources,
   type ProjectionItem,
-  type TableCoordinate,
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
 import type { ColumnPair, Edge, NodeId, StorageRow } from './edge';
 import { FilterData } from './filter-data';
@@ -96,7 +96,7 @@ export class Graph {
     this.#connect(to, 'requires', new Requires(from));
   }
 
-  sameState(a: NodeId, b: NodeId, table: TableCoordinate): boolean {
+  sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
     const stateA = this.#stateEdgeOf(a, table);
     return stateA !== undefined && stateA.from === this.#stateEdgeOf(b, table)?.from;
   }
@@ -177,7 +177,7 @@ export class Graph {
     }
   }
 
-  #stateOf(table: TableCoordinate): NodeId {
+  #stateOf(table: TableStorageCoordinate): NodeId {
     const current = this.#states.get(tableKey(table));
     if (current !== undefined) {
       return current;
@@ -187,23 +187,22 @@ export class Graph {
     return initial;
   }
 
-  #stateEdgeOf(id: NodeId, table: TableCoordinate): StateEdge | undefined {
-    const key = tableKey(table);
+  #stateEdgeOf(id: NodeId, table: TableStorageCoordinate): StateEdge | undefined {
     return edgesIn(this.inputsOf(id)).find(
-      (edge): edge is StateEdge => edge instanceof StateEdge && tableKey(edge.table) === key,
+      (edge): edge is StateEdge =>
+        edge instanceof StateEdge &&
+        edge.table.namespaceId === table.namespaceId &&
+        edge.table.tableName === table.tableName,
     );
   }
 
-  #tablesWrittenBy(statements: readonly StatementAst[]): readonly TableCoordinate[] {
+  #tablesWrittenBy(statements: readonly StatementAst[]): readonly TableStorageCoordinate[] {
     return uniqueTables(
       statements.flatMap((ast) => {
         const write = writeOf(ast);
         return write === undefined
           ? []
-          : changedBy(this.#contract, write.kind, {
-              namespaceId: write.target.namespaceId,
-              name: write.target.name,
-            });
+          : changedBy(this.#contract, write.kind, storageOf(write.target));
       }),
     );
   }
@@ -213,11 +212,23 @@ function edgesIn(slots: Slots): readonly Edge<unknown>[] {
   return Object.values(slots).flat();
 }
 
-function tablesReadBy(statements: readonly StatementAst[]): readonly TableCoordinate[] {
-  return uniqueTables(statements.flatMap((ast) => collectTables(ast)));
+function tablesReadBy(statements: readonly StatementAst[]): readonly TableStorageCoordinate[] {
+  return uniqueTables(statements.flatMap((ast) => collectTableSources(ast).map(storageOf)));
 }
 
-function uniqueTables(tables: readonly TableCoordinate[]): readonly TableCoordinate[] {
+function storageOf(source: TableSource): TableStorageCoordinate {
+  return {
+    namespaceId: blindCast<
+      string,
+      'The ORM builds every table source with tableSourceForContract, which sets the namespace'
+    >(source.namespaceId),
+    tableName: source.name,
+  };
+}
+
+function uniqueTables(
+  tables: readonly TableStorageCoordinate[],
+): readonly TableStorageCoordinate[] {
   return [...new Map(tables.map((table) => [tableKey(table), table])).values()];
 }
 

@@ -24,7 +24,7 @@ import {
 const sameId = columnPairs('users', 'users', [['id', 'id']]);
 const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
 const emailToTitle = columnPairs('users', 'posts', [['email', 'title']]);
-const posts = { namespaceId: 'public', name: 'posts' };
+const posts = { namespaceId: 'public', tableName: 'posts' };
 
 function returned(graph: Graph, id: NodeId): string[] {
   return graph

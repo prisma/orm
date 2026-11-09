@@ -26,8 +26,8 @@ import {
   updateUsers,
 } from './statements';
 
-const users = { namespaceId: 'public', name: 'users' };
-const posts = { namespaceId: 'public', name: 'posts' };
+const users = { namespaceId: 'public', tableName: 'users' };
+const posts = { namespaceId: 'public', tableName: 'posts' };
 const sameId = columnPairs('users', 'users', [['id', 'id']]);
 const withState = { state: true };
 
