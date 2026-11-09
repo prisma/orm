@@ -1,13 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { supportsDefaultInInsert } from '../collection-contract';
+import type { SelectAst } from '@internal/sql-relational-core/ast';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { resolveRowIdentityColumns, supportsDefaultInInsert } from '../collection-contract';
 import type { CollectionTables } from '../collection-tables';
 import {
   groupRowsByColumnSignature,
   type InsertConflictSkip,
   insertAst,
 } from '../mutation-statements';
+import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import type { AliasedTable } from '../table-scope';
+import type { CollectionState } from '../types';
 import type { ColumnPair, NodeId } from './edge';
 import type { Graph } from './graph';
 import { Insert } from './insert';
@@ -53,4 +57,28 @@ export function addInsertRows(
     graph.addPayloadDataEdge(from, inserted, columns);
   }
   return inserted;
+}
+
+export type SelectedColumns = 'identity' | 'selection';
+
+export function selectAstOf(
+  context: ExecutionContext,
+  model: Model,
+  state: CollectionState,
+  columns: SelectedColumns,
+): SelectAst {
+  const { contract } = context;
+  const { modelName, tables } = model;
+  if (columns === 'identity') {
+    const { namespaceId, tableName } = tables.root.storage;
+    return collectionSelectAst(contract, modelName, {
+      ...state,
+      includes: [],
+      selectedFields: resolveRowIdentityColumns(contract, namespaceId, tableName),
+    });
+  }
+  if (state.includes.length === 0) {
+    return collectionSelectAst(contract, modelName, state);
+  }
+  return collectionSelectWithIncludesAst(contract, context.aggregateDescriptors, modelName, state);
 }

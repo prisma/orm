@@ -28,7 +28,6 @@ import {
   upsertAst,
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
-import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import { variantReturning } from '../query-plan-source';
 import type { ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
@@ -42,7 +41,7 @@ import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertReportingKeys } from './insert-reporting-keys';
-import { addInsertRows, type KeySource } from './model-statements';
+import { addInsertRows, type KeySource, selectAstOf } from './model-statements';
 import {
   addAfterWrite,
   addBeforeWrite,
@@ -559,27 +558,14 @@ function selectIdentityAst(
   collection: DescribeCollectionRowsOptions,
   state: CollectionState,
 ): SelectAst {
-  return collectionSelectAst(collection.context.contract, collection.modelName, {
-    ...state,
-    includes: [],
-    selectedFields: identityColumnsOf(collection),
-  });
+  return selectAstOf(collection.context, modelOf(collection), state, 'identity');
 }
 
 function selectRowsAst(
   collection: DescribeCollectionRowsOptions,
   state: CollectionState,
 ): SelectAst {
-  const { context, modelName } = collection;
-  if (state.includes.length === 0) {
-    return collectionSelectAst(context.contract, modelName, state);
-  }
-  return collectionSelectWithIncludesAst(
-    context.contract,
-    context.aggregateDescriptors,
-    modelName,
-    state,
-  );
+  return selectAstOf(collection.context, modelOf(collection), state, 'selection');
 }
 
 function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly string[] {

@@ -36,7 +36,7 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { InsertReportingKeys } from './insert-reporting-keys';
-import { addInsertRows, type KeySource, type Model } from './model-statements';
+import { addInsertRows, type KeySource, type Model, selectAstOf } from './model-statements';
 import type { Requires } from './requires';
 import { createRowOf, withCreateDefaults } from './storage-rows';
 import { Update } from './update';
@@ -412,11 +412,12 @@ function addFindAndAssert(
   }
   const find = graph.add(
     new Find(
-      collectionSelectAst(context.contract, related.modelName, {
-        ...emptyState(related.tables),
-        filters: [where],
-        limit: 1,
-      }),
+      selectAstOf(
+        context,
+        related,
+        { ...emptyState(related.tables), filters: [where], limit: 1 },
+        'selection',
+      ),
     ),
   );
   requireGate(t, find);
