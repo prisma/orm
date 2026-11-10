@@ -116,10 +116,10 @@ export function singleLineDeclarations(text: string): string {
       `Cannot join declarations onto one line: the header line "${closingHeaderLine}" contains "*/"`,
     );
   }
-  const lineComment = codeLines.find((line) => line.startsWith('//'));
+  const lineComment = codeLines.find((line) => outsideStringLiterals(line).includes('//'));
   if (lineComment !== undefined) {
     throw new InternalError(
-      `Cannot join declarations onto one line: the line comment "${lineComment}" after the header would hide the code after it`,
+      `Cannot join declarations onto one line: the line comment in "${lineComment}" after the header would hide the code after it`,
     );
   }
 
@@ -128,6 +128,10 @@ export function singleLineDeclarations(text: string): string {
     .filter((line) => line !== '');
   const parts = header.length > 0 ? [`/* ${header.join(' ')} */`, ...codeLines] : codeLines;
   return `${parts.join(' ')}\n`;
+}
+
+function outsideStringLiterals(line: string): string {
+  return line.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, '');
 }
 
 /** The bytes the store writes for `input`: `contract.json` and `contract.d.ts`. */

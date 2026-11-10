@@ -144,6 +144,23 @@ describe('singleLineDeclarations', () => {
     );
   });
 
+  it('refuses a line comment after code on the same line', () => {
+    expect(() =>
+      singleLineDeclarations('export type A = 1; // note\nexport type B = 2;\n'),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'InternalError',
+        message: expect.stringContaining('// note'),
+      }),
+    );
+  });
+
+  it('keeps a double slash inside a string literal', () => {
+    expect(
+      singleLineDeclarations('export type A = \'https://example.com\';\nexport type B = "a//b";\n'),
+    ).toBe('export type A = \'https://example.com\'; export type B = "a//b";\n');
+  });
+
   it('refuses a triple-slash directive after the header', () => {
     expect(() =>
       singleLineDeclarations('export type A = 1;\n/// <reference types="node" />\n'),
