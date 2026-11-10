@@ -1,0 +1,29 @@
+{
+  "name": "prisma",
+  "description": "Prisma 8 agent skill",
+  "author": {
+    "name": "Prisma",
+    "url": "https://github.com/prisma"
+  },
+  "homepage": "https://www.prisma.io",
+  "repository": "https://github.com/prisma/orm",
+  "license": "Apache-2.0",
+  "keywords": [
+    "prisma",
+    "orm",
+    "database",
+    "typescript",
+    "migrations"
+  ],
+  "skills": [
+    "./prisma-8"
+  ],
+  "interface": {
+    "displayName": "Prisma",
+    "shortDescription": "Prisma 8 agent skill",
+    "longDescription": "Agent skill for Prisma 8, installed from the skill already in this repository. Complements prisma skills sync from the installed packages.",
+    "developerName": "Prisma",
+    "category": "Developer Tools",
+    "websiteURL": "https://www.prisma.io"
+  }
+}

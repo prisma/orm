@@ -1,0 +1,34 @@
+{
+  "name": "prisma",
+  "owner": {
+    "name": "Prisma"
+  },
+  "description": "Prisma 8 agent skill",
+  "plugins": [
+    {
+      "name": "prisma",
+      "displayName": "Prisma",
+      "description": "Prisma 8 agent skill for Claude Code",
+      "source": "./skills",
+      "strict": false,
+      "author": {
+        "name": "Prisma",
+        "url": "https://github.com/prisma"
+      },
+      "homepage": "https://www.prisma.io",
+      "repository": "https://github.com/prisma/orm",
+      "license": "Apache-2.0",
+      "keywords": [
+        "prisma",
+        "orm",
+        "database",
+        "typescript",
+        "migrations"
+      ],
+      "category": "development",
+      "skills": [
+        "./prisma-8"
+      ]
+    }
+  ]
+}
