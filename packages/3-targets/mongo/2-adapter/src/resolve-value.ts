@@ -6,7 +6,11 @@ import {
 } from '@internal/framework-components/runtime';
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { Document, MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import {
+  isMongoPreparedParamRef,
+  MongoParamRef,
+  type MongoPreparedParamRef,
+} from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
@@ -30,6 +34,8 @@ function isWireScalar(value: object): boolean {
  * driver-ready wire shape. When a leaf has a `codecId` and the registry has a
  * codec for it, the codec's async `encode` is awaited so codecs may perform
  * asynchronous work (e.g. lookups, key derivations).
+ *
+ * A `MongoParamRef` holding `null` and marked `nullable` resolves to `null` without its codec. A `MongoPreparedParamRef` throws `RUNTIME.PREPARE_BIND_ON_ADHOC`: the plan was built inside `prepare(...)` and run without it.
  *
  * Object/array nodes dispatch their child resolutions concurrently via
  * `Promise.all` so independent leaves encode in parallel.
@@ -67,7 +73,13 @@ export async function resolveValue(
   checkAborted(ctx, 'encode');
   const signal = ctx.signal;
 
+  if (isMongoPreparedParamRef(value)) {
+    throw bindOnAdhocError(value);
+  }
   if (value instanceof MongoParamRef) {
+    if (value.value === null && value.nullable === true) {
+      return null;
+    }
     if (value.codecId) {
       const codec = codecs.get(value.codecId);
       if (codec?.toWire) {
@@ -118,7 +130,7 @@ async function resolveDraftSlot(
   codecs: MongoCodecRegistry,
   ctx: CodecCallContext,
 ): Promise<unknown> {
-  if (value instanceof MongoParamRef) {
+  if (value instanceof MongoParamRef || isMongoPreparedParamRef(value)) {
     return resolveValue(value, codecs, ctx);
   }
   if (value === null || typeof value !== 'object' || isWireScalar(value)) return value;
@@ -160,6 +172,14 @@ export async function resolveDraftDoc(
     }
   }
   return result;
+}
+
+function bindOnAdhocError(placeholder: MongoPreparedParamRef): Error {
+  return runtimeError(
+    'RUNTIME.PREPARE_BIND_ON_ADHOC',
+    `The plan has a placeholder for '${placeholder.name}'. A plan built inside prepare(...) runs only as a prepared statement.`,
+    { name: placeholder.name },
+  );
 }
 
 function paramRefLabel(ref: MongoParamRef, codecId: string): string {

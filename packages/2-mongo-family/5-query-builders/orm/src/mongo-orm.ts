@@ -4,11 +4,13 @@ import type {
   MongoContractWithTypeMaps,
   RootModelName,
 } from '@internal/mongo-contract';
-import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoExecutionContext,
+  MongoQueryExecutor,
+} from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import type { MongoCollection } from './collection';
 import { buildEnumAccessors, MongoCollectionImpl } from './collection';
-import type { MongoQueryExecutor } from './executor';
 
 export interface MongoOrmOptions<TContract extends MongoContract> {
   /** The validated contract, its codecs, and the execution defaults filled on writes. */
