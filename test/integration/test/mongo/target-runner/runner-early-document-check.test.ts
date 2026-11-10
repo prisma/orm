@@ -374,10 +374,10 @@ describe('MongoMigrationRunner, early checks for validator changes alone', () =>
     async () => {
       await live.createClosed('accounts', ['email'], [], [{ email: 'a@example.com' }]);
       await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
-      const accountsValidator = async () =>
-        (await live.db().listCollections({ name: 'accounts' }).toArray())[0]?.['options']?.[
-          'validator'
-        ];
+      const accountsValidator = async () => {
+        const [info] = await live.db().listCollections({ name: 'accounts' }).toArray();
+        return info !== undefined && 'options' in info ? info.options?.['validator'] : undefined;
+      };
       const before = await accountsValidator();
       const nonEmptyEmail = () => {
         const schema = closedSchema(['email']);
