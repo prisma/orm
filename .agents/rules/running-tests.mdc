@@ -22,9 +22,9 @@ Each `:agent` run has a hard timeout (default 5 minutes; `AGENT_CMD_TIMEOUT_SECO
 
 | Command | Purpose |
 |---|---|
-| `pnpm test:packages:agent` | Unit tests for every package (CI runs it; locally only when the operator asks) |
-| `pnpm test:integration:agent` | Integration suite (PGlite + mongodb-memory-server) (CI runs it; locally only when the operator asks) |
-| `pnpm test:e2e:agent` | End-to-end suite (CI runs it; locally only when the operator asks) |
+| `pnpm test:packages:agent` | Unit tests for every package (CI only) |
+| `pnpm test:integration:agent` | Integration suite (PGlite + mongodb-memory-server) (CI only) |
+| `pnpm test:e2e:agent` | End-to-end suite (CI only) |
 | `pnpm build:agent` | Build every package (turbo) |
 | `pnpm typecheck:agent` | Typecheck every package (turbo, cached) |
 | `pnpm lint:agent` | Biome lint |

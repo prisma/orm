@@ -45,7 +45,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - **Never change the framework domain** (`packages/1-framework`). If a design needs to, stop and tell the operator: `.agents/rules/never-change-the-framework-domain.mdc`.
 - **Node.js version**: Use the shell's Node — do not run `nvm`/`fnm` or any version switcher. Source of truth is the root `package.json` `engines.node`. If the shell's `node -v` doesn't satisfy that, report that the shell is misconfigured (e.g. user should set their default Node in their version manager, or use Volta) — don't try to switch it yourself.
 - Use `pnpm`, not `npm`. Never use `npx`.
-- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run `pnpm build` at the root to refresh `dist/*.d.mts` before validating downstream TypeScript. Build the whole repo, not single packages: a partial build leaves other packages' `dist` stale and causes confusing errors.
+- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript. Never build single packages: a partial build leaves stale `dist`.
 - For typecheck/test, use the local `pnpm typecheck` / `pnpm test` scripts rather than writing `tsc`/`vitest` invocations from scratch.
 - Use arktype, not zod.
 - Never add file extensions to imports in TypeScript.
@@ -71,7 +71,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ```bash
 pnpm build                 # Build via Turbo
-# Full suites must pass, but CI runs them: the machine is shared. Locally, run your packages' tests (.agents/rules/running-tests.mdc)
+# Full suites: CI runs them; locally, run your packages' tests (.agents/rules/running-tests.mdc)
 pnpm test:packages         # Package tests
 pnpm test:integration      # Integration tests (PGlite + mongodb-memory-server, no external DB)
 pnpm test:e2e              # E2E tests (also self-contained)
