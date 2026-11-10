@@ -137,9 +137,9 @@ changes:
         - 'DRIVER\.ALREADY_CONNECTED'
         - '(?:Postgres|SQLite|MySQL|Mongo) client already connected'
         - 'Call connect\(\) at most once per client'
-  - id: free-create-extension
+  - id: create-extension-takes-options
     summary: |
-      The free function `createExtension` from `@internal/target-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class: `this.createExtension({ extension: 'btree_gist' })`, and drop `createExtension` from the import. Run `node migration.ts` again only for a migration no database has applied.
+      The free function `createExtension` from `@internal/target-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class: `this.createExtension({ extension: 'btree_gist' })`, and drop `createExtension` from the import. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
     detection:
       glob: "**/migration.{ts,mts}"
       matches:
@@ -461,4 +461,4 @@ override get operations() {
 }
 ```
 
-Without `schema`, the method creates the extension where the old function did: in the connection's current schema, unless the extension's control file names one. For a migration no database has applied yet, run `node migration.ts` to write its `ops.json` again. Leave the `ops.json` of an applied migration alone: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.
+Without `schema`, the method creates the extension where the old function did: in the connection's current schema, unless the extension's control file names one. The migration's `ops.json` does not change, and there is no need to run `node migration.ts` again: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.

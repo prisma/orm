@@ -19,10 +19,9 @@ export {
   primaryKey,
   unique,
 } from '@internal/sql-relational-core/contract-free';
-export {
-  type DataTransformClosure,
-  type DataTransformOptions,
-  dataTransform,
+export type {
+  DataTransformClosure,
+  DataTransformOptions,
 } from '../core/migrations/operations/data-transform';
 export { rawSql } from '../core/migrations/operations/raw';
 // Target-owned base class for migrations. Aliased to `Migration` so

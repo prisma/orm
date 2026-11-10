@@ -149,6 +149,13 @@ changes:
         - 'DRIVER\.ALREADY_CONNECTED'
         - '(?:Postgres|SQLite|MySQL|Mongo) client already connected'
         - 'Call connect\(\) at most once per client'
+  - id: create-extension-takes-options
+    summary: |
+      The free function `createExtension` from `@prisma/orm-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class: `this.createExtension({ extension: 'btree_gist' })`, and drop `createExtension` from the import. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
+    detection:
+      glob: "**/migration.{ts,mts}"
+      matches:
+        - '(?<![\w$.])createExtension\s*\('
   - id: contract-artifacts-restamp
     summary: |
       An extension that writes its own package version into the contracts it emits, such as the Supabase extension, now writes 8.0.0-rc.22. Run `contract emit` once after upgrading so the emitted `contract.json` and `contract.d.ts` match the installed extension.
@@ -156,13 +163,6 @@ changes:
       glob: "**/contract.json"
       contains:
         - '"version": "8.0.0-rc.21"'
-  - id: free-create-extension
-    summary: |
-      The free function `createExtension` from `@prisma/orm-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class: `this.createExtension({ extension: 'btree_gist' })`, and drop `createExtension` from the import. Run `node migration.ts` again only for a migration no database has applied.
-    detection:
-      glob: "**/migration.{ts,mts}"
-      matches:
-        - '(?<![\w$.])createExtension\s*\('
 ---
 
 # 8.0.0-rc.21 → 8.0.0-rc.22 — User upgrade instructions
@@ -177,7 +177,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 4. Change MongoDB application code: create the driver from its descriptor (`mongo-driver-from-runtime-descriptor`), and pass an execution context to the query builder, raw lane, ORM and runtime (`mongo-query-takes-context`, `mongo-orm-takes-context`, `mongo-runtime-takes-adapter`).
 5. Run `prisma contract emit` and commit what it writes, including the files under `migrations/` (this also covers `contract-emit-pins-pack-files`, `date-now-takes-column-precision`, `mongo-merged-redundant-indexes` and `contract-artifacts-restamp`).
 6. Bring each database up to date: run `prisma db migrate` for a pgvector, PostGIS or ParadeDB pack (`packs-declare-their-postgres-extension`); run `prisma db sign` for a project that reads a Prisma 7 schema (`prisma7-schema-reads-dates`); on MongoDB, replace a planned migration that creates two indexes now merged (`mongo-merged-redundant-indexes`); on PostgreSQL, plan and apply the value object checks (`postgres-value-object-checks`).
-7. Change the remaining application code: read a Prisma 7 `DateTime` field as a `Date` (`prisma7-schema-reads-dates`), drop handlers for a repeated `connect()` (`client-connect-safe-to-call-again`), update value object and discriminator types (`value-object-types-from-storage`, `discriminator-typed-by-variant-values`), and call `this.createExtension(...)` in a `migration.ts` (`free-create-extension`).
+7. Change the remaining application code: read a Prisma 7 `DateTime` field as a `Date` (`prisma7-schema-reads-dates`), drop handlers for a repeated `connect()` (`client-connect-safe-to-call-again`), update value object and discriminator types (`value-object-types-from-storage`, `discriminator-typed-by-variant-values`), and call `this.createExtension(...)` in a `migration.ts` (`create-extension-takes-options`).
 
 
 ## One version of Prisma ORM
@@ -557,11 +557,6 @@ await expect(db.connect({ url })).rejects.toThrow('Postgres client already conne
 await expect(db.connect({ url })).rejects.toThrow('Postgres client is already bound');
 ```
 
-## `contract-artifacts-restamp`
-
-For every `contract.json` matched by `detection`, run the project's emit command (`prisma contract emit`, or the project's `contract:emit` script) once after upgrading. This entry accounts for the extension's embedded `version` moving to `8.0.0-rc.22`; any other difference in the emitted files comes from an earlier entry in this guide.
-
-
 ## `createExtension` is a method of the migration class
 
 In 8.0.0-rc.22 the free function `createExtension` from `@prisma/orm-postgres/migration` changed to take an options object and an internal argument that only the migration class can supply. A `migration.ts` that still calls it the old way fails when it runs, with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote the old call into every migration that created an extension.
@@ -584,4 +579,9 @@ override get operations() {
 }
 ```
 
-Without `schema`, the method creates the extension where the old function did: in the connection's current schema, unless the extension's control file names one. For a migration no database has applied yet, run `node migration.ts` to write its `ops.json` again. Leave the `ops.json` of an applied migration alone: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.
+Without `schema`, the method creates the extension where the old function did: in the connection's current schema, unless the extension's control file names one. The migration's `ops.json` does not change, and there is no need to run `node migration.ts` again: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.
+
+## `contract-artifacts-restamp`
+
+For every `contract.json` matched by `detection`, run the project's emit command (`prisma contract emit`, or the project's `contract:emit` script) once after upgrading. This entry accounts for the extension's embedded `version` moving to `8.0.0-rc.22`; any other difference in the emitted files comes from an earlier entry in this guide.
+
