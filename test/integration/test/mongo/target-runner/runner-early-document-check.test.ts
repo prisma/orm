@@ -181,25 +181,26 @@ describe('MongoMigrationRunner, a new unique field on a collection with document
   );
 });
 
+function withBorn(fields: readonly string[]) {
+  const schema = closedSchema(fields);
+  return new MongoCollection({
+    validator: {
+      jsonSchema: {
+        ...schema,
+        properties: { ...schema.properties, born: { bsonType: 'date' } },
+      },
+      validationLevel: 'strict',
+      validationAction: 'error',
+    },
+  });
+}
+
 describe('MongoMigrationRunner, early checks on two collections', () => {
   it(
     'stops at the users check before the accounts index drop and fill, so accounts keep their index and still accept updates',
     async () => {
       await live.createClosed('accounts', ['email'], ['email'], [{ email: 'a@example.com' }]);
       await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
-      const withBorn = (fields: readonly string[]) => {
-        const schema = closedSchema(fields);
-        return new MongoCollection({
-          validator: {
-            jsonSchema: {
-              ...schema,
-              properties: { ...schema.properties, born: { bsonType: 'date' } },
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
-          },
-        });
-      };
       const from = contract(
         'from',
         {
@@ -255,6 +256,113 @@ describe('MongoMigrationRunner, early checks on two collections', () => {
         accountIndexes: ['_id_', 'email_1'],
         update: 1,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, an early check before an index drop', () => {
+  const runDropping = async (
+    accounts: { readonly from: MongoCollection; readonly to: MongoCollection } | undefined,
+    users: { readonly from: MongoCollection; readonly to: MongoCollection },
+  ) => {
+    const from = contract(
+      'from',
+      {
+        ...(accounts === undefined
+          ? {}
+          : { Account: { collection: 'accounts', fields: ['_id', 'email', 'code'] } }),
+        User: { collection: 'users', fields: ['_id', 'email'] },
+      },
+      { ...(accounts === undefined ? {} : { accounts: accounts.from }), users: users.from },
+    );
+    const to = contract(
+      'to',
+      {
+        ...(accounts === undefined
+          ? {}
+          : { Account: { collection: 'accounts', fields: ['_id', 'email', 'code'] } }),
+        User: {
+          collection: 'users',
+          fields: ['_id', 'email', 'born'],
+          codecs: { _id: 'mongo/objectId@1', born: 'mongo/date@1' },
+        },
+      },
+      { ...(accounts === undefined ? {} : { accounts: accounts.to }), users: users.to },
+    );
+    const { planned, result } = await live.planAndRun(from, to, [], [mongoTargetDescriptor]);
+    return {
+      operations:
+        planned.kind === 'success'
+          ? planned.plan.operations.map((operation) => Reflect.get(operation, 'id'))
+          : planned,
+      failedAt: result.ok ? result : result.failure.meta['operationId'],
+    };
+  };
+
+  it(
+    'stops before dropping a unique index on another collection, which still refuses a duplicate',
+    async () => {
+      await live.createClosed(
+        'accounts',
+        ['email', 'code'],
+        ['code'],
+        [{ email: 'a@example.com', code: 'A' }],
+      );
+      await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
+
+      const run = await runDropping(
+        {
+          from: closedCollection(['email', 'code'], ['code']),
+          to: closedCollection(['email', 'code']),
+        },
+        { from: closedCollection(['email']), to: withBorn(['email', 'born']) },
+      );
+      const accounts = live.db().collection('accounts');
+
+      expect({
+        ...run,
+        accountIndexes: (await accounts.indexes()).map((index) => index.name),
+      }).toEqual({
+        operations: [
+          'collection.users.checkDocuments',
+          'index.accounts.drop(code_1)',
+          'validator.users.update',
+        ],
+        failedAt: 'collection.users.checkDocuments',
+        accountIndexes: ['_id_', 'code_1'],
+      });
+      await expect(accounts.insertOne({ email: 'b@example.com', code: 'A' })).rejects.toThrow(
+        'duplicate key',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'stops before dropping a unique index on the same collection, which still refuses a duplicate',
+    async () => {
+      await live.createClosed('users', ['email'], ['email'], [{ email: 'u@example.com' }]);
+
+      const run = await runDropping(undefined, {
+        from: closedCollection(['email'], ['email']),
+        to: withBorn(['email', 'born']),
+      });
+      const users = live.db().collection('users');
+
+      expect({
+        ...run,
+        userIndexes: (await users.indexes()).map((index) => index.name),
+      }).toEqual({
+        operations: [
+          'collection.users.checkDocuments',
+          'index.users.drop(email_1)',
+          'validator.users.update',
+        ],
+        failedAt: 'collection.users.checkDocuments',
+        userIndexes: ['_id_', 'email_1'],
+      });
+      await expect(users.insertOne({ email: 'u@example.com' })).rejects.toThrow('duplicate key');
     },
     timeouts.spinUpMongoMemoryServer,
   );

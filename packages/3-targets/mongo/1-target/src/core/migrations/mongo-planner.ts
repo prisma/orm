@@ -489,45 +489,26 @@ function documentChecksOf(
   );
 }
 
-function callCollection(call: OpFactoryCall): string | undefined {
-  return 'collection' in call ? call.collection : undefined;
-}
-
 /**
- * A check for each collection the rewrites and index creates touch that its documents can fit the
- * validator the plan sets on it, once the fields the rewrites change are left out. The checks only
- * read documents, and run after the collection renames and creates but before the index drops,
- * rewrites and index creates of any collection. So a check that fails on one collection stops the
- * apply before it changes any index or document: a rewrite could otherwise leave documents that
- * neither the old validator nor the new one accepts, and a unique index build could fail on
- * documents that lack the field.
+ * A check for each collection whose validator change checks documents, that its documents can fit
+ * the new validator once the fields the plan rewrites in it are left out. The checks only read
+ * documents, and run after the collection renames and creates but before the index drops, rewrites
+ * and index creates of any collection. So a check that fails stops the apply before it changes any
+ * index or document: an index drop or a rewrite would otherwise stay applied while the validator
+ * change fails, and a unique index build could fail on documents that lack the field.
  */
 function documentChecksFor(
-  calls: readonly OpFactoryCall[],
-  documentChecks: ReadonlyMap<string, DocumentCheckFields>,
   validatorOps: readonly OpFactoryCall[],
+  documentChecks: ReadonlyMap<string, DocumentCheckFields>,
 ): readonly OpFactoryCall[] {
-  const collections = [
-    ...new Set(
-      calls.flatMap((call) => {
-        const collection = callCollection(call);
-        return collection === undefined ? [] : [collection];
-      }),
-    ),
-  ];
-  return collections.flatMap((collection): OpFactoryCall[] => {
-    const validatorOp = validatorOps.find(
-      (op): op is CollModCall =>
-        op instanceof CollModCall &&
-        op.collection === collection &&
-        op.meta?.checkDocuments === true,
-    );
-    const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
+  return validatorOps.flatMap((op): OpFactoryCall[] => {
+    if (!(op instanceof CollModCall) || op.meta?.checkDocuments !== true) return [];
+    const validator: unknown = op.options.validator?.['$jsonSchema'];
     if (!isDocument(validator)) return [];
-    const fields = documentChecks.get(collection);
+    const fields = documentChecks.get(op.collection);
     return [
       new CheckDocumentsCall({
-        collection,
+        collection: op.collection,
         validator,
         rewrittenFields: fields?.rewrittenFields ?? [],
         ...(fields === undefined || Object.keys(fields.renamedFields).length === 0
@@ -610,11 +591,9 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const allCalls = [
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
-      ...documentChecksFor(
-        [...rewrites, ...creates],
-        options.statementCalls?.documentChecks ?? new Map(),
-        validatorOps,
-      ),
+      ...(drops.length + rewrites.length + creates.length === 0
+        ? []
+        : documentChecksFor(validatorOps, options.statementCalls?.documentChecks ?? new Map())),
       ...drops,
       ...rewrites,
       ...creates,

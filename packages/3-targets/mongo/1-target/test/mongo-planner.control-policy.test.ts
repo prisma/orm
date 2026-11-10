@@ -132,6 +132,49 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
     ]);
   });
 
+  describe('the early document check', () => {
+    const validatorOnly: MongoCollectionInput = { validator: declared.validator };
+    const codeIndex = new MongoSchemaIndex({
+      name: 'code_1',
+      keys: [{ field: 'code', direction: 1 }],
+      unique: true,
+    });
+    const liveEmailIndex = new MongoSchemaIndex({
+      name: 'email_1',
+      keys: [{ field: 'email', direction: 1 }],
+      unique: true,
+    });
+
+    it('checks a collection whose validator changes before an index drop on another collection', () => {
+      expect(
+        plannedCommands(
+          contractOf({ accounts: {}, users: validatorOnly }),
+          new MongoSchemaIR([liveCollection('accounts', [codeIndex]), liveCollection('users')], {
+            fromDatabase: false,
+          }),
+        ),
+      ).toEqual(['collection.users.checkDocuments', 'dropIndex accounts', 'collMod users']);
+    });
+
+    it('checks a collection before an index drop on the same collection', () => {
+      expect(
+        plannedCommands(
+          contractOf({ users: validatorOnly }),
+          new MongoSchemaIR([liveCollection('users', [liveEmailIndex])], { fromDatabase: false }),
+        ),
+      ).toEqual(['collection.users.checkDocuments', 'dropIndex users', 'collMod users']);
+    });
+
+    it('plans no check when the validator changes are the only operations', () => {
+      expect(
+        plannedCommands(
+          contractOf({ users: validatorOnly }),
+          new MongoSchemaIR([liveCollection('users')], { fromDatabase: false }),
+        ),
+      ).toEqual(['collMod users']);
+    });
+  });
+
   it.each(['external', 'observed'] as const)(
     'changes nothing in an existing %s collection',
     (control) => {
