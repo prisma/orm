@@ -110,6 +110,28 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
     ).toEqual(['collection.users.checkDocuments', 'createIndex users', 'collMod users']);
   });
 
+  it('runs collection creates, then the early checks, then the index drops', () => {
+    const contract = contractOf({ users: declared, posts: declared });
+    const oldIndex = new MongoSchemaIndex({
+      name: 'old_1',
+      keys: [{ field: 'old', direction: 1 }],
+    });
+
+    expect(
+      plannedCommands(
+        contract,
+        new MongoSchemaIR([liveCollection('users', [oldIndex])], { fromDatabase: false }),
+      ),
+    ).toEqual([
+      'createCollection posts',
+      'collection.users.checkDocuments',
+      'dropIndex users',
+      'createIndex posts',
+      'createIndex users',
+      'collMod users',
+    ]);
+  });
+
   it.each(['external', 'observed'] as const)(
     'changes nothing in an existing %s collection',
     (control) => {

@@ -138,8 +138,8 @@ describe('MongoMigrationPlanner, field statements', () => {
       ),
     ).toEqual({
       labels: [
-        'Drop index name_1 on profiles (name:1)',
         'Check that the documents in profiles can fit the new validator',
+        'Drop index name_1 on profiles (name:1)',
         'Rename field name to fullName in collection profiles',
         'Create index fullName_1 on profiles (fullName:1)',
         'Update validator on profiles (added: fullName; removed: name)',
@@ -171,8 +171,8 @@ describe('MongoMigrationPlanner, field statements', () => {
     ).toMatchObject({
       labels: [
         'Rename collection profiles to users',
-        'Drop index name_1 on users (name:1)',
         'Check that the documents in users can fit the new validator',
+        'Drop index name_1 on users (name:1)',
         'Rename field name to fullName in collection users',
         'Create index fullName_1 on users (fullName:1)',
         'Update validator on users (added: fullName; removed: name)',

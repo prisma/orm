@@ -494,14 +494,15 @@ function callCollection(call: OpFactoryCall): string | undefined {
 }
 
 /**
- * The rewrites and index creates, preceded by a check for each collection they touch that its
- * documents can fit the validator the plan sets on it, once the fields the rewrites change are left
- * out. Every check runs before the first rewrite or index create of any collection, so a check that
- * fails on one collection stops the apply before anything changes: a rewrite could otherwise leave
- * documents that neither the old validator nor the new one accepts, and a unique index build could
- * fail on documents that lack the field.
+ * A check for each collection the rewrites and index creates touch that its documents can fit the
+ * validator the plan sets on it, once the fields the rewrites change are left out. The checks only
+ * read documents, and run after the collection renames and creates but before the index drops,
+ * rewrites and index creates of any collection. So a check that fails on one collection stops the
+ * apply before it changes any index or document: a rewrite could otherwise leave documents that
+ * neither the old validator nor the new one accepts, and a unique index build could fail on
+ * documents that lack the field.
  */
-function withDocumentChecks(
+function documentChecksFor(
   calls: readonly OpFactoryCall[],
   documentChecks: ReadonlyMap<string, DocumentCheckFields>,
   validatorOps: readonly OpFactoryCall[],
@@ -514,7 +515,7 @@ function withDocumentChecks(
       }),
     ),
   ];
-  const checks = collections.flatMap((collection): OpFactoryCall[] => {
+  return collections.flatMap((collection): OpFactoryCall[] => {
     const validatorOp = validatorOps.find(
       (op): op is CollModCall =>
         op instanceof CollModCall &&
@@ -535,7 +536,6 @@ function withDocumentChecks(
       }),
     ];
   });
-  return [...checks, ...calls];
 }
 
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
@@ -606,15 +606,18 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       return { kind: 'failure', conflicts };
     }
 
+    const rewrites = options.statementCalls?.rewrites ?? [];
     const allCalls = [
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
-      ...drops,
-      ...withDocumentChecks(
-        [...(options.statementCalls?.rewrites ?? []), ...creates],
+      ...documentChecksFor(
+        [...rewrites, ...creates],
         options.statementCalls?.documentChecks ?? new Map(),
         validatorOps,
       ),
+      ...drops,
+      ...rewrites,
+      ...creates,
       ...validatorOps,
       ...mutableOptionOps,
       ...collDrops,

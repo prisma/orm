@@ -183,9 +183,9 @@ describe('MongoMigrationRunner, a new unique field on a collection with document
 
 describe('MongoMigrationRunner, early checks on two collections', () => {
   it(
-    'stops at the users check before the accounts fill, so accounts documents still accept updates',
+    'stops at the users check before the accounts index drop and fill, so accounts keep their index and still accept updates',
     async () => {
-      await live.createClosed('accounts', ['email'], [], [{ email: 'a@example.com' }]);
+      await live.createClosed('accounts', ['email'], ['email'], [{ email: 'a@example.com' }]);
       await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
       const withBorn = (fields: readonly string[]) => {
         const schema = closedSchema(fields);
@@ -206,7 +206,7 @@ describe('MongoMigrationRunner, early checks on two collections', () => {
           Account: { collection: 'accounts', fields: ['_id', 'email'] },
           User: { collection: 'users', fields: ['_id', 'email'] },
         },
-        { accounts: closedCollection(['email']), users: closedCollection(['email']) },
+        { accounts: closedCollection(['email'], ['email']), users: closedCollection(['email']) },
       );
       const to = contract(
         'to',
@@ -238,11 +238,13 @@ describe('MongoMigrationRunner, early checks on two collections', () => {
             : planned,
         failedAt: result.ok ? result : result.failure.meta['operationId'],
         accounts: await live.documents('accounts'),
+        accountIndexes: (await accounts.indexes()).map((index) => index.name),
         update: (await accounts.updateMany({}, { $set: { email: 'b@example.com' } })).modifiedCount,
       }).toEqual({
         operations: [
           'collection.accounts.checkDocuments',
           'collection.users.checkDocuments',
+          'index.accounts.drop(email_1)',
           'field.accounts.plan.fill',
           'field.users.plan.fill',
           'validator.accounts.update',
@@ -250,6 +252,7 @@ describe('MongoMigrationRunner, early checks on two collections', () => {
         ],
         failedAt: 'collection.users.checkDocuments',
         accounts: [{ email: 'a@example.com' }],
+        accountIndexes: ['_id_', 'email_1'],
         update: 1,
       });
     },
