@@ -1,3 +1,4 @@
+import { ListCollectionsCommand } from '@internal/mongo-query-ast/control';
 import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
 import {
@@ -133,6 +134,7 @@ describe('validatorCheckedBy', () => {
         command: new RawAggregateCommand('users', [{ $limit: 1 }]),
         meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
       }),
-    ]).toEqual([validator, undefined]);
+      validatorCheckedBy(new ListCollectionsCommand()),
+    ]).toEqual([validator, undefined, undefined]);
   });
 });

@@ -1,6 +1,7 @@
-import type {
-  MongoCheckDocumentsMeta,
-  MongoMigrationCheck,
+import {
+  isInspectionCheckSource,
+  type MongoCheckDocumentsMeta,
+  type MongoMigrationCheck,
 } from '@internal/mongo-query-ast/control';
 import { MongoExistsExpr, RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 
@@ -83,7 +84,9 @@ function relaxedSchema(schema: Document, fields: MongoCheckDocumentsMeta): Recor
  * with `$nor`.
  */
 export function validatorCheckedBy(source: MongoMigrationCheck['source']): Document | undefined {
-  if (!('command' in source) || !(source.command instanceof RawAggregateCommand)) return undefined;
+  if (isInspectionCheckSource(source) || !(source.command instanceof RawAggregateCommand)) {
+    return undefined;
+  }
   const match: unknown = source.command.pipeline[0]?.['$match'];
   const nor: unknown = isDocument(match) ? match['$nor'] : undefined;
   const [validator]: readonly unknown[] = Array.isArray(nor) ? nor : [];
