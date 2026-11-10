@@ -3,15 +3,24 @@ import type {
   MigrationPlannerConflict,
   ModelCoordinate,
 } from '@internal/framework-components/control';
-import { validatorRootShapesOf } from '@internal/mongo-contract';
-import {
-  otherModelsReached,
-  SEPARATE_THE_MODELS,
-  sharedCollectionWhy,
-  TIME_SERIES_UPDATES,
-} from './mongo-statement-planning';
+import { otherModelsReached, validatorRootShapesOf } from '@internal/mongo-contract';
 
 type Document = Record<string, unknown>;
+
+export const SEPARATE_THE_MODELS =
+  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
+
+export function sharedCollectionWhy(
+  collection: string,
+  others: readonly string[],
+  change: string,
+): string {
+  const names = others.map((name) => JSON.stringify(name)).join(', ');
+  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
+}
+
+export const TIME_SERIES_UPDATES =
+  'MongoDB updates the documents of a time-series collection only through its metaField';
 
 /** What a planned rewrite does to a field's documents. */
 export type RewriteKind = 'removal' | 'cast' | 'fill' | 'conversion' | 'backfill';
@@ -138,7 +147,7 @@ function sharedCollectionRefusal(
     };
   }
   const others = otherModelsReached(
-    contract,
+    contract.domain,
     model,
     collection,
     rewrite.filter,

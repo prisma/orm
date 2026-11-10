@@ -37,6 +37,7 @@ import {
   propertyBsonTypesOf,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -71,7 +72,6 @@ import { FilterEvaluator } from './filter-evaluator';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
-import { variantFilter } from './mongo-statement-planning';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -308,7 +308,7 @@ function backfillAdvice(
         kind: 'backfill',
         collection,
         field: stored,
-        filter: variantFilter(contract, model),
+        filter: variantFilterOf(contract.domain, model),
         model,
       },
       contract,

@@ -23,7 +23,6 @@ import {
   collectionControlPoliciesOf,
   collectionControlPolicyOf,
   collectionOfModel,
-  collectionRootModelsOf,
   embeddingModelOf,
   hasOwnFieldStoredAs,
   MongoCollection,
@@ -31,16 +30,23 @@ import {
   type MongoModelStorage,
   modelAndBasesOf,
   mongoModelsOf,
+  otherModelsReached,
   ownEmbedStoredNamesOf,
   ownStoredNameOf,
   ownStoredNamesOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import {
+  SEPARATE_THE_MODELS,
+  sharedCollectionWhy,
+  TIME_SERIES_UPDATES,
+} from './mongo-rewrite-refusals';
 import {
   type CastFieldCall,
   type DataTransformCall,
@@ -100,31 +106,6 @@ function resolvedStoredNameAt(contract: ContractWithDomain, coordinate: FieldCoo
     );
   }
   return storedName;
-}
-
-/**
- * The condition that selects a variant's documents in the collection it shares with its base: the
- * base's discriminator field holding the variant's value. A model that is not a variant has none.
- */
-export function variantFilter(
-  contract: ContractWithDomain,
-  coordinate: ModelCoordinate,
-): Document | undefined {
-  const base = modelAt(contract, coordinate)?.base;
-  if (base === undefined) return undefined;
-  const baseModel = modelAt(contract, {
-    namespaceId: asNamespaceId(base.namespace),
-    model: base.model,
-  });
-  const field = baseModel?.discriminator?.field;
-  const variants = Object.entries(baseModel?.variants ?? {});
-  const value = variants.find(
-    ([, variant]) =>
-      variant.namespace === coordinate.namespaceId && variant.model === coordinate.model,
-  )?.[0];
-  return baseModel === undefined || field === undefined || value === undefined
-    ? undefined
-    : { [ownStoredNameOf(baseModel, field)]: value };
 }
 
 /** The control policy that governs a collection, and the policy its contract declares for it. */
@@ -253,82 +234,6 @@ function refused(
 }
 
 const LEAVE_OUT = 'Leave out this statement.';
-
-export const SEPARATE_THE_MODELS =
-  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
-
-/**
- * The discriminator field and value a variant's filter selects, or `undefined` for a filter that selects by anything else, or no filter.
- */
-function discriminatorValueOf(
-  filter: Document | undefined,
-): { readonly field: string; readonly value: unknown } | undefined {
-  const entries = Object.entries(filter ?? {});
-  if (entries.length !== 1) return undefined;
-  const [entry] = entries;
-  if (entry === undefined) return undefined;
-  const [field, value] = entry;
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-    ? { field, value }
-    : undefined;
-}
-
-/**
- * The other models stored in `collection`, root models and their variants, whose documents a change of `storedName` with `filter` reaches, and which store the field themselves or through their base; with no `storedName`, every such model, whether it stores the field or not. No discriminator tells the documents of several root models apart, so without a filter, or with a base model's filter, every other root model's documents are reached. A variant's filter, one discriminator value, reaches a model only when its documents can hold that value: a variant of another root model with the same discriminator field and value, or a model that declares the discriminator field itself.
- */
-export function otherModelsReached(
-  contract: ContractWithDomain,
-  model: ModelCoordinate,
-  collection: string,
-  filter: Document | undefined,
-  storedName: string | undefined,
-): readonly string[] {
-  const models = mongoModelsOf(contract.domain, model.namespaceId);
-  const baseOf = (name: string) => {
-    const base = models[name]?.base;
-    return base === undefined ? undefined : models[base.model];
-  };
-  const storesOrInherits = (name: string, storedName: string) =>
-    modelAndBasesOf(models, name).some((each) => ownStores(each, storedName));
-  const selected = discriminatorValueOf(filter);
-  const canHold = (name: string) => {
-    if (selected === undefined) return true;
-    const base = baseOf(name);
-    const discriminator = base?.discriminator?.field;
-    if (
-      base !== undefined &&
-      discriminator !== undefined &&
-      ownStoredNameOf(base, discriminator) === selected.field
-    ) {
-      return Object.entries(base.variants ?? {}).some(
-        ([value, variant]) => variant.model === name && value === selected.value,
-      );
-    }
-    return storesOrInherits(name, selected.field);
-  };
-  const subjectRoot = modelAt(contract, model)?.base?.model ?? model.model;
-  return (collectionRootModelsOf(models)[collection] ?? [])
-    .filter((name) => name !== subjectRoot)
-    .flatMap((name) => [
-      name,
-      ...Object.values(models[name]?.variants ?? {}).map((variant) => variant.model),
-    ])
-    .filter(
-      (name) => canHold(name) && (storedName === undefined || storesOrInherits(name, storedName)),
-    );
-}
-
-export function sharedCollectionWhy(
-  collection: string,
-  others: readonly string[],
-  change: string,
-): string {
-  const names = others.map((name) => JSON.stringify(name)).join(', ');
-  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
-}
-
-export const TIME_SERIES_UPDATES =
-  'MongoDB updates the documents of a time-series collection only through its metaField';
 
 /**
  * Plans the rename each statement states, in order: a model statement whose collection changes renames the
@@ -469,8 +374,8 @@ function discriminatorValueChange(
   statement: ResolvedModelRenameStatement,
   input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): readonly [reason: string, why: string] | undefined {
-  const before = variantFilter(input.fromContract, statement.from);
-  const after = variantFilter(input.contract, statement.to);
+  const before = variantFilterOf(input.fromContract.domain, statement.from);
+  const after = variantFilterOf(input.contract.domain, statement.to);
   const base = modelAt(input.contract, statement.to)?.base;
   if (before === undefined || after === undefined || base === undefined) return undefined;
   const [field, oldValue] = Object.entries(before)[0] ?? [];
@@ -636,7 +541,7 @@ function planFieldStatement(
   }
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, collection);
   if (policyRefusal !== undefined) return policyRefusal;
-  const variant = variantFilter(input.fromContract, statement.from);
+  const variant = variantFilterOf(input.fromContract.domain, statement.from);
   const renamedTogether = new Set(
     input.statements.flatMap((other) =>
       other.entity === 'field' &&
@@ -648,7 +553,7 @@ function planFieldStatement(
     ),
   );
   const others = otherModelsReached(
-    input.fromContract,
+    input.fromContract.domain,
     statement.from,
     originCollection,
     variant,
@@ -730,12 +635,12 @@ export function destinationModelOf(
   const originCollection = collectionOfModel(input.fromContract.domain, origin);
   if (originCollection === undefined) return undefined;
   const collection = input.collectionAfterRenames(originCollection);
-  const filter = JSON.stringify(variantFilter(input.fromContract, origin) ?? null);
+  const filter = JSON.stringify(variantFilterOf(input.fromContract.domain, origin) ?? null);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
       embeddingModelOf(input.contract.domain, candidate) === undefined &&
       collectionOfModel(input.contract.domain, candidate) === collection &&
-      JSON.stringify(variantFilter(input.contract, candidate) ?? null) === filter,
+      JSON.stringify(variantFilterOf(input.contract.domain, candidate) ?? null) === filter,
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
@@ -869,7 +774,7 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
     if (destination === undefined) return [];
     const model = modelAt(input.fromContract, origin);
     if (model === undefined) return [];
-    const variant = variantFilter(input.fromContract, origin);
+    const variant = variantFilterOf(input.fromContract.domain, origin);
     const losing = (storedName: string): { readonly filter: Document | undefined } | undefined => {
       if (variant !== undefined) {
         return storedFieldsOf(input.contract, destination).has(storedName)

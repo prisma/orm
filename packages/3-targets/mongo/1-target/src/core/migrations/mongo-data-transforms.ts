@@ -12,6 +12,7 @@ import {
   type MongoContract,
   ownStoredNameOf,
   validatorDocumentShapesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import {
@@ -29,7 +30,6 @@ import {
   noCollectionReason,
   originFieldOf,
   originModelOf,
-  variantFilter,
 } from './mongo-statement-planning';
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';
@@ -220,7 +220,7 @@ export function backfillTransform(
       contracts,
     );
   }
-  const variant = variantFilter(input.contract, statement.field);
+  const variant = variantFilterOf(input.contract.domain, statement.field);
   return {
     kind: 'transform',
     call: new DataTransformCall(

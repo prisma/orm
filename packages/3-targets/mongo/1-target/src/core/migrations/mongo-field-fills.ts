@@ -10,6 +10,7 @@ import {
   type MongoContract,
   ownStoredNameOf,
   validatorFieldNamesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import {
   type MongoTemporaryValue,
@@ -26,7 +27,6 @@ import {
   originFieldOf,
   originModelOf,
   storedFieldsOf,
-  variantFilter,
 } from './mongo-statement-planning';
 import { FillFieldCall } from './op-factory-call';
 
@@ -136,7 +136,7 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         if (underUniqueIndex(input.destination, collection, storedName)) return [];
         const value = temporaryValueOf(contractField, input.lookups);
         if (value === undefined) return [];
-        const filter = variantFilter(input.contract, model);
+        const filter = variantFilterOf(input.contract.domain, model);
         return [
           {
             call: new FillFieldCall({

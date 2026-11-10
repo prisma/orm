@@ -13,6 +13,7 @@ import {
   ownStoredNameOf,
   propertyBsonTypesOf,
   validatorDocumentShapesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -26,7 +27,6 @@ import {
   type FieldRemovalInput,
   modelAt,
   modelCoordinates,
-  variantFilter,
 } from './mongo-statement-planning';
 import { CastFieldCall } from './op-factory-call';
 
@@ -166,7 +166,7 @@ export function planFieldTypeChanges(
             field: storedName,
             from,
             to,
-            filter: variantFilter(input.contract, destination),
+            filter: variantFilterOf(input.contract.domain, destination),
           }),
         ];
       });
