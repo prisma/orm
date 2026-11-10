@@ -1132,7 +1132,23 @@ function renderParts(
   pim: ParamIndexMap,
 ): string {
   return parts
-    .map((part) => (typeof part === 'string' ? part : renderExpr(part, contract, pim)))
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      switch (part.kind) {
+        case 'select':
+          return renderSelect(part, contract, pim);
+        case 'insert':
+          return renderInsert(part, contract, pim);
+        case 'update':
+          return renderUpdate(part, contract, pim);
+        case 'delete':
+          return renderDelete(part, contract, pim);
+        default:
+          return renderExpr(part, contract, pim);
+      }
+    })
     .join('');
 }
 

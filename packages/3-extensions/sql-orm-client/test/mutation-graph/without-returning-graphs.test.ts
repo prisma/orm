@@ -89,7 +89,7 @@ describe('write graphs on a contract without capability "returning"', () => {
       undefined,
       'rows',
     );
-    const [[, insert] = []] = graph.nodes();
+    const [, insert] = graph.nodes().find(([, node]) => node instanceof InsertReportingKeys) ?? [];
 
     expect(insert).toBeInstanceOf(InsertReportingKeys);
     const generated = (insert as InsertReportingKeys).generated;

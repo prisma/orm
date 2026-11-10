@@ -24,6 +24,8 @@ const uncoveredElsewhere = [
   '@prisma/orm-sqlite',
   '@prisma/orm-target-mysql',
   '@prisma/orm-mysql',
+  '@prisma/orm-target-mariadb',
+  '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
   '@prisma/orm-extension-postgis',
   '@prisma/orm-extension-paradedb',

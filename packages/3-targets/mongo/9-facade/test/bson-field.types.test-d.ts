@@ -5,13 +5,13 @@ import type { BSONSymbol, Code, MaxKey, MinKey } from 'mongodb';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, type }) => ({
   models: {
     Event: model('Event', {
       collection: 'events',
       fields: {
-        _id: field.objectId(),
-        raw: field.bson(),
+        _id: field.scalar(type.ObjectId()),
+        raw: field.scalar(type.Bson()),
       },
     }),
   },

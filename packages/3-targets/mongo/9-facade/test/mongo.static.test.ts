@@ -6,7 +6,14 @@ import type {
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
 import { shoutPack, shoutRuntime } from './fixtures/shout-extension';
 
@@ -22,7 +29,7 @@ const Role = enumType(
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     role: field.namedType(Role),
   },
 });
@@ -86,15 +93,17 @@ describe('mongoStatic({ contract })', () => {
 });
 
 describe('mongoStatic({ contract, extensions })', () => {
-  const shoutContract = defineContract({
-    extensions: { shout: shoutPack },
-    models: {
-      Greeting: model('Greeting', {
-        collection: 'greetings',
-        fields: { _id: field.objectId(), text: field.scalar('shout/text@1') },
-      }),
-    },
-  });
+  const shoutContract = defineContract(
+    { extensions: { shout: shoutPack } },
+    ({ field, model, type }) => ({
+      models: {
+        Greeting: model('Greeting', {
+          collection: 'greetings',
+          fields: { _id: field.scalar(type.ObjectId()), text: field.scalar(type.shout.Text()) },
+        }),
+      },
+    }),
+  );
 
   it('refuses a contract that requires an extension it is not given', () => {
     expect(() => mongoStatic({ contract: shoutContract })).toThrow(

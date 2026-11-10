@@ -1,20 +1,31 @@
 import type { Brand } from '@internal/contract/types';
 import type { ProjectionItem } from '@internal/sql-relational-core/ast';
+import type { Slots } from './node';
 
-export type NodeId = number & Brand<'MutationGraphNodeId'>;
+declare const inputsOfNode: unique symbol;
+
+export type NodeId<Inputs extends Slots = Slots> = number &
+  Brand<'MutationGraphNodeId'> & { readonly [inputsOfNode]?: Inputs };
 
 export type StorageRow = Record<string, unknown>;
 
-export type ColumnPair = readonly [source: ProjectionItem, target: ProjectionItem];
+export type ColumnMapping = readonly [source: ProjectionItem, target: ProjectionItem];
 
 export abstract class Edge<Output> {
   readonly from: NodeId;
-  readonly columns: readonly ColumnPair[];
 
-  constructor(from: NodeId, columns: readonly ColumnPair[]) {
+  constructor(from: NodeId) {
     this.from = from;
-    this.columns = Object.freeze([...columns]);
   }
 
   abstract output(sourceRow: StorageRow): Output;
+}
+
+export abstract class DataEdge<Output> extends Edge<Output> {
+  readonly columns: readonly ColumnMapping[];
+
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
+    super(from);
+    this.columns = Object.freeze([...columns]);
+  }
 }

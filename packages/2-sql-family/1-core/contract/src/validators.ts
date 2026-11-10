@@ -479,15 +479,15 @@ const ContractRelationThroughSchema = type({
   '+': 'reject',
   table: 'string',
   namespaceId: 'string',
-  parentColumns: type.string.array().readonly(),
-  childColumns: type.string.array().readonly(),
-  targetColumns: type.string.array().readonly(),
+  parentColumns: type.string.array().atLeastLength(1).readonly(),
+  childColumns: type.string.array().atLeastLength(1).readonly(),
+  targetColumns: type.string.array().atLeastLength(1).readonly(),
 });
 
 const ContractRelationOnSchema = type({
   '+': 'reject',
-  localFields: type.string.array().readonly(),
-  targetFields: type.string.array().readonly(),
+  localFields: type.string.array().atLeastLength(1).readonly(),
+  targetFields: type.string.array().atLeastLength(1).readonly(),
 });
 
 const ContractManyToManyRelationSchema = type({

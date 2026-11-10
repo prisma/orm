@@ -29,11 +29,11 @@ export default defineConfig({
 
 ```typescript
 // prisma/contract.ts
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```
@@ -42,7 +42,7 @@ export default defineContract({
 
 ### `@internal/mongo/config`
 
-Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 ```typescript
 import { defineConfig } from '@internal/mongo/config';
@@ -148,11 +148,11 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields. Pass `extensions: { [id]: pack }` with the extension packs whose codecs the contract uses, as the Postgres `defineContract` takes them; the contract records them, and `mongo()` requires their runtime descriptors.
 
 ```typescript
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```
@@ -202,6 +202,8 @@ Options besides the binding:
 - `extensions`: the runtime descriptors of the extension packs the contract was built with, as `postgres()` takes them. Their codecs encode and decode the fields that use them. A contract that requires a pack missing from `extensions` fails the factory call with `RUNTIME.MISSING_EXTENSION_PACK`. `mongoStatic()` takes the same option.
 - `middleware`: a middleware chain applied to every MongoDB execution.
 - `mode`: the runtime mode.
+
+`db.prepare(declaration, callback)` builds a prepared statement: the callback runs once with one placeholder per declared parameter and returns a query-builder plan, which is lowered once. It opens no connection, so a client with no binding can prepare; a closed client rejects with `DRIVER.NOT_CONNECTED`. Run the handle against the runtime: `await ps.query(await db.runtime(), params).toArray()`, or `ps.execute(...)` for an update or delete. Declarations are checked against the contract's codec ids. See [ADR 318](../../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
 
 #### Writing a MongoDB extension
 

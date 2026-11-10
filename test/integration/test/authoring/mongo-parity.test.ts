@@ -8,6 +8,7 @@ import type { Contract } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import mongoFamilyPack from '@internal/family-mongo/pack';
 import { createControlStack } from '@internal/framework-components/control';
+import { type } from '@internal/mongo/contract-builder';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { defineContract, field, model } from '@internal/mongo-contract-ts/contract-builder';
@@ -194,7 +195,7 @@ describe('Mongo contracts written in TypeScript and in PSL', () => {
       models: {
         Doc: model('Doc', {
           collection: 'docs',
-          fields: { id: field.objectId().mongo({ field: '_id' }) },
+          fields: { id: field.scalar(type.ObjectId()).mongo({ field: '_id' }) },
         }),
       },
     });

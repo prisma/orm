@@ -182,13 +182,13 @@ export type WithNsId<State extends CollectionTypeState, NsId extends string> = O
 > & { readonly nsId: NsId };
 
 export interface RuntimeConnection extends RuntimeScope {
-  release?(): Promise<void>;
-  transaction?(): Promise<RuntimeTransaction>;
+  release(): Promise<void>;
+  transaction(): Promise<RuntimeTransaction>;
 }
 
 export interface RuntimeTransaction extends RuntimeScope {
-  commit?(): Promise<void>;
-  rollback?(): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
 }
 
 /** What the ORM sends its statements to. It must carry an `activitySource` member, as the SQL runtime's queryables, connections, transactions and activity handles do: every terminal method starts an `orm-call` activity through it, and a terminal method on a queryable without one fails with `ORM.ACTIVITY_SOURCE_MISSING`. The member is optional in this type only because the public runtime types do not show it. */
@@ -1992,7 +1992,7 @@ type JunctionPayloadFieldNames<
  * column — a non-join column that is not nullable and has no default. Such a
  * relation can't be populated through nested `create`, so its create input is
  * disabled at the type level (mirroring the runtime guard in
- * `mutation-executor.ts`).
+ * `relation-mutations.ts`).
  */
 type HasRequiredJunctionPayload<
   TContract extends Contract<SqlStorage>,

@@ -317,15 +317,15 @@ import { defineContract } from '@internal/mongo/contract-builder';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
       }),
     },
@@ -444,15 +444,15 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + typescript > starterSc
 
 export const contract = defineContract(
   {},
-  ({ field, model, rel }) => ({
+  ({ field, model, rel, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
         relations: {
           posts: rel.hasMany('Post', { from: 'id', to: 'authorId' }),
@@ -462,10 +462,10 @@ export const contract = defineContract(
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          title: field.string(),
-          content: field.string().optional(),
-          authorId: field.objectId(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          title: field.scalar(type.String()),
+          content: field.scalar(type.String()).optional(),
+          authorId: field.scalar(type.ObjectId()),
         },
         relations: {
           author: rel.belongsTo('User', { from: 'authorId', to: 'id' }),

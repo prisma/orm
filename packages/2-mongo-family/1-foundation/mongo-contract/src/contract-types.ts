@@ -118,6 +118,14 @@ export type ExtractMongoCodecTypes<T> =
       : Record<string, never>
     : Record<string, never>;
 
+/** The shape every contract's codec types have: each codec id maps to at least its `output` type. */
+export type MongoCodecTypesBase = Record<string, { readonly output: unknown }>;
+
+/** The type a codec accepts as a value: its `input` type, or `unknown` when the codec types do not declare one. */
+export type MongoCodecInput<CT, Id extends keyof CT> = CT[Id] extends { readonly input: infer I }
+  ? I
+  : unknown;
+
 export type ExtractMongoFieldOutputTypes<T> =
   ExtractMongoTypeMaps<T> extends { fieldOutputTypes: infer F }
     ? F extends Record<string, Record<string, unknown>>

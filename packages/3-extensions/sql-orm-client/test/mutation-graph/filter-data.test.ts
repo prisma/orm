@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { printExpression } from './print-expression';
-import { columnPairs, positions } from './statements';
+import { columnMappings, positions } from './statements';
 
 const [from] = positions();
 
-const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
-const idAndName = columnPairs('users', 'posts', [
+const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
+const idAndName = columnMappings('users', 'posts', [
   ['id', 'user_id'],
   ['name', 'title'],
 ]);
@@ -25,7 +25,7 @@ describe('FilterData', () => {
     expect(printExpression(condition, 'posts')).toBe('user_id = 7');
   });
 
-  it('gives an and of target = value for several column pairs', () => {
+  it('gives an and of target = value for several column mappings', () => {
     const condition = new FilterData(from, idAndName).output({ id: 7, name: 'Ada' });
 
     expect(printExpression(condition, 'posts')).toBe("(user_id = 7 and title = 'Ada')");

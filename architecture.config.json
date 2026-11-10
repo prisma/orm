@@ -1201,274 +1201,382 @@
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/core/*.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/core/*.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/core/migrations/**",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/core/migrations/**",
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/core/runtime/**",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/core/runtime/**",
       "domain": "extensions",
       "layer": "targets",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/codec-descriptor.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-descriptor.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/codec-ids.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-ids.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/codec-types.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-types.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/codecs.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codecs.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/contract-free.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/contract-free.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/control-tables.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/control-tables.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/marker-lock.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/marker-lock.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/control.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/control.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/data-types.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/data-types.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/ddl.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/ddl.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/default-normalizer.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/default-normalizer.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/errors.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/errors.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/migration.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/pack.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/pack.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/runtime.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/runtime.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/sql-utils.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/sql-utils.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/exports/types.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/types.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/contract-free/**",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/contract-free/**",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/1-target/src/core/ddl/**",
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/core/ddl/**",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/core/*.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/core/*.ts",
       "domain": "targets",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/core/migrations/**",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/core/migrations/**",
       "domain": "targets",
       "layer": "adapters",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/core/runtime/**",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/core/runtime/**",
       "domain": "targets",
       "layer": "adapters",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/exports/adapter.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/adapter.ts",
       "domain": "targets",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/exports/codec-types.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/codec-types.ts",
       "domain": "targets",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/exports/control.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/control.ts",
       "domain": "targets",
       "layer": "adapters",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/2-adapter/src/exports/runtime.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/runtime.ts",
       "domain": "targets",
       "layer": "adapters",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/3-driver/src/core/*.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/core/*.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/3-driver/src/core/migrations/**",
+      "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/core/migrations/**",
       "domain": "targets",
       "layer": "drivers",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/3-driver/src/core/runtime/**",
+      "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/core/runtime/**",
       "domain": "targets",
       "layer": "drivers",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/3-driver/src/exports/control.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/exports/control.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/3-driver/src/exports/runtime.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/exports/runtime.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/errors.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/errors.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/config.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/config.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/contract-builder.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/contract-builder.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/control.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/control.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/migration.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/runtime.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/runtime.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/exports/static.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/static.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/config/**",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/config/**",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/contract/**",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/contract/**",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/runtime/**",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/runtime/**",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/mysql/9-facade/src/static/**",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/static/**",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/core/*.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/core/migrations/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/migration.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/pack.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/*.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/migrations/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/codec-types.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/migrations/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/runtime/**",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/exports/control.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/errors.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/config.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/migration.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/config/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mongo/1-target/src/core/*.ts",

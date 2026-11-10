@@ -5,7 +5,7 @@
 ## At a glance
 
 ```text
-packages/3-targets/mysql/
+packages/3-targets/mysql/1-mysql/
   1-target/    @internal/target-mysql    descriptor meta, data types, codecs, authoring, control tables
   2-adapter/   @internal/adapter-mysql   control adapter: introspection, marker and ledger reads, bootstrap DDL
   3-driver/    @internal/driver-mysql    mysql2 control driver that hands codecs the server's text
