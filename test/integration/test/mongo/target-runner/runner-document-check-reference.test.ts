@@ -74,4 +74,38 @@ describe('MongoMigrationRunner, the check before a collection rewrites', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'does not say nothing was rewritten when a rewrite of the apply ran before the failing check',
+    async () => {
+      await live.db().createCollection('users');
+      await live.db().collection('users').insertOne({ email: 'ada@example.com' });
+      const after = {
+        email: { bsonType: 'string' },
+        plan: { bsonType: 'string' },
+        born: { bsonType: 'date' },
+      };
+
+      const result = await live.run(
+        [
+          fillField({ collection: 'users', field: 'plan', value: { $literal: '' } }),
+          checkDocuments({
+            collection: 'users',
+            validator: usersSchema(after),
+            rewrittenFields: ['plan'],
+          }),
+        ],
+        usersContract(after),
+      );
+
+      if (result.ok) throw new Error('Expected the check to stop the apply');
+      expect({
+        nothingRewritten: result.failure.why?.includes('nothing was rewritten'),
+        warning: result.failure.why?.includes(
+          'Documents this apply already rewrote in collection users',
+        ),
+      }).toEqual({ nothingRewritten: false, warning: true });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });

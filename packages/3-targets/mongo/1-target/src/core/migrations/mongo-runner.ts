@@ -789,6 +789,7 @@ export class MongoMigrationRunner {
               (await this.documentsFailingValidatorRefusal(operation, failing, {
                 ranOn,
                 validatorSetBy: (collection) => validatorSetOn.get(collection),
+                rewroteBefore: rewritesRan.size > 0,
                 contract: options.destinationContract,
               })) ??
               runnerFailure(
@@ -1046,6 +1047,8 @@ export class MongoMigrationRunner {
       readonly ranOn: (collection: string) => readonly string[];
       /** The label of the operation of this apply that last set the collection's validator, if one did. */
       readonly validatorSetBy: (collection: string) => string | undefined;
+      /** Whether an operation of this apply already changed documents or a validator. */
+      readonly rewroteBefore: boolean;
       readonly contract: MongoContract;
     },
   ): Promise<MongoMigrationRunnerResult | undefined> {
@@ -1139,7 +1142,9 @@ export class MongoMigrationRunner {
     const why = beforeRewrites
       ? [
           ...found,
-          `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
+          apply.rewroteBefore
+            ? `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail.`
+            : `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
           ...advice,
           `Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
           uncheckable
