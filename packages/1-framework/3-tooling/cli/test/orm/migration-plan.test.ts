@@ -24,10 +24,10 @@ import {
   OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
-  RENDERED_CONTRACT_DTS,
   removeOfflineProjects,
   renderContractDtsMock,
   resetRenderContractDtsMock,
+  SNAPSHOT_CONTRACT_DTS,
   seedContractSnapshot,
   seedDbRef,
   seedMigrationPackage,
@@ -1358,7 +1358,7 @@ describe('migration plan destination snapshot', () => {
     expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual(
       contractJson(HASH_TO),
     );
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
   });
 
   it('refuses before writing anything when the declarations cannot be rendered', async () => {
