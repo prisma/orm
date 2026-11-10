@@ -125,10 +125,7 @@ describe('pinned-client serialization', { timeout: timeouts.databaseOperation },
     const state = createConcurrencyState();
     const driver = makeDirectDriver(state);
     const connection = await driver.acquireConnection();
-    const transaction = await connection.beginTransaction({
-      kind: 'explicit',
-      isolationLevel: 'Serializable',
-    });
+    const transaction = await connection.beginTransaction({ isolationLevel: 'Serializable' });
 
     await Promise.all([
       queryRows(transaction, 'select 1'),

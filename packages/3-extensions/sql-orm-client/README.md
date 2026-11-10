@@ -33,10 +33,12 @@ This package should not depend on target adapters or drivers directly; execution
 
 - `query<Row>(plan)` — streams rows; `execute(plan)` — returns statement stats. Both come from `RuntimeScope` and accept AST-level `SqlQueryPlan` and pre-lowered `SqlExecutionPlan`.
 - `connection?()` — opt-in connection acquisition for grouped multi-statement work.
-- `transaction?()` — opt-in transaction acquisition for atomic mutation scopes.
+- `transaction?(options?)` — opt-in transaction acquisition for atomic mutation scopes, accepting resolved `SqlTransactionOptions`.
 - `[activitySource]` — the SQL runtime's activity source, through which the client starts an `orm-call` activity for each terminal method (see [Calls are activities](#calls-are-activities)). The runtime's queryables, connections, transactions and activity handles carry it. The type marks it optional only because the public runtime types do not show it; a runtime passed to `orm()` must carry it. A hand-built `{ query, execute }` object does not, and every terminal method on it fails with `ORM.ACTIVITY_SOURCE_MISSING`.
 
 `connection()` and `transaction()` are SQL-specific orchestration capabilities and are intentionally absent from the cross-family `RuntimeExecutor` contract. Runtimes that don't expose them are still used for single-statement execution.
+
+`orm({ context, runtime, implicitTransactionOptions })` optionally configures isolation for transactions the ORM opens itself. The configuration is retained across namespace collections, activity rebinding, nested mutations and multi-statement graphs, including the connection fallback. Omission leaves database/session defaults unchanged. An existing transaction remains authoritative: the ORM neither starts another transaction nor resets its isolation. The MySQL facade supplies ReadCommitted here independently of its callback transaction defaults; drivers receive only the resolved isolation level. See [transaction isolation](../../../docs/reference/transaction-isolation.md).
 
 ## Architecture
 

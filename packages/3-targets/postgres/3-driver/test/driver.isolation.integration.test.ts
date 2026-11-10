@@ -34,10 +34,7 @@ describe.each(['pooled', 'direct'] as const)(
             ['Serializable', 'serializable'],
           ] as const) {
             const connection = await driver.acquireConnection();
-            const transaction = await connection.beginTransaction({
-              kind: 'explicit',
-              isolationLevel,
-            });
+            const transaction = await connection.beginTransaction({ isolationLevel });
             expect(await queryRows(transaction, 'SHOW transaction_isolation')).toEqual([
               { transaction_isolation: reported },
             ]);
@@ -50,7 +47,7 @@ describe.each(['pooled', 'direct'] as const)(
               { transaction_isolation: 'repeatable read' },
             ]);
             await unconfigured.rollback();
-            const implicit = await reused.beginTransaction({ kind: 'implicit' });
+            const implicit = await reused.beginTransaction(undefined);
             expect(await queryRows(implicit, 'SHOW transaction_isolation')).toEqual([
               { transaction_isolation: 'repeatable read' },
             ]);

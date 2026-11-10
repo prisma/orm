@@ -36,10 +36,7 @@ describe('MySQL callback isolation options', () => {
     vi.spyOn(db.runtime(), 'connection').mockResolvedValue(connection);
     try {
       expect(await db.transaction(async () => 42, local)).toBe(42);
-      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({
-        kind: 'explicit',
-        isolationLevel,
-      });
+      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({ isolationLevel });
     } finally {
       await db.close();
     }

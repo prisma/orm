@@ -1,16 +1,15 @@
-import type { SqlTransactionStart } from '@internal/sql-relational-core/ast';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
 import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
 import { createSetup, names, type Setup } from './transaction-activity-fixtures';
 
-const starts: (SqlTransactionStart | undefined)[] = [
+const starts: (SqlTransactionOptions | undefined)[] = [
   undefined,
-  { kind: 'explicit' },
-  { kind: 'explicit', isolationLevel: undefined },
-  { kind: 'explicit', isolationLevel: 'Serializable' },
-  { kind: 'implicit' },
+  {},
+  { isolationLevel: undefined },
+  { isolationLevel: 'Serializable' },
 ];
 
 async function acquiredConnection(setup: Setup) {
@@ -70,7 +69,7 @@ describe.each(starts)('transaction start %j', (start) => {
 
 describe('callback transaction options', () => {
   it.each([undefined, {}, { isolationLevel: undefined }, { isolationLevel: 'Serializable' }])(
-    'converts resolved options %j to an explicit start',
+    'forwards resolved options %j without an ORM discriminator',
     async (options) => {
       const setup = createSetup();
       const result = await withTransaction(
@@ -85,7 +84,7 @@ describe('callback transaction options', () => {
       );
       expect(result).toBe(42);
       expect(vi.mocked((await acquiredConnection(setup)).beginTransaction).mock.calls).toEqual([
-        [{ kind: 'explicit', isolationLevel: options?.isolationLevel }],
+        [options],
       ]);
       const manual = await setup.runtime.connection();
       await (await manual.transaction()).rollback();
@@ -126,7 +125,7 @@ describe.each(['callback', 'activity'] as const)('%s start failure ownership', (
       const activity =
         route === 'activity' ? await startActivityOn(setup.runtime, testCall) : undefined;
       const run = activity
-        ? activity.transaction?.({ kind: 'implicit' })
+        ? activity.transaction?.(undefined)
         : withTransaction(setup.runtime, callback, { isolationLevel: 'Serializable' });
       await expect(run).rejects.toBe(original);
       await activity?.end({ outcome: 'failed' });
@@ -136,13 +135,7 @@ describe.each(['callback', 'activity'] as const)('%s start failure ownership', (
       expect(vi.mocked(connection.beginTransaction).mock.calls).toEqual(
         failure === 'refused'
           ? []
-          : [
-              [
-                route === 'activity'
-                  ? { kind: 'implicit' }
-                  : { kind: 'explicit', isolationLevel: 'Serializable' },
-              ],
-            ],
+          : [[route === 'activity' ? undefined : { isolationLevel: 'Serializable' }]],
       );
       expect(connection.release).toHaveBeenCalledTimes(failure === 'refused' ? 1 : 0);
       expect(connection.destroy).toHaveBeenCalledTimes(failure === 'attempted' ? 1 : 0);

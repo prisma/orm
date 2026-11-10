@@ -158,13 +158,13 @@ async function connected(options?: Parameters<typeof mysqlRuntimeDriver.create>[
 describe('per-transaction isolation setup', () => {
   it.each([
     [undefined, undefined],
-    [{ kind: 'explicit' }, undefined],
-    [{ kind: 'explicit', isolationLevel: undefined }, undefined],
-    [{ kind: 'implicit' }, 'READ COMMITTED'],
-    [{ kind: 'explicit', isolationLevel: 'ReadUncommitted' }, 'READ UNCOMMITTED'],
-    [{ kind: 'explicit', isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
-    [{ kind: 'explicit', isolationLevel: 'RepeatableRead' }, 'REPEATABLE READ'],
-    [{ kind: 'explicit', isolationLevel: 'Serializable' }, 'SERIALIZABLE'],
+    [{}, undefined],
+    [{ isolationLevel: undefined }, undefined],
+    [{ isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
+    [{ isolationLevel: 'ReadUncommitted' }, 'READ UNCOMMITTED'],
+    [{ isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
+    [{ isolationLevel: 'RepeatableRead' }, 'REPEATABLE READ'],
+    [{ isolationLevel: 'Serializable' }, 'SERIALIZABLE'],
   ] as const)('sets %j only for this start', async (start, isolation) => {
     const driver = await connected();
     const held = await driver.acquireConnection();
@@ -190,7 +190,7 @@ describe('per-transaction isolation setup', () => {
       const held = await driver.acquireConnection();
       connection.query.mockClear();
       await expect(
-        held.beginTransaction({ kind: 'explicit', isolationLevel: isolationLevel as string }),
+        held.beginTransaction({ isolationLevel: isolationLevel as string }),
       ).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
       expect(connection.query).not.toHaveBeenCalled();
       expect(connection.beginTransaction).not.toHaveBeenCalled();
@@ -216,7 +216,7 @@ describe('per-transaction isolation setup', () => {
       await gate;
       return [];
     });
-    const opening = held.beginTransaction({ kind: 'implicit' });
+    const opening = held.beginTransaction({ isolationLevel: 'ReadCommitted' });
     await entered;
     const statement = held.execute({ sql: 'UPDATE t SET id = 1' });
     expect(connection.query.mock.calls).toEqual([
@@ -239,7 +239,7 @@ describe('per-transaction isolation setup', () => {
     const held = await driver.acquireConnection();
     const failure = new Error('SET failed');
     connection.query.mockRejectedValueOnce(failure);
-    await expect(held.beginTransaction({ kind: 'implicit' })).rejects.toBe(failure);
+    await expect(held.beginTransaction({ isolationLevel: 'ReadCommitted' })).rejects.toBe(failure);
     expect(connection.beginTransaction).not.toHaveBeenCalled();
     await held.destroy().catch(() => undefined);
     await driver.close();

@@ -1,15 +1,14 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { SqlTransactionStart } from '@internal/sql-relational-core/ast';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { SqliteConnectionImpl } from '../src/sqlite-driver';
 
 describe('SQLite transaction isolation', () => {
   it.each([
     undefined,
-    { kind: 'implicit' },
-    { kind: 'explicit' },
-    { kind: 'explicit', isolationLevel: undefined },
-    { kind: 'explicit', isolationLevel: 'Serializable' },
+    {},
+    { isolationLevel: undefined },
+    { isolationLevel: 'Serializable' },
   ] as const)('uses plain BEGIN for %j and preserves PRAGMAs on reuse', async (start) => {
     const db = new DatabaseSync(':memory:');
     db.exec('CREATE TABLE items (value INTEGER)');
@@ -45,7 +44,7 @@ describe('SQLite transaction isolation', () => {
     const exec = vi.spyOn(db, 'exec');
     try {
       await expect(
-        connection.beginTransaction({ kind: 'explicit', isolationLevel } as SqlTransactionStart),
+        connection.beginTransaction({ isolationLevel } as SqlTransactionOptions),
       ).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
       expect(exec).not.toHaveBeenCalled();
     } finally {

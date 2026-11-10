@@ -12,7 +12,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
-  SqlTransactionStart,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { validateMysqlIsolationLevel } from '@internal/target-mysql/runtime';
 import { blindCast } from '@internal/utils/casts';
@@ -417,13 +417,11 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     onRelease?.();
   }
 
-  async beginTransaction(start?: SqlTransactionStart): Promise<SqlTransaction> {
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
     const isolationLevel =
-      start?.kind === 'implicit'
-        ? 'ReadCommitted'
-        : start?.isolationLevel === undefined
-          ? undefined
-          : validateMysqlIsolationLevel(start.isolationLevel);
+      start?.isolationLevel === undefined
+        ? undefined
+        : validateMysqlIsolationLevel(start.isolationLevel);
     const statements = {
       ReadUncommitted: 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
       ReadCommitted: 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',

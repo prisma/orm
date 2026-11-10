@@ -7,7 +7,7 @@ import type {
   SqlConnection,
   SqlQueryable,
   SqlStatementStats,
-  SqlTransactionStart,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlOrmPlan } from '@internal/sql-relational-core/types';
@@ -155,7 +155,7 @@ export class SupabaseRuntimeImpl<
         return self.runPreparedExecuteAgainstRoleQueryable(prepared, params, conn, options);
       },
 
-      async transaction(start?: SqlTransactionStart): Promise<RuntimeTransaction> {
+      async transaction(start?: SqlTransactionOptions): Promise<RuntimeTransaction> {
         return self.beginTransactionOn(conn, session, undefined, start);
       },
 
@@ -244,7 +244,7 @@ export class SupabaseRuntimeImpl<
   private async beginRoleTransaction(
     binding: SupabaseRoleBinding,
     parent: ActivityParent,
-    start?: SqlTransactionStart,
+    start?: SqlTransactionOptions,
   ): Promise<RuntimeTransaction> {
     const { conn, session } = await this.openRoleConnection(binding, { activityParent: parent });
     return this.ownTransaction(session, () =>

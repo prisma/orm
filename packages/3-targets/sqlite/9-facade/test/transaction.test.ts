@@ -57,7 +57,7 @@ describe('sqlite transaction isolation options', () => {
       const manual = await runtime.connection();
       await (await manual.transaction()).rollback();
       await manual.release();
-      expect(starts).toEqual([{ kind: 'explicit', isolationLevel }, undefined]);
+      expect(starts).toEqual([{ isolationLevel }, undefined]);
     } finally {
       await db.close();
     }

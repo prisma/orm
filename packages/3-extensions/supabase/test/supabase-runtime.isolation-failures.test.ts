@@ -46,7 +46,7 @@ describe.each(['callback', 'activity'] as const)(
             : undefined;
         const run = async () => {
           if (activity) {
-            const tx = await activity.transaction?.({ kind: 'implicit' });
+            const tx = await activity.transaction?.(undefined);
             if (!tx) throw new Error('Expected transaction');
             const result = await callback();
             await tx.commit();
@@ -63,13 +63,7 @@ describe.each(['callback', 'activity'] as const)(
           expect(connection.beginTransactionSpy.mock.calls).toEqual(
             point === 'setup' || point === 'refusal'
               ? []
-              : [
-                  [
-                    route === 'activity'
-                      ? { kind: 'implicit' }
-                      : { kind: 'explicit', isolationLevel: 'Serializable' },
-                  ],
-                ],
+              : [[route === 'activity' ? undefined : { isolationLevel: 'Serializable' }]],
           );
           expect(connection.release).toHaveBeenCalledTimes(point === 'refusal' ? 1 : 0);
           expect(connection.destroy).toHaveBeenCalledTimes(point === 'refusal' ? 0 : 1);
@@ -99,7 +93,7 @@ describe.each(['callback', 'activity'] as const)(
           : undefined;
       try {
         if (activity) {
-          const tx = await activity.transaction?.({ kind: 'implicit' });
+          const tx = await activity.transaction?.(undefined);
           await expect(tx?.rollback()).rejects.toBe(rollback);
         } else {
           await expect(

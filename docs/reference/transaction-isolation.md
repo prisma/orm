@@ -29,17 +29,19 @@ Supabase's `.supabase` secondary root still has no callback transaction API. Its
 
 ## Driver and runtime start SPI
 
-`SqlConnection.beginTransaction(start?)`, runtime connection `transaction(start?)`, and activity transaction routes carry `SqlTransactionStart`:
+`SqlConnection.beginTransaction(options?)`, runtime connection `transaction(options?)`, and activity transaction routes carry resolved `SqlTransactionOptions`:
 
 ```typescript
-type SqlTransactionStart =
-  | { readonly kind: 'explicit'; readonly isolationLevel?: string | undefined }
-  | { readonly kind: 'implicit' };
+interface SqlTransactionOptions {
+  readonly isolationLevel?: string | undefined;
+}
 ```
 
-Shared code forwards intent, not database policy or SQL fragments. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. That helper produces an explicit start. ORM-owned starts use the implicit variant. Role/session wrappers must forward the optional input, including through activity-owned routes, while retaining refusal/settlement metadata.
+Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. Role/session wrappers forward that optional input unchanged while retaining refusal/settlement metadata.
 
-Drivers validate defined explicit levels against their target, then select fixed SQL. MySQL's SET TRANSACTION and BEGIN must share one connection query lock. A failed BEGIN after successful SET can leave a pending next-transaction setting: the owner must destroy an uncertain connection, not return it to the pool. Release is safe after a known pre-BEGIN refusal or confirmed settlement; uncertain rollback also requires destruction. Cleanup failures must not replace an existing setup error. Existing callback rollback-failure wrapping remains unchanged.
+ORM factories separately accept `implicitTransactionOptions`, retained in collection configuration and used only when the ORM opens a transaction. The MySQL facade supplies `{ isolationLevel: 'ReadCommitted' }` to its root ORM factory. Standalone ORM instances may opt into this policy; without it they request the database default. Namespace collections, nested writes and activity-bound execution preserve the configured options. An ORM already bound to a transaction does not open another transaction or change its isolation. Drivers receive no implicit/explicit discriminator and never choose ORM policy.
+
+Drivers validate supplied levels against their target, then select fixed SQL. MySQL's SET TRANSACTION and BEGIN must share one connection query lock. A failed BEGIN after successful SET can leave a pending next-transaction setting: the owner must destroy an uncertain connection, not return it to the pool. Release is safe after a known pre-BEGIN refusal or confirmed settlement; uncertain rollback also requires destruction. Cleanup failures must not replace an existing setup error. Existing callback rollback-failure wrapping remains unchanged.
 
 ## Deliberately unsupported
 

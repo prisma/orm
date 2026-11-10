@@ -215,7 +215,7 @@ describe('isolation across Supabase roots and user roles', () => {
           kind: 'test-call',
           contentHash: async () => 'test',
         });
-        const tx = await activity.transaction?.({ kind: 'implicit' });
+        const tx = await activity.transaction?.(undefined);
         if (!tx) throw new Error('Expected transaction');
         await tx.commit();
         await activity.end({ outcome: 'succeeded' });

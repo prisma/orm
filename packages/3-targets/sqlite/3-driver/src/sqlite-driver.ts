@@ -9,7 +9,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
-  SqlTransactionStart,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
 import { InternalError } from '@internal/utils/internal-error';
@@ -111,8 +111,8 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
-  async beginTransaction(start?: SqlTransactionStart): Promise<SqlTransaction> {
-    if (start?.kind === 'explicit' && start.isolationLevel !== undefined) {
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
+    if (start?.isolationLevel !== undefined) {
       validateSqliteIsolationLevel(start.isolationLevel);
     }
     try {

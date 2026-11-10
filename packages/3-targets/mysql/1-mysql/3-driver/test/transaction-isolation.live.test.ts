@@ -1,4 +1,4 @@
-import type { SqlConnection, SqlTransactionStart } from '@internal/sql-relational-core/ast';
+import type { SqlConnection, SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import type { PoolConnection } from 'mariadb';
@@ -62,7 +62,7 @@ describe('MySQL next-transaction isolation on real pooled connections', {
           writing = await writer.acquireConnection();
           const write = await writing.beginTransaction();
           await write.execute({ sql: 'UPDATE t SET value = 2 WHERE id = 1' });
-          const selected = await held.beginTransaction({ kind: 'explicit', isolationLevel });
+          const selected = await held.beginTransaction({ isolationLevel });
           expect(await collect(selected.query({ sql: 'SELECT value FROM t' }))).toEqual([
             { value: dirty },
           ]);
@@ -79,8 +79,8 @@ describe('MySQL next-transaction isolation on real pooled connections', {
           const pending = await writing.beginTransaction();
           await pending.execute({ sql: 'UPDATE t SET value = 3 WHERE id = 1' });
           for (const [start, value] of [
-            [{ kind: 'explicit' }, '3'],
-            [{ kind: 'implicit' }, '2'],
+            [{}, '3'],
+            [{ isolationLevel: 'ReadCommitted' }, '2'],
             [undefined, '3'],
           ] as const) {
             const tx = await held.beginTransaction(start);
@@ -113,10 +113,7 @@ describe('MySQL next-transaction isolation on real pooled connections', {
         await held.execute({ sql: 'CREATE TABLE t (id INT PRIMARY KEY, value INT) ENGINE=InnoDB' });
         await held.execute({ sql: 'INSERT INTO t VALUES (1, 1)' });
         await writing.execute({ sql: 'SET SESSION innodb_lock_wait_timeout = 1' });
-        const tx = await held.beginTransaction({
-          kind: 'explicit',
-          isolationLevel: 'Serializable',
-        });
+        const tx = await held.beginTransaction({ isolationLevel: 'Serializable' });
         expect(await collect(tx.query({ sql: 'SELECT value FROM t' }))).toEqual([{ value: '1' }]);
         await expect(
           writing.execute({ sql: 'UPDATE t SET value = 2 WHERE id = 1' }),
@@ -148,9 +145,8 @@ describe('MySQL next-transaction isolation on real pooled connections', {
           else vi.spyOn(client, 'beginTransaction').mockRejectedValueOnce(failure);
           await expect(
             held.beginTransaction({
-              kind: 'explicit',
               isolationLevel: 'Serializable',
-            } satisfies SqlTransactionStart),
+            } satisfies SqlTransactionOptions),
           ).rejects.toBe(failure);
           await held.destroy(failure);
           held = await driver.acquireConnection();

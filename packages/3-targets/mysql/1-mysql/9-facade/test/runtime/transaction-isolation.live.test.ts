@@ -1,7 +1,7 @@
 import mysqlDriver from '@internal/driver-mysql/runtime';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { orm } from '@internal/sql-orm-client';
-import type { SqlTransactionStart } from '@internal/sql-relational-core/ast';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import mysql from '../../src/runtime/mysql';
@@ -14,7 +14,7 @@ const contract = contractFromJson<Contract>(contractJson);
 
 function observeStarts(failure?: Error) {
   let pendingFailure = failure;
-  const starts: (SqlTransactionStart | undefined)[] = [];
+  const starts: (SqlTransactionOptions | undefined)[] = [];
   const destroyed: unknown[] = [];
   const create = mysqlDriver.create.bind(mysqlDriver);
   const spy = vi.spyOn(mysqlDriver, 'create').mockImplementation((...args) => {
@@ -64,7 +64,7 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
             role: 'USER',
           }),
         ).toEqual({ id: 10, email: 'implicit@example.com', role: 'USER' });
-        expect(observed.starts).toEqual([{ kind: 'implicit' }]);
+        expect(observed.starts).toEqual([{ isolationLevel: 'ReadCommitted' }]);
         expect(
           await db.transaction(async (tx) =>
             tx.orm.User.select('id', 'email', 'role').create({
@@ -75,8 +75,8 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           ),
         ).toEqual({ id: 11, email: 'explicit@example.com', role: 'ADMIN' });
         expect(observed.starts).toEqual([
-          { kind: 'implicit' },
-          { kind: 'explicit', isolationLevel: 'Serializable' },
+          { isolationLevel: 'ReadCommitted' },
+          { isolationLevel: 'Serializable' },
         ]);
         const held = await db.runtime().connection();
         try {
@@ -86,15 +86,17 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           await held.release();
         }
         expect(observed.starts).toEqual([
-          { kind: 'implicit' },
-          { kind: 'explicit', isolationLevel: 'Serializable' },
+          { isolationLevel: 'ReadCommitted' },
+          { isolationLevel: 'Serializable' },
           undefined,
         ]);
         const pinned = await db.runtime().connection();
         try {
-          const models = orm<Contract>({ context: db.context, runtime: pinned })[
-            UNBOUND_NAMESPACE_ID
-          ];
+          const models = orm<Contract>({
+            context: db.context,
+            runtime: pinned,
+            implicitTransactionOptions: { isolationLevel: 'ReadCommitted' },
+          })[UNBOUND_NAMESPACE_ID];
           expect(
             await models.User.select('id', 'email', 'role').create({
               id: 12,
@@ -106,10 +108,10 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           await pinned.release();
         }
         expect(observed.starts).toEqual([
-          { kind: 'implicit' },
-          { kind: 'explicit', isolationLevel: 'Serializable' },
+          { isolationLevel: 'ReadCommitted' },
+          { isolationLevel: 'Serializable' },
           undefined,
-          { kind: 'implicit' },
+          { isolationLevel: 'ReadCommitted' },
         ]);
       } finally {
         observed.restore();
@@ -140,8 +142,8 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           ),
         ).toEqual([{ id: 1, email: 'b@example.com', role: 'ADMIN' }]);
         expect(observed.starts).toEqual([
-          { kind: 'explicit', isolationLevel: 'Serializable' },
-          { kind: 'explicit', isolationLevel: undefined },
+          { isolationLevel: 'Serializable' },
+          { isolationLevel: undefined },
         ]);
       } finally {
         observed.restore();

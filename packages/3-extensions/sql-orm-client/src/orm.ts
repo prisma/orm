@@ -35,6 +35,7 @@ export interface OrmOptions<
 > {
   readonly runtime: RuntimeQueryable;
   readonly collections?: TCollections;
+  readonly implicitTransactionOptions?: CollectionContext<TContract>['implicitTransactionOptions'];
   readonly context: ExecutionContext<TContract>;
 }
 
@@ -179,7 +180,11 @@ export function orm<
   assertAggregateOperationsNotReserved(context.aggregateDescriptors);
   collectionMethodTables(context);
   const contract = context.contract;
-  const ctx: CollectionContext<TContract> = { runtime, context };
+  const ctx: CollectionContext<TContract> = {
+    runtime,
+    context,
+    implicitTransactionOptions: options.implicitTransactionOptions,
+  };
   const collectionRegistry = checkCollectionClasses(contract, collections);
 
   type AnyCollection = Collection<TContract, string, unknown, CollectionTypeState>;

@@ -10,7 +10,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
-  SqlTransactionStart,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { validatePostgresIsolationLevel } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
@@ -552,7 +552,7 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     return this.#txState.open;
   }
 
-  async beginTransaction(start?: SqlTransactionStart): Promise<SqlTransaction> {
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
     const statements = {
       ReadUncommitted: 'BEGIN ISOLATION LEVEL READ UNCOMMITTED',
       ReadCommitted: 'BEGIN ISOLATION LEVEL READ COMMITTED',
@@ -560,7 +560,7 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
       Serializable: 'BEGIN ISOLATION LEVEL SERIALIZABLE',
     };
     const sql =
-      start?.kind === 'explicit' && start.isolationLevel !== undefined
+      start?.isolationLevel !== undefined
         ? statements[validatePostgresIsolationLevel(start.isolationLevel)]
         : 'BEGIN';
     const releaseLock = await acquireClientQueryLock(this.#connection);

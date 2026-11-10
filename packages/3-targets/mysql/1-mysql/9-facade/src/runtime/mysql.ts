@@ -323,6 +323,7 @@ export default function mysql<
       context,
       ...ifDefined('collections', options.collections),
       runtime: workRuntime,
+      implicitTransactionOptions: { isolationLevel: 'ReadCommitted' },
     }),
   );
 

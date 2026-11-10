@@ -12,7 +12,7 @@ import type {
   PreparedStatementHandle,
   SqlDriver,
   SqlExecuteRequest,
-  SqlTransactionStart,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { SelectAst as SelectAstCtor, TableSource } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
@@ -85,7 +85,7 @@ export interface RecordingConnection {
   query: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
-  beginTransaction(start?: SqlTransactionStart): Promise<RecordingTransaction>;
+  beginTransaction(start?: SqlTransactionOptions): Promise<RecordingTransaction>;
   readonly transaction: RecordingTransaction;
 }
 
