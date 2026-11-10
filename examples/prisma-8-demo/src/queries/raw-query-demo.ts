@@ -143,14 +143,6 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
   return (runtime ?? db).query(plan);
 }
 
-/**
- * An `INSERT … SELECT` whose SELECT is a typed builder query.
- *
- * Interpolating a builder query splices its SQL and its parameters into the
- * raw template at that point, in template order, with no parentheses added, so
- * it can stand where SQL expects a bare SELECT. Here it copies one author's
- * posts to another, prefixing each title.
- */
 export async function rawQueryCopyPosts(
   fromEmail: string,
   toEmail: string,
