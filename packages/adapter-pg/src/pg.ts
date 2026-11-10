@@ -132,8 +132,8 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
-  private settled = false
-  private inFlightQueries = 0
+  private closed = false
+  private runningStatements = 0
 
   constructor(
     client: pg.PoolClient,
@@ -145,40 +145,37 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   }
 
   protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
-    if (this.settled) {
+    if (this.closed) {
       throw new DriverAdapterError({
         kind: 'TransactionAlreadyClosed',
         cause: 'The transaction has already been committed or rolled back',
       })
     }
 
-    this.inFlightQueries++
+    this.runningStatements++
     try {
       return await super.performIO(query)
     } finally {
-      this.inFlightQueries--
+      this.runningStatements--
     }
   }
 
   /**
-   * Settles the transaction at most once. The query engine can settle twice when
-   * an interactive transaction timeout expires while COMMIT is in flight: the
-   * abandoned commit chain and the compensating rollback both reach the adapter
-   * (https://github.com/prisma/prisma/issues/29952). A second `release()` would
-   * corrupt pg-pool's accounting once the pool has re-lent the client, so it is
-   * skipped, and a client with statements still in flight is released with an
-   * error so the pool destroys the connection instead of re-lending a busy one.
+   * Closes the transaction at most once. Once the pool has lent the client to
+   * a new owner, a second `release()` would corrupt the pool's bookkeeping, so
+   * it is skipped. A client with a statement still running is released with an
+   * error so the pool destroys it instead of lending out a busy connection.
    */
-  private settle(): void {
-    if (this.settled) {
+  private close(): void {
+    if (this.closed) {
       return
     }
-    this.settled = true
+    this.closed = true
 
     try {
       this.cleanup?.()
     } finally {
-      if (this.inFlightQueries > 0) {
+      if (this.runningStatements > 0) {
         this.client.release(new Error('Transaction settled with statements still in flight'))
       } else {
         this.client.release()
@@ -189,13 +186,13 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    this.settle()
+    this.close()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    this.settle()
+    this.close()
   }
 
   async createSavepoint(name: string): Promise<void> {
