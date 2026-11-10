@@ -624,7 +624,7 @@ function rewriteFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: a value of field "${named}" in collection ${cast.collection} cannot be cast to ${cast.to}`,
     {
-      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${reason}. Documents cast before that value stay cast, and a re-run casts the rest.`,
+      why: `MongoDB's $convert met a value of field "${named}" it cannot cast to ${cast.to}: ${reason}. Documents cast before that value stay cast, and a re-run casts the rest. Until it does, a document already cast holds a type the collection's current validator does not allow, so updates to it fail.`,
       meta: {
         operationId: op.id,
         mongoCode,

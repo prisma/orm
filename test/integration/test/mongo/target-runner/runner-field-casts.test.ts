@@ -220,7 +220,7 @@ describe('MongoMigrationRunner, a cast of a field', () => {
         code: 'MIGRATION.EXECUTION_FAILED',
         message:
           'Operation field.users.age.cast(int) failed: a value of field "User.age" in collection users cannot be cast to int',
-        why: `MongoDB's $convert met a value of field "User.age" it cannot cast to int: Failed to parse number 'abc' in $convert with no onError value: Did not consume whole string. Documents cast before that value stay cast, and a re-run casts the rest. The operations that ran before the failure stay applied.`,
+        why: `MongoDB's $convert met a value of field "User.age" it cannot cast to int: Failed to parse number 'abc' in $convert with no onError value: Did not consume whole string. Documents cast before that value stay cast, and a re-run casts the rest. Until it does, a document already cast holds a type the collection's current validator does not allow, so updates to it fail. The operations that ran before the failure stay applied.`,
         meta: {
           operationId: 'field.users.age.cast(int)',
           mongoCode: 241,
