@@ -1,7 +1,7 @@
 {
   "name": "prisma",
-  "version": "0.1.1",
-  "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries.",
+  "version": "0.1.2",
+  "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries. After a version mismatch, run prisma skills sync and continue from the synced project skill under .agents/skills/prisma-8 (or .claude/skills/prisma-8, .cursor/skills/prisma-8, .windsurf/skills/prisma-8) and its references — not this plugin copy.",
   "author": {
     "name": "Prisma",
     "url": "https://www.prisma.io"
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Prisma",
     "shortDescription": "Build with Prisma 8 through its agent skill",
-    "longDescription": "Prisma 8 is a contract-first TypeScript data layer. This plugin installs the prisma-8 agent skill already maintained in this repository, so coding agents edit the data contract, run prisma contract emit, plan and apply migrations, and write typed db.orm / db.sql / db.query queries against the version the skill describes.\n\nUse it in projects that depend on @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo (Prisma 8, formerly Prisma Next): changing contract.prisma or a contract.ts builder, wiring db.ts or middleware, integrating a build tool, using the Supabase extension or RLS, upgrading Prisma 8, or reading a dotted error code such as MIGRATION.HASH_MISMATCH. Do not use it for Prisma ORM 7 or earlier (schema.prisma + @prisma/client).\n\nThe skill ships inside the ORM packages and is also copied with prisma skills sync. This marketplace listing is a second install path for users who want the skill from the repo before or without that sync.",
+    "longDescription": "Prisma 8 is a contract-first TypeScript data layer. This plugin installs the prisma-8 agent skill already maintained in this repository, so coding agents edit the data contract, run prisma contract emit, plan and apply migrations, and write typed db.orm / db.sql / db.query queries against the version the skill describes.\n\nUse it in projects that depend on @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo (Prisma 8, formerly Prisma Next): changing contract.prisma or a contract.ts builder, wiring db.ts or middleware, integrating a build tool, using the Supabase extension or RLS, upgrading Prisma 8, or reading a dotted error code such as MIGRATION.HASH_MISMATCH. Do not use it for Prisma ORM 7 or earlier (schema.prisma + @prisma/client).\n\nThe skill ships inside the ORM packages and is also copied with prisma skills sync. This marketplace listing is a second install path for users who want the skill from the repo before or without that sync. Sync writes the project skill directories, not this plugin copy: if metadata.library_version in the plugin skill does not match the project's installed @prisma/orm-* packages, run prisma skills sync and then read the synced project skill under .agents/skills/prisma-8 (or .claude/skills/prisma-8, .cursor/skills/prisma-8, .windsurf/skills/prisma-8) and its references — do not re-read this plugin copy.",
     "developerName": "Prisma",
     "category": "Developer Tools",
     "capabilities": [

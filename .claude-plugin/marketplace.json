@@ -11,8 +11,8 @@
       "displayName": "Prisma",
       "source": "./skills",
       "strict": false,
-      "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries. Use when working with @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo — not Prisma ORM 7 or earlier.",
-      "version": "0.1.1",
+      "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries. Use when working with @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo — not Prisma ORM 7 or earlier. After a version mismatch, run prisma skills sync and continue from the synced project skill under .claude/skills/prisma-8 (or .agents/skills/prisma-8, .cursor/skills/prisma-8, .windsurf/skills/prisma-8) and its references — not this plugin copy.",
+      "version": "0.1.2",
       "author": {
         "name": "Prisma",
         "url": "https://www.prisma.io"
