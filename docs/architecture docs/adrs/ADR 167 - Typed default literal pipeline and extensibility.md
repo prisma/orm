@@ -2,6 +2,8 @@
 
 > **Superseded by [ADR 184 — Codec-owned value serialization](ADR%20184%20-%20Codec-owned%20value%20serialization.md).** ADR 184 generalizes the deferred v2 design from this ADR: codecs own all value representations (contract JSON, DDL, PSL), eliminating the hardcoded bigint/Date branches and the tagged type system. This ADR remains as historical context for the v1 design.
 
+> **Note (2026-09-22).** The `dbgenerated("...")` stopgap this ADR accepted for raw SQL defaults is removed. A raw SQL column default is written as the tagged literal of [ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md), `` @default(sql`<expression>`) `` in PSL and `` .default(sql`<expression>`) `` in TypeScript, and lowers to the same `{ kind: 'function', expression }` contract shape. A typed literal default is checked and converted through data types and casts per [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which replaced the PSL half of ADR 184.
+
 ## Context
 PR #167 introduced strictly-typed literal defaults for SQL columns, replacing opaque `expression` strings with typed `value` payloads. The pipeline now encodes, serializes, validates, verifies, and renders literal defaults as typed values end-to-end.
 

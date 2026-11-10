@@ -47,8 +47,8 @@ describe('SQLite Migration E2E - From empty schema', () => {
               fields: {
                 id: int.id(),
                 label: text.default('untitled'),
-                priority: field.column(integerColumn).default('0'),
-                isActive: field.column(integerColumn).default('1').column('is_active'),
+                priority: field.column(integerColumn).default(0),
+                isActive: field.column(integerColumn).default(1).column('is_active'),
                 createdAt: text.default(now()).column('created_at'),
               },
             }),

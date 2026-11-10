@@ -1,18 +1,4 @@
-import type { Contract } from '@internal/contract/types';
-import { coreHash, profileHash } from '@internal/contract/types';
-import {
-  type ExecutionStackInstance,
-  instantiateExecutionStack,
-  type RuntimeDriverInstance,
-  type RuntimeExtensionInstance,
-} from '@internal/framework-components/execution';
-import { SqlStorage } from '@internal/sql-contract/types';
-import type {
-  Codec,
-  PreparedStatementHandle,
-  SqlDriver,
-  SqlExecuteRequest,
-} from '@internal/sql-relational-core/ast';
+import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import {
   BinaryExpr,
   ColumnRef,
@@ -27,314 +13,12 @@ import type {
   Expression,
   ScopeField,
 } from '@internal/sql-relational-core/expression';
-import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import type {
-  SqlMiddleware,
-  SqlRuntimeAdapterDescriptor,
-  SqlRuntimeAdapterInstance,
-  SqlRuntimeTargetDescriptor,
-} from '@internal/sql-runtime';
-import {
-  createExecutionContext,
-  createSqlExecutionStack,
-  withTransaction,
-} from '@internal/sql-runtime';
-import { descriptorsFromCodecs } from '@internal/sql-runtime/test/utils';
-import { applicationDomainOf } from '@repo/test-utils';
+import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { SqlMiddleware } from '@internal/sql-runtime';
+import { withTransaction } from '@internal/sql-runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { createTestSqlNamespace } from '../../../2-sql/1-core/contract/test/test-support';
 import type { SupabaseRoleBinding } from '../src/runtime/supabase-runtime';
-import { SupabaseRuntimeImpl } from '../src/runtime/supabase-runtime';
-
-const testContract: Contract<SqlStorage> = {
-  targetFamily: 'sql',
-  target: 'postgres',
-  profileHash: profileHash('supabase-runtime-test'),
-  domain: applicationDomainOf({ models: {} }),
-  roots: {},
-  storage: new SqlStorage({
-    storageHash: coreHash('supabase-runtime-test'),
-    namespaces: {
-      __unbound__: createTestSqlNamespace({ id: '__unbound__', entries: { table: {} } }),
-    },
-  }),
-  extensions: {},
-  capabilities: {},
-  meta: {},
-};
-
-type ExecuteSpy = ReturnType<
-  typeof vi.fn<(request: SqlExecuteRequest) => Promise<{ affectedRows: number }>>
->;
-
-interface RecordingTransaction {
-  readonly id: symbol;
-  readonly executeCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle?: PreparedStatementHandle | undefined;
-  }>;
-  readonly queryCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle: unknown;
-  }>;
-  execute: ExecuteSpy;
-  query: ReturnType<typeof vi.fn>;
-  commit: ReturnType<typeof vi.fn>;
-  rollback: ReturnType<typeof vi.fn>;
-}
-
-interface RecordingConnection {
-  readonly id: symbol;
-  readonly executeCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle?: PreparedStatementHandle | undefined;
-  }>;
-  readonly queryCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle: unknown;
-  }>;
-  readonly beginTransactionSpy: ReturnType<typeof vi.fn>;
-  execute: ExecuteSpy;
-  query: ReturnType<typeof vi.fn>;
-  release: ReturnType<typeof vi.fn>;
-  destroy: ReturnType<typeof vi.fn>;
-  beginTransaction(): Promise<RecordingTransaction>;
-  readonly transaction: RecordingTransaction;
-}
-
-interface RecordingDriver {
-  readonly acquireConnectionSpy: ReturnType<typeof vi.fn>;
-  execute: ReturnType<typeof vi.fn>;
-  query: ReturnType<typeof vi.fn>;
-  connect: ReturnType<typeof vi.fn>;
-  close: ReturnType<typeof vi.fn>;
-  acquireConnection(): Promise<RecordingConnection>;
-  readonly connection: RecordingConnection;
-}
-
-function createRecordingDriver(
-  queryRows: readonly Record<string, unknown>[] = [{ id: 1 }],
-  affectedRows = 0,
-): RecordingDriver {
-  const txId = Symbol('transaction');
-  const connId = Symbol('connection');
-  const txExecuteCalls: RecordingConnection['executeCalls'] = [];
-  const txQueryCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle: unknown;
-  }> = [];
-  const connExecuteCalls: RecordingConnection['executeCalls'] = [];
-  const connQueryCalls: Array<{
-    sql: string;
-    params: readonly unknown[] | undefined;
-    handle: unknown;
-  }> = [];
-
-  const transaction: RecordingTransaction = {
-    id: txId,
-    get executeCalls() {
-      return txExecuteCalls;
-    },
-    get queryCalls() {
-      return txQueryCalls;
-    },
-    execute: vi
-      .fn<(request: SqlExecuteRequest) => Promise<{ affectedRows: number }>>()
-      .mockImplementation(async (request) => {
-        txExecuteCalls.push({
-          sql: request.sql,
-          params: request.params,
-          handle: request.preparedStatementHandle,
-        });
-        return { affectedRows };
-      }),
-    query: vi.fn().mockImplementation(async function* (request: SqlExecuteRequest) {
-      txQueryCalls.push({
-        sql: request.sql,
-        params: request.params,
-        handle: request.preparedStatementHandle,
-      });
-      for (const row of queryRows) yield row;
-    }),
-    commit: vi.fn().mockResolvedValue(undefined),
-    rollback: vi.fn().mockResolvedValue(undefined),
-  };
-
-  const beginTransactionSpy = vi.fn().mockResolvedValue(transaction);
-  const connection: RecordingConnection = {
-    id: connId,
-    get executeCalls() {
-      return connExecuteCalls;
-    },
-    get queryCalls() {
-      return connQueryCalls;
-    },
-    beginTransactionSpy,
-    get transaction() {
-      return transaction;
-    },
-    execute: vi
-      .fn<(request: SqlExecuteRequest) => Promise<{ affectedRows: number }>>()
-      .mockImplementation(async (request) => {
-        connExecuteCalls.push({
-          sql: request.sql,
-          params: request.params,
-          handle: request.preparedStatementHandle,
-        });
-        return { affectedRows };
-      }),
-    query: vi.fn().mockImplementation(async function* (request: SqlExecuteRequest) {
-      connQueryCalls.push({
-        sql: request.sql,
-        params: request.params,
-        handle: request.preparedStatementHandle,
-      });
-      for (const row of queryRows) yield row;
-    }),
-    release: vi.fn().mockResolvedValue(undefined),
-    destroy: vi.fn().mockResolvedValue(undefined),
-    beginTransaction: () => beginTransactionSpy(),
-  };
-
-  const acquireConnectionSpy = vi.fn().mockResolvedValue(connection);
-  const driver: RecordingDriver = {
-    acquireConnectionSpy,
-    get connection() {
-      return connection;
-    },
-    execute: vi.fn().mockResolvedValue({ affectedRows }),
-    query: vi.fn().mockImplementation(async function* () {}),
-    connect: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-    acquireConnection: () => acquireConnectionSpy(),
-  };
-  return driver;
-}
-
-function createStubAdapter() {
-  const codec: Codec<string> = {
-    id: 'pg/int4@1',
-    targetTypes: ['int4'],
-    encode: (v: number) => v,
-    decode: (w: number) => w,
-  } as unknown as Codec<string>;
-  const codecs = [codec];
-
-  return {
-    familyId: 'sql' as const,
-    targetId: 'postgres' as const,
-    __codecs: codecs,
-    profile: {
-      id: 'test-profile',
-      target: 'postgres',
-      capabilities: {},
-      readMarker: async () => ({ kind: 'absent' as const }),
-    },
-    lower(ast: Parameters<SqlRuntimeAdapterInstance<'postgres'>['lower']>[0]) {
-      const params = [...new Set(ast.collectParamRefs())].map((ref) =>
-        ref.kind === 'prepared-param-ref'
-          ? { kind: 'bind' as const, name: ref.name }
-          : { kind: 'literal' as const, value: ref.value },
-      );
-      return Object.freeze({ sql: JSON.stringify(ast), params });
-    },
-  };
-}
-
-function createTestAdapterDescriptor(
-  adapter: ReturnType<typeof createStubAdapter>,
-): SqlRuntimeAdapterDescriptor<'postgres'> {
-  const descriptors = descriptorsFromCodecs(adapter.__codecs);
-  return {
-    kind: 'adapter',
-    rawCodecInferer: { inferCodec: () => 'pg/text' },
-    id: 'test-adapter',
-    version: '0.0.1',
-    familyId: 'sql' as const,
-    targetId: 'postgres' as const,
-    codecs: () => descriptors,
-    create() {
-      return Object.assign(
-        { familyId: 'sql' as const, targetId: 'postgres' as const },
-        adapter,
-      ) as SqlRuntimeAdapterInstance<'postgres'>;
-    },
-  };
-}
-
-function createTestTargetDescriptor(): SqlRuntimeTargetDescriptor<'postgres'> {
-  return {
-    kind: 'target',
-    id: 'postgres',
-    version: '0.0.1',
-    familyId: 'sql' as const,
-    targetId: 'postgres' as const,
-    codecs: () => [],
-    create() {
-      return { familyId: 'sql' as const, targetId: 'postgres' as const };
-    },
-  };
-}
-
-function createTestSetup(options?: {
-  middleware?: readonly SqlMiddleware[];
-  affectedRows?: number;
-}) {
-  const adapter = createStubAdapter();
-  const driver = createRecordingDriver(undefined, options?.affectedRows);
-  const targetDescriptor = createTestTargetDescriptor();
-  const adapterDescriptor = createTestAdapterDescriptor(adapter);
-
-  const stack = createSqlExecutionStack({
-    target: targetDescriptor,
-    adapter: adapterDescriptor,
-    extensions: [],
-  });
-
-  type SqlTestStackInstance = ExecutionStackInstance<
-    'sql',
-    'postgres',
-    SqlRuntimeAdapterInstance<'postgres'>,
-    RuntimeDriverInstance<'sql', 'postgres'>,
-    RuntimeExtensionInstance<'sql', 'postgres'>
-  >;
-  const stackInstance = instantiateExecutionStack(stack) as unknown as SqlTestStackInstance;
-
-  const context = createExecutionContext({
-    contract: testContract,
-    stack: { target: targetDescriptor, adapter: adapterDescriptor, extensions: [] },
-  });
-
-  const runtimeOptions: ConstructorParameters<typeof SupabaseRuntimeImpl>[0] = {
-    context,
-    adapter: stackInstance.adapter,
-    driver: driver as unknown as SqlDriver,
-    verifyMarker: false,
-    middleware: options?.middleware ?? [],
-  };
-
-  const runtime = new SupabaseRuntimeImpl(runtimeOptions);
-  return { runtime, driver };
-}
-
-function stubPlan(): SqlExecutionPlan<Record<string, unknown>> {
-  return {
-    sql: 'select 1',
-    params: [],
-    ast: SelectAstCtor.from(TableSource.named('stub')),
-    meta: {
-      target: testContract.target,
-      targetFamily: testContract.targetFamily,
-      storageHash: testContract.storage.storageHash,
-      lane: 'raw',
-    },
-  };
-}
+import { createTestSetup, stubPlan, testContract } from './supabase-runtime-fixtures';
 
 function buildEqUserIdPlan(userId: Expression<ScopeField>): SqlQueryPlan<{ id: number }> {
   const users = TableSource.named('users');
@@ -417,7 +101,7 @@ describe('SupabaseRuntimeImpl', () => {
       await session.query(stubPlan()).toArray();
       await session.release();
 
-      expect(sessionControlOnConn).toHaveLength(3);
+      expect(sessionControlOnConn).toHaveLength(4);
       expect(queriedOnConn).toHaveLength(1);
       expect(sessionControlOnConn[0]).toBe(queriedOnConn[0]);
     });
@@ -455,7 +139,7 @@ describe('SupabaseRuntimeImpl', () => {
       const observer: SqlMiddleware = {
         name: 'sql-observer',
         familyId: 'sql',
-        beforeQuery(exec) {
+        beforeEncode(exec) {
           observedSqls.push(exec.sql);
         },
       };
@@ -517,13 +201,13 @@ describe('SupabaseRuntimeImpl', () => {
   });
 
   describe('openRoleSession — release', () => {
-    it('release() sends RESET ALL then releases the connection to the pool', async () => {
+    it('release() sends RESET ALL and RESET ROLE, since RESET ALL leaves the role, then releases the connection to the pool', async () => {
       const { runtime, driver } = createTestSetup();
       const resetCalls: string[] = [];
 
       driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
         driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
+        if (request.sql.startsWith('RESET')) {
           resetCalls.push(request.sql);
         }
         return { affectedRows: 0 };
@@ -532,29 +216,34 @@ describe('SupabaseRuntimeImpl', () => {
       const session = await runtime.openRoleSession({ role: 'anon' });
       await session.release();
 
-      expect(resetCalls).toHaveLength(1);
+      expect(resetCalls).toEqual(['RESET ALL', 'RESET ROLE']);
       expect(driver.connection.release).toHaveBeenCalledOnce();
       expect(driver.connection.destroy).not.toHaveBeenCalled();
     });
 
-    it('when RESET ALL fails, destroys the connection instead of releasing', async () => {
-      const { runtime, driver } = createTestSetup();
-      const resetError = new Error('RESET ALL failed');
+    it.each(['RESET ALL', 'RESET ROLE'])(
+      'when %s fails, destroys the connection instead of releasing',
+      async (failing) => {
+        const { runtime, driver } = createTestSetup();
+        const resetError = new Error(`${failing} failed`);
 
-      driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
-        driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
-          throw resetError;
-        }
-        return { affectedRows: 0 };
-      });
+        driver.connection.execute = vi
+          .fn()
+          .mockImplementation(async (request: SqlExecuteRequest) => {
+            driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
+            if (request.sql === failing) {
+              throw resetError;
+            }
+            return { affectedRows: 0 };
+          });
 
-      const session = await runtime.openRoleSession({ role: 'anon' });
-      await session.release();
+        const session = await runtime.openRoleSession({ role: 'anon' });
+        await session.release();
 
-      expect(driver.connection.destroy).toHaveBeenCalledOnce();
-      expect(driver.connection.release).not.toHaveBeenCalled();
-    });
+        expect(driver.connection.destroy).toHaveBeenCalledOnce();
+        expect(driver.connection.release).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('openRoleSession — bind-failure', () => {
@@ -577,7 +266,7 @@ describe('SupabaseRuntimeImpl', () => {
     });
   });
 
-  describe('queryWithRole — stream cleanup', () => {
+  describe('forRole(binding).query — stream cleanup', () => {
     it('resets then releases the session after the stream drains', async () => {
       const { runtime, driver } = createTestSetup();
       const cleanupEvents: string[] = [];
@@ -590,7 +279,7 @@ describe('SupabaseRuntimeImpl', () => {
         cleanupEvents.push('release');
       });
 
-      const rows = runtime.queryWithRole(stubPlan(), { role: 'anon' });
+      const rows = runtime.forRole({ role: 'anon' }).query(stubPlan());
       expect(driver.acquireConnectionSpy).not.toHaveBeenCalled();
 
       const iterator = rows[Symbol.asyncIterator]();
@@ -616,7 +305,7 @@ describe('SupabaseRuntimeImpl', () => {
         },
       });
 
-      await expect(runtime.queryWithRole(stubPlan(), { role: 'anon' }).toArray()).rejects.toBe(
+      await expect(runtime.forRole({ role: 'anon' }).query(stubPlan()).toArray()).rejects.toBe(
         streamError,
       );
 
@@ -625,17 +314,19 @@ describe('SupabaseRuntimeImpl', () => {
     });
   });
 
-  describe('executeWithRole — eager cleanup', () => {
+  describe('forRole(binding).execute — eager cleanup', () => {
     it('returns connection statistics then resets and releases', async () => {
       const observedSqls: string[] = [];
       const observer: SqlMiddleware = {
         name: 'execute-observer',
         familyId: 'sql',
-        beforeExecute(exec) {
+        beforeEncode(exec) {
           observedSqls.push(exec.sql);
         },
-        beforeQuery() {
-          throw new Error('query hook ran during execute');
+        intercept: {
+          async onQuery() {
+            throw new Error('query hook ran during execute');
+          },
         },
       };
       const { runtime, driver } = createTestSetup({ affectedRows: 4, middleware: [observer] });
@@ -651,7 +342,7 @@ describe('SupabaseRuntimeImpl', () => {
         cleanupEvents.push('release');
       });
 
-      const stats = await runtime.executeWithRole(stubPlan(), { role: 'service_role' });
+      const stats = await runtime.forRole({ role: 'service_role' }).execute(stubPlan());
 
       expect(stats).toBe(statementStats);
       expect(cleanupEvents).toEqual(['reset', 'release']);
@@ -670,7 +361,7 @@ describe('SupabaseRuntimeImpl', () => {
         return await execute(request);
       });
 
-      await expect(runtime.executeWithRole(stubPlan(), { role: 'anon' })).rejects.toBe(
+      await expect(runtime.forRole({ role: 'anon' }).execute(stubPlan())).rejects.toBe(
         executeError,
       );
 

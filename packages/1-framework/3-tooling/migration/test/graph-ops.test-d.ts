@@ -44,7 +44,7 @@ test('composite overload accepts a typed `key` and binds S to the composite', ()
     },
     (s) => {
       expectTypeOf(s).toEqualTypeOf<Composite>();
-      return `${s.node}\0${s.mask}`;
+      return JSON.stringify([s.node, s.mask]);
     },
   );
   expectTypeOf(gen).toEqualTypeOf<Generator<BfsStep<Composite, TestEdge>>>();
@@ -71,6 +71,6 @@ test('composite overload rejects neighbours that yield mismatched state shape', 
     [{ node: 'A', mask: 0 }],
     // @ts-expect-error — `next` must be Composite, not string
     (_s) => [{ next: 'B', edge: { from: 'A', to: 'B' } }],
-    (s) => `${s.node}\0${s.mask}`,
+    (s) => JSON.stringify([s.node, s.mask]),
   );
 });

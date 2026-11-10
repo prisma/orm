@@ -1,36 +1,68 @@
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import type { JsonValue } from '@internal/contract/types';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import mongoControlDriver from '@internal/driver-mongo/control';
-import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import {
+  type AuthoringTypeConstructorDescriptor,
+  assembleDataTypeSupport,
+} from '@internal/framework-components/authoring';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+  type DataTypeValue,
+} from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { planOriginOf } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
-import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
+import {
+  describeUnsupportedMongoAttribute,
+  interpretPslDocumentToMongoContract,
+  mongoAttributeSpecs,
+} from '@internal/mongo-contract-psl';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
+  mongoTargetDescriptor,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
+
+const { support: mongoDataTypeSupport } = assembleDataTypeSupport(
+  [mongoTargetDescriptor],
+  (codecId) => mongoDescriptorById(codecId)?.dataType,
+);
+
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => type.valueFrom(v as JsonValue, {}),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
+
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these integration tests.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 const bsonTypesByCodecId: Record<string, string> = {
   'mongo/string@1': 'string',
@@ -41,51 +73,63 @@ const bsonTypesByCodecId: Record<string, string> = {
   'mongo/double@1': 'double',
 };
 
-const mongoCodecLookup: CodecLookup = {
+const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const bsonType = bsonTypesByCodecId[id];
-    if (!bsonType) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
-      encodeJson: (v: unknown) => v as JsonValue,
-      decodeJson: (v: JsonValue) => v,
-    };
+    return bsonTypesByCodecId[id] ? identityCodec(id) : undefined;
   },
-  targetTypesFor(id: string) {
-    const bsonType = bsonTypesByCodecId[id];
-    return bsonType ? [bsonType] : undefined;
-  },
+  descriptorFor: (id: string) => (bsonTypesByCodecId[id] ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
 };
 
 function pslToContract(schema: string): MongoContract {
-  const scalarTypeCodecIds = new Map([
+  const scalarCodecIds = new Map([
     ['String', 'mongo/string@1'],
-    ['Int', 'mongo/int32@1'],
-    ['Boolean', 'mongo/bool@1'],
-    ['DateTime', 'mongo/date@1'],
+    ['Int32', 'mongo/int32@1'],
+    ['Bool', 'mongo/bool@1'],
+    ['Date', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
-    ['Float', 'mongo/double@1'],
+    ['Double', 'mongo/double@1'],
   ]);
-  const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: {},
-  });
-  const result = interpretPslDocumentToMongoContract({
-    document,
-    symbolTable,
-    sources,
-    scalarTypeCodecIds,
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...scalarCodecIds].map(([name, codecId]) => [
+        name,
+        { kind: 'typeConstructor' as const, output: { codecId } },
+      ]),
+    );
+  const bound = bindPslSchema(schema, {
+    sourceId: 'mongo-migration-schema.prisma',
+    context: {
+      composedExtensions: [],
+      defaultNamespaceId: '__unbound__',
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        type: scalarTypeConstructors,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: mongoDataTypeSupport.entries,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: mongoCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: mongoDataTypeSupport,
+      resolvedInputs: [],
+      capabilities: {},
     },
-    codecLookup: mongoCodecLookup,
   });
+  const result = withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+    }),
+    bound.seedDiagnostics,
+  );
   if (!result.ok) {
     throw new Error(`PSL interpretation failed: ${JSON.stringify(result)}`);
   }
@@ -104,6 +148,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -117,11 +163,7 @@ async function planAndApply(
   const controlDriver = await mongoControlDriver.create(replSetUri);
   try {
     const runner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        controlDriver,
-        MongoDriverImpl.fromDb(extractDb(controlDriver)),
-        makeFamily(),
-      ),
+      new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
     );
     const plan = {
       targetId: 'mongo',
@@ -215,12 +257,30 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(emailIdx!['unique']).toBe(true);
   });
 
+  it('PSL with @unique and @@index on one field creates one unique index', async () => {
+    const contract = pslToContract(`
+      model User {
+        id    ObjectId @id @map("_id")
+        email String   @unique
+        @@index([email])
+      }
+    `);
+
+    await planAndApply(replSetUri, null, contract);
+
+    const indexes = await db.collection('User').listIndexes().toArray();
+    expect(indexes.map(({ key, unique }) => ({ key, unique }))).toEqual([
+      { key: { _id: 1 }, unique: undefined },
+      { key: { email: 1 }, unique: true },
+    ]);
+  });
+
   it('PSL with model fields produces $jsonSchema validator on MongoDB', async () => {
     const contract = pslToContract(`
       model User {
         id    ObjectId @id @map("_id")
         name  String
-        age   Int
+        age   Int32
         bio   String?
       }
     `);
@@ -248,7 +308,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Post {
         id        ObjectId @id @map("_id")
         title     String
-        createdAt DateTime
+        createdAt Date
         @@index([createdAt])
       }
     `);
@@ -328,13 +388,13 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(wildcardIdx).toBeDefined();
   });
 
-  it('PSL with sort: Desc produces mixed-direction compound index', async () => {
+  it('PSL with sort(field, Desc) produces mixed-direction compound index', async () => {
     const contract = pslToContract(`
       model Events {
         id        ObjectId @id @map("_id")
         status    String
-        createdAt DateTime
-        @@index([status, createdAt(sort: Desc)])
+        createdAt Date
+        @@index([status, sort(createdAt, Desc)])
       }
     `);
 

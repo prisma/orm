@@ -16,7 +16,7 @@ The policy in ADR 222 is unchanged: the floor is a hard floor, declared in `pack
 
 The 17 floor was set during early access as "the latest GA release we test against" (ADR 222). Three facts argued for lowering it:
 
-1. **Our code needs far less than 17.** A full audit of emitted SQL, introspection queries, and migration DDL found a feature-implied floor of **PostgreSQL 12**. The single binding feature is `ALTER TYPE ... ADD VALUE` executed inside the migration runner's transaction (allowed since 12). The next tier down is 10 (`pg_attribute.attidentity`, `pg_policies.permissive`, `CREATE POLICY ... AS PERMISSIVE|RESTRICTIVE`). Nothing we emit or read requires 13, 14, 15, 16, or 17. A user-authored `@default(dbgenerated("gen_random_uuid()"))` needs 13; a 15 floor keeps that safe.
+1. **Our code needs far less than 17.** A full audit of emitted SQL, introspection queries, and migration DDL found a feature-implied floor of **PostgreSQL 12**. The single binding feature is `ALTER TYPE ... ADD VALUE` executed inside the migration runner's transaction (allowed since 12). The next tier down is 10 (`pg_attribute.attidentity`, `pg_policies.permissive`, `CREATE POLICY ... AS PERMISSIVE|RESTRICTIVE`). Nothing we emit or read requires 13, 14, 15, 16, or 17. A user-authored `` @default(sql`gen_random_uuid()`) `` needs 13; a 15 floor keeps that safe.
 2. **CI already tests 15, not 17.** Every Postgres service container in `.github/workflows/ci.yml` (Test, E2E, Integration, Coverage, CLI recording) runs `postgres:15`. ADR 222 stated the floor was enforced by the `docker-compose.yaml` image, but CI does not use docker-compose; the claim that 17 was "what CI exercises" was wrong. 15 is the version our test infrastructure actually proves.
 3. **The migrating audience runs older servers.** Prisma 8's promise of incremental migration from v7 is contradicted by a floor that excludes Postgres 15 and 16 users (see `projects/prisma-8-rc1/design-notes.md`). One example (`examples/react-router-demo`) already told users "Any Postgres 15+".
 
@@ -56,7 +56,7 @@ If any of these becomes worth emitting, the path is per-server capability gating
 
 ## Enforcement
 
-- Source of truth: `packages/3-targets/3-targets/postgres/package.json` → `prismaNext.minServerVersion: "15"`.
+- Source of truth: `packages/3-targets/postgres/1-target/package.json` → `prismaNext.minServerVersion: "15"`.
 - CLI mirror: `MIN_SERVER_VERSION.postgres` in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts`; the drift test in `tsconfig-env.test.ts` asserts the two match.
 - CI proves the floor: the `postgres:15` service containers in `.github/workflows/ci.yml`. **When bumping the floor, update these image tags** — this replaces ADR 222's step 3, which pointed only at `docker-compose.yaml`.
 - Local dev (`docker-compose.yaml`) also runs the floor version (`postgres:15-alpine`).

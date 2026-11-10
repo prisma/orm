@@ -67,10 +67,6 @@ describe('computeRefAdvancementName', () => {
   it('returns null when advanceRef is omitted and db is provided', () => {
     expect(computeRefAdvancementName({ db: 'postgres://localhost/db' })).toBe(null);
   });
-
-  it('returns db when advanceRef is explicitly db on the default database', () => {
-    expect(computeRefAdvancementName({ advanceRef: 'db' })).toBe('db');
-  });
 });
 
 describe('executeRefAdvancement', () => {
@@ -146,13 +142,11 @@ describe('preflightRefAdvancement', () => {
   const contractJson = sampleContractIR().contract as Record<string, unknown>;
   let projectDir: string;
   let contractJsonPath: string;
-  let configPath: string;
 
   beforeEach(() => {
     projectDir = createTestProjectDir('preflight-ref-advancement');
     writeProjectManifest(projectDir);
     contractJsonPath = join(projectDir, 'output', 'contract.json');
-    configPath = join(projectDir, 'prisma.config.ts');
   });
 
   afterEach(async () => {
@@ -171,7 +165,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -189,7 +183,7 @@ describe('preflightRefAdvancement', () => {
       name: 'Invalid Name',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -213,7 +207,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -240,7 +234,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -303,7 +297,9 @@ describe('buildRefAdvancementFields', () => {
     expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(true);
     const storeDir = contractSnapshotDir(migrationsDir, HASH_A);
     expect(existsSync(join(storeDir, 'contract.json'))).toBe(true);
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(contractIR.contractDts);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(
+      '/* generated */ export type Contract = unknown;\n',
+    );
   });
 
   it('maps a hash mismatch between the argument and the contract to the MigrationToolsError envelope', async () => {

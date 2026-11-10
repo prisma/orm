@@ -25,6 +25,7 @@
  *     the live database.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
   mkdirSync,
@@ -35,14 +36,14 @@ import {
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-mongo/components/control';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationToHash,
   migrationStatusAppSpace,
   parseJsonOutput,
   parseMigrationStatusJson,
@@ -53,6 +54,11 @@ import {
   runMigrationStatus,
   selfEmitMigration,
 } from '../utils/journey-test-helpers';
+import {
+  contractSnapshotFile,
+  mongoDataMigrationImports,
+  mongoMigrationModule,
+} from '../utils/journey-workspace-helpers';
 
 const INVARIANT_ID = 'lowercase-user-name';
 
@@ -84,24 +90,7 @@ function setupMongoJourney(connectionString: string | undefined): JourneyContext
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
 
-  // The journey's project states the one package it installs. Emission reads
-  // the nearest manifest to decide which names generated files carry, and
-  // without this the temp directory would inherit the shared fixture app's,
-  // which lists the whole workspace and looks nothing like a user's project.
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify(
-      {
-        name: 'mongo-journey-app',
-        private: true,
-        type: 'module',
-        dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-      },
-      null,
-      2,
-    ),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
 
   copyFileSync(join(FIXTURES_DIR, 'contract-base.ts'), join(testDir, 'contract.ts'));
 
@@ -161,13 +150,31 @@ function findMigrationDirBySlug(ctx: JourneyContext, slugFragment: string): stri
   return join(migrationsDir, match);
 }
 
+const SINGLE_LINE_DECLARATIONS_SCRIPT = `
+import { readFileSync } from 'node:fs';
+import { singleLineDeclarations } from '@prisma/orm-mongo/migration-tools/contract-snapshot-store';
+process.stdout.write(singleLineDeclarations(readFileSync(0, 'utf-8')));
+`;
+
+/**
+ * The store's single-line form of `text`, computed in a child process: loading the published package into this
+ * process beside the CLI's own copy makes the CLI refuse to run with `RUNTIME.MULTIPLE_ORM_COPIES`.
+ */
+function singleLineDeclarations(text: string): string {
+  return execFileSync(
+    process.execPath,
+    ['--input-type=module', '--eval', SINGLE_LINE_DECLARATIONS_SCRIPT],
+    { cwd: import.meta.dirname, input: text, encoding: 'utf-8' },
+  );
+}
+
 /** Path to a `migrations/snapshots/<hex>/contract.{json,d.ts}` store entry. */
 function contractSnapshotPath(
   ctx: JourneyContext,
   storageHash: string,
   file: 'contract.json' | 'contract.d.ts',
 ): string {
-  return join(ctx.testDir, 'migrations', 'snapshots', storageHashHex(storageHash), file);
+  return contractSnapshotFile(ctx.testDir, storageHash, file);
 }
 
 // Journey tests run multi-step CLI flows, which easily exceed the
@@ -195,7 +202,7 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     const migrationDir = getLatestMigrationDir(ctx);
 
     const migrationTs = readFileSync(join(migrationDir, 'migration.ts'), 'utf-8');
-    expect(migrationTs).toContain('@prisma/orm-mongo/target/migration');
+    expect(migrationTs).toContain(mongoMigrationModule);
     expect(migrationTs).toContain('createIndex');
     // Prettier rewrites double-quoted literals to single-quoted on disk.
     expect(migrationTs).toContain("'users'");
@@ -205,9 +212,9 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       readFileSync(join(migrationDir, 'migration.json'), 'utf-8'),
     ) as { to: string };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(
         readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.json'), 'utf-8'),
@@ -215,7 +222,7 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
     expect(
       readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.d.ts'), 'utf-8'),
-    ).toBe(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'));
+    ).toBe(singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')));
 
     // Plan leaves a draft migration; self-emit by running migration.ts in-process to
     // produce `ops.json` and the attested `migration.json`.
@@ -256,14 +263,19 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     const emit1 = await runContractEmit(ctx);
     expect(emit1.exitCode, `contract emit additive: ${emit1.stderr}`).toBe(0);
 
-    const newResult = await runMigrationNew(ctx, ['--name', 'add-name-index']);
+    const newResult = await runMigrationNew(ctx, [
+      '--name',
+      'add-name-index',
+      '--from',
+      latestMigrationToHash(ctx),
+    ]);
     expect(newResult.exitCode, `migration new: ${newResult.stdout}\n${newResult.stderr}`).toBe(0);
 
     const migrationDir = findMigrationDirBySlug(ctx, 'add_name_index');
 
     const migrationTs = readFileSync(join(migrationDir, 'migration.ts'), 'utf-8');
     expect(migrationTs).toContain(
-      "import { Migration, MigrationCLI } from '@prisma/orm-mongo/target/migration'",
+      `import { Migration, MigrationCLI } from '${mongoMigrationModule}'`,
     );
     // New generator shape: the base derives describe() from the imported contract
     // JSON, so the scaffold carries `Migration<…, End>` + the endContractJson
@@ -281,14 +293,14 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       migrationHash: string;
     };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.json'), 'utf-8')),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
     expect(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8')).toBe(
-      readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
+      singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')),
     );
 
     const ops = JSON.parse(readFileSync(join(migrationDir, 'ops.json'), 'utf-8'));
@@ -376,7 +388,12 @@ describe('Journey: Mongo migration authoring (live database)', {
     const emit1 = await runContractEmit(ctx);
     expect(emit1.exitCode, `contract emit additive: ${emit1.stderr}`).toBe(0);
 
-    const newResult = await runMigrationNew(ctx, ['--name', 'normalize-names']);
+    const newResult = await runMigrationNew(ctx, [
+      '--name',
+      'normalize-names',
+      '--from',
+      latestMigrationToHash(ctx),
+    ]);
     expect(newResult.exitCode, `migration new: ${newResult.stdout}\n${newResult.stderr}`).toBe(0);
 
     const migrationDir = findMigrationDirBySlug(ctx, 'normalize_names');
@@ -390,9 +407,7 @@ describe('Journey: Mongo migration authoring (live database)', {
     // The check finds documents whose `name` contains an uppercase letter;
     // after the transform all names are lower-case so the check is
     // satisfied, enabling idempotency-skip on re-apply (tested below).
-    const handAuthored = `import { createIndex, dataTransform, Migration, MigrationCLI } from '@prisma/orm-mongo/target/migration';
-import { RawUpdateManyCommand, RawAggregateCommand } from '@prisma/orm-mongo/query-ast/execution';
-
+    const handAuthored = `${mongoDataMigrationImports()}
 const planMeta = {
   target: 'mongo',
   storageHash: 'hand-authored',

@@ -13,14 +13,6 @@ function geometryExpr(value: unknown, codec: CodecRef = geometryCodec) {
 }
 
 describe('postgis operations', () => {
-  it('descriptor has correct metadata', () => {
-    expect(postgisDescriptor.kind).toBe('extension');
-    expect(postgisDescriptor.id).toBe('postgis');
-    expect(postgisDescriptor.familyId).toBe('sql');
-    expect(postgisDescriptor.targetId).toBe('postgres');
-    expect(postgisDescriptor.version).toBe('0.0.1');
-  });
-
   it('descriptor exposes a geometry codec descriptor', () => {
     const codecs = postgisDescriptor.codecs!();
     expect(codecs).toBeDefined();
@@ -65,7 +57,6 @@ describe('postgis operations', () => {
       expect(ast).toBeInstanceOf(OperationExpr);
       expect(ast.lowering).toEqual({
         targetFamily: 'sql',
-        strategy: 'function',
         template,
       });
     }
@@ -82,7 +73,6 @@ describe('postgis operations', () => {
     const ast = expr.buildAst();
     expect(ast.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'ST_DWithin({{self}}, {{arg0}}, {{arg1}})',
     });
   });

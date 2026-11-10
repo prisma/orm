@@ -1,5 +1,5 @@
 import { deepStrictEqual, strictEqual, throws } from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -41,6 +41,28 @@ describe('add-model-map CLI', () => {
       );
       strictEqual(stdout.includes('node_modules'), false);
       strictEqual(stdout.includes('dist/'), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when no file matches', () => {
+    const wip = join(here, '..', '..', 'wip');
+    mkdirSync(wip, { recursive: true });
+    const root = mkdtempSync(join(wip, 'add-model-map-cli-'));
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [join(here, 'add-model-map.mjs'), 'typo/**/*.prisma'],
+        {
+          cwd: root,
+          encoding: 'utf8',
+        },
+      );
+      deepStrictEqual(
+        { status: result.status, stderr: result.stderr },
+        { status: 1, stderr: 'no files matched\n' },
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -453,14 +475,14 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), expected);
   });
 
-  it('is byte-identical to the copies shipped in the pending upgrade fragments', () => {
+  it('is byte-identical to the copies shipped in the upgrade guides', () => {
     const repoCopy = readFileSync(`${here}add-model-map.mjs`, 'utf8');
     for (const audience of ['app', 'extension']) {
-      const fragmentCopy = readFileSync(
-        `${here}../../upgrade-instructions/pending/psl-verbatim-table-names/${audience}/scripts/add-model-map.mjs`,
+      const shippedCopy = readFileSync(
+        `${here}../../skills/prisma-8/upgrading/${audience}/upgrades/8.0.0-rc.11-to-8.0.0-rc.12/scripts/psl-verbatim-table-names/add-model-map.mjs`,
         'utf8',
       );
-      strictEqual(fragmentCopy, repoCopy, audience);
+      strictEqual(shippedCopy, repoCopy, audience);
     }
   });
 

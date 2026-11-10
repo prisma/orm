@@ -1,0 +1,7 @@
+{
+  "from": null,
+  "to": "3d2c56a2944685bd21b05bc8a8d73164397df51c014201902932fbe7e80ff1b8",
+  "providedInvariants": ["pgvector:install-vector-v1"],
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "migrationHash": "ffa170b2fba1b7fa75dd89fe0a4ac1e1991877e98b7667326d8304249d172dad"
+}

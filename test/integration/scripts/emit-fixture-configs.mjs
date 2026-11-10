@@ -17,7 +17,20 @@ import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = resolve(packageRoot, '../../packages/1-framework/3-tooling/cli/dist/bin.mjs');
-const fixtureRoots = ['test/ports', 'test/enum-order-by', 'test/sql-builder/fixtures'];
+const fixtureRoots = [
+  'test/ports',
+  'test/enum-order-by',
+  'test/enum-members',
+  'test/sql-builder/fixtures',
+  'test/planner-golden/fixtures',
+  'test/contract-parity/fixtures',
+  'test/mongo/bson-scalars',
+  'test/mongo/list-filters',
+  'test/mongo/temporal-generators',
+  'test/mongo/prisma6-source',
+  'test/mongo/recursive-value-objects',
+  'test/value-objects/fixtures',
+];
 
 function findConfigs(dir) {
   const found = [];

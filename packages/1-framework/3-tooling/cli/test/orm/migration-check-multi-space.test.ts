@@ -1,10 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MigrationCheckResult } from '../../src/commands/json/schemas';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   contractJson,
   createOfflineProject,
@@ -46,7 +46,7 @@ function postgisExtension(): Record<string, unknown> {
 function harness(project: OfflineProject, options: { readonly declared?: boolean } = {}) {
   const base = offlineConfig({ project });
   const config = options.declared === false ? base : { ...base, extensions: [postgisExtension()] };
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 async function seedHeadRef(spaceDir: string, hash: string): Promise<void> {

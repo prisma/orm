@@ -2,17 +2,17 @@
   "failureSummary": "PSL to SQL contract interpretation failed",
   "diagnostics": [
     {
-      "code": "PSL_INVALID_ATTRIBUTE_SYNTAX",
+      "code": "PSL_INVALID_GENERATOR_ARGUMENT",
       "sourceId": "./schema.prisma",
       "startLine": 5
     },
     {
-      "code": "PSL_INVALID_ATTRIBUTE_SYNTAX",
+      "code": "PSL_INVALID_GENERATOR_ARGUMENT",
       "sourceId": "./schema.prisma",
       "startLine": 6
     },
     {
-      "code": "PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT",
+      "code": "PSL_INVALID_ATTRIBUTE_SYNTAX",
       "sourceId": "./schema.prisma",
       "startLine": 7
     }

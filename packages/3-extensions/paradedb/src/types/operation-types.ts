@@ -1,4 +1,7 @@
-import type { SqlQueryOperationTypes } from '@internal/sql-contract/types';
+import type {
+  QueryOperationTypesFunction,
+  SqlQueryOperationTypes,
+} from '@internal/sql-contract/types';
 import type { CodecExpression, Expression } from '@internal/sql-relational-core/expression';
 import type { ParadeDbProximityChain } from '../core/proximity-chain';
 
@@ -82,3 +85,8 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     };
   }
 >;
+
+/** {@link QueryOperationTypes} as a function of the contract's codec types, for a contract written in TypeScript. */
+export interface QueryOperationTypesForCodecs extends QueryOperationTypesFunction {
+  readonly queryOperationTypes: QueryOperationTypes<this['codecTypes']>;
+}

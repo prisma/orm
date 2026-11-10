@@ -2,7 +2,7 @@
  * Hashes a canonical-string representation of an execution into a bounded,
  * opaque cache-key digest.
  *
- * Designed for use as the final step of `RuntimeMiddlewareContext.contentHash`
+ * Designed for use as the final step of `ActivityContext.contentHash`
  * implementations: family runtimes compose a canonical string from
  * `meta.storageHash`, the rendered statement (or wire command), and
  * canonicalized parameters via `canonicalStringify`, then pipe the result

@@ -1,28 +1,31 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
+import { join, resolve } from 'pathe';
 import { createControlClient } from '../../control-api/client';
 import type { MigrationNewResult } from '../../control-api/operations/migration-new';
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
+import { type CliInvocation, cliInvocation, selfEmitCommand } from '../../utils/printed-command';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { appMigrationsDirFor, contractPathFor, displayPath, projectConfigPathFor } from './paths';
+import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
 
 function newPresentations(inputs: {
   readonly document: MigrationNewResult;
   readonly contractPath: string;
   readonly appMigrationsRelative: string;
+  readonly invocation: CliInvocation;
 }): Presentations {
   const { document } = inputs;
   const migrationTs = join(document.dir, 'migration.ts');
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.dir]),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -52,7 +55,7 @@ function newPresentations(inputs: {
       { kind: 'edit-file', label: `Write the migration body in ${migrationTs}` },
       runCommandAction(
         'Run it to self-emit ops.json and attest the package',
-        `node "${migrationTs}"`,
+        selfEmitCommand(inputs.invocation, resolve(inputs.invocation.cwd, migrationTs)),
       ),
     ],
   };
@@ -64,8 +67,8 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       summary: 'Scaffold a new migration for manual authoring',
       description:
         'Creates a migration package with a migration.ts file for manual authoring.\n' +
-        'Write the migration body in migration.ts, then run the file with Node\n' +
-        '(`node migration.ts`) to self-emit ops.json and attest the package.\n' +
+        'Write the migration body in migration.ts, then run the file with Node, as this\n' +
+        'command prints, to self-emit ops.json and attest the package.\n' +
         'Offline — does not consult the database.',
       examples: [
         'migration new --name split-name',
@@ -80,7 +83,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
           placeholder: 'slug',
         }),
         from: flag.string({
-          brief: 'Starting contract hash (default: latest migration target)',
+          brief: 'Starting contract hash (default: the db ref)',
           placeholder: 'hash',
         }),
       },
@@ -90,7 +93,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        configPath: projectConfigPathFor(ctx.cwd),
+        projectDir: baseDirFor(ctx.config),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({
@@ -105,7 +108,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(scaffolded.failure));
       }
 
-      const contractPath = contractPathFor(ctx.config, ctx.cwd);
+      const contractPath = contractPathFor(ctx.config);
       return ok(
         ctx.present(
           { data: scaffolded.value },
@@ -113,7 +116,8 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
             document: scaffolded.value,
             contractPath:
               contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
-            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
+            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config), ctx.cwd),
+            invocation: cliInvocation(ctx, undefined),
           }),
         ),
       );

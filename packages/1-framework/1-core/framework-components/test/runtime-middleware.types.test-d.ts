@@ -2,10 +2,16 @@ import type { PlanMeta } from '@internal/contract/types';
 import { assertType, expectTypeOf, test } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import type {
+  Activity,
+  ActivityContext,
+  ActivityEndedResult,
+  ActivityFinalizedResult,
+  CrossFamilyMiddleware,
+  ExecuteInterceptResult,
   QueryInterceptResult,
   RuntimeExecutor,
   RuntimeMiddleware,
-  RuntimeMiddlewareContext,
+  RuntimeStatementStats,
 } from '../src/execution/runtime-middleware';
 
 test('framework ExecutionPlan satisfies RuntimeExecutor plan constraint', () => {
@@ -42,65 +48,158 @@ test('type without meta does not satisfy plan constraint', () => {
 test('RuntimeMiddleware default plan parameter sees only QueryPlan fields', () => {
   const middleware: RuntimeMiddleware = {
     name: 'test',
-    async beforeQuery(plan) {
+    async beforeEncode(plan, ctx) {
       assertType<PlanMeta>(plan.meta);
+      assertType<ActivityContext>(ctx);
     },
     async onRow(row, plan) {
       assertType<Record<string, unknown>>(row);
       assertType<PlanMeta>(plan.meta);
     },
-    async afterQuery(plan, result) {
-      assertType<PlanMeta>(plan.meta);
-      assertType<number>(result.rowCount);
-      assertType<number>(result.latencyMs);
-      assertType<boolean>(result.completed);
-      assertType<'driver' | 'middleware'>(result.source);
-    },
   };
   void middleware;
 });
 
-test('RuntimeMiddleware.interceptQuery is optional', () => {
-  // No `interceptQuery` field — perfectly valid.
-  const observer: RuntimeMiddleware = {
-    name: 'observer',
-    async beforeQuery() {},
-  };
-  void observer;
-});
-
-test('RuntimeMiddleware.interceptQuery receives the plan and context, returns Promise<QueryInterceptResult | undefined>', () => {
-  const interceptQueryor: RuntimeMiddleware = {
-    name: 'interceptQueryor',
-    async interceptQuery(plan, ctx) {
-      assertType<PlanMeta>(plan.meta);
-      assertType<RuntimeMiddlewareContext>(ctx);
-      return undefined;
-    },
-  };
-  void interceptQueryor;
-
-  // The hook's return type is exactly `Promise<QueryInterceptResult | undefined>`.
-  type InterceptHook = NonNullable<RuntimeMiddleware['interceptQuery']>;
-  expectTypeOf<ReturnType<InterceptHook>>().toEqualTypeOf<
-    Promise<QueryInterceptResult | undefined>
-  >();
-});
-
-test('RuntimeMiddleware.interceptQuery narrows the plan parameter alongside other hooks', () => {
+test('the statement hooks narrow the plan parameter to the family plan', () => {
   interface SqlExec extends ExecutionPlan {
     readonly sql: string;
     readonly params: readonly unknown[];
   }
   const middleware: RuntimeMiddleware<SqlExec> = {
-    name: 'sql-interceptQueryor',
-    async interceptQuery(plan) {
+    name: 'sql',
+    async beforeEncode(plan) {
       assertType<string>(plan.sql);
-      assertType<readonly unknown[]>(plan.params);
-      return undefined;
+    },
+    intercept: {
+      async onQuery(plan) {
+        assertType<readonly unknown[]>(plan.params);
+        return undefined;
+      },
+      async onExecute(plan) {
+        assertType<string>(plan.sql);
+        return undefined;
+      },
+    },
+    async onRow(_row, plan) {
+      assertType<string>(plan.sql);
     },
   };
   void middleware;
+});
+
+test('a middleware with only lifecycle events is a cross-family middleware', () => {
+  const observer = {
+    name: 'observer',
+    async activityStarted(activity: Activity, ctx: ActivityContext) {
+      void activity;
+      void ctx;
+    },
+    async activityEnded(_activity: Activity, _result: ActivityEndedResult) {},
+    async activityFinalized(_activity: Activity, _result: ActivityFinalizedResult) {},
+  };
+  expectTypeOf(observer).toExtend<CrossFamilyMiddleware>();
+  expectTypeOf(observer).toExtend<RuntimeMiddleware>();
+  const middleware: CrossFamilyMiddleware[] = [observer];
+  void middleware;
+});
+
+test('the intercept handlers return their own result type', () => {
+  type Intercept = NonNullable<RuntimeMiddleware['intercept']>;
+  expectTypeOf<ReturnType<NonNullable<Intercept['onQuery']>>>().toEqualTypeOf<
+    Promise<QueryInterceptResult | undefined>
+  >();
+  expectTypeOf<ReturnType<NonNullable<Intercept['onExecute']>>>().toEqualTypeOf<
+    Promise<ExecuteInterceptResult | undefined>
+  >();
+});
+
+test('intercept.onQuery returning statistics does not compile, nor onExecute returning rows', () => {
+  const wrongQuery: RuntimeMiddleware = {
+    name: 'wrong-query',
+    intercept: {
+      // @ts-expect-error - onQuery supplies rows, not statistics
+      async onQuery() {
+        return { stats: { affectedRows: 1 } };
+      },
+    },
+  };
+  const wrongExecute: RuntimeMiddleware = {
+    name: 'wrong-execute',
+    intercept: {
+      // @ts-expect-error - onExecute supplies statistics, not rows
+      async onExecute() {
+        return { rows: [{ id: 1 }] };
+      },
+    },
+  };
+  void wrongQuery;
+  void wrongExecute;
+});
+
+test('the lifecycle events receive the activity, its result and its context', () => {
+  type Middleware = Required<RuntimeMiddleware>;
+  expectTypeOf<Parameters<Middleware['activityStarted']>>().toEqualTypeOf<
+    [Activity, ActivityContext]
+  >();
+  expectTypeOf<Parameters<Middleware['activityEnded']>>().toEqualTypeOf<
+    [Activity, ActivityEndedResult, ActivityContext]
+  >();
+  expectTypeOf<Parameters<Middleware['activityFinalized']>>().toEqualTypeOf<
+    [Activity, ActivityFinalizedResult, ActivityContext]
+  >();
+  expectTypeOf<ReturnType<Middleware['activityFinalized']>>().toEqualTypeOf<Promise<void>>();
+  expectTypeOf<ActivityFinalizedResult['outcome']>().toEqualTypeOf<
+    'committed' | 'rolled-back' | 'unknown'
+  >();
+});
+
+test('activityEnded narrows its result by kind and by returns', () => {
+  const middleware: CrossFamilyMiddleware = {
+    name: 'narrowing',
+    async activityEnded(activity, result) {
+      if (activity.kind === 'statement') {
+        expectTypeOf(activity.returns).toEqualTypeOf<'rows' | 'stats'>();
+        assertType<PlanMeta>(activity.plan.meta);
+      }
+      if (result.kind === 'transaction') {
+        expectTypeOf(result.outcome).toEqualTypeOf<'succeeded' | 'failed'>();
+        // @ts-expect-error - a transaction result has no latency
+        void result.latencyMs;
+        return;
+      }
+      if (result.kind !== 'statement') return;
+      expectTypeOf(result.outcome).toEqualTypeOf<'succeeded' | 'failed' | 'stopped'>();
+      expectTypeOf(result.latencyMs).toEqualTypeOf<number>();
+      expectTypeOf(result.source).toEqualTypeOf<'driver' | 'middleware'>();
+      if (result.returns === 'rows') {
+        expectTypeOf(result.rowCount).toEqualTypeOf<number>();
+        // @ts-expect-error - a rows result carries no statistics
+        void result.stats;
+      } else {
+        expectTypeOf(result.stats).toEqualTypeOf<RuntimeStatementStats | undefined>();
+        // @ts-expect-error - a statistics result carries no row count
+        void result.rowCount;
+      }
+    },
+  };
+  void middleware;
+});
+
+test('ActivityContext has the runtime fields and the tree members', () => {
+  expectTypeOf<ActivityContext>().toHaveProperty('contract');
+  expectTypeOf<ActivityContext>().toHaveProperty('mode');
+  expectTypeOf<ActivityContext>().toHaveProperty('log');
+  expectTypeOf<ActivityContext>().toHaveProperty('now');
+  expectTypeOf<ActivityContext['contentHash']>().returns.resolves.toBeString();
+  expectTypeOf<ActivityContext['scope']>().toEqualTypeOf<
+    'runtime' | 'connection' | 'transaction'
+  >();
+  expectTypeOf<ActivityContext['parent']>().toEqualTypeOf<ActivityContext | undefined>();
+  expectTypeOf<ActivityContext['state']>().toEqualTypeOf<
+    (key: string | symbol) => Record<string | symbol, unknown>
+  >();
+  expectTypeOf<ActivityContext['inTransaction']>().toEqualTypeOf<() => boolean>();
+  expectTypeOf<ActivityContext>().not.toHaveProperty('operation');
 });
 
 test('QueryInterceptResult.rows accepts Iterable, AsyncIterable, and arrays', () => {
@@ -132,35 +231,6 @@ test('QueryInterceptResult.rows accepts Iterable, AsyncIterable, and arrays', ()
 test('QueryInterceptResult rejects rows whose elements are not Record<string, unknown>', () => {
   // @ts-expect-error - row elements must be Record<string, unknown>
   const _bad: QueryInterceptResult = { rows: [1, 2, 3] };
-});
-
-test('RuntimeMiddleware narrowed to a SQL plan sees the SQL fields', () => {
-  interface SqlExec extends ExecutionPlan {
-    readonly sql: string;
-    readonly params: readonly unknown[];
-  }
-  const middleware: RuntimeMiddleware<SqlExec> = {
-    name: 'sql-test',
-    async beforeQuery(plan) {
-      assertType<string>(plan.sql);
-      assertType<readonly unknown[]>(plan.params);
-    },
-  };
-  void middleware;
-});
-
-test('RuntimeMiddlewareContext has contract, mode, log, now, contentHash, scope', () => {
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('contract');
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('mode');
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('log');
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('now');
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('contentHash');
-  expectTypeOf<RuntimeMiddlewareContext['contentHash']>().toBeFunction();
-  expectTypeOf<RuntimeMiddlewareContext['contentHash']>().returns.resolves.toBeString();
-  expectTypeOf<RuntimeMiddlewareContext>().toHaveProperty('scope');
-  expectTypeOf<RuntimeMiddlewareContext['scope']>().toEqualTypeOf<
-    'runtime' | 'connection' | 'transaction'
-  >();
 });
 
 test('RuntimeMiddleware familyId and targetId are optional', () => {

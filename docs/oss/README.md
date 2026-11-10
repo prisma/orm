@@ -14,6 +14,7 @@ These pages are written for maintainers and curious contributors who want to und
 | Triaging incoming contributor PRs | [PR triage](./pr-triage.md) |
 | Curious about supply-chain hygiene | [Supply chain](./supply-chain.md) |
 | Wondering how PR CI is structured for cost | [PR CI pipeline](./ci-pipeline.md) |
+| Asking which version line takes a change, or how long Prisma 7 is maintained | [Versioning](./versioning.md#supported-versions) |
 | Reasoning about the version contract (consumer or extension author) | [Versioning](./versioning.md) |
 | Cutting a release (or auditing how) | [Versioning](./versioning.md) |
 
@@ -23,4 +24,4 @@ These pages are written for maintainers and curious contributors who want to und
 - [`supply-chain.md`](./supply-chain.md) — License declarations, NOTICE audit, npm provenance, Dependabot soak window.
 - [`ci-pipeline.md`](./ci-pipeline.md) — How PR CI builds once, caches deterministic tasks, and skips heavy work on inert diffs.
 - [`pr-triage.md`](./pr-triage.md) — Criteria for triaging external contributor PRs: fork-CI safety, version-line scope, direction fit, staleness, and the verdict vocabulary.
-- [`versioning.md`](./versioning.md) — Release-candidate cadence and breaking-change policy, lockstep contract (and what it means for skill/extension authors), dist-tag convention, release procedure.
+- [`versioning.md`](./versioning.md) — Which versions are supported and what each receives, release-candidate cadence and breaking-change policy, lockstep contract (and what it means for skill/extension authors), dist-tag convention, release procedure.

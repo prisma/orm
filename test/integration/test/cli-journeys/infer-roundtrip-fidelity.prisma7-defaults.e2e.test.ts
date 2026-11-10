@@ -49,7 +49,7 @@
  * }
  * ```
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
@@ -119,6 +119,9 @@ CREATE TABLE "sql_defaults" (
     "realNaN" REAL NOT NULL DEFAULT 'NaN',
     "decimalNaN" NUMERIC NOT NULL DEFAULT 'NaN',
     "timeWithZone" TIMETZ NOT NULL DEFAULT '12:34:56+00',
+    "stampInfinity" TIMESTAMP(3) NOT NULL DEFAULT 'infinity',
+    "dayNegInfinity" DATE NOT NULL DEFAULT '-infinity',
+    "instantBc" TIMESTAMPTZ(6) NOT NULL DEFAULT '0044-03-15 00:00:00+00 BC',
 
     CONSTRAINT "sql_defaults_pkey" PRIMARY KEY ("id")
 );
@@ -132,12 +135,6 @@ CREATE TABLE "raw_list_defaults" (
     CONSTRAINT "raw_list_defaults_pkey" PRIMARY KEY ("id")
 );
 `;
-
-/**
- * `db init` renders a `dbgenerated` timestamp default through a codec that needs a global
- * `Temporal`, which the CLI does not install.
- */
-const DB_INIT_UNSUPPORTED_FIELDS = ['stamp'] as const;
 
 interface VerifyIssue {
   readonly path: readonly string[];
@@ -155,14 +152,13 @@ function output(run: EngineCommandResult): string {
   return `${stripAnsi(run.stderr)}\n${stripAnsi(run.stdout)}`;
 }
 
-function withoutFields(psl: string, fields: readonly string[]): string {
-  return psl
-    .split('\n')
-    .filter((line) => !fields.includes(line.trim().split(/\s+/)[0] ?? ''))
-    .join('\n');
+async function inferInto(ctx: JourneyContext): Promise<string> {
+  const psl = await inferPsl(ctx);
+  expect(psl).not.toContain('dbgenerated');
+  return psl;
 }
 
-async function inferInto(ctx: JourneyContext): Promise<string> {
+async function inferPsl(ctx: JourneyContext): Promise<string> {
   const infer = await runContractInfer(ctx);
   expect(infer.exitCode, `contract infer\n${output(infer)}`).toBe(0);
   return readContractPsl(ctx);
@@ -180,7 +176,7 @@ withTempDir(({ createTempDir }) => {
       const emptyDb = useDevDatabase();
 
       it(
-        'infer prints each default as the literal its codec accepts, or as dbgenerated when a scalar has none',
+        'infer prints each default as the literal its codec accepts, or as a sql tagged literal when a scalar has none',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -193,52 +189,55 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model ListDefaults {
-              id             Int                @id(map: "list_defaults_pkey")
-              negInts        Int[]?             @default([-1, 2]) @noCheck(elementNotNull)
-              negSmallInts   SmallInt[]?        @default([-1, 2]) @noCheck(elementNotNull)
-              bigInts        BigInt[]?          @default([1, 2]) @noCheck(elementNotNull)
-              negBigInts     BigInt[]?          @default([-1, 2]) @noCheck(elementNotNull)
-              emptyBigInts   BigInt[]?          @default([]) @noCheck(elementNotNull)
-              hugeBigInts    BigInt[]?          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
-              negFloats      Float[]?           @default([-1.5, 2]) @noCheck(elementNotNull)
-              negDecimals    Numeric(65, 30)[]? @default(["-1.5", "2"]) @noCheck(elementNotNull)
-              longDecimals   Numeric(65, 30)[]? @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
-              scaledDecimals Numeric(10, 2)[]?  @default(["-1.25", "2"]) @noCheck(elementNotNull)
-              emptyVarchars  VarChar(32)[]?     @default([]) @noCheck(elementNotNull)
+              id             Int                                      @id(map: "list_defaults_pkey")
+              negInts        Int?[]?                                  @default([-1, 2])
+              negSmallInts   Int(storage: int2)?[]?                   @default([-1, 2])
+              bigInts        BigInt?[]?                               @default([1, 2])
+              negBigInts     BigInt?[]?                               @default([-1, 2])
+              emptyBigInts   BigInt?[]?                               @default([])
+              hugeBigInts    BigInt?[]?                               @default([9007199254740993, -9007199254740993])
+              negFloats      Float?[]?                                @default([-1.5, 2])
+              negDecimals    Decimal(precision: 65, scale: 30)?[]?    @default([-1.5, 2])
+              longDecimals   Decimal(precision: 65, scale: 30)?[]?    @default([12345678901234567890.123456789, 0.000000000000000001])
+              scaledDecimals Decimal(precision: 10, scale: 2)?[]?     @default([-1.25, 2])
+              emptyVarchars  String(storage: varchar, length: 32)?[]? @default([])
 
               @@map("list_defaults")
             }
 
             model NumberDefaults {
-              id            Int             @id(map: "number_defaults_pkey")
-              negInt        Int             @default(-1)
-              negSmallInt   SmallInt        @default(-2)
-              negFloat      Float           @default(-1.5)
-              tinyFloat     Float           @default(0.0000001)
-              negReal       Real            @default(-2.5)
-              negDecimal    Numeric(65, 30) @default("-0.5")
-              longDecimal   Numeric(65, 30) @default("12345678901234567890.123456789")
-              tinyDecimal   Numeric(65, 30) @default("0.000000000000000001")
-              scaleDecimal  Numeric(65, 30) @default("1.50")
-              wholeDecimal  Numeric(65, 30) @default("10")
-              scaledDecimal Numeric(10, 2)  @default("-1.25")
-              negSafeBigInt BigInt          @default(-5)
-              negBigInt     BigInt          @default(-9007199254740993)
-              hugeBigInt    BigInt          @default(9007199254740993)
-              stamp         Timestamp(3)    @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
-              jsonNull      Jsonb?          @default(dbgenerated("'null'::jsonb"))
+              id            Int                               @id(map: "number_defaults_pkey")
+              negInt        Int                               @default(-1)
+              negSmallInt   Int(storage: int2)                @default(-2)
+              negFloat      Float                             @default(-1.5)
+              tinyFloat     Float                             @default(0.0000001)
+              negReal       Float(storage: float4)            @default(-2.5)
+              negDecimal    Decimal(precision: 65, scale: 30) @default(-0.5)
+              longDecimal   Decimal(precision: 65, scale: 30) @default(12345678901234567890.123456789)
+              tinyDecimal   Decimal(precision: 65, scale: 30) @default(0.000000000000000001)
+              scaleDecimal  Decimal(precision: 65, scale: 30) @default(1.5)
+              wholeDecimal  Decimal(precision: 65, scale: 30) @default(10)
+              scaledDecimal Decimal(precision: 10, scale: 2)  @default(-1.25)
+              negSafeBigInt BigInt                            @default(-5)
+              negBigInt     BigInt                            @default(-9007199254740993)
+              hugeBigInt    BigInt                            @default(9007199254740993)
+              stamp         DateTime(storage: timestamp)      @default(timestamp\`2024-01-01T00:00:00\`)
+              jsonNull      Jsonb?                            @default(json\`null\`)
 
               @@map("number_defaults")
             }
 
             model SqlDefaults {
-              id           Int          @id(map: "sql_defaults_pkey")
-              textNull     VarChar(32)? @default(dbgenerated("NULL::character varying"))
-              floatNaN     Float        @default("NaN")
-              floatNegInf  Float        @default("-Infinity")
-              realNaN      Real         @default("NaN")
-              decimalNaN   Numeric      @default("NaN")
-              timeWithZone Timetz       @default("12:34:56+00")
+              id             Int                                                    @id(map: "sql_defaults_pkey")
+              textNull       String(storage: varchar, length: 32)?                  @default(sql\`NULL::character varying\`)
+              floatNaN       Float                                                  @default(NaN)
+              floatNegInf    Float                                                  @default(-Infinity)
+              realNaN        Float(storage: float4)                                 @default(NaN)
+              decimalNaN     Decimal                                                @default(NaN)
+              timeWithZone   Time(storage: timetz)                                  @default(timetz\`12:34:56Z\`)
+              stampInfinity  DateTime(as: string, storage: timestamp, precision: 3) @default(timestamp\`infinity\`)
+              dayNegInfinity Date                                                   @default(date\`-infinity\`)
+              instantBc      DateTime(precision: 6)                                 @default(timestamptz\`-000043-03-15T00:00:00Z\`)
 
               @@map("sql_defaults")
             }
@@ -278,8 +277,7 @@ withTempDir(({ createTempDir }) => {
             createTempDir,
             contractMode: 'psl',
           });
-          const psl = withoutFields(await inferInto(ctx), DB_INIT_UNSUPPORTED_FIELDS);
-          writeFileSync(join(ctx.testDir, 'contract.prisma'), psl, 'utf-8');
+          await inferInto(ctx);
 
           const emit = await runContractEmit(ctx);
           expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
@@ -301,13 +299,13 @@ withTempDir(({ createTempDir }) => {
       );
     });
 
-    describe('given list defaults with an element that has no PSL literal', () => {
+    describe('given a temporal list default', () => {
       const db = useDevDatabase({
         onReady: (cs) => withClient(cs, (client) => client.query(RAW_LIST_DEFAULTS_SQL)),
       });
 
       it(
-        'infer prints them as dbgenerated, which emit accepts: a list column takes any storage default',
+        'infer prints each element as the literal its codec reads, which emit accepts',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -320,8 +318,8 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model RawListDefaults {
-              id         Int             @id(map: "raw_list_defaults_pkey")
-              timestamps Timestamp(3)[]? @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+              id         Int                              @id(map: "raw_list_defaults_pkey")
+              timestamps DateTime(storage: timestamp)?[]? @default([timestamp\`2024-01-01T00:00:00\`])
 
               @@map("raw_list_defaults")
             }

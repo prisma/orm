@@ -7,6 +7,7 @@ import {
   errorSnapshotMissing,
   errorUnexpected,
 } from '../../utils/cli-errors';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 
 export function mapContractAtError(
   error: unknown,
@@ -31,7 +32,7 @@ export function mapContractAtError(
         return notOk(
           errorContractValidationFailed(
             `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error },
+            { where: { path: filePath }, cause: error, meta: contractValidationMeta(error) },
           ),
         );
       }

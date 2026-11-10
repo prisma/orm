@@ -12,7 +12,7 @@ import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
+import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
@@ -25,9 +25,9 @@ import { rejectionShape } from './error-shape';
 /**
  * SQLite's side of the cut, through a real ORM include.
  *
- * The include nests the child row set through a derived table, which is where
- * SQLite drops the JSON subtype — so this is the shape that exercises the retag,
- * rather than a flat projection over a base table.
+ * The include nests the child row set through a derived table, so every value
+ * crosses into JSON there: a JSON column as its stored text, which its codec
+ * reads back as the document, rather than a flat projection over a base table.
  */
 
 /** Past 2^53, where a JSON number stops carrying an int64. */
@@ -36,7 +36,7 @@ const WIDE_BIGINT = 9007199254740993n;
 const WIDE_BLOB = Uint8Array.from({ length: 80 }, (_, index) => (index * 7) % 256);
 /**
  * A document, and a text value whose characters happen to look like one. The
- * pair separates retagging by codec identity from retagging by content: only
+ * pair separates decoding by codec identity from decoding by content: only
  * the first is a `sqlite/json@1` column, so only the first may come back as a
  * parsed object.
  */
@@ -111,7 +111,7 @@ describe('integration/sqlite include canonical JSON', () => {
       throw new InternalError('SQLite execution stack is missing its adapter or driver');
     }
     await driver.connect({ kind: 'path', path });
-    runtime = new SqliteRuntimeImpl({ context, adapter, driver });
+    runtime = new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
     // SQLite has no schema namespaces, so the contract builder leaves models in
     // the unbound namespace rather than `public`.
     stations = new Collection({ runtime, context }, 'Station', {
@@ -170,12 +170,11 @@ describe('integration/sqlite include canonical JSON', () => {
     ]);
   });
 
-  // A document and a text value spelled the same way must not converge. The
-  // retag reaches the document column because that column's codec is
-  // `sqlite/json@1`, not because its stored characters look like JSON — so a
-  // `sqlite/text@1` column holding those same characters stays a string. Were
-  // the retag driven by content instead, both would parse and the two columns
-  // would become indistinguishable.
+  // A document and a text value written the same way must not converge. The
+  // document column is parsed because that column's codec is `sqlite/json@1`,
+  // not because its stored characters look like JSON — so a `sqlite/text@1`
+  // column holding those same characters stays a string. Were parsing driven by
+  // content instead, the two columns would become indistinguishable.
   it('keeps a document apart from a string that merely contains JSON', async () => {
     seed(2, { document: JSON.stringify(DOCUMENT), label: STRING_CONTAINING_JSON });
 
@@ -204,7 +203,7 @@ describe('integration/sqlite include canonical JSON', () => {
     });
   });
 
-  // An empty blob and an absent one both hex to `''`, and `decodeJson` accepts
+  // An empty blob and an absent one both hex to `''`, and `fromDataTypeValue` accepts
   // `''` as a valid zero-length blob — so this is the pair the NULL guard on the
   // hex projection exists to keep apart, asserted where a user would see it.
   it('keeps an empty blob apart from an absent one', async () => {
@@ -230,15 +229,10 @@ describe('integration/sqlite include canonical JSON', () => {
   it('carries an include aggregate past 2^53 through the JSON envelope', async () => {
     seedStation(100, 1, WIDE_BIGINT.toString());
 
-    // Same cardinality-inference gap as the PostgreSQL suite: the reducers are
-    // typed away on a contract declared in this file, though the relation is
-    // to-many and the shape below is what the query returns.
-    const reduceToMax = (related: unknown): unknown =>
-      (related as { max: (field: string) => unknown }).max('weight');
     const withStations = await readings!
       .where((reading) => reading.id.eq(1))
       .select('id')
-      .include('stations', (related) => reduceToMax(related) as never)
+      .include('stations', (related) => related.max('weight'))
       .all();
 
     expect(withStations).toEqual([{ id: 1, stations: WIDE_BIGINT }]);
@@ -255,55 +249,46 @@ describe('integration/sqlite include canonical JSON', () => {
     seedStation(200, 200, '3');
     seedStation(201, 200, '4');
 
-    const reduceToTotals = (related: unknown): unknown => {
-      const reducers = related as {
-        combine: (branches: Record<string, unknown>) => unknown;
-        count: () => unknown;
-        sum: (column: string) => unknown;
-      };
-      return reducers.combine({ tally: reducers.count(), weight: reducers.sum('weight') });
-    };
     const rows = await readings!
       .where((reading) => reading.id.eq(200))
       .select('id')
-      .include('stations', (related) => reduceToTotals(related) as never)
+      .include('stations', (related) =>
+        related.combine({ tally: related.count(), weight: related.sum('weight') }),
+      )
       .all();
 
     expect(rows).toEqual([{ id: 200, stations: { tally: 2, weight: 7 } }]);
   });
 
-  // The same JSON number carries the full digits of a total no double holds, so
-  // the rounding happens in `JSON.parse` and the codec's guard refuses the
-  // result. A monotone rounding is what makes that guard un-foolable: the value
-  // that reaches it is out of range whenever the total was.
+  // The sum is carried as the digit text `sqlite/bigint` stores, so the exact
+  // total reaches the codec and the codec refuses it: a number-valued codec
+  // produces a JavaScript number, and this total is past what one holds.
   it('refuses an include sum past 2^53 rather than answering with a rounded total', async () => {
     database!.prepare('insert into canon_readings (id) values (?)').run(300);
     seedStation(300, 300, WIDE_BIGINT.toString());
     seedStation(301, 300, '2');
 
-    const reduceToSum = (related: unknown): unknown =>
-      (related as { sum: (column: string) => unknown }).sum('weight');
     const shape = await rejectionShape(
       readings!
         .where((reading) => reading.id.eq(300))
         .select('id')
-        .include('stations', (related) => reduceToSum(related) as never)
+        .include('stations', (related) => related.sum('weight'))
         .all(),
     );
 
-    const rounded = 9007199254740996;
+    const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${rounded}`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${rounded}`,
+        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: String(rounded) },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
       },
     });
   });
@@ -313,13 +298,9 @@ describe('integration/sqlite include canonical JSON', () => {
   // integer a JS number cannot hold. The target's descriptor answers with the
   // cast that makes the wire form text, which is what the bigint codec reads.
   it('carries a top-level sumBigInt past 2^53 through the ORM', async () => {
-    // The contract is authored in this file, so its static aggregate map is
-    // unknown and the typed builder surface is empty; dispatch dynamically,
-    // as the include reducer above already does.
-    const stats = await readings!.aggregate((aggregate) => {
-      const dynamic = aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-      return { total: dynamic['sumBigInt']!('counter') };
-    });
+    const stats = await readings!.aggregate((aggregate) => ({
+      total: aggregate.sumBigInt('counter'),
+    }));
 
     expect(stats).toEqual({ total: WIDE_BIGINT });
     expect(BigInt(Number(stats.total))).not.toBe(stats.total);
@@ -330,10 +311,7 @@ describe('integration/sqlite include canonical JSON', () => {
   // the answer a caller reads.
   it('refuses a top-level bare sum past 2^53 rather than rounding it', async () => {
     const shape = await rejectionShape(
-      readings!.aggregate((aggregate) => {
-        const dynamic = aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-        return { total: dynamic['sum']!('counter') };
-      }),
+      readings!.aggregate((aggregate) => ({ total: aggregate.sum('counter') })),
     );
 
     expect(shape).toEqual({

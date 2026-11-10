@@ -7,7 +7,7 @@ import type { AttributeCtx } from '../types';
 export const ATTRIBUTE_DIAGNOSTIC_CODE: PslDiagnosticCode = 'PSL_INVALID_ATTRIBUTE_SYNTAX';
 
 export function leafDiagnostic(
-  ctx: AttributeCtx,
+  ctx: Pick<AttributeCtx, 'sources'>,
   node: AstNode,
   message: string,
   code: PslDiagnostic['code'] = ATTRIBUTE_DIAGNOSTIC_CODE,

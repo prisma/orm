@@ -138,7 +138,7 @@ describe('init emit through the project-local prisma bin (process e2e)', () => {
       const invocation = JSON.parse(
         readFileSync(join(projectDir, 'emit-invocation.json'), 'utf-8'),
       ) as { argv: string[]; script: string; cwd: string };
-      expect(invocation.argv).toEqual(['contract', 'emit']);
+      expect(invocation.argv).toEqual(['contract', 'emit', '--json']);
       expect(realpathSync(invocation.cwd)).toBe(realpathSync(projectDir));
       expect(realpathSync(invocation.script)).toBe(
         realpathSync(join(projectDir, 'node_modules', 'prisma', 'bin', 'prisma.mjs')),

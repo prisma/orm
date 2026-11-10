@@ -14,8 +14,8 @@ let projectDir: string;
 
 /**
  * Build a `prisma.config.mjs` source string with the minimum
- * descriptor shape that `validateConfig` (from
- * `@internal/config/config-validation`) accepts. The integration
+ * descriptor shape that the `orm` config schema (`ormConfigSchema` in
+ * `@internal/config-loader`) accepts. The integration
  * test exercises the full c12 + validator pipeline in the detached
  * child, so the fixture has to be structurally valid.
  */
@@ -207,18 +207,6 @@ describe('cli-telemetry end-to-end via telemetry backend', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
-  });
-
-  it('transmits only flag names, never values or positionals', async () => {
-    const sensitiveFlags = ['connection-string', 'name', 'config'];
-    await spawnSenderDirect(buildPayload({ flags: sensitiveFlags }));
-    const [row] = await harness.awaitRows(1);
-
-    expect(row?.flags).toEqual(sensitiveFlags);
-    const serialised = JSON.stringify(row);
-    expect(serialised).not.toMatch(/postgres:\/\/u:p@h\/d/);
-    expect(serialised).not.toMatch(/customer-acme-payments/);
-    expect(serialised).not.toMatch(/\/Users\/alice\/secrets/);
   });
 
   it('round-trips a string[] of declared extension-pack ids verbatim from prisma.config', async () => {

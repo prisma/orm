@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Post {
   id         Int        @id
   title      String

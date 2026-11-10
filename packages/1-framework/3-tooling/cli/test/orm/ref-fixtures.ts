@@ -5,9 +5,9 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { blindCast } from '@internal/utils/casts';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 export const HASH_A = `4cb4256${'0'.repeat(57)}`;
@@ -64,10 +64,10 @@ export function ormConfig(): Record<string, unknown> {
 }
 
 export function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: BIN_COMMANDS,
     groups: BIN_GROUPS,
-    config: { orm: config },
+    orm: config,
   });
 }
 
@@ -138,6 +138,23 @@ export async function seedRefProject(migrationsDirName = 'migrations'): Promise<
     { withSnapshot: true },
   );
   return { dir, initialDirName, secondDirName };
+}
+
+/** A project whose graph forks at the empty database: one edge to {@link HASH_A}, one to {@link HASH_B}. */
+export async function seedForkedRefProject(): Promise<string> {
+  const dir = await emptyProject();
+  const migrationsDir = join(dir, 'migrations');
+  await writeSeededMigration(
+    migrationsDir,
+    { from: null, to: HASH_A, slug: 'left', at: new Date(2025, 0, 1, 10, 0) },
+    { withSnapshot: true },
+  );
+  await writeSeededMigration(
+    migrationsDir,
+    { from: null, to: HASH_B, slug: 'right', at: new Date(2025, 0, 2, 10, 0) },
+    { withSnapshot: true },
+  );
+  return dir;
 }
 
 /** A project whose only migration never had its contract snapshot written. */

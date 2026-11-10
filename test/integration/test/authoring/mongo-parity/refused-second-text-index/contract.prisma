@@ -1,0 +1,11 @@
+// use prisma-8
+
+model Doc {
+  id ObjectId @id @map("_id")
+  a  String
+  b  String
+
+  @@textIndex([a])
+  @@textIndex([b])
+  @@map("docs")
+}

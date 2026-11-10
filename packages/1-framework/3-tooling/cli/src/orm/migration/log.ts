@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { LedgerEntryRecord } from '@internal/contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
@@ -5,12 +6,8 @@ import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { MigrationLogResult } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
-import { mapCaughtMigrationError } from '../../control-api/operations/caught-errors';
-import {
-  errorTargetMigrationNotSupported,
-  errorUnexpected,
-  requireLiveDatabase,
-} from '../../utils/cli-errors';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
+import { errorTargetMigrationNotSupported, requireLiveDatabase } from '../../utils/cli-errors';
 import {
   closeQuietly,
   maskConnectionUrl,
@@ -26,7 +23,7 @@ import {
 } from '../../utils/formatters/migration-log-table';
 import { toneSpans } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ormConfigSection } from '../config-section';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -82,7 +79,17 @@ function logPresentations(inputs: {
 }): Presentations {
   const grid = inputs.grid;
   return {
-    stdout: () => [],
+    stdout: () =>
+      inputs.document.records.map((record) =>
+        dataLine([
+          record.appliedAt,
+          record.space,
+          record.name,
+          record.fromContract,
+          record.toContract,
+          record.operationCount,
+        ]),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       ...(inputs.database === undefined
@@ -159,13 +166,11 @@ export const migrationLogCommand = defineOrmCommand({
       await client.connect(dbConnection);
       entries = await client.readLedger();
     } catch (error) {
-      const mapped = mapCaughtMigrationError(error);
       return notOk(
         normalizeError(
-          mapped ??
-            errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read migration log: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+          errorFromCaught(error, (message) => `Failed to read migration log: ${message}`, {
+            connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+          }),
         ),
       );
     } finally {

@@ -1,10 +1,22 @@
-import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
+import type { JsonValue } from '@internal/contract/types';
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/authoring';
+import type { DataTypeId, DataTypeValue } from '@internal/framework-components/codec';
+import type {
+  SignatureArgumentOutput,
+  SignatureOptionalArgument,
+} from '@internal/framework-components/components';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
+import type { Binder } from '../binder';
 import type { PslDiagnostic } from '../diagnostic';
+import type {
+  EntityDeclaration,
+  EntitySelector,
+  ResolvedEntityReference,
+} from '../entity-reference';
 import type { PslSources } from '../source-file';
-import type { FieldSymbol, ModelSymbol } from '../symbol-table';
+import type { BlockSymbol, FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 
@@ -12,25 +24,32 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
   readonly sources: PslSources;
+  readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
   readonly selfModel: ModelSymbol;
 }
 
+export interface BlockAttributeCtx extends AttributeCtx {
+  readonly selfBlock: BlockSymbol;
+}
+
 export interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 
 export type ArgTypeKind =
   | 'bool'
+  | 'dataTypeValue'
   | 'entityRef'
   | 'fieldRef'
   | 'funcCall'
   | 'identifier'
   | 'int'
   | 'json'
+  | 'null'
   | 'list'
   | 'num'
   | 'oneOf'
@@ -42,9 +61,10 @@ export type ArgTypeKind =
 
 export type ArgTypeContext = 'attribute' | 'field' | 'model';
 
-export interface ArgTypeOutput<T, Ctx extends AttributeCtx> {
+export interface ArgTypeOutput<T, Ctx extends AttributeCtx> extends SignatureArgumentOutput<T> {
   readonly label: string;
-  readonly _out?: T;
+  /** True when the argument has this type's shape, so that its diagnostics are about the argument. `oneOf` returns the result of the one alternative that claims the argument. */
+  readonly claims?: (arg: ExpressionAst) => boolean;
   readonly parse: (arg: ExpressionAst, ctx: Ctx) => Result<T, readonly PslDiagnostic[]>;
 }
 
@@ -53,9 +73,12 @@ export interface BoolArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly kind: 'bool';
 }
 
-export interface EntityRefArgType<Ctx extends AttributeCtx = AttributeCtx>
-  extends ArgTypeOutput<string, Ctx> {
+export interface EntityRefArgType<
+  D extends EntityDeclaration = EntityDeclaration,
+  Ctx extends AttributeCtx = AttributeCtx,
+> extends ArgTypeOutput<ResolvedEntityReference<D>, Ctx> {
   readonly kind: 'entityRef';
+  readonly expected: EntitySelector;
 }
 
 export interface FieldRefArgType<Ctx extends ModelAttributeCtx = ModelAttributeCtx>
@@ -68,10 +91,10 @@ export interface ReferencedFieldRefArgType<Ctx extends FieldAttributeCtx = Field
   readonly kind: 'referencedFieldRef';
 }
 
-export interface FuncCallSig {
+export interface FuncCallSig<Ctx extends AttributeCtx = AttributeCtx> {
   readonly documentation: string;
-  readonly positional?: readonly PositionalParam<unknown, AttributeCtx>[];
-  readonly named?: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
+  readonly positional?: readonly PositionalParam<unknown, Ctx>[];
+  readonly named?: Readonly<Record<string, Param<unknown, Ctx>>>;
 }
 
 export interface TypedFuncCall {
@@ -83,14 +106,15 @@ export interface TypedFuncCall {
 export interface FuncCallArgType<
   Name extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
-  Signature extends FuncCallSig = FuncCallSig,
+  Signature extends FuncCallSig<never> = FuncCallSig<Ctx>,
 > extends ArgTypeOutput<TypedFuncCall, Ctx> {
   readonly kind: 'funcCall';
   readonly name: Name;
   readonly signature: Signature;
+  readonly claims: (arg: ExpressionAst) => boolean;
 }
 
-export interface IdentifierArgType<
+export interface FixedIdentifierArgType<
   Name extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
 > extends ArgTypeOutput<Name, Ctx> {
@@ -98,6 +122,17 @@ export interface IdentifierArgType<
   readonly name: Name;
   readonly documentation: string;
 }
+
+export interface UnrestrictedIdentifierArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<string, Ctx> {
+  readonly kind: 'identifier';
+  readonly name: undefined;
+}
+
+export type IdentifierArgType<
+  Name extends string = string,
+  Ctx extends AttributeCtx = AttributeCtx,
+> = FixedIdentifierArgType<Name, Ctx> | UnrestrictedIdentifierArgType<Ctx>;
 
 export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<number, Ctx> {
@@ -109,6 +144,25 @@ export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
 export interface JsonArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<Record<string, unknown>, Ctx> {
   readonly kind: 'json';
+}
+
+export interface JsonValueArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<JsonValue, Ctx> {
+  readonly kind: 'oneOf';
+  readonly labelIsUnion: false;
+  readonly alternatives: readonly [
+    UnrestrictedStrArgType<Ctx>,
+    UnrestrictedNumArgType<Ctx>,
+    BoolArgType<Ctx>,
+    NullArgType<Ctx>,
+    ListArgType<JsonValue, Ctx>,
+    RecordArgType<JsonValue, Ctx>,
+  ];
+}
+
+export interface NullArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<null, Ctx> {
+  readonly kind: 'null';
 }
 
 export interface ListArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -149,9 +203,16 @@ export type NumArgType<
 export interface OneOfArgType<
   Alts extends readonly [AnyArgType, ...AnyArgType[]],
   Ctx extends AttributeCtx = ContextForRequirement<RequiredContextFor<CtxOf<Alts[number]>>>,
-> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx> {
-  readonly kind: 'oneOf';
+> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx>,
+    OneOfMetadata {
   readonly alternatives: Alts;
+}
+
+interface OneOfMetadata {
+  readonly kind: 'oneOf';
+  /** Whether the label reads as a union: several labels joined by ` | `. False for a union that names itself, as `JSON value` does. */
+  readonly labelIsUnion: boolean;
+  readonly alternatives: readonly [AnyArgType, ...AnyArgType[]];
 }
 
 export interface RecordArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -185,7 +246,7 @@ export type StrArgType<
 
 /**
  * A tagged literal argument as parsed: its tag, the canonicalization of its string literal, and its
- * span. Neither the tag nor the canonicalization has been checked; lowering does both.
+ * span. Neither the tag nor the canonicalization has been checked; the consumer checks both.
  */
 export interface ParsedTaggedLiteral {
   readonly tag: string;
@@ -200,9 +261,32 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly documentation: string;
 }
 
-export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {
-  readonly kind: ArgTypeKind;
+/** A value of a data type parsed from an argument, with the argument's span. */
+export interface ParsedTypedValue {
+  readonly value: DataTypeValue;
+  readonly span: PslSpan;
 }
+
+export interface DataTypeValueArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<ParsedTypedValue, Ctx> {
+  readonly kind: 'dataTypeValue';
+  readonly dataType: DataTypeId;
+  /** The tags a position of this type admits, for completion. */
+  readonly tags: readonly string[];
+  /** The documentation of this type's authoring entry, or '' when it has none. */
+  readonly documentation: string;
+  /** Written values offered for completion besides the tags, such as the versions a function takes. */
+  readonly suggestions: readonly string[];
+  /** Whether the label reads as a union: several suggestions joined by ` | `. */
+  readonly labelIsUnion: boolean;
+}
+
+type ArgTypeMetadata<Type> = Type extends object
+  ? Omit<Type, keyof ArgTypeOutput<unknown, never>>
+  : never;
+
+export type ArgType<T, Ctx extends AttributeCtx> = ArgTypeOutput<T, Ctx> &
+  ArgTypeMetadata<ArgTypeVariant<Ctx>>;
 
 export type AnyArgType =
   | ArgType<unknown, AttributeCtx>
@@ -225,19 +309,23 @@ export type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'fie
     ? ModelAttributeCtx
     : AttributeCtx;
 
-export type InspectableArgType<Ctx extends AttributeCtx> =
+export type InspectableArgType<Ctx extends AttributeCtx> = ArgType<unknown, Ctx>;
+
+type ArgTypeVariant<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
-  | EntityRefArgType<Ctx>
+  | DataTypeValueArgType<Ctx>
+  | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
   | FuncCallArgType<string, Ctx>
   | IdentifierArgType<string, Ctx>
   | IntArgType<Ctx>
   | JsonArgType<Ctx>
+  | NullArgType<Ctx>
   | ListArgType<unknown, Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
   | NumLiteralArgType<Ctx>
-  | OneOfArgType<readonly [AnyArgType, ...AnyArgType[]], Ctx>
+  | OneOfMetadata
   | RecordArgType<unknown, Ctx>
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>
   | RejectingArgType<never, Ctx>
@@ -250,11 +338,14 @@ export type OptionalArgType<
   Ctx extends AttributeCtx,
   Type extends object = ArgType<T, Ctx>,
   HasDefault extends boolean = boolean,
-> = Type & {
-  readonly optional: true;
+> = Type & OptionalArgumentMarks<T, HasDefault>;
+
+/** What `optional(...)` adds to an argument type: the shared optional mark `gen` reads, and its default. */
+export interface OptionalArgumentMarks<T, HasDefault extends boolean>
+  extends SignatureOptionalArgument {
   readonly hasDefault: HasDefault;
   readonly defaultValue?: T | undefined;
-};
+}
 
 export interface Param<T, Ctx extends AttributeCtx> {
   readonly type: ArgType<T, Ctx>;
@@ -279,9 +370,9 @@ export interface AttributeSpec<Out, Ctx extends AttributeCtx> {
   readonly refine?: (parsed: Out, ctx: Ctx, attributeNode: AstNode) => readonly PslDiagnostic[];
 }
 
-export type OutOf<P> = P extends { readonly _out?: infer T } ? T : never;
+export type OutOf<P> = P extends SignatureArgumentOutput<infer T> ? T : never;
 
-type OptionalMarker = { readonly optional: true };
+type OptionalMarker = SignatureOptionalArgument;
 
 export type NamedOut<N extends Record<string, Param<unknown, never>>> = Simplify<
   { [K in keyof N as N[K]['type'] extends OptionalMarker ? never : K]: OutOf<N[K]['type']> } & {

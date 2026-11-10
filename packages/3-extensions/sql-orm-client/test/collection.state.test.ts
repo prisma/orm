@@ -2,6 +2,7 @@ import {
   AndExpr,
   BinaryExpr,
   ColumnRef,
+  InsertAst,
   LiteralExpr,
   NullCheckExpr,
   OperationExpr,
@@ -16,8 +17,22 @@ import {
   createCollection,
   createCollectionFor,
   createReturningCollectionFor,
+  createReturningCollectionWithoutCapabilities,
   createReturningCollectionWithoutDefaultInInsert,
 } from './collection-fixtures';
+import { fieldUnknown, type MockExecution, type MockRuntime, publicTables } from './helpers';
+
+function insertAstOf(execution: MockExecution): InsertAst {
+  const ast = (execution.plan as { ast: unknown }).ast;
+  expect(ast).toBeInstanceOf(InsertAst);
+  return ast as InsertAst;
+}
+
+function lastInsertAst(runtime: MockRuntime): InsertAst {
+  const execution = runtime.executions[runtime.executions.length - 1];
+  if (!execution) throw new Error('runtime recorded no executions');
+  return insertAstOf(execution);
+}
 
 describe('Collection', () => {
   describe('chain methods', () => {
@@ -29,6 +44,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
       ]);
       expect(collection.state.filters).toEqual([]);
@@ -38,10 +54,12 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
+          publicTables('users'),
         ),
         bindWhereExpr(
           baseContract,
           BinaryExpr.neq(ColumnRef.of('users', 'email'), LiteralExpr.of('old@example.com')),
+          publicTables('users'),
         ),
       ]);
     });
@@ -97,6 +115,7 @@ describe('Collection', () => {
             BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
             NullCheckExpr.isNull(ColumnRef.of('users', 'email')),
           ]),
+          publicTables('users'),
         ),
       ]);
 
@@ -126,21 +145,6 @@ describe('Collection', () => {
       ]);
     });
 
-    it('orderBy() accepts expression-based orders', () => {
-      const { collection: postCollection } = createCollectionFor('Post', baseContract);
-
-      const opExpr = new OperationExpr({
-        method: 'cosineDistance',
-        self: ColumnRef.of('posts', 'embedding'),
-        args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
-        returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
-      });
-
-      const ordered = postCollection.orderBy(() => OrderByItem.asc(opExpr));
-      expect(ordered.state.orderBy).toEqual([OrderByItem.asc(opExpr)]);
-    });
-
     it('orderBy() mixes column-based and expression-based orders', () => {
       const { collection: postCollection } = createCollectionFor('Post', baseContract);
 
@@ -149,7 +153,7 @@ describe('Collection', () => {
         self: ColumnRef.of('posts', 'embedding'),
         args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
         returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+        lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
       });
 
       const ordered = postCollection
@@ -188,13 +192,14 @@ describe('Collection', () => {
         relationName: 'posts',
         relatedModelName: 'Post',
         relatedTableName: 'posts',
-        targetColumn: 'user_id',
+        targetColumns: ['user_id'],
         cardinality: '1:N',
       });
       expect(withPosts.state.includes[0]?.nested.filters).toEqual([
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
       expect(withPosts.state.includes[0]?.nested.limit).toBe(5);
@@ -211,6 +216,7 @@ describe('Collection', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       ]);
 
@@ -240,8 +246,8 @@ describe('Collection', () => {
         relationName: 'author',
         relatedModelName: 'User',
         relatedTableName: 'users',
-        targetColumn: 'id',
-        localColumn: 'user_id',
+        targetColumns: ['id'],
+        localColumns: ['user_id'],
         cardinality: 'N:1',
       });
 
@@ -323,13 +329,9 @@ describe('Collection', () => {
       await expect(collection.createAndCount([])).resolves.toBe(0);
     });
 
-    it('create() nested mutation throws when reload by primary key returns no row', async () => {
+    it('create() nested mutation throws when the insert of the parent returns no row', async () => {
       const { collection, runtime } = createReturningCollectionFor('User');
-      runtime.setNextResults([
-        [{ id: 1, name: 'Alice', email: 'alice@example.com' }],
-        [{ id: 10, title: 'Post', user_id: 1, views: 1 }],
-        [],
-      ]);
+      runtime.setNextResults([[]]);
 
       await expect(
         collection.create({
@@ -366,17 +368,204 @@ describe('Collection', () => {
       expect(runtime.executions).toHaveLength(2);
     });
 
-    it('createAndCount() uses split insert when defaultInInsert is absent', async () => {
-      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
-      runtime.setNextResults([[], []]);
+    it('createAndCount() returns the database count, not the input length', async () => {
+      const { collection, runtime } = createCollection();
+      runtime.setNextStats([{ affectedRows: 2 }]);
 
       const count = await collection.createAndCount([
         { id: 1, name: 'Alice', email: 'alice@example.com' },
-        { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        { id: 2, name: 'Bob', email: 'bob@example.com' },
+        { id: 3, name: 'Carol', email: 'carol@example.com' },
+      ]);
+
+      expect(count).toBe(2);
+      expect(runtime.executions).toHaveLength(1);
+    });
+
+    it('createAndCount() sums the database counts across split statements', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
+      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
+
+      const count = await collection.createAndCount([
+        { id: 1, name: 'Alice', email: 'alice@example.com' },
+        { id: 2, name: 'Bob', email: 'bob@example.com' },
+        { id: 3, name: 'Carol', email: 'carol@example.com', invitedById: 1 },
       ]);
 
       expect(count).toBe(2);
       expect(runtime.executions).toHaveLength(2);
+    });
+
+    it('createAll() carries a targetless skip clause on the single statement', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+      ]);
+
+      await collection
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], { onConflict: 'skip' })
+        .toArray();
+
+      const ast = lastInsertAst(runtime);
+      expect(ast.onConflict?.columns).toEqual([]);
+      expect(ast.onConflict?.action.kind).toBe('do-nothing');
+    });
+
+    it('createAll() maps conflictOn fields to their storage columns', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+      ]);
+
+      await collection
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['invitedById'],
+        })
+        .toArray();
+
+      const ast = lastInsertAst(runtime);
+      expect(ast.onConflict?.columns).toEqual([ColumnRef.of('users', 'invited_by_id')]);
+    });
+
+    it('createAll() treats an empty conflictOn as untargeted', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+      ]);
+
+      await collection
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: [],
+        })
+        .toArray();
+
+      expect(lastInsertAst(runtime).onConflict?.columns).toEqual([]);
+    });
+
+    it('createAll() keeps the configure callback working in second position', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+      ]);
+
+      await collection
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], () => {})
+        .toArray();
+
+      expect(lastInsertAst(runtime).onConflict).toBeUndefined();
+    });
+
+    it('createAndCount() carries the skip clause and returns the database count', async () => {
+      const { collection, runtime } = createCollection();
+      runtime.setNextStats([{ affectedRows: 1 }]);
+
+      const count = await collection.createAndCount(
+        [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ],
+        { onConflict: 'skip' },
+      );
+
+      expect(count).toBe(1);
+      expect(lastInsertAst(runtime).onConflict?.action.kind).toBe('do-nothing');
+    });
+
+    it('createAndCount() puts the skip clause on every split statement', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
+      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
+
+      const count = await collection.createAndCount(
+        [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+          { id: 3, name: 'Carol', email: 'carol@example.com', invitedById: 1 },
+        ],
+        { onConflict: 'skip' },
+      );
+
+      expect(count).toBe(2);
+      expect(runtime.executions).toHaveLength(2);
+      for (const execution of runtime.executions) {
+        expect(insertAstOf(execution).onConflict?.action.kind).toBe('do-nothing');
+      }
+    });
+
+    it('createAll() refuses the skip option without the insertOnConflictSkip capability', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutCapabilities('User', [
+        'insertOnConflictSkip',
+      ]);
+
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['email'],
+        }),
+      ).toThrow(expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }));
+      expect(runtime.executions).toHaveLength(0);
+    });
+
+    it('createAndCount() refuses the skip option without the insertOnConflictSkip capability', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutCapabilities('User', [
+        'insertOnConflictSkip',
+      ]);
+
+      await expect(
+        collection.createAndCount([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+        }),
+      ).rejects.toThrow(/insertOnConflictSkip/);
+      expect(runtime.executions).toHaveLength(0);
+    });
+
+    it('createAll() refuses an untargeted skip without insertOnConflictWithoutTarget but allows a targeted one', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutCapabilities('User', [
+        'insertOnConflictWithoutTarget',
+      ]);
+
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+        }),
+      ).toThrow(/insertOnConflictWithoutTarget/);
+      expect(runtime.executions).toHaveLength(0);
+
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+      ]);
+      await collection
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['email'],
+        })
+        .toArray();
+
+      expect(lastInsertAst(runtime).onConflict?.columns).toEqual([ColumnRef.of('users', 'email')]);
+    });
+
+    it('createAll() refuses a conflictOn field that is not a scalar field of the model', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['posts' as never],
+        }),
+      ).toThrow(fieldUnknown('User', 'posts'));
+      expect(runtime.executions).toHaveLength(0);
+    });
+
+    it('createAll() refuses an unknown onConflict value', async () => {
+      const { collection, runtime } = createReturningCollectionFor('User');
+
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'merge' as never,
+        }),
+      ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+      expect(runtime.executions).toHaveLength(0);
     });
 
     it('update() returns null when nested or scalar updates return no rows', async () => {

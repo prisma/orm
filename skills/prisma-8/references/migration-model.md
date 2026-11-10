@@ -55,7 +55,7 @@ pnpm prisma migration ref delete <name>
 | Command | Ref advancement |
 |---|---|
 | `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed whenever `--db` is passed without `--advance-ref`, regardless of the URL — even `--db $DATABASE_URL` pointing at the default database) |
-| `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRef` carries name and hash only). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
+| `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRefs` lists `{ space, name, hash }` for each contract space it advanced). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
 | `db migrate --advance-ref <name>` | The **only** apply-time advancement |
 | plain `db migrate` | **Never advances anything** — deliberate: deploy and CI applies must not infer dev intent |
 | `migration plan` | Never advances anything — chaining discipline is yours |
@@ -65,11 +65,15 @@ pnpm prisma migration ref delete <name>
 
 `migration plan` resolves its origin in exactly this order:
 
-1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @empty>` — `@empty` names the empty database deliberately. The reserved forms `@db` and `@contract` exist in the shared ref grammar but do not resolve here: `migration plan` is offline, so `@db` (the live marker) has nothing to read, and `@contract` needs a contract hash the plan resolver does not pass. Use them with `db migrate --show` / `migration status`, not with `plan`.
+1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | @empty>` — `@empty` names the empty database deliberately. The reserved forms `@db` and `@contract` exist in the shared ref grammar but do not resolve here: `migration plan` is offline, so `@db` (the live marker) has nothing to read, and `@contract` needs a contract hash the plan resolver does not pass. Use them with `db migrate --show` / `migration status`, not with `plan`.
 2. No `--from` → the `db` ref (`migrations/app/refs/db.json`).
 3. No `db` ref → **greenfield: the plan starts from the empty database.** On an empty graph the human output adds a muted notice beneath the summary — `No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.` — and the JSON document carries `fromDefaulted: true`, so this case is distinguishable from an explicit `--from @empty`.
 
 It is **offline** — it never consults a database, never reads a marker (which is why `--from @db` is not an option here). Whatever the refs on disk say is what it believes. The destination defaults to the emitted `contract.json` (`--to` overrides).
+
+When the origin came from the `db` ref by default and that node **already has an outgoing migration**, the plan still succeeds but warns: planning from there forks the graph. Pass `--from` to name the origin deliberately if that is what you want.
+
+**`migration new` picks its origin the same way, with one difference.** With `--from <hash-or-prefix>` it uses that migration's `to` hash. Without `--from`: the `db` ref (which must be a graph node), else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`. The difference: on an empty graph that has a `db` ref, `migration plan` writes the baseline (auto-baseline above) while `migration new` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` and tells you to run `migration plan` first. Neither command ever chains from "the newest migration on disk" — there is no such node.
 
 The human output names the resolved origin on its `from:` line. **`from: (baseline)` means the origin resolved to nothing — the plan starts from an empty database** and will contain a create for every object in the contract.
 
@@ -152,7 +156,7 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## Common Pitfalls
 
-1. **Assuming `migration plan` chains from the newest migration on disk.** It never does. The origin is `--from`, else the `db` ref, else empty. If neither exists, you get a from-scratch plan; on an empty graph the only warning is the muted `No db ref set` notice.
+1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref. With neither, only an empty graph plans from scratch (with the muted `No db ref set` notice); once migrations exist, both commands refuse with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` / `db sign` advance implicitly, and only `--advance-ref` advances at apply time.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.

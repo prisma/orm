@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Real emitted fixture for the scalar-list ORM round-trip integration test.
 //
 // A single model with two native scalar-list columns: `tags String[]` and

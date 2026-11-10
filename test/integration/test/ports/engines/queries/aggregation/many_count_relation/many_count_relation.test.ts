@@ -1,3 +1,4 @@
+import type { Ordered } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as CompoundContract } from './_fixture/compound/generated/contract';
@@ -10,6 +11,10 @@ import type { Contract as NestedContract } from './_fixture/nested/generated/con
 import nestedContractJson from './_fixture/nested/generated/contract.json' with { type: 'json' };
 import type { Contract as SelfContract } from './_fixture/self/generated/contract';
 import selfContractJson from './_fixture/self/generated/contract.json' with { type: 'json' };
+
+function treatAsOrdered<C>(collection: C): Ordered<C> {
+  return collection as Ordered<C>;
+}
 
 function withManyCountRelation(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
@@ -122,19 +127,13 @@ describe('ports/engines/queries/aggregation/many_count_relation', () => {
           .select('id')
           .include('comments', (comments) =>
             comments.combine({
-              rows: comments
-                .select('id')
-                .cursor({ id: 1 } as never)
-                .limit(1),
+              rows: treatAsOrdered(comments.select('id')).cursor({ id: 1 }).limit(1),
               count: comments.count(),
             }),
           )
           .include('categories', (categories) =>
             categories.combine({
-              rows: categories
-                .select('id')
-                .cursor({ id: 1 } as never)
-                .limit(1),
+              rows: treatAsOrdered(categories.select('id')).cursor({ id: 1 }).limit(1),
               count: categories.count(),
             }),
           )

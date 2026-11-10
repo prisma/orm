@@ -3,12 +3,19 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { join, relative } from 'pathe';
 import {
+  errorContractSnapshotContentMismatch,
   errorContractSnapshotHashMismatch,
   errorContractSnapshotMissing,
   errorInvalidJson,
+  MigrationToolsError,
 } from './errors';
+import type { SnapshotCanonicalizationHooks } from './hash';
+import { recomputePublishedStorageHash } from './hash';
+
+export type { SnapshotCanonicalizationHooks } from './hash';
 
 const CONTRACT_JSON_FILE = 'contract.json';
 const CONTRACT_DTS_FILE = 'contract.d.ts';
@@ -36,9 +43,129 @@ export function contractSnapshotDir(migrationsDir: string, storageHash: string):
   return join(migrationsDir, CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex(storageHash));
 }
 
+/**
+ * Recompute-and-compare integrity check for loaded contract snapshots,
+ * mirroring `verifyMigrationHash` for migration packages and
+ * `assertDescriptorSelfConsistency` for extension descriptors: the store is
+ * content-addressed, so the JSON read back for a hash must reproduce that
+ * hash. Every assertion recomputes — nothing is cached, so mutated or
+ * re-read content is always re-verified; repeated resolutions of the same
+ * snapshot are already deduplicated by the aggregate's result memo, so each
+ * file read is hashed once in practice. The recompute is coupled to
+ * the emit-time canonicalization: a release that changes the family hooks
+ * or hash canonicalization rules must regenerate (or migrate) existing
+ * snapshot stores, or every pre-existing snapshot reads as tampered.
+ */
+export interface SnapshotContentVerifier {
+  /**
+   * Throws `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH` when
+   * `contractJson`'s content does not recompute to `storageHash` — the hash
+   * the snapshot at `jsonPath` was addressed by.
+   */
+  assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void;
+}
+
+export function createSnapshotContentVerifier(
+  hooks?: SnapshotCanonicalizationHooks,
+): SnapshotContentVerifier {
+  return {
+    assertSnapshotContentMatches(contractJson, storageHash, jsonPath) {
+      const record = blindCast<
+        { target?: unknown; targetFamily?: unknown; storage?: unknown },
+        'contractJson is unknown JSON; only the identity fields the hash covers are read here'
+      >(contractJson ?? {});
+      const computedHash = recomputePublishedStorageHash({
+        target: record.target,
+        targetFamily: record.targetFamily,
+        storage: record.storage,
+        hooks,
+      });
+      if (computedHash !== storageHash) {
+        throw errorContractSnapshotContentMismatch({ storageHash, computedHash, jsonPath });
+      }
+    },
+  };
+}
+
 export interface ContractSnapshotInput {
   readonly contractJson: unknown;
   readonly contractDts: string;
+}
+
+/**
+ * `text` on one line ending in a newline: leading `//` comment lines become one block comment, and every other line
+ * break with the indentation that follows it becomes one space. Throws `InternalError` for text it cannot join
+ * without changing its meaning.
+ */
+export function singleLineDeclarations(text: string): string {
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const firstCodeLine = lines.findIndex((line) => line !== '' && !line.startsWith('//'));
+  const headerLength = firstCodeLine === -1 ? lines.length : firstCodeLine;
+  const headerLines = lines.slice(0, headerLength).filter((line) => line !== '');
+  const codeLines = lines.slice(headerLength).filter((line) => line !== '');
+
+  const directive = headerLines.find((line) => line.startsWith('///'));
+  if (directive !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the triple-slash directive "${directive}" would become a comment`,
+    );
+  }
+  const closingHeaderLine = headerLines.find((line) => line.includes('*/'));
+  if (closingHeaderLine !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the header line "${closingHeaderLine}" contains "*/"`,
+    );
+  }
+  const lineComment = lineWithLineComment(codeLines);
+  if (lineComment !== undefined) {
+    throw new InternalError(
+      `Cannot join declarations onto one line: the line comment in "${lineComment}" after the header would hide the code after it`,
+    );
+  }
+
+  const header = headerLines
+    .map((line) => line.slice('//'.length).trim())
+    .filter((line) => line !== '');
+  const parts = header.length > 0 ? [`/* ${header.join(' ')} */`, ...codeLines] : codeLines;
+  return `${parts.join(' ')}\n`;
+}
+
+function lineWithLineComment(lines: readonly string[]): string | undefined {
+  let inBlockComment = false;
+  let quote: string | undefined;
+  for (const line of lines) {
+    for (let i = 0; i < line.length; i++) {
+      const pair = line.slice(i, i + 2);
+      if (inBlockComment) {
+        if (pair === '*/') {
+          inBlockComment = false;
+          i++;
+        }
+      } else if (quote !== undefined) {
+        if (line[i] === '\\') i++;
+        else if (line[i] === quote) quote = undefined;
+      } else if (pair === '/*') {
+        inBlockComment = true;
+        i++;
+      } else if (pair === '//') {
+        return line;
+      } else if (line[i] === "'" || line[i] === '"' || line[i] === '`') {
+        quote = line[i];
+      }
+    }
+  }
+  return undefined;
+}
+
+/** The bytes the store writes for `input`: `contract.json` and `contract.d.ts`. */
+export function contractSnapshotFiles(input: ContractSnapshotInput): {
+  readonly contractJson: string;
+  readonly contractDts: string;
+} {
+  return {
+    contractJson: `${canonicalizeJson(input.contractJson)}\n`,
+    contractDts: singleLineDeclarations(input.contractDts),
+  };
 }
 
 export async function writeContractSnapshot(
@@ -74,14 +201,11 @@ export async function writeContractSnapshot(
   );
   await mkdir(tmpDir, { recursive: true });
 
-  const jsonContent = `${canonicalizeJson(input.contractJson)}\n`;
-  const dtsContent = input.contractDts.endsWith('\n')
-    ? input.contractDts
-    : `${input.contractDts}\n`;
+  const files = contractSnapshotFiles(input);
 
   try {
-    await writeFile(join(tmpDir, CONTRACT_JSON_FILE), jsonContent);
-    await writeFile(join(tmpDir, CONTRACT_DTS_FILE), dtsContent);
+    await writeFile(join(tmpDir, CONTRACT_JSON_FILE), files.contractJson);
+    await writeFile(join(tmpDir, CONTRACT_DTS_FILE), files.contractDts);
     await rename(tmpDir, dir);
   } catch (error) {
     await rm(tmpDir, { recursive: true, force: true });
@@ -94,9 +218,16 @@ export async function writeContractSnapshot(
   return { written: true, dir };
 }
 
+/**
+ * When `verifyContent` is supplied, the parsed snapshot's content is checked
+ * against the hash it was addressed by before being returned — the store is
+ * content-addressed, and a snapshot edited in place under an unchanged hash
+ * would otherwise flow into planning as if it were the recorded contract.
+ */
 export async function readContractSnapshotJson(
   migrationsDir: string,
   storageHash: string,
+  verifyContent?: SnapshotContentVerifier,
 ): Promise<unknown> {
   const jsonPath = join(contractSnapshotDir(migrationsDir, storageHash), CONTRACT_JSON_FILE);
 
@@ -110,11 +241,14 @@ export async function readContractSnapshotJson(
     throw error;
   }
 
+  let parsed: unknown;
   try {
-    return JSON.parse(raw);
+    parsed = JSON.parse(raw);
   } catch (e) {
     throw errorInvalidJson(jsonPath, e instanceof Error ? e.message : String(e));
   }
+  verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+  return parsed;
 }
 
 /**
@@ -125,11 +259,15 @@ export async function readContractSnapshotJson(
  * `readEndContractJson` (`io.ts`), which never validated the hash it was
  * keyed by either. Any other fs error (e.g. `EACCES` on a present-but-
  * unreadable file) propagates rather than silently loading a contract-less
- * package.
+ * package. When `verifyContent` is supplied, an entry whose content does not
+ * recompute to its address also resolves to `undefined` — tampered content
+ * must not flow onward, and the strict store reads report the same file
+ * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`.
  */
 export async function readContractSnapshotJsonTolerant(
   migrationsDir: string,
   storageHash: string,
+  verifyContent?: SnapshotContentVerifier,
 ): Promise<unknown | undefined> {
   let jsonPath: string;
   try {
@@ -148,12 +286,27 @@ export async function readContractSnapshotJsonTolerant(
     throw error;
   }
 
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed === null ? undefined : parsed;
+    parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+  if (parsed === null) {
+    return undefined;
+  }
+  try {
+    verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+  } catch (error) {
+    if (
+      MigrationToolsError.is(error) &&
+      error.code === 'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH'
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+  return parsed;
 }
 
 export function snapshotsImportPathFrom(packageDir: string, migrationsDir: string): string {

@@ -1,15 +1,16 @@
 import {
   byteaColumn,
   int4Column,
-  int8Column,
-  intervalColumn,
-  numericColumn,
+  int8BigIntColumn,
+  intervalPartsColumn,
+  numericStringColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
+import pgvector from '@internal/extension-pgvector/pack';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
-import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
+import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
@@ -38,11 +39,11 @@ const VECTOR = [0.5, -0.25, 1.5];
 const Reading = model('Reading', {
   fields: {
     id: field.column(int4Column).id(),
-    amount: field.column(numericColumn(38, 20)).optional(),
-    padded: field.column(numericColumn(10, 2)).optional(),
-    counter: field.column(int8Column).optional(),
+    amount: field.column(numericStringColumn(38, 20)).optional(),
+    padded: field.column(numericStringColumn(10, 2)).optional(),
+    counter: field.column(int8BigIntColumn).optional(),
     payload: field.column(byteaColumn).optional(),
-    elapsed: field.column(intervalColumn()).optional(),
+    elapsed: field.column(intervalPartsColumn()).optional(),
     embedding: field.column(vector(3)).optional(),
   },
 }).sql({ table: 'canonical_readings' });
@@ -53,7 +54,7 @@ const StationBase = model('Station', {
     readingId: field.column(int4Column).column('reading_id'),
     // A per-station tally wide enough to hold values a double cannot, so an
     // aggregate over it has something to lose.
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }),
@@ -66,7 +67,10 @@ const ReadingWithStations = Reading.relations({
   stations: rel.hasMany(() => StationBase, { by: 'readingId' }),
 }).sql({ table: 'canonical_readings' });
 
-const contract = defineContract({ models: { Reading: ReadingWithStations, Station } });
+const contract = defineContract({
+  extensions: { pgvector },
+  models: { Reading: ReadingWithStations, Station },
+});
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({
@@ -163,7 +167,7 @@ describe('integration/include canonical JSON', () => {
 
   /**
    * The slice recorded scale-padding as a tripwire: `numeric(p,s)` pads, so
-   * `col::text` might disagree with `encodeJson`. Probed against a live
+   * `col::text` might disagree with `toDataTypeValue`. Probed against a live
    * server, the padding happens on **write** — `'1.5'` inserted into
    * `numeric(10,2)` is stored as `1.50` — so the projection reports what is
    * stored, exactly, and there is nothing for it to disagree with. The same
@@ -245,13 +249,10 @@ describe('integration/include canonical JSON', () => {
           namespaceId: 'public',
         });
 
-        // The contract is authored in this file, so its static aggregate map
-        // is unknown and the typed builder surface is empty; dispatch
-        // dynamically, as the include reducer below already does.
-        const stats = await readings.aggregate((aggregate) => {
-          const dynamic = aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-          return { total: dynamic['sumBigInt']!('counter'), peak: dynamic['max']!('counter') };
-        });
+        const stats = await readings.aggregate((aggregate) => ({
+          total: aggregate.sumBigInt('counter'),
+          peak: aggregate.max('counter'),
+        }));
 
         // The lossless sum reads PostgreSQL's numeric total as an unbounded
         // bigint; the maximum keeps the column's own bigint. Both are exact,
@@ -260,16 +261,10 @@ describe('integration/include canonical JSON', () => {
         expect(BigInt(Number(stats.total))).not.toBe(stats.total);
         expect(BigInt(Number(stats.peak))).not.toBe(9007199254740993n);
 
-        // The include refinement's cardinality inference does not read a
-        // `hasMany` attached to a model declared in this file as to-many, so it
-        // types the scalar reducers away; the relation is to-many and the shape
-        // asserted below is what the query returns.
-        const reduceToMax = (related: unknown): unknown =>
-          (related as { max: (field: string) => unknown }).max('weight');
         const withStations = await readings
           .where((reading) => reading.id.eq(1))
           .select('id')
-          .include('stations', (stations) => reduceToMax(stations) as never)
+          .include('stations', (stations) => stations.max('weight'))
           .all();
 
         // The include carries its value inside a JSON document, where a number

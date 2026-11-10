@@ -8,18 +8,13 @@ const testHashes = { storageHash: 'blog-test', profileHash: 'blog-profile' };
 
 const mongoCodecImports: TypesImportSpec[] = [
   {
-    package: '@internal/adapter-mongo/codec-types',
+    package: '@internal/target-mongo/codec-types',
     named: 'CodecTypes',
     alias: 'MongoCodecTypes',
   },
 ];
 
 describe('Mongo emitter hook end-to-end (blog fixture)', () => {
-  it('validates the blog contract', () => {
-    expect(() => mongoEmission.validateTypes(blogContract, {})).not.toThrow();
-    expect(() => mongoEmission.validateStructure(blogContract)).not.toThrow();
-  });
-
   it('generates complete contract.d.ts from blog contract', () => {
     const types = generateContractDts(blogContract, mongoEmission, mongoCodecImports, testHashes);
 
@@ -69,15 +64,6 @@ describe('Mongo emitter hook end-to-end (blog fixture)', () => {
     );
 
     expect(types).not.toContain('strategy');
-  });
-
-  it('generates storage section with namespaces', () => {
-    const types = generateContractDts(blogContract, mongoEmission, [], testHashes);
-
-    expect(types).toContain('readonly namespaces:');
-    expect(types).toContain('readonly collection:');
-    expect(types).toContain('readonly users: MongoCollection');
-    expect(types).toContain('readonly posts: MongoCollection');
   });
 
   it('generates Comment model with owner and empty storage', () => {

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Upstream uses generated CUID ids. The port seeds every incidental id explicitly so the fields retain String storage.
 
 model User {

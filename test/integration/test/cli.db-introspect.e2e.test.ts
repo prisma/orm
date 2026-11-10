@@ -49,7 +49,7 @@ withTempDir(({ createTempDir }) => {
             const tree = stripAnsi(run.stderr);
             expect(tree).toContain('table user');
             expect(tree).toContain('table post');
-            expect(tree).toContain('id: int4 (not nullable)');
+            expect(tree).toContain('id: integer (not nullable)');
             expect(tree).toContain('email: text (not nullable)');
             expect(tree).toContain('name: text (nullable)');
             expect(tree).toContain('primary key: id');
@@ -129,7 +129,7 @@ model User {
   id    Int     @id(map: "user_pkey") @default(autoincrement())
   email String
   name  String?
-  token Uuid    @default(dbgenerated("gen_random_uuid()"))
+  token Uuid    @default(sql\`gen_random_uuid()\`)
 
   @@map("user")
 }

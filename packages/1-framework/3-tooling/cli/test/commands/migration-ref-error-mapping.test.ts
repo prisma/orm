@@ -11,7 +11,6 @@ const config = { migrations: { dir: 'migrations' } } as unknown as PrismaNextCon
 
 describe('migration-ref MigrationToolsError envelope passthrough', () => {
   let tempDir: string;
-  let configPath: string;
 
   beforeEach(async () => {
     tempDir = join(
@@ -26,7 +25,6 @@ describe('migration-ref MigrationToolsError envelope passthrough', () => {
       `${JSON.stringify({ hash: HASH_A, invariants: [] }, null, 2)}\n`,
       'utf-8',
     );
-    configPath = join(tempDir, 'prisma.config.ts');
   });
 
   afterEach(async () => {
@@ -41,7 +39,6 @@ describe('migration-ref MigrationToolsError envelope passthrough', () => {
       const result = await executeRefDeleteCommand('does-not-exist', {
         config,
         cwd: tempDir,
-        configPath,
       });
 
       expect(result.ok).toBe(false);

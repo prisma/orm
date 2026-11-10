@@ -25,6 +25,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   runContractEmit,
   runContractInfer,
@@ -33,11 +34,11 @@ import {
   useDevDatabase,
 } from '../utils/journey-test-helpers';
 import {
-  expectVerifiesCleanAfterPull,
   fixIndexTypes,
   fixOneToOneBackRelation,
   readContractPsl,
   SEED_SQL,
+  SESSIONS_CROSS_SCHEMA_FOREIGN_KEY,
   writeContractPsl,
 } from './infer-roundtrip-fidelity/harness';
 
@@ -181,11 +182,9 @@ withTempDir(({ createTempDir }) => {
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
 
         const psl = readContractPsl(ctx);
-        expect(psl, 'Users.tags carries a PSL literal-list default, not dbgenerated').toMatch(
-          /tags\s+String\[\]\s+@default\(\[\]\)/,
-        );
-        expect(psl, 'Users.tags waives the element check its source database never had').toMatch(
-          /tags\s+String\[\][^\n]*@noCheck\(elementNotNull\)/,
+        expect(psl).not.toContain('dbgenerated');
+        expect(psl, 'Users.tags carries a PSL literal-list default, not a raw one').toMatch(
+          /tags\s+String\?\[\]\s+@default\(\[\]\)/,
         );
 
         // Isolate the list-default defect: fix the one remaining unrelated
@@ -203,13 +202,13 @@ withTempDir(({ createTempDir }) => {
             `instead got:\n${stripAnsi(emit.stderr)}\n${stripAnsi(emit.stdout)}`,
         ).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'Users.tags');
+        await expectStrictVerifyIssues(ctx, 'Users.tags', [SESSIONS_CROSS_SCHEMA_FOREIGN_KEY]);
       },
       timeouts.spinUpPpgDev,
     );
 
     it(
-      'infer prints a nullable text[] column as String[]? with its default, and it round-trips clean',
+      'infer prints a nullable text[] column as String?[]? with its default, and it round-trips clean',
       async () => {
         const ctx: JourneyContext = setupJourney({
           connectionString: db.connectionString,
@@ -222,7 +221,7 @@ withTempDir(({ createTempDir }) => {
 
         const psl = readContractPsl(ctx);
         expect(psl, 'Users.labels is a nullable list with a literal-list default').toMatch(
-          /labels\s+String\[\]\?\s+@default\(\[\]\)/,
+          /labels\s+String\?\[\]\?\s+@default\(\[\]\)/,
         );
 
         const reduced = fixOneToOneBackRelation(psl);
@@ -231,11 +230,11 @@ withTempDir(({ createTempDir }) => {
         const emit = await runContractEmit(ctx);
         expect(
           emit.exitCode,
-          'contract emit should accept String[]? @default([]) on Users.labels; ' +
+          'contract emit should accept String?[]? @default([]) on Users.labels; ' +
             `instead got:\n${stripAnsi(emit.stderr)}\n${stripAnsi(emit.stdout)}`,
         ).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'Users.labels');
+        await expectStrictVerifyIssues(ctx, 'Users.labels', [SESSIONS_CROSS_SCHEMA_FOREIGN_KEY]);
       },
       timeouts.spinUpPpgDev,
     );
@@ -320,7 +319,7 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'a jsonb literal default round-trips clean through db verify --schema-only',
+      'a jsonb, numeric and temporal literal default round-trip clean through db verify --schema-only',
       async () => {
         const ctx: JourneyContext = setupJourney({
           connectionString: db.connectionString,
@@ -331,21 +330,25 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
 
+        // Each default prints as the literal its codec reads back: a jsonb
+        // document as a `json` tag, a numeric keeping the trailing zero it was
+        // stored with, and a timestamp with its tag, in its type's canonical form.
+        const printed = readContractPsl(ctx);
+        expect(printed).toContain('@default(json`{}`)');
+        expect(printed).toContain('@default(1.5)');
+        expect(printed).toContain('@default(timestamp`2024-01-01T00:00:00`)');
+
         // Fix the one remaining unrelated emit-blocker (1:1 back-relation) so
-        // emit succeeds and verify can run. The gin/hash indexes and the tags
-        // list default are left exactly as infer printed them — postgres now
-        // registers those access methods and infer now prints a literal-list
-        // default (TML-3037), so they emit and round-trip clean against the
-        // live gin/hash indexes and the live tags default, proving those
-        // fixes too. Only the jsonb default on Users.metadata is left broken,
-        // which is what this test is for.
-        const reduced = fixOneToOneBackRelation(readContractPsl(ctx));
-        writeContractPsl(ctx, reduced);
+        // emit succeeds and verify can run. Everything else is left exactly as
+        // infer printed it.
+        writeContractPsl(ctx, fixOneToOneBackRelation(printed));
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'Users.metadata');
+        await expectStrictVerifyIssues(ctx, 'Users.metadata, Users.fee, Users.joinedAt', [
+          SESSIONS_CROSS_SCHEMA_FOREIGN_KEY,
+        ]);
       },
       timeouts.spinUpPpgDev,
     );
@@ -361,7 +364,7 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
         expect(readContractPsl(ctx)).toContain(
-          '@@index(expression: "lower(email)", map: "users_email_lower_idx")',
+          '@@index(expression: sql`lower(email)`, map: "users_email_lower_idx")',
         );
       },
       timeouts.spinUpPpgDev,
@@ -378,7 +381,7 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
         expect(readContractPsl(ctx)).toContain(
-          '@@index([email], map: "users_email_active_idx", where: "(birth_date IS NULL)")',
+          '@@index([email], map: "users_email_active_idx", where: sql`(birth_date IS NULL)`)',
         );
       },
       timeouts.spinUpPpgDev,
@@ -396,7 +399,7 @@ withTempDir(({ createTempDir }) => {
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
         const psl = readContractPsl(ctx);
         expect(psl).toContain(
-          '@@index(expression: "lower(email)", map: "users_email_ci_key", unique: true)',
+          '@@index(expression: sql`lower(email)`, map: "users_email_ci_key", unique: true)',
         );
         expect(psl).toContain('@@index([email], map: "users_email_plain_key", unique: true)');
       },
@@ -434,7 +437,7 @@ withTempDir(({ createTempDir }) => {
         expect(psl).toContain('@@rls');
         expect(psl).toContain('policy_select users_owner_read {');
         expect(psl).toContain('roles = [fidelity_app_user]');
-        expect(psl).toContain('using = "(id = 1)"');
+        expect(psl).toContain('using = sql`(id = 1)`');
         expect(psl).toContain('@@map("users_owner_read")');
       },
       timeouts.spinUpPpgDev,
@@ -453,7 +456,7 @@ withTempDir(({ createTempDir }) => {
         const psl = readContractPsl(ctx);
         expect(psl).toContain('policy_update Users_restrictive_write {');
         expect(psl).toContain('roles = [fidelity_app_user, fidelity_auditor]');
-        expect(psl).toContain('withCheck = "(id = 2)"');
+        expect(psl).toContain('withCheck = sql`(id = 2)`');
         expect(psl).toContain('permissive = false');
         expect(psl).toContain('@@map("Users restrictive write")');
       },

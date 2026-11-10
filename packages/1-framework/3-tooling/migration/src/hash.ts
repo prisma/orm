@@ -1,7 +1,52 @@
 import { createHash } from 'node:crypto';
+import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import { computeStorageHash } from '@internal/contract/hashing';
 import { canonicalizeJson } from '@internal/framework-components/utils';
+import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type { MigrationMetadata } from './metadata';
 import type { MigrationOps, OnDiskMigrationPackage } from './package';
+
+/**
+ * The canonicalization hooks a family's emit pipeline computes storage
+ * hashes with. Sourced from the target serializer's
+ * `hashCanonicalizationHooks` — never from its serialization-preserve
+ * hooks, which may be broader (Postgres preserves required entity-kind
+ * fields at default values on disk that the published hash canonicalized
+ * away).
+ */
+export interface SnapshotCanonicalizationHooks {
+  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
+  readonly sortStorage?: StorageSort;
+}
+
+/**
+ * Recompute the storage hash a contract's content publishes as its
+ * identity. The published `storage.storageHash` is the output of the emit
+ * pipeline's `computeStorageHash` call over a storage object that did not
+ * yet carry `storageHash`, so the field is stripped before recomputing.
+ * Shared by snapshot content verification and descriptor
+ * self-consistency — the one place this invariant lives.
+ */
+export function recomputePublishedStorageHash(args: {
+  readonly target: unknown;
+  readonly targetFamily: unknown;
+  readonly storage: unknown;
+  readonly hooks: SnapshotCanonicalizationHooks | undefined;
+}): string {
+  const storageRecord = blindCast<
+    Record<string, unknown>,
+    'the storage subtree is hashed as an opaque record; a non-record value simply fails the comparison'
+  >(args.storage ?? {});
+  const { storageHash: _published, ...storageWithoutHash } = storageRecord;
+  return computeStorageHash({
+    target: typeof args.target === 'string' ? args.target : '',
+    targetFamily: typeof args.targetFamily === 'string' ? args.targetFamily : '',
+    storage: storageWithoutHash,
+    ...ifDefined('shouldPreserveEmpty', args.hooks?.shouldPreserveEmpty),
+    ...ifDefined('sortStorage', args.hooks?.sortStorage),
+  });
+}
 
 export interface VerifyResult {
   readonly ok: boolean;

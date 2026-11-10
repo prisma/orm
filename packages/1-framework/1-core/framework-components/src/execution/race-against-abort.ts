@@ -5,9 +5,9 @@ import { runtimeAborted } from './runtime-error';
  * Throw a phase-tagged `RUNTIME.ABORTED` envelope if the supplied
  * context is already aborted at the precheck site. Centralises the
  * `if (ctx.signal?.aborted) throw runtimeAborted(...)` pattern that
- * every codec dispatch site (and the `beforeExecute` middleware phase)
+ * every codec dispatch site (and the `beforeEncode` middleware phase)
  * repeats. Accepts both the framework `CodecCallContext` and the
- * `RuntimeMiddlewareContext`; both expose `signal?: AbortSignal`.
+ * `ActivityContext`; both expose `signal?: AbortSignal`.
  */
 export function checkAborted(
   ctx: { readonly signal?: AbortSignal },

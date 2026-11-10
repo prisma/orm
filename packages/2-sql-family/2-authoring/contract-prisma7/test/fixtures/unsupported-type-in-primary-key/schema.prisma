@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model FieldKey {
+  id Unsupported("cidr") @id
+  x  Int                 @unique
+}
+
+model CompositeKey {
+  a Int
+  b Unsupported("cidr")
+  c Int                 @unique
+
+  @@id([a, b])
+}

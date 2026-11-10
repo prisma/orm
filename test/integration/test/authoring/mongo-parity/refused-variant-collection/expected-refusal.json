@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.COLLECTION_INVALID",
+    "message": "Variant model \"Bug\" is stored in collection \"bugs\", but its base \"Task\" is stored in \"tasks\". A variant is stored in its base's collection; leave its collection out."
+  },
+  "psl": [
+    {
+      "code": "PSL_MONGO_VARIANT_SEPARATE_COLLECTION",
+      "message": "Mongo variant \"Bug\" cannot use a different collection than its base \"Task\". Mongo only supports single-collection polymorphism.",
+      "spanText": "@@base(Task, \"bug\")"
+    }
+  ]
+}

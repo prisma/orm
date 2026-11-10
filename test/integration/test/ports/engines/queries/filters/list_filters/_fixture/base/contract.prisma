@@ -1,3 +1,5 @@
+// use prisma-8
+
 model TestModel {
   id     Int       @id
   string String[]
@@ -6,6 +8,6 @@ model TestModel {
   float  Float[]
   bytes  Bytes[]
   bool   Boolean[]
-  dt     DateTime[]
+  dt     TimestamptzTemporal[]
   @@map("testModel")
 }

@@ -3,10 +3,9 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 
-const mongoDb = mongo<Contract>({ contractJson });
+const mongoDb = mongo({ contract });
 
 const q = mongoDb.query;
 

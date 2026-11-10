@@ -4,6 +4,7 @@
 import type { CodecTypes as SqliteTypes } from '@prisma/orm-sqlite/adapter/codec-types';
 
 import type {
+  ColumnTypesFromStorage,
   ContractWithTypeMaps,
   RelationKeys,
   TypeMaps as TypeMapsType,
@@ -11,15 +12,16 @@ import type {
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'379449b0fa50ab981fb8993e856f682d6bef21eb6a39abe6dd6dc1d34ffb4494'>;
+  StorageHashBase<'38ba9948da5dd02051336dcd63474c601a073c1e63741d1fcca0e8692e978708'>;
 export type ExecutionHash =
-  ExecutionHashBase<'5b8ea41bd78c098dbe7227970a920650aa10992f11357c2664703742248ffc95'>;
+  ExecutionHashBase<'711ee7a9f9952ece816afa0be8a7beb696460439dd0added45acb86d7072b8fe'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -52,14 +54,32 @@ export type AggregateTypes = {
   };
   readonly max: {
     readonly byCodec: {
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
       readonly 'sql/float@1': { readonly output: 'sql/float@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'sql/int@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
       readonly 'sqlite/bigint@1': { readonly output: 'sqlite/bigint@1'; readonly nullable: true };
       readonly 'sqlite/bigintnumber@1': {
         readonly output: 'sqlite/bigintnumber@1';
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -68,18 +88,44 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly min: {
     readonly byCodec: {
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
       readonly 'sql/float@1': { readonly output: 'sql/float@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'sql/int@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
       readonly 'sqlite/bigint@1': { readonly output: 'sqlite/bigint@1'; readonly nullable: true };
       readonly 'sqlite/bigintnumber@1': {
         readonly output: 'sqlite/bigintnumber@1';
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -88,6 +134,14 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly sum: {
@@ -126,146 +180,85 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     ? Encoded
     : CodecTypes[CodecId]['json']
   : Encoded;
+type ParameterizedOutputTypeFunctions = never;
 
-export type FieldOutputTypes = {
-  readonly __unbound__: {
-    readonly Post: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['output'];
-      readonly id: CodecTypes['sql/char@1']['output'];
-      readonly impressionCount: CodecTypes['sqlite/bigint@1']['output'] | null;
-      readonly title: CodecTypes['sqlite/text@1']['output'];
-      readonly userId: CodecTypes['sql/char@1']['output'];
-      readonly viewCount: CodecTypes['sqlite/bigintnumber@1']['output'] | null;
-    };
-    readonly PostTag: {
-      readonly postId: CodecTypes['sql/char@1']['output'];
-      readonly tagId: CodecTypes['sql/char@1']['output'];
-    };
-    readonly Tag: {
-      readonly id: CodecTypes['sql/char@1']['output'];
-      readonly label: CodecTypes['sqlite/text@1']['output'];
-    };
-    readonly User: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['output'];
-      readonly displayName: CodecTypes['sqlite/text@1']['output'];
-      readonly email: CodecTypes['sqlite/text@1']['output'];
-      readonly id: CodecTypes['sql/char@1']['output'];
-    };
-  };
-};
-export type FieldInputTypes = {
-  readonly __unbound__: {
-    readonly Post: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['input'];
-      readonly id: CodecTypes['sql/char@1']['input'];
-      readonly impressionCount: CodecTypes['sqlite/bigint@1']['input'] | null;
-      readonly title: CodecTypes['sqlite/text@1']['input'];
-      readonly userId: CodecTypes['sql/char@1']['input'];
-      readonly viewCount: CodecTypes['sqlite/bigintnumber@1']['input'] | null;
-    };
-    readonly PostTag: {
-      readonly postId: CodecTypes['sql/char@1']['input'];
-      readonly tagId: CodecTypes['sql/char@1']['input'];
-    };
-    readonly Tag: {
-      readonly id: CodecTypes['sql/char@1']['input'];
-      readonly label: CodecTypes['sqlite/text@1']['input'];
-    };
-    readonly User: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['input'];
-      readonly displayName: CodecTypes['sqlite/text@1']['input'];
-      readonly email: CodecTypes['sqlite/text@1']['input'];
-      readonly id: CodecTypes['sql/char@1']['input'];
-    };
-  };
-};
-export type StorageColumnTypes = {
-  readonly __unbound__: {
-    readonly post: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['output'];
-      readonly id: CodecTypes['sql/char@1']['output'];
-      readonly impressionCount: CodecTypes['sqlite/bigint@1']['output'] | null;
-      readonly title: CodecTypes['sqlite/text@1']['output'];
-      readonly userId: CodecTypes['sql/char@1']['output'];
-      readonly viewCount: CodecTypes['sqlite/bigintnumber@1']['output'] | null;
-    };
-    readonly post_tag: {
-      readonly postId: CodecTypes['sql/char@1']['output'];
-      readonly tagId: CodecTypes['sql/char@1']['output'];
-    };
-    readonly tag: {
-      readonly id: CodecTypes['sql/char@1']['output'];
-      readonly label: CodecTypes['sqlite/text@1']['output'];
-    };
-    readonly user: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['output'];
-      readonly displayName: CodecTypes['sqlite/text@1']['output'];
-      readonly email: CodecTypes['sqlite/text@1']['output'];
-      readonly id: CodecTypes['sql/char@1']['output'];
-    };
-  };
-};
-export type StorageColumnInputTypes = {
-  readonly __unbound__: {
-    readonly post: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['input'];
-      readonly id: CodecTypes['sql/char@1']['input'];
-      readonly impressionCount: CodecTypes['sqlite/bigint@1']['input'] | null;
-      readonly title: CodecTypes['sqlite/text@1']['input'];
-      readonly userId: CodecTypes['sql/char@1']['input'];
-      readonly viewCount: CodecTypes['sqlite/bigintnumber@1']['input'] | null;
-    };
-    readonly post_tag: {
-      readonly postId: CodecTypes['sql/char@1']['input'];
-      readonly tagId: CodecTypes['sql/char@1']['input'];
-    };
-    readonly tag: {
-      readonly id: CodecTypes['sql/char@1']['input'];
-      readonly label: CodecTypes['sqlite/text@1']['input'];
-    };
-    readonly user: {
-      readonly createdAt: CodecTypes['sqlite/datetime@1']['input'];
-      readonly displayName: CodecTypes['sqlite/text@1']['input'];
-      readonly email: CodecTypes['sqlite/text@1']['input'];
-      readonly id: CodecTypes['sql/char@1']['input'];
-    };
-  };
-};
+type FieldTypeOverrides = {};
+export type FieldOutputTypes = FieldTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'output',
+  ContractBase['storage']['namespaces']
+>;
+export type FieldInputTypes = FieldTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'input',
+  ContractBase['storage']['namespaces']
+>;
+type ColumnTypeOverrides = {};
+export type StorageColumnTypes = ColumnTypesFromStorage<
+  ContractBase['storage'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  ColumnTypeOverrides,
+  'output'
+>;
+export type StorageColumnInputTypes = ColumnTypesFromStorage<
+  ContractBase['storage'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  ColumnTypeOverrides,
+  'input'
+>;
 
 export namespace Models {
+  export type Event = {
+    bookedOn: FieldOutputTypes['__unbound__']['Event']['bookedOn'];
+    day: FieldOutputTypes['__unbound__']['Event']['day'];
+    id: FieldOutputTypes['__unbound__']['Event']['id'];
+    opensAt: FieldOutputTypes['__unbound__']['Event']['opensAt'];
+    startsAt: FieldOutputTypes['__unbound__']['Event']['startsAt'];
+    title: FieldOutputTypes['__unbound__']['Event']['title'];
+    readonly [RelationKeys]?: never;
+  };
   export type Post = {
-    createdAt: CodecTypes['sqlite/datetime@1']['output'];
-    id: CodecTypes['sql/char@1']['output'];
-    impressionCount: CodecTypes['sqlite/bigint@1']['output'] | null;
-    title: CodecTypes['sqlite/text@1']['output'];
-    userId: CodecTypes['sql/char@1']['output'];
-    viewCount: CodecTypes['sqlite/bigintnumber@1']['output'] | null;
+    createdAt: FieldOutputTypes['__unbound__']['Post']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['Post']['id'];
+    impressionCount: FieldOutputTypes['__unbound__']['Post']['impressionCount'];
+    title: FieldOutputTypes['__unbound__']['Post']['title'];
+    userId: FieldOutputTypes['__unbound__']['Post']['userId'];
+    viewCount: FieldOutputTypes['__unbound__']['Post']['viewCount'];
     tags: Tag[];
     user: User;
     readonly [RelationKeys]?: 'tags' | 'user';
   };
   export type PostTag = {
-    postId: CodecTypes['sql/char@1']['output'];
-    tagId: CodecTypes['sql/char@1']['output'];
+    postId: FieldOutputTypes['__unbound__']['PostTag']['postId'];
+    tagId: FieldOutputTypes['__unbound__']['PostTag']['tagId'];
     readonly [RelationKeys]?: never;
   };
   export type Tag = {
-    id: CodecTypes['sql/char@1']['output'];
-    label: CodecTypes['sqlite/text@1']['output'];
+    id: FieldOutputTypes['__unbound__']['Tag']['id'];
+    label: FieldOutputTypes['__unbound__']['Tag']['label'];
     posts: Post[];
     readonly [RelationKeys]?: 'posts';
   };
   export type User = {
-    createdAt: CodecTypes['sqlite/datetime@1']['output'];
-    displayName: CodecTypes['sqlite/text@1']['output'];
-    email: CodecTypes['sqlite/text@1']['output'];
-    id: CodecTypes['sql/char@1']['output'];
+    createdAt: FieldOutputTypes['__unbound__']['User']['createdAt'];
+    displayName: FieldOutputTypes['__unbound__']['User']['displayName'];
+    email: FieldOutputTypes['__unbound__']['User']['email'];
+    id: FieldOutputTypes['__unbound__']['User']['id'];
     posts: Post[];
     readonly [RelationKeys]?: 'posts';
   };
 }
 
 export declare const models: {
+  Event: Models.Event;
   Post: Models.Post;
   PostTag: Models.PostTag;
   Tag: Models.Tag;
@@ -290,41 +283,92 @@ type ContractBase = Omit<
         readonly kind: 'sqlite-namespace';
         readonly entries: {
           readonly table: {
+            readonly event: {
+              columns: {
+                readonly bookedOn: {
+                  readonly dataType: 'sqlite/date';
+                  readonly codecId: 'sqlite/date-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly day: {
+                  readonly dataType: 'sqlite/date';
+                  readonly codecId: 'sqlite/date-string@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/character';
+                  readonly codecId: 'sql/char@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
+                };
+                readonly opensAt: {
+                  readonly dataType: 'sqlite/time';
+                  readonly codecId: 'sqlite/time-string@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly startsAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly post: {
               columns: {
                 readonly createdAt: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly impressionCount: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigint@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly userId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly viewCount: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: true;
-                  readonly typeRef: 'BigIntNumber';
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -356,16 +400,18 @@ type ContractBase = Omit<
             readonly post_tag: {
               columns: {
                 readonly postId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly tagId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
               };
               primaryKey: {
@@ -419,15 +465,17 @@ type ContractBase = Omit<
             readonly tag: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -438,26 +486,30 @@ type ContractBase = Omit<
             readonly user: {
               columns: {
                 readonly createdAt: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
                 };
                 readonly displayName: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -469,14 +521,6 @@ type ContractBase = Omit<
         };
       };
     };
-    readonly types: {
-      readonly BigIntNumber: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sqlite/bigintnumber@1';
-        readonly nativeType: 'integer';
-        readonly typeParams: Record<string, never>;
-      };
-    };
     readonly storageHash: StorageHash;
   }>,
   'roots' | 'domain'
@@ -484,6 +528,7 @@ type ContractBase = Omit<
   readonly target: 'sqlite';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly post_tag: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -496,6 +541,60 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly __unbound__: {
         readonly models: {
+          readonly Event: {
+            readonly fields: {
+              readonly bookedOn: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/date-string@1';
+                };
+              };
+              readonly day: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/date-string@1';
+                };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/char@1';
+                  readonly typeParams: { readonly length: 36 };
+                };
+              };
+              readonly opensAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sqlite/time-string@1';
+                };
+              };
+              readonly startsAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'event';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly bookedOn: { readonly column: 'bookedOn' };
+                readonly day: { readonly column: 'day' };
+                readonly id: { readonly column: 'id' };
+                readonly opensAt: { readonly column: 'opensAt' };
+                readonly startsAt: { readonly column: 'startsAt' };
+                readonly title: { readonly column: 'title' };
+              };
+            };
+          };
           readonly Post: {
             readonly fields: {
               readonly createdAt: {
@@ -706,6 +805,9 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly sql: {
       readonly foreignKeys: true;
+      readonly insertOnConflictSkip: true;
+      readonly insertOnConflictTarget: true;
+      readonly insertOnConflictWithoutTarget: true;
       readonly jsonAgg: true;
       readonly limit: true;
       readonly orderBy: true;
@@ -720,32 +822,39 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'event';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
-            readonly table: 'post';
           };
         },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'post';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
-            readonly table: 'tag';
           };
         },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'tag';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
-            readonly table: 'user';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'user';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
           };
         },
       ];
     };
   };
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

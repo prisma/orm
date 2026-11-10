@@ -1,0 +1,9 @@
+model Post {
+  id String @id
+  title String
+  address Address
+
+  @@index([title,address . city])
+  @@unique([address.geo.lat( sort : Desc )])
+  @@fulltext([ address.street ])
+}

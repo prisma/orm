@@ -2,10 +2,11 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerId, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
-import { join } from 'pathe';
+import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
+import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -13,7 +14,7 @@ const emit = vi.fn();
 /** The production tree, with `init` rebuilt around the injected fake emit. */
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit }),
+  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
 };
 const groups = BIN_GROUPS;
 
@@ -160,7 +161,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(4);
       expect(envelopeOf(run)).toMatchObject({
@@ -179,7 +180,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.presented?.data).toMatchObject({
         ok: true,
@@ -200,7 +201,7 @@ describe('init installs', () => {
     async () => {
       emit.mockRejectedValue(new Error('contract source is not readable'));
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(5);
       expect(envelopeOf(run)).toMatchObject({
@@ -217,7 +218,7 @@ describe('init installs', () => {
   it(
     'runs no skills command — the family-level `prisma init` owns skills setup',
     async () => {
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
       expect(skillCalls()).toEqual([]);
@@ -283,7 +284,7 @@ describe('init installs', () => {
           { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
         ];
 
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(run.exitCode).toBe(4);
         expect(envelopeOf(run)).toMatchObject({
@@ -303,7 +304,7 @@ describe('init installs', () => {
       async () => {
         script = [{ exitCode: 1, stderr: 'EACCES: permission denied' }];
 
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(run.exitCode).toBe(4);
         expect(calls).toHaveLength(1);
@@ -324,6 +325,24 @@ describe('init installs', () => {
       timeouts.coldTransformImport,
     );
   });
+
+  it(
+    'installs the driver the Mongo package declares as a peer dependency',
+    async () => {
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
+        cwd: projectDir,
+      });
+    },
+    timeouts.coldTransformImport,
+  );
 
   describe('--skip-install', () => {
     it(
@@ -348,11 +367,114 @@ describe('init installs', () => {
     );
   });
 
+  describe('on the Prisma 7 path', () => {
+    const PRISMA7_SCHEMA =
+      'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id String @id\n}\n';
+
+    function writePrisma7Project(manifest: Record<string, unknown>): void {
+      mkdirSync(join(projectDir, 'prisma'), { recursive: true });
+      writeFileSync(join(projectDir, 'prisma/schema.prisma'), PRISMA7_SCHEMA, 'utf-8');
+      writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf-8');
+    }
+
+    function prisma7Argv(): string[] {
+      return [
+        'orm',
+        'init',
+        '--from-prisma7-schema',
+        'prisma/schema.prisma',
+        '--confirm',
+        basename(projectDir),
+      ];
+    }
+
+    it(
+      'installs the target package for the check first, then @prisma/client@7, @prisma/prisma7, and prisma@latest',
+      async () => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies: { '@prisma/client': '^6.0.0' },
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls.map((call) => call.args)).toEqual([
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', '@prisma/client@7'],
+          ['add', '-D', 'prisma@latest', '@types/node', '@prisma/prisma7@7'],
+          ['add', '-D', '@prisma/cli-engine@latest'],
+        ]);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'leaves @prisma/client alone when it is already on the Prisma 7 line',
+      async () => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies: { '@prisma/client': '^7.4.0' },
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it.each([
+      ['never declared @prisma/client', {}],
+      ['declares @prisma/client through the workspace', { '@prisma/client': 'workspace:*' }],
+    ])(
+      'does not add @prisma/client when the project %s',
+      async (_case, dependencies) => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies,
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'installs only the usual packages when @prisma/prisma7 is already declared',
+      async () => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^8.0.0', '@prisma/prisma7': '^7.10.0' },
+        });
+
+        const run = await harness().run(prisma7Argv().slice(0, 4), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls.map((call) => call.args)).toEqual([
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', '-D', 'prisma@latest', '@types/node'],
+          ['add', '-D', '@prisma/cli-engine@latest'],
+        ]);
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
   describe('a host with no package-manager runner', () => {
     it(
       'reports the install failure rather than pretending it installed',
       async () => {
-        const run = await createTestCli({ commands, groups }).run(scaffoldArgv(), {
+        const run = await createTestCli({ commands, groups }).run([...scaffoldArgv(), '--json'], {
           cwd: projectDir,
         });
 

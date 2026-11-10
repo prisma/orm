@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/blog-update (postgres matrix entry).
 //
@@ -35,38 +37,38 @@
 //   }
 
 model User {
-  id          String    @id @default(cuid(2))
+  id          String    @id @onCreate(cuid(2))
   email       String    @unique
   name        String?
   posts       Post[]
   profile     Profile?
-  wakesUpAt   DateTime? @default(now())
-  lastLoginAt DateTime? @default(now())
+  wakesUpAt   TimestamptzTemporal? @default(now())
+  lastLoginAt TimestamptzTemporal? @default(now())
   @@map("user")
 }
 
 model Profile {
-  id             String    @id @default(cuid(2))
+  id             String    @id @onCreate(cuid(2))
   bio            String?
   notrequired    String?
   user           User      @relation(fields: [userId], references: [id])
   userId         String    @unique
-  goesToBedAt    DateTime? @default(now())
-  goesToOfficeAt DateTime? @default(now())
+  goesToBedAt    TimestamptzTemporal? @default(now())
+  goesToOfficeAt TimestamptzTemporal? @default(now())
   @@map("profile")
 }
 
 model Post {
-  id              String    @id @default(cuid(2))
-  createdAt       DateTime  @default(now())
-  updatedAt       temporal.updatedAt()
+  id              String    @id @onCreate(cuid(2))
+  createdAt       TimestamptzTemporal  @default(now())
+  updatedAt       TimestamptzTemporal @onCreate(now()) @onUpdate(now())
   published       Boolean
   title           String
   content         String?
   optional        String?
   authorId        String?   @map("author")
   author          User?     @relation(fields: [authorId], references: [id])
-  lastReviewedAt  DateTime? @default(now())
-  lastPublishedAt DateTime? @default(now())
+  lastReviewedAt  TimestamptzTemporal? @default(now())
+  lastPublishedAt TimestamptzTemporal? @default(now())
   @@map("post")
 }

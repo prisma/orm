@@ -25,6 +25,7 @@ export {
   InsertManyWireCommand,
   InsertOneWireCommand,
   isDdlWireCommand,
+  RenameCollectionWireCommand,
   UpdateManyWireCommand,
   UpdateOneWireCommand,
 } from '../wire-commands';

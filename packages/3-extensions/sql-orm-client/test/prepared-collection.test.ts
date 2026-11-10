@@ -10,6 +10,7 @@ import { Collection } from '../src/collection';
 import { createPreparedRowQuery } from '../src/prepared-row-query';
 import { createCollectionFor } from './collection-fixtures';
 import { buildStiPolyContract, createMockRuntime, getTestContext, isSelectAst } from './helpers';
+import { createActivityCollectionFor, fakePlanHash, ormCallHash } from './orm-call-fixtures';
 
 function source<Row>(rows: Row[]) {
   return new AsyncIterableResult(
@@ -17,6 +18,22 @@ function source<Row>(rows: Row[]) {
       yield* rows;
     })(),
   );
+}
+
+function preparedStatementOf(
+  description: Preparable<Record<string, unknown>, unknown>,
+  targets: unknown[],
+): PreparedStatement<{ id: number }, Record<string, unknown>> {
+  return {
+    sql: 'select rows',
+    ast: description.plan.ast,
+    meta: description.plan.meta,
+    slots: [],
+    query: (target, params) => {
+      targets.push(target);
+      return source([{ user_id: params.id }]);
+    },
+  };
 }
 
 function prepareRows<Result>(
@@ -39,27 +56,56 @@ const annotation = defineAnnotation<{ label: string }>()({
 });
 
 describe('prepared collection', () => {
-  it('preserves all and first annotations without changing the source or ordinary terminals', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('puts all and first annotations on the call of each execution, not on the plan or the source', async () => {
+    const { collection, runtime, calls, hashed } = createActivityCollectionFor('Post');
     const selected = collection.where({ id: 7 }).select('userId').limit(99);
     const configure = (meta: MetaBuilder<'read'>) =>
       meta.annotate(annotation({ label: 'prepared' }));
     const all = selected.prepared.all(configure);
     const first = selected.prepared.first(undefined, configure);
-    expect(annotation.read(all.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(first.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(selected.prepared.all().plan)).toBeUndefined();
-    runtime.setNextResults([[{ user_id: 2 }], [{ user_id: 3 }]]);
-    expect(await selected.all(configure)).toEqual([{ userId: 2 }]);
-    expect(await selected.first(undefined, configure)).toEqual({ userId: 3 });
-    expect(runtime.executions.map(({ plan }) => annotation.read(plan))).toEqual([
-      { label: 'prepared' },
-      { label: 'prepared' },
+    const targets: unknown[] = [];
+    const statements = {
+      all: preparedStatementOf(all, targets),
+      first: preparedStatementOf(first, targets),
+    };
+    const preparedAll = createPreparedRowQuery(all, statements.all);
+    const preparedFirst = createPreparedRowQuery(first, statements.first);
+
+    expect(await preparedAll.query(runtime, { id: 1 })).toEqual([{ userId: 1 }]);
+    expect(await preparedFirst.query(runtime, { id: 2 })).toEqual({ userId: 2 });
+
+    expect(await Promise.all(calls.map(({ activity }) => activity.contentHash()))).toEqual([
+      await ormCallHash('all', fakePlanHash),
+      await ormCallHash('first', fakePlanHash),
     ]);
-    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([
-      all.plan.params,
-      first.plan.params,
-    ]);
+    expect({
+      plans: [annotation.read(all.plan), annotation.read(first.plan)],
+      calls: calls.map(({ activity, ended }) => ({
+        kind: activity.kind,
+        annotation: annotation.read(activity),
+        ended,
+      })),
+      hashed,
+    }).toEqual({
+      plans: [undefined, undefined],
+      calls: [
+        {
+          kind: 'orm-call',
+          annotation: { label: 'prepared' },
+          ended: { outcome: 'succeeded', result: [{ userId: 1 }] },
+        },
+        {
+          kind: 'orm-call',
+          annotation: { label: 'prepared' },
+          ended: { outcome: 'succeeded', result: { userId: 2 } },
+        },
+      ],
+      hashed: [
+        { statement: statements.all, params: { id: 1 } },
+        { statement: statements.first, params: { id: 2 } },
+      ],
+    });
+    expect(targets.map((target) => target === runtime)).toEqual([false, false]);
     expect(selected.state.limit).toBe(99);
   });
 
@@ -72,8 +118,8 @@ describe('prepared collection', () => {
       )
       .prepared.all();
     const prepared = prepareRows(description, (id) => [
-      { name: `User ${id}`, posts: { rows: [{ user_id: id }], count: { value: 1 } } },
-      { name: `Empty ${id}`, posts: { rows: [], count: { value: 0 } } },
+      { name: `User ${id}`, posts: { rows: [{ user_id: id }], count: { value: '1' } } },
+      { name: `Empty ${id}`, posts: { rows: [], count: { value: '0' } } },
     ]);
     const a = prepared.query(runtime, { id: 1 })[Symbol.asyncIterator]();
     const b = prepared.query(runtime, { id: 9 })[Symbol.asyncIterator]();
@@ -100,7 +146,7 @@ describe('prepared collection', () => {
     const runtime = createMockRuntime();
     const context = { ...getTestContext(), contract: buildStiPolyContract() };
     const collection = new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
-    const selected = collection.variant('Admin' as never).select('name', 'role' as never);
+    const selected = collection.variant('admin' as never).select('name', 'role' as never);
     const prepared = prepareRows(selected.prepared.all(), () => [
       { name: 'Admin', kind: 'admin', role: 'owner', plan: null },
     ]);
@@ -113,7 +159,7 @@ describe('prepared collection', () => {
     const { collection, runtime } = createCollectionFor('Post');
     const query = vi.spyOn(runtime, 'query');
     const view = collection.select('userId').prepared;
-    expect(Object.keys(view)).toEqual(['aggregate', 'all', 'first']);
+    expect(Object.keys(view)).toEqual(['aggregate', 'all', 'first', 'firstOrThrow']);
     const all = view.all();
     const first = view.first();
     expect(Object.keys(all).sort()).toEqual(['consume', 'plan']);
@@ -126,6 +172,55 @@ describe('prepared collection', () => {
     expect(await first.consume(source([{ user_id: 2 }]))).toEqual({ userId: 2 });
     expect(await first.consume(source([]))).toBeNull();
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('firstOrThrow describes the plan of first and rejects when the source has no rows', async () => {
+    const { collection, runtime } = createCollectionFor('Post');
+    const query = vi.spyOn(runtime, 'query');
+    const selected = collection.select('userId').limit(99);
+    const configure = (meta: MetaBuilder<'read'>) =>
+      meta.annotate(annotation({ label: 'prepared' }));
+    const described = selected.prepared.firstOrThrow();
+    expect(Object.keys(described).sort()).toEqual(['consume', 'plan']);
+    expect(described).not.toBeInstanceOf(Promise);
+    expectTypeOf(described.consume).returns.toEqualTypeOf<Promise<{ userId: number }>>();
+    expect(described.plan).toEqual(selected.prepared.first().plan);
+    expect(selected.prepared.firstOrThrow({ id: 7 }).plan).toEqual(
+      selected.prepared.first({ id: 7 }).plan,
+    );
+    expect(selected.prepared.firstOrThrow((post) => post.id.eq(7)).plan.params).toEqual([7]);
+    expect(
+      annotation.read(selected.prepared.firstOrThrow(undefined, configure).plan),
+    ).toBeUndefined();
+    expect(await described.consume(source([{ user_id: 2 }, { user_id: 3 }]))).toEqual({
+      userId: 2,
+    });
+    await expect(described.consume(source([]))).rejects.toMatchObject({
+      code: 'RUNTIME.NO_ROWS',
+      message: 'Expected at least one row, but none were returned',
+      details: {},
+    });
+    expect(query).not.toHaveBeenCalled();
+    expect(selected.state.limit).toBe(99);
+  });
+
+  it('firstOrThrow executes the query of first and rejects when nothing matches', async () => {
+    const { collection, runtime } = createCollectionFor('Post');
+    const selected = collection.select('userId').limit(99);
+    runtime.setNextResults([[{ user_id: 2 }], [{ user_id: 3 }], [{ user_id: 4 }], []]);
+    expect(await selected.first({ id: 7 })).toEqual({ userId: 2 });
+    expect(await selected.firstOrThrow({ id: 7 })).toEqual({ userId: 3 });
+    expect(await selected.firstOrThrow((post) => post.id.eq(7))).toEqual({ userId: 4 });
+    await expect(selected.firstOrThrow()).rejects.toMatchObject({
+      code: 'RUNTIME.NO_ROWS',
+      message: 'Expected at least one row, but none were returned',
+      details: {},
+    });
+    const [first, shorthand, callback, unfiltered] = runtime.executions.map(({ plan }) => plan);
+    expect(shorthand).toEqual(first);
+    expect(callback?.params).toEqual([7]);
+    expect(unfiltered).toEqual(selected.prepared.first().plan);
+    expect(selected.state.limit).toBe(99);
   });
 
   it('first preserves filters and replaces an earlier limit', () => {
@@ -183,7 +278,11 @@ describe('prepared collection', () => {
       break;
     }
     expect(events).toEqual(['row', 'closed']);
-    expect(query).toHaveBeenCalledWith(runtime, { id: 1 }, options);
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ activity: expect.objectContaining({ kind: 'orm-call' }) }),
+      { id: 1 },
+      options,
+    );
     expect(await prepared.query(runtime, { id: 10 })).toEqual([{ userId: 10 }, { userId: 11 }]);
     const preparedFirst = createPreparedRowQuery(
       collection.select('userId').prepared.first(),

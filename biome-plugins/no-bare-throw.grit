@@ -21,7 +21,7 @@
 //
 // Severity is "info" so the plugin runs repo-wide without breaking existing
 // builds (thousands of pre-existing bare throws). The CI ratchet
-// (scripts/lint-throws.mjs) enforces the gate by counting these diagnostics
+// (scripts/lint-ratchets.mjs) enforces the gate by counting these diagnostics
 // from biome's JSON reporter; "info" entries still appear there with the
 // distinctive `no-bare-throw: ` prefix.
 language js

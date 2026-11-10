@@ -88,6 +88,24 @@ export function verify(entries, pageText) {
   return entries.filter((e) => !pageText.includes(e.code)).map((e) => e.code);
 }
 
+/**
+ * The docs site compiles this page as MDX (prisma/web
+ * `apps/docs/scripts/generate-error-reference.mjs`), which refuses a tag or a
+ * brace outside a code span or fence. Same patterns as that generator.
+ */
+const CODE_SEGMENT = /^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[^\S\n]*$|(`+)[^\n]*?\2/gm;
+const MDX_UNSAFE = /[{}]|<[A-Za-z/]/;
+
+export function mdxUnsafeLines(pageText) {
+  const outsideCode = pageText.replace(CODE_SEGMENT, (segment) => segment.replace(/[^\n]/g, ' '));
+  const original = pageText.split('\n');
+  return outsideCode
+    .split('\n')
+    .flatMap((line, index) =>
+      MDX_UNSAFE.test(line) ? [{ line: index + 1, text: original[index] ?? '' }] : [],
+    );
+}
+
 function main() {
   const args = argv.slice(2);
   const readFlag = (name) => {
@@ -100,7 +118,16 @@ function main() {
 
   const verifyPath = readFlag('--verify');
   if (verifyPath !== undefined) {
-    const missing = verify(entries, readFileSync(verifyPath, 'utf-8'));
+    const pageText = readFileSync(verifyPath, 'utf-8');
+    const unsafe = verifyPath.endsWith('.mdx') ? [] : mdxUnsafeLines(pageText);
+    if (unsafe.length > 0) {
+      stderr.write(
+        'error-reference has text the docs site cannot compile as MDX; put each tag or brace inside a code span:\n',
+      );
+      for (const { line, text } of unsafe) stderr.write(`  line ${line}: ${text}\n`);
+      exit(1);
+    }
+    const missing = verify(entries, pageText);
     if (missing.length > 0) {
       stderr.write(
         `error-reference is missing ${missing.length} of ${entries.length} known codes:\n`,

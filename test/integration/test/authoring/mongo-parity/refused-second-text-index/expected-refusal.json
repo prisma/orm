@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"b\":\"text\"}} is a second text index in its collection; MongoDB allows one text index per collection."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "Only one @@textIndex is allowed per collection (model \"Doc\")",
+      "spanText": "@@textIndex([b])"
+    }
+  ]
+}

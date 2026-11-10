@@ -1,3 +1,5 @@
+// use prisma-8
+
 model UserOneToMany {
   id            String @id
   posts         PostOneToMany[]

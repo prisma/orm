@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.NAME_DUPLICATE",
+    "message": "Collection \"users\" has two indexes named \"email_1\": index 0 of model \"User\" and index 1 of model \"User\". An index without a name is named after its keys and directions. Give one of them another name with the index option name."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "@@index([email], sparse: true) on model \"User\" is named \"email_1\", as is @unique on field \"User.email\", in collection \"users\". An index without `map` is named after its keys and directions. Give one of them another name with `map`.",
+      "spanText": "@@index([email], sparse: true)"
+    }
+  ]
+}

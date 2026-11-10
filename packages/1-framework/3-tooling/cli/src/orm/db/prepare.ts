@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { ControlClient, CreateControlClient } from '../../control-api/types';
 import {
   errorConfigValidation,
@@ -11,7 +13,6 @@ import {
   errorDriverRequired,
   errorFileNotFound,
   errorTargetMigrationNotSupported,
-  errorUnexpected,
 } from '../../utils/cli-errors';
 import { maskConnectionUrl, targetSupportsMigrations } from '../../utils/command-helpers';
 import { appRefsDirFor, contractPathFor, displayPath, migrationsDirFor } from '../migration/paths';
@@ -49,9 +50,7 @@ export async function readContractDocument(
               why: `Contract file not found at ${contractPath}`,
               fix: 'Run `{bin} contract emit` to generate contract.json, or update `contract.output` in prisma.config.ts',
             })
-          : errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+          : errorFromCaught(error, (message) => `Failed to read contract file: ${message}`),
       ),
     );
   }
@@ -75,9 +74,14 @@ export async function prepareMigrationRun(inputs: {
   readonly db: string | undefined;
   readonly commandName: string;
   readonly createClient: CreateControlClient;
+  /**
+   * The command the missing-connection error suggests; defaults to `{bin} <commandName> --db <url>`.
+   * A function is called only when the error is raised.
+   */
+  readonly retryCommand?: string | (() => string);
 }): Promise<Result<PreparedMigrationRun, CliStructuredError>> {
   const { config, cwd, commandName } = inputs;
-  const contractPath = contractPathFor(config, cwd);
+  const contractPath = contractPathFor(config);
   if (contractPath === undefined) {
     return notOk(
       normalizeError(
@@ -102,6 +106,10 @@ export async function prepareMigrationRun(inputs: {
           why: `Database connection is required for ${commandName} (set db.connection in prisma.config.ts, or pass --db <url>)`,
           commandName,
           missingFlags: ['--db'],
+          ...ifDefined(
+            'retryCommand',
+            typeof inputs.retryCommand === 'function' ? inputs.retryCommand() : inputs.retryCommand,
+          ),
         }),
       ),
     );
@@ -134,7 +142,7 @@ export async function prepareMigrationRun(inputs: {
     contractDisplayPath: displayPath(contractPath, cwd),
     dbConnection,
     database: typeof dbConnection === 'string' ? maskConnectionUrl(dbConnection) : undefined,
-    migrationsDir: migrationsDirFor(config, cwd),
-    refsDir: appRefsDirFor(config, cwd),
+    migrationsDir: migrationsDirFor(config),
+    refsDir: appRefsDirFor(config),
   });
 }

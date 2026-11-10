@@ -167,4 +167,13 @@ describe('what the check allows', () => {
     const result = run();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
+
+  it('allows the archived sources of a release’s upgrade instructions as dated records', () => {
+    const archived =
+      'upgrade-instructions/releases/8.0.0-rc.1-to-8.0.0-rc.2/sources/rename/app/instructions.md';
+    write(archived, `Rename \`// use ${LEGACY}\` to the current directive.\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(allowanceFor(archived, `// use ${LEGACY}`).why, /dated record/);
+  });
 });

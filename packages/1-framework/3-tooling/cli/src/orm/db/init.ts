@@ -1,9 +1,12 @@
+import { ormConfigSection } from '@internal/config-loader';
+import type { MigrationPlannerConflict } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
+import { flag, noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -12,32 +15,33 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorUnexpected,
-} from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
-import { mapDbInitFailure } from '../../utils/db-init-failure';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { closeQuietly } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
-import { ormConfigSection } from '../config-section';
+import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { projectConfigPathFor } from '../migration/paths';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
+import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
 
 function initPresentations(inputs: {
   readonly document: MigrationCommandResult;
+  /** Where the CLI ran and the `--config` it was given, which printed commands repeat. */
+  readonly invocation: CliInvocation;
   readonly contractPath: string;
   readonly database: string | undefined;
   readonly dryRun: boolean;
 }): Presentations {
   const { document, database, dryRun } = inputs;
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'Data lines are not defined: this command applies a plan, not migrations, so the db migrate fields do not fit. --json carries the plan and what ran.',
+    ),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -48,10 +52,15 @@ function initPresentations(inputs: {
           ...(dryRun ? [{ label: 'mode', value: 'dry run' }] : []),
         ],
       },
-      ...migrationResultBlocks(document),
+      ...migrationResultBlocks(document, inputs.invocation, undefined),
     ],
     json: () => document,
-    next: () => migrationResultNextActions(document, '{bin} db init'),
+    next: () =>
+      migrationResultNextActions(
+        document,
+        inputs.invocation,
+        cliCommand(inputs.invocation, 'db init'),
+      ),
   };
 }
 
@@ -61,6 +70,7 @@ function initDocument(inputs: {
   readonly advancedRef: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef: { readonly name: string; readonly hash: string } | null;
   readonly startedAt: number;
+  readonly plannerWarnings: readonly MigrationPlannerConflict[];
 }): MigrationCommandResult {
   const { value } = inputs;
   return {
@@ -98,6 +108,7 @@ function initDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
+    ...(inputs.plannerWarnings.length > 0 ? { warnings: inputs.plannerWarnings } : {}),
     summary: value.summary,
     timings: { total: Date.now() - inputs.startedAt },
   };
@@ -156,7 +167,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: contractPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {
@@ -169,14 +180,18 @@ export function createDbInitCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
+        const plannerWarnings = plannerWarningsCollector(ctx.report);
         const result = await client.dbInit({
           contract: contractJson,
           mode: args.flags.dryRun ? 'plan' : 'apply',
           migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
+          onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
-          return notOk(normalizeError(mapDbInitFailure(result.failure)));
+          plannerWarnings.reportCollected();
+          return notOk(normalizeError(result.failure));
         }
 
         const advancementHash =
@@ -204,28 +219,27 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           advancedRef: advanced.value.advancedRef,
           plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
+          plannerWarnings: plannerWarnings.collected(),
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
                 where: { path: contractPath },
+                meta: contractValidationMeta(error),
               }),
             ),
           );
         }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db init: ${safeMessage}`,
+            errorFromCaught(error, (message) => `Unexpected error during db init: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
             }),
           ),
         );
@@ -244,6 +258,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           { data: document },
           initPresentations({
             document,
+            invocation: cliInvocation(ctx, args.flags.db),
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,
             dryRun: args.flags.dryRun,

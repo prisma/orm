@@ -20,13 +20,20 @@ function normalizeModels(
 export function mongoContractJson(params: {
   readonly models?: Record<string, ContractModelBase>;
   readonly storageCollections?: Record<string, unknown>;
+  readonly storageValueObjects?: Record<string, unknown>;
   readonly roots?: Record<string, ReturnType<typeof crossRef>>;
 }) {
   const models = normalizeModels(
     (params.models ?? {
       Item: {
-        fields: { _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false } },
-        storage: { collection: 'items' },
+        fields: {
+          _id: {
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            nullable: false,
+            many: false,
+          },
+        },
+        storage: { fields: { _id: { field: '_id' } }, collection: 'items' },
       },
     }) as Record<string, ContractModelBase>,
   );
@@ -41,7 +48,12 @@ export function mongoContractJson(params: {
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: {
           id: UNBOUND_NAMESPACE_ID,
-          entries: { collection: collections },
+          entries: {
+            collection: collections,
+            ...(params.storageValueObjects === undefined
+              ? {}
+              : { valueObject: params.storageValueObjects }),
+          },
         },
       },
     },

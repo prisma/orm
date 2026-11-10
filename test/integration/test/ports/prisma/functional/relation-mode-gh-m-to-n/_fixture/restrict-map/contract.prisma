@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/relationMode-in-separate-gh-action
 // _schema_m_to_n.ts (manyToManySQLExplicit branch, isSchemaUsingMap=true).

@@ -8,7 +8,7 @@ The mechanical half of the release: moving the code into `prisma/prisma`, and ta
 prisma/prisma
 ├── main            ← becomes Prisma Next (after the final merge)
 ├── v8              ← staging branch until release week
-└── v7              ← Prisma 7 maintenance (bug fixes, 12 months from 8.0.0 final)
+└── v7              ← Prisma 7 maintenance (bug fixes and security updates, 18 months from 8.0.0 final)
 
 tags: v7.x.y (existing) · v8.0.0-rc.1 · v8.0.0 (later)
 ```

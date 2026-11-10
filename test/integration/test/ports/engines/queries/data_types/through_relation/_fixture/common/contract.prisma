@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Parent {
   id Int @id
   children Child[]
@@ -13,6 +15,6 @@ model Child {
   float Float
   bytes Bytes
   bool Boolean
-  dt DateTime
+  dt TimestamptzTemporal
   @@map("child")
 }

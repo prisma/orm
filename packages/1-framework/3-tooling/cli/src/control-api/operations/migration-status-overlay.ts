@@ -1,12 +1,6 @@
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { findPath } from '@internal/migration-tools/migration-graph';
 import type { MigrationEdgeAnnotation } from '../../utils/formatters/migration-graph-labels';
-
-/** Origin hash for status path computation: the live/override marker, or the empty-contract sentinel. */
-export function originHashForStatus(markerHash: string | undefined): string {
-  return markerHash ?? EMPTY_CONTRACT_HASH;
-}
 
 export interface DeriveStatusEdgeAnnotationsInput {
   readonly graph: MigrationGraph;

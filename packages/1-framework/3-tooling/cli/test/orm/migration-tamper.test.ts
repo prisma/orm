@@ -1,9 +1,9 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
   contractJson,
@@ -70,7 +70,7 @@ function driverConfig(project: OfflineProject): {
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: OFFLINE_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: OFFLINE_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 /** A project whose only migration's ops.json was rewritten after attestation. */

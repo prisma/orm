@@ -48,7 +48,7 @@ export async function preflightRefAdvancement(args: {
   readonly name: string;
   readonly contractJson: Record<string, unknown>;
   readonly contractJsonPath: string;
-  readonly configPath: string;
+  readonly projectDir: string;
   readonly client: Pick<ControlClient, 'renderContractDts'>;
 }): Promise<Result<ContractIR, CliStructuredError>> {
   if (!validateRefName(args.name)) {
@@ -56,7 +56,7 @@ export async function preflightRefAdvancement(args: {
   }
   let resolveImportSpecifier: ReturnType<typeof createProjectSpecifierResolver>;
   try {
-    resolveImportSpecifier = createProjectSpecifierResolver(args.configPath);
+    resolveImportSpecifier = createProjectSpecifierResolver(args.projectDir);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);

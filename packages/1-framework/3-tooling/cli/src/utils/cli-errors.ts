@@ -25,22 +25,27 @@ import {
   errorTargetMigrationNotSupported,
   errorUnexpected,
 } from '@internal/errors/control';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction } from '@prisma/cli-engine/protocol';
-import type { MigrateFailure } from '../control-api/types';
-import { chooseAction, runCommandAction } from './next-actions';
+import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
+import { join } from 'pathe';
+import { statementFlag } from '../control-api/statements/statement-flag';
+import type { StatementText } from '../control-api/statements/statement-text';
+import { chooseAction, editFileAction, runCommandAction } from './next-actions';
+import {
+  type CliInvocation,
+  cliCommand,
+  printedPath,
+  printedPlanCommand,
+  selfEmitCommand,
+} from './printed-command';
 
 export {
-  ERROR_CODE_DESTRUCTIVE_CHANGES,
-  errorConsentPlanMismatch,
-  errorDestructiveChanges,
   errorHashMismatch,
   errorMarkerMissing,
   errorMarkerRequired,
-  errorRunnerFailed,
   errorRuntime,
-  errorSchemaVerificationFailed,
   errorTargetMismatch,
 } from '@internal/errors/execution';
 export {
@@ -88,12 +93,13 @@ export class ActionableCliError extends CliStructuredError {
     code: `${string}.${string}`,
     summary: string,
     options: {
-      readonly why: string;
+      readonly why?: string;
       readonly fix: string;
       readonly nextActions: readonly NextAction[];
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;
       readonly cause?: unknown;
+      readonly diagnostics?: readonly Diagnostic[];
     },
   ) {
     super(code, summary, options);
@@ -145,27 +151,127 @@ export function errorAdvanceRefArgConflict(options: {
   );
 }
 
+/** A ref `db sign` meant to advance, and why writing it or its snapshot failed. */
+export interface UnwrittenRef {
+  readonly space: string;
+  readonly name: string;
+  readonly hash: string;
+  readonly reason: string;
+}
+
+function quotedSpaces(spaces: readonly string[]): string {
+  return spaces.map((space) => `"${space}"`).join(', ');
+}
+
+function notSignedSentence(
+  spaces: readonly string[],
+  because: string,
+  becausePlural: string,
+): string {
+  if (spaces.length === 0) return '';
+  return spaces.length === 1
+    ? ` Space ${quotedSpaces(spaces)} was not signed, because ${because}.`
+    : ` Spaces ${quotedSpaces(spaces)} were not signed, because ${becausePlural}.`;
+}
+
+/**
+ * `db sign` wrote the markers, then failed to write one or more refs or their snapshots. The database is signed; running the command again writes the refs. The error also names the spaces it did not sign: those whose schema failed verification, those whose marker changed while it ran, and those whose marker lacks invariants their head ref requires, and it carries each of those spaces' findings.
+ */
+export function errorSignRefsNotWritten(options: {
+  readonly signedSpaces: readonly string[];
+  readonly failedSpaces: readonly string[];
+  readonly conflictSpaces: readonly string[];
+  readonly refusedSpaces: readonly {
+    readonly space: string;
+    readonly missingInvariants: readonly string[];
+  }[];
+  readonly unwrittenRefs: readonly UnwrittenRef[];
+  readonly advancedRefs: readonly {
+    readonly space: string;
+    readonly name: string;
+    readonly hash: string;
+  }[];
+  readonly rerunCommand: string;
+  readonly migrateCommand: string;
+  readonly diagnostics: readonly Diagnostic[];
+  readonly cause: unknown;
+}): ActionableCliError {
+  const { signedSpaces, failedSpaces, conflictSpaces, refusedSpaces, unwrittenRefs, rerunCommand } =
+    options;
+  const markers =
+    signedSpaces.length === 1
+      ? `the marker of space ${quotedSpaces(signedSpaces)} holds its contract`
+      : `the markers of spaces ${quotedSpaces(signedSpaces)} hold their contracts`;
+  const notSigned =
+    notSignedSentence(
+      failedSpaces,
+      'its schema does not satisfy its contract',
+      'their schemas do not satisfy their contracts',
+    ) +
+    notSignedSentence(
+      conflictSpaces,
+      'its marker changed while db sign ran',
+      'their markers changed while db sign ran',
+    ) +
+    notSignedSentence(
+      refusedSpaces.map(({ space }) => space),
+      'its marker does not record invariants its head ref requires',
+      'their markers do not record invariants their head refs require',
+    );
+  const refs = unwrittenRefs
+    .map((ref) => `ref "${ref.name}" of space "${ref.space}" (${ref.reason})`)
+    .join('; ');
+  const count = unwrittenRefs.length;
+  return new ActionableCliError(
+    'MIGRATION.SIGN_REFS_NOT_WRITTEN',
+    `Database signed, but ${count} ${count === 1 ? 'ref was' : 'refs were'} not written`,
+    {
+      why: `The database was signed: ${markers}.${notSigned} These refs were not written: ${refs}.`,
+      fix: `Fix what stopped the write, then run \`${rerunCommand}\` again: the markers already hold the contracts, so it writes only the refs.`,
+      nextActions: [
+        runCommandAction('Sign again to write the refs that were not written', rerunCommand),
+        ...(refusedSpaces.length === 0
+          ? []
+          : [
+              runCommandAction(
+                'Run the migrations that provide the missing invariants, then sign again',
+                options.migrateCommand,
+              ),
+            ]),
+      ],
+      meta: {
+        signedSpaces,
+        failedSpaces,
+        conflictSpaces,
+        refusedSpaces,
+        unwrittenRefs,
+        advancedRefs: options.advancedRefs,
+      },
+      diagnostics: options.diagnostics,
+      cause: options.cause,
+    },
+  );
+}
+
 export function errorRefSetHashNotInGraph(
   resolvedHash: string,
   reachableHashes: readonly string[],
-  graphTipHash: string | null,
 ): ActionableCliError {
   const reachableList =
     reachableHashes.length > 0 ? reachableHashes.join(', ') : '(none — migration graph is empty)';
   const fix =
     reachableHashes.length > 0
-      ? graphTipHash !== null
-        ? `Set the ref to a graph-node hash such as ${graphTipHash}, or run \`{bin} migration plan\` to extend the graph.`
-        : 'Set the ref to a hash that appears in the migration graph.'
+      ? 'Set the ref to the `to` hash of an on-disk migration; `{bin} migration list` shows them.'
       : 'Run `{bin} migration plan` first.';
   const nextActions =
     reachableHashes.length > 0
-      ? graphTipHash !== null
-        ? [
-            chooseAction(`Set the ref to a graph-node hash such as ${graphTipHash}`),
-            runCommandAction('Extend the migration graph', '{bin} migration plan'),
-          ]
-        : [chooseAction('Set the ref to a hash that appears in the migration graph')]
+      ? [
+          runCommandAction(
+            'List the migrations and their destination hashes',
+            '{bin} migration list',
+          ),
+          chooseAction('Set the ref to the `to` hash of one of them'),
+        ]
       : [runCommandAction('Plan the first migration', '{bin} migration plan')];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
@@ -180,7 +286,6 @@ export function errorRefSetHashNotInGraph(
       meta: {
         resolvedHash,
         reachableHashes: [...reachableHashes],
-        ...(graphTipHash !== null ? { graphTipHash } : {}),
       },
     },
   );
@@ -345,7 +450,6 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
 export function errorPlanForgotTheFlag(
   resolvedHash: string,
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
-  graphTipHash: string | null,
   options?: { readonly cause?: unknown },
 ): ActionableCliError {
   const reachableList =
@@ -355,22 +459,22 @@ export function errorPlanForgotTheFlag(
   const refFix =
     reachableRefs.length > 0
       ? `Run migration plan with ${reachableRefs.map((r) => `--from ${r.name}`).join(' or ')}.`
-      : graphTipHash !== null
-        ? `Run migration plan --from ${graphTipHash}.`
-        : 'Commit pending migrations first, then run migration plan.';
+      : 'Pass --from <contract> naming the `to` hash of an on-disk migration (`{bin} migration list` shows them), or point the db ref at one with `{bin} migration ref set db <contract>`.';
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
           runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
         )
-      : graphTipHash !== null
-        ? [
-            runCommandAction(
-              'Plan from the graph tip',
-              `{bin} migration plan --from ${graphTipHash}`,
-            ),
-          ]
-        : [chooseAction('Commit pending migrations first, then run migration plan')];
+      : [
+          runCommandAction(
+            'Plan from an explicit origin',
+            '{bin} migration plan --from <contract>',
+          ),
+          runCommandAction(
+            'Point the db ref at a graph node',
+            '{bin} migration ref set db <contract>',
+          ),
+        ];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
     `Resolved from-hash is not in the migration graph: ${resolvedHash}`,
@@ -381,7 +485,6 @@ export function errorPlanForgotTheFlag(
       meta: {
         resolvedHash,
         reachableRefs: reachableRefs.map((r) => r.name),
-        ...(graphTipHash !== null ? { graphTipHash } : {}),
       },
       ...ifDefined('cause', options?.cause),
     },
@@ -448,25 +551,19 @@ export function errorSnapshotMissing(
  */
 export function errorPlanOriginUnknown(
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
-  graphTipHash: string | null,
 ): ActionableCliError {
   const fromSuggestion =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `--from ${r.name}`).join(' or ')
-      : graphTipHash !== null
-        ? `--from ${graphTipHash}`
-        : '--from <contract>';
-  const refSetCommand =
-    graphTipHash !== null
-      ? `{bin} migration ref set db ${graphTipHash}`
-      : '{bin} migration ref set db <contract>';
+      : '--from <contract>';
+  const refSetCommand = '{bin} migration ref set db <contract>';
   return new ActionableCliError(
     'MIGRATION.PLAN_ORIGIN_UNKNOWN',
     'Cannot determine the plan origin: migrations exist but no origin is named',
     {
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
-        `Set the \`db\` ref to the contract your dev database is at (\`${refSetCommand}\`), or advance it via \`{bin} db update\`.`,
+        `Set the \`db\` ref to the contract your database is at (\`${refSetCommand}\`), or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
         `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
@@ -489,129 +586,451 @@ export function errorPlanOriginUnknown(
       ],
       meta: {
         reachableRefs: reachableRefs.map((r) => r.name),
-        ...(graphTipHash !== null ? { graphTipHash } : {}),
       },
     },
   );
 }
 
-export function errorMarkerMismatch(
-  markerHash: string,
-  reachableHashes: readonly string[],
-  graphTip: string | null,
+/**
+ * A statement is malformed, or names two things that cannot be
+ * renamed into each other (a model and a field, or fields of two models).
+ */
+/** A statement as the user wrote it: its verb and its text. */
+interface WrittenStatement {
+  readonly verb: string;
+  readonly text: string;
+}
+
+export function errorStatementInvalid(
+  statement: WrittenStatement,
+  why: string,
+  fix: string,
 ): ActionableCliError {
-  const reachableList =
-    reachableHashes.length > 0 ? reachableHashes.join(', ') : '(none — migration graph is empty)';
-  const planFromFix =
-    graphTip !== null
-      ? `Run \`{bin} migration plan --from ${graphTip}\` if the live marker is canonical and the on-disk graph needs catching up.`
-      : 'Run `{bin} migration plan` if the live marker is canonical and the on-disk graph needs catching up.';
-  const planCommand =
-    graphTip !== null ? `{bin} migration plan --from ${graphTip}` : '{bin} migration plan';
   return new ActionableCliError(
-    'MIGRATION.MARKER_MISMATCH',
-    'Database marker is not reachable in the on-disk migration graph',
+    'MIGRATION.STATEMENT_INVALID',
+    `Invalid statement "--${statement.verb} ${statement.text}"`,
     {
-      why: `DB marker is ${markerHash}, but the on-disk migration graph reaches: ${reachableList}.`,
-      fix: [
-        planFromFix,
-        `Run \`{bin} migration ref set db ${markerHash}\` if the on-disk graph is canonical and the local \`db\` ref drifted.`,
-        'Investigate whether the database was migrated by an out-of-band process.',
-      ].join('\n'),
+      why,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb },
+    },
+  );
+}
+
+/**
+ * A statement is well formed, but its names do not resolve in the
+ * origin and destination contracts the way a rename requires.
+ */
+export function errorStatementUnresolved(
+  statement: WrittenStatement,
+  why: string,
+  fix: string,
+): ActionableCliError {
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_UNRESOLVED',
+    `Cannot resolve statement "--${statement.verb} ${statement.text}"`,
+    {
+      why,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb },
+    },
+  );
+}
+
+/**
+ * A rename or convert typed in answer to a data-loss question was planned, and the plan still loses
+ * the subject's data: the statement does not account for the operation the question was about.
+ */
+export function errorStatementDidNotResolveLoss(
+  statement: WrittenStatement,
+  subject: string,
+): ActionableCliError {
+  const fix = `Answer the question about "${subject}" with ${statementFlag({ verb: 'delete', text: subject })} if its data may be lost, or give a ${statement.verb} statement that keeps that data.`;
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS',
+    `"--${statement.verb} ${statement.text}" does not keep the data of "${subject}"`,
+    {
+      why: `The plan was made again with the statement, and it still loses the data of "${subject}".`,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: statement.text, verb: statement.verb, subject },
+    },
+  );
+}
+
+/** `--convert` and `--delete` name the same field, and each answers its type change differently. */
+export function errorConvertAndDelete(field: string): ActionableCliError {
+  const fix = `Give one of them: ${statementFlag({ verb: 'convert', text: field })}, or ${statementFlag({ verb: 'delete', text: field })}.`;
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_INVALID',
+    `"--convert ${field}" and "--delete ${field}" conflict`,
+    {
+      why: `Both answer the type change of "${field}": --convert converts each value with code you write in migration.ts, and --delete lets the database cast each value, losing those it cannot keep.`,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { statement: field, verb: 'convert' },
+    },
+  );
+}
+
+const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 'backfill'];
+
+/**
+ * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
+ * to `db update`, which applies its plan directly and so has no migration file whose slot the user
+ * could fill. `statements` are every statement the user gave, in the order given: the `migration
+ * plan` command the error suggests carries each one that command accepts, and starts from
+ * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
+ * `--config` of `invocation`.
+ */
+function needsMigrationFileReason(refused: readonly StatementText[]): string {
+  const converts = refused.some(({ verb }) => verb === 'convert');
+  const backfills = refused.some(({ verb }) => verb === 'backfill');
+  if (converts && backfills) {
+    return '--convert of a field and --backfill ask for a migration file with a slot for the code that converts the values or the value that fills the field';
+  }
+  return converts
+    ? '--convert of a field asks for a migration file with a slot for the code that converts its values'
+    : '--backfill asks for a migration file with a slot for the value that fills the field';
+}
+
+export function errorStatementNeedsMigrationFile(
+  statements: readonly StatementText[],
+  refused: readonly StatementText[],
+  invocation: CliInvocation | undefined,
+  databaseStorageHash?: string,
+): ActionableCliError {
+  const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
+  const listed =
+    written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
+  const plan = printedPlanCommand(
+    invocation,
+    databaseStorageHash,
+    statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
+  );
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+    `db update cannot carry out ${listed}`,
+    {
+      why: `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`,
+      fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
-        runCommandAction('Catch the on-disk graph up to the live marker', planCommand),
-        runCommandAction(
-          'Point the local db ref at the live marker',
-          `{bin} migration ref set db ${markerHash}`,
-        ),
-        chooseAction('Investigate whether the database was migrated by an out-of-band process'),
+        runCommandAction('Plan the change into a migration file to fill in', plan),
+        chooseAction('Or run db update without these statements'),
       ],
+      meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+    },
+  );
+}
+
+/**
+ * Consent flags the command took from the CLI engine and that answered no question: the engine's
+ * own `CLI.CONSENT_UNUSED`, in its words, for values the engine no longer holds.
+ */
+/** A consent flag nothing used, and the flag that had already answered its question, if one did. */
+export interface UnusedConsent extends WrittenStatement {
+  readonly alreadyAnsweredBy:
+    | { readonly kind: 'subject'; readonly subject: string; readonly flag: WrittenStatement }
+    | { readonly kind: 'namespace'; readonly namespace: string }
+    | undefined;
+}
+
+function unusedConsentSentence({
+  verb,
+  text,
+  alreadyAnsweredBy: answeredBy,
+}: UnusedConsent): string {
+  if (answeredBy === undefined) {
+    return `--${verb} ${text} was given but nothing in this run asked about ${text}.`;
+  }
+  if (answeredBy.kind === 'namespace') {
+    return `--${verb} ${text} was given, but every question about namespace "${answeredBy.namespace}" was already answered by another flag.`;
+  }
+  return `--${verb} ${text} was given, but the question about ${answeredBy.subject} was already answered by --${answeredBy.flag.verb} ${answeredBy.flag.text}.`;
+}
+
+export function errorConsentUnused(
+  unused: readonly UnusedConsent[],
+  asked: readonly string[],
+): CliStructuredError {
+  const actions = [
+    ...(unused.some(({ alreadyAnsweredBy }) => alreadyAnsweredBy === undefined)
+      ? ['Remove the flag, or spell the subject the way the command names it.']
+      : []),
+    ...(unused.some(({ alreadyAnsweredBy }) => alreadyAnsweredBy !== undefined)
+      ? ['Give one flag per question.']
+      : []),
+  ];
+  return new CliStructuredError('CLI.CONSENT_UNUSED', unused.map(unusedConsentSentence).join(' '), {
+    ...ifDefined(
+      'why',
+      asked.length === 0 ? undefined : `The run asked about ${asked.join(', ')}.`,
+    ),
+    nextActions: actions.map((label) => ({ kind: 'user-choice', label })),
+    meta: {
+      unused: unused.map(({ verb, text }) => ({ verb, values: [text] })),
+      ...(asked.length === 0 ? {} : { asked }),
+    },
+  });
+}
+
+/**
+ * `delete` or `allow` statements given to a programmatic call match no question the plan asks,
+ * so they consent to nothing.
+ */
+export function errorStatementAnswersNoQuestion(
+  statements: readonly WrittenStatement[],
+  subjects: readonly string[],
+): ActionableCliError {
+  const written = statements.map(({ verb, text }) => `"--${verb} ${text}"`);
+  const listed =
+    written.length === 1
+      ? `Statement ${written[0]} answers`
+      : `Statements ${written.slice(0, -1).join(', ')} and ${written.at(-1)} answer`;
+  const fix =
+    subjects.length === 0
+      ? 'Leave the statements out: the plan asks no question.'
+      : `Leave them out, or name a subject the plan asks about: ${subjects.join(', ')}.`;
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+    `${listed} no question of the plan`,
+    {
+      why: 'A delete or allow statement consents to an operation the plan asks about, and these name no subject the plan would lose data from or change access to.',
+      fix,
+      nextActions: [chooseAction(fix)],
       meta: {
-        markerHash,
-        reachableHashes: [...reachableHashes],
-        ...(graphTip !== null ? { graphTip } : {}),
+        statements: statements.map(({ verb, text }) => ({ verb, text })),
+        subjects,
       },
     },
   );
+}
+
+/**
+ * Without statements, `db update` drops a renamed table or column and creates it again under the
+ * new name, so any advice to run without them says so.
+ */
+const WITHOUT_STATEMENTS_DROPS =
+  'A plan made without statements drops the storage of each renamed model or field with its data and creates it again under the new name, and asks for consent before it does.';
+
+/** How to store the snapshot of the contract the database is at, so statements can resolve. */
+export const STORE_ORIGIN_SNAPSHOT_STEPS = [
+  '1. Put the contract source back to the version the database is at, and run `{bin} contract emit`.',
+  '2. Run `{bin} db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
+  '3. Put the new contract source back, run `{bin} contract emit`, and run this command again with `--advance-ref <name>`.',
+];
+
+/**
+ * Statements were given, but there is no origin contract to resolve their old
+ * names against.
+ */
+export function errorStatementOriginUnknown(origin: {
+  readonly hash: string | null;
+  readonly snapshotDirectory: string;
+  readonly unreadable: string | undefined;
+}): ActionableCliError {
+  if (origin.hash === null) {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+      'Cannot resolve statements: the database has no marker',
+      {
+        why: 'The database has no marker: Prisma has never initialised or updated it, so there is no earlier contract whose names a statement could rename.',
+        fix: `Leave out the statements. If the database already holds data under the old names, preview the plan with --dry-run first. ${WITHOUT_STATEMENTS_DROPS}`,
+        nextActions: [
+          chooseAction(
+            `Leave out the statements, and preview the plan with --dry-run first. ${WITHOUT_STATEMENTS_DROPS}`,
+          ),
+        ],
+        meta: { hash: null, snapshotDirectory: origin.snapshotDirectory },
+      },
+    );
+  }
+  const meta = {
+    hash: origin.hash,
+    snapshotDirectory: origin.snapshotDirectory,
+    ...ifDefined('unreadable', origin.unreadable),
+  };
+  if (origin.unreadable !== undefined) {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+      'Cannot resolve statements: the origin contract snapshot cannot be read',
+      {
+        why: `The contract snapshot for hash "${origin.hash}" in ${origin.snapshotDirectory} could not be read: ${origin.unreadable}`,
+        fix: [
+          'Restore migrations/snapshots/ from version control. If no good copy exists, store the snapshot again:',
+          ...STORE_ORIGIN_SNAPSHOT_STEPS,
+        ].join('\n'),
+        nextActions: [
+          chooseAction('Restore migrations/snapshots/ from version control'),
+          chooseAction('Or store the snapshot again from the contract the database is at'),
+        ],
+        meta,
+      },
+    );
+  }
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
+    'Cannot resolve statements: the origin contract is unknown',
+    {
+      why: `No contract snapshot for hash "${origin.hash}" was found in ${origin.snapshotDirectory}. Statements name things in the contract the database is at, so the command needs that contract. \`db update\` stores the snapshot of the contract it applies only when it advances a ref: the \`db\` ref by default, or with \`--db <url>\` only the ref named by \`--advance-ref <name>\`. Most likely the run that brought the database to this contract advanced no ref.`,
+      fix: [
+        'Store the snapshot of the contract the database is at, then run the rename:',
+        ...STORE_ORIGIN_SNAPSHOT_STEPS,
+        'Adding --advance-ref to this command alone does not help: it would store the new contract, not the one the database is at. `migration plan --from` does not apply to `db update`.',
+      ].join('\n'),
+      nextActions: [
+        chooseAction('Put the contract source back to the version the database is at, and emit it'),
+        runCommandAction(
+          'Check that it plans no operations (with the same --db as this command, if any)',
+          '{bin} db update --advance-ref <name> --dry-run',
+        ),
+        runCommandAction(
+          'Then store its snapshot, which changes nothing in the database',
+          '{bin} db update --advance-ref <name>',
+        ),
+        chooseAction(
+          'Put the new contract source back, emit it, and run this command again with --advance-ref <name>',
+        ),
+      ],
+      meta,
+    },
+  );
+}
+
+/** Where a `migration plan` leg plans to; only the emitted contract can be the destination of `migration new`. */
+export interface PlanDestination {
+  readonly hash: string;
+  readonly isEmitted: boolean;
+}
+
+/**
+ * `migration plan` refuses a first migration whose planner produced no operations: the contract
+ * describes nothing to create.
+ */
+export function errorPlanProducedNoOperations(destination: PlanDestination): CliStructuredError {
+  return errorMigrationPlanningFailed({
+    conflicts: [
+      {
+        kind: 'nothingToCreate',
+        summary:
+          'This contract describes nothing migration plan can create, so there is no first migration to plan.',
+        why: destination.isEmitted
+          ? 'If the database needs something the contract does not describe, run `prisma migration new`, add its operations to the new `migration.ts`, then run that `migration.ts` with `node` to write `ops.json`.'
+          : '`prisma migration new` writes a migration only to the emitted contract. If the database needs something this contract does not describe, emit it, run `prisma migration new`, add its operations to the new `migration.ts`, then run that `migration.ts` with `node` to write `ops.json`.',
+      },
+    ],
+  });
 }
 
 const ROLLBACK_IS_DESTRUCTIVE =
   'A rollback (reverse) plan is expected to contain destructive (DROP) operations — review them before applying';
-const NARROWER_CASES_NEED_A_HINT =
-  'Narrower cases (rename inference, re-adding a required field without a safe default, or a type change that needs data) may additionally need a hint in the planned migration';
+const RENAMES_AND_DATA_NEED_MORE =
+  'Plan a rename with --rename old:new; re-adding a required field without a safe default, or a type change that needs data, may need you to fill in the planned migration.ts';
 
-export function errorPathUnreachable(failure: MigrateFailure): ActionableCliError {
-  const meta = failure.meta ?? {};
-  const fromHashMeta = typeof meta['fromHash'] === 'string' ? meta['fromHash'] : null;
-  // `buildPathNotFoundFailure` uses this sentinel in meta when the live marker is null.
-  const planFromHash = fromHashMeta === '<empty>' ? null : fromHashMeta;
-  const targetHash =
-    typeof meta['targetHash'] === 'string'
-      ? meta['targetHash']
-      : typeof meta['target'] === 'string'
-        ? meta['target']
-        : null;
-  const deadEnds = meta['deadEnds'];
-  const deadEndsSuffix =
-    Array.isArray(deadEnds) && deadEnds.length > 0
-      ? ` Dead-ends: ${deadEnds.map(String).join(', ')}.`
-      : '';
-  // Plan-then-apply recovery. The planner destination is the missing edge's
-  // target; `migration plan --to` (built for arbitrary targets) makes this a
-  // real command, so the diagnostic that sends you here is now honest.
-  //
+/**
+ * The `meta` of `MIGRATION.PATH_UNREACHABLE`: no path joins the two hashes in the space's graph
+ * (`pathUnreachable`, where a space with no marker starts from the empty contract's hash), or the
+ * space has no migrations at all (`neverPlanned`).
+ */
+export type PathUnreachableMeta =
+  | {
+      readonly kind: 'pathUnreachable';
+      readonly spaceId: string;
+      readonly fromHash: string;
+      readonly targetHash: string;
+    }
+  | { readonly kind: 'neverPlanned'; readonly spaceId: string; readonly targetHash: string };
+
+/** What a replay found when no migration path reaches its target. */
+export interface PathUnreachable {
+  readonly summary: string;
+  readonly why: string;
+  readonly meta: PathUnreachableMeta;
+}
+
+/** The advice for a `PATH_UNREACHABLE` the caller knows better than a plan-then-apply of the app space. */
+export interface PathUnreachableAdvice {
+  readonly fix: string;
+  readonly nextActions: readonly NextAction[];
+}
+
+function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
   // Never-planned spaces have an EMPTY migration graph, and contract-ref
   // resolution only resolves full hashes against graph nodes — a
   // `--to <hash>` remediation would reject its own input. `migration plan`
   // without `--to` targets the working contract (the same contract the app
   // space's synthesized head ref carries), so the bare form is the one that
-  // runs verbatim.
-  const neverPlanned = meta['kind'] === 'neverPlanned';
-  const planCommand = (() => {
-    if (neverPlanned) {
-      return '{bin} migration plan --name <slug>';
-    }
-    if (planFromHash !== null && targetHash !== null) {
-      return `{bin} migration plan --from ${planFromHash} --to ${targetHash} --name <slug>`;
-    }
-    if (targetHash !== null) {
-      return `{bin} migration plan --to ${targetHash} --name <slug>`;
-    }
-    if (planFromHash !== null) {
-      return `{bin} migration plan --from ${planFromHash} --name <slug>`;
-    }
-    return '{bin} migration plan';
-  })();
+  // runs verbatim. With no marker, the live origin `migration plan` uses
+  // without `--from` is the empty contract, so the printed command leaves
+  // `--from` out.
+  const planCommand =
+    meta.kind === 'neverPlanned'
+      ? '{bin} migration plan --name <slug>'
+      : meta.fromHash === EMPTY_CONTRACT_HASH
+        ? `{bin} migration plan --to ${meta.targetHash} --name <slug>`
+        : `{bin} migration plan --from ${meta.fromHash} --to ${meta.targetHash} --name <slug>`;
   const applyCommand =
-    targetHash !== null && !neverPlanned
-      ? `{bin} db migrate --to ${targetHash}`
-      : '{bin} db migrate';
-  return new ActionableCliError('MIGRATION.PATH_UNREACHABLE', failure.summary, {
-    why:
-      failure.why ??
-      `Cannot reach target "${targetHash ?? '<unknown>'}" from current marker "${fromHashMeta ?? '<unknown>'}".${deadEndsSuffix}`,
+    meta.kind === 'neverPlanned' ? '{bin} db migrate' : `{bin} db migrate --to ${meta.targetHash}`;
+  return {
     fix: [
       'Plan the missing edge, then apply it:',
       `  1. ${planCommand}`,
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
-      `${NARROWER_CASES_NEED_A_HINT}.`,
+      `${RENAMES_AND_DATA_NEED_MORE}.`,
       'Inspect the on-disk graph with `{bin} migration list`, or `{bin} migration show <bundle>` for any bundle in the path you expected.',
     ].join('\n'),
     nextActions: [
       runCommandAction('Plan the missing edge', planCommand),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
-      chooseAction(NARROWER_CASES_NEED_A_HINT),
+      chooseAction(RENAMES_AND_DATA_NEED_MORE),
       runCommandAction('Inspect the on-disk graph', '{bin} migration list'),
       runCommandAction(
         'Inspect a bundle in the path you expected',
         '{bin} migration show <bundle>',
       ),
     ],
-    meta: {
-      ...meta,
+  };
+}
+
+/** `MIGRATION.UNFILLED_PLACEHOLDER` from `db migrate`: a migration to apply still has `placeholder(...)` calls, so its `ops.json` lacks their operations. */
+export function errorMigrationHasUnfilledPlaceholders(
+  directory: string,
+  invocation: CliInvocation,
+): ActionableCliError {
+  const migrationTs = join(directory, 'migration.ts');
+  const edit = `Replace each placeholder(...) call in ${printedPath(invocation, migrationTs)} with the value or query it stands for.`;
+  const emit = selfEmitCommand(invocation, migrationTs);
+  const migrate = cliCommand(invocation, 'db migrate');
+  return new ActionableCliError(
+    'MIGRATION.UNFILLED_PLACEHOLDER',
+    'Migration has unfilled placeholders',
+    {
+      why: `The migration in ${printedPath(invocation, directory)} still has placeholder(...) calls in its migration.ts, so its ops.json does not hold their operations. Applying it would move the database to its contract without them.`,
+      fix: `${edit} Then run ${emit} to write ops.json, and run ${migrate} again.`,
+      nextActions: [
+        editFileAction(edit),
+        runCommandAction('Write ops.json', emit),
+        runCommandAction('Apply the migration', migrate),
+      ],
+      meta: { directory },
     },
+  );
+}
+
+/** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */
+export function errorPathUnreachable(
+  failure: PathUnreachable,
+  advice: PathUnreachableAdvice = planThenApply(failure.meta),
+): ActionableCliError {
+  return new ActionableCliError('MIGRATION.PATH_UNREACHABLE', failure.summary, {
+    why: failure.why,
+    fix: advice.fix,
+    nextActions: advice.nextActions,
+    meta: failure.meta,
   });
 }
 

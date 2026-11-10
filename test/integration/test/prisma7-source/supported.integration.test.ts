@@ -1,11 +1,7 @@
 /**
  * The end-to-end proof for the Prisma 7 contract source on Postgres: the SQL
  * Prisma 7.10.0 generated for the supported schema is applied unchanged, the
- * schema is interpreted, and strict `db verify` reports only what Prisma 7
- * creates for `@ignore` and `@@ignore` constructs, and the column default left
- * behind by the `@default(now())` removed beside `@updatedAt`. See
- * `fixtures/prisma7-source/supported-verify/README.md` for the three edits that
- * make the schema interpretable and the full schema's error case.
+ * schema is interpreted, and strict `db verify` reports no findings.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -41,10 +37,13 @@ function sourceContext(schemaPath: string) {
   });
   return {
     composedExtensions: [],
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,
   };
@@ -57,7 +56,7 @@ function load(schemaPath: string) {
 }
 
 async function interpretVerifiableSchema(): Promise<unknown> {
-  const loaded = await load(join(fixturesDir, 'supported-verify/schema.prisma'));
+  const loaded = await load(join(fixturesDir, 'supported/schema.prisma'));
   if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure.diagnostics));
   return new PostgresContractSerializer().serializeContract(loaded.value as Contract<SqlStorage>);
 }
@@ -69,29 +68,27 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     await withClient(getConnectionString(), (client) => client.query(migrationSql));
   }, timeouts.spinUpPpgDev);
 
-  it('verifies strictly with only the ignored constructs as extras', async () => {
+  it('verifies strictly with no findings', async () => {
     const serialized = await interpretVerifiableSchema();
     const lenient = await runSchemaVerify(getConnectionString(), serialized);
     expect(lenient.schema.issues).toEqual([]);
     expect(lenient.ok).toBe(true);
 
     const strict = await runSchemaVerify(getConnectionString(), serialized, { strict: true });
-    expect(strict.schema.issues.map((issue) => issue.path).sort()).toEqual([
-      ['database', 'public', 'LegacyThing'],
-      ['database', 'public', 'LegacyThing', 'column:id'],
-      ['database', 'public', 'LegacyThing', 'primary-key'],
-      ['database', 'public', 'Post', 'column:legacyOwnerId'],
-      ['database', 'public', 'Post', 'foreign-key:legacyOwnerId->public.User(id)'],
-      ['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default'],
-      ['database', 'public', 'User', 'column:legacy'],
-    ]);
+    expect(strict.schema.issues).toEqual([]);
+    expect(strict.ok).toBe(true);
   });
 
   it('reports a Decimal default that lost digits', async () => {
     const serialized = JSON.stringify(await interpretVerifiableSchema());
-    expect(serialized.split('"12345678901234567890.123456789"')).toHaveLength(2);
+    expect(serialized.split('"12345678901234567890.123456789000000000000000000000"')).toHaveLength(
+      2,
+    );
     const rounded: unknown = JSON.parse(
-      serialized.replace('"12345678901234567890.123456789"', '"12345678901234567000"'),
+      serialized.replace(
+        '"12345678901234567890.123456789000000000000000000000"',
+        '"12345678901234567000.000000000000000000000000000000"',
+      ),
     );
 
     const result = await runSchemaVerify(getConnectionString(), rounded);
@@ -121,16 +118,5 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     } finally {
       await withClient(getConnectionString(), (client) => client.query('RESET TIME ZONE'));
     }
-  });
-
-  it('rejects an optional generated field and @updatedAt with @default in the full supported schema', async () => {
-    const loaded = await load(join(fixturesDir, 'supported/schema.prisma'));
-    expect(loaded.ok).toBe(false);
-    if (loaded.ok) return;
-    expect(loaded.failure.diagnostics.map((d) => [d.code, d.span?.start.line]).sort()).toEqual([
-      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 115],
-      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 96],
-      ['PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', 97],
-    ]);
   });
 });

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Real emitted fixture for the sql-orm-client polymorphism integration tests.
 //
 // It carries two polymorphic hierarchies plus the parent/relation models the

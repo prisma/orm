@@ -1,0 +1,60 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
+import { describe, expect, it } from 'vitest';
+import { interpretMongoContract } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
+
+const scalarTypes: ReadonlyMap<string, string> = new Map([
+  ['ObjectId', 'mongo/objectId@1'],
+  ['Int64', 'mongo/int64@1'],
+  ['Decimal128', 'mongo/decimal128@1'],
+  ['Binary', 'mongo/binary@1'],
+  ['Json', 'mongo/json@1'],
+]);
+
+const SCHEMA = `model Post {
+  id        ObjectId    @id @map("_id")
+  views     Int64
+  price     Decimal128
+  thumbnail Binary
+  meta      Json
+  notes     Json?
+}
+`;
+
+function interpretPost() {
+  const result = interpretMongoContract(
+    SCHEMA,
+    {
+      scalarTypes,
+      defaultFunctionRegistry: new Map(),
+      codecLookup: mongoCodecLookup,
+      dataTypes: mongoDataTypeSupport,
+    },
+    'bson-scalars.prisma',
+  );
+  if (!result.ok) throw new Error(JSON.stringify(result.failure));
+  return result.value;
+}
+
+describe('BSON scalar field types', () => {
+  it('emits the codec id of each type', () => {
+    const contract = interpretPost();
+    expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
+      id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+      views: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
+      price: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+      },
+      thumbnail: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+      },
+      meta: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+      notes: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+    });
+  });
+});

@@ -11,7 +11,9 @@
 
 import type { Contract } from '@internal/contract/types';
 import type { ImportRequirement } from '@internal/ts-render';
+import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
+import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type { TargetBoundComponentDescriptor } from '../shared/framework-components';
 import type { ImportSpecifierResolver } from '../shared/import-specifier-resolver';
 import type {
@@ -20,6 +22,16 @@ import type {
   ControlFamilyInstance,
 } from './control-instances';
 import type { OperationContext } from './control-operation-results';
+import type {
+  AppliedMigrationStatement,
+  EnumValueCoordinateJson,
+  KeepDataEdit,
+  MigrationPlanNamespaces,
+  MigrationPlanSubjects,
+  MigrationSubject,
+  ResolvedMigrationStatement,
+} from './migration-statements';
+import type { SchemaDiffIssue } from './schema-diff';
 
 // ============================================================================
 // Migration Package Metadata
@@ -67,13 +79,36 @@ export interface MigrationMetadata {
 // ============================================================================
 
 /**
- * Migration operation classes define the safety level of an operation.
- * - 'additive': Adds new structures without modifying existing ones (safe)
- * - 'widening': Relaxes constraints or expands types (generally safe)
- * - 'destructive': Removes or alters existing structures (potentially unsafe)
- * - 'data': Data transformation operation (e.g., backfill, type conversion)
+ * What an operation does to the data. Of the classes a planner chooses, only `destructive` loses
+ * data by itself; a `data` operation runs what its author wrote, which may lose data by design.
+ * - 'additive': adds structure and leaves existing structure and data as they are.
+ * - 'widening': changes existing structure without losing data. An operation that cannot keep
+ *   every value fails instead, so a tightened constraint is widening: `SET NOT NULL` fails on a
+ *   NULL, and a MongoDB validator applies to later writes only. So are a rename, a relaxed
+ *   constraint, a type change that keeps every value, and a drop of an object that holds no data,
+ *   such as an index, a constraint or a default. An operation that changes who can read or write
+ *   data is asked about by `db update`.
+ * - 'destructive': can lose rows or values: dropping a table, a column or a collection, or a type
+ *   change that can change values.
+ * - 'data': reads and writes rows, such as a backfill or a type conversion, as its author wrote.
  */
 export type MigrationOperationClass = 'additive' | 'widening' | 'destructive' | 'data';
+
+/**
+ * The state a plan asserts it starts from: the storage hash, and optionally the profile hash, the
+ * runner checks the marker for. A planner's `origin` option and a plan's `origin` share this type.
+ */
+export interface PlanOrigin {
+  readonly storageHash: string;
+  readonly profileHash?: string;
+}
+
+/** The origin a plan from `contract` asserts, or `null` when it starts from no contract. */
+export function planOriginOf(
+  contract: { readonly storage: { readonly storageHash: string } } | null,
+): PlanOrigin | null {
+  return contract === null ? null : { storageHash: contract.storage.storageHash };
+}
 
 /**
  * Policy defining which operation classes are allowed during a migration.
@@ -91,7 +126,14 @@ export interface MigrationOperationPolicy {
  * Contains only the fields needed for CLI output (tree view, JSON envelope).
  */
 export interface MigrationPlanOperation {
-  /** Unique identifier for this operation (e.g., "table.users.create"). */
+  /**
+   * Names what the operation changes (e.g., "table.users"). Ids are not guaranteed unique within a
+   * plan: on Postgres, same-named tables in two schemas give operations the same id. So anything
+   * that points at one operation of a plan, such as `AppliedMigrationStatement.operationIndexes`,
+   * uses its position in `operations`. Ids are written to `ops.json`, so they are part of a
+   * migration's hash; the ledger records executed operations, ids included, but nothing compares
+   * them.
+   */
   readonly id: string;
   /** Human-readable label for display in UI/CLI (e.g., "Create table users"). */
   readonly label: string;
@@ -197,10 +239,7 @@ export interface MigrationPlan {
    * Origin contract identity that the plan expects the database to currently be at.
    * If omitted or null, the runner skips origin validation entirely.
    */
-  readonly origin?: {
-    readonly storageHash: string;
-    readonly profileHash?: string;
-  } | null;
+  readonly origin?: PlanOrigin | null;
   /** Destination contract identity that the plan intends to reach. */
   readonly destination: {
     readonly storageHash: string;
@@ -266,6 +305,18 @@ export interface MigrationPlannerConflict {
   readonly summary: string;
   /** Optional explanation of why this conflict occurred. */
   readonly why?: string;
+  /** Set when the conflict is an operation the policy does not allow: the class of that operation. */
+  readonly refusedOperationClass?: MigrationOperationClass;
+  /**
+   * Set when the conflict refuses a statement: the statement, in domain coordinates. Consumers key
+   * on this field, not on the conflict's kind, which each family names.
+   */
+  readonly refusedStatement?: ResolvedMigrationStatement;
+  /**
+   * Set when the change can be written by hand instead: the statements to leave out of a plan, whose
+   * `migration.ts` the user then adds the operations the conflict's `why` names to.
+   */
+  readonly leaveOut?: readonly ResolvedMigrationStatement[];
 }
 
 /**
@@ -274,10 +325,14 @@ export interface MigrationPlannerConflict {
  * The plan is typed as `MigrationPlanWithAuthoringSurface` so the CLI can
  * uniformly ask any plan to render itself to TypeScript.
  */
-export interface MigrationPlannerSuccessResult {
+export interface MigrationPlannerSuccessResult extends MigrationPlanSubjects {
   readonly kind: 'success';
   readonly plan: MigrationPlanWithAuthoringSurface;
   readonly warnings?: readonly MigrationPlannerConflict[];
+  /** The statements the plan applied, one per statement it was given, in order. */
+  readonly appliedStatements: readonly AppliedMigrationStatement[];
+  /** The namespaces the plan removes and adds; absent from a planner without namespaces. */
+  readonly namespaces?: MigrationPlanNamespaces;
 }
 
 /**
@@ -318,23 +373,200 @@ export interface MigrationRunnerSuccessValue {
 }
 
 /**
- * Failure details for migration runner execution.
+ * What a check states of the database: that the object is `absent` or `present`. `object` is
+ * display text, the object as a reader names it (`index "Item_state_idx"`); no code reads it to
+ * decide anything.
  */
-export interface MigrationRunnerFailure {
-  /** Error code for the failure. */
-  readonly code: string;
-  /** Human-readable summary of the failure. */
-  readonly summary: string;
-  /** Optional explanation of why the failure occurred. */
-  readonly why?: string;
-  /** Optional metadata for debugging and UX (e.g., schema issues, SQL state). */
-  readonly meta?: Record<string, unknown>;
+export interface CheckExpectation {
+  readonly expects: 'absent' | 'present';
+  readonly object: string;
+}
+
+/** A check of an operation that did not hold: before the operation ran (`precheck`), or after it (`postcheck`). */
+export interface FailedCheck {
+  readonly operationId: string;
+  readonly phase: 'precheck' | 'postcheck';
+  /** The check, as the operation describes it. */
+  readonly description: string;
+  /** What the check states of the database, when it states an object's absence or presence. */
+  readonly expectation?: CheckExpectation;
+}
+
+/** A failed migration run: a structured error whose `message` is the summary. */
+export interface MigrationRunnerFailure extends StructuredError {
+  readonly code: `MIGRATION.${string}`;
+  readonly meta: MigrationRunnerFailureMeta;
+}
+
+/** The facts of a failed migration run. Each fact appears once. */
+export interface MigrationRunnerFailureMeta {
   /**
-   * Identifier of the space whose plan caused the rollback when
-   * {@link MigrationRunner.execute} processes multiple spaces.
+   * The space whose plan failed when {@link MigrationRunner.execute} processes multiple spaces.
    */
   readonly failingSpace?: string;
+  /**
+   * Whether the database is as it was before the failed apply: `true` when the runner rolled the
+   * apply back or failed before it changed anything, `false` when what it changed stays. Absent when
+   * the runner does not say. Creating the runner's own control tables (the marker and the ledger)
+   * does not count as a change: it is `true` when only those were created.
+   */
+  readonly databaseUnchanged?: boolean;
+  /** The check that did not hold, when a precheck or postcheck failed. */
+  readonly failedCheck?: FailedCheck;
+  /** The type change that failed, when the failed step converts a column's values. */
+  readonly failedTypeChange?: FailedTypeChange;
+  /**
+   * The fields that were to become required while rows had no value for them, when that made the
+   * step fail: first the field of the failed step, then the others of the same migration.
+   */
+  readonly rowsWithoutValue?: readonly RowsWithoutValue[];
+  /**
+   * The data that still holds stored enum values whose removal its storage cannot take, when that
+   * made a check fail: first the data of the failed check, then the others of the same migration.
+   */
+  readonly rowsHoldingValue?: readonly RowsHoldingValue[];
+  /** The existing rows that a check the failed operation adds refuses, when that made the operation fail. */
+  readonly rowsFailingCheck?: RowsFailingCheck;
+  /** The objects in the database that kept the failed operation from running, such as a view on a table to drop. */
+  readonly blockingObjects?: readonly BlockingObject[];
+  /** The differences the schema check after apply found, when that check failed. */
+  readonly schemaIssues?: readonly SchemaDiffIssue[];
+  /** Further facts for the code, such as `sqlState` or the marker hashes. */
+  readonly [key: string]: unknown;
 }
+
+export function migrationRunnerFailure<TCode extends MigrationRunnerFailure['code']>(
+  code: TCode,
+  message: string,
+  options?: {
+    readonly why?: string | undefined;
+    readonly meta?: MigrationRunnerFailureMeta;
+    readonly cause?: unknown;
+  },
+): MigrationRunnerFailure & { readonly code: TCode } {
+  const meta = options?.meta ?? {};
+  const error = structuredError(code, message, {
+    ...ifDefined('why', options?.why),
+    meta,
+    ...ifDefined('cause', options?.cause),
+  });
+  return Object.assign(error, { code, meta });
+}
+
+/** The same failure, attributed to the space whose plan failed. */
+export function withFailingSpace<TCode extends MigrationRunnerFailure['code']>(
+  failure: MigrationRunnerFailure & { readonly code: TCode },
+  failingSpace: string,
+): MigrationRunnerFailure & { readonly code: TCode } {
+  const attributed = migrationRunnerFailure(failure.code, failure.message, {
+    why: failure.why,
+    meta: { ...failure.meta, failingSpace },
+    ...ifDefined('cause', failure.cause),
+  });
+  if (failure.stack !== undefined) attributed.stack = failure.stack;
+  return attributed;
+}
+
+/** An object in the database, named as the database names it, that keeps an operation from running. */
+export interface BlockingObject {
+  /** What the object is, in the database's words, such as `view` or `sequence`. */
+  readonly kind: string;
+  readonly name: string;
+}
+
+function asSentence(text: string): string {
+  const trimmed = text.trimEnd();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+/**
+ * The same failure, saying whether the database is as it was before the failed apply, in its meta
+ * and at the end of its why.
+ */
+export function withDatabaseUnchanged<TCode extends MigrationRunnerFailure['code']>(
+  failure: MigrationRunnerFailure & { readonly code: TCode },
+  databaseUnchanged: boolean,
+): MigrationRunnerFailure & { readonly code: TCode } {
+  const outcome = databaseUnchanged
+    ? 'The failed apply changed nothing.'
+    : 'The operations that ran before the failure stay applied.';
+  const attributed = migrationRunnerFailure(failure.code, failure.message, {
+    why: failure.why === undefined ? outcome : `${asSentence(failure.why)} ${outcome}`,
+    meta: { ...failure.meta, databaseUnchanged },
+    ...ifDefined('cause', failure.cause),
+  });
+  if (failure.stack !== undefined) attributed.stack = failure.stack;
+  return attributed;
+}
+
+/** The data that still holds the stored value of an enum value a plan removes from storage that cannot do without it. */
+export interface RowsHoldingValue {
+  /** The enum value, in the JSON form statements report, which leaves out the unbound namespace. */
+  readonly enumValue: EnumValueCoordinateJson;
+  /** The stored value, as the database stores it. */
+  readonly value: string | number;
+  /** How many rows hold it. */
+  readonly rows: number;
+  /** The position of the operation in the operations of the failing space's plan. */
+  readonly operationIndex: number;
+  /** The edit to the migration's `migration.ts` that keeps the data, when the target can say it. */
+  readonly keepDataEdit?: KeepDataEdit;
+}
+
+/** The existing rows that a check the failed operation adds refuses. The failure's message names where the check is and how to find the rows. */
+export interface RowsFailingCheck {
+  /** The check, as the database names it. */
+  readonly check: string;
+  /** The check the plan drops before it adds this one, when the plan replaces a check. While it holds, the rows cannot be changed to fit the new check. */
+  readonly replacedCheck?: string;
+  /** The position of the operation in the operations of the failing space's plan. */
+  readonly operationIndex: number;
+}
+
+/** A field that is to become required while existing rows have no value for it. */
+export interface RowsWithoutValue {
+  /** The field, when the destination contract names the storage that lacks the value. */
+  readonly field: MigrationSubject | undefined;
+  /**
+   * `nullValues`: rows hold no value for the field. `newField`: the field is new, and can be added only where there are no
+   * rows. `backfillMissedRows`: the migration's backfill step for the field left rows without a value.
+   */
+  readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
+  /** How many rows have no value. */
+  readonly rows: number;
+  /** The position of the operation in the operations of the failing space's plan. */
+  readonly operationIndex: number;
+}
+
+interface FailedTypeChangeOf {
+  /** The field whose type changes. */
+  readonly field: MigrationSubject;
+  /** The position of the operation in the operations of the failing space's plan. */
+  readonly operationIndex: number;
+}
+
+/**
+ * A type change whose values the database's own cast converted, and why it failed. `value`: the
+ * cast met a value it could not convert. `noCast`: the database has no cast between the two types.
+ */
+export interface FailedCast extends FailedTypeChangeOf {
+  readonly by: 'cast';
+  readonly reason: 'value' | 'noCast';
+}
+
+/**
+ * A type change whose values the migration's own conversion converted, and why it failed. `value`:
+ * the database raised an error on a value the conversion produced or read. `invalidResult`: the
+ * conversion left a value the new type cannot hold. `expressionError`: the conversion's expression
+ * has an error, such as an unknown function.
+ */
+export interface FailedConversion extends FailedTypeChangeOf {
+  readonly by: 'conversion';
+  readonly reason: 'value' | 'invalidResult' | 'expressionError';
+}
+
+/** A type change that failed: who converted the values, and why it failed. */
+export type FailedTypeChange = FailedCast | FailedConversion;
 
 /**
  * Result type for migration runner execution.
@@ -418,6 +650,8 @@ export interface SchemaOwnership {
    * entity at this coordinate.
    */
   declaresEntity(coordinate: SchemaEntityCoordinate): boolean;
+  /** The ids of the contract spaces whose contracts declare the storage namespace, the planned one included. */
+  namespaceDeclaringSpaces(namespaceId: string): readonly string[];
 }
 
 /**
@@ -436,23 +670,24 @@ export interface MigrationPlanner<
     readonly schema: unknown;
     readonly policy: MigrationOperationPolicy;
     /**
-     * The "from" contract (the state the planner assumes the database starts
-     * at), or `null` for a baseline plan with no prior state.
-     *
-     * Planners derive any "from" identity they need to stamp onto the
-     * produced plan's `describe()` from `fromContract?.storage.storageHash
-     * ?? null`. They also pass this to data-safety strategies so they can
-     * compare `from` and `to` column shapes (e.g. to detect unsafe type
-     * changes).
-     *
-     * Required at every call site to make the structural fact "I have a
-     * prior contract / I don't" visible in the type. Reconciliation
-     * commands (`db init`, `db update`) introspect a live schema and pass
-     * `null`; authoring commands (`migration plan`) read the predecessor's
-     * contract from the snapshot store by its storage hash and pass the
-     * parsed value.
+     * The contract the planner reads as the starting state, or `null` when it has none: statements
+     * resolve against it, and data-safety strategies compare its column shapes with the
+     * destination's. `migration plan` passes the predecessor's contract; `db update` passes the
+     * contract the marker names only when statements are given.
      */
     readonly fromContract: Contract | null;
+    /**
+     * The origin the produced plan asserts, which the runner checks against the marker: the
+     * plan's `origin` and its `describe().from`. `migration plan` passes its starting contract's
+     * hash ({@link planOriginOf}); reconciliation commands (`db init`, `db update`) pass `null`,
+     * because their plans apply from whatever state the database is in.
+     */
+    readonly origin: PlanOrigin | null;
+    /**
+     * Statements the user gave, resolved against `fromContract` and `contract`,
+     * in the order given. Empty when the user gave none.
+     */
+    readonly statements: readonly ResolvedMigrationStatement[];
     /**
      * Active framework components participating in this composition.
      * Families/targets can interpret this list to derive family-specific metadata.
@@ -576,9 +811,10 @@ export interface MigrationRunner<
    * at the load boundary. Runners do not re-verify plans and assume the
    * `(metadata, ops)` pairs on disk have not been tampered with since emit.
    *
-   * Atomicity semantics differ by family: SQL targets open one outer
-   * transaction across every space; Mongo iterates per-space without an
-   * outer transaction and relies on per-space verify-gated marker atomicity.
+   * A failure states what it left in {@link MigrationRunnerFailureMeta.failingSpace} and
+   * {@link MigrationRunnerFailureMeta.databaseUnchanged}. On a target whose DDL is transactional the
+   * runner rolls the whole apply back and reports `databaseUnchanged: true`; otherwise it reports
+   * whether the database changed, and the operations that already ran stay applied.
    */
   execute(options: {
     readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
@@ -615,13 +851,13 @@ export interface TargetMigrationsCapability<
    * The returned schema can be passed to `planner.plan({ schema })` as the "from" state.
    *
    * @param contract - The contract to convert, or null for a new project (empty schema).
-   * @param frameworkComponents - Active framework components, used to derive database
-   *   dependencies (e.g. extensions) that should be reflected in the schema IR.
+   * @param frameworkComponents - Active framework components: the codecs and data types that
+   *   name each column's type, and the database dependencies (e.g. extensions) the schema IR reflects.
    * @returns Family-specific schema IR (e.g., `SqlSchemaIR` for SQL targets).
    */
   contractToSchema(
     contract: Contract | null,
-    frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>,
+    frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>,
   ): unknown;
 }
 

@@ -5,6 +5,6 @@ export async function insertUser(email: string, displayName: string) {
     .insert([{ email, displayName, createdAt: new Date() }])
     .returning('id', 'email')
     .build();
-  const rows = await db.runtime().query(plan);
+  const rows = await db.query(plan);
   return rows[0] ?? null;
 }

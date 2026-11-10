@@ -28,6 +28,7 @@ import {
   namespacePslExtensionBlocks,
   type PslDocumentAst,
   type PslExtensionBlock,
+  type PslField,
   type PslModel,
   type PslNamedTypeDeclaration,
   type PslNamespace,
@@ -183,7 +184,6 @@ function roleExtensionBlock(name: string): PslExtensionBlock {
     name,
     parameters: {},
     blockAttributes: [],
-    attributes: {},
     span: SYNTHETIC_SPAN,
   };
 }
@@ -192,8 +192,8 @@ function roleExtensionBlock(name: string): PslExtensionBlock {
  * Roles are cluster-scoped in Postgres: the `role` block factory stamps the
  * unbound coordinate on every lowered entity, so the blocks must be declared
  * inside an explicit `namespace unbound { … }` block, not in `auth` or
- * `storage`. `resolveNamespaceIdForSqlTarget` maps the `unbound` bucket name
- * to the framework's `__unbound__` sentinel.
+ * `storage`. The PSL symbol table maps the `unbound` namespace name to the
+ * framework's `__unbound__` sentinel.
  */
 function roleNamespace(): PslNamespace {
   return makePslNamespace({
@@ -281,68 +281,104 @@ function rewriteFieldTypeNames(
   });
 }
 
-function namedTypeSignature(declaration: PslNamedTypeDeclaration): string {
-  return JSON.stringify({
-    baseType: declaration.baseType,
-    typeConstructor: declaration.typeConstructor,
-    attributes: declaration.attributes,
-  });
+/**
+ * Curated storage-type aliases, keyed by the type as `contract infer` writes
+ * it. Hand-authored in the pack's first contract (commit 7a9426e2,
+ * "using named types for the uuid/timestamptz column types") and preserved
+ * here so `contract:generate` reproduces them instead of inlining every
+ * column's full type.
+ *
+ * The alias is chosen by how the type is written, never by what the column
+ * means: a new Supabase release that adds any `character varying(255)` column
+ * will have it named `Parent`, whether or not that reads correctly. Check the
+ * names after refreshing the fixture.
+ */
+const NAMED_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  Inet: 'IpAddress',
+  Json: 'Payload',
+  'Int(storage: int2)': 'EmailChangeConfirmStatus',
+  TimestampString: 'CreatedAt',
+  Uuid: 'Id',
+  'String(storage: varchar, length: 40)': 'Hash',
+  'String(storage: varchar, length: 64)': 'IpAddress2',
+  'String(storage: varchar, length: 100)': 'Name',
+  'String(storage: varchar, length: 255)': 'Parent',
+};
+
+/** The type as `printPsl` would write it, e.g. `Uuid` or `String(storage: varchar, length: 255)`. */
+function printedFieldType(field: PslField): string {
+  const { typeConstructor } = field;
+  if (!typeConstructor) return field.typeName;
+  const path = typeConstructor.path.join('.');
+  if (typeConstructor.args.length === 0) return path;
+  const args = typeConstructor.args.map((arg) =>
+    arg.kind === 'positional' ? arg.value : `${arg.name}: ${arg.value}`,
+  );
+  return `${path}(${args.join(', ')})`;
 }
 
 /**
- * `auth` and `storage` are inferred independently, so each seeds its own
- * named-type registry from its own columns — the same underlying `Uuid`
- * storage type can come out as `Id` in one schema and `Owner` in the other. Groups every declaration by structural signature (ignoring name),
- * keeps one canonical declaration per signature (the first-seen — `auth`'s
- * declarations are passed first), and returns the old-name -> canonical-name
- * map for every non-canonical name so callers fold it into the global
- * field-`typeName` rewrite alongside the model-rename maps.
+ * Rewrites every scalar field whose printed type has an alias to reference
+ * that alias, and records which aliases were used so only those are declared.
+ * `modelNames` keeps a relation field out of the lookup: its type name is the
+ * target model's name, which could one day collide with an alias name.
  */
-function canonicalizeNamedTypes(
-  declarationLists: readonly (readonly PslNamedTypeDeclaration[])[],
-): {
-  readonly declarations: readonly PslNamedTypeDeclaration[];
-  readonly renameMap: ReadonlyMap<string, string>;
-} {
-  const bySignature = new Map<string, PslNamedTypeDeclaration[]>();
-  for (const list of declarationLists) {
-    for (const declaration of list) {
-      const signature = namedTypeSignature(declaration);
-      const group = bySignature.get(signature);
-      if (group) {
-        group.push(declaration);
-      } else {
-        bySignature.set(signature, [declaration]);
+function applyNamedTypeAliases(
+  namespace: PslNamespace,
+  modelNames: ReadonlySet<string>,
+  used: Set<string>,
+): PslNamespace {
+  let changed = false;
+  const models = namespace.models.map((model) => {
+    const fields = model.fields.map((field) => {
+      if (
+        field.typeNamespaceId !== undefined ||
+        field.typeContractSpaceId !== undefined ||
+        modelNames.has(field.typeName)
+      ) {
+        return field;
       }
-    }
-  }
+      const alias = NAMED_TYPE_ALIASES[printedFieldType(field)];
+      if (alias === undefined) return field;
+      changed = true;
+      used.add(alias);
+      const { typeConstructor: _replacedByAlias, ...rest } = field;
+      return { ...rest, typeName: alias };
+    });
+    return { ...model, fields };
+  });
 
-  const declarations: PslNamedTypeDeclaration[] = [];
-  const renameMap = new Map<string, string>();
-  for (const group of bySignature.values()) {
-    const [canonical] = group;
-    if (!canonical) continue;
-    declarations.push(canonical);
-    for (const declaration of group) {
-      if (declaration.name !== canonical.name) {
-        renameMap.set(declaration.name, canonical.name);
-      }
-    }
-  }
-  declarations.sort((a, b) => a.name.localeCompare(b.name));
+  if (!changed) return namespace;
 
-  return { declarations, renameMap };
+  return makePslNamespace({
+    kind: 'namespace',
+    name: namespace.name,
+    entries: makePslNamespaceEntries(
+      models,
+      namespace.compositeTypes,
+      namespacePslExtensionBlocks(namespace),
+    ),
+    span: namespace.span,
+  });
 }
 
-interface InferredSchema {
-  readonly namespace: PslNamespace;
-  readonly types: readonly PslNamedTypeDeclaration[];
+function namedTypeDeclarations(used: ReadonlySet<string>): readonly PslNamedTypeDeclaration[] {
+  return Object.entries(NAMED_TYPE_ALIASES)
+    .filter(([, alias]) => used.has(alias))
+    .map(([baseType, name]) => ({
+      kind: 'namedType' as const,
+      name,
+      baseType,
+      attributes: [],
+      span: SYNTHETIC_SPAN,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function introspectSchema(
   driver: Awaited<ReturnType<typeof postgresDriverDescriptor.create>>,
   schemaName: string,
-): Promise<InferredSchema> {
+): Promise<PslNamespace> {
   const controlStack = createControlStack({
     family: sqlFamilyDescriptor,
     target: postgresTargetDescriptor,
@@ -355,11 +391,7 @@ async function introspectSchema(
   const rawSchemaNode = await controlAdapter.introspect(driver, undefined, schemaName);
   PostgresDatabaseSchemaNode.assert(rawSchemaNode);
 
-  const inferPslContract = postgresTargetDescriptor.inferPslContract;
-  if (!inferPslContract) {
-    throw new Error('generate-contract: postgres target descriptor has no inferPslContract');
-  }
-  const ast = inferPslContract(rawSchemaNode);
+  const ast = await sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
   const namespace = ast.namespaces.find((ns) => ns.name === schemaName);
   if (!namespace) {
     throw new Error(
@@ -370,8 +402,7 @@ async function introspectSchema(
 
   // `@@rls` is emitted natively by `inferPslContract` from each table node's
   // `rlsEnabled` — no out-of-band appender needed.
-  const defaultsFixed = applyDefaultOmissions(namespace, DEFAULT_OMISSIONS[schemaName] ?? {});
-  return { namespace: defaultsFixed, types: ast.types?.declarations ?? [] };
+  return applyDefaultOmissions(namespace, DEFAULT_OMISSIONS[schemaName] ?? {});
 }
 
 async function main(): Promise<void> {
@@ -393,8 +424,8 @@ async function main(): Promise<void> {
   }
 
   const driver = await postgresDriverDescriptor.create(connectionString);
-  let auth: InferredSchema;
-  let storage: InferredSchema;
+  let auth: PslNamespace;
+  let storage: PslNamespace;
   try {
     auth = await introspectSchema(driver, 'auth');
     storage = await introspectSchema(driver, 'storage');
@@ -403,31 +434,35 @@ async function main(): Promise<void> {
     if (database) await database.close();
   }
 
-  const authRenamed = renameModels(auth.namespace, MODEL_RENAMES['auth'] ?? {});
-  const storageRenamed = renameModels(storage.namespace, MODEL_RENAMES['storage'] ?? {});
-  const { declarations: canonicalTypes, renameMap: typeRenameMap } = canonicalizeNamedTypes([
-    auth.types,
-    storage.types,
-  ]);
+  const authRenamed = renameModels(auth, MODEL_RENAMES['auth'] ?? {});
+  const storageRenamed = renameModels(storage, MODEL_RENAMES['storage'] ?? {});
 
   const globalRenameMap = new Map<string, string>([
     ...authRenamed.renameMap,
     ...storageRenamed.renameMap,
-    ...typeRenameMap,
   ]);
 
+  const renamedNamespaces = [authRenamed.namespace, storageRenamed.namespace].map((namespace) =>
+    rewriteFieldTypeNames(namespace, globalRenameMap),
+  );
+  const modelNames = new Set(
+    renamedNamespaces.flatMap((namespace) => namespace.models.map((model) => model.name)),
+  );
+  const usedAliases = new Set<string>();
   const namespaces = [
     roleNamespace(),
-    rewriteFieldTypeNames(authRenamed.namespace, globalRenameMap),
-    rewriteFieldTypeNames(storageRenamed.namespace, globalRenameMap),
+    ...renamedNamespaces.map((namespace) =>
+      applyNamedTypeAliases(namespace, modelNames, usedAliases),
+    ),
   ];
+  const declarations = namedTypeDeclarations(usedAliases);
 
   const merged: PslDocumentAst = {
     kind: 'document',
     sourceId: 'supabase-reference',
     namespaces,
-    ...(canonicalTypes.length > 0
-      ? { types: { kind: 'types', declarations: canonicalTypes, span: SYNTHETIC_SPAN } }
+    ...(declarations.length > 0
+      ? { types: { kind: 'types', declarations, span: SYNTHETIC_SPAN } }
       : {}),
     span: SYNTHETIC_SPAN,
   };
@@ -438,7 +473,11 @@ async function main(): Promise<void> {
       'generate-contract: postgres target descriptor has no authoring.pslBlockDescriptors',
     );
   }
-  const pslContent = printPsl(merged, { pslBlockDescriptors });
+  const pslContent = printPsl(merged, {
+    pslBlockDescriptors,
+    description:
+      'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+  });
 
   const contractPrismaPath = join(packageRoot, 'src', 'contract', 'contract.prisma');
   writeFileSync(contractPrismaPath, pslContent, 'utf8');

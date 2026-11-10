@@ -1,24 +1,27 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
+import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
-import type { RefEntry, Refs } from '@internal/migration-tools/refs';
+import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
+import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
+import type { CliStructuredError, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { createControlClient } from '../control-api/client';
-import { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
+import { errorFromCaught } from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
   loadContractSpaceAggregateForCli,
   refuseContractSpaceIntegrity,
 } from '../control-api/operations/contract-space-aggregate-loader';
-import { refuseMarkerOutsideGraph } from '../control-api/operations/graph-queries';
 import { refuseUnknownInvariants } from '../control-api/operations/invariants';
+import { planEverySpace } from '../control-api/operations/migrate';
 import {
   executeMigrateShowPlan,
   type MigrateShowMigration,
@@ -28,14 +31,21 @@ import {
   type ContractIR,
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
-import { resolveContractRef } from '../control-api/operations/ref-resolution';
+import {
+  type RefResolutionContext,
+  resolveContractRef,
+  retryCommandFor,
+} from '../control-api/operations/ref-resolution';
+import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
   PerSpaceExecutionEntry,
 } from '../control-api/types';
-import { errorContractValidationFailed, errorUnexpected } from '../utils/cli-errors';
+import { errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
+import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
+import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
 import {
   migrateShowRunListRows,
@@ -44,14 +54,15 @@ import {
 import { TONE_MIGRATION_GRAPH_PALETTE } from '../utils/formatters/migration-graph-palette';
 import { createToneMigrationListStyler } from '../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../utils/formatters/tone-markup';
-import { mapMigrateFailure } from '../utils/migrate-failure';
 import { runCommandAction } from '../utils/next-actions';
-import { ormConfigSection } from './config-section';
+import { type CliInvocation, cliCommand, cliInvocation } from '../utils/printed-command';
+import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
+import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
 import { dbFlag } from './flags';
-import { displayPath, migrationsDirFor, projectConfigPathFor } from './migration/paths';
+import { baseDirFor, displayPath, migrationsDirFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
 import { controlProgressReporter } from './progress';
 
@@ -82,10 +93,16 @@ interface MigrateDocument {
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
 }
 
-const STATUS_ACTION = runCommandAction(
-  'Check every space against the database',
-  '{bin} migration status',
-);
+function statusAction(invocation: CliInvocation): NextAction {
+  return runCommandAction(
+    'Check every space against the database',
+    cliCommand(invocation, 'migration status'),
+  );
+}
+
+function fromField(from: string): string | undefined {
+  return from === EMPTY_CONTRACT_HASH ? undefined : from;
+}
 
 /**
  * The route the migration will take. The graph is a drawing — the engine cannot
@@ -104,7 +121,10 @@ function showPresentations(inputs: {
   const { document, graph, runList } = inputs;
   const count = document.migrations.length;
   return {
-    stdout: () => [],
+    stdout: () =>
+      document.migrations.map((migration) =>
+        dataLine([migration.spaceId, migration.dirName, fromField(migration.from), migration.to]),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -138,11 +158,21 @@ function applyPresentations(inputs: {
   readonly migrationsDir: string;
   readonly database: string | undefined;
   readonly to: string | undefined;
+  readonly invocation: CliInvocation;
 }): Presentations {
   const { document } = inputs;
   const advanced = document.advancedRef;
   return {
-    stdout: () => [],
+    stdout: () =>
+      document.applied.map((migration) =>
+        dataLine([
+          migration.spaceId,
+          migration.dirName,
+          fromField(migration.from),
+          migration.to,
+          migration.operationsExecuted,
+        ]),
+      ),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -169,7 +199,7 @@ function applyPresentations(inputs: {
           ]),
     ],
     json: () => document,
-    next: () => [STATUS_ACTION],
+    next: () => [statusAction(inputs.invocation)],
   };
 }
 
@@ -178,28 +208,38 @@ interface RequestedTarget {
   readonly refName: string | undefined;
 }
 
+const EMITTED_CONTRACT_TARGET: RequestedTarget = { entry: undefined, refName: undefined };
+
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
- * the ref declares; a bare hash carries none. Omitting `--to` targets the
- * emitted contract, which needs no resolution at all.
+ * the ref declares; a bare hash or `@empty` carries none. An omitted `--to`
+ * and `@contract` both target the emitted contract. `@db` is not resolved
+ * here: it needs the live marker, which is read only once the connection is
+ * open.
  */
 function resolveRequestedTarget(
   to: string | undefined,
-  refs: Refs,
-  graph: MigrationGraph,
+  context: RefResolutionContext,
 ): Result<RequestedTarget, CliStructuredError> {
   if (to === undefined) {
-    return ok({ entry: undefined, refName: undefined });
+    return ok(EMITTED_CONTRACT_TARGET);
   }
-  const resolved = resolveContractRef(to, { graph, refs });
+  const resolved = resolveContractRef(to, context);
   if (!resolved.ok) {
     return notOk(normalizeError(resolved.failure));
+  }
+  if (resolved.value.provenance.kind === 'reserved-contract') {
+    return ok(EMITTED_CONTRACT_TARGET);
   }
   if (resolved.value.provenance.kind !== 'ref') {
     return ok({ entry: { hash: resolved.value.hash, invariants: [] }, refName: undefined });
   }
   const refName = resolved.value.provenance.refName;
-  return ok({ entry: refs[refName], refName });
+  return ok({ entry: context.refs[refName], refName });
+}
+
+function liveMarkerTarget(appMarker: { readonly storageHash: string } | null): RequestedTarget {
+  return { entry: { hash: contractHashAtMarker(appMarker), invariants: [] }, refName: undefined };
 }
 
 export function createMigrateCommand(createClient: CreateControlClient) {
@@ -210,8 +250,8 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'Walks every contract space (app + extensions) and applies pending on-disk\n' +
         'migrations in canonical order (extensions alphabetically, then app). It\n' +
         'replays the on-disk migration graph and never invents an edge. Use --to to\n' +
-        'target a specific contract (hash, ref name, or migration directory) and\n' +
-        '--show for a read-only preview of the route it would take.',
+        'target a specific contract and --show for a read-only preview of the route\n' +
+        'it would take.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',
@@ -224,8 +264,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       flags: {
         db: dbFlag,
         to: flag.string({
-          brief:
-            'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+          brief: `Target contract reference (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -234,7 +273,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         }),
         show: flag.boolean({ brief: 'Preview the migration route without applying (read-only)' }),
         from: flag.string({
-          brief: 'From-state for the --show preview (@contract, @db, hash, ref name, or dir)',
+          brief: `From-state for the --show preview (${ALL_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
       },
@@ -243,12 +282,13 @@ export function createMigrateCommand(createClient: CreateControlClient) {
     handler: async (args, ctx) => {
       // `migrate` walks every contract space, so the header names the root they
       // all live under rather than the app subspace.
-      const migrationsRelative = displayPath(migrationsDirFor(ctx.config, ctx.cwd), ctx.cwd);
+      const migrationsRelative = displayPath(migrationsDirFor(ctx.config), ctx.cwd);
 
       if (args.flags.show) {
         const planned = await executeMigrateShowPlan({
           config: ctx.config,
           cwd: ctx.cwd,
+          invocation: cliInvocation(ctx, args.flags.db),
           createClient,
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
@@ -280,7 +320,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               runList: migrateShowRunListRows(plan.migrations, rendering, paint),
               migrationsDir: migrationsRelative,
               database:
-                args.flags.from === undefined && typeof dbConnection === 'string'
+                plan.databaseMarkerHashBySpace !== undefined && typeof dbConnection === 'string'
                   ? maskConnectionUrl(dbConnection)
                   : undefined,
               from: args.flags.from,
@@ -290,6 +330,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         );
       }
 
+      const liveTarget = isLiveMarkerRef(args.flags.to);
       const startedAt = Date.now();
       const prepared = await prepareMigrationRun({
         config: ctx.config,
@@ -297,6 +338,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         db: args.flags.db,
         commandName: 'db migrate',
         createClient,
+        retryCommand: retryCommandFor({
+          commandName: 'db migrate',
+          to: args.flags.to,
+          advanceRef: args.flags.advanceRef,
+          canRunOffline: false,
+        }),
       });
       if (!prepared.ok) {
         return notOk(prepared.failure);
@@ -313,7 +360,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           normalizeError(
             errorContractValidationFailed(
               `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-              { where: { path: contractPath } },
+              { where: { path: contractPath }, meta: contractValidationMeta(error) },
             ),
           ),
         );
@@ -325,6 +372,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         appContract,
         extensions: ctx.config.extensions ?? [],
         deserializeContract: (json) => familyInstance.deserializeContract(json),
+        ...ifDefined('verifySnapshotContent', snapshotVerifierFor(ctx.config)),
       });
       if (!loaded.ok) {
         return notOk(normalizeError(loaded.failure));
@@ -344,38 +392,50 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(integrityFailure));
       }
 
-      const target = resolveRequestedTarget(
-        args.flags.to,
-        aggregate.app.refs,
-        aggregate.app.graph(),
-      );
-      if (!target.ok) {
-        return notOk(target.failure);
+      const offlineTarget = liveTarget
+        ? undefined
+        : resolveRequestedTarget(args.flags.to, {
+            graph: aggregate.app.graph(),
+            refs: aggregate.app.refs,
+            contractHash: aggregate.app.contract().storage.storageHash,
+          });
+      if (offlineTarget !== undefined && !offlineTarget.ok) {
+        return notOk(offlineTarget.failure);
       }
 
       let document: MigrateDocument;
       try {
         await client.connect(dbConnection);
         const appGraph = aggregate.app.graph();
-        const appMarker = (await client.readAllMarkers()).get('app') ?? null;
+        const markers = await client.readAllMarkers();
+        const appMarker = markers.get(aggregate.app.spaceId) ?? null;
 
-        if (appMarker !== null) {
-          const markerRefusal = refuseMarkerOutsideGraph({
-            markerHash: appMarker.storageHash,
-            graph: appGraph,
-          });
-          if (markerRefusal) {
-            return notOk(normalizeError(markerRefusal));
-          }
+        const target: RequestedTarget =
+          offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
+
+        const refEntry = target.entry;
+        const planned = await planEverySpace({
+          aggregate,
+          markers,
+          appTarget: {
+            hash: refEntry?.hash ?? appContract.storage.storageHash,
+            invariants: refEntry?.invariants,
+            refName: target.refName,
+          },
+          storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
+          readLedger: (spaceId) => client.readLedger(spaceId),
+        });
+        if (!planned.ok) {
+          return notOk(normalizeError(planned.failure));
         }
-
-        const refEntry = target.value.entry;
         if (refEntry !== undefined && refEntry.invariants.length > 0) {
           const invariantRefusal = refuseUnknownInvariants({
             graph: appGraph,
             markerInvariants: appMarker?.invariants ?? [],
             refInvariants: refEntry.invariants,
-            ...ifDefined('refName', args.flags.to),
+            ...ifDefined('refName', target.refName),
           });
           if (invariantRefusal) {
             return notOk(normalizeError(invariantRefusal));
@@ -393,7 +453,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             try {
               const at = await aggregate.app.contractAt(
                 refEntry.hash,
-                target.value.refName === undefined ? undefined : { refName: target.value.refName },
+                target.refName === undefined ? undefined : { refName: target.refName },
               );
               applyContract = at.contract;
               snapshotContractJson = blindCast<
@@ -423,7 +483,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             name: args.flags.advanceRef,
             contractJson: snapshotContractJson,
             contractJsonPath: snapshotContractPath,
-            configPath: projectConfigPathFor(ctx.cwd),
+            projectDir: baseDirFor(ctx.config),
             client,
           });
           if (!preflight.ok) {
@@ -435,13 +495,22 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const applied = await client.migrate({
           contract: applyContract,
           migrationsDir,
+          invocation: {
+            ...cliInvocation(ctx, args.flags.db),
+            rerunArgs: [
+              ...(args.flags.to === undefined ? [] : ['--to', shellQuoted(args.flags.to)]),
+              ...(args.flags.advanceRef === undefined
+                ? []
+                : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+            ],
+          },
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('refHash', refEntry?.hash),
           ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),
-          ...(refEntry === undefined ? {} : ifDefined('refName', args.flags.to)),
+          ...ifDefined('refName', target.refName),
         });
         if (!applied.ok) {
-          return notOk(normalizeError(mapMigrateFailure(applied.failure)));
+          return notOk(normalizeError(applied.failure));
         }
         const { value } = applied;
 
@@ -473,13 +542,11 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           advancedRef,
         };
       } catch (error) {
-        const mapped = mapCaughtMigrationError(error);
         return notOk(
           normalizeError(
-            mapped ??
-              errorUnexpected(error instanceof Error ? error.message : String(error), {
-                why: `Unexpected error during migrate: ${error instanceof Error ? error.message : String(error)}`,
-              }),
+            errorFromCaught(error, (message) => `Unexpected error during migrate: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {
@@ -500,6 +567,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             migrationsDir: migrationsRelative,
             database: prepared.value.database,
             to: args.flags.to,
+            invocation: cliInvocation(ctx, args.flags.db),
           }),
         ),
       );

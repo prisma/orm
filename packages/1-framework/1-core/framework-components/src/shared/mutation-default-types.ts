@@ -1,8 +1,4 @@
-import type {
-  ColumnDefault,
-  ExecutionMutationDefaultPhases,
-  ExecutionMutationDefaultValue,
-} from '@internal/contract/types';
+import type { ColumnDefault } from '@internal/contract/types';
 
 interface SourcePosition {
   readonly offset: number;
@@ -30,9 +26,11 @@ export interface DefaultFunctionLoweringContext {
   readonly columnCodecId?: string;
 }
 
-export type LoweredDefaultValue =
-  | { readonly kind: 'storage'; readonly defaultValue: ColumnDefault }
-  | { readonly kind: 'execution'; readonly generated: ExecutionMutationDefaultValue };
+/** What a default function lowers to: always a database default. A value the client generates is a generator function, which `@onCreate(fn())` and `@onUpdate(fn())` call. */
+export type LoweredDefaultValue = {
+  readonly kind: 'storage';
+  readonly defaultValue: ColumnDefault;
+};
 
 export type LoweredDefaultResult =
   | { readonly ok: true; readonly value: LoweredDefaultValue }
@@ -40,23 +38,6 @@ export type LoweredDefaultResult =
 
 export interface MutationDefaultGeneratorDescriptor {
   readonly id: string;
-  /**
-   * Codec ids the generator is compatible with when the codec choice
-   * and the generator choice are made independently by the contract
-   * author. Set when the registry-coherence check is meaningful
-   * (the codec and the generator can be paired arbitrarily by the
-   * caller); omitted when the generator is only reachable through a
-   * descriptor that co-registers a fixed codec, so coherence is
-   * structural and the list would be tautological.
-   */
-  readonly applicableCodecIds?: readonly string[];
-  /**
-   * Construct the `onCreate`/`onUpdate` phases value owned by this
-   * generator. Authoring layers (PSL `temporal.updatedAt()`, TS field presets) call
-   * this instead of building the literal inline so PSL/TS-authored
-   * contracts stay byte-equivalent for any future params-bearing generator.
-   */
-  readonly buildPhases?: (args?: Record<string, unknown>) => ExecutionMutationDefaultPhases;
 }
 
 // A default-function call whose arguments the function's `funcCall` signature has already parsed
@@ -81,34 +62,13 @@ export interface ControlMutationDefaultEntry {
 
 export type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>;
 
-/** A `` tag`body` `` default literal as the attribute spec accepted it: tag, canonical body, and span. */
-export interface TaggedLiteralValue {
-  readonly tag: string;
-  readonly body: string;
-  readonly span: SourceSpan;
-}
-
-export interface ControlDefaultLiteralTagEntry {
-  /** How the tag is written, for messages: `` sql`...` ``. */
-  readonly usage: string;
-  /** What the literal does, shown as signature help. */
-  readonly documentation: string;
-  readonly lower: (input: {
-    readonly literal: TaggedLiteralValue;
-    readonly context: DefaultFunctionLoweringContext;
-  }) => LoweredDefaultResult;
-}
-
-export type ControlDefaultLiteralTagRegistry = ReadonlyMap<string, ControlDefaultLiteralTagEntry>;
-
 export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
 }
 
-/** The two registries an attribute spec needs to build its `@default` arms. */
-export type ControlDefaultRegistries = Pick<
-  ControlMutationDefaults,
-  'defaultFunctionRegistry' | 'defaultLiteralTagRegistry'
->;
+/** The mutation defaults of a composed stack. */
+export interface AssembledControlMutationDefaults extends ControlMutationDefaults {
+  /** For each registered generator id, the id of the component that registers it, or `undefined` when that component has no id. */
+  readonly componentIdsByGenerator: ReadonlyMap<string, string | undefined>;
+}

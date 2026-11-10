@@ -3,6 +3,7 @@ import type { SchemaEntityCoordinate } from '@internal/framework-components/cont
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
+import type { SnapshotContentVerifier } from '../contract-snapshot-store';
 import { contractSnapshotDir, readContractSnapshotJson } from '../contract-snapshot-store';
 import {
   errorBundleNotFoundForGraphNode,
@@ -27,7 +28,7 @@ import type {
 } from './types';
 
 function contractAtMemoKey(hash: string, refName: string | undefined): string {
-  return `${hash}\0${refName ?? ''}`;
+  return JSON.stringify([hash, refName ?? '']);
 }
 
 function deserializeContractAtPath(
@@ -42,7 +43,7 @@ function deserializeContractAtPath(
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw errorContractDeserializationFailed(filePath, message);
+    throw errorContractDeserializationFailed(filePath, message, { cause: error });
   }
 }
 
@@ -50,8 +51,9 @@ async function readContractSnapshotEntry(
   migrationsDir: string,
   hash: string,
   deserializeContract: (raw: unknown) => Contract,
+  verifySnapshotContent: SnapshotContentVerifier | undefined,
 ): Promise<{ contractJson: unknown; contract: Contract }> {
-  const contractJson = await readContractSnapshotJson(migrationsDir, hash);
+  const contractJson = await readContractSnapshotJson(migrationsDir, hash, verifySnapshotContent);
   const jsonPath = join(contractSnapshotDir(migrationsDir, hash), 'contract.json');
   const contract = deserializeContractAtPath(jsonPath, contractJson, deserializeContract);
   return { contractJson, contract };
@@ -65,8 +67,18 @@ async function resolveContractAt(args: {
   readonly packages: readonly OnDiskMigrationPackage[];
   readonly graph: MigrationGraph;
   readonly deserializeContract: (raw: unknown) => Contract;
+  readonly verifySnapshotContent: SnapshotContentVerifier | undefined;
 }): Promise<ContractAtResult> {
-  const { hash, opts, refsDir, migrationsDir, packages, graph, deserializeContract } = args;
+  const {
+    hash,
+    opts,
+    refsDir,
+    migrationsDir,
+    packages,
+    graph,
+    deserializeContract,
+    verifySnapshotContent,
+  } = args;
   const refName = opts?.refName;
 
   if (refName !== undefined) {
@@ -86,6 +98,7 @@ async function resolveContractAt(args: {
         migrationsDir,
         refEntry.hash,
         deserializeContract,
+        verifySnapshotContent,
       );
       return { hash: refEntry.hash, contractJson, contract, provenance: 'ref' };
     }
@@ -96,6 +109,7 @@ async function resolveContractAt(args: {
         migrationsDir,
         packages,
         deserializeContract,
+        verifySnapshotContent,
         explicitLabel: refName,
       });
     }
@@ -104,7 +118,13 @@ async function resolveContractAt(args: {
   }
 
   if (isGraphNode(hash, graph)) {
-    return resolveGraphNodeContractAt({ hash, migrationsDir, packages, deserializeContract });
+    return resolveGraphNodeContractAt({
+      hash,
+      migrationsDir,
+      packages,
+      deserializeContract,
+      verifySnapshotContent,
+    });
   }
 
   throw errorHashNotInGraph(hash, graph);
@@ -115,9 +135,17 @@ async function resolveGraphNodeContractAt(args: {
   readonly migrationsDir: string;
   readonly packages: readonly OnDiskMigrationPackage[];
   readonly deserializeContract: (raw: unknown) => Contract;
+  readonly verifySnapshotContent: SnapshotContentVerifier | undefined;
   readonly explicitLabel?: string;
 }): Promise<ContractAtResult> {
-  const { hash, migrationsDir, packages, deserializeContract, explicitLabel } = args;
+  const {
+    hash,
+    migrationsDir,
+    packages,
+    deserializeContract,
+    verifySnapshotContent,
+    explicitLabel,
+  } = args;
   const matchingBundle = packages.find((pkg) => pkg.metadata.to === hash);
   if (!matchingBundle) {
     throw errorBundleNotFoundForGraphNode(hash, explicitLabel);
@@ -127,6 +155,7 @@ async function resolveGraphNodeContractAt(args: {
     migrationsDir,
     hash,
     deserializeContract,
+    verifySnapshotContent,
   );
   return { hash, contractJson, contract, provenance: 'graph-node' };
 }
@@ -172,6 +201,7 @@ export function createAggregateContractSpace(args: {
   readonly migrationsDir: string;
   readonly resolveContract: () => Contract;
   readonly deserializeContract: (raw: unknown) => Contract;
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
 }): AggregateContractSpace {
   const {
     spaceId,
@@ -182,6 +212,7 @@ export function createAggregateContractSpace(args: {
     migrationsDir,
     resolveContract,
     deserializeContract,
+    verifySnapshotContent,
   } = args;
   let graphMemo: MigrationGraph | undefined;
   let contractMemo: Contract | undefined;
@@ -217,6 +248,7 @@ export function createAggregateContractSpace(args: {
         packages,
         graph: spaceGraph(),
         deserializeContract,
+        verifySnapshotContent,
       });
       contractAtMemo.set(key, result);
       return result;
@@ -226,25 +258,45 @@ export function createAggregateContractSpace(args: {
 
 /**
  * Collect the union of every namespace declared across all contract spaces of an
- * aggregate (app + extensions) and return a minimal object with the shape
- * `{ storage: { namespaces } }` suitable for passing to
- * `familyInstance.introspect`.
+ * aggregate (app + extensions), and of the application space's origin contract when given, so a
+ * namespace the origin declares and the destination removed is read too, and return a minimal
+ * object with the shape
+ * `{ storage: { namespaces }, contracts }` suitable for passing to
+ * `familyInstance.introspect`. `contracts` holds each space's contract, app first, so
+ * introspection reads a table with the contract of the space that declares it.
  *
  * Callers invoke this after the integrity gate (`buildContractSpaceAggregate`
  * with `checkContracts: true`), so every `space.contract()` call is safe —
  * no try/catch is needed here.
  */
-export function collectAggregateNamespaces(aggregate: ContractSpaceAggregate): {
+export function collectAggregateNamespaces(
+  aggregate: ContractSpaceAggregate,
+  originContract: Contract | null = null,
+): {
   readonly storage: { readonly namespaces: Readonly<Record<string, StorageNamespace>> };
+  readonly contracts: readonly Contract[];
 } {
+  const contracts = [
+    ...aggregate.spaces().map((space) => space.contract()),
+    ...(originContract === null ? [] : [originContract]),
+  ];
   const merged: Record<string, StorageNamespace> = {};
-  for (const space of aggregate.spaces()) {
-    for (const [key, ns] of Object.entries(space.contract().storage.namespaces)) {
+  for (const contract of contracts) {
+    for (const [key, ns] of Object.entries(contract.storage.namespaces)) {
       const existing = merged[key];
       merged[key] = existing === undefined ? ns : mergeNamespaceEntries(existing, ns);
     }
   }
-  return { storage: { namespaces: merged } };
+  return { storage: { namespaces: merged }, contracts };
+}
+
+/**
+ * The order in which `migrate` applies an aggregate's contract spaces and `db sign` signs them: the extension spaces in the aggregate's order, then the app space, so an extension's tables exist before the app's tables refer to them.
+ */
+export function spacesInApplyOrder(
+  aggregate: ContractSpaceAggregate,
+): readonly AggregateContractSpace[] {
+  return [...aggregate.extensions, aggregate.app];
 }
 
 /**
@@ -300,6 +352,10 @@ export function createContractSpaceAggregate(args: {
     declaresEntity: (coordinate) => ordered.some((space) => spaceDeclares(space, coordinate)),
     declaringSpaces: (coordinate) =>
       ordered.filter((space) => spaceDeclares(space, coordinate)).map((s) => s.spaceId),
+    namespaceDeclaringSpaces: (namespaceId) =>
+      ordered
+        .filter((space) => Object.hasOwn(space.contract().storage.namespaces, namespaceId))
+        .map((space) => space.spaceId),
     checkIntegrity,
   };
 }

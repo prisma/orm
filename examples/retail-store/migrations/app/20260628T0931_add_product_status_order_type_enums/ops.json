@@ -15,7 +15,8 @@
           "op": "$eq",
           "value": "orders"
         },
-        "expect": "exists"
+        "expect": "exists",
+        "object": "collection \"orders\""
       }
     ],
     "execute": [
@@ -247,7 +248,8 @@
           "op": "$eq",
           "value": "products"
         },
-        "expect": "exists"
+        "expect": "exists",
+        "object": "collection \"products\""
       }
     ],
     "execute": [

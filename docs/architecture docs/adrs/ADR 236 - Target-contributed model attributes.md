@@ -23,9 +23,11 @@ model Profile {
 policy_select profile_owner_read {
   target = Profile
   roles  = [authenticated]
-  using  = "\"userId\"::uuid = auth.uid()"
+  using  = sql`"userId"::uuid = auth.uid()`
 }
 ```
+
+The predicate is a `sql` literal, the only form PSL takes for raw SQL; the TypeScript `policy*` helpers take a `sql` value ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 Neither the framework nor the SQL family knows what `@@rls` means. The Postgres target teaches the interpreter both facts about it declaratively.
 
@@ -72,7 +74,7 @@ A registry of `AuthoringModelAttributeDescriptor`s. Each descriptor:
 
 - **claims a bare `@@` attribute name** (`attribute: 'rls'`);
 - **supplies a factory for the declarative parameter spec** — a `ModelAttributeSpecFactory`, called with the declaring model's context and returning a spec built with the same `modelAttribute(...)` constructors as every other declarative attribute ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)) — so parsing, validation, and printing come for free from the generic machinery. A spec that needs nothing from the context, like `@@rls`, returns a hoisted module constant so its identity is stable across calls;
-- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`.
+- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`. A lowering may instead return `{ index }`; see the amendment below.
 
 The factory indirection is uniform across every registered attribute spec, so one entry shape serves both this channel and the family built-ins that share the registry.
 
@@ -98,6 +100,16 @@ The field expresses exactly one constraint — *one* ref parameter's model must 
 
 - Both SPIs are durable public framework surface with a single consumer (`@@rls`). The shapes are the narrowest that serve it; a second consumer may force widening (e.g. multiple `requiresModelAttribute` pairs), which is additive but still a surface change.
 - An argument-less attribute's `lower` receives an empty parse (`Record<never, never>`); the descriptor machinery's generality is unused until an attribute with parameters arrives.
+
+## Amendment: a contributed attribute may produce a table index
+
+A lowering returns either the entity it always could or `{ index }`, an opaque payload the family narrows. The SQL interpreter checks it with `isAuthoredIndexInput` and pushes it onto the same `indexNodes` list `@@index` fills, so index naming, index-type registration and the name-xor-map rules are shared rather than reimplemented. The framework declares only the arm: an index's *shape* belongs to the family, because a Mongo index and a SQL index agree on nothing but the word.
+
+Two smaller additions serve the same case. A descriptor may declare itself `repeatable`, which skips the duplicate-attribute diagnostic, since a model may want several such indexes. And the lowering context resolves a field of the declaring model to its storage name and to the codec it stores through — `fieldStorageName` and `fieldCodecId` — so a lowering that names storage columns never guesses past `@map` or a naming convention, and can refuse a field whose values it cannot express.
+
+Postgres's `@@fullTextIndex` is the first attribute to use all three. Its fields are weight groups: one field, or a list whose items are fields or lists of fields, at most four groups. It resolves each field to its storage column, refuses a field that is not stored through a textual codec, and returns an index of the registered type `fullText` over those columns whose `options` hold the groups (`weightGroups`), as column names, and the language, from the same allowlist the query operations check. The contract stores that definition, not SQL. One renderer turns it into the search document — `to_tsvector('<language>', "<column>")` for one field; for several, one `to_tsvector` per field joined with `||`, every column wrapped in `coalesce`, each field weighted with `setweight` when there is more than one group — for the `gin` index the DDL creates, for the schema that migrations and verification compare, and for `fullTextMatches` and `fullTextRank`. Postgres uses the index only for a query whose expression is the same document — it compares parsed expressions, not text, so qualifying the columns or not makes no difference. Sharing the renderer keeps the index and the query from diverging when they are given the same groups and language. To make sure they are, both query lanes hand a query the index itself: `fns.fullTextMatches(post.indexes.post_search, q)` in the SQL builder, and `fns.fullTextMatches(indexes.post_search, q)` in an ORM `where` or `orderBy` callback, whose second argument is `{ fns, indexes }` ([ADR 270](ADR%20270%20-%20ORM%20queries%20use%20the%20query%20builder's%20functions%20and%20a%20model's%20indexes.md)). Either reads the groups and the language from the contract's definition, so the query renders exactly the expression the index covers. A document written by hand, with the `fullTextDocument` helper or as a single column, can still differ from every index; such a query gets no error, just a sequential scan.
+
+Anchors: the `{ index }` arm and `repeatable` in [`interpreter.ts`](../../../packages/2-sql-family/2-authoring/contract-psl/src/interpreter.ts); the attribute in [`authoring.ts`](../../../packages/3-targets/postgres/1-target/src/core/authoring.ts); the one place its search document is rendered in [`full-text-search-document.ts`](../../../packages/3-targets/postgres/1-target/src/core/full-text-search-document.ts); its rules in [`full-text-index-definition.ts`](../../../packages/3-targets/postgres/1-target/src/core/full-text-index-definition.ts); and [`full-text-index-usage.test.ts`](../../../test/integration/test/sql-builder/full-text-index-usage.test.ts) and [`weighted-full-text-index-usage.test.ts`](../../../test/integration/test/sql-builder/weighted-full-text-index-usage.test.ts), which prove with `EXPLAIN` against a real server that Postgres chooses the index for the SQL the lanes lower.
 
 ## Alternatives considered
 

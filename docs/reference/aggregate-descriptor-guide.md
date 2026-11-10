@@ -44,7 +44,7 @@ Two codecs may not both claim one input by trait: a codec carrying two claimed t
 
 ### The empty-result value
 
-A descriptor that declares `nullable: false` must also declare `emptyResultJson` — the value the operation answers with when no result row reaches the caller at all. The two travel together in the type, so a non-nullable descriptor without it does not compile:
+A descriptor that declares `nullable: false` must also declare `emptyResultWire` — the value the operation answers with when no result row reaches the caller at all. The two travel together in the type, so a non-nullable descriptor without it does not compile:
 
 ```ts
 const count: SqlAggregateDescriptor = {
@@ -52,21 +52,21 @@ const count: SqlAggregateDescriptor = {
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8number@1' },
   nullable: false,
-  emptyResultJson: 0,
+  emptyResultWire: '0',
 };
 ```
 
-State the value in the **result codec's canonical JSON**; the client decodes it through that codec, so the application sees the same shape a real row would produce. `count`'s zero is the JSON number `0` under `pg/int8number@1` and the decimal string `'0'` under `pg/int8@1` — one answer, two canonical forms.
+State the value as the **wire value** the driver would return for a result row; the client reads it with the result codec's `fromWire`, so the application sees the same shape a real row would produce. `count`'s zero is the decimal string `'0'` under both `pg/int8number@1` and `pg/int8@1`, the text PostgreSQL returns for an `int8`; the two differ in what they read it into, a `number` and a `bigint`.
 
 The value lives on the descriptor rather than on the codec because the empty-input answer is a property of the operation, not of the type its result carries. `count`'s identity element is zero; an `every()` operation's would be `true`; a `product()`'s would be one. A codec has no way to know which.
 
 SQL answers an empty input set itself, so the declared value is read only in the degenerate cases where no row carries the aggregate: an absent aggregate alias, or an include whose envelope never arrived.
 
-## The relationship to canonical JSON
+## Results the database returns as JSON
 
-An aggregate's result enters a JSON envelope wherever it is an include reducer, and it goes in under the codec resolved here — which is why [the canonical JSON guarantee](./codec-authoring-guide.md#the-canonical-json-guarantee) applies to aggregates too. A `numeric` result read as a JSON number would be the same defect as a `numeric` column read as one.
+An aggregate's result enters a JSON envelope wherever it is an include reducer, and it goes in under the codec resolved here: the codec's projection writes it and its `fromWire` reads it, as for a column ([Rows the database returns as JSON](./codec-authoring-guide.md#rows-the-database-returns-as-json)). A `numeric` result read as a JSON number would be the same defect as a `numeric` column read as one.
 
-The number-flavoured integer codecs are the deliberate exception, and they are safe because their guard runs after the parse. `pg/int8number@1` and `sqlite/bigintnumber@1` project as JSON numbers; double rounding is monotone and 2^53 is exactly representable, so a true value outside ±(2^53 − 1) cannot parse back inside it. A `sum` past the boundary therefore raises `RUNTIME.DECODE_FAILED` on the include path exactly as it does on the wire path.
+The number-flavoured integer codecs are the deliberate exception, and they are safe because the range check reads the exact decimal text. `pg/int8number@1` and `sqlite/bigintnumber@1` decode the decimal text their type stores into a `number`, and the range check runs on the exact text before the conversion, so a true value outside ±(2^53 − 1) is refused rather than rounded into range. A `sum` past the boundary therefore raises `RUNTIME.DECODE_FAILED` on the include path exactly as it does on the wire path.
 
 ## Lowering: what builds the expression
 
@@ -155,7 +155,7 @@ The rows a contribution settles into decide the call shapes the operation surfac
 
 One naming constraint applies. Include reducers install into the ORM collection's own namespace, beside `select`, `where`, `include`, and the rest of the query builder, so an operation may not take a name a built-in collection member already owns; `orm(...)` rejects one that does with `ORM.AGGREGATE_OPERATION_RESERVED`.
 
-A custom collection class registered through `orm({ collections })` sits outside that check, and its own members take precedence: a member whose name an operation also carries keeps the name, and the collection installs no reducer for that operation. Where the contract's emitted map declares the operation, TypeScript holds the member to the reducer's signature — the collection surface is the class intersected with the reducer set — so what passes silently is a member the types never promised.
+A custom collection class, passed in a client's `collections` option, sits outside that check, and its own members take precedence: a member whose name an operation also carries keeps the name, and the collection installs no reducer for that operation. Where the contract's emitted map declares the operation, TypeScript holds the member to the reducer's signature — the collection surface is the class intersected with the reducer set — so what passes silently is a member the types never promised.
 
 ## What a consumer stamps
 
@@ -180,9 +180,9 @@ The fix is to make the two agree. Either compose the extension into the runtime 
 
 ## Where to look
 
-- **PostgreSQL's matrix**: [packages/3-targets/3-targets/postgres/src/core/aggregates.ts](../../packages/3-targets/3-targets/postgres/src/core/aggregates.ts) — every row read off a live database rather than inferred.
-- **SQLite's matrix, including the lowering**: [packages/3-targets/3-targets/sqlite/src/core/aggregates.ts](../../packages/3-targets/3-targets/sqlite/src/core/aggregates.ts).
-- **The vocabulary**: `AggregateDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/aggregate-descriptor.ts`; the precedence rule beside it in `aggregate-overloads.ts`; the SQL specialization and registry, including the lowering rule, in `packages/2-sql/4-lanes/relational-core/src/aggregate-descriptor{,-registry}.ts`.
+- **PostgreSQL's matrix**: [packages/3-targets/postgres/1-target/src/core/aggregates.ts](../../packages/3-targets/postgres/1-target/src/core/aggregates.ts) — every row read off a live database rather than inferred.
+- **SQLite's matrix, including the lowering**: [packages/3-targets/sqlite/1-target/src/core/aggregates.ts](../../packages/3-targets/sqlite/1-target/src/core/aggregates.ts).
+- **The vocabulary**: `AggregateDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/aggregate-descriptor.ts`; the precedence rule beside it in `aggregate-overloads.ts`; the SQL specialization and registry, including the lowering rule, in `packages/2-sql-family/4-lanes/relational-core/src/aggregate-descriptor{,-registry}.ts`.
 - **A contribution end to end**: [test/integration/test/sql-orm-client/contributed-aggregates.test.ts](../../test/integration/test/sql-orm-client/contributed-aggregates.test.ts) contributes two operations from a test-only extension and reads their results back from PostgreSQL.
 - **A contribution you can run**: [examples/prisma-8-demo/src/extensions/engagement-stats.ts](../../examples/prisma-8-demo/src/extensions/engagement-stats.ts) contributes `stddev` from a local extension composed on both planes, and `pnpm start -- aggregate-stddev` calls it as a statically typed method.
 - **The rules the surfaces follow**: [ADR 020 § Contributed aggregate operations](../architecture%20docs/adrs/ADR%20020%20-%20Result%20Typing%20Rules.md#contributed-aggregate-operations).

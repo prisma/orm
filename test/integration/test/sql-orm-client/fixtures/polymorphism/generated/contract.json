@@ -469,14 +469,17 @@
               "table": "tasks"
             },
             "variants": {
-              "Bug": {
-                "value": "bug"
+              "bug": {
+                "model": "Bug",
+                "namespace": "public"
               },
-              "Epic": {
-                "value": "epic"
+              "epic": {
+                "model": "Epic",
+                "namespace": "public"
               },
-              "Feature": {
-                "value": "feature"
+              "feature": {
+                "model": "Feature",
+                "namespace": "public"
               }
             }
           },
@@ -677,11 +680,13 @@
               "table": "users"
             },
             "variants": {
-              "Admin": {
-                "value": "admin"
+              "admin": {
+                "model": "Admin",
+                "namespace": "public"
               },
-              "Regular": {
-                "value": "regular"
+              "regular": {
+                "model": "Regular",
+                "namespace": "public"
               }
             }
           }
@@ -698,16 +703,16 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -724,17 +729,20 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "scope": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -764,22 +772,25 @@
               "columns": {
                 "feature_assignee_person_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "priority": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "features_feature_assignee_person_id_idx_7fcd7a77"
+                  },
                   "source": {
                     "columns": [
                       "feature_assignee_person_id"
@@ -796,6 +807,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -834,16 +848,16 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -860,16 +874,16 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -886,26 +900,29 @@
               "columns": {
                 "body": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "task_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "task_comments_task_id_idx_5d5ac774"
+                  },
                   "source": {
                     "columns": [
                       "task_id"
@@ -940,49 +957,65 @@
               "uniques": []
             },
             "tasks": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('bug', 'epic', 'feature')",
+                  "name": "tasks_type_check_b3d5b43f",
+                  "prefix": "tasks_type_check"
+                }
+              ],
               "columns": {
                 "bug_assignee_person_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "project_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "reporter_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "severity": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "type": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
-                  "nullable": false
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tasks_project_id_idx_6ad92603"
+                  },
                   "source": {
                     "columns": [
                       "project_id"
@@ -999,6 +1032,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "tasks_reporter_id_idx_3eeed9a0"
+                  },
                   "source": {
                     "columns": [
                       "reporter_id"
@@ -1044,26 +1080,29 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "owner_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "subject": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "tickets_owner_id_idx_ade9f347"
+                  },
                   "source": {
                     "columns": [
                       "owner_id"
@@ -1098,49 +1137,65 @@
               "uniques": []
             },
             "users": {
+              "checks": [
+                {
+                  "expression": "\"kind\" IN ('admin', 'regular')",
+                  "name": "users_kind_check_dc69a8d4",
+                  "prefix": "users_kind_check"
+                }
+              ],
               "columns": {
                 "account_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "kind": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
-                  "nullable": false
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "User.kind",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "plan": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "role": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "users_account_id_idx_3b48271c"
+                  },
                   "source": {
                     "columns": [
                       "account_id"
@@ -1174,17 +1229,36 @@
               },
               "uniques": []
             }
+          },
+          "valueSet": {
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "epic",
+                "feature"
+              ]
+            },
+            "User.kind": {
+              "kind": "valueSet",
+              "values": [
+                "admin",
+                "regular"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ea5a7a82d2517faa41ea5d93e27a33bf33d008a7f0f8db17199bad8c14fc24f0"
+    "storageHash": "00913b83286a9e6492e6621c3ba277633d43a309cdda39f9cb46f0a54752c1eb"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -1195,7 +1269,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

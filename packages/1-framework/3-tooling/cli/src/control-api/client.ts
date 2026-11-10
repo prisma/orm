@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -5,13 +6,13 @@ import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-c
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   ControlAdapterInstance,
+  ControlDriverConnectOptions,
   ControlDriverInstance,
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
   MigrationPlanOperation,
   OperationPreview,
-  SignDatabaseResult,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -28,19 +29,22 @@ import {
   keepInternalSpecifiers,
 } from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
-
+import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
+import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
+import { type ExecuteDbSignResult, executeDbSign } from './operations/db-sign';
 import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
+import { loadContractSourceWithStack } from './operations/load-contract-source';
 import { executeMigrate } from './operations/migrate';
-
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type {
   ControlActionName,
@@ -48,6 +52,7 @@ import type {
   ControlClientOptions,
   DbInitOptions,
   DbInitResult,
+  DbSignOptions,
   DbUpdateOptions,
   DbUpdateResult,
   DbVerifyOptions,
@@ -58,7 +63,6 @@ import type {
   MigrateResult,
   OnControlProgress,
   SchemaVerifyOptions,
-  SignOptions,
   VerifyOptions,
 } from './types';
 
@@ -72,6 +76,12 @@ import type {
  * @see {@link ControlClient} for the client interface
  * @see README.md "Programmatic Control API" section for usage examples
  */
+function sourceWarningsOf(warnings: readonly ContractSourceDiagnostic[]): {
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
+} {
+  return ifDefined('sourceWarnings', warnings.length > 0 ? warnings : undefined);
+}
+
 export function createControlClient(options: ControlClientOptions): ControlClient {
   return new ControlClientImpl(options);
 }
@@ -90,10 +100,13 @@ class ControlClientImpl implements ControlClient {
   > | null = null;
   private initialized = false;
   private readonly defaultConnection: unknown;
+  /** One per client so the verified-hash memo spans operations (e.g. db update's pre-plan + consented apply). */
+  private readonly snapshotVerifier: SnapshotContentVerifier | undefined;
 
   constructor(options: ControlClientOptions) {
     this.options = options;
     this.defaultConnection = options.connection;
+    this.snapshotVerifier = snapshotVerifierFor(options);
   }
 
   init(): void {
@@ -126,7 +139,7 @@ class ControlClientImpl implements ControlClient {
     this.initialized = true;
   }
 
-  async connect(connection?: unknown): Promise<void> {
+  async connect(connection?: unknown, options?: ControlDriverConnectOptions): Promise<void> {
     // Auto-init if needed
     this.init();
 
@@ -159,6 +172,7 @@ class ControlClientImpl implements ControlClient {
         Parameters<typeof this.stack.driver.create>[0],
         'Connection shape is validated by the selected driver at runtime'
       >(resolvedConnection),
+      options,
     );
   }
 
@@ -245,7 +259,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     // Emit verify span
@@ -298,7 +315,10 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     // Emit schemaVerify span
@@ -341,56 +361,6 @@ class ControlClientImpl implements ControlClient {
     }
   }
 
-  async sign(options: SignOptions): Promise<SignDatabaseResult> {
-    const { onProgress } = options;
-    await this.connectWithProgress(options.connection, 'sign', onProgress);
-    const { driver, familyInstance } = await this.ensureConnected();
-
-    // Validate contract using family instance
-    let contract: Contract;
-    try {
-      contract = familyInstance.deserializeContract(options.contract);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
-    }
-
-    // Emit sign span
-    onProgress?.({
-      action: 'sign',
-      kind: 'spanStart',
-      spanId: 'sign',
-      label: 'Signing database...',
-    });
-
-    try {
-      // Delegate to family instance sign method
-      const result = await familyInstance.sign({
-        driver,
-        contract,
-        contractPath: options.contractPath ?? '',
-        ...ifDefined('configPath', options.configPath),
-      });
-
-      onProgress?.({
-        action: 'sign',
-        kind: 'spanEnd',
-        spanId: 'sign',
-        outcome: 'ok',
-      });
-
-      return result;
-    } catch (error) {
-      onProgress?.({
-        action: 'sign',
-        kind: 'spanEnd',
-        spanId: 'sign',
-        outcome: 'error',
-      });
-      throw error;
-    }
-  }
-
   async dbInit(options: DbInitOptions): Promise<DbInitResult> {
     const { onProgress } = options;
     await this.connectWithProgress(options.connection, 'dbInit', onProgress);
@@ -410,11 +380,16 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeDbInit({
       driver,
+      invocation: options.invocation,
+      ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
       adapter,
       familyInstance,
       contract,
@@ -424,6 +399,7 @@ class ControlClientImpl implements ControlClient {
       migrationsDir: options.migrationsDir,
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -447,11 +423,16 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeDbUpdate({
       driver,
+      invocation: options.invocation,
+      ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
       adapter,
       familyInstance,
       contract,
@@ -462,7 +443,10 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
-      ...ifDefined('consent', options.consent),
+      ...ifDefined('acceptAccessChanges', options.acceptAccessChanges),
+      ...ifDefined('statements', options.statements),
+      answerQuestions: options.answerQuestions,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -483,6 +467,25 @@ class ControlClientImpl implements ControlClient {
       mode: options.strict ? 'strict' : 'lenient',
       skipSchema: options.skipSchema,
       skipMarker: options.skipMarker,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
+      ...ifDefined('onProgress', onProgress),
+    });
+  }
+
+  async dbSign(options: DbSignOptions): Promise<ExecuteDbSignResult> {
+    const { onProgress } = options;
+    await this.connectWithProgress(options.connection, 'dbSign', onProgress);
+    const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
+
+    return executeDbSign({
+      driver,
+      familyInstance,
+      contract: options.contract,
+      migrationsDir: options.migrationsDir,
+      targetId: this.options.target.targetId,
+      extensions: this.options.extensions ?? [],
+      frameworkComponents,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -524,11 +527,15 @@ class ControlClientImpl implements ControlClient {
       contract = familyInstance.deserializeContract(options.contract);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw structuredError('CONTRACT.VALIDATION_FAILED', message, { cause: error });
+      throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
+        cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
+      });
     }
 
     return executeMigrate({
       driver,
+      invocation: options.invocation,
       familyInstance,
       contract,
       migrations: this.options.target.migrations,
@@ -539,6 +546,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('refHash', options.refHash),
       ...ifDefined('refInvariants', options.refInvariants),
       ...ifDefined('refName', options.refName),
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -590,7 +598,7 @@ class ControlClientImpl implements ControlClient {
     return undefined;
   }
 
-  inferPslContract(schemaIR: unknown): PslDocumentAst | undefined {
+  async inferPslContract(schemaIR: unknown): Promise<PslDocumentAst | undefined> {
     this.init();
     if (this.familyInstance && hasPslContractInfer(this.familyInstance)) {
       return this.familyInstance.inferPslContract(schemaIR);
@@ -622,7 +630,6 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
-    let contractRaw: unknown;
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -630,58 +637,30 @@ class ControlClientImpl implements ControlClient {
       label: 'Resolving contract source...',
     });
 
-    try {
-      const stack = this.stack!;
-      const sourceContext = {
-        composedExtensions: stack.extensions.map((p) => p.id),
-        composedExtensionContracts: stack.extensionContracts,
-        authoringContributions: stack.authoringContributions,
-        codecLookup: stack.codecLookup,
-        controlMutationDefaults: stack.controlMutationDefaults,
-        resolvedInputs: contractConfig.source.inputs ?? [],
-        capabilities: stack.capabilities,
-      };
-      const providerResult = await contractConfig.source.load(sourceContext);
-      if (!providerResult.ok) {
-        onProgress?.({
-          action: 'emit',
-          kind: 'spanEnd',
-          spanId: 'resolveSource',
-          outcome: 'error',
-        });
-
-        return notOk({
-          code: 'CONTRACT_SOURCE_INVALID',
-          summary: providerResult.failure.summary,
-          why: providerResult.failure.summary,
-          meta: providerResult.failure.meta,
-          diagnostics: providerResult.failure,
-        });
-      }
-      contractRaw = providerResult.value;
-
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'ok',
-      });
-    } catch (error) {
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'error',
-      });
-
-      const message = error instanceof Error ? error.message : String(error);
+    const loaded = await loadContractSourceWithStack({
+      stack: this.stack!,
+      source: contractConfig.source,
+      cwd: undefined,
+    });
+    onProgress?.({
+      action: 'emit',
+      kind: 'spanEnd',
+      spanId: 'resolveSource',
+      outcome: loaded.ok ? 'ok' : 'error',
+    });
+    if (!loaded.ok) {
+      const { error, sourceDiagnostics, warnings } = loaded.failure;
+      const thrownBySource = error.code !== 'CONTRACT.SOURCE_LOAD_FAILED';
       return notOk({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: 'Failed to resolve contract source',
-        why: message,
-        meta: undefined,
+        summary: sourceDiagnostics?.summary ?? error.message,
+        why: error.why,
+        meta: thrownBySource ? { code: error.code, ...error.meta } : sourceDiagnostics?.meta,
+        ...ifDefined('diagnostics', sourceDiagnostics),
+        ...sourceWarningsOf(warnings),
       });
     }
+    const { contract, warnings } = loaded.value;
 
     // Emit contract
     onProgress?.({
@@ -692,20 +671,7 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      // Blind cast: `contractRaw` is the unverified provider
-      // payload — `enrichContract` only adds capability + extension
-      // metadata onto whatever shape it receives. The structural
-      // check happens immediately afterwards via
-      // `familyInstance.deserializeContract`, which is the
-      // seam-of-record and the only thing that may surface
-      // structural errors to the caller.
-      const enrichedIR = enrichContract(
-        blindCast<
-          Contract,
-          'Provider payload is enriched before target serialization and family validation'
-        >(contractRaw),
-        this.frameworkComponents ?? [],
-      );
+      const enrichedIR = enrichContract(contract, this.frameworkComponents ?? []);
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
 
       let deserializedContract: Contract;
@@ -724,6 +690,7 @@ class ControlClientImpl implements ControlClient {
           summary: 'Contract validation failed',
           why: message,
           meta: undefined,
+          ...sourceWarningsOf(warnings),
         });
       }
 
@@ -742,6 +709,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
+        ...sourceWarningsOf(warnings),
       });
     } catch (error) {
       onProgress?.({
@@ -756,6 +724,7 @@ class ControlClientImpl implements ControlClient {
         summary: 'Failed to emit contract',
         why: error instanceof Error ? error.message : String(error),
         meta: undefined,
+        ...sourceWarningsOf(warnings),
       });
     }
   }

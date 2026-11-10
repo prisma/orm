@@ -1,9 +1,10 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { DOCS_BASE } from '@internal/utils/structured-error';
 import type { AnyCommand, RedirectSpec } from '@prisma/cli-engine';
 import { defineCommandFamily } from '@prisma/cli-engine';
-import { ormConfigSection } from './config-section';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { dbInitCommand } from './db/init';
 import { dbSchemaCommand } from './db/schema';
 import { dbSignCommand } from './db/sign';
@@ -32,6 +33,7 @@ import { refSetCommand } from './ref/set';
 const DOCS_BASE_URL = `${DOCS_BASE}/`;
 
 const commands: Readonly<Record<string, AnyCommand>> = {
+  'contract print': contractPrintCommand,
   'contract emit': contractEmitCommand,
   'contract format': formatCommand,
   'contract infer': contractInferCommand,
@@ -57,12 +59,9 @@ const commands: Readonly<Record<string, AnyCommand>> = {
 };
 
 /**
- * The invocations the ORM retired, so an old command line gets the replacement
- * rather than a spelling suggestion. Replacements name the binary as `{bin}`;
- * the engine substitutes the shell's own name.
+ * The invocations the ORM retired, and the Prisma 7 `migrate` commands, so an old command line gets the replacement rather than a spelling suggestion. Replacements name the binary as `{bin}`; the engine substitutes the shell's own name.
  *
- * The four flag redirects name `migration status`, which the engine requires
- * to be a mounted command.
+ * The four flag redirects name `migration status`, which the engine requires to be a mounted command.
  */
 const redirects: readonly RedirectSpec[] = [
   {
@@ -93,6 +92,42 @@ const redirects: readonly RedirectSpec[] = [
     flag: 'ref',
     replacement: '{bin} migration status --to <contract>',
     reason: 'One flag names the target contract, whether it is a ref, a hash or a migration.',
+  },
+  {
+    from: 'migrate dev',
+    replacement: '{bin} contract emit',
+    reason:
+      "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
+  },
+  {
+    from: 'migrate deploy',
+    replacement: '{bin} db migrate',
+    reason:
+      "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
+  },
+  {
+    from: 'migrate status',
+    replacement: '{bin} migration status',
+    reason:
+      "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
+  },
+  {
+    from: 'migrate diff',
+    replacement: '{bin} db update --dry-run',
+    reason:
+      '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
+  },
+  {
+    from: 'migrate reset',
+    replacement: '{bin} db update',
+    reason:
+      "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
+  },
+  {
+    from: 'migrate resolve',
+    replacement: '{bin} db sign <migration>',
+    reason:
+      "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
   },
 ];
 

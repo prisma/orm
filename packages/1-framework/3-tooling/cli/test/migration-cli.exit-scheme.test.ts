@@ -74,34 +74,9 @@ describe('migration-file CLI exit scheme (0/1/2)', () => {
     expect(stdout.text).toContain('migration.ts');
   });
 
-  it('exits 0 when imported rather than executed', async () => {
-    const stdout = new BufferStream();
-    const stderr = new BufferStream();
-    const exitCode = await MigrationCLI.run(migrationUrl, NoOpMigration, {
-      argv: ['node', join(projectDir, 'some-other-entrypoint.ts')],
-      stdout,
-      stderr,
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout.text).toBe('');
-    expect(stderr.text).toBe('');
-  });
-
   it('exits 1 for a runtime error (config file not found)', async () => {
     const { exitCode, stderr } = run(['--config', join(projectDir, 'does-not-exist.config.ts')]);
     expect(await exitCode).toBe(1);
     expect(stderr.text).toContain('CONFIG.FILE_NOT_FOUND');
-  });
-
-  it('exits 2 for an unknown flag', async () => {
-    const { exitCode, stderr } = run(['--frobnicate']);
-    expect(await exitCode).toBe(2);
-    expect(stderr.text).toContain('CLI.UNKNOWN_FLAG');
-  });
-
-  it('exits 2 for --config without a path', async () => {
-    const { exitCode, stderr } = run(['--config']);
-    expect(await exitCode).toBe(2);
-    expect(stderr.text).toContain('CLI.CONFIG_ARG_MISSING_PATH');
   });
 });

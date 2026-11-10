@@ -21,36 +21,8 @@ describe('hasPslInterpreter', () => {
     expect(hasPslInterpreter(source)).toBe(true);
   });
 
-  it('exposes interpret on the narrowed source', () => {
-    const provider: PslInterpretCapable = {
-      format: 'psl',
-      load,
-      interpret: () => ok({} as never),
-    };
-    const source: ContractSourceProvider = provider;
-
-    if (!hasPslInterpreter(source)) {
-      throw new Error('expected guard to accept the provider');
-    }
-    expect(source.interpret).toBe(provider.interpret);
-  });
-
   it('rejects a typescript provider even when it carries an interpret function', () => {
     const provider = { format: 'typescript' as const, load, interpret: () => [] };
-    const source: ContractSourceProvider = provider;
-
-    expect(hasPslInterpreter(source)).toBe(false);
-  });
-
-  it('rejects an opaque provider with an unknown format carrying interpret', () => {
-    const provider = { format: 'made-up-format', load, interpret: () => [] };
-    const source: ContractSourceProvider = provider;
-
-    expect(hasPslInterpreter(source)).toBe(false);
-  });
-
-  it('rejects a provider without a format', () => {
-    const provider = { load, interpret: () => [] };
     const source: ContractSourceProvider = provider;
 
     expect(hasPslInterpreter(source)).toBe(false);

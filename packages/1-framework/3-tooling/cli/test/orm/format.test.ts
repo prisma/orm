@@ -1,9 +1,9 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const MESSY_PSL = 'model    User{id Int @id\nname String}\n';
@@ -62,11 +62,15 @@ function pslConfig(inputPath: string): Record<string, unknown> {
   return ormConfig({ format: 'psl', inputs: [inputPath], load: async () => ({}) });
 }
 
+function pslConfigMulti(inputPaths: readonly string[]): Record<string, unknown> {
+  return ormConfig({ format: 'psl', inputs: [...inputPaths], load: async () => ({}) });
+}
+
 function harness(config: Record<string, unknown>) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: BIN_COMMANDS,
     groups: BIN_GROUPS,
-    config: { orm: config },
+    orm: config,
   });
 }
 
@@ -95,6 +99,27 @@ describe('format', () => {
     expect(await readFile(join(dir, 'contract.prisma'), 'utf-8')).toBe(FORMATTED_PSL);
   });
 
+  it('formats every member of a multi-file contract source', async () => {
+    const dir = await projectDir();
+    const first = join(dir, 'first.prisma');
+    const second = join(dir, 'second.prisma');
+    await writeFile(first, MESSY_PSL, 'utf-8');
+    await writeFile(second, MESSY_PSL, 'utf-8');
+
+    const run = await harness(pslConfigMulti([first, second])).run(
+      ['contract', 'format', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: true, exitCode: 0, result: { formatted: true, paths: [first, second] } },
+    });
+    expect(await readFile(first, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(second, 'utf-8')).toBe(FORMATTED_PSL);
+  });
+
   it('renders one summary block naming the file it formatted', async () => {
     const dir = await projectWithMessySource();
 
@@ -112,16 +137,14 @@ describe('format', () => {
     ]);
   });
 
-  it('leaves stdout empty in human mode, having no machine-consumable lines', async () => {
+  it('prints the path of each file it formatted, relative to the working directory', async () => {
     const dir = await projectWithMessySource();
 
     const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['contract', 'format'], {
       cwd: dir,
-      isTty: { stdout: true },
     });
 
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+    expect(run.stdout).toBe('contract.prisma\n');
   });
 
   it('renders the success line even under --quiet', async () => {
@@ -152,7 +175,7 @@ describe('format', () => {
       isTty: { stdout: true },
     });
 
-    expect(run.presented?.data).toEqual({ formatted: false });
+    expect(run.presented?.data).toEqual({ formatted: false, paths: [] });
     expect(run.presented?.presentation.human).toEqual([
       {
         kind: 'summary',
@@ -199,7 +222,8 @@ describe('format', () => {
 
     expect(envelope?.ok).toBe(false);
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('reports the unreadable source rather than throwing', async () => {

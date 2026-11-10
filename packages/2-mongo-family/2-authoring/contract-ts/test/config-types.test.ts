@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -10,22 +11,24 @@ import { typescriptContract, typescriptContractFromPath } from '../src/config-ty
 
 const emptyContext: ContractSourceContext = {
   composedExtensions: [],
+  defaultNamespaceId: '__unbound__',
   composedExtensionContracts: new Map(),
 
   authoringContributions: {
-    field: {},
+    dataTypes: {},
     type: {},
     entityTypes: {},
     pslBlockDescriptors: {},
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
   },
-  codecLookup: emptyCodecLookup,
+  dataTypes: { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined },
+  codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
   controlMutationDefaults: {
-    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },
+  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   resolvedInputs: [],
   capabilities: {},
 };

@@ -37,10 +37,13 @@ function sourceContext() {
   });
   return {
     composedExtensions: [],
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,
   };
@@ -123,6 +126,7 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
         expect(foreignKeysOf(serialized, 'Post')).toEqual([
           foreignKey(['authorId'], 'User', ['id'], 'restrict', 'cascade'),
           foreignKey(['editorId'], 'User', ['id'], 'setNull', 'cascade'),
+          foreignKey(['legacyOwnerId'], 'User', ['id'], 'setNull', 'cascade'),
         ]);
         expect(foreignKeysOf(serialized, 'Profile')).toEqual([
           foreignKey(['userId'], 'User', ['id'], 'restrict', 'cascade'),

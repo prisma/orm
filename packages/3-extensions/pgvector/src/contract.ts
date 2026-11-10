@@ -40,20 +40,34 @@
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  */
 
-import { defineContract } from '@internal/postgres/contract-builder';
+import { assembleDataTypes } from '@internal/framework-components/codec';
+import { defineContract, extension, unbound } from '@internal/postgres/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { VECTOR_CODEC_ID } from './core/constants';
-import { PGVECTOR_NATIVE_TYPE } from './core/contract-space-constants';
+import { PGVECTOR_EXTENSION_NAME, PGVECTOR_NATIVE_TYPE } from './core/contract-space-constants';
+import { pgvectorDataTypes } from './core/data-types';
+import { pgvectorCodecRegistry } from './core/registry';
 
-export const contract = defineContract({}, () => ({
-  types: {
+const dataTypeLookup = assembleDataTypes([
+  { id: 'postgres', dataTypes: postgresDataTypes },
+  { id: 'pgvector', dataTypes: pgvectorDataTypes },
+]).lookup;
+const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
+  [{ types: { codecTypes: { codecDescriptors: [...pgvectorCodecRegistry.values()] } } }],
+  dataTypeLookup,
+);
+
+export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
+  databaseTypes: {
     [PGVECTOR_NATIVE_TYPE]: {
       kind: 'codec-instance',
       codecId: VECTOR_CODEC_ID,
-      nativeType: PGVECTOR_NATIVE_TYPE,
       typeParams: {},
     },
   },
   models: {},
+  entities: [extension(PGVECTOR_EXTENSION_NAME, { namespace: unbound })],
 }));
 
 export default contract;

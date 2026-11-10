@@ -1,5 +1,6 @@
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import { diagnosticSource, type PslDiagnostic } from '../src/diagnostic';
 import type { ArgType, AttributeCtx, FieldAttributeCtx } from '../src/exports';
 import {
@@ -16,24 +17,25 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import { StringLiteralExprAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sources,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    context: binderContext(),
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttributeCtx } {
@@ -47,6 +49,7 @@ function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttribu
 function str(): ArgType<string, AttributeCtx> {
   return {
     kind: 'str',
+    value: undefined,
     label: 'string',
     parse: (arg, ctx): Result<string, readonly PslDiagnostic[]> => {
       if (arg instanceof StringLiteralExprAst) {
@@ -74,6 +77,7 @@ const FAILING_DIAGNOSTIC: PslDiagnostic = {
 function failing(): ArgType<never, AttributeCtx> {
   return {
     kind: 'rejecting',
+    message: FAILING_DIAGNOSTIC.message,
     label: 'failing',
     parse: (): Result<never, readonly PslDiagnostic[]> => notOk([FAILING_DIAGNOSTIC]),
   };
@@ -407,7 +411,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },
@@ -427,7 +431,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },

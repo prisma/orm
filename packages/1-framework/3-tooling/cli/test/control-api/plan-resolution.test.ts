@@ -16,6 +16,7 @@ import {
   looksLikeFullHash,
   type ResolveFromForPlanInput,
   type ResolveToForPlanInput,
+  resolveDefaultOriginHash,
   resolveFromForPlan,
   resolveToForPlan,
 } from '../../src/control-api/operations/plan-resolution';
@@ -150,18 +151,30 @@ describe('resolveFromForPlan', () => {
       expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from @empty');
       expect(result.failure.fix).toContain('--from staging');
       expect(result.failure.fix).toContain('ref set db');
-      expect(result.failure.meta?.['graphTipHash']).toBe(HASH_B);
+      expect(result.failure.meta).not.toHaveProperty('graphTipHash');
     }
   });
 
-  it('suggests the graph tip when no ref reaches the graph', async () => {
+  it('suggests a contract placeholder when no ref reaches the graph', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const space = makeSpace(bundles);
     const result = await resolveFromForPlan(baseInput({ space }));
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', `--from ${HASH_A}`);
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from <contract>');
+      expect(result.failure.fix).toContain('ref set db <contract>');
+    }
+  });
+
+  it('refuses plan-origin-unknown on a forked graph with no db ref', async () => {
+    const bundles = [makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')];
+    const space = makeSpace(bundles);
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from @empty');
     }
   });
 
@@ -244,7 +257,7 @@ describe('resolveFromForPlan', () => {
     }
   });
 
-  it('returns ref-provenance for db ref at a non-tip graph node', async () => {
+  it('flags a default db ref that already has outgoing edges', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1'), makePkg(HASH_A, HASH_B, 'm2')];
     const space = makeSpace(
       bundles,
@@ -255,7 +268,56 @@ describe('resolveFromForPlan', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
+      expect(result.value).toMatchObject({
+        kind: 'ref',
+        fromHash: HASH_A,
+        defaultOriginForks: { refName: 'db', refHash: HASH_A, outgoingTo: [HASH_B] },
+      });
+    }
+  });
+
+  it('does not flag a default db ref sitting on a fork tip', async () => {
+    const bundles = [makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')];
+    const space = makeSpace(
+      bundles,
+      { db: { hash: HASH_A, invariants: [] } },
+      vi.fn().mockResolvedValue(contractAtResult(HASH_A)),
+    );
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({
+        kind: 'ref',
+        fromHash: HASH_A,
+        fromContract: expect.anything(),
+      });
+    }
+  });
+
+  it('resolves an explicit ref on a forked graph to its node', async () => {
+    const bundles = [makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')];
+    const space = makeSpace(
+      bundles,
+      { topic: { hash: HASH_A, invariants: [] } },
+      vi.fn().mockResolvedValue(contractAtResult(HASH_A)),
+    );
+    const result = await resolveFromForPlan(baseInput({ space, optionsFrom: 'topic' }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
       expect(result.value).toMatchObject({ kind: 'ref', fromHash: HASH_A });
+    }
+  });
+
+  it('refuses forgot-the-flag on a forked graph for a full hash outside it', async () => {
+    const bundles = [makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')];
+    const space = makeSpace(bundles, { topic: { hash: HASH_A, invariants: [] } });
+    const result = await resolveFromForPlan(baseInput({ space, optionsFrom: HASH_ORPHAN }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from topic');
     }
   });
 
@@ -289,7 +351,8 @@ describe('resolveFromForPlan', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from');
+      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from <contract>');
+      expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });
 
@@ -569,18 +632,63 @@ describe('resolveToForPlan', () => {
   });
 });
 
+describe('resolveDefaultOriginHash', () => {
+  function originOf(space: AggregateContractSpace) {
+    const result = resolveDefaultOriginHash(space);
+    expect(result.ok).toBe(true);
+    return result.ok ? result.value : undefined;
+  }
+
+  it('is greenfield on an empty graph with no db ref', () => {
+    expect(originOf(makeSpace([]))).toEqual({ kind: 'greenfield', fromHash: null });
+  });
+
+  it('reports a db ref that needs a baseline on an empty graph', () => {
+    const space = makeSpace([], { db: { hash: HASH_A, invariants: [] } });
+    expect(originOf(space)).toEqual({
+      kind: 'ref-needs-baseline',
+      refName: 'db',
+      fromHash: HASH_A,
+    });
+  });
+
+  it('returns the db ref hash when it is a graph node', () => {
+    const space = makeSpace([makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')], {
+      db: { hash: HASH_B, invariants: [] },
+    });
+    expect(originOf(space)).toEqual({ kind: 'ref', refName: 'db', fromHash: HASH_B });
+  });
+
+  it('refuses plan-origin-unknown with migrations and no db ref', () => {
+    const result = resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'a')]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('MIGRATION.PLAN_ORIGIN_UNKNOWN');
+    }
+  });
+
+  it('refuses forgot-the-flag when the db ref is not a graph node', () => {
+    const space = makeSpace([makePkg(E, HASH_A, 'a')], {
+      db: { hash: HASH_ORPHAN, invariants: [] },
+    });
+    const result = resolveDefaultOriginHash(space);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
+    }
+  });
+});
+
 describe('assertFromIsGraphNode', () => {
   it('throws forgot-the-flag CliStructuredError for a non-graph-node hash', () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const graph = reconstructGraph(bundles);
     const refs = { tip: { hash: HASH_A, invariants: [] } };
 
-    expect(() => assertFromIsGraphNode(HASH_ORPHAN, graph, refs, HASH_A)).toThrow(
-      CliStructuredError,
-    );
+    expect(() => assertFromIsGraphNode(HASH_ORPHAN, graph, refs)).toThrow(CliStructuredError);
 
     try {
-      assertFromIsGraphNode(HASH_ORPHAN, graph, refs, HASH_A);
+      assertFromIsGraphNode(HASH_ORPHAN, graph, refs);
     } catch (error) {
       if (CliStructuredError.is(error)) {
         expectRefuse(error, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from tip');

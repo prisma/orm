@@ -6,145 +6,64 @@ alwaysApply: false
 
 # CLI Error Handling
 
-## Pattern: Structured Errors + Result Pattern + process.exit()
+Paths below are relative to `packages/1-framework/3-tooling/cli`.
 
-**CRITICAL**: CLI commands use structured errors (`CliStructuredError`), the Result pattern
-(`performAction`), and `process.exit()` for exit codes. Commands never throw (except unhandled
-failures, which fail fast).
+## A command settles a result; it does not exit
 
-The architecture:
+- An ORM command is a `defineOrmCommand({ help, args, needs, exitCodes, handler })` (`src/orm/define-command.ts`), which wraps `@prisma/cli-engine`'s `defineCommand`.
+- The handler returns `ok(...)` or `notOk(error)` from `@prisma/cli-engine/protocol`. It does not end the process: `src/bin.ts` sets `process.exitCode = await runOrmCli(process)`, and the engine picks the code from the settled result.
+- A `notOk` error settles at exit 2. A finding on a completed run, such as drift, is a success whose `ctx.present({ data, exitCode })` names a code the command declares in `exitCodes` (`src/orm/db/verify.ts`, `INIT_EXIT_CODES` in `src/orm/init.ts`).
 
-1. **Structured errors**: call sites throw `CliStructuredError` instances with full context (why,
-   fix, docsUrl, etc.) — so they can provide actionable messages and metadata.
-2. **Result pattern**: commands wrap logic in `performAction()`, which catches **only**
-   `CliStructuredError` — cleanly separating action logic from error handling.
-3. **Error handling**: `handleResult()` processes Results, formats output (JSON vs human), and
-   returns an exit code.
-4. **Exit**: commands call `process.exit(exitCode)` directly — never throw — so they control exit
-   codes.
-5. **Fail fast**: non-structured errors (bugs, unexpected failures) propagate with stack traces and
-   are caught by Commander.js's `exitOverride`.
+## Errors are structured, with dotted codes
+
+- Codes are `NAMESPACE.SUBCODE`: `CONFIG.FILE_NOT_FOUND`, `CONTRACT.DEFAULT_INVALID`, `CLI.UNEXPECTED`. See [ADR 239](../../docs/architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md).
+- Build a CLI error with a factory from `src/utils/cli-errors.ts`, which re-exports those of `@internal/errors/control` (`errorConfigFileNotFound`, `errorFileNotFound`, `errorUnexpected`, …). A command-specific factory lives with the command, such as `src/commands/init/errors.ts`.
+- `ActionableCliError` (`src/utils/cli-errors.ts`) carries typed `nextActions` as well as `fix` prose; only the CLI knows the invocation that fixes a failure.
+- `normalizeError` (`src/orm/normalize-error.ts`) is the one conversion to the engine's protocol shape. It turns `fix` prose into `user-choice` next actions. Pass every error a handler returns through it.
+
+## Catching an error
+
+A handler's `try` reports what it caught with `errorFromCaught(error, why, { connection })` (`src/control-api/operations/caught-errors.ts`):
+
+- a CLI error is reported as it is;
+- any other error with a structured code a library raised is reported as itself, whatever its namespace, such as `RUNTIME.TYPE_PARAMS_INVALID`;
+- an `InternalError` is thrown again;
+- anything else is `CLI.UNEXPECTED`, with `why(message)` and any non-structured `code` it carries, such as `ECONNREFUSED`, in `meta.code`.
+
+A command that holds a database connection passes its connection string as `connection`, so it is removed from every field of the reported error.
 
 ```typescript
-import { performAction } from '../utils/result';
-import { handleResult } from '../utils/result-handler';
-import { errorContractConfigMissing } from '../utils/cli-errors';
-
-export function createEmitCommand(): Command {
-  return new Command('emit').action(async (options) => {
-    const flags = parseGlobalFlags(options);
-    const result = await performAction(async () => {
-      const config = await loadConfig(options.config);
-      if (!config.contract) {
-        throw errorContractConfigMissing({ why: 'Config.contract is required for emit' });
-      }
-      return emitResult;
-    });
-    const exitCode = handleResult(result, flags, (emitResult) => {
-      console.log(formatEmitOutput(emitResult, flags));
-    });
-    process.exit(exitCode);
-  });
+} catch (error) {
+  return notOk(
+    normalizeError(
+      errorFromCaught(error, (message) => `Unexpected error during db schema: ${message}`, {
+        connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+      }),
+    ),
+  );
 }
 ```
 
-## Structured Error Factories
+Do not choose which library errors to report by namespace, and do not wrap a structured error as `CLI.UNEXPECTED`.
 
-Create structured errors with the factory functions from `utils/cli-errors.ts` — they give
-type-safe, consistently-structured errors with call-site context and no fragile string matching in
-the mapper.
+## Bugs surface as bugs
 
-```typescript
-import { errorConfigFileNotFound, errorContractConfigMissing, errorMarkerMissing } from '../utils/cli-errors';
-
-throw errorConfigFileNotFound(configPath);          // Config errors (PN-CLI-4xxx)
-throw errorContractConfigMissing({ why: '...' });
-throw errorMarkerMissing();                           // Runtime errors (PN-RTM-3xxx)
-```
-
-## PN code ranges inside the `CLI` domain
-
-Error codes are `PN-<domain>-<NNNN>`. Inside the `CLI` domain, sub-cluster by numeric prefix:
-
-- **`4xxx`** — generic / cross-command errors authored in
-  `packages/1-framework/1-core/errors/src/control.ts` (e.g. `4001` config-file-not-found, `4003`
-  contract-validation-failed, `4011` missing-extension-packs).
-- **`5xxx`** — command-specific errors authored alongside the command. Each command owns its own
-  `errors.ts` and reserves a numeric block at the top (e.g. `init` owns `5001`–`5009` in
-  `packages/1-framework/3-tooling/cli/src/commands/init/errors.ts`).
-
-Consumers branch on the full `PN-CLI-NNNN` form, so the prefix is purely an authoring guide that
-keeps the cross-command pool from colliding with command-local codes. When adding a new
-command-specific factory, pick the next free `5xxx` code and update the comment block at the top of
-the command's `errors.ts`.
-
-## Variant: explicit `runFoo` + `emitError` (no `performAction`)
-
-Some commands use structured-error-driven control flow that does **not** route through
-`performAction`/`handleResult`. The canonical example is `init`
-(`packages/1-framework/3-tooling/cli/src/commands/init/init.ts`):
-
-```typescript
-export async function runInit(baseDir: string, opts: { … }): Promise<number> {
-  let inputs;
-  try {
-    inputs = await resolveInitInputs(…);
-  } catch (error) {
-    if (CliStructuredError.is(error)) return emitError(ui, flags, error);
-    throw error;
-  }
-  // … phases that may also throw `CliStructuredError` …
-  return INIT_EXIT_OK;
-}
-
-function emitError(ui, flags, error: CliStructuredError): number {
-  // render envelope to stdout (--json) or stderr (human)
-  return exitCodeForError(error);
-}
-```
-
-`init` has multiple distinct fallible phases (input resolution, install, emit) that each map to a
-**different** command-specific exit code (`PRECONDITION = 2`, `USER_ABORTED = 3`,
-`INSTALL_FAILED = 4`, `EMIT_FAILED = 5`). `performAction`/`handleResult` collapse every error path
-to a single envelope-derived exit code, losing the per-phase signal CI/agents branch on. The
-explicit pipeline keeps the error → exit-code mapping centralised (one `switch` over `error.code`),
-shares structured envelope rendering with the rest of the CLI (`formatErrorJson`/`formatErrorOutput`),
-and lets each phase throw its own factory without an exit-code argument.
-
-**Default to `performAction`/`handleResult`.** Reach for the explicit `runFoo` + `emitError` +
-`exitCodeForError` variant only when the command needs **4+** distinct command-specific exit codes
-tied to specific failure modes — and document the mapping in `exit-codes.ts` next to the codes.
-
-## Helper behavior
-
-- **`performAction()`** catches only `CliStructuredError` (returns `err(error)`); it re-throws
-  everything else so bugs fail fast with stack traces.
-- **`handleResult()`** never throws — it returns an exit code for `process.exit()`, formatting
-  output per flags (JSON vs human) and handling success and error cases consistently. On error it
-  maps via `mapErrorToCliEnvelope()` and returns `envelope.exitCode ?? 1`.
-- **`mapErrorToCliEnvelope()`** extracts fields directly from a `CliStructuredError` (code with the
-  `PN-CLI-`/`PN-RTM-` prefix, domain, severity, summary, why, fix, where, meta, docsUrl, exitCode) —
-  no string matching — with a fallback for the rare non-structured error.
+An `InternalError` (`@internal/utils/internal-error`) means an invariant broke. `defineOrmCommand` and `errorFromCaught` both throw it again, so the engine reports it as `CLI.INTERNAL_ERROR` at exit 1. Never convert it into a command error.
 
 ## Testing
 
-Commands call `process.exit()` directly, so spy on it — no need to mock Commander.js:
+Run the command through the engine with `createOrmTestCli` (`test/helpers/orm-test-cli.ts`) and assert the exit code and the settled envelope:
 
 ```typescript
-it('exits with code 2 for config errors', async () => {
-  const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called');
-  });
-  await expect(
-    createEmitCommand().parseAsync(['node', 'cli.js', 'emit', '--config', invalidPath]),
-  ).rejects.toThrow('process.exit called');
-  expect(exitSpy).toHaveBeenCalledWith(2);
+const run = await createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config }).run(
+  ['db', 'schema', '--json'],
+  { cwd },
+);
+expect(run.exitCode).toBe(2);
+expect(run.json.at(-1)).toMatchObject({
+  kind: 'result',
+  envelope: { ok: false, error: { code: 'CLI.UNEXPECTED' } },
 });
 ```
 
-## Related Patterns
-
-- `docs/Testing Guide.md`: Testing best practices
-- `packages/framework/tooling/cli/src/utils/cli-errors.ts`: Structured error factories
-- `packages/framework/tooling/cli/src/utils/result.ts`: Result pattern utilities
-- `packages/framework/tooling/cli/src/utils/result-handler.ts`: Result processing
+`test/orm/db-schema.test.ts` is a complete example, including an `InternalError` at exit 1 and a connection string kept out of the settled error.

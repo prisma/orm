@@ -48,23 +48,23 @@ describe('API flow: order ownership (auth guard)', {
     });
 
     const order = await createOrder(ctx.db, {
-      userId: alice._id,
+      userId: alice.id,
       items: [ITEM_A],
       shippingAddress: '123 Main St',
       type: enums.OrderType.members.Delivery,
       statusHistory: [{ status: 'placed', timestamp: new Date() }],
     });
 
-    const orderId = order._id;
+    const orderId = order.id;
     const fetched = await getOrderWithUser(ctx.db, orderId);
     expect(fetched).not.toBeNull();
-    // `alice._id` comes back from `orm.users.create()` as the raw driver
+    // `alice.id` comes back from `orm.users.create()` as the raw driver
     // value (an ObjectId); `fetched!.userId` is decoded to a hex string by
     // the typed-read path. Compare via String(...) until create() decodes
     // its return value (separate change).
-    expect(fetched!.userId).toEqual(String(alice._id));
+    expect(fetched!.userId).toEqual(String(alice.id));
 
-    const bobOrders = await getUserOrders(ctx.db, bob._id);
+    const bobOrders = await getUserOrders(ctx.db, bob.id);
     expect(bobOrders).toHaveLength(0);
   });
 
@@ -81,7 +81,7 @@ describe('API flow: order ownership (auth guard)', {
     });
 
     await createOrder(ctx.db, {
-      userId: alice._id,
+      userId: alice.id,
       items: [ITEM_A],
       shippingAddress: '123 Main St',
       type: enums.OrderType.members.Delivery,
@@ -89,15 +89,15 @@ describe('API flow: order ownership (auth guard)', {
     });
 
     await createOrder(ctx.db, {
-      userId: bob._id,
+      userId: bob.id,
       items: [ITEM_B],
       shippingAddress: '456 Oak Ave',
       type: enums.OrderType.members.Pickup,
       statusHistory: [{ status: 'placed', timestamp: new Date() }],
     });
 
-    const aliceOrders = await getUserOrders(ctx.db, alice._id);
-    const bobOrders = await getUserOrders(ctx.db, bob._id);
+    const aliceOrders = await getUserOrders(ctx.db, alice.id);
+    const bobOrders = await getUserOrders(ctx.db, bob.id);
 
     expect(aliceOrders).toHaveLength(1);
     expect(bobOrders).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('API flow: order ownership (auth guard)', {
     });
 
     const order1 = await createOrder(ctx.db, {
-      userId: alice._id,
+      userId: alice.id,
       items: [ITEM_A],
       shippingAddress: '123 Main St',
       type: enums.OrderType.members.Delivery,
@@ -121,20 +121,20 @@ describe('API flow: order ownership (auth guard)', {
     });
 
     const order2 = await createOrder(ctx.db, {
-      userId: alice._id,
+      userId: alice.id,
       items: [ITEM_B],
       shippingAddress: '456 Oak Ave',
       type: enums.OrderType.members.Delivery,
       statusHistory: [{ status: 'placed', timestamp: new Date() }],
     });
 
-    await deleteOrder(ctx.db, order1._id);
+    await deleteOrder(ctx.db, order1.id);
 
-    const remaining = await getUserOrders(ctx.db, alice._id);
+    const remaining = await getUserOrders(ctx.db, alice.id);
     expect(remaining).toHaveLength(1);
-    // Same shape mismatch as above: `order2._id` comes from create() (raw
-    // ObjectId), the `remaining[0]!._id` from a typed read (decoded hex).
-    expect(remaining[0]!._id).toEqual(String(order2._id));
+    // Same shape mismatch as above: `order2.id` comes from create() (raw
+    // ObjectId), the `remaining[0]!.id` from a typed read (decoded hex).
+    expect(remaining[0]!.id).toEqual(String(order2.id));
   });
 });
 
@@ -149,7 +149,7 @@ describe('API flow: checkout (cart → order → clear)', {
       email: 'c@test.com',
       address: null,
     });
-    const userId = user._id;
+    const userId = user.id;
 
     await addToCart(ctx.db, userId, ITEM_A);
     await addToCart(ctx.db, userId, ITEM_B);
@@ -188,7 +188,7 @@ describe('API flow: checkout (cart → order → clear)', {
       email: 'd@test.com',
       address: null,
     });
-    const userId = user._id;
+    const userId = user.id;
 
     await addToCart(ctx.db, userId, ITEM_A);
     const cart = await getCartByUserId(ctx.db, userId);
@@ -210,7 +210,7 @@ describe('API flow: checkout (cart → order → clear)', {
 
     await clearCart(ctx.db, userId);
 
-    const fetchedOrder = await getOrderById(ctx.db, order._id);
+    const fetchedOrder = await getOrderById(ctx.db, order.id);
     expect(fetchedOrder).not.toBeNull();
     expect(fetchedOrder!.items).toHaveLength(1);
     expect(fetchedOrder!.items[0]).toMatchObject({ name: 'Shirt' });
@@ -221,45 +221,6 @@ describe('API flow: order status progression', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
   const ctx = setupTestDb('api_flows_order_status');
-
-  it('advances through placed → shipped → delivered', async () => {
-    const user = await ctx.db.orm.users.create({
-      name: 'Eve',
-      email: 'e@test.com',
-      address: null,
-    });
-
-    const order = await createOrder(ctx.db, {
-      userId: user._id,
-      items: [ITEM_A],
-      shippingAddress: '200 Cedar',
-      type: enums.OrderType.members.Delivery,
-      statusHistory: [{ status: 'placed', timestamp: new Date('2026-04-01T10:00:00Z') }],
-    });
-
-    await updateOrderStatus(ctx.db, order._id, {
-      status: 'shipped',
-      timestamp: new Date('2026-04-02T14:00:00Z'),
-    });
-
-    await updateOrderStatus(ctx.db, order._id, {
-      status: 'delivered',
-      timestamp: new Date('2026-04-04T09:00:00Z'),
-    });
-
-    const final = await getOrderById(ctx.db, order._id);
-    expect(final!.statusHistory).toHaveLength(3);
-    const statuses = final!.statusHistory.map((s) => s.status);
-    expect(statuses).toEqual(['placed', 'shipped', 'delivered']);
-  });
-
-  it('updateOrderStatus on non-existent order returns null', async () => {
-    const result = await updateOrderStatus(ctx.db, '000000000000000000000000', {
-      status: 'shipped',
-      timestamp: new Date(),
-    });
-    expect(result).toBeNull();
-  });
 
   it('order with user relation includes user data after status update', async () => {
     const user = await ctx.db.orm.users.create({
@@ -274,19 +235,19 @@ describe('API flow: order status progression', {
     });
 
     const order = await createOrder(ctx.db, {
-      userId: user._id,
+      userId: user.id,
       items: [ITEM_A],
       shippingAddress: '300 Maple',
       type: enums.OrderType.members.Delivery,
       statusHistory: [{ status: 'placed', timestamp: new Date() }],
     });
 
-    await updateOrderStatus(ctx.db, order._id, {
+    await updateOrderStatus(ctx.db, order.id, {
       status: 'shipped',
       timestamp: new Date(),
     });
 
-    const withUser = await getOrderWithUser(ctx.db, order._id);
+    const withUser = await getOrderWithUser(ctx.db, order.id);
     expect(withUser).not.toBeNull();
     expect(withUser!.user).toMatchObject({ name: 'Frank', email: 'f@test.com' });
     expect(withUser!.statusHistory).toHaveLength(2);
@@ -304,7 +265,7 @@ describe('API flow: duplicate cart add behavior', {
       email: 'g@test.com',
       address: null,
     });
-    const userId = user._id;
+    const userId = user.id;
 
     await addToCart(ctx.db, userId, ITEM_A);
     await addToCart(ctx.db, userId, ITEM_A);

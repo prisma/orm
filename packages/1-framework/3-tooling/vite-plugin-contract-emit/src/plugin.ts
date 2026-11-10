@@ -1,8 +1,8 @@
 import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import { loadConfigForSections } from '@internal/config-loader';
+import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
-import { extname, resolve } from 'pathe';
+import { dirname, extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
 import type { PrismaVitePluginOptions } from './types';
 
@@ -129,13 +129,16 @@ export function prismaVitePlugin(
       const result = await executeContractEmit({
         config: configResult.value,
         cwd: process.cwd(),
-        configPath: absoluteConfigPath,
+        projectDir: dirname(absoluteConfigPath),
         signal,
       });
 
       log(`Emitted contract (storageHash: ${result.storageHash.slice(0, 8)}...)`);
       log(`  → ${result.files.json}`, 'debug');
       log(`  → ${result.files.dts}`, 'debug');
+      for (const { spaceId, path } of result.pinnedFiles) {
+        log(`Wrote ${path} for extension pack space ${spaceId}`);
+      }
 
       if (server) {
         server.moduleGraph.onFileChange(result.files.json);
@@ -308,7 +311,7 @@ export function prismaVitePlugin(
       }
 
       const files = new Set<string>([absoluteConfigPath]);
-      const inputs = contract.source.inputs ?? [];
+      const inputs = await expandContractInputs(contract.source.inputs);
       for (const outputFile of resolveContractOutputFiles(contract.output)) {
         ignoredOutputFiles.add(outputFile);
       }

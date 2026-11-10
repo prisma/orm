@@ -4,14 +4,13 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 
 describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   const dbName = 'crud_lifecycle_test';
-  const mongoDb = mongo<Contract>({ contractJson });
+  const mongoDb = mongo({ contract });
   const orm = mongoDb.orm;
 
   beforeAll(async () => {
@@ -41,7 +40,7 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
       address: null,
     });
 
-    expect(alice._id).toBeDefined();
+    expect(alice.id).toBeDefined();
     expect(alice.name).toBe('Alice');
     expect(alice.email).toBe('alice@example.com');
 
@@ -162,7 +161,7 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
     });
 
     expect(result).toBeDefined();
-    expect(result._id).toBeDefined();
+    expect(result.id).toBeDefined();
 
     const allUsers = await orm.users.all();
     expect(allUsers).toHaveLength(1);

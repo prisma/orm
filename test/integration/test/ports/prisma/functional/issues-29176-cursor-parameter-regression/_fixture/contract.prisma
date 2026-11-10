@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/29176-cursor-parameter-regression
 // (postgres matrix entry; allProviders — we port postgres).
@@ -13,7 +15,7 @@
 //   }
 
 model ListResult {
-  id              String @id @default(cuid(2))
+  id              String @id @onCreate(cuid(2))
   connection_uuid String
   query_ref       String
   result_index    Int

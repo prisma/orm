@@ -1,24 +1,7 @@
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
-import type { ControlMutationDefaultEntry } from '@internal/framework-components/control';
+import { singleGeneratorBinding } from '@internal/framework-components/components';
 
-// `slugid()` takes no arguments; its signature makes arity a grammar concern, so any
-// `slugid(...)` call fails as invalid attribute syntax before the lower runs.
-const slugidEntry: ControlMutationDefaultEntry = {
-  signature: { documentation: 'Generates a slug identifier when a field value is omitted.' },
-  lower: () => ({
-    ok: true,
-    value: {
-      kind: 'execution',
-      generated: {
-        kind: 'generator',
-        id: 'slugid',
-      },
-    },
-  }),
-  usageSignatures: ['slugid()'],
-};
-
-const slugidDefaultsPack: SqlControlExtensionDescriptor<'postgres'> = {
+export const slugidDefaultsPack = {
   kind: 'extension',
   id: 'slugid-defaults',
   version: '0.0.1',
@@ -26,16 +9,22 @@ const slugidDefaultsPack: SqlControlExtensionDescriptor<'postgres'> = {
   targetId: 'postgres',
 
   controlMutationDefaults: {
-    defaultFunctionRegistry: new Map([['slugid', slugidEntry]]),
-    defaultLiteralTagRegistry: new Map(),
-    generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
+    defaultFunctionRegistry: new Map(),
+    generatorDescriptors: [{ id: 'slugid' }],
   },
+  generatorFunctions: [
+    {
+      name: 'slugid',
+      signature: { documentation: 'Generates a slug identifier when a field value is omitted.' },
+      bindings: [singleGeneratorBinding({ codecIds: ['pg/text@1'], generatorId: 'slugid' })],
+    },
+  ],
   create() {
     return {
       familyId: 'sql',
       targetId: 'postgres',
-    };
+    } as const;
   },
-};
+} as const satisfies SqlControlExtensionDescriptor<'postgres'>;
 
 export const extensions = [slugidDefaultsPack] as const;

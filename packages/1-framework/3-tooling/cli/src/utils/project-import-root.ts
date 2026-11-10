@@ -99,15 +99,15 @@ function declaredDependencies(manifest: Record<string, unknown>): string[] {
 }
 
 /**
- * The import root for the project that owns `configPath`, or for the working
- * directory when the config was discovered rather than named.
+ * The import root for the project at `projectDir`, or for the working
+ * directory when no project directory is known.
  *
  * A project with no manifest, or one that names no published package, is on
  * the internal root — which emits every specifier exactly as authored, so a
  * project that has not moved to published names is unaffected.
  */
-export function projectImportRoot(configPath?: string): ImportRoot {
-  const start = configPath === undefined ? resolve('.') : dirname(resolve(configPath));
+export function projectImportRoot(projectDir?: string): ImportRoot {
+  const start = projectDir === undefined ? resolve('.') : resolve(projectDir);
   const nearest = nearestManifest(start);
   if (nearest === undefined) return internalImportRoot;
   try {
@@ -123,7 +123,7 @@ export function projectImportRoot(configPath?: string): ImportRoot {
   }
 }
 
-/** The specifier resolver emission should use for the project owning `configPath`. */
-export function createProjectSpecifierResolver(configPath?: string): ImportSpecifierResolver {
-  return createImportSpecifierResolver(projectImportRoot(configPath));
+/** The specifier resolver emission should use for the project at `projectDir`. */
+export function createProjectSpecifierResolver(projectDir?: string): ImportSpecifierResolver {
+  return createImportSpecifierResolver(projectImportRoot(projectDir));
 }

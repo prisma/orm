@@ -343,69 +343,72 @@
               "columns": {
                 "author": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "content": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "lastPublishedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "lastReviewedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "optional": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "published": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_author_idx_d6f5b826"
+                  },
                   "source": {
                     "columns": [
                       "author"
@@ -443,45 +446,50 @@
               "columns": {
                 "bio": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "goesToBedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "goesToOfficeAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "notrequired": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "userId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -516,35 +524,35 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "lastLoginAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "wakesUpAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": true
                 }
               },
@@ -569,10 +577,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e6c000b56f75b52317469ab2499f9cbf13bbdce4893a02ebe8c75d3a7427258c"
+    "storageHash": "002bd23ef7a4d3e51d0ddfffe601ffb1d7b57401261948bb2c741ad66ebe21ce"
   },
   "execution": {
-    "executionHash": "832c8be2b6f1e714a8da794129891210f13de47a4a296e15323e6678bbee59fd",
+    "executionHash": "f8e41cca8a2d8fceba6784aec5ebd8d56907f11dfc43e58ab4ac6ec0bd37b818",
     "mutations": {
       "defaults": [
         {
@@ -581,9 +589,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "post"
+            "entry": "post",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -596,9 +604,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "updatedAt",
-            "namespace": "public",
-            "table": "post"
+            "entry": "post",
+            "field": "updatedAt",
+            "namespace": "public"
           }
         },
         {
@@ -607,9 +615,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "profile"
+            "entry": "profile",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -618,9 +626,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]
@@ -629,6 +637,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -639,7 +649,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -14,7 +15,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListResult } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ormConfigSection } from '../config-section';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
@@ -28,7 +29,18 @@ function listPresentations(inputs: {
 }): Presentations {
   const legend = inputs.legend;
   return {
-    stdout: () => [],
+    stdout: () =>
+      inputs.list.spaces.flatMap((space) =>
+        space.migrations.map((migration) =>
+          dataLine([
+            space.space,
+            migration.name,
+            migration.fromContract,
+            migration.toContract,
+            migration.operationCount,
+          ]),
+        ),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -73,7 +85,7 @@ export const migrationListCommand = defineOrmCommand({
   },
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
 
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
     if (!loaded.ok) {

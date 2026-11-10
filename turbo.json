@@ -64,12 +64,18 @@
         "@prisma/orm-family-mongo#build",
         "@prisma/orm-target-postgres#build",
         "@prisma/orm-target-sqlite#build",
+        "@prisma/orm-target-mysql#build",
+        "@prisma/orm-target-mariadb#build",
         "@prisma/orm-target-mongo#build"
       ],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     },
     "@prisma/orm-target-postgres#test": {
-      "dependsOn": ["build", "^build"],
+      "dependsOn": ["build", "^build", "@prisma/orm-postgres#build"],
+      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
+    },
+    "@prisma/orm-target-sqlite#test": {
+      "dependsOn": ["build", "^build", "@prisma/orm-sqlite#build"],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     }
   }

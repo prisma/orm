@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `0-legacy-ports/aggregations`
 // (packages/client/tests/functional/0-legacy-ports/aggregations, postgres matrix entry):
 //
@@ -21,7 +23,7 @@
 //   }
 
 model User {
-  id    String  @id @default(cuid(2))
+  id    String  @id @onCreate(cuid(2))
   email String  @unique
   age   Int
   name  String?
@@ -30,9 +32,9 @@ model User {
 }
 
 model Post {
-  id        String   @id @default(cuid(2))
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  id        String   @id @onCreate(cuid(2))
+  createdAt TimestamptzTemporal @default(now())
+  updatedAt TimestamptzTemporal @onCreate(now()) @onUpdate(now())
   published Boolean
   title     String
   content   String?

@@ -1,16 +1,23 @@
 import { rmSync, writeFileSync } from 'node:fs';
-import { notOk, ok } from '@internal/utils/result';
-import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
+import { asNamespaceId } from '@internal/contract/types';
+import { ok } from '@internal/utils/result';
+import type { StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
-import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ControlClient } from '../../src/control-api/types';
+import {
+  accessChangeQuestion,
+  dataLossQuestion,
+  type PlanAnswer,
+  type PlanQuestion,
+} from '../../src/control-api/statements/plan-questions';
+import type { ControlClient, DbUpdateOptions } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const mocks = {
   connect: vi.fn(),
+  readMarker: vi.fn(),
   dbUpdate: vi.fn(),
   renderContractDts: vi.fn(),
   close: vi.fn(),
@@ -21,6 +28,7 @@ const commands = createBinCommands(
   () =>
     ({
       connect: mocks.connect,
+      readMarker: mocks.readMarker,
       dbUpdate: mocks.dbUpdate,
       renderContractDts: mocks.renderContractDts,
       close: mocks.close,
@@ -39,13 +47,80 @@ const DESCRIPTOR = { familyId: 'sql', targetId: 'postgres', version: '1.0.0', cr
 const DEST_HASH = 'd'.repeat(64);
 const MARKER_HASH = 'a'.repeat(64);
 const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-const TOKEN = 'appdb';
-const PLAN_HASH = 'c'.repeat(64);
-const FRESH_PLAN_HASH = 'e'.repeat(64);
-const QUESTION = 'Apply 1 destructive operation(s) to appdb?';
 
 let projectDir: string;
 const projectDirs: string[] = [];
+
+/** The contracts the questions name subjects in: the origin has Legacy and User, the destination User. */
+const origin = {
+  domain: {
+    namespaces: {
+      app: {
+        models: {
+          Legacy: { fields: {}, relations: {}, storage: {} },
+          User: { fields: {}, relations: {}, storage: {} },
+        },
+      },
+    },
+  },
+  storage: { namespaces: {} },
+};
+const destination = {
+  domain: { namespaces: { app: { models: { User: { fields: {}, relations: {}, storage: {} } } } } },
+  storage: { namespaces: {} },
+};
+const contracts = {
+  origin,
+  destination,
+  statements: [],
+  canConvert: false,
+  originKnown: true,
+};
+
+/** One question of each kind, across two spaces: an extension's recorded drop is a storage subject. */
+function planQuestions(): readonly PlanQuestion[] {
+  return [
+    dataLossQuestion(
+      {
+        operationIndex: 0,
+        label: 'Drop table "audit_old"',
+        subject: { kind: 'storage', name: 'audit_old' },
+        loss: 'drop',
+      },
+      contracts,
+    ),
+    dataLossQuestion(
+      {
+        operationIndex: 1,
+        label: 'Drop table "Legacy"',
+        subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'Legacy' },
+        loss: 'drop',
+      },
+      contracts,
+    ),
+    accessChangeQuestion(
+      {
+        operationIndex: 2,
+        label: 'Disable row-level security on "User"',
+        subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' },
+        widens: true,
+      },
+      contracts,
+    ),
+  ];
+}
+
+/** The control API's shape: an apply asks its questions, then applies; a dry run asks nothing. */
+function askThenApply(questions: () => readonly PlanQuestion[]) {
+  return async (options: DbUpdateOptions) => {
+    if (options.mode === 'apply') {
+      answers.push(...(await options.answerQuestions(questions())));
+    }
+    return ok(applySuccess(options.mode));
+  };
+}
+
+const answers: (PlanAnswer | undefined)[] = [];
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-db-update-consent');
@@ -56,9 +131,11 @@ beforeEach(() => {
     JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
+  answers.splice(0);
   mocks.connect.mockReset().mockResolvedValue(undefined);
+  mocks.readMarker.mockReset().mockResolvedValue(null);
   mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.dbUpdate.mockReset().mockImplementation(refuseUntilConsented());
+  mocks.dbUpdate.mockReset().mockImplementation(askThenApply(planQuestions));
   mocks.renderContractDts
     .mockReset()
     .mockResolvedValue(ok({ contractDts: 'export type Contract = never;\n' }));
@@ -86,75 +163,24 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
   };
 }
 
-function applySuccess(): Record<string, unknown> {
+function applySuccess(mode: 'plan' | 'apply'): Record<string, unknown> {
   return {
-    mode: 'apply',
+    mode,
     destination: { storageHash: DEST_HASH },
     plan: {
-      operations: [{ id: 'op-2', label: 'drop relation legacy', operationClass: 'destructive' }],
+      operations: [{ id: 'op-2', label: 'Drop table "Legacy"', operationClass: 'destructive' }],
     },
-    execution: { operationsPlanned: 1, operationsExecuted: 1 },
+    ...(mode === 'apply' ? { execution: { operationsPlanned: 1, operationsExecuted: 1 } } : {}),
     marker: { storageHash: MARKER_HASH },
-    perSpace: [
-      {
-        spaceId: 'app',
-        kind: 'app',
-        operations: [{ id: 'op-2', label: 'drop relation legacy', operationClass: 'destructive' }],
-        marker: { storageHash: MARKER_HASH },
-      },
-    ],
+    appliedStatements: [],
+    dataLoss: [],
+    accessChanges: [],
     summary: 'Database updated',
   };
 }
 
-function destructiveRefusal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    code: 'DESTRUCTIVE_CHANGES',
-    summary: 'Planned 1 destructive operation(s) that require confirmation',
-    why: 'Destructive operations require confirmation',
-    conflicts: undefined,
-    meta: undefined,
-    destructiveChanges: {
-      destructiveOperations: [{ id: 'op-2', label: 'drop relation legacy' }],
-      databaseName: TOKEN,
-      planHash: PLAN_HASH,
-    },
-    ...overrides,
-  };
-}
-
-/** The refusal an apply carrying a stale consent comes back with. */
-function planMismatchFailure(): Record<string, unknown> {
-  return {
-    code: 'CONSENT_PLAN_MISMATCH',
-    summary: 'The plan changed between consent and apply',
-    why: 'The freshly computed plan is not the plan that was consented to',
-    conflicts: undefined,
-    meta: undefined,
-    consentPlanMismatch: { consentedPlanHash: PLAN_HASH, planHash: FRESH_PLAN_HASH },
-  };
-}
-
-function warnTexts(events: readonly EngineEvent[]): readonly string[] {
-  return events.flatMap((event) =>
-    event.kind === 'message' && event.severity === 'warn' ? [event.text] : [],
-  );
-}
-
-/**
- * The control API's own shape: an apply without consent refuses when the plan
- * carries destructive operations, and the call consenting to that exact plan
- * (by its hash) applies.
- */
-function refuseUntilConsented() {
-  return (options: { readonly consent?: { readonly planHash: string } }) =>
-    Promise.resolve(
-      options.consent?.planHash === PLAN_HASH ? ok(applySuccess()) : notOk(destructiveRefusal()),
-    );
-}
-
 function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function envelopeOf(json: readonly StreamEvent[]): unknown {
@@ -162,327 +188,306 @@ function envelopeOf(json: readonly StreamEvent[]): unknown {
   return terminal?.kind === 'result' ? terminal.envelope : undefined;
 }
 
-function applyCalls(): readonly { readonly consent?: { readonly planHash: string } }[] {
-  return mocks.dbUpdate.mock.calls.map((call) => call[0]);
-}
+describe('db update questions', () => {
+  it('refuses where nobody can answer, listing every question across spaces with its flags', async () => {
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
 
-describe('db update consent', () => {
-  describe('interactively', () => {
-    it('applies the destructive plan once the database name is typed', async () => {
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(envelopeOf(run.json)).toMatchObject({ ok: true, result: { mode: 'apply' } });
-      expect(mocks.connect).toHaveBeenCalledTimes(1);
-      expect(applyCalls().map((call) => call.consent)).toEqual([
-        undefined,
-        { planHash: PLAN_HASH },
-      ]);
-    });
-
-    /**
-     * Typed on stdin rather than scripted through `answers`: a scripted answer
-     * is returned without the prompt ever being rendered, so the question only
-     * reaches stderr when the run reads it from the stream.
-     */
-    it('names the database and every destructive operation in the question', async () => {
-      const run = await harness().run(['db', 'update'], {
-        cwd: projectDir,
-        isTty: { stdin: true, stdout: true, stderr: true },
-        stdin: `${TOKEN}\n`,
-      });
-
-      const rendered = stripAnsi(run.stderr);
-      expect(rendered).toContain(QUESTION);
-      expect(rendered).toContain('drop relation legacy');
-    });
-
-    it('shows the planner`s warnings before it asks', async () => {
-      const warning = 'Column user.legacy is dropped without a backfill';
-      mocks.dbUpdate
-        .mockReset()
-        .mockImplementation((options: { consent?: { planHash: string } }) =>
-          Promise.resolve(
-            options.consent?.planHash === PLAN_HASH
-              ? ok(applySuccess())
-              : notOk(destructiveRefusal({ warnings: [{ summary: warning }] })),
-          ),
-        );
-
-      const run = await harness().run(['db', 'update'], {
-        cwd: projectDir,
-        isTty: { stdin: true, stdout: true, stderr: true },
-        stdin: `${TOKEN}\n`,
-      });
-
-      const rendered = stripAnsi(run.stderr);
-      expect(warnTexts(run.events)).toContain(warning);
-      expect(rendered).toContain(QUESTION);
-      expect(rendered.indexOf(warning)).toBeLessThan(rendered.indexOf(QUESTION));
-    });
-
-    it('applies nothing when the answer is not the database name', async () => {
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: ['no'],
-      });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.PROMPT_INVALID' },
-      });
-      expect(applyCalls()).toHaveLength(1);
-    });
-
-    it('exits 3 when the prompt is cancelled', async () => {
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        stdin: '',
-      });
-
-      expect(run.exitCode).toBe(3);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.PROMPT_CANCELLED' },
-      });
-      expect(applyCalls()).toHaveLength(1);
-    });
+    expect(run.exitCode).toBe(2);
+    const envelope = envelopeOf(run.json) as {
+      readonly error: { readonly code: string; readonly nextActions: unknown };
+    };
+    expect(envelope.error.code).toBe('CLI.CONSENT_REQUIRED');
+    const actions = JSON.stringify(envelope.error.nextActions);
+    for (const flag of [
+      '--delete audit_old',
+      '--delete Legacy',
+      "--rename 'Legacy:<new name>'",
+      '--allow User',
+    ]) {
+      expect(actions).toContain(flag);
+    }
+    expect(actions).not.toContain('--rename audit_old');
+    expect(actions).not.toContain('--delete User');
   });
 
-  describe('non-interactively', () => {
-    it('refuses without --confirm, naming the token to pass', async () => {
-      const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_REQUIRED', meta: { consentToken: TOKEN } },
-      });
-      expect(applyCalls()).toHaveLength(1);
-    });
-
-    it('applies when --confirm carries the database name', async () => {
-      const run = await harness().run(['db', 'update', '--confirm', TOKEN, '--json'], {
-        cwd: projectDir,
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(envelopeOf(run.json)).toMatchObject({ ok: true, result: { mode: 'apply' } });
-      expect(applyCalls().map((call) => call.consent)).toEqual([
-        undefined,
-        { planHash: PLAN_HASH },
-      ]);
-    });
-
-    it('refuses when --confirm carries another name', async () => {
-      const run = await harness().run(['db', 'update', '--confirm', 'otherdb', '--json'], {
-        cwd: projectDir,
-      });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_REQUIRED' },
-      });
-      expect(applyCalls()).toHaveLength(1);
-    });
-  });
-
-  describe('--yes', () => {
-    it('does not accept data loss on its own', async () => {
-      const run = await harness().run(['db', 'update', '--yes', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-      });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_REQUIRED' },
-      });
-      expect(applyCalls()).toHaveLength(1);
-    });
-
-    it('does not stop --confirm from granting', async () => {
-      const run = await harness().run(['db', 'update', '--yes', '--confirm', TOKEN, '--json'], {
-        cwd: projectDir,
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(applyCalls().map((call) => call.consent)).toEqual([
-        undefined,
-        { planHash: PLAN_HASH },
-      ]);
-    });
-  });
-
-  describe('the consent token', () => {
-    it('asks with the database name the refusal carries', async () => {
-      mocks.dbUpdate.mockReset().mockResolvedValue(
-        notOk(
-          destructiveRefusal({
-            destructiveChanges: {
-              destructiveOperations: [{ id: 'op-2', label: 'drop relation legacy' }],
-              databaseName: 'otherdb',
-              planHash: PLAN_HASH,
-            },
-          }),
+  it('gives a value the subject it equals when another subject is its prefix', async () => {
+    mocks.dbUpdate.mockImplementation(
+      askThenApply(() => [
+        dataLossQuestion(
+          {
+            operationIndex: 0,
+            label: 'Drop table "Legacy"',
+            subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'Legacy' },
+            loss: 'drop',
+          },
+          contracts,
         ),
-      );
-
-      const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
-
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { meta: { consentToken: 'otherdb' } },
-      });
-    });
-  });
-
-  describe('when the question would be unanswerable', () => {
-    it('refuses rather than ask for a blank token', async () => {
-      mocks.dbUpdate.mockReset().mockResolvedValue(
-        notOk(
-          destructiveRefusal({
-            destructiveChanges: {
-              destructiveOperations: [{ id: 'op-2', label: 'drop relation legacy' }],
-              databaseName: undefined,
-              planHash: PLAN_HASH,
-            },
-          }),
+        dataLossQuestion(
+          {
+            operationIndex: 1,
+            label: 'Drop table "Legacy:x"',
+            subject: { kind: 'storage', name: 'Legacy:x' },
+            loss: 'drop',
+          },
+          contracts,
         ),
-      );
+      ]),
+    );
 
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
+    const run = await harness().run(
+      ['db', 'update', '--delete', 'Legacy:x', '--delete', 'Legacy', '--json'],
+      { cwd: projectDir },
+    );
 
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_TOKEN_UNRESOLVED' },
-      });
-      expect(applyCalls()).toHaveLength(1);
+    expect(run.exitCode).toBe(0);
+    expect(answers).toEqual([
+      { verb: 'delete', text: 'Legacy' },
+      { verb: 'delete', text: 'Legacy:x' },
+    ]);
+  });
+
+  it('applies once every question is answered with flags', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--delete', 'audit_old', '--delete', 'Legacy', '--allow', 'User', '--json'],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(answers).toEqual([
+      { verb: 'delete', text: 'audit_old' },
+      { verb: 'delete', text: 'Legacy' },
+      { verb: 'allow', text: 'User' },
+    ]);
+  });
+
+  it('refuses an apply that widens access without --allow', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--delete', 'audit_old', '--delete', 'Legacy', '--json'],
+      { cwd: projectDir },
+    );
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'CLI.CONSENT_REQUIRED',
+        meta: { unanswered: [{ subject: 'User', verbs: ['allow'] }] },
+      },
+    });
+  });
+
+  it('takes typed answers', async () => {
+    const run = await harness().run(['db', 'update', '--json'], {
+      cwd: projectDir,
+      isTty: { stdin: true },
+      answers: ['delete', 'delete', 'allow'],
     });
 
-    it('refuses rather than ask about operations the refusal did not name', async () => {
-      mocks.dbUpdate.mockReset().mockResolvedValue(
-        notOk(
-          destructiveRefusal({
-            destructiveChanges: {
-              destructiveOperations: [],
-              databaseName: TOKEN,
-              planHash: PLAN_HASH,
-            },
+    expect(run.exitCode).toBe(0);
+    expect(answers.map((answer) => answer?.verb)).toEqual(['delete', 'delete', 'allow']);
+  });
+
+  it('does not take --confirm or --yes as an answer', async () => {
+    const confirmed = await harness().run(['db', 'update', '--confirm', 'appdb', '--json'], {
+      cwd: projectDir,
+    });
+    const yes = await harness().run(['db', 'update', '--yes', '--json'], {
+      cwd: projectDir,
+      isTty: { stdin: true },
+    });
+
+    expect([envelopeOf(confirmed.json), envelopeOf(yes.json)]).toMatchObject([
+      { error: { code: 'CLI.CONSENT_REQUIRED' } },
+      { error: { code: 'CLI.CONSENT_REQUIRED' } },
+    ]);
+  });
+
+  it('refuses a --delete of what a --rename of the same run renames, before it plans anything', async () => {
+    const run = await harness().run(
+      [
+        'db',
+        'update',
+        '--rename',
+        'Status.ARCHIVED:Status.RETIRED',
+        '--delete',
+        'Status.ARCHIVED',
+        '--json',
+      ],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).not.toBe(0);
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_INVALID',
+        why: '--delete Status.ARCHIVED names what --rename Status.ARCHIVED:Status.RETIRED renames in the same run, so it cannot also be deleted.',
+      },
+    });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
+    mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    const run = await harness().run(
+      [
+        'db',
+        'update',
+        '--rename',
+        'User.years:User.age',
+        '--convert',
+        'User.age',
+        '--allow',
+        'User',
+        '--backfill',
+        'User.email',
+        '--json',
+      ],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).not.toBe(0);
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        nextActions: [
+          expect.objectContaining({
+            command:
+              'prisma-test migration plan --rename User.years:User.age --convert User.age --backfill User.email',
           }),
-        ),
-      );
-
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.CONSENT_OPERATIONS_MISSING' },
-      });
-      expect(applyCalls()).toHaveLength(1);
+          expect.anything(),
+        ],
+        meta: { statements: [{ verb: 'backfill', text: 'User.email' }] },
+      },
     });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
   });
 
-  describe('when the applied plan is not the plan consented to', () => {
-    it('surfaces the control API`s typed mismatch refusal as an error', async () => {
-      mocks.dbUpdate
-        .mockReset()
-        .mockImplementation((options: { consent?: { planHash: string } }) =>
-          Promise.resolve(
-            options.consent === undefined
-              ? notOk(destructiveRefusal())
-              : notOk(planMismatchFailure()),
-          ),
-        );
-
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
-
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'MIGRATION.CONSENT_PLAN_MISMATCH' },
-      });
-      expect(applyCalls().map((call) => call.consent)).toEqual([
-        undefined,
-        { planHash: PLAN_HASH },
-      ]);
+  it('refuses --convert and --backfill within a few seconds when the database never answers', async () => {
+    mocks.connect.mockReturnValueOnce(new Promise(() => {}));
+    const started = Date.now();
+    const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
+      cwd: projectDir,
     });
 
-    it('carries the consented plan through the re-run untouched', async () => {
-      const run = await harness().run(['db', 'update', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(warnTexts(run.events)).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        nextActions: [
+          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
+          expect.anything(),
+        ],
+      },
     });
+  }, 10_000);
+
+  it('refuses --convert and --backfill when the database cannot be reached, opening only an existing database', async () => {
+    mocks.connect.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:1'));
+    const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        nextActions: [
+          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
+          expect.anything(),
+        ],
+      },
+    });
+    expect(mocks.connect).toHaveBeenCalledWith(expect.anything(), {
+      existingDatabaseOnly: true,
+      connectTimeoutMs: 3000,
+    });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
   });
 
-  describe('--dry-run', () => {
-    it('never asks, even when the plan call comes back destructive', async () => {
-      const run = await harness().run(['db', 'update', '--dry-run', '--json'], {
-        cwd: projectDir,
-        isTty: { stdin: true },
-        answers: [TOKEN],
-      });
+  it('refuses a --delete no question asks about', async () => {
+    mocks.dbUpdate.mockReset().mockImplementation(askThenApply(() => []));
 
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run.json)).toMatchObject({
-        ok: false,
-        error: { code: 'MIGRATION.DESTRUCTIVE_CHANGES' },
-      });
-      expect(mocks.dbUpdate).toHaveBeenCalledWith(expect.objectContaining({ mode: 'plan' }));
-      expect(applyCalls()).toHaveLength(1);
+    const run = await harness().run(['db', 'update', '--delete', 'Nope', '--json'], {
+      cwd: projectDir,
     });
+
+    expect(envelopeOf(run.json)).toMatchObject({ error: { code: 'CLI.CONSENT_UNUSED' } });
   });
 
-  describe('when nothing destructive is planned', () => {
-    beforeEach(() => {
-      mocks.dbUpdate.mockReset().mockResolvedValue(ok(applySuccess()));
+  it('hands a --convert with one or two names to the control API, which tells a variant from a field', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--dry-run', '--convert', 'Bug', '--convert', 'app.Epic', '--json'],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statements: [
+          { verb: 'convert', text: 'Bug' },
+          { verb: 'convert', text: 'app.Epic' },
+        ],
+      }),
+    );
+  });
+
+  it('refuses a --convert with three names before it plans anything, since it names a field', async () => {
+    const run = await harness().run(['db', 'update', '--convert', 'app.User.age', '--json'], {
+      cwd: projectDir,
     });
 
-    it('applies without asking, even non-interactively', async () => {
-      const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
-
-      expect(run.exitCode).toBe(0);
-      expect(applyCalls()).toHaveLength(1);
-      expect(applyCalls()[0]?.consent).toBeUndefined();
-      expect(run.stderr).not.toContain('confirm');
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        meta: { statements: [{ verb: 'convert', text: 'app.User.age' }] },
+      },
     });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
 
-    it('plans without asking under --dry-run', async () => {
-      const run = await harness().run(['db', 'update', '--dry-run', '--json'], {
-        cwd: projectDir,
-      });
+  it('asks nothing on a dry run, and hands it the delete and allow flags to check', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--dry-run', '--delete', 'Legacy', '--allow', 'User', '--json'],
+      { cwd: projectDir },
+    );
 
-      expect(run.exitCode).toBe(0);
-      expect(mocks.dbUpdate).toHaveBeenCalledWith(expect.objectContaining({ mode: 'plan' }));
-      expect(applyCalls()).toHaveLength(1);
+    expect(run.exitCode).toBe(0);
+    expect(answers).toEqual([]);
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'plan',
+        statements: [
+          { verb: 'delete', text: 'Legacy' },
+          { verb: 'allow', text: 'User' },
+        ],
+      }),
+    );
+  });
+
+  it('keeps every statement in the retry command when no connection is configured', async () => {
+    const run = await harness({ ...ormConfig(), db: undefined }).run(
+      [
+        'db',
+        'update',
+        '--rename',
+        'Profile:User',
+        '--delete',
+        'Legacy',
+        '--allow',
+        'User',
+        '--json',
+      ],
+      { cwd: projectDir },
+    );
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'CONFIG.DB_CONNECTION_REQUIRED',
+        nextActions: [
+          expect.objectContaining({
+            label: expect.stringContaining(
+              'prisma-test db update --rename Profile:User --delete Legacy --allow User --db $DATABASE_URL',
+            ),
+          }),
+        ],
+      },
     });
   });
 });

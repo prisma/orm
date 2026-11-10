@@ -1,0 +1,200 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Composite": {
+            "storage": {
+              "table": "Composite",
+              "namespaceId": "public",
+              "fields": {
+                "a": {
+                  "column": "a"
+                },
+                "b": {
+                  "column": "b_col"
+                }
+              }
+            },
+            "fields": {
+              "a": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "b": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Single": {
+            "storage": {
+              "table": "Single",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "pk"
+                },
+                "code": {
+                  "column": "code"
+                },
+                "x": {
+                  "column": "x"
+                },
+                "y": {
+                  "column": "y"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "code": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "x": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "y": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Composite": {
+      "namespace": "public",
+      "model": "Composite"
+    },
+    "Single": {
+      "namespace": "public",
+      "model": "Single"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "994c376740cc6d08419ebb1c7423af34fe0938a118d898bb14bbaacb4e37a436",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Composite": {
+              "columns": {
+                "a": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "b_col": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Composite_b_col_a_key",
+                  "unique": true,
+                  "columns": ["b_col", "a"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["a", "b_col"]
+              }
+            },
+            "Single": {
+              "columns": {
+                "pk": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "code": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "x": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "y": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Single_x_y_key",
+                  "unique": true,
+                  "columns": ["x", "y"]
+                },
+                {
+                  "name": "Single_code_key",
+                  "unique": true,
+                  "columns": ["code"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["pk"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

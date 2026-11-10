@@ -66,6 +66,35 @@ export function withoutDefaultInInsert(contract: TestContract = baseContract): T
   return deserializeTestContract(raw);
 }
 
+export function withoutCapabilityKeys(
+  contract: TestContract,
+  keys: readonly string[],
+): TestContract {
+  const raw = JSON.parse(JSON.stringify(contract)) as Record<string, unknown>;
+  const capabilities = raw['capabilities'] as Record<string, Record<string, unknown>> | undefined;
+  for (const group of Object.values(capabilities ?? {})) {
+    for (const key of keys) delete group[key];
+  }
+  return deserializeTestContract(raw);
+}
+
+export function createReturningCollectionWithoutCapabilities<ModelName extends TestModelName>(
+  modelName: ModelName,
+  keys: readonly string[],
+): {
+  collection: Collection<TestContract, ModelName>;
+  runtime: MockRuntime;
+} {
+  const runtime = createMockRuntime();
+  const context = contextForContract(
+    withReturningCapability(withoutCapabilityKeys(baseContract, keys)),
+  );
+  const collection = new Collection({ runtime, context }, modelName, {
+    namespaceId: soleDomainNamespaceId(context.contract.domain),
+  });
+  return { collection, runtime };
+}
+
 export function createReturningCollectionWithoutDefaultInInsert<ModelName extends TestModelName>(
   modelName: ModelName,
 ): {

@@ -1,0 +1,368 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "managerId": {
+                  "column": "managerId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "managerId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorId": {
+                  "column": "authorId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Profile": {
+            "storage": {
+              "table": "Profile",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "userId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Tag": {
+            "storage": {
+              "table": "Tag",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    },
+    "Profile": {
+      "namespace": "public",
+      "model": "Profile"
+    },
+    "Tag": {
+      "namespace": "public",
+      "model": "Tag"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "538f8a67cde7ccca9791d96b12e8fe0ccbca04d844b3f2e2091824be228cda1c",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "managerId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["managerId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "authorId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Profile": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "userId": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Profile_userId_key",
+                  "unique": true,
+                  "columns": ["userId"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Profile",
+                    "columns": ["userId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "Profile_userId_key"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Tag": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_TagToUser": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_TagToUser_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_TagToUser",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Tag",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_TagToUser",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_TagToUser_B_index"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"],
+                "name": "_TagToUser_AB_pkey"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

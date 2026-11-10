@@ -1,1 +1,3 @@
+// use prisma-8
+
 model User { id Int @id name String? friendOf User? @relation("Userfriend") friend User? @relation("Userfriend", fields: [friendId], references: [id], onDelete: NoAction, onUpdate: NoAction) friendId Int? @unique @@map("user") }

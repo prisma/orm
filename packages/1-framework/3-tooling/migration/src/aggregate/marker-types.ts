@@ -1,3 +1,5 @@
+import { EMPTY_CONTRACT_HASH } from '../constants';
+
 /**
  * Structural shape the aggregate planner / verifier accept for marker
  * rows. Mirrors `family.readAllMarkers(...)` outputs across SQL and
@@ -13,4 +15,11 @@ export interface ContractMarkerRecordLike {
   readonly storageHash: string;
   readonly invariants: readonly string[];
   readonly profileHash?: string;
+}
+
+/** The contract hash a database is at: its marker's storage hash, or the empty contract when it has no marker. */
+export function contractHashAtMarker(
+  marker: Pick<ContractMarkerRecordLike, 'storageHash'> | null | undefined,
+): string {
+  return marker?.storageHash ?? EMPTY_CONTRACT_HASH;
 }

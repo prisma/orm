@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import type { PrismaNextConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import { determineAgent } from '@vercel/detect-agent';
 import { join } from 'pathe';
@@ -30,7 +29,7 @@ const EMPTY_PROJECT_CONFIG: ProjectConfigFields = {
  * shape, etc. Telemetry is non-blocking and best-effort; an empty
  * result is the only downside of an unloadable or invalid config.
  *
- * Both `c12` and `@internal/config/config-validation` are imported
+ * Both `c12` and the config loader are imported
  * lazily so the detached sender's cold-start cost is paid only when
  * telemetry actually fires, not on every fork even when gates
  * short-circuit before reaching this code path.
@@ -69,14 +68,12 @@ export async function loadProjectConfig(projectRoot: string): Promise<ProjectCon
       Record<string, unknown>,
       'a non-null non-array object indexes by string keys'
     >(orm);
-    const validation = await import('@internal/config/config-validation');
-    if (validation.collectConfigIssues(config).length > 0) {
+    const { validateOrmSection } = await import('@internal/config-loader');
+    const validation = validateOrmSection(config, { files: [], keys: {} });
+    if (!validation.ok) {
       return EMPTY_PROJECT_CONFIG;
     }
-    const validConfig = blindCast<
-      PrismaNextConfig,
-      'collectConfigIssues returned no issues, so the validated sections are present'
-    >(config);
+    const validConfig = validation.value;
     return {
       databaseTarget: validConfig.target.targetId,
       extensions: (validConfig.extensions ?? []).map((pack) => pack.id),

@@ -3,11 +3,11 @@
  *
  * Spec § Case 3: method-level generic over `S extends Type<unknown>`. The schema's TypeScript-level inferred type `S['infer']` is only available at the column-author site (where the user passes their typed schema), not at the descriptor's factory site (where only the serialized IR is available). This drives the shape:
  *
- * 1. {@link ArktypeJsonCodecClass} extends {@link CodecImpl} and is generic over `TInferred` — the application-level JS type the schema validates to. The constructor takes both the descriptor (for `id` proxy) and the rehydrated arktype `Type` (closure-captured so encode/decode/encodeJson/decodeJson can validate through it). 2. {@link ArktypeJsonDescriptor} extends {@link CodecDescriptorImpl} over {@link
+ * 1. {@link ArktypeJsonCodecClass} extends {@link CodecImpl} and is generic over `TInferred` — the application-level JS type the schema validates to. The constructor takes both the descriptor (for `id` proxy) and the rehydrated arktype `Type` (closure-captured so the wire and value methods can validate through it). 2. {@link ArktypeJsonDescriptor} extends {@link CodecDescriptorImpl} over {@link
  * ArktypeJsonTypeParams}. Factory rehydrates the schema from `params.jsonIr` and returns `(ctx) => new ArktypeJsonCodecClass<unknown>(this, schema)` — `S` is erased to `unknown` because the descriptor only sees IR. The runtime path through `descriptor.factory(params)` always exists (e.g. for `family.deserializeContract` re-materialization); it just loses the typed inferred shape. 3. {@link arktypeJsonColumn} is the column-author
  * surface with the method-level generic over `S extends Type<unknown>`. It bypasses `descriptor.factory` because `S` is only available here, instead constructing the typed codec directly so `S['infer']` flows through `codecFactory`'s return into the column site's resolved output type. Eager serialization at this call site captures `expression` (for the emit-path renderer) and `jsonIr` (for runtime rehydration).
  *
- * `satisfies ColumnHelperFor<ArktypeJsonDescriptor>` (coarse) is applied — the typeParams shape is verified. `ColumnHelperForStrict` is intentionally skipped: the descriptor's factory return is `ArktypeJsonCodecClass<unknown>` while the helper produces `ArktypeJsonCodecClass<S['infer']>`, and `Codec`'s `TInput` is invariant (used contravariantly in `encode`, covariantly in `decode`/`encodeJson`/`decodeJson`). Strict
+ * `satisfies ColumnHelperFor<ArktypeJsonDescriptor>` (coarse) is applied — the typeParams shape is verified. `ColumnHelperForStrict` is intentionally skipped: the descriptor's factory return is `ArktypeJsonCodecClass<unknown>` while the helper produces `ArktypeJsonCodecClass<S['infer']>`, and `Codec`'s `TInput` is invariant (used contravariantly in `toWire`, covariantly in `fromWire` and `fromDataTypeValue`). Strict
  * assignment fails by design; the explicit `expectTypeOf` tests in `test/arktype-json-codec.types.test-d.ts` cover the literal-preservation property the strict variant would otherwise enforce.
  */
 
@@ -19,13 +19,15 @@ import {
   type ColumnHelperFor,
   type ColumnSpec,
   column,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
-import { isRuntimeError, runtimeError } from '@internal/framework-components/runtime';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { runtimeError } from '@internal/framework-components/runtime';
+import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
+import { pgJsonb, pgJsonbEnumRefusal } from '@internal/target-postgres/data-types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { ArkErrors, ark, type Type, type } from 'arktype';
 
@@ -105,44 +107,11 @@ function serializeJson<TInferred>(value: TInferred): JsonValue {
   return JSON.parse(serializeWire(value)) as JsonValue;
 }
 
-function parseJsonText(wire: string): JsonValue | undefined {
-  try {
-    return JSON.parse(wire) as JsonValue;
-  } catch {
-    return undefined;
-  }
-}
-
 function decodeWireValue<TInferred>(
   schema: ArktypeSchemaLike,
   wire: string | JsonValue,
 ): TInferred {
-  if (typeof wire !== 'string') return validateSchema<TInferred>(schema, wire);
-
-  // Try the wire as the literal value first. Under `pg` + `jsonb` (the
-  // documented native type), wire arrives already-parsed: a JSON object
-  // surfaces as a JS object, a JSON string surfaces as a JS string. For
-  // string columns that means the wire IS the user's value — including
-  // strings whose literal characters happen to start and end with `"`.
-  // A `"…"`-shape unwrap heuristic would silently truncate them (the
-  // 7-char `"hello"` would decode to the 5-char `hello`).
-  //
-  // Fall back to JSON.parse only when schema validation rejects the raw
-  // wire: that path covers object/array shapes received as raw JSON
-  // text (legacy `json` text-OID adapters, or any code path that hands
-  // us un-pre-parsed JSON).
-  try {
-    return validateSchema<TInferred>(schema, wire);
-  } catch (error) {
-    if (!isRuntimeError(error) || error.code !== 'RUNTIME.JSON_SCHEMA_VALIDATION_FAILED') {
-      throw error;
-    }
-    const parsed = parseJsonText(wire);
-    if (parsed === undefined) {
-      throw error;
-    }
-    return validateSchema<TInferred>(schema, parsed);
-  }
+  return validateSchema<TInferred>(schema, typeof wire === 'string' ? JSON.parse(wire) : wire);
 }
 
 function rehydrateSchema(jsonIr: object): ArktypeSchemaLike {
@@ -184,23 +153,23 @@ export class ArktypeJsonCodecClass<TInferred> extends CodecImpl<
     descriptor: ArktypeJsonDescriptor,
     private readonly schema: ArktypeSchemaLike,
   ) {
-    super(descriptor);
+    super(descriptor, pgJsonb);
   }
 
-  async encode(value: TInferred, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: TInferred, _ctx: CodecCallContext): Promise<string> {
     return serializeWire(value);
   }
 
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<TInferred> {
+  async fromWire(wire: string | JsonValue, _ctx: CodecCallContext): Promise<TInferred> {
     return decodeWireValue<TInferred>(this.schema, wire);
   }
 
-  encodeJson(value: TInferred): JsonValue {
-    return serializeJson(value);
+  fromDataTypeValue(value: DataTypeValue): TInferred {
+    return validateSchema<TInferred>(this.schema, value.value);
   }
 
-  decodeJson(json: JsonValue): TInferred {
-    return validateSchema<TInferred>(this.schema, json);
+  toDataTypeValue(input: TInferred): DataTypeValue {
+    return this.dataTypeValueOf(serializeJson(input));
   }
 }
 
@@ -210,15 +179,15 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
-  protected override nativeType(): string {
-    return ARKTYPE_JSON_NATIVE_TYPE;
-  }
+  override readonly jsonType = 'any' as const;
+  /** The document's JSON text, which `fromWire` parses as it parses a row; a document that is a string would otherwise reach it unquoted. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return CastExpr.as(expression, 'text');
   }
+  override readonly dataType = pgJsonb.id;
   override readonly codecId = ARKTYPE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = [ARKTYPE_JSON_NATIVE_TYPE] as const;
+  override readonly enumRefusal = pgJsonbEnumRefusal;
   override readonly paramsSchema: StandardSchemaV1<ArktypeJsonTypeParams> = arktypeJsonParamsSchema;
   override renderOutputType(params: ArktypeJsonTypeParams): string {
     return renderArktypeJsonOutputType(params);
@@ -278,12 +247,11 @@ export function arktypeJsonColumn<S extends Type<unknown>>(
       new ArktypeJsonCodecClass<S['infer']>(arktypeJsonDescriptor, schema),
     arktypeJsonDescriptor.codecId,
     params,
-    ARKTYPE_JSON_NATIVE_TYPE,
   );
 }
 
 arktypeJsonColumn satisfies ColumnHelperFor<ArktypeJsonDescriptor>;
-// Note: `ColumnHelperForStrict` is intentionally not applied — `Codec` is invariant in `TInput` (encode contravariant, decode covariant), so `ArktypeJsonCodecClass<S['infer']>` is not assignable to `ArktypeJsonCodecClass<unknown>` (the descriptor.factory return). `expectTypeOf` tests cover the literal-preservation property strict satisfies would otherwise enforce.
+// Note: `ColumnHelperForStrict` is intentionally not applied — `Codec` is invariant in `TInput` (`toWire` contravariant, `fromWire` covariant), so `ArktypeJsonCodecClass<S['infer']>` is not assignable to `ArktypeJsonCodecClass<unknown>` (the descriptor.factory return). `expectTypeOf` tests cover the literal-preservation property strict satisfies would otherwise enforce.
 
 /**
  * Codec instance returned by `arktypeJsonColumn(schema).codecFactory(ctx)` and by `arktypeJsonDescriptor.factory(typeParams)(ctx)`. The `TInferred` slot carries the arktype schema's inferred output type at the column-author site; descriptor-side factories erase to `unknown`.

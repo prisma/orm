@@ -1,27 +1,33 @@
 import { mkdir } from 'node:fs/promises';
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
-import { createControlStack } from '@internal/framework-components/control';
+import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
-import type { Diagnostic } from '@internal/utils/structured-error';
-import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import { dirname, join } from 'pathe';
-import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
+import { migrationsDirFor } from '../../orm/migration/paths';
+import { errorContractConfigMissing } from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
-import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
+import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { publishContractArtifactPair } from '../../utils/publish-contract-artifact-pair';
 import { validateContractDeps } from '../../utils/validate-contract-deps';
-import { enrichContract } from '../contract-enrichment';
 import type {
   ContractEmitOptions,
   ContractEmitResult,
   ControlActionName,
   OnControlProgress,
 } from '../types';
+import { runContractSpaceSeedPhase } from './contract-space-seed-phase';
+import {
+  loadContractSourceWithStack,
+  requireContractConfig,
+  requireSourceProvider,
+  withWarningFindings,
+} from './load-contract-source';
+import { validateLoadedContract } from './validate-loaded-contract';
 
 const EMIT_ACTION: ControlActionName = 'emit';
 
@@ -30,10 +36,6 @@ type ContractEmitDependencies = {
 };
 
 const defaultContractEmitDependencies: ContractEmitDependencies = { emit };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function startSpan(onProgress: OnControlProgress | undefined, spanId: string, label: string): void {
   onProgress?.({ action: EMIT_ACTION, kind: 'spanStart', spanId, label });
@@ -47,177 +49,6 @@ function endSpan(
   onProgress?.({ action: EMIT_ACTION, kind: 'spanEnd', spanId, outcome });
 }
 
-function failedToResolveContractSource(
-  why: string,
-  fix: string,
-  meta?: Record<string, unknown>,
-  cause?: unknown,
-  diagnostics?: readonly Diagnostic[],
-) {
-  return errorRuntime('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
-    why,
-    fix,
-    ...ifDefined('diagnostics', diagnostics),
-    ...ifDefined('meta', meta),
-    ...ifDefined('cause', cause),
-  });
-}
-
-interface DiagnosticLocation {
-  readonly sourceId: string | undefined;
-  readonly line: number | undefined;
-  readonly character: number | undefined;
-}
-
-function diagnosticLocation(diagnostic: Record<string, unknown>): DiagnosticLocation {
-  const sourceId = typeof diagnostic['sourceId'] === 'string' ? diagnostic['sourceId'] : undefined;
-  const span = isRecord(diagnostic['span']) ? diagnostic['span'] : undefined;
-  const start = span && isRecord(span['start']) ? span['start'] : undefined;
-  const line = start && typeof start['line'] === 'number' ? start['line'] : undefined;
-  // biome-ignore lint/plugin/no-family-vocabulary: a text position in the source file; the span calls it column
-  const character = start && typeof start['column'] === 'number' ? start['column'] : undefined;
-  return { sourceId, line, character };
-}
-
-function formatLocation({ sourceId, line, character }: DiagnosticLocation): string | undefined {
-  if (sourceId === undefined) return undefined;
-  return line !== undefined && character !== undefined
-    ? `${sourceId}:${line}:${character}`
-    : sourceId;
-}
-
-/**
- * The finding the CLI prints under the error, one per source diagnostic. The
- * terminal renderer prints a finding's code and summary and nothing of its
- * `where`, so the summary starts with the location. A source code that is not
- * yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC` and named in the summary.
- */
-function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
-  if (!isRecord(raw)) return undefined;
-  const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
-  const message = typeof raw['message'] === 'string' ? raw['message'] : '';
-  const location = diagnosticLocation(raw);
-  const formatted = formatLocation(location);
-  const locatedSummary = (text: string) =>
-    formatted === undefined ? text : `${formatted} ${text}`;
-  const finding = {
-    severity: 'error',
-    nextActions: [],
-    ...ifDefined(
-      'where',
-      location.sourceId === undefined
-        ? undefined
-        : { path: location.sourceId, ...ifDefined('line', location.line) },
-    ),
-  } as const;
-  return isStructuredErrorCode(code)
-    ? { code, summary: locatedSummary(message), ...finding }
-    : {
-        code: 'CONTRACT.SOURCE_DIAGNOSTIC',
-        summary: locatedSummary(`${code}: ${message}`),
-        ...finding,
-        meta: { code },
-      };
-}
-
-function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnostic[] {
-  const findings: Diagnostic[] = [];
-  for (const raw of diagnostics) {
-    const finding = sourceDiagnosticToFinding(raw);
-    if (finding !== undefined) findings.push(finding);
-  }
-  return findings;
-}
-
-type ValidatedProviderResult =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly error: ReturnType<typeof errorRuntime> };
-
-function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
-  const formatted = formatLocation(diagnosticLocation(diagnostic));
-  return formatted === undefined ? '' : ` (${formatted})`;
-}
-
-function mapDiagnosticsToIssues(
-  diagnostics: readonly unknown[],
-): ReadonlyArray<{ readonly kind: string; readonly message: string }> {
-  const issues: { readonly kind: string; readonly message: string }[] = [];
-  for (const raw of diagnostics) {
-    if (!isRecord(raw)) continue;
-    const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
-    const message = typeof raw['message'] === 'string' ? raw['message'] : '';
-    issues.push({ kind: code, message: `${message}${diagnosticLocationSuffix(raw)}` });
-  }
-  return issues;
-}
-
-function validateProviderResult(providerResult: unknown): ValidatedProviderResult {
-  if (!isRecord(providerResult) || typeof providerResult['ok'] !== 'boolean') {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
-        'Contract source provider returned malformed result shape.',
-        'Ensure contract.source.load resolves to ok(Contract) or notOk({ summary, diagnostics }).',
-      ),
-    };
-  }
-
-  if (providerResult['ok']) {
-    if (!('value' in providerResult)) {
-      return {
-        ok: false,
-        error: failedToResolveContractSource(
-          'Contract source provider returned malformed success result: missing value.',
-          'Ensure contract.source.load success payload is ok(Contract).',
-        ),
-      };
-    }
-    return { ok: true, value: providerResult['value'] };
-  }
-
-  const failure = providerResult['failure'];
-  if (
-    !isRecord(failure) ||
-    typeof failure['summary'] !== 'string' ||
-    !Array.isArray(failure['diagnostics'])
-  ) {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
-        'Contract source provider returned malformed failure result: expected summary and diagnostics.',
-        'Ensure contract.source.load failure payload is notOk({ summary, diagnostics, meta? }).',
-      ),
-    };
-  }
-  if (
-    failure['diagnostics'].some(
-      (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
-    )
-  ) {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
-        'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
-        'Include the source filename in each diagnostic returned by contract.source.load.',
-      ),
-    };
-  }
-  return {
-    ok: false,
-    error: failedToResolveContractSource(
-      String(failure['summary']),
-      'Edit the schema where each finding points, then run contract emit again.',
-      {
-        diagnostics: failure['diagnostics'],
-        issues: mapDiagnosticsToIssues(failure['diagnostics']),
-        ...ifDefined('providerMeta', failure['meta']),
-      },
-      undefined,
-      sourceDiagnosticsToFindings(failure['diagnostics']),
-    ),
-  };
-}
-
 /**
  * Canonical contract emit operation.
  *
@@ -225,6 +56,12 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
  * (`prisma contract emit`) and the Vite plugin
  * (`@internal/vite-plugin-contract-emit`). New callers must go through this
  * function rather than re-implementing load → emit → publish.
+ *
+ * Before publishing, it writes each composed extension pack's pinned files
+ * under `migrations/<space-id>/`, as `migration plan` does, so a project
+ * that never plans a migration can still sign its database, and returns
+ * each path it wrote there. An `outputPath` writes the contract somewhere
+ * other than the project, so it writes no pinned files.
  *
  * The whole flow (load config → resolve source → emit bytes → atomic publish)
  * is serialized per output JSON path via `queueEmitByOutput`. Concurrent calls
@@ -244,20 +81,14 @@ export async function executeContractEmit(
 ): Promise<ContractEmitResult> {
   const {
     config,
-    configPath,
+    cwd,
+    projectDir,
     outputPath,
     signal = new AbortController().signal,
     onProgress,
   } = options;
   const unlessAborted = abortable(signal);
-
-  if (!config.contract) {
-    throw errorContractConfigMissing({
-      why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
-    });
-  }
-
-  const contractConfig = config.contract;
+  const contractConfig = requireContractConfig(config);
 
   const effectiveOutput =
     outputPath !== undefined ? join(outputPath, 'contract.json') : contractConfig.output;
@@ -268,11 +99,7 @@ export async function executeContractEmit(
     });
   }
 
-  if (typeof contractConfig.source?.load !== 'function') {
-    throw errorContractConfigMissing({
-      why: 'Contract config must include a valid source provider object',
-    });
-  }
+  requireSourceProvider(contractConfig);
 
   let outputPaths: ReturnType<typeof getEmittedArtifactPaths>;
   try {
@@ -285,39 +112,25 @@ export async function executeContractEmit(
   const { jsonPath: outputJsonPath, dtsPath: outputDtsPath } = outputPaths;
 
   return queueEmitByOutput(outputJsonPath, async () => {
-    const stack = createControlStack(config);
-
-    const sourceContext = {
-      composedExtensions: stack.extensions.map((p) => p.id),
-      composedExtensionContracts: stack.extensionContracts,
-      authoringContributions: stack.authoringContributions,
-      codecLookup: stack.codecLookup,
-      controlMutationDefaults: stack.controlMutationDefaults,
-      resolvedInputs: contractConfig.source.inputs ?? [],
-      capabilities: stack.capabilities,
-    };
-
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
-    let providerResult: Awaited<ReturnType<typeof contractConfig.source.load>>;
+    let stack: ControlStack;
+    let contract: Contract;
+    let sourceWarnings: readonly ContractSourceDiagnostic[];
     try {
-      providerResult = await unlessAborted(contractConfig.source.load(sourceContext));
+      stack = createControlStack(config);
+      const loaded = await loadContractSourceWithStack({
+        stack,
+        source: contractConfig.source,
+        signal,
+        cwd,
+      });
+      if (!loaded.ok) {
+        throw withWarningFindings(loaded.failure.error, loaded.failure.warnings, cwd);
+      }
+      ({ contract, warnings: sourceWarnings } = loaded.value);
     } catch (error) {
       endSpan(onProgress, 'resolveSource', 'error');
-      if (signal.aborted || (isRecord(error) && error['name'] === 'AbortError')) {
-        throw error;
-      }
-      throw failedToResolveContractSource(
-        error instanceof Error ? error.message : String(error),
-        'Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.',
-        undefined,
-        error,
-      );
-    }
-
-    const validatedContract = validateProviderResult(providerResult);
-    if (!validatedContract.ok) {
-      endSpan(onProgress, 'resolveSource', 'error');
-      throw validatedContract.error;
+      throw error;
     }
     endSpan(onProgress, 'resolveSource', 'ok');
 
@@ -325,28 +138,7 @@ export async function executeContractEmit(
     let emitResult: Awaited<ReturnType<typeof emit>>;
     try {
       const familyInstance = config.family.create(stack);
-      const rawComponents = [config.target, config.adapter, ...(config.extensions ?? [])];
-      const frameworkComponents = assertFrameworkComponentsCompatible(
-        config.family.familyId,
-        config.target.targetId,
-        rawComponents,
-      );
-      // Blind cast: `validateProviderResult` upstream has already
-      // pinned `validatedContract.value` to the provider's loose
-      // `Contract` envelope, but the local `Contract` type at this
-      // call site is the precise structural interface. The cast just
-      // defers the structural check by one statement so `enrichContract`
-      // can decorate first; the subsequent serialize→deserialize round-trip
-      // re-narrows the envelope into the precise type.
-      const enrichedIR = enrichContract(
-        blindCast<
-          Contract,
-          'Provider payload is enriched before target serialization and family validation'
-        >(validatedContract.value),
-        frameworkComponents,
-      );
-      const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);
-      const deserializedContract = familyInstance.deserializeContract(rawContractJson);
+      const deserializedContract = validateLoadedContract({ config, familyInstance, contract });
       // Each target's descriptor ships a `contractSerializer` SPI; the
       // framework canonicalizer threads its `serializeContract` so the
       // on-disk JSON envelope is constructed by target-owned code
@@ -366,9 +158,11 @@ export async function executeContractEmit(
           // Which package names the generated files may import is decided by
           // the nearest manifest above the file being written — the package
           // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller holding the config file's path
-          // may name it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(configPath ?? outputJsonPath),
+          // resolves against below. A caller that knows the project directory
+          // names it instead.
+          resolveImportSpecifier: createProjectSpecifierResolver(
+            projectDir ?? dirname(outputJsonPath),
+          ),
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),
@@ -379,6 +173,22 @@ export async function executeContractEmit(
       throw error;
     }
     endSpan(onProgress, 'emit', 'ok');
+
+    signal.throwIfAborted();
+    const pinnedFiles =
+      outputPath === undefined
+        ? (
+            await unlessAborted(
+              runContractSpaceSeedPhase({
+                migrationsDir: migrationsDirFor(config, cwd),
+                extensions: toExtensionInputs(config.extensions ?? []),
+                signal,
+              }),
+            )
+          ).seeded.flatMap(({ spaceId, writtenPaths }) =>
+            writtenPaths.map((path) => ({ spaceId, path })),
+          )
+        : [];
 
     await unlessAborted(mkdir(dirname(outputJsonPath), { recursive: true }));
     await publishContractArtifactPair({
@@ -402,7 +212,9 @@ export async function executeContractEmit(
         json: outputJsonPath,
         dts: outputDtsPath,
       },
+      pinnedFiles,
       ...ifDefined('validationWarning', validationWarning),
+      ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
     };
   });
 }

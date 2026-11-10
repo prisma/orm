@@ -2,6 +2,8 @@
 
 > **Retrospective note.** This ADR's examples use the `defineCodec({...})` factory. That factory was retired in favor of class-based descriptors (`CodecDescriptorImpl`) and codecs (`CodecImpl`) as described in [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md). The decision this ADR records — that the SQL renderer reads `meta.db.sql.<adapter>.nativeType` as descriptive metadata and the adapter applies cast policy — is unchanged. `meta` is declared on the descriptor class today (`readonly meta = { db: { sql: { postgres: { nativeType: 'vector' } } } } as const;`). See [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md).
 
+> **Update — the cast is written from the data type.** A codec no longer carries a native type name. The renderer finds the data type the parameter's codec represents ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)), and the inferrable set, now `POSTGRES_INFERRABLE_DATA_TYPES`, holds data type ids (`pg/int2`, `pg/int4`, `pg/int8`, `pg/float4`, `pg/float8`, `pg/numeric`, `pg/bool`, `pg/text`, `pg/char`, `pg/varchar`, `pg/timestamp`, `pg/timestamptz`, `pg/time`, `pg/timetz`, `pg/interval`, `pg/bit`, `pg/varbit`). A parameter outside the set, or a list parameter, is cast to the data type's base name, the name it is written with when it has no parameters, never with the column's parameters, because an explicit cast to `varchar(n)` truncates and to `numeric(p,s)` rounds. So a cast reads `$1::int4` rather than `$1::integer`, `$1::vector` for pgvector, and `$1::"Status"` for an enum, whose data type writes its name from `typeName`. The adapter-policy decision below is unchanged; the `meta.db.sql.postgres.nativeType` field and the spellings in the set below are historical.
+
 ## TL;DR
 
 The Postgres SQL renderer sometimes has to suffix a parameter with `::<type>` (e.g. `$1::vector`) so Postgres can resolve the parameter's type. Today it picks which casts to emit by hardcoding three codec IDs in the renderer — including a codec ID owned by an extension package, which inverts the dependency between core adapter and extension. We're moving the decision out of the renderer and onto the **adapter as policy**: the renderer reads each codec's existing `nativeType` field and casts only when the type isn't in an adapter-local "infers cleanly" allow-list. Codec authors set no new flags; extensions just work.
@@ -32,7 +34,7 @@ Postgres now treats `$1` as `vector` directly. The same fix applies to several J
 
 Our SQL renderer is the thing assembling that string. **Where does the decision to emit `::vector` belong?**
 
-Today, in `packages/3-targets/6-adapters/postgres/src/core/sql-renderer.ts`:
+Today, in `packages/3-targets/postgres/2-adapter/src/core/sql-renderer.ts`:
 
 ```ts
 function getCodecParamCast(codecId: string | undefined): string | undefined {
@@ -137,9 +139,9 @@ The renderer's `renderTypedParam` chokepoint distinguishes three cases:
 
 Throwing on miss is a deliberate strengthening of the "bare factories can't see extensions" position. The alternative — silently emitting `$N` when an extension `ParamRef` reaches a stack-less adapter — would defer the failure to Postgres' parser, where it surfaces as an opaque `operator does not exist: vector <-> text` later in the call. Failing at lower-time names the misconfiguration directly: *"This usually indicates a missing extension pack in the runtime stack — register the pack that contributes this codec."* Stack composition becomes a hard precondition for any query touching extension codecs, which matches the rest of the system's "explicit composition over implicit defaults" stance.
 
-### Codecs with no static `nativeType`
+### Enum parameters (updated October 12, 2026)
 
-`pg/enum@1` has no static `meta.db.sql.postgres.nativeType` — the type name is per-column, derived from `typeParams.values`. Codecs without a `nativeType` produce no cast. That's correct for v1: column context disambiguates enums in normal use. If per-column enum casts ever become necessary, a follow-up can route per-column metadata through `LowererContext` without changing the codec interface.
+`pg/enum@1` has no static `meta.db.sql.postgres.nativeType`: the type name is per column, held in `typeParams.typeName`. The renderer (`renderTypedParam` in `packages/3-targets/postgres/2-adapter/src/core/sql-renderer.ts`) now decides casts by data type rather than by `nativeType`. A parameter is written as plain `$N` only when its data type is one whose type PostgreSQL infers reliably (`POSTGRES_INFERRABLE_DATA_TYPES`); every other parameter, enums included, is written as `$N::<name>`, where the name comes from the data type and the parameter's `typeParams`. So an enum parameter is cast to its own type, for example `$1::"ticket_status"`.
 
 ## Consequences
 

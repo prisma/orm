@@ -1,0 +1,10 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist/**", "test/**", "**/*.test.ts", "**/*.config.ts", "**/exports/**"],
+  "thresholds": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  }
+}

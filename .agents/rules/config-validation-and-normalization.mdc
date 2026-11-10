@@ -1,5 +1,5 @@
 ---
-description: Config validation and normalization responsibilities (defineConfig normalizes, loader validates into section diagnostics)
+description: Config validation and normalization responsibilities (defineConfig normalizes, the orm section schema validates and resolves paths, the loader reports per-section diagnostics)
 globs: ["packages/1-framework/1-core/config/**", "packages/1-framework/3-tooling/config-loader/**", "packages/1-framework/3-tooling/cli/**", "**/prisma.config.ts"]
 alwaysApply: false
 ---
@@ -14,12 +14,20 @@ Responsibilities are split across exactly three places. Keep them there.
 
 The marker does not survive spreads: configs must export the `defineConfig` result directly. The loader rejects unmarked configs with `CONFIG.VERSION_MARKER_MISSING`.
 
-## Loader — validate into per-section diagnostics
+## The `orm` section schema — validate and resolve paths
 
-`loadConfig` (in `@internal/config-loader`) returns `Result<{ config, diagnostics }, CliStructuredError>`:
+The shape of the `orm` section is declared once, as `ormConfigSchema` in `@internal/config-loader/src/orm-section.ts`, with the CLI engine's `configSchema` (arktype plus a `path` keyword). Every structural rule lives there: descriptor fields, cross-descriptor `familyId`/`targetId` agreement, contract source shape, formatter values, and which fields are paths. Do not add a hand-written check next to it.
+
+The engine derives everything from the declaration: validation, a `CLI.CONFIG_FIELD_INVALID` diagnostic per bad field naming the field and the file to fix, and the resolution of every `path` field against the config file that declared it (prisma-cli ADR 0005). The validated value has absolute paths, `migrations.dir` and `contract.output` defaulted, and `baseDir`, the directory of the nearest config file. A relative `path` default is declared as a thunk, `['path', '=', () => './migrations']`, never as a literal.
+
+## Loader — evaluate, then report per-section diagnostics
+
+`loadConfigFiles` (in `@internal/config-loader`) evaluates `prisma.config.ts` with c12 and returns each file on the chain with its sections as written. The ORM's bin hands those files to the engine, which validates the `orm` section with their provenance before a command runs.
+
+`loadConfig` is the same evaluation plus the same schema validation, for the language server and the vite plugin, which read the config outside a command run. It returns `Result<{ config, diagnostics }, CliStructuredError>`:
 
 - Failures that prevent evaluation entirely are the `Result` failure: `CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`, `CONFIG.VERSION_MARKER_MISSING`. Every command fails early with these.
-- Structural problems inside an evaluated config never fail the load. `collectConfigIssues` (in `@internal/config/config-validation`) returns every problem, each tagged with the top-level section it concerns; the loader wraps them as `CONFIG.VALIDATION_FAILED` diagnostics with `meta.section` and `meta.field`.
+- Structural problems inside an evaluated config never fail the load. Each schema diagnostic is wrapped as `CONFIG.VALIDATION_FAILED` with `meta.section` (the top-level subsection the field sits under) and `meta.field`.
 
 ## Commands — declare the sections they read
 
@@ -37,18 +45,9 @@ const config = configResult.value;
 
 Command handlers use normalized values directly — they do NOT set defaults or normalize structure.
 
-## Default Path Resolution
+## Path Resolution
 
-`defineConfig` supplies a default `contract.output` as a config-relative string. The loader then makes every config-relative path absolute by resolving it against the directory of the config file it loaded, using `pathe` (never `node:path`) so the result is the same on every platform:
-
-```typescript
-import { dirname, resolve } from 'pathe';
-
-const configDir = dirname(loadedConfigFile);
-const output = resolve(configDir, contract.output ?? `${DEFAULT_CONTRACT_SOURCE_DIR}/contract.json`);
-```
-
-Command handlers read the already-absolute value. They never re-resolve it and never substitute a default of their own.
+Paths in the config are relative to the config file that wrote them, and the schema resolves them during validation using the engine's per-key provenance, so a parent config's `./migrations` resolves under the parent even when a child config extends it. Nothing resolves a config path after loading: command handlers read absolute values and `baseDir`, never re-resolve, and never anchor anything on `cwd`. The one path relative to the working directory is one typed on the command line, such as `--output-path`.
 
 ## Related Patterns
 

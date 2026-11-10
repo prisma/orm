@@ -1,3 +1,5 @@
+// use prisma-8
+
 native_enum TestEnum {
   a = "a"
   b = "b"

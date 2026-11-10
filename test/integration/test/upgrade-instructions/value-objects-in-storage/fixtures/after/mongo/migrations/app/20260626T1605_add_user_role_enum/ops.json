@@ -1,0 +1,171 @@
+[
+  {
+    "id": "validator.users.update",
+    "label": "Update validator on users",
+    "operationClass": "destructive",
+    "precheck": [
+      {
+        "description": "collection users exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "users"
+        },
+        "expect": "exists",
+        "object": "collection \"users\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify users",
+        "command": {
+          "kind": "collMod",
+          "collection": "users",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "objectId"
+                },
+                "address": {
+                  "oneOf": [
+                    {
+                      "bsonType": "null"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "bsonType": "object",
+                      "properties": {
+                        "city": {
+                          "bsonType": "string"
+                        },
+                        "country": {
+                          "bsonType": "string"
+                        },
+                        "street": {
+                          "bsonType": "string"
+                        },
+                        "zip": {
+                          "bsonType": ["null", "string"]
+                        }
+                      },
+                      "required": ["city", "country", "street"]
+                    }
+                  ]
+                },
+                "bio": {
+                  "bsonType": ["null", "string"]
+                },
+                "email": {
+                  "bsonType": "string"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "role": {
+                  "bsonType": "string",
+                  "enum": ["admin", "author", "reader"]
+                }
+              },
+              "required": ["_id", "email", "name", "role"]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on users",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "users"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "objectId"
+                  },
+                  "address": {
+                    "oneOf": [
+                      {
+                        "bsonType": "null"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "city": {
+                            "bsonType": "string"
+                          },
+                          "country": {
+                            "bsonType": "string"
+                          },
+                          "street": {
+                            "bsonType": "string"
+                          },
+                          "zip": {
+                            "bsonType": ["null", "string"]
+                          }
+                        },
+                        "required": ["city", "country", "street"]
+                      }
+                    ]
+                  },
+                  "bio": {
+                    "bsonType": ["null", "string"]
+                  },
+                  "email": {
+                    "bsonType": "string"
+                  },
+                  "name": {
+                    "bsonType": "string"
+                  },
+                  "role": {
+                    "bsonType": "string",
+                    "enum": ["admin", "author", "reader"]
+                  }
+                },
+                "required": ["_id", "email", "name", "role"]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

@@ -8,9 +8,11 @@ export default defineConfig({
     'src/exports/resolve-domain-model.ts',
     'src/exports/types.ts',
     'src/exports/validate-domain.ts',
+    'src/exports/validate-storage.ts',
     'src/exports/contract-validation-error.ts',
     'src/exports/hashing.ts',
     'src/exports/hashing-utils.ts',
     'src/exports/is-plain-record.ts',
+    'src/exports/validate-once.ts',
   ],
 });

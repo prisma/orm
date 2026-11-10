@@ -31,9 +31,9 @@ describe('cart lifecycle (integration)', { timeout: timeouts.spinUpMongoMemorySe
       address: null,
     });
 
-    await addToCart(ctx.db, user._id, ITEM_SHIRT);
+    await addToCart(ctx.db, user.id, ITEM_SHIRT);
 
-    const cart = await getCartByUserId(ctx.db, user._id);
+    const cart = await getCartByUserId(ctx.db, user.id);
     expect(cart).not.toBeNull();
     expect(cart!.items).toHaveLength(1);
     expect(cart!.items[0]).toMatchObject({ name: 'Shirt', productId: 'prod-1' });
@@ -46,10 +46,10 @@ describe('cart lifecycle (integration)', { timeout: timeouts.spinUpMongoMemorySe
       address: null,
     });
 
-    await addToCart(ctx.db, user._id, ITEM_SHIRT);
-    await addToCart(ctx.db, user._id, ITEM_CHINOS);
+    await addToCart(ctx.db, user.id, ITEM_SHIRT);
+    await addToCart(ctx.db, user.id, ITEM_CHINOS);
 
-    const cart = await getCartByUserId(ctx.db, user._id);
+    const cart = await getCartByUserId(ctx.db, user.id);
     expect(cart).not.toBeNull();
     expect(cart!.items).toHaveLength(2);
     const names = cart!.items.map((i) => i.name).sort();
@@ -63,11 +63,11 @@ describe('cart lifecycle (integration)', { timeout: timeouts.spinUpMongoMemorySe
       address: null,
     });
 
-    await addToCart(ctx.db, user._id, ITEM_SHIRT);
-    await addToCart(ctx.db, user._id, ITEM_CHINOS);
-    await removeFromCart(ctx.db, user._id, 'prod-1');
+    await addToCart(ctx.db, user.id, ITEM_SHIRT);
+    await addToCart(ctx.db, user.id, ITEM_CHINOS);
+    await removeFromCart(ctx.db, user.id, 'prod-1');
 
-    const cart = await getCartByUserId(ctx.db, user._id);
+    const cart = await getCartByUserId(ctx.db, user.id);
     expect(cart).not.toBeNull();
     expect(cart!.items).toHaveLength(1);
     expect(cart!.items[0]!.productId).toBe('prod-2');
@@ -80,10 +80,10 @@ describe('cart lifecycle (integration)', { timeout: timeouts.spinUpMongoMemorySe
       address: null,
     });
 
-    await addToCart(ctx.db, user._id, ITEM_SHIRT);
-    await clearCart(ctx.db, user._id);
+    await addToCart(ctx.db, user.id, ITEM_SHIRT);
+    await clearCart(ctx.db, user.id);
 
-    const cart = await getCartByUserId(ctx.db, user._id);
+    const cart = await getCartByUserId(ctx.db, user.id);
     expect(cart).not.toBeNull();
     expect(cart!.items).toHaveLength(0);
   });
@@ -95,21 +95,21 @@ describe('cart lifecycle (integration)', { timeout: timeouts.spinUpMongoMemorySe
       address: null,
     });
 
-    await addToCart(ctx.db, user._id, ITEM_SHIRT);
-    const afterFirst = await getCartByUserId(ctx.db, user._id);
+    await addToCart(ctx.db, user.id, ITEM_SHIRT);
+    const afterFirst = await getCartByUserId(ctx.db, user.id);
     expect(afterFirst!.items).toHaveLength(1);
 
-    await addToCart(ctx.db, user._id, ITEM_CHINOS);
-    const afterSecond = await getCartByUserId(ctx.db, user._id);
+    await addToCart(ctx.db, user.id, ITEM_CHINOS);
+    const afterSecond = await getCartByUserId(ctx.db, user.id);
     expect(afterSecond!.items).toHaveLength(2);
 
-    await removeFromCart(ctx.db, user._id, 'prod-1');
-    const afterRemove = await getCartByUserId(ctx.db, user._id);
+    await removeFromCart(ctx.db, user.id, 'prod-1');
+    const afterRemove = await getCartByUserId(ctx.db, user.id);
     expect(afterRemove!.items).toHaveLength(1);
     expect(afterRemove!.items[0]!.name).toBe('Chinos');
 
-    await clearCart(ctx.db, user._id);
-    const afterClear = await getCartByUserId(ctx.db, user._id);
+    await clearCart(ctx.db, user.id);
+    const afterClear = await getCartByUserId(ctx.db, user.id);
     expect(afterClear!.items).toHaveLength(0);
   });
 });

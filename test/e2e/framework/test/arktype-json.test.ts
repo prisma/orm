@@ -6,6 +6,7 @@ import type { Vector } from '@prisma/orm-extension-pgvector/codec-types';
 import pgvector from '@prisma/orm-extension-pgvector/runtime';
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
@@ -36,8 +37,8 @@ async function withPostgresClient(
   const contractJson = await loadContractJson();
   await withDevDatabase(async ({ connectionString }) => {
     await runDbInit({ connectionString, contractJsonPath });
-    const db = postgres<Contract>({
-      contractJson,
+    const db = postgres({
+      contract: contractFromJson<Contract>(contractJson),
       url: connectionString,
       extensions: [pgvector, arktypeJson],
     });
@@ -75,7 +76,7 @@ describe('arktype-json column round-trip', { timeout: timeouts.spinUpPpgDev }, (
 // `packages/3-extensions/arktype-json/test/arktype-json-codec.test.ts`
 // (decode rejects pre-parsed payloads that violate the schema) and at
 // the runtime level in
-// `packages/2-sql/5-runtime/test/json-schema-validation.test.ts` (the
+// `packages/2-sql-family/5-runtime/test/json-schema-validation.test.ts` (the
 // runtime preserves `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED` thrown from
 // codec.decode without rewrapping). Reproducing it through the ORM is
 // awkward because `create` returns a decoded row via `RETURNING`, so a

@@ -1,6 +1,6 @@
 ---
 description: Use codec-owned storage-type hooks for control-plane type behavior
-globs: ["packages/2-sql/**", "packages/3-targets/**"]
+globs: ["packages/2-sql-family/**", "packages/3-targets/**"]
 alwaysApply: false
 ---
 

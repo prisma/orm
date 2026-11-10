@@ -133,6 +133,13 @@
           },
           "Post": {
             "fields": {
+              "body": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "createdAt": {
                 "nullable": false,
                 "type": {
@@ -144,7 +151,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1536
+                  }
                 }
               },
               "expiresAt": {
@@ -258,6 +268,9 @@
             },
             "storage": {
               "fields": {
+                "body": {
+                  "column": "body"
+                },
                 "createdAt": {
                   "column": "createdAt"
                 },
@@ -518,11 +531,13 @@
               "table": "task"
             },
             "variants": {
-              "Bug": {
-                "value": "bug"
+              "bug": {
+                "model": "Bug",
+                "namespace": "public"
               },
-              "Feature": {
-                "value": "feature"
+              "feature": {
+                "model": "Feature",
+                "namespace": "public"
               }
             }
           },
@@ -531,8 +546,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "public",
+                  "plane": "storage"
                 }
               },
               "createdAt": {
@@ -634,40 +652,6 @@
               "table": "user"
             }
           }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -681,22 +665,25 @@
               "columns": {
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "severity": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "stepsToRepro": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -726,22 +713,25 @@
               "columns": {
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "priority": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "targetRelease": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "primaryKey": true
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -776,47 +766,54 @@
                 }
               ],
               "columns": {
+                "body": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                },
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "embedding": {
                   "codecId": "pg/vector@1",
-                  "nativeType": "vector",
+                  "dataType": "pgvector/vector",
                   "nullable": true,
-                  "typeRef": "Embedding1536"
+                  "typeParams": {
+                    "length": 1536
+                  }
                 },
                 "expiresAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "(now() + '7 days'::interval)",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "impressionCount": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": true
                 },
                 "priority": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": 0
                   },
-                  "nativeType": "int4",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -827,27 +824,30 @@
                 },
                 "reachScore": {
                   "codecId": "pg/unboundedint@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "viewCount": {
                   "codecId": "pg/int8number@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": true
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -865,6 +865,44 @@
                 }
               ],
               "indexes": [
+                {
+                  "columns": [
+                    "title",
+                    "body"
+                  ],
+                  "name": "post_search_f03270be",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "title"
+                      ],
+                      [
+                        "body"
+                      ]
+                    ]
+                  },
+                  "prefix": "post_search",
+                  "type": "fullText",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "title"
+                  ],
+                  "name": "post_title_search_e0dd1131",
+                  "options": {
+                    "language": "english",
+                    "weightGroups": [
+                      [
+                        "title"
+                      ]
+                    ]
+                  },
+                  "prefix": "post_title_search",
+                  "type": "fullText",
+                  "unique": false
+                },
                 {
                   "columns": [
                     "userId"
@@ -885,17 +923,20 @@
               "columns": {
                 "postId": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "tagId": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "post_tag_postId_idx_a7a72715"
+                  },
                   "source": {
                     "columns": [
                       "postId"
@@ -912,6 +953,9 @@
                   }
                 },
                 {
+                  "index": {
+                    "name": "post_tag_tagId_idx_86854244"
+                  },
                   "source": {
                     "columns": [
                       "tagId"
@@ -958,12 +1002,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "label": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -983,53 +1027,69 @@
               ]
             },
             "task": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('bug', 'feature')",
+                  "name": "task_type_check_cda3f5e7",
+                  "prefix": "task_type_check"
+                }
+              ],
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "description": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "status": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "kind": "literal",
                     "value": "open"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "type": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
-                  "nullable": false
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "userId": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "name": "task_userId_idx_a489d58a"
+                  },
                   "source": {
                     "columns": [
                       "userId"
@@ -1066,6 +1126,11 @@
             "user": {
               "checks": [
                 {
+                  "expression": "\"address\" IS NULL OR jsonb_path_match(\"address\", 'strict $.type() == \"null\" || ($.type() == \"object\" && exists($.keyvalue() ? (@.key == \"city\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"country\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && !exists($.keyvalue() ? (@.key == \"zip\" && !(@.value.type() == \"null\" || (@.value.type() == \"string\")))) && !exists($.keyvalue() ? (@.key != \"city\" && @.key != \"country\" && @.key != \"street\" && @.key != \"zip\")))') IS TRUE",
+                  "name": "user_address_shape_69432dc1",
+                  "prefix": "user_address_shape"
+                },
+                {
                   "expression": "\"kind\" IN ('admin', 'user')",
                   "name": "user_kind_check_836d43ef",
                   "prefix": "user_kind_check"
@@ -1074,36 +1139,36 @@
               "columns": {
                 "address": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "displayName": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "kind": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -1123,6 +1188,40 @@
               "uniques": []
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Priority": {
               "kind": "valueSet",
@@ -1130,6 +1229,13 @@
                 0,
                 1,
                 2
+              ]
+            },
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "feature"
               ]
             },
             "user_type": {
@@ -1145,20 +1251,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "62d81d607d929760f7d740b45bb97acc1dba361363c4851b19ee5a1cb4fecbe3",
-    "types": {
-      "Embedding1536": {
-        "codecId": "pg/vector@1",
-        "kind": "codec-instance",
-        "nativeType": "vector",
-        "typeParams": {
-          "length": 1536
-        }
-      }
-    }
+    "storageHash": "e1916bd73bb2388302d81a1eaa17125c0cedb6ce47b489a7adeeb41c2ef50ebf"
   },
   "execution": {
-    "executionHash": "e592be8e097b3e2b4958da0b3ed54265d1bfa0523295fa03e03af2364cccbd08",
+    "executionHash": "eb9bffd4c01945792e83de10d571b20df42f5bf40405ec8c642c6592f7dc4655",
     "mutations": {
       "defaults": [
         {
@@ -1167,9 +1263,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "post"
+            "entry": "post",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1178,9 +1274,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "tag"
+            "entry": "tag",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1189,9 +1285,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "task"
+            "entry": "task",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1200,9 +1296,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]
@@ -1211,6 +1307,8 @@
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -1222,7 +1320,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
@@ -1268,13 +1374,11 @@
             "named": "CodecTypes",
             "package": "@internal/extension-pgvector/codec-types"
           },
-          "typeImports": [
-            {
-              "alias": "Vector",
-              "named": "Vector",
-              "package": "@internal/extension-pgvector/codec-types"
-            }
-          ]
+          "parameterizedOutputTypes": {
+            "alias": "PgVectorParameterizedOutputTypes",
+            "named": "ParameterizedOutputTypesForTypeParams",
+            "package": "@internal/extension-pgvector/codec-types"
+          }
         },
         "operationTypes": {
           "import": {
@@ -1289,15 +1393,7 @@
             "named": "QueryOperationTypes",
             "package": "@internal/extension-pgvector/operation-types"
           }
-        },
-        "storage": [
-          {
-            "familyId": "sql",
-            "nativeType": "vector",
-            "targetId": "postgres",
-            "typeId": "pg/vector@1"
-          }
-        ]
+        }
       },
       "version": "0.0.1"
     }

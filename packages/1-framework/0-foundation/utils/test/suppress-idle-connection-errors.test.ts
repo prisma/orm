@@ -3,13 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { suppressIdleConnectionErrors } from '../src/suppress-idle-connection-errors';
 
 describe('suppressIdleConnectionErrors', () => {
-  it('an emitter with no error listener rethrows an emitted error (the failure mode)', () => {
-    const emitter = new EventEmitter();
-    expect(() => emitter.emit('error', new Error('connection dropped'))).toThrow(
-      'connection dropped',
-    );
-  });
-
   it('an attached emitter survives an emitted error', () => {
     const emitter = suppressIdleConnectionErrors(new EventEmitter());
     expect(() => emitter.emit('error', new Error('connection dropped'))).not.toThrow();

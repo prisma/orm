@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `decimal/scalar`
 // (packages/client/tests/functional/decimal/scalar, postgres matrix entry):
 //
@@ -6,7 +8,7 @@
 //     money Decimal
 //   }
 model User {
-  id    String  @id @default(cuid(2))
+  id    String  @id @onCreate(cuid(2))
   money Decimal
   @@map("user")
 }

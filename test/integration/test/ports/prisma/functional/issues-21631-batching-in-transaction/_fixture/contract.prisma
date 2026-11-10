@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite
 // `issues/21631-batching-in-transaction` (postgres matrix entry):
 //
@@ -9,7 +11,7 @@
 //
 // idForProvider(postgresql) is `String @id @default(cuid(2))`.
 model Worker {
-  id    String @id @default(cuid(2))
+  id    String @id @onCreate(cuid(2))
   email String @unique
   phone String @unique
   @@map("worker")

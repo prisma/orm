@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `issues/11974`
 // (packages/client/tests/functional/issues/11974, postgres matrix entry).
 //

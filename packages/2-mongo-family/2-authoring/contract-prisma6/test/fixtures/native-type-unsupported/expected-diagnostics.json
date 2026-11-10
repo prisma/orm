@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.number\": native type \"@db.ObjectId\" is not supported, and Prisma 6 does not accept it on an Int field either. Remove it."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.stamp\": native type \"@db.Timestamp\" is not supported: Prisma 6 stores it as a BSON timestamp, and Prisma 8 has no codec for that BSON type. Remove it; this also changes the Prisma 6 app: its client then stores new DateTime values as BSON date instead of timestamp. Documents already stored keep their timestamp values, so rewrite them as dates before Prisma 8 reads them."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Post.ratio\": native type \"@db.Decimal\" is not supported, and Prisma 6 does not accept it on a Float field either. Remove it."
+  }
+]

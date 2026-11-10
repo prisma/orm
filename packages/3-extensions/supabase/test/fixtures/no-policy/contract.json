@@ -92,22 +92,31 @@
               "columns": {
                 "id": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
+                  "default": {
+                    "expression": "gen_random_uuid()",
+                    "kind": "function"
+                  },
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "pg/uuid@1",
-                  "nativeType": "uuid",
+                  "dataType": "pg/uuid",
                   "nullable": false
                 },
                 "username": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "userId"
+                    ]
+                  },
                   "onDelete": "cascade",
                   "source": {
                     "columns": [
@@ -146,29 +155,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "001f3fafe61a0014ad43b145830bb08d77853a35d6b3003f045d4931c74e7ee8"
-  },
-  "execution": {
-    "executionHash": "5079bd5e0c8e64383c627062a19a0c2299f3729197bfa1d49761e26d082fe72b",
-    "mutations": {
-      "defaults": [
-        {
-          "onCreate": {
-            "id": "uuidv4",
-            "kind": "generator"
-          },
-          "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "profile"
-          }
-        }
-      ]
-    }
+    "storageHash": "d883b27a7bf64e8fcf5011d8709862e71b7ddb217eece8395b6e037867b6878b"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -179,7 +172,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
@@ -190,7 +191,7 @@
       "id": "supabase",
       "kind": "extension",
       "targetId": "postgres",
-      "version": "8.0.0-rc.11"
+      "version": "8.0.0-rc.23"
     }
   },
   "meta": {},

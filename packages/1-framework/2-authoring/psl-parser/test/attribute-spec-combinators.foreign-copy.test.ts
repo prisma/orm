@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { ModelAttributeCtx } from '../src/exports';
 import {
   bool,
@@ -14,13 +15,11 @@ import {
   record,
   str,
 } from '../src/exports';
-import { Cursor, parse, parseAttribute } from '../src/parse';
-import { PslSources } from '../src/source-file';
+import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
-import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
-import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 class ForeignCopyOfAnAstNode {
   readonly syntax: SyntaxNode;
@@ -30,24 +29,29 @@ class ForeignCopyOfAnAstNode {
 }
 
 function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCtx } {
-  const cursor = new Cursor('schema.prisma', `@demo(${source})`);
-  const root = createSyntaxTree(parseAttribute(cursor));
-  const node = FieldAttributeAst.cast(root);
-  const value = Array.from(node?.argList()?.args() ?? [])[0]?.value();
-  if (value === undefined) throw new Error('expected one argument');
-  const { document, sources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { document, sources } = parse(`model M {\n  id Int @demo(${source})\n}\n`, 'schema.prisma');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
+  const node = selfModel.fields['id']?.node.attributes()[Symbol.iterator]().next().value;
+  const value = node?.argList()?.args()[Symbol.iterator]().next().value?.value();
+  if (value === undefined) throw new Error('expected one argument');
+  const { binder } = createBinder({
+    sources,
+    symbolTable,
+    context: binderContext(),
+  });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
     ctx: {
-      sources: new PslSources([[root, cursor.sourceFile]]),
+      sources,
+      symbols: symbolTable,
       selfModel,
+      binder,
     },
   };
 }
@@ -65,8 +69,7 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
       'Cascade',
       'Cascade',
     ],
-    ['entityRef', entityRef(), 'User', 'User'],
-    ['fieldRef', fieldRef(), 'id', 'id'],
+    ['unrestricted identifier', identifier(), 'User', 'User'],
     ['json', json(), '"{\\"a\\":1}"', { a: 1 }],
     ['list', list(str()), '["a", "b"]', ['a', 'b']],
     ['record', record(int()), '{ a: 1 }', { a: 1 }],
@@ -77,6 +80,22 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it('fieldRef dispatches on the syntax kind of a node from another module copy', () => {
+    const { arg, ctx } = foreignArg('id');
+
+    const result = fieldRef().parse(arg, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
+  });
+
+  it('entityRef rejects a node from another module copy', () => {
+    const { arg, ctx } = foreignArg('M');
+
+    const result = entityRef({ kind: 'model' }).parse(arg, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('funcCall accepts a node from another module copy', () => {

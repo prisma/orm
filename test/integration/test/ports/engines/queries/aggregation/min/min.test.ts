@@ -1,9 +1,14 @@
+import type { Ordered } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as CommonContract } from './_fixture/common/generated/contract';
 import commonContractJson from './_fixture/common/generated/contract.json' with { type: 'json' };
 import type { Contract as DecimalContract } from './_fixture/decimal/generated/contract';
 import decimalContractJson from './_fixture/decimal/generated/contract.json' with { type: 'json' };
+
+function treatAsOrdered<C>(collection: C): Ordered<C> {
+  return collection as Ordered<C>;
+}
 
 function withCommonMin(fn: Parameters<typeof withPostgresPort<CommonContract>>[1]) {
   return withPostgresPort<CommonContract>({ contractJson: commonContractJson }, fn);
@@ -94,14 +99,14 @@ describe('ports/engines/queries/aggregation/min', () => {
           float: aggregate.min('float'),
           string: aggregate.min('string'),
         }));
-        const cursorAtThree = await db.public.TestModel.cursor({ id: 3 } as never).aggregate(
-          (aggregate) => ({
+        const cursorAtThree = await treatAsOrdered(db.public.TestModel)
+          .cursor({ id: 3 })
+          .aggregate((aggregate) => ({
             int: aggregate.min('int'),
             bInt: aggregate.min('bInt'),
             float: aggregate.min('float'),
             string: aggregate.min('string'),
-          }),
-        );
+          }));
 
         expect(takeTwo).toEqual({ int: 5, bInt: 5n, float: 4.5, string: '2' });
         expect(takeFive).toEqual({ int: 1, bInt: 1n, float: 0, string: '2' });
@@ -172,9 +177,9 @@ describe('ports/engines/queries/aggregation/min', () => {
         const skipTwo = await db.public.TestModel.offset(2).aggregate((aggregate) => ({
           decimal: aggregate.min('decimal'),
         }));
-        const cursorAtThree = await db.public.TestModel.cursor({ id: 3 } as never).aggregate(
-          (aggregate) => ({ decimal: aggregate.min('decimal') }),
-        );
+        const cursorAtThree = await treatAsOrdered(db.public.TestModel)
+          .cursor({ id: 3 })
+          .aggregate((aggregate) => ({ decimal: aggregate.min('decimal') }));
 
         expect(takeTwo).toEqual({ decimal: '4.5' });
         expect(takeFive).toEqual({ decimal: '0' });

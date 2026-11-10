@@ -4,8 +4,8 @@
  * and a body edit under the same name converges as create + drop.
  *
  * A `.prisma` contract carries the Cipherstash-style index
- * (`@@index(expression: "eql_v3.eq_term(email)", name: "users_email_eq",
- * type: "btree")` — the default access method normalizes away in the schema
+ * (``@@index(expression: sql`eql_v3.eq_term(email)`, name: "users_email_eq",
+ * type: "btree")`` — the default access method normalizes away in the schema
  * IR, so the DDL carries no USING clause and verify is clean),
  * a partial index, a unique expression index, and a registry-typed
  * (`USING hash`) index; a `.ts` twin authors the same schema via

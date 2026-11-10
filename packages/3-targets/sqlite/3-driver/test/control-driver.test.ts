@@ -1,0 +1,121 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import sqliteControlDriverDescriptor, { SqliteControlDriver } from '../src/exports/control';
+
+let testDir: string;
+let testPath: string;
+
+beforeEach(() => {
+  testDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-test-'));
+  testPath = join(testDir, 'test.db');
+});
+
+afterEach(() => {
+  rmSync(testDir, { recursive: true, force: true });
+});
+
+describe('SqliteControlDriverDescriptor', () => {
+  it('opens only an existing file, for writing, when asked for an existing database only, and creates none', async () => {
+    await expect(
+      sqliteControlDriverDescriptor.create(testPath, { existingDatabaseOnly: true }),
+    ).rejects.toMatchObject({ code: 'DRIVER.CONNECTION_FAILED' });
+    expect(existsSync(testPath)).toBe(false);
+
+    const created = await sqliteControlDriverDescriptor.create(testPath);
+    await created.query('CREATE TABLE t (id INTEGER)');
+    await created.close();
+    const existing = await sqliteControlDriverDescriptor.create(testPath, {
+      existingDatabaseOnly: true,
+    });
+    await existing.query('INSERT INTO t (id) VALUES (1)');
+    expect(await existing.query('SELECT COUNT(*) AS n FROM t')).toEqual({ rows: [{ n: 1 }] });
+    await existing.close();
+  });
+
+  it('creates a control driver from file path', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    expect(driver).toBeInstanceOf(SqliteControlDriver);
+    expect(driver.familyId).toBe('sql');
+    expect(driver.targetId).toBe('sqlite');
+    await driver.close();
+  });
+
+  it('executes queries via control driver', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    await driver.query('CREATE TABLE t(id INTEGER PRIMARY KEY, val TEXT)');
+    await driver.query('INSERT INTO t VALUES (?, ?)', [1, 'hello']);
+    const result = await driver.query<{ id: number; val: string }>('SELECT * FROM t');
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ id: 1, val: 'hello' });
+    await driver.close();
+  });
+
+  it('refuses a NaN parameter, which SQLite would bind as NULL', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    await driver.query('CREATE TABLE t(id INTEGER PRIMARY KEY, value REAL)');
+    await expect(driver.query('INSERT INTO t VALUES (?, ?)', [1, Number.NaN])).rejects.toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message:
+          'Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.',
+      }),
+    );
+    await driver.close();
+  });
+
+  it('names the database file it is connected to', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    await expect(driver.databaseName()).resolves.toBe('test.db');
+    await driver.close();
+  });
+
+  it('names nothing for an in-memory database', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(':memory:');
+    await expect(driver.databaseName()).resolves.toBeUndefined();
+    await driver.close();
+  });
+
+  it('has foreign keys enabled', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    const result = await driver.query<{ foreign_keys: number }>('PRAGMA foreign_keys');
+    expect(result.rows[0]?.foreign_keys).toBe(1);
+    await driver.close();
+  });
+
+  it('waits for another connection to release the write lock instead of failing at once', async () => {
+    const setup = await sqliteControlDriverDescriptor.create(testPath);
+    await setup.query('CREATE TABLE t(id INTEGER PRIMARY KEY)');
+    await setup.close();
+    const holder = new Worker(
+      `
+        const { DatabaseSync } = require('node:sqlite');
+        const { parentPort, workerData } = require('node:worker_threads');
+        const db = new DatabaseSync(workerData.path);
+        db.exec('BEGIN EXCLUSIVE');
+        db.exec('INSERT INTO t VALUES (1)');
+        parentPort.postMessage('locked');
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+        db.exec('COMMIT');
+        db.close();
+      `,
+      { eval: true, workerData: { path: testPath } },
+    );
+    try {
+      await new Promise((resolve) => holder.once('message', resolve));
+      const driver = await sqliteControlDriverDescriptor.create(testPath);
+
+      await driver.query('BEGIN IMMEDIATE');
+      await driver.query('INSERT INTO t VALUES (2)');
+      await driver.query('COMMIT');
+
+      const result = await driver.query<{ n: number }>('SELECT count(*) AS n FROM t');
+      expect(result.rows[0]?.n).toBe(2);
+      await driver.close();
+    } finally {
+      await holder.terminate();
+    }
+  });
+});

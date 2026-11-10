@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model UnreadableJson {
+  id     Int    @id
+  broken Json   @default("{ nope")
+  list   Json[] @default(["{}", "nope"])
+}
