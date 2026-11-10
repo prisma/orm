@@ -56,7 +56,7 @@ type CreateOrConnect = Exclude<Mutation, { kind: 'disconnect' }>;
 export interface Translation {
   readonly graph: Graph;
   readonly context: ExecutionContext;
-  readonly gate: NodeId | undefined;
+  readonly parentRow: NodeId | undefined;
   readonly readsBack: boolean;
 }
 
@@ -70,7 +70,7 @@ export function addCreateWithRelations(
   model: Model,
   parsed: ParsedMutationInput,
   keysFromParent: readonly KeySource[],
-  gated = false,
+  requiresParentRow = false,
 ): NodeId {
   for (const relationMutation of parsed.relationMutations) {
     rejectDisconnect(relationMutation);
@@ -79,8 +79,8 @@ export function addCreateWithRelations(
   const keys = [...keysFromParent, ...before.keys];
   const row = createRowOf(t.context, model, undefined, parsed.scalarData, undefined);
   const parent = t.readsBack
-    ? addInsertAndReadBack(t, model, row, keys, gated)
-    : addParentInsert(t, model, row, keys, gated);
+    ? addInsertAndReadBack(t, model, row, keys, requiresParentRow)
+    : addParentInsert(t, model, row, keys, requiresParentRow);
   addAfterWrite(t, model, parent, parsed.relationMutations);
   return parent;
 }
@@ -90,15 +90,15 @@ function addParentInsert(
   model: Model,
   row: Record<string, unknown>,
   keys: readonly KeySource[],
-  gated: boolean,
+  requiresParentRow: boolean,
 ): NodeId {
   const insert = addInsertRows(t.graph, t.context.contract, model.tables.root, [row], {
     conflict: undefined,
     keys,
     junction: undefined,
   });
-  if (gated) {
-    requireGate(t, insert);
+  if (requiresParentRow) {
+    requireParentRow(t, insert);
   }
   return insert;
 }
@@ -108,7 +108,7 @@ function addInsertAndReadBack(
   model: Model,
   row: Record<string, unknown>,
   keys: readonly KeySource[],
-  gated: boolean,
+  requiresParentRow: boolean,
 ): NodeId {
   const { graph, context } = t;
   const { contract } = context;
@@ -127,8 +127,8 @@ function addInsertAndReadBack(
   for (const { from, columns } of keys) {
     graph.addPayloadDataEdge(from, insert, columns);
   }
-  if (gated) {
-    requireGate(t, insert);
+  if (requiresParentRow) {
+    requireParentRow(t, insert);
   }
   const identity = readBackIdentity(contract, namespaceId, tableName, model.modelName, 'create()');
   const identityPairs = projectTableColumns(contract, root, identity).map(
@@ -435,7 +435,7 @@ function addFindAndAssert(
       ),
     ),
   );
-  requireGate(t, find);
+  requireParentRow(t, find);
   const assert = graph.add(
     new Assert(
       ormError(
@@ -451,7 +451,7 @@ function addFindAndAssert(
     'rows',
     columns.map(([source]) => [source, source]),
   );
-  requireGate(t, assert);
+  requireParentRow(t, assert);
   return find;
 }
 
@@ -473,9 +473,9 @@ function requiredCriterion(
   return where;
 }
 
-function requireGate(t: Translation, node: NodeId<{ requires: Requires[] }>): void {
-  if (t.gate !== undefined) {
-    t.graph.addRequiresEdge(t.gate, node);
+function requireParentRow(t: Translation, node: NodeId<{ requires: Requires[] }>): void {
+  if (t.parentRow !== undefined) {
+    t.graph.addRequiresEdge(t.parentRow, node);
   }
 }
 

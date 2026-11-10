@@ -129,7 +129,12 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { graph, context, gate: find, readsBack: readsBack(collection, 'rows') };
+  const t: Translation = {
+    graph,
+    context,
+    parentRow: find,
+    readsBack: readsBack(collection, 'rows'),
+  };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
@@ -239,7 +244,7 @@ export function createGraph(
   const graph = new Graph(context.contract);
   requireIdentityColumnsForIncludes(collection);
   const created = addCreateWithRelations(
-    { graph, context, gate: undefined, readsBack: readsBack(collection, 'rows') },
+    { graph, context, parentRow: undefined, readsBack: readsBack(collection, 'rows') },
     modelOf(collection),
     parsed,
     [],
