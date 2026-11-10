@@ -43,12 +43,13 @@ type ClosingReason = 'committed' | 'rolled_back' | 'timed_out'
  * when they were issued.
  */
 type Scope = {
+  savepoint: string | undefined
   closingReason?: ClosingReason
   runningStatements: Set<Promise<void>>
 }
 
-function createScope(): Scope {
-  return { closingReason: undefined, runningStatements: new Set() }
+function createScope(savepoint: string | undefined): Scope {
+  return { savepoint, closingReason: undefined, runningStatements: new Set() }
 }
 
 type TransactionWrapper = {
@@ -58,8 +59,6 @@ type TransactionWrapper = {
   startedAt: number
   transaction?: Transaction
   operationQueue: Promise<void>
-  depth: number
-  savepoints: string[]
   savepointCounter: number
   scopes: Scope[]
 } & TransactionState
@@ -175,19 +174,9 @@ export class TransactionManager {
           )
         }
 
-        existing.depth += 1
-
         const savepointName = this.#nextSavepointName(existing)
-        existing.savepoints.push(savepointName)
-        try {
-          await this.#requiredCreateSavepoint(existing.transaction)(savepointName)
-        } catch (e) {
-          // Keep state consistent if creating the savepoint fails.
-          existing.depth -= 1
-          existing.savepoints.pop()
-          throw e
-        }
-        existing.scopes.push(createScope())
+        await this.#requiredCreateSavepoint(existing.transaction)(savepointName)
+        existing.scopes.push(createScope(savepointName))
 
         return { id: existing.id }
       })
@@ -213,10 +202,8 @@ export class TransactionManager {
         startedAt: Date.now(),
         transaction: undefined,
         operationQueue: Promise.resolve(),
-        depth: 1,
-        savepoints: [],
         savepointCounter: 0,
-        scopes: [createScope()],
+        scopes: [createScope(undefined)],
       }
 
       // An abort that arrived while the id was being generated would be missed by the listener
@@ -322,22 +309,14 @@ export class TransactionManager {
   async commitTransaction(transactionId: string): Promise<void> {
     return await this.tracingHelper.runInChildSpan('commit_transaction', async () => {
       await this.#withActiveTransactionLock(transactionId, 'commit', async (txw) => {
-        if (txw.depth > 1) {
+        const scope = innermostScope(txw)
+        if (scope.savepoint !== undefined) {
           if (!txw.transaction) throw new TransactionNotFoundError()
-          const savepointName = txw.savepoints.at(-1)
-          if (!savepointName) {
-            throw new TransactionInternalConsistencyError(
-              `Missing savepoint for nested commit. Depth: ${txw.depth}, transactionId: ${txw.id}`,
-            )
-          }
           try {
-            await this.#closeScopes([innermostScope(txw)], 'committed')
-            await this.#releaseSavepoint(txw.transaction, savepointName)
+            await this.#closeScopes([scope], 'committed')
+            await this.#releaseSavepoint(txw.transaction, scope.savepoint)
           } finally {
-            // Keep internal state consistent even if releasing the savepoint fails.
-            txw.savepoints.pop()
             txw.scopes.pop()
-            txw.depth -= 1
           }
           return
         }
@@ -349,25 +328,16 @@ export class TransactionManager {
   async rollbackTransaction(transactionId: string): Promise<void> {
     return await this.tracingHelper.runInChildSpan('rollback_transaction', async () => {
       await this.#withActiveTransactionLock(transactionId, 'rollback', async (txw) => {
-        if (txw.depth > 1) {
+        const scope = innermostScope(txw)
+        if (scope.savepoint !== undefined) {
           if (!txw.transaction) throw new TransactionNotFoundError()
-          const savepointName = txw.savepoints.at(-1)
-          if (!savepointName) {
-            throw new TransactionInternalConsistencyError(
-              `Missing savepoint for nested rollback. Depth: ${txw.depth}, transactionId: ${txw.id}`,
-            )
-          }
-
           try {
             const rollbackToSavepoint = this.#requiredRollbackToSavepoint(txw.transaction)
-            await this.#closeScopes([innermostScope(txw)], 'rolled_back')
-            await rollbackToSavepoint(savepointName)
-            await this.#releaseSavepoint(txw.transaction, savepointName)
+            await this.#closeScopes([scope], 'rolled_back')
+            await rollbackToSavepoint(scope.savepoint)
+            await this.#releaseSavepoint(txw.transaction, scope.savepoint)
           } finally {
-            // Keep internal state consistent even if rollback/release fails.
-            txw.savepoints.pop()
             txw.scopes.pop()
-            txw.depth -= 1
           }
           return
         }
@@ -566,7 +536,7 @@ export class TransactionManager {
   }
 
   // Any operation that mutates or closes a transaction must run through this lock so
-  // status/savepoint/depth checks and updates happen against a stable view of state.
+  // status/scope checks and updates happen against a stable view of state.
   async #withActiveTransactionLock<T>(
     transactionId: string,
     operation: string,
@@ -580,7 +550,7 @@ export class TransactionManager {
   }
 
   // Serializes operations per transaction id to prevent interleaving across awaits.
-  // This avoids races where one operation mutates savepoint/depth state while another
+  // This avoids races where one operation mutates scope state while another
   // operation is suspended, which could otherwise corrupt cleanup logic.
   async #runSerialized<T>(tx: TransactionWrapper, callback: () => Promise<T>): Promise<T> {
     const previousOperation = tx.operationQueue
