@@ -416,6 +416,67 @@ describe('transaction connection management', () => {
     expect(conn.listenerCount('error')).toBe(0)
   })
 
+  function startTransactionOn(conn: ReturnType<typeof makePoolConn>) {
+    const pool = {
+      getConnection: vi.fn().mockResolvedValue(conn),
+      query: vi.fn().mockResolvedValue([['8.0.13']]),
+    } as unknown as mariadb.Pool
+    return new PrismaMariaDbAdapter(pool, { supportsRelationJoins: false }).startTransaction()
+  }
+
+  const closed = { name: 'DriverAdapterError', cause: { kind: 'TransactionAlreadyClosed' } }
+
+  test.each(['commit', 'rollback'] as const)(
+    'a second close after %s sends no SQL and does not release the connection again',
+    async (first) => {
+      const conn = makePoolConn()
+      const tx = await startTransactionOn(conn)
+
+      await tx[first]()
+      conn.query.mockClear()
+      await tx.commit()
+      await tx.rollback()
+
+      expect(conn.query).not.toHaveBeenCalled()
+      expect(conn.release).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  test('a close or statement issued while COMMIT is running sends no SQL', async () => {
+    const conn = makePoolConn()
+    let finishCommit!: () => void
+    conn.query.mockImplementation(({ sql }: { sql: string }) =>
+      sql === 'COMMIT' ? new Promise<void>((resolve) => (finishCommit = resolve)) : Promise.resolve([]),
+    )
+    const tx = await startTransactionOn(conn)
+
+    const commit = tx.commit()
+    await tx.rollback()
+    await expect(tx.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toMatchObject(closed)
+    finishCommit()
+    await commit
+
+    expect(conn.query.mock.calls.map(([{ sql }]) => sql)).toEqual(['BEGIN', 'COMMIT'])
+    expect(conn.execute).not.toHaveBeenCalled()
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
+  test('statements and savepoint calls after close are rejected without reaching the driver', async () => {
+    const conn = makePoolConn()
+    const tx = await startTransactionOn(conn)
+
+    await tx.rollback()
+    conn.query.mockClear()
+
+    await expect(tx.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toMatchObject(closed)
+    await expect(tx.queryRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toMatchObject(closed)
+    await expect(tx.createSavepoint!('sp')).rejects.toMatchObject(closed)
+    await expect(tx.rollbackToSavepoint!('sp')).rejects.toMatchObject(closed)
+    await expect(tx.releaseSavepoint!('sp')).rejects.toMatchObject(closed)
+    expect(conn.query).not.toHaveBeenCalled()
+    expect(conn.execute).not.toHaveBeenCalled()
+  })
+
   test('falls back to end() for non-pool connections (no release method)', async () => {
     const conn = makePoolConn()
     const connNoRelease = { ...conn, release: undefined as unknown as typeof conn.release }
