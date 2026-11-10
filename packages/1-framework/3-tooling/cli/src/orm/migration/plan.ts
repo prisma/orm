@@ -20,6 +20,7 @@ import {
 } from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import {
   type CliInvocation,
   cliCommand,
@@ -170,7 +171,10 @@ function temporaryValueBlocks(result: MigrationPlanResult): readonly Block[] {
 }
 
 function warningBlocks(result: MigrationPlanResult): readonly Block[] {
-  return (result.warnings ?? []).map((text): Block => ({ kind: 'summary', status: 'warn', text }));
+  return [
+    ...(result.warnings ?? []),
+    ...(result.plannerWarnings ?? []).map(plannerWarningText),
+  ].map((text): Block => ({ kind: 'summary', status: 'warn', text }));
 }
 
 function planBlocks(result: MigrationPlanResult, migrationsRelative: string): readonly Block[] {

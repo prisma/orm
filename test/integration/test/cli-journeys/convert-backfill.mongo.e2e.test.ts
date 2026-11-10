@@ -417,11 +417,15 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
 
     expect({
       documents: result.documents,
-      warnings: Reflect.get(result.planned, 'warnings'),
+      plannerWarnings: Reflect.get(result.planned, 'plannerWarnings'),
     }).toEqual({
       documents: [{ email: 'a@example.com', status: 'active' }],
-      warnings: [
-        'Field "User.status" gains enum "Status". This change is not a statement, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.',
+      plannerWarnings: [
+        {
+          kind: 'documentsNotRewritten',
+          summary: 'Field "User.status" gains enum "Status"',
+          why: 'This change is not a statement, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.',
+        },
       ],
     });
   });
