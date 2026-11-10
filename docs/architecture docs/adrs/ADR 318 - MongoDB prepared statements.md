@@ -103,7 +103,7 @@ Paging is the most common prepared query, and SQL accepts placeholders there, so
 
 `MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. The rule is the one ad-hoc `execute` uses: a raw `updateOne` lowers to an `updateOne` wire command, which `runtime.execute` gives statistics for, so its prepared handle has `execute` too. The raw lane's plans carry their raw command type, so the type agrees. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
 
-The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. `execute` is not a second result: it is `query`'s single result row, the driver's response, reduced to `{ affectedRows }`. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
 
 ## The runtime is the only target, and the bridge is internal
 
