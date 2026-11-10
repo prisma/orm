@@ -59,6 +59,26 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
   );
 
   it(
+    'names a value outside the enum the new validator gives the field',
+    async () => {
+      const withStatus = { name: { bsonType: 'string' }, status: { enum: ['active', 'paused'] } };
+      await live.db().createCollection('users');
+      await live
+        .db()
+        .collection('users')
+        .insertOne({ _id: new ObjectId('64b7f0c2a1b2c3d4e5f60718'), name: 'Ada', status: 'gone' });
+
+      const result = await run([usersValidatorChange(withStatus)], usersContract(withStatus));
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        'It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document holds "gone" in "status", a value the new validator does not allow there.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'names --backfill only for the required fields the documents that do not fit lack',
     async () => {
       const nameOnly = { ...usersSchema(PLAN), required: ['_id', 'name'] };

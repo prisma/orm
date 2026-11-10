@@ -285,6 +285,15 @@ function problemsAgainst(
           `holds a value of type ${type} in ${named(field)}, which the new validator does not allow there`,
         ];
   });
+  const outsideEnum = [...fields].flatMap(([field, { value }]) => {
+    const allowed: unknown = Reflect.get(Object(shape.properties[field]), 'enum');
+    return !Array.isArray(allowed) ||
+      allowed.some((member) => canonicalize(member) === canonicalize(value))
+      ? []
+      : [
+          `holds ${mongoshValue(value)} in ${named(field)}, a value the new validator does not allow there`,
+        ];
+  });
   const undeclared = shape.closed
     ? [...fields.keys()]
         .filter(
@@ -294,7 +303,10 @@ function problemsAgainst(
     : [];
   return [
     ...unchecked.map((text) => ({ text, uncheckable: true })),
-    ...[...missing, ...retyped, ...undeclared].map((text) => ({ text, uncheckable: false })),
+    ...[...missing, ...retyped, ...outsideEnum, ...undeclared].map((text) => ({
+      text,
+      uncheckable: false,
+    })),
   ];
 }
 
