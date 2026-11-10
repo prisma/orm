@@ -1,0 +1,197 @@
+import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
+import { expectAbsent, expectPresent } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { indexDefinitionAst, indexExistsAst } from '../../../contract-free/checks';
+import {
+  alterIndexRename as alterIndexRenameDdl,
+  createIndex as createIndexDdl,
+  dropIndex as dropIndexDdl,
+} from '../../../contract-free/ddl';
+import type { CreateIndexElements } from '../../ddl/nodes';
+import { type Op, step, targetDetails } from './shared';
+
+type CheckStep = { sql: string; params?: readonly unknown[] };
+
+async function indexExistsSteps(
+  lowerer: ExecuteRequestLowerer,
+  schemaName: string,
+  indexName: string,
+): Promise<{ present: CheckStep; absent: CheckStep }> {
+  const checks = indexExistsAst(schemaName, indexName);
+  const present = await lowerer.lowerToExecuteRequest(checks.indexPresent());
+  const absent = await lowerer.lowerToExecuteRequest(checks.indexAbsent());
+  return { present, absent };
+}
+
+/** An unbound-namespace object renders unqualified: the DDL node takes no schema. */
+function ddlSchemaOf(schemaName: string): string | undefined {
+  return schemaName === UNBOUND_NAMESPACE_ID ? undefined : schemaName;
+}
+
+export interface CreateIndexExtras {
+  readonly type?: string;
+  readonly options?: Record<string, unknown>;
+  /**
+   * Partial-index predicate (WHERE body, without the keyword). Inserted
+   * verbatim, never quoted or escaped — the same opaque-SQL stance as RLS
+   * policy predicates.
+   */
+  readonly where?: string;
+  readonly unique?: boolean;
+}
+
+export async function createIndex(
+  schemaName: string,
+  tableName: string,
+  indexName: string,
+  elements: CreateIndexElements,
+  lowerer: ExecuteRequestLowerer,
+  extras?: CreateIndexExtras,
+): Promise<Op> {
+  const ddlNode = createIndexDdl({
+    schema: ddlSchemaOf(schemaName),
+    table: tableName,
+    name: indexName,
+    unique: extras?.unique === true,
+    elements,
+    type: extras?.type,
+    options: extras?.options,
+    where: extras?.where,
+  });
+  const execute = await lowerer.lowerToExecuteRequest(ddlNode);
+  const absent = await lowerer.lowerToExecuteRequest(
+    indexExistsAst(schemaName, indexName).indexAbsent(),
+  );
+  const defined = await lowerer.lowerToExecuteRequest(
+    indexDefinitionAst({
+      schema: schemaName,
+      table: tableName,
+      index: indexName,
+      unique: extras?.unique === true,
+      method: extras?.type ?? 'btree',
+      elements: 'columns' in elements ? { columns: elements.columns } : { expression: true },
+      hasPredicate: extras?.where !== undefined,
+    }),
+  );
+  return {
+    id: `index.${tableName}.${indexName}`,
+    label: `Create index "${indexName}" on "${tableName}"`,
+    operationClass: 'additive',
+    target: targetDetails('index', indexName, schemaName, tableName),
+    precheck: [
+      step(
+        `ensure index "${indexName}" does not exist`,
+        absent.sql,
+        absent.params,
+        expectAbsent(`index "${indexName}"`),
+      ),
+    ],
+    execute: [step(`create index "${indexName}"`, execute.sql, execute.params)],
+    postcheck: [
+      step(
+        `verify index "${indexName}" exists on "${tableName}" with the planned definition`,
+        defined.sql,
+        defined.params,
+      ),
+    ],
+  };
+}
+
+/** `ALTER INDEX … RENAME TO`: `widening`, because a rename keeps every row and value. */
+export function renameIndexOperationId(
+  schemaName: string,
+  tableName: string,
+  fromName: string,
+): string {
+  return `index.${schemaName}.${tableName}.${fromName}.rename`;
+}
+
+export async function renameIndex(
+  schemaName: string,
+  tableName: string,
+  fromName: string,
+  toName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<Op> {
+  const fromChecks = indexExistsAst(schemaName, fromName);
+  const toChecks = indexExistsAst(schemaName, toName);
+  const fromPresent = await lowerer.lowerToExecuteRequest(fromChecks.indexPresent());
+  const toAbsent = await lowerer.lowerToExecuteRequest(toChecks.indexAbsent());
+  const toPresent = await lowerer.lowerToExecuteRequest(toChecks.indexPresent());
+  const fromAbsent = await lowerer.lowerToExecuteRequest(fromChecks.indexAbsent());
+  const ddlNode = alterIndexRenameDdl({
+    schema: ddlSchemaOf(schemaName),
+    from: fromName,
+    to: toName,
+  });
+  const execute = await lowerer.lowerToExecuteRequest(ddlNode);
+  return {
+    id: renameIndexOperationId(schemaName, tableName, fromName),
+    label: `Rename index "${fromName}" to "${toName}" on "${tableName}"`,
+    operationClass: 'widening',
+    target: targetDetails('index', toName, schemaName, tableName),
+    precheck: [
+      step(
+        `ensure index "${fromName}" exists`,
+        fromPresent.sql,
+        fromPresent.params,
+        expectPresent(`index "${fromName}"`),
+      ),
+      step(
+        `ensure index "${toName}" does not exist`,
+        toAbsent.sql,
+        toAbsent.params,
+        expectAbsent(`index "${toName}"`),
+      ),
+    ],
+    execute: [step(`rename index "${fromName}" to "${toName}"`, execute.sql, execute.params)],
+    postcheck: [
+      step(
+        `verify index "${toName}" exists`,
+        toPresent.sql,
+        toPresent.params,
+        expectPresent(`index "${toName}"`),
+      ),
+      step(
+        `verify index "${fromName}" no longer exists`,
+        fromAbsent.sql,
+        fromAbsent.params,
+        expectAbsent(`index "${fromName}"`),
+      ),
+    ],
+  };
+}
+
+export async function dropIndex(
+  schemaName: string,
+  tableName: string,
+  indexName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<Op> {
+  const ddlNode = dropIndexDdl({ schema: ddlSchemaOf(schemaName), name: indexName });
+  const execute = await lowerer.lowerToExecuteRequest(ddlNode);
+  const { present, absent } = await indexExistsSteps(lowerer, schemaName, indexName);
+  return {
+    id: `dropIndex.${tableName}.${indexName}`,
+    label: `Drop index "${indexName}"`,
+    operationClass: 'widening',
+    target: targetDetails('index', indexName, schemaName, tableName),
+    precheck: [
+      step(
+        `ensure index "${indexName}" exists`,
+        present.sql,
+        present.params,
+        expectPresent(`index "${indexName}"`),
+      ),
+    ],
+    execute: [step(`drop index "${indexName}"`, execute.sql, execute.params)],
+    postcheck: [
+      step(
+        `verify index "${indexName}" does not exist`,
+        absent.sql,
+        absent.params,
+        expectAbsent(`index "${indexName}"`),
+      ),
+    ],
+  };
+}

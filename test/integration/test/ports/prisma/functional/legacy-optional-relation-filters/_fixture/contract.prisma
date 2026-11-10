@@ -27,7 +27,7 @@ model User {
 }
 
 model Bio {
-  id     String  @id @default(cuid(2))
+  id     String  @id @onCreate(cuid(2))
   text   String?
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique

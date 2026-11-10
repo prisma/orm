@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Shop {
   id       Int    @id
   name     String

@@ -1,0 +1,8 @@
+model M {
+  plain    String
+  optional String?
+  elemNull String?[]
+  list     String[]
+  listNull String[]?
+  both     String?[]?
+}

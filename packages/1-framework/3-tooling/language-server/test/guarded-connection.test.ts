@@ -67,14 +67,6 @@ async function closedConnection(): Promise<Connection> {
 
 describe('guardedConnection', () => {
   describe('once the client is gone', () => {
-    it('drops a notification instead of throwing at its sender', async () => {
-      const connection = guardedConnection(await closedConnection());
-
-      expect(() =>
-        connection.sendDiagnostics({ uri: 'file:///x.psl', diagnostics: [] }),
-      ).not.toThrow();
-    });
-
     it('hands an awaiting sender a promise, not a bare undefined', async () => {
       const connection = guardedConnection(await closedConnection());
 

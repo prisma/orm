@@ -4,6 +4,7 @@ import { expectTypeOf, test } from 'vitest';
 import type { IncludeRelationValue } from '../src/types';
 
 type Int4Field = {
+  readonly many: false;
   readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
   readonly nullable: false;
 };

@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "testModel": {
+      "model": "TestModel",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "TestModel": {
+            "fields": {
+              "bInt": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bool": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "dt": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "float": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "int": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "string": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bInt": {
+                  "column": "bInt"
+                },
+                "bool": {
+                  "column": "bool"
+                },
+                "bytes": {
+                  "column": "bytes"
+                },
+                "dt": {
+                  "column": "dt"
+                },
+                "float": {
+                  "column": "float"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "int": {
+                  "column": "int"
+                },
+                "string": {
+                  "column": "string"
+                }
+              },
+              "namespaceId": "public",
+              "table": "testModel"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "testModel": {
+              "checks": [
+                {
+                  "expression": "array_position(\"bInt\", NULL) IS NULL",
+                  "name": "testModel_bInt_elem_not_null_9451bcb8",
+                  "prefix": "testModel_bInt_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bool\", NULL) IS NULL",
+                  "name": "testModel_bool_elem_not_null_94b92b30",
+                  "prefix": "testModel_bool_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bytes\", NULL) IS NULL",
+                  "name": "testModel_bytes_elem_not_null_a0ea8e67",
+                  "prefix": "testModel_bytes_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"dt\", NULL) IS NULL",
+                  "name": "testModel_dt_elem_not_null_c2c390e2",
+                  "prefix": "testModel_dt_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"float\", NULL) IS NULL",
+                  "name": "testModel_float_elem_not_null_37a1906a",
+                  "prefix": "testModel_float_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"int\", NULL) IS NULL",
+                  "name": "testModel_int_elem_not_null_f4d3a68a",
+                  "prefix": "testModel_int_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"string\", NULL) IS NULL",
+                  "name": "testModel_string_elem_not_null_0d3545b4",
+                  "prefix": "testModel_string_elem_not_null"
+                }
+              ],
+              "columns": {
+                "bInt": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "bool": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "bytes": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": false
+                },
+                "dt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "float": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "int": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "string": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "0c5fd80b68d670bb15fcc9e86cbb9efba034dc0b0acbd84612ddfbb8ca1037f2"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

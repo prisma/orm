@@ -21,8 +21,8 @@ The contract expresses this with one field. The Supabase extension ships its con
         "tables": {
           "users": {
             "columns": {
-              "id":    { "nativeType": "uuid", "nullable": false },
-              "email": { "nativeType": "text", "nullable": false }
+              "id":    { "dataType": "pg/uuid", "nullable": false },
+              "email": { "dataType": "pg/text", "nullable": false }
             }
           }
         }
@@ -105,7 +105,7 @@ export function effectiveControlPolicy(
 
 The contract carries the default as a top-level `defaultControlPolicy?: ControlPolicy`. This is the field that does the work in practice: an extension that wraps an externally-owned schema sets `defaultControlPolicy: 'external'` once, and every object it declares inherits it. An application that owns its whole schema sets nothing and gets `managed` everywhere, which is the behaviour the framework had before control policy existed.
 
-The resolver is deliberately framework-agnostic — it takes two raw optional values, not typed IR nodes — so that the verifier and the planner call the *same* function without depending on each other's types. There is one definition of "effective policy" in the system, and both consumers read it. Neither re-derives the precedence chain on its own, so the two can never disagree about what an object's policy is.
+The resolver is deliberately framework-agnostic — it takes two raw optional values, not typed IR nodes — so that the verifier and the planner call the *same* function without depending on each other's types. There is one definition of "effective policy" in the system, and both consumers read it. Neither re-derives the precedence chain on its own, so the two cannot disagree about an object's declared policy. The floor below is the exception today: the SQL planner applies it and the SQL verifier does not yet, so for a `managed` table under an `external` default the two still disagree. The MongoDB planner, validator derivation and verifier all apply it.
 
 Because the default absorbs the common case, the field is **omitted from the serialized contract whenever an object's effective policy equals the contract default**. A contract that names no policies serializes identically to one with no notion of control policy at all, and therefore hashes identically. Control hashing is content-addressed, so this property is what lets the field exist without disturbing any contract that does not use it.
 
@@ -115,7 +115,7 @@ Where the field lives is shaped by the contract IR's structure ([ADR 221](ADR%20
 
 The verifier and the planner both decide what to do per object by switching on its effective policy. That decision is identical across every target within a family, so it lives **once on the family's abstract base** rather than being re-implemented per target. This is the [three-layer polymorphic IR pattern](../patterns/three-layer-polymorphic-ir.md): the framework defines the vocabulary and the resolver, the family owns the dispatch, and the target supplies only the hooks the dispatch cannot know on its own.
 
-For the SQL verifier, the target supplies two hooks. `normalizeNativeType` canonicalises the spelling of a type string (e.g. `int4` and `integer` are the same Postgres type; `normalizeNativeType` maps both to a single canonical form before the comparison). `normalizeDefault` performs the equivalent canonicalisation for column default expressions. Both hooks are about spelling normalisation — they do not claim that two distinct types are equivalent. After normalisation, column-type comparison is **exact equality** for all four control policies. There is no "compatible-shape" seam; the family base does not delegate a compatibility relation to the target.
+For the SQL verifier, the target supplies one hook, `normalizeDefault`, which canonicalises the spelling of column default expressions. Type spelling needs no hook: the contract side is written from the column's data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)), and the target's introspection reports the database's type in that same written form (`int4` and `integer` are the same Postgres type and both arrive as `int4`). Neither step claims that two distinct types are equivalent. After normalisation, column-type comparison is **exact equality** for all four control policies. There is no "compatible-shape" seam; the family base does not delegate a compatibility relation to the target.
 
 **Why there is no compatibility hook.** Column-type compatibility is a question about whether two *codecs'* storage types are interchangeable — a concern that is correct only with full knowledge of the codecs involved. Codecs are an open extension point: a user-supplied codec can map a domain type onto any native type, and a list of "compatible" native-type pairs maintained by the framework or the target would necessarily be incomplete. More critically, any pair that appeared on such a list would silently suppress a `type_mismatch` under `external`, which is the one policy where the framework offers no DDL safety net. A false "compatible" result under `external` is worse than useless: it lets a schema drift go undetected with no corrective path. Exact equality after normalisation is the only guarantee the framework can make honestly.
 
@@ -143,8 +143,8 @@ The Mongo family base mirrors the same four-way severity dispatch over collectio
 The planner refuses. When the contract default is `external`, every object in that contract space resolves to `external` regardless of any per-object override — the floor is not overridable:
 
 ```ts
-export function controlPolicyForCall(
-  subject: ControlPolicySubject | undefined,
+export function governingControlPolicy(
+  subject: { readonly explicitNodeControlPolicy?: ControlPolicy | undefined } | undefined,
   defaultControlPolicy: ControlPolicy | undefined,
 ): ControlPolicy {
   if (defaultControlPolicy === 'external') {
@@ -156,7 +156,7 @@ export function controlPolicyForCall(
 
 A mistake of this kind is not silently swallowed. When the floor suppresses DDL that an override would otherwise have produced, the planner records a `warn`-level conflict identifying the suppressed object by its coordinates. The plan still succeeds — the safe outcome already happened — but the contradiction is visible.
 
-The choice to enforce this at the planner, rather than reject the override at authoring time, is deliberate. A hard authoring error would forbid a legitimate pattern: an extension that is `external` by default but genuinely owns one object within its space. The floor lets that object's declaration stand while guaranteeing the dangerous interpretation can never reach the database. Enforcement lives in one place; the authoring surface does not duplicate it.
+The choice to enforce this where the policy is resolved, rather than reject the override at authoring time, is deliberate. A hard authoring error would forbid a legitimate pattern: an extension that is `external` by default but genuinely owns one object within its space. The floor lets that object's declaration stand while guaranteeing the dangerous interpretation can never reach the database. One resolver, `governingControlPolicy`, applies the floor, and every consumer that should honour it calls that resolver; the authoring surface does not duplicate it. MongoDB's collection validator derivation and its verifier resolve each collection with the same `governingControlPolicy`, so a `managed` collection under an `external` default gets no validator in the contract and is verified as `external`: in MongoDB the validator is part of the contract, so a contract that described one would promise the database something the planner will never apply, and a verifier that graded the collection as `managed` would fail on differences the planner will never repair.
 
 ## Authoring surfaces
 

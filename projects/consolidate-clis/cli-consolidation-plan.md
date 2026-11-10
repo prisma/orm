@@ -201,7 +201,9 @@ Direct commands                      Orchestration
                                          └── Apps
 ```
 
-`app deploy` ships one App. `postgres create` creates one Database. `project deploy` brings the whole configured Project up to date. There is no bare `prisma deploy`; its scope would be unclear (invariant 1).
+`app deploy` ships one App. `postgres create` creates one Database. `project deploy` brings the whole configured Project up to date.
+
+**Ruling of 2026-09-30 (Will Madden):** the shipped bare commands `prisma deploy` and `prisma dev` stay as they are. They are special cases of the noun-verb grammar, not violations to be renamed. Wherever this document writes `project deploy` or `project dev` for the Composer workflow, read the shipped bare command.
 
 Direct commands work without a config, but remote commands always need a resolved Cloud Project and Branch (Layer 3).
 
@@ -510,10 +512,10 @@ The flow is read-only first, for all three surfaces: detect the existing setup, 
 
 | Composer | Unified | Why |
 | --- | --- | --- |
-| `deploy <entry>` (bare = production) | `project deploy` (Branch resolved; production gate) | Invariant 8: production is never the implicit target of a bare command. **Bare-deploy-to-production does not survive.** |
-| `deploy <entry> --stage X` | `project deploy --branch X` | Branch is the platform noun; Composer's own ADR already defines a stage as a Branch. |
+| `deploy <entry>` (bare = production) | `deploy <entry>`, unchanged | Ruling of 2026-09-30: `deploy` stays a bare command as a special case of the grammar. Whether the production gate of invariant 8 applies to it is not decided here. |
+| `deploy <entry> --stage X` | `deploy <entry> --stage X`, unchanged | Same ruling. A later rename of `--stage` to `--branch` is open; Composer's own ADR already defines a stage as a Branch. |
 | `destroy <entry> --stage X` / `--production` | `branch delete X` (plan + guarded confirm) | Verb rule: one stable destructive verb (`delete`). Composer's explicit-target discipline survives — teardown never guesses, and the exact-id confirm guard applies (invariant 9). |
-| `dev <entry>` | `project dev` | Grammar: whole-Project actions live under `project`. Same stage-less, credential-free behavior. |
+| `dev <entry>` | `dev <entry>`, unchanged | Ruling of 2026-09-30: `dev` stays a bare command as a special case of the grammar. Same stage-less, credential-free behavior. |
 | `log <entry> [address]` | `app logs` / `project dev` output | Unified verb is `logs`, scoped per App instead of dotted addresses. |
 | `<entry>` positional argument | discovered via `prisma.config.ts` | One composition root replaces per-command entry paths (invariant 4). |
 

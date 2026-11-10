@@ -12,7 +12,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // port uses the required-content root.
 //
 // Ported here:
-//   - simple  → `.where({ _id }).first()` returns the row incl. the composite content.
+//   - simple  → `.where({ id }).first()` returns the row incl. the composite content.
 //
 // Upstream omits `country` in its seed (Prisma stores it absent and reads it back
 // as `null`). Prisma 8's mongo create input requires the optional `country` key
@@ -35,7 +35,7 @@ describe('ports/prisma/functional/composites/object/findFirst', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comments_required.create({
-          _id: id,
+          id,
           country: null,
           content: {
             text: 'Hello World',
@@ -43,10 +43,10 @@ describe('ports/prisma/functional/composites/object/findFirst', () => {
           },
         });
 
-        const comment = await db.comments_required.where({ _id: id }).first();
+        const comment = await db.comments_required.where({ id }).first();
 
         expect(comment).toEqual({
-          _id: id,
+          id,
           content: {
             text: 'Hello World',
             upvotes: [{ userId: '10', vote: true }],

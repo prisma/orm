@@ -1,0 +1,91 @@
+{
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "notes": {
+      "namespace": "__unbound__",
+      "model": "Note"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Note": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "body": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "notes",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "body": {
+                  "field": "body"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "f4a105e1157e3119f5716d96b8b500ecc12401c7edbd1798d68eedd0743921d1",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "notes": {
+              "kind": "mongo-collection",
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "body": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "_id",
+                    "body"
+                  ]
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 > **Status:** Superseded. The Kysely lane was removed from Prisma Next. This ADR is retained for historical context only. See [ADR-INDEX.md](../ADR-INDEX.md) for the current lane set.
 
+> **Update — the hook is removed.** The middleware hook `beforeExecute` this ADR describes no longer exists. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced it with lifecycle events and interceptors on a tree of activities.
+
 
 ```mermaid
 sequenceDiagram

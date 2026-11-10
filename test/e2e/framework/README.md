@@ -93,7 +93,7 @@ Contract-related test utilities are located in `test/e2e/framework/test/utils.ts
 
 **Available Utilities:**
 - `loadContractFromDisk<TContract>(contractJsonPath)`: Loads an already-emitted contract from disk. The generic type parameter should be specified from the emitted `contract.d.ts` file (e.g., `loadContractFromDisk<Contract>(contractJsonPath)`).
-- `emitAndVerifyContract(cliPath, contractTsPath, adapterPath, outputDir, expectedContractJsonPath)`: Emits contract via CLI and verifies it matches on-disk artifacts. Used in a single test to verify contract emission correctness.
+- `emitAndVerifyContract(cliPath, configPath, expectedContractJsonPath)`: Emits the contract via CLI and verifies the emitted `contract.json` and `contract.d.ts` match the committed copies read before the emit. Used in a single test to verify contract emission correctness.
 - `runDbInit({ connectionString, contractJsonPath })`: Runs `dbInit` via the control client before inserting test data.
 
 **Usage:**
@@ -105,7 +105,7 @@ import type { Contract } from './fixtures/generated/contract.d';
 const contract = await loadContractFromDisk<Contract>(contractJsonPath);
 
 // Emit and verify contract
-await emitAndVerifyContract(cliPath, contractTsPath, adapterPath, outputDir, expectedContractJsonPath);
+await emitAndVerifyContract(cliPath, configPath, expectedContractJsonPath);
 ```
 
 **Note**: These utilities are local to the e2e-tests package and depend on `@internal/sql-lane` and `@internal/sql-contract`. They are not exported from `@repo/test-utils` to avoid circular dependencies.

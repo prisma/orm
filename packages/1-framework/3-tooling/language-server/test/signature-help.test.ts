@@ -1,4 +1,5 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -15,11 +16,13 @@ import {
   optional,
   record,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 const parseArgument = vi.fn(str().parse);
 const text = { ...str(), parse: parseArgument };
@@ -113,7 +116,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'signature-policy',
     name: { required: true },
-    parameters: {},
+    spec: () => structBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };
@@ -123,7 +126,11 @@ function help(markedSource: string, labelOffsets = true) {
   expect(offset).toBeGreaterThanOrEqual(0);
   const { document, sources } = parse(markedSource.replace('|', ''), 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   parseArgument.mockClear();
   const result = providePslSignatureHelp({
     document,
@@ -131,10 +138,12 @@ function help(markedSource: string, labelOffsets = true) {
     position: sourceFile.positionAt(offset),
     clientSupportsLabelOffsets: labelOffsets,
     candidates: {
+      binder: testBinder({ sources, symbolTable, authoringContributions, pslBlockDescriptors }),
       pslBlockDescriptors,
       symbolTable,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
   });
   expect(parseArgument).not.toHaveBeenCalled();
@@ -393,10 +402,53 @@ describe('providePslSignatureHelp', () => {
   ])('suppresses help outside recognized argument lists: %s', (source) => {
     expect(help(source)).toBeNull();
   });
+});
 
-  it('never invokes argument parsers to inspect metadata', () => {
-    parseArgument.mockClear();
-    expect(field('call: nested(|)')?.signatures[0]?.label).toBe('nested(string, flag?: boolean)');
-    expect(parseArgument).not.toHaveBeenCalled();
+describe('providePslSignatureHelp — inside a mixin body', () => {
+  it.each([
+    [
+      'a field attribute of a model mixin',
+      'model mixin Example {',
+      'model Example {',
+      ' value String @probe(|)',
+    ],
+    [
+      'a later argument of a field attribute',
+      'model mixin Example {',
+      'model Example {',
+      ' value String @pair("a", |)',
+    ],
+    [
+      'a block attribute of a model mixin',
+      'model mixin Example {',
+      'model Example {',
+      ' @@probe(|)',
+    ],
+    [
+      'a field attribute of a type mixin',
+      'type mixin Example {',
+      'type Example {',
+      ' value String @probe(|)',
+    ],
+    ['a block attribute of a type mixin', 'type mixin Example {', 'type Example {', ' @@probe(|)'],
+    [
+      'a block attribute of a key = value mixin',
+      'policy mixin Example {',
+      'policy Example {',
+      ' @@probe(|)',
+    ],
+  ])(
+    'gives the signature a block of the keyword gives at %s',
+    (_position, mixinHeader, blockHeader, line) => {
+      const inMixin = help([mixinHeader, line, '}'].join('\n'));
+
+      expect(inMixin).toEqual(help([blockHeader, line, '}'].join('\n')));
+    },
+  );
+
+  it('gives a signature in a model mixin and in a key = value mixin', () => {
+    expect(help('model mixin Example {\n value String @probe(|)\n}')?.signatures).toHaveLength(1);
+    expect(help('model mixin Example {\n @@probe(|)\n}')?.signatures).toHaveLength(1);
+    expect(help('policy mixin Example {\n @@probe(|)\n}')?.signatures).toHaveLength(1);
   });
 });

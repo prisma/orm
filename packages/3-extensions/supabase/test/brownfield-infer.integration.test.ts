@@ -110,7 +110,7 @@ describe('contract infer — brownfield: app tables alongside the full Supabase 
       try {
         await client.connect(connectionString);
         const schema = await client.introspect({});
-        const ast = client.inferPslContract(schema);
+        const ast = await client.inferPslContract(schema);
         if (!ast) {
           throw new Error('Expected inferPslContract to return a PSL document');
         }
@@ -128,7 +128,7 @@ describe('contract infer — brownfield: app tables alongside the full Supabase 
         expect(ownerField?.typeNamespaceId).toBe('auth');
         expect(ownerField?.typeContractSpaceId).toBe('supabase');
 
-        const printed = printPsl(ast);
+        const printed = printPsl(ast, { pslBlockDescriptors: client.getPslBlockDescriptors() });
         expect(printed).toMatch(/\bowner\s+supabase:auth\.AuthUser\b/);
         expect(printed).toContain(
           '@relation(fields: [ownerId], references: [id], onDelete: Cascade',

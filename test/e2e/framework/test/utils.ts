@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import arktypeJson from '@prisma/orm-extension-arktype-json/control';
 import arktypeJsonRuntime from '@prisma/orm-extension-arktype-json/runtime';
@@ -15,9 +15,12 @@ import type { ExecutionContext, Runtime } from '@prisma/orm-postgres/family-runt
 import { materialiseMigrationPackage } from '@prisma/orm-postgres/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@prisma/orm-postgres/migration-tools/spaces';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { withClient, withDevDatabase } from '@repo/test-utils';
 import type { Client } from 'pg';
+
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
 
 const execFileAsync = promisify(execFile);
 
@@ -56,43 +59,43 @@ async function loadRawContractFromDisk(contractJsonPath: string): Promise<Record
 }
 
 /**
- * Emits a contract via CLI and verifies it matches the on-disk contract.json.
- * This should be used in a single test to verify contract emission correctness.
+ * Emits a contract via CLI and verifies the emitted artifacts match the committed
+ * contract.json and contract.d.ts. The committed files are read before the emit
+ * overwrites them; if the emit fails or its output differs, they are restored and the helper throws.
  * Returns the emitted contract for further use in the test.
- *
- * The config file should already include the contract configuration with nested structure:
- * ```typescript
- * contract: {
- *   source: contract,
- *   output: 'path/to/contract.json',
- *   types: 'path/to/contract.d.ts',
- * }
- * ```
  */
 export async function emitAndVerifyContract(
   cliPath: string,
   configPath: string,
   expectedContractJsonPath: string,
 ): Promise<Contract<SqlStorage>> {
-  await execFileAsync('node', [cliPath, 'contract', 'emit', '--config', configPath]);
+  const expectedContractDtsPath = join(dirname(expectedContractJsonPath), 'contract.d.ts');
+  const expectedJson = await readFile(expectedContractJsonPath, 'utf-8');
+  const expectedDts = await readFile(expectedContractDtsPath, 'utf-8');
+  const restoreCommitted = async () => {
+    await writeFile(expectedContractJsonPath, expectedJson);
+    await writeFile(expectedContractDtsPath, expectedDts);
+  };
 
-  // Read the emitted contract from the path specified in config.contract.output
-  // For now, we'll read from expectedContractJsonPath since that's what the test expects
-  // In the future, we could parse the config to get the actual output path
-  const emittedContractContent = await readFile(expectedContractJsonPath, 'utf-8');
-  const emittedContract = JSON.parse(emittedContractContent) as Record<string, unknown>;
+  try {
+    await execFileAsync('node', [cliPath, 'contract', 'emit', '--config', configPath]);
+  } catch (error) {
+    await restoreCommitted();
+    throw error;
+  }
 
-  const expectedContractContent = await readFile(expectedContractJsonPath, 'utf-8');
-  const expectedContract = JSON.parse(expectedContractContent) as Record<string, unknown>;
+  const emittedJson = await readFile(expectedContractJsonPath, 'utf-8');
+  const emittedDts = await readFile(expectedContractDtsPath, 'utf-8');
 
-  if (JSON.stringify(emittedContract) !== JSON.stringify(expectedContract)) {
+  if (emittedJson !== expectedJson || emittedDts !== expectedDts) {
+    await restoreCommitted();
     throw new Error(
-      `Emitted contract does not match expected contract on disk.\nExpected: ${expectedContractJsonPath}\nEmitted: ${expectedContractJsonPath}`,
+      `Emitted contract artifacts do not match the committed ones in ${dirname(expectedContractJsonPath)}. Run \`pnpm fixtures:check\` to see the drift.`,
     );
   }
 
   return new PostgresContractSerializer().deserializeContract(
-    emittedContract,
+    JSON.parse(emittedJson) as Record<string, unknown>,
   ) as Contract<SqlStorage>;
 }
 
@@ -100,23 +103,21 @@ export async function emitAndVerifyContract(
  * Materialise pgvector's pinned contract-space artifacts under
  * `<migrationsDir>/pgvector/...`. The e2e contracts declare pgvector
  * in their extension packs, so the per-space `db init` flow requires
- * its head ref + baseline migration to be present on disk.
+ * its head ref and migrations to be present on disk.
  */
 async function materialisePgvectorPinnedArtifacts(migrationsDir: string): Promise<void> {
   const space = pgvector.contractSpace;
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
 }
 
 export async function withE2eMigrationsDir<T>(
@@ -142,13 +143,14 @@ export async function runDbInit(options: {
 
   const invoke = async (migrationsDir: string): Promise<void> => {
     const result = await controlClient.dbInit({
+      invocation: TEST_INVOCATION,
       contract: contractJson,
       mode: 'apply',
       migrationsDir,
     });
     if (!result.ok) {
       throw new Error(
-        `dbInit failed: ${result.failure.summary}\n${JSON.stringify(result.failure, null, 2)}`,
+        `dbInit failed: ${result.failure.message}\n${JSON.stringify(result.failure, null, 2)}`,
       );
     }
   };
@@ -174,13 +176,14 @@ async function getPlannedDdlSql(options: {
 
   const invoke = async (migrationsDir: string): Promise<string> => {
     const result = await controlClient.dbInit({
+      invocation: TEST_INVOCATION,
       contract,
       mode: 'plan',
       connection: connectionString,
       migrationsDir,
     });
     if (!result.ok) {
-      throw new Error(`dbInit plan failed: ${result.failure.summary}`);
+      throw new Error(`dbInit plan failed: ${result.failure.message}`);
     }
 
     const sqlStatements =
@@ -255,8 +258,8 @@ export async function withTestRuntime<TContract extends Contract<SqlStorage>>(
       await runDbInit({ connectionString, contractJsonPath, migrationsDir });
 
       await withClient(connectionString, async (client: Client) => {
-        const postgresClient = postgres<TContract>({
-          contractJson,
+        const postgresClient = postgres({
+          contract: contractFromJson<TContract>(contractJson),
           pg: client,
           extensions: [pgvectorRuntime, arktypeJsonRuntime],
         });

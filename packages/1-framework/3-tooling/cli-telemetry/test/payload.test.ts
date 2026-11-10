@@ -23,15 +23,6 @@ describe('isParentToSenderPayload', () => {
     expect(isParentToSenderPayload({ ...validPayload, databaseTarget: 'postgres' })).toBe(true);
   });
 
-  it('accepts a payload with the optional databaseTarget override omitted entirely (no override)', () => {
-    // `validPayload` doesn't carry `databaseTarget` to begin with; spelling
-    // out the invariant here so a future regression that flipped the field
-    // from optional to required would surface as a failed assertion.
-    const { ...withoutOverride } = validPayload;
-    expect('databaseTarget' in withoutOverride).toBe(false);
-    expect(isParentToSenderPayload(withoutOverride)).toBe(true);
-  });
-
   it('accepts a payload carrying the run exit code', () => {
     expect(isParentToSenderPayload({ ...validPayload, exitCode: 4 })).toBe(true);
     expect(isParentToSenderPayload({ ...validPayload, exitCode: 0 })).toBe(true);

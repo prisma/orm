@@ -1,0 +1,190 @@
+import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
+import { isRuntimeError } from '@internal/framework-components/runtime';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
+import {
+  createMongoExecutionContext,
+  createMongoExecutionStack,
+  type MongoExecutionContext,
+  type MongoRuntimeExtensionDescriptor,
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { fixtureContract } from '../setup';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+
+const STANDARD_CODEC_IDS = [
+  'mongo/objectId@1',
+  'mongo/string@1',
+  'mongo/double@1',
+  'mongo/int32@1',
+  'mongo/bool@1',
+  'mongo/date@1',
+  'mongo/vector@1',
+  'mongo/int64@1',
+  'mongo/int64Number@1',
+  'mongo/decimal128@1',
+  'mongo/binary@1',
+  'mongo/json@1',
+  'mongo/bson@1',
+];
+
+describe('createMongoExecutionStack', () => {
+  it('builds a stack from target + adapter (no extensions)', () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    expect(stack.target).toBe(mongoRuntimeTarget);
+    expect(stack.adapter).toBe(mongoRuntimeAdapter);
+    expect(stack).not.toHaveProperty('driver');
+    expect(stack.extensions).toEqual([]);
+  });
+
+  it('exposes the supplied extension packs', () => {
+    const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {
+      kind: 'extension',
+      id: 'test-pack',
+      familyId: 'mongo',
+      targetId: 'mongo',
+      version: '0.0.1',
+      create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+    };
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+      extensions: [pack],
+    });
+    expect(stack.extensions).toEqual([pack]);
+  });
+});
+
+describe('createMongoExecutionContext', () => {
+  it('aggregates the standard wire-type codecs from the target descriptor', () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
+    for (const id of STANDARD_CODEC_IDS) {
+      expect(context.codecs.get(id), `codec ${id} should be registered`).toBeDefined();
+    }
+  });
+
+  it('folds extension-pack codec contributions into the same registry', () => {
+    const customCodec = mongoCodec({
+      typeId: 'test/custom@1',
+      fromWire: (wire: string) => `decoded:${wire}`,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+    });
+    const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {
+      kind: 'extension',
+      id: 'extension-with-codec',
+      familyId: 'mongo',
+      targetId: 'mongo',
+      version: '0.0.1',
+      types: {
+        codecTypes: { codecDescriptors: [mongoCodecDescriptor(customCodec, { traits: [] })] },
+      },
+      create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+    };
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+      extensions: [pack],
+    });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
+    expect(context.codecs.get('test/custom@1')).toBe(customCodec);
+    expect(context.codecs.get('mongo/string@1')).toBeDefined();
+  });
+
+  it('throws RUNTIME.DUPLICATE_CODEC when two contributors declare the same codec id', () => {
+    const conflictingCodec = mongoCodec({
+      typeId: 'mongo/string@1',
+      fromWire: (wire: string) => wire,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+    });
+    const conflictingPack: MongoRuntimeExtensionDescriptor<'mongo'> = {
+      kind: 'extension',
+      id: 'extension-string-conflict',
+      familyId: 'mongo',
+      targetId: 'mongo',
+      version: '0.0.1',
+      types: {
+        codecTypes: { codecDescriptors: [mongoCodecDescriptor(conflictingCodec, { traits: [] })] },
+      },
+      create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+    };
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+      extensions: [conflictingPack],
+    });
+
+    let caught: unknown;
+    try {
+      createMongoExecutionContext({ contract: fixtureContract, stack });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeDefined();
+    if (!isRuntimeError(caught)) throw new Error('expected runtime error');
+    expect(caught.code).toBe('RUNTIME.DUPLICATE_CODEC');
+    expect(caught.message).toContain('mongo/string@1');
+    expect(caught.message).toContain('extension-string-conflict');
+    expect(caught.message).toContain('mongo');
+    expect(caught.details).toMatchObject({
+      codecId: 'mongo/string@1',
+      existingOwner: 'mongo',
+      incomingOwner: 'extension-string-conflict',
+    });
+  });
+
+  it('returns a frozen { contract, codecs } object with no stack', () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
+    expect(Object.isFrozen(context)).toBe(true);
+    expect(context.contract).toBe(fixtureContract);
+    expect(Object.keys(context)).not.toContain('stack');
+  });
+
+  it('preserves the TContract type on context.contract (no unknown widening)', () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const context = createMongoExecutionContext({ contract: fixtureContract, stack });
+    expectTypeOf(context).toMatchTypeOf<MongoExecutionContext<typeof fixtureContract>>();
+    expectTypeOf(context.contract).toEqualTypeOf<typeof fixtureContract>();
+  });
+});
+
+describe('runtime target descriptor', () => {
+  it('declares the standard Mongo codecs as codec descriptors', () => {
+    const codecIds = (mongoRuntimeTarget.types?.codecTypes?.codecDescriptors ?? [])
+      .map((descriptor) => descriptor.codecId)
+      .sort();
+    expect(codecIds).toEqual([...STANDARD_CODEC_IDS].sort());
+  });
+});
+
+describe('runtime adapter descriptor', () => {
+  it('create(stack) returns an instance whose lower() delegates to the standard adapter', async () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const adapterInstance = mongoRuntimeAdapter.create(stack);
+    expect(adapterInstance.familyId).toBe('mongo');
+    expect(adapterInstance.targetId).toBe('mongo');
+    expect(typeof adapterInstance.lower).toBe('function');
+  });
+});

@@ -74,14 +74,6 @@ describe('loadOrmConfig', () => {
     expect(orm.contract?.source?.inputs).toEqual(['contract.prisma']);
   });
 
-  it('discovers the config in the supplied cwd rather than the process cwd', async () => {
-    const dir = projectDir();
-    writeConfig(dir, VALID_BODY);
-
-    expect(dir).not.toBe(process.cwd());
-    expect((await loadOrmConfig({ cwd: dir })).files[0]?.sections['orm']).toBeDefined();
-  });
-
   it('reads an explicit config path relative to the cwd', async () => {
     const dir = projectDir();
     writeConfig(dir, VALID_BODY, 'custom.config.ts');

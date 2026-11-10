@@ -45,7 +45,7 @@ Key tensions:
 
 `migration plan` reuses the existing `PostgresMigrationPlanner` (same planner `db init` uses). Instead of introspecting a live database for the "from" schema IR, it converts the "from" contract to a `SqlSchemaIR` via `contractToSchemaIR(contract, options) → SqlSchemaIR`.
 
-The conversion is intentionally lossy in the contract→schemaIR direction (drops `codecId`, `typeParams`, `typeRef`), but the planner only needs structural information (native types, nullability, defaults, constraints) to produce correct diffs. No second diff engine is required.
+The conversion is intentionally lossy in the contract→schemaIR direction (drops `codecId` and `typeParams`), but the planner only needs structural information (native types, nullability, defaults, constraints) to produce correct diffs. No second diff engine is required.
 
 The `contractToSchemaIR` function lives in the SQL family tooling layer (`@internal/family-sql`). The CLI accesses it via `TargetMigrationsCapability.contractToSchema()`, respecting the layering boundary.
 
@@ -93,6 +93,8 @@ If migration N fails, migrations 1..N-1 are already committed. Re-running `migra
 `migrate` is policy-agnostic — it derives allowed operation classes from the operations already present in `ops.json`. The policy gate belongs at plan time (`migration plan`), not apply time.
 
 ### 6. "From" contract resolution
+
+Since 8.0.0-rc.12 the default origin is the `db` ref: with no migrations and no `db` ref the origin is the empty database, with migrations but no `db` ref the command is refused with `MIGRATION.PLAN_ORIGIN_UNKNOWN`, and otherwise the origin is the hash the `db` ref points at. The rest of this section describes the earlier behaviour.
 
 `migration plan` determines the "from" contract by resolving the latest migration target:
 - **No migrations**: Assume `empty` (new project). The converted schema IR is empty.

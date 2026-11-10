@@ -1,11 +1,10 @@
-import { ulid } from '@internal/ids';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { defineContract, field, gen, model, type } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
   models: {
     User: model('User', {
       fields: {
-        id: field.generated(ulid()).id(),
+        id: field.column(type.Char(26)).onCreate(gen.ulid()).id(),
       },
     }).sql({ table: 'user' }),
   },

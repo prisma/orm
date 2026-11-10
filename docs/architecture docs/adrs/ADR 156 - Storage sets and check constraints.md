@@ -1,6 +1,6 @@
 # ADR 156 — Storage sets and check constraints
 
-**Status: Partially superseded.** Section 2 below — `tables.*.checks[]` as a structured `{ kind: "inSet", column, setRef }` entry, and the statement that this is "intentionally not a general-purpose SQL expression system in the contract" — is superseded by [ADR 244 — Check constraints are opaque wire-named expressions](<./ADR 244 - Check constraints are opaque wire-named expressions.md>). A check now carries one opaque SQL predicate under a content-addressed wire name, because the structured shape could not survive Postgres reprinting the predicates it was supposed to recognise. Section 1 — `storage.sets` and the `column.valueSet` that references it — **remains in force**; value sets still drive generated types, ordering, and developer-facing tooling. They simply no longer travel into the check node, so the `setRef` link described below is gone: a check's members are baked into its predicate text. The examples in section 2 and the check-constraint half of "How this is used" are preserved as a historical record.
+**Status: Superseded.** Both halves of this ADR are replaced. Section 1, `storage.sets`, is replaced by the value set: a `valueSet` entry at `storage.namespaces.<ns>.entries.valueSet.<Name>`. A column names its value set with a `valueSet` reference, and the domain field names the domain enum with one. Section 2, `tables.*.checks[]` as a structured `{ kind: "inSet", column, setRef }` entry, is replaced by [ADR 244 — Check constraints are opaque wire-named expressions](<./ADR 244 - Check constraints are opaque wire-named expressions.md>): a check is one opaque SQL predicate under a content-addressed wire name, with its members written into the predicate. The idea stands: the allowed values and their enforcement are explicit in the contract. [ADR 157's October 12, 2026 amendment](<./ADR 157 - Execution enums.md#amendment-october-12-2026--how-enums-are-realized>) describes how enums use both today. The rest of this ADR is kept as a historical record.
 
 ## Context
 
@@ -76,7 +76,7 @@ This is intentionally not a general-purpose SQL expression system in the contrac
         "columns": {
           "status": {
             "codecId": "pg/text@1",
-            "nativeType": "text",
+            "dataType": "pg/text",
             "nullable": false
           }
         },

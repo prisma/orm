@@ -1,0 +1,13 @@
+[
+  {
+    "id": "migration.20260201T0000_add_embedding",
+    "label": "Fixture operation",
+    "operationClass": "additive",
+    "execute": [
+      {
+        "description": "fixture",
+        "sql": "SELECT 1"
+      }
+    ]
+  }
+]

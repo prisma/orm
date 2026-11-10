@@ -31,11 +31,11 @@ model Post {
   content   String
   kind      String
   authorId  ObjectId
-  createdAt DateTime
+  createdAt Date
   author    User @relation(fields: [authorId], references: [id])
   @@discriminator(kind)
   @@index([authorId])
-  @@index([createdAt(sort: Desc), authorId])
+  @@index([sort(createdAt, Desc), authorId])
   @@map("posts")
 }
 
@@ -47,6 +47,6 @@ model Article {
 
 model Tutorial {
   difficulty String
-  duration   Int
+  duration   Int32
   @@base(Post, "tutorial")
 }

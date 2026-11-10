@@ -26,7 +26,7 @@ Legend:
 | `createAll` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll`) |
 | `createAndCount` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/create.test.ts` (`createAndCount`) |
 | `update` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`update`) |
-| Empty-data `update` returns the matched row | ❌ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
+| Empty-data `update` returns the matched row | ✅ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
 | `updateAll` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAll`) |
 | `updateAndCount` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAndCount`, one write statement); `test/integration/test/sql-orm-client/count-terminal-interleaving.test.ts` (SQLite real-driver write-derived count) |
 | `delete` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/delete.test.ts` (`delete`) |
@@ -57,7 +57,7 @@ Legend:
 | String `contains` first-class helper | 🟡 | 🟡 | — | |
 | String `startsWith` first-class helper | 🟡 | 🟡 | — | |
 | String `endsWith` first-class helper | 🟡 | 🟡 | — | |
-| `findUniqueOrThrow` / `findFirstOrThrow` terminal | ❌ | ❌ | — | |
+| `firstOrThrow()` (`findUniqueOrThrow` / `findFirstOrThrow`) | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/first.test.ts` (`firstOrThrow() returns the first matching row and rejects when no row matches`) |
 | Per-query / global `omit` | ❌ | ❌ | — | |
 | `createMany({ skipDuplicates })` — `createAll`/`createAndCount` with `{ onConflict: 'skip' }` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create-on-conflict.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll with onConflict skip`) |
 | `updateMany({ limit })` | ❌ | ❌ | — | |

@@ -1,0 +1,5 @@
+
+// use prisma-8
+model A {
+  id String @id @onCreate(uuid())
+}

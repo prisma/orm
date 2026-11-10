@@ -6,10 +6,11 @@ Durable design reference material for Prisma 8, organised per the `docs-framewor
 
 This directory is **partially populated**. The slots currently in use:
 
+- [`00-purpose/`](00-purpose/) — who Prisma 8 is for and where it is going: the [project intent](00-purpose/project-intent.md) and the [vision](00-purpose/vision.md).
 - [`04-inspirations/migrations/`](04-inspirations/migrations/) — vendor research and established-system conventions that informed the migration domain model (Atlas, Active Record, and a six-system synthesis).
 - [`10-domains/migration/`](10-domains/migration/) — the conceptual domain reference for the migration system: ubiquitous language, entities, operations, mental model (Git as the anchor), and CLI mapping.
 
-The framework's other slots (`00-purpose/`, `01-principles/`, `03-domain-model/`, `05-infrastructure/`, `06-operations/`, `90-decisions/`, `99-process/`) are not yet created. They will be added when there is durable content to put in them; empty scaffolds imply false completeness. Wholesale framework adoption is a separate, future decision.
+The framework's other slots (`01-principles/`, `03-domain-model/`, `05-infrastructure/`, `06-operations/`, `90-decisions/`, `99-process/`) are not yet created. They will be added when there is durable content to put in them; empty scaffolds imply false completeness. Wholesale framework adoption is a separate, future decision.
 
 ADRs continue to live under [`../architecture docs/adrs/`](../architecture%20docs/adrs/). The implementation-facing subsystem docs live under [`../architecture docs/subsystems/`](../architecture%20docs/subsystems/). The user-facing glossary lives at [`../glossary.md`](../glossary.md). None of those have moved.
 

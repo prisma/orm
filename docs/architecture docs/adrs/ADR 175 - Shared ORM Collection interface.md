@@ -32,7 +32,7 @@ const user = await db.User.byEmail('alice@example.com').first();
 **Mongo ORM (target — not yet implemented):**
 
 ```typescript
-const db = mongoOrm({ contract, runtime });
+const db = mongoOrm({ context, runtime });
 
 // Same custom collection pattern
 class UserCollection extends Collection<Contract, 'User'> {
@@ -112,7 +112,7 @@ The `Collection` class with fluent chaining is the shared ORM interface for all 
 | **Terminal compilation** | `CollectionState` → `SqlQueryPlan` (SQL AST) | `CollectionState` → `MongoQueryPlan` (FindCommand / AggregateCommand) |
 | **Include resolution** | Lateral joins, correlated subqueries, multi-query stitching | `$lookup` pipeline stages; embedded relations auto-projected |
 | **Where expression output** | SQL AST nodes (`AnyWhereExpr`) | Mongo filter documents (`MongoExpr`) |
-| **Field mapping** | Column remapping via `model.storage.fields` | Identity mapping (domain fields = document fields) |
+| **Field mapping** | Column remapping via `model.storage.fields` | Stored-name remapping via `model.storage.fields` |
 | **Mutation compilation** | `INSERT...RETURNING`, `ON CONFLICT`, FK cascades | `insertOne`, `updateOne` with update operators (`$set`, `$inc`, `$push`) |
 
 ### Approach: spike then extract
@@ -144,6 +144,10 @@ The SQL ORM's `ModelAccessor` provides typed comparison methods (`.eq()`, `.neq(
 ### Aggregation/groupBy
 
 The SQL ORM has `.groupBy()` and `.aggregate()`. Mongo has aggregation pipelines. Whether these belong on the shared `Collection` interface or are family-specific extensions is an open question. The pipeline DSL is architecturally the Mongo equivalent of the SQL query builder — a lower-level escape hatch, not part of the ORM Collection.
+
+### Ordering by relations and null placement
+
+The SQL ORM's `orderBy` accepts a to-one relation's field, a to-many relation's `count(predicate?)` and `{ nulls: 'first' | 'last' }` on `asc`/`desc` ([ADR 255](ADR%20255%20-%20Relation%20ordering%20lowers%20to%20correlated%20subqueries.md)). The Mongo ORM's `orderBy` takes `Record<field, 1 | -1>`. Whether the shared interface adopts the accessor form, and how Mongo would lower a relation order, is open.
 
 ### Include refinement depth
 

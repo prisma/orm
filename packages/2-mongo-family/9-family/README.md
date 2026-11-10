@@ -16,7 +16,7 @@ This package is the Mongo family integration point for both control-plane assemb
 
 - **Control-plane assembly**: Exposes `mongoFamilyDescriptor` and `createMongoFamilyInstance()` for validation and emission flows.
 - **Family hook integration**: Wires `mongoEmission` from `@internal/mongo-emitter` into the family descriptor.
-- **Adapter SPI**: Defines `MongoControlAdapter` — the contract `@internal/adapter-mongo` implements for marker-ledger CAS, ledger appends, and schema introspection. `MongoControlFamilyInstance` resolves the adapter from the control stack and dispatches wire-level work through it.
+- **Adapter SPI**: Defines `MongoControlAdapter` — the contract `@internal/adapter-mongo` implements for marker-ledger CAS, ledger appends, schema introspection, and building the migration runner's dependencies (`createRunnerDependencies`). `MongoControlFamilyInstance` resolves the adapter from the control stack and dispatches wire-level work through it.
 - **Family-shared verification**: Owns `verifyMongoSchema` (the structural diff against introspected `MongoSchemaIR`) and the `MongoSchemaVerifierBase` walk used by per-target verifiers.
 - **Authoring-time family pack**: Exposes `@internal/family-mongo/pack` so `defineContract(...)` can bind a Mongo contract to the Mongo family without importing control-plane code.
 - **Validation and emission**: Delegates Mongo contract validation to `@internal/mongo-contract` and contract emission to the shared emitter pipeline.
@@ -24,7 +24,7 @@ This package is the Mongo family integration point for both control-plane assemb
 ## Entrypoints
 
 - `./control`: control-plane entrypoint exporting `mongoFamilyDescriptor`, `createMongoFamilyInstance`, `MongoControlFamilyInstance`, and family-shared helpers (`contractToMongoSchemaIR`, `formatMongoOperations`, `diffMongoSchemas`)
-- `./control-adapter`: SPI surface — `MongoControlAdapter` and `MongoControlAdapterDescriptor`, implemented by `@internal/adapter-mongo`
+- `./control-adapter`: SPI surface — `MongoControlAdapter` and `MongoControlAdapterDescriptor`, implemented by `@internal/adapter-mongo`, plus the runner dependency types `MongoRunnerDependencies` and `MarkerOperations`
 - `./ir`: Mongo family IR abstract bases (`MongoContractSerializerBase`, `MongoSchemaVerifierBase`) extended by target packages. The concrete `MongoStorage` storage class lives in the foundation package `@internal/mongo-contract`.
 - `./migration`: migration authoring — `Migration` class, factory functions, and strategies (re-exported from `@internal/target-mongo/migration`)
 - `./pack`: pure pack ref for TypeScript authoring flows such as `@internal/mongo-contract-ts/contract-builder`
@@ -54,13 +54,15 @@ const result = await familyInstance.emitContract({ contract });
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
@@ -70,8 +72,8 @@ const Task = model('Task', {
     comments: { field: 'comments' },
   },
   fields: {
-    _id: field.objectId(),
-    type: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    type: field.scalar(type.String()),
     metadata: field.valueObject(Address).optional(),
   },
   relations: {
@@ -88,8 +90,8 @@ const Task = model('Task', {
 const Comment = model('Comment', {
   owner: Task,
   fields: {
-    _id: field.objectId(),
-    text: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    text: field.scalar(type.String()),
   },
 });
 
@@ -121,7 +123,7 @@ class AddUsersCollection extends Migration {
         validator: { $jsonSchema: { required: ["email"] } },
         validationLevel: "strict",
       }),
-      createIndex("users", [{ field: "email", direction: 1 }], { unique: true }),
+      createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true }),
     ]
   }
 }
@@ -130,13 +132,13 @@ export default AddUsersCollection;
 MigrationCLI.run(import.meta.url, AddUsersCollection);
 ```
 
-Run `node migration.ts` to produce `ops.json` and `migration.json`. Use `--dry-run` to preview without writing.
+Run `node <directory>/migration.ts` from any directory to produce `ops.json` and `migration.json`. Use `--dry-run` to preview without writing.
 
 ## Package Structure
 
 - `src/core/control-descriptor.ts`: `MongoFamilyDescriptor` implementation
 - `src/core/control-instance.ts`: `createMongoFamilyInstance()` and `MongoControlFamilyInstance` — resolves the `MongoControlAdapter` from the control stack and dispatches wire-level work through it
-- `src/core/control-adapter.ts`: `MongoControlAdapter` SPI definition
+- `src/core/control-adapter.ts`: `MongoControlAdapter` SPI definition and the `MongoRunnerDependencies` and `MarkerOperations` types it returns
 - `src/core/control-target-descriptor.ts`: `MongoControlTargetDescriptor` interface (concrete `mongoTargetDescriptor` lives in `@internal/target-mongo`)
 - `src/core/ir/`: Mongo family IR abstract bases (`MongoContractSerializerBase`, `MongoSchemaVerifierBase`); the concrete `MongoStorage` class lives at `@internal/mongo-contract/ir/mongo-storage.ts`
 - `src/core/operation-preview.ts`: family-shared `formatMongoOperations` / `mongoOperationsToPreview`

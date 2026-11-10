@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { detect } from 'package-manager-detector/detect';
-import { basename, dirname, isAbsolute, join } from 'pathe';
+import { basename, dirname, isAbsolute, join, relative } from 'pathe';
 import type { PackageManager } from '../commands/init/detect-package-manager';
 import { formatRunCommand } from '../commands/init/detect-package-manager';
 import {
@@ -141,6 +141,11 @@ export interface ScaffoldOutcome {
  * `devDependencies`. Transitive presence is deliberately ignored: detecting it
  * needs the lockfile, and the realistic risk is a direct pin being clobbered.
  */
+function declaresRuntimeDependencies(parsed: Record<string, unknown> | null): boolean {
+  const value = parsed?.['dependencies'];
+  return value !== null && typeof value === 'object' && Object.keys(value).length > 0;
+}
+
 function hasDirectDep(parsed: Record<string, unknown>, name: string): boolean {
   for (const field of ['dependencies', 'devDependencies'] as const) {
     const value = parsed[field];
@@ -371,7 +376,9 @@ function planScaffold(ctx: {
       working = withScripts;
       changed = true;
     }
-    const { content: withType, warning: typeWarning } = ensureEsmModuleType(working);
+    const { content: withType, warning: typeWarning } = ensureEsmModuleType(working, {
+      existingProject: manifestExisted && declaresRuntimeDependencies(parsedManifest),
+    });
     if (withType !== null) {
       working = withType;
       changed = true;
@@ -486,7 +493,7 @@ export function scaffoldProject(ctx: {
   }
 
   for (const file of plan.files) {
-    const target = join(ctx.cwd, file.path);
+    const target = isAbsolute(file.path) ? file.path : join(ctx.cwd, file.path);
     try {
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, file.content, 'utf-8');
@@ -498,7 +505,7 @@ export function scaffoldProject(ctx: {
         filesRenamed,
       });
     }
-    filesWritten.push(file.path);
+    filesWritten.push(relative(ctx.cwd, target));
     if (file.note !== undefined) {
       notes.push(file.note);
     }

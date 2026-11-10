@@ -1,0 +1,66 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  buildSymbolTable,
+  createBinder,
+  EMPTY_DATA_TYPES,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
+import { parse } from '@internal/psl-parser/syntax';
+import { describe, expect, it } from 'vitest';
+import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
+
+function build(source: string) {
+  const { document, sources } = parse(source, 'schema.prisma');
+  const result = buildSymbolTable({ documents: [document], sources, defaultNamespaceId: 'public' });
+  const { binder } = createBinder({
+    sources,
+    symbolTable: result.symbolTable,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: EMPTY_DATA_TYPES,
+    },
+  });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    binder,
+    dataTypes: EMPTY_DATA_TYPES,
+  });
+  return { ...result, blockDiagnostics, parsedBlocks };
+}
+
+describe('enum @@type through the family descriptor', () => {
+  it('parses the codec id into the block attributes', () => {
+    const result = build('enum Role {\n  @@type("pg/text@1")\n  Admin\n}');
+
+    expect(result.diagnostics).toEqual([]);
+    const block = result.symbolTable.defaultNamespace.blocks['Role'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.get(block)?.attributes['type']?.args).toEqual({
+      codecId: 'pg/text@1',
+    });
+  });
+
+  it('rejects a non-string argument when the blocks are resolved', () => {
+    const result = build('enum Role {\n  @@type(foo)\n  Admin\n}');
+
+    expect(result.blockDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected a string literal',
+      }),
+    ]);
+    const block = result.symbolTable.defaultNamespace.blocks['Role'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.has(block)).toBe(false);
+  });
+});

@@ -13,7 +13,7 @@ const countAnything: AggregateDescriptor = {
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'lib/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 const countRows: AggregateDescriptor = {
@@ -21,7 +21,7 @@ const countRows: AggregateDescriptor = {
   input: { kind: 'none' },
   output: { kind: 'codec', codecId: 'lib/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 const sumNumeric: AggregateDescriptor = {
@@ -105,7 +105,7 @@ describe('settleAggregateOverloads', () => {
       input: { kind: 'codec', codecId: 'lib/int8@1' },
       output: { kind: 'self' },
       nullable: false,
-      emptyResultJson: '0',
+      emptyResultWire: '0',
     };
     const settled = settleAggregateOverloads([sumInt8, later], codecs);
 
@@ -132,7 +132,7 @@ describe('settleAggregateOverloads', () => {
       input: { kind: 'trait', trait: 'numeric' },
       output: { kind: 'codec', codecId: 'lib/int8@1' },
       nullable: false,
-      emptyResultJson: '0',
+      emptyResultWire: '0',
     };
     const settled = settleAggregateOverloads([sumNumeric, later], codecs);
 

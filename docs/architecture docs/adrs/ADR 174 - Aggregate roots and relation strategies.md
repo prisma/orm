@@ -53,6 +53,8 @@ A User model as an aggregate root with a referenced relation (Post) and an embed
 }
 ```
 
+> Every model's `storage` now also records each field's stored name in `fields`, embedded models included (see [ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md)). This example predates that and leaves `fields` out.
+
 Three things to notice:
 
 1. **`roots`** maps ORM accessor names to models — `db.users` and `db.posts` are the entry points. Address is not in `roots` because it's only reachable through User.
@@ -174,7 +176,7 @@ This design means:
 ### Open questions
 
 - ~~**Relation storage details**: What's the shape of family-specific join info on `reference` relations? What field on the parent holds an `embed` relation's data?~~ **Resolved**: Reference relations use `on: { localFields, targetFields }`. Embed relations use `field: string`.
-- **Many-to-many**: Does a junction table appear as a model? Probably not — it's storage machinery, not a domain entity. But the relation needs to reference it somehow.
+- ~~**Many-to-many**: Does a junction table appear as a model? Probably not — it's storage machinery, not a domain entity. But the relation needs to reference it somehow.~~ **Resolved.** A junction table is a model; the relation's `through` resolves by model. See [ADR 267 — A table may hold columns its model does not map](ADR%20267%20-%20A%20table%20may%20hold%20columns%20its%20model%20does%20not%20map.md).
 - **`nullable` on relations**: Can a reference relation be nullable (User may not have an assignee)? Where does this live — on the relation, on the field, or on the storage?
 - ~~**Entity vs value object**~~: **Resolved.** Value objects are defined in a top-level `valueObjects` section, distinct from `models`. See [ADR 178 — Value objects in the contract](ADR%20178%20-%20Value%20objects%20in%20the%20contract.md).
 

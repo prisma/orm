@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type * as configLoader from '@internal/config-loader';
@@ -100,14 +100,14 @@ describe('executeFormat', () => {
     expect(await readFile(inputPath, 'utf-8')).toBe(original);
   });
 
-  it('leaves an absent-format source untouched', async () => {
+  it('leaves a .prisma input of a typescript source untouched', async () => {
     const inputPath = join(tmpDir, 'schema.prisma');
     await writeFile(inputPath, MESSY_PSL, 'utf-8');
 
     const result = await executeFormat({
       config: mockConfig({
         contract: {
-          source: { inputs: [inputPath], load: () => {} },
+          source: { format: 'typescript', inputs: [inputPath], load: () => {} },
           output: join(tmpDir, 'contract.json'),
         },
       }),
@@ -137,6 +137,32 @@ describe('executeFormat', () => {
     expect(await readFile(inputPath, 'utf-8')).toBe(broken);
   });
 
+  it('parses the files with the parser options the source declares', async () => {
+    const inputPath = join(tmpDir, 'schema.prisma');
+    await writeFile(inputPath, 'view ActiveUsers {\nid Int @unique\nemail   String\n}\n', 'utf-8');
+
+    const result = await executeFormat({
+      config: mockConfig({
+        contract: {
+          source: {
+            format: 'psl',
+            inputs: [inputPath],
+            parserOptions: { grammar: 'prisma-7' },
+            load: () => {},
+          },
+          output: join(tmpDir, 'contract.json'),
+        },
+      }),
+      cwd: tmpDir,
+      eol: '\n',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await readFile(inputPath, 'utf-8')).toBe(
+      'view ActiveUsers {\n  id    Int    @unique\n  email String\n}\n',
+    );
+  });
+
   it('formats every resolvedInputs member, not just the first', async () => {
     const a = join(tmpDir, 'a.prisma');
     const b = join(tmpDir, 'b.prisma');
@@ -155,6 +181,23 @@ describe('executeFormat', () => {
     }
     expect(await readFile(a, 'utf-8')).toBe(FORMATTED_PSL);
     expect(await readFile(b, 'utf-8')).toBe(FORMATTED_PSL);
+  });
+
+  it('formats every .prisma file under an input that is a directory', async () => {
+    const dir = join(tmpDir, 'schema');
+    await mkdir(join(dir, 'nested'), { recursive: true });
+    const a = join(dir, 'a.prisma');
+    const b = join(dir, 'nested', 'b.prisma');
+    await writeFile(a, MESSY_PSL, 'utf-8');
+    await writeFile(b, MESSY_PSL, 'utf-8');
+    await writeFile(join(dir, 'notes.txt'), 'model    X{', 'utf-8');
+
+    const result = await executeFormat({ config: pslConfig(dir), cwd: tmpDir, eol: '\n' });
+
+    expect(result.ok && result.value).toEqual({ formatted: true, paths: [a, b] });
+    expect(await readFile(a, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(b, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(join(dir, 'notes.txt'), 'utf-8')).toBe('model    X{');
   });
 
   it('keeps formatting remaining members after one fails to read', async () => {

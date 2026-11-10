@@ -1,8 +1,7 @@
 import type { DefaultModelRow } from '@prisma/orm-sqlite/orm-client';
-import type { SqliteRuntime } from '@prisma/orm-sqlite/runtime';
 import { castAs } from '@prisma/orm-sqlite/utils/casts';
 import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import { db } from '../prisma/db';
 
 type PostRow = DefaultModelRow<Contract, 'Post'>;
 type TagRow = DefaultModelRow<Contract, 'Tag'>;
@@ -19,12 +18,8 @@ export interface CreatePostWithTagsInput {
  * create + link new tags via the callback mutator. Demonstrates
  * `t.create([...])` on an N:M relation from inside a `create()` call.
  */
-export async function ormClientCreatePostWithTags(
-  input: CreatePostWithTagsInput,
-  runtime: SqliteRuntime,
-) {
-  const db = createOrmClient(runtime);
-  return db.Post.create({
+export async function ormClientCreatePostWithTags(input: CreatePostWithTagsInput) {
+  return db.orm.Post.create({
     id: castAs<PostRow['id']>(input.id),
     title: input.title,
     userId: castAs<PostRow['userId']>(input.userId),

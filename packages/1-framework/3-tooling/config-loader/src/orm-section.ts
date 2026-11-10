@@ -61,13 +61,16 @@ const targetLikeFields = { ...descriptorFields, targetId: 'string' } as const;
 
 /**
  * The contract source provider: `load` closes over the authored contract,
- * and `inputs` are paths the schema resolves against the config file. Other
- * keys a provider carries pass through.
+ * `inputs` are paths the schema resolves against the config file, and
+ * `format` names the language the inputs are written in. Other keys a
+ * provider carries pass through.
  */
 const contractSource = {
   load: 'Function',
   'inputs?': 'path[]',
-  'format?': 'string',
+  format: "'psl' | 'typescript'",
+  // biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
+  'parserOptions?': { '+': 'reject', 'grammar?': "'prisma-7' | 'prisma-8'" },
 } as const;
 
 /** Each subsection's own shape, without the rules that relate subsections to one another. */

@@ -7,8 +7,6 @@ import { contract } from './invalid-contract-document';
 // Create a config with document family (which doesn't exist, but we'll test the error)
 const mockHook = {
   id: 'document',
-  validateTypes: () => {},
-  validateStructure: () => {},
   generateContractTypes: () => '',
 };
 

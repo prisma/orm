@@ -120,7 +120,7 @@ export function hasSchemaDiagram<TFamilyId extends string, TSchemaIR>(
   );
 }
 
-// 2-sql/9-family/.../control-instance.ts
+// 2-sql-family/9-family/.../control-instance.ts
 class SqlControlFamilyInstance implements ..., SchemaDiagramCapable<SqlSchemaIR> {
   toSchemaDiagram(schema: SqlSchemaIR): SchemaDiagram { /* mermaid from tables + FKs */ }
 }

@@ -1,16 +1,14 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { and, not, or } from '@prisma/orm-postgres/orm-client';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 export async function ormClientGetDashboardUsers(
   emailDomain: string,
   postTitleTerm: string,
   limit: number,
   postsPerUser: number,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  return await db.User.where((user) =>
+  return await orm.User.where((user) =>
     and(
       or(user.kind.eq('admin'), user.email.ilike(`%@${emailDomain}`)),
       not(user.posts.none((post) => post.title.ilike(`%${postTitleTerm}%`))),

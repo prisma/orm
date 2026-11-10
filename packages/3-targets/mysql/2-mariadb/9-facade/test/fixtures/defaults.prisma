@@ -1,0 +1,17 @@
+// use prisma-8
+
+model Item {
+  id        Int      @id
+  label     String   @default("it's")
+  count     Int      @default(0)
+  total     BigInt   @default(10)
+  role      Role     @default(USER)
+  nickname  String?
+  createdAt DateTime @default(now())
+  day       Date     @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}

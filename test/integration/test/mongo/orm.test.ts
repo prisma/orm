@@ -13,10 +13,45 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
   it('loads generated collection indexes and options', () => {
     expect(contract.storage.namespaces.__unbound__.entries.collection.users).toEqual({
       kind: 'mongo-collection',
-      indexes: [{ kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      indexes: [
+        {
+          kind: 'mongo-index',
+          name: 'email_1',
+          keys: [{ field: 'email', direction: 1 }],
+          unique: true,
+        },
+      ],
       options: {
         kind: 'mongo-collection-options',
         collation: { kind: 'mongo-collation-options', locale: 'en', strength: 2 },
+      },
+      validator: {
+        kind: 'mongo-validator',
+        validationLevel: 'strict',
+        validationAction: 'error',
+        jsonSchema: {
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'email', 'name'],
+          properties: {
+            _id: { bsonType: 'objectId' },
+            name: { bsonType: 'string' },
+            email: { bsonType: 'string' },
+            addresses: {
+              bsonType: 'array',
+              items: {
+                bsonType: 'object',
+                additionalProperties: false,
+                required: ['city', 'street', 'zip'],
+                properties: {
+                  street: { bsonType: 'string' },
+                  city: { bsonType: 'string' },
+                  zip: { bsonType: 'string' },
+                },
+              },
+            },
+          },
+        },
       },
     });
   });
@@ -28,7 +63,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.orderBy({ name: 1 }).all();
 
     expect(results).toHaveLength(2);
@@ -43,7 +78,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.where(MongoFieldFilter.eq('email', 'alice@example.com')).all();
 
     expect(results).toHaveLength(1);
@@ -67,7 +102,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.tasks.include('assignee').all();
 
     expect(results).toHaveLength(1);
@@ -88,7 +123,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       ],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const users = await orm.users.all();
 
     expect(users).toHaveLength(1);
@@ -109,7 +144,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [{ _id: new ObjectId(), text: 'Found it!', createdAt: new Date('2025-01-01') }],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const tasks = await orm.tasks.all();
 
     expect(tasks).toHaveLength(1);
@@ -138,7 +173,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const tasks = await orm.tasks.all();
 
     expect(tasks).toHaveLength(2);
@@ -162,7 +197,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.tasks.all();
     const r0 = results[0]!;
 
@@ -184,7 +219,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Charlie', email: 'charlie@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.where(MongoFieldFilter.eq('name', 'Alice').not()).all();
 
     expect(results).toHaveLength(2);
@@ -200,7 +235,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.orderBy({ name: 1 }).all();
 
     expect(results).toHaveLength(3);
@@ -217,7 +252,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Charlie', email: 'charlie@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.orderBy({ name: 1 }).offset(1).limit(1).all();
 
     expect(results).toHaveLength(1);
@@ -231,7 +266,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       { name: 'Bob', email: 'bob@example.com', addresses: [] },
     ]);
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
     const results = await orm.users.select('name').all();
 
     expect(results).toHaveLength(2);
@@ -262,7 +297,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
       comments: [{ _id: new ObjectId(), text: 'LGTM', createdAt: new Date() }],
     });
 
-    const orm = mongoOrm({ contract, executor: ctx.runtime });
+    const orm = mongoOrm({ context: ctx.context, runtime: ctx.runtime });
 
     const users = await orm.users.where(MongoFieldFilter.eq('name', 'Alice')).all();
     expect(users).toHaveLength(1);

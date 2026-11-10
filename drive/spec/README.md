@@ -20,6 +20,11 @@ In addition to the canonical project-spec / slice-spec templates, this repo expe
 - **Contract-impact section** for any spec that touches the contract surface (`packages/0-shared/contract/**`, `packages/1-framework-core/**`). Names the contract entities affected, the new / changed kinds, the migration plan for downstream consumers.
 - **Adapter-impact section** for any spec that affects target adapters (`packages/3-targets/**`). Names which adapters are affected (postgres / sqlite / mongo / etc.).
 - **ADR pointer** for any architectural shift. Either link an existing ADR or commit to authoring one as part of the project's close-out.
+- **Failure-state section** for any spec of a command that edits files it did not write. For each way the command can fail after it starts, name the state the user's project is left in, and require that a failure the command can predict is reported before the first edit. (Added 2026-09-24, orm-init-prisma7-detection final retro: `orm init` renamed the Prisma 7 config and rewrote scripts before finding out Prisma 8 could not read the schema, and the problem surfaced only in manual review after five dispatches.)
+
+## Read the architecture before writing a spec
+
+Before writing a slice or project spec, read the architecture overview, the subsystem docs for every area the work touches, and the ADRs they cite. A spec written from the code alone misses project-wide rules the code does not show. (Added 2026-10-08, migration statements slice 2 retro: the operator stopped slice 2's spec until the docs were read, and reading them turned up the CLI Style Guide's consent rule, which changed the design to a CLI engine change. The operator asked for the same reading again before the remaining slices were discussed.)
 
 ## Grounding illustrative snippets before execution
 

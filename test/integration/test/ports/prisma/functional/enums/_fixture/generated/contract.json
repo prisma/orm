@@ -34,7 +34,7 @@
         "models": {
           "User": {
             "fields": {
-              "_id": {
+              "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -57,7 +57,15 @@
             },
             "relations": {},
             "storage": {
-              "collection": "User"
+              "collection": "User",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "plan": {
+                  "field": "plan"
+                }
+              }
             }
           }
         }

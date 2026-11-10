@@ -1,5 +1,7 @@
 # ADR 023 — Budget evaluation & EXPLAIN policy
 
+> **Update — the hooks are removed.** The middleware hooks `beforeExecute` and `afterExecute` this ADR describes no longer exist. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced them with lifecycle events and interceptors on a tree of activities.
+
 ## Context
 
 Prisma Next provides guardrails via budgets to prevent accidental expensive queries. We need a clear policy for when to run EXPLAIN, how to cache results, and how to fall back safely when EXPLAIN is unavailable or too costly. Budgets must be predictable, low overhead by default, and configurable per environment.

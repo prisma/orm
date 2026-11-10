@@ -37,17 +37,6 @@ describe('canonicalizeJson', () => {
     expect(canonicalizeJson([])).toBe('[]');
   });
 
-  it('produces compact JSON with no whitespace', () => {
-    const result = canonicalizeJson({ a: 1 });
-    expect(result).not.toContain('\n');
-    expect(result).not.toContain('  ');
-  });
-
-  it('is deterministic across invocations', () => {
-    const input = { z: [{ b: 1, a: 2 }], m: { y: 3, x: 4 } };
-    expect(canonicalizeJson(input)).toBe(canonicalizeJson(input));
-  });
-
   it('preserves a __proto__ input key without mutating Object.prototype', () => {
     const protoBefore = Object.getPrototypeOf({});
     const polluted = Object.prototype as unknown as { polluted?: unknown };

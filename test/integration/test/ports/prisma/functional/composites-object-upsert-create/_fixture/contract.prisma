@@ -24,7 +24,7 @@
 // use prisma-8
 
 type CommentContentUpvotes {
-  vote   Boolean
+  vote   Bool
   userId String
 }
 

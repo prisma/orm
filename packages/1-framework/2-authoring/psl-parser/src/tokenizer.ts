@@ -17,6 +17,7 @@ export type TokenKind =
   | 'Dot'
   | 'Comma'
   | 'Colon'
+  | 'Plus'
   | 'Whitespace'
   | 'Newline'
   | 'Comment'
@@ -79,6 +80,15 @@ export class Tokenizer {
     this.#pos += token.text.length;
     return token;
   }
+}
+
+/**
+ * Whether the tokenizer reads `text` as one identifier: a letter or `_`, then letters, `_`, ASCII
+ * digits or `-`, and not one of the number words `NaN` and `Infinity`.
+ */
+export function isPslIdentifier(text: string): boolean {
+  const token = scan(text, 0);
+  return token.kind === 'Ident' && token.text === text;
 }
 
 function scan(source: string, pos: number): Token {
@@ -173,7 +183,7 @@ function scanKeywordNumber(source: string, pos: number): Token | undefined {
 
 function scanNumber(source: string, pos: number): Token | undefined {
   let end = pos;
-  if (source.charAt(end) === '-') {
+  if (source.charAt(end) === '-' || source.charAt(end) === '+') {
     if (end + 1 >= source.length || !isDigit(source.charAt(end + 1))) return undefined;
     end++;
   } else if (!isDigit(source.charAt(end))) {
@@ -310,4 +320,5 @@ const PUNCTUATION: Record<string, TokenKind> = {
   '.': 'Dot',
   ',': 'Comma',
   ':': 'Colon',
+  '+': 'Plus',
 };

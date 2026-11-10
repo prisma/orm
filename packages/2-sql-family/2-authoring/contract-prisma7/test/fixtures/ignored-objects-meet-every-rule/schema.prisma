@@ -1,0 +1,27 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Event {
+  id Int      @id
+  at DateTime
+
+  @@index([at(sort: Desc)])
+  @@ignore
+}
+
+model Document {
+  id   Int  @id
+  data Json @default("null") @ignore
+}
+
+model Owner {
+  id   Int   @id
+  pets Pet[]
+}
+
+model Pet {
+  id      Int   @id
+  ownerId Int
+  owner   Owner @relation(fields: [ownerId], references: [id], onDelete: SetNull) @ignore
+}

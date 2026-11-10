@@ -31,7 +31,13 @@ import { publicShells, type ShellName } from '../src/shells';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const consumerRoots = ['examples', 'apps'];
-const facades: ShellName[] = ['@prisma/orm-postgres', '@prisma/orm-sqlite', '@prisma/orm-mongo'];
+const facades: ShellName[] = [
+  '@prisma/orm-postgres',
+  '@prisma/orm-sqlite',
+  '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
+  '@prisma/orm-mongo',
+];
 
 const INCLUDED_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const EXCLUDED_DIRECTORIES = new Set([
@@ -106,11 +112,15 @@ describe('the published surface against the applications that will consume it', 
       '@internal/framework-components/control',
       '@internal/sql-contract/types',
       '@internal/mongo-contract',
-      '@internal/adapter-mongo/codec-types',
+      '@internal/target-mongo/codec-types',
       '@internal/target-postgres/codec-types',
       '@internal/target-postgres/operation-types',
+      '@internal/adapter-mysql/codec-types',
+      '@internal/adapter-mariadb/codec-types',
       '@internal/postgres/migration',
       '@internal/sqlite/migration',
+      '@internal/mysql/migration',
+      '@internal/mariadb/migration',
       '@internal/target-mongo/migration',
     ];
 

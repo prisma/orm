@@ -20,7 +20,7 @@ import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
-import type { OnControlProgress } from '../types';
+import type { ControlActionName, OnControlProgress } from '../types';
 import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
@@ -123,6 +123,7 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
   const schemaIntrospection = skipSchema
     ? null
     : await runIntrospection({
+        action: 'dbVerify',
         driver,
         familyInstance,
         onProgress,
@@ -172,15 +173,16 @@ function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
   };
 }
 
-async function runIntrospection<TFamilyId extends string, TTargetId extends string>(args: {
+export async function runIntrospection<TFamilyId extends string, TTargetId extends string>(args: {
+  action: ControlActionName;
   driver: ControlDriverInstance<TFamilyId, TTargetId>;
   familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   onProgress: OnControlProgress | undefined;
   contract: unknown;
 }): Promise<unknown> {
-  const { driver, familyInstance, onProgress, contract } = args;
+  const { action, driver, familyInstance, onProgress, contract } = args;
   onProgress?.({
-    action: 'dbVerify',
+    action,
     kind: 'spanStart',
     spanId: SPAN_IDS.introspect,
     label: 'Introspecting database schema',
@@ -188,7 +190,7 @@ async function runIntrospection<TFamilyId extends string, TTargetId extends stri
   try {
     const result = await familyInstance.introspect({ driver, contract });
     onProgress?.({
-      action: 'dbVerify',
+      action,
       kind: 'spanEnd',
       spanId: SPAN_IDS.introspect,
       outcome: 'ok',
@@ -196,7 +198,7 @@ async function runIntrospection<TFamilyId extends string, TTargetId extends stri
     return result;
   } catch (error) {
     onProgress?.({
-      action: 'dbVerify',
+      action,
       kind: 'spanEnd',
       spanId: SPAN_IDS.introspect,
       outcome: 'error',

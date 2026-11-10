@@ -201,15 +201,15 @@ withTempDir(({ createTempDir }) => {
             expect(command).not.toMatch(/--to [0-9a-f]{64}/);
           }
           expect(remediationCommands).toEqual([
-            '{bin} migration plan --name <slug>',
-            '{bin} db migrate',
+            'prisma-test migration plan --name <slug>',
+            'prisma-test db migrate',
           ]);
 
           // Execute the presented remediation: derive each command's argv from
           // the action text itself, substituting the <slug> placeholder.
           const [planCommand, migrateCommand] = remediationCommands;
           const planArgs = (planCommand ?? '')
-            .replace(/^\{bin\} migration plan\s*/, '')
+            .replace(/^prisma-test migration plan\s*/, '')
             .replaceAll('<slug>', 'initial')
             .split(/\s+/)
             .filter((arg) => arg.length > 0);
@@ -217,7 +217,7 @@ withTempDir(({ createTempDir }) => {
           expect(plan.exitCode).toBe(0);
 
           const migrateArgs = (migrateCommand ?? '')
-            .replace(/^\{bin\} db migrate\s*/, '')
+            .replace(/^prisma-test db migrate\s*/, '')
             .split(/\s+/)
             .filter((arg) => arg.length > 0);
           const apply = await runMigrate(project, [...migrateArgs, '--json']);

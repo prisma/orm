@@ -12,9 +12,9 @@ import { MongoContractView } from './ir/mongo-contract-view';
  * the abstract `targetId` member from `Migration`.
  *
  * The operation type parameter is `AnyMongoMigrationOperation` — the union
- * of DDL-shaped `MongoMigrationPlanOperation` and `MongoDataTransformOperation` —
+ * of DDL-shaped `MongoMigrationPlanOperation` and `MongoDmlOperation` —
  * so subclasses can return a mix of schema operations (e.g. `createIndex`,
- * `setValidation`) and data-transform operations (e.g. `dataTransform`).
+ * `setValidation`) and DML operations (e.g. `dataTransform`, `renameField`).
  * Mirrors the generic parameter used by `PlannerProducedMongoMigration`.
  *
  * Binds the framework base's `Start` / `End` contract generics so a subclass

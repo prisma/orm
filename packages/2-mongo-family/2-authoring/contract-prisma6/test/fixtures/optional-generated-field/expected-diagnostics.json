@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.createdAt\" is optional and its value comes from @default(now()), which Prisma 8 cannot express on an optional field yet. Either fix also changes the Prisma 6 app: a required field makes the Prisma 6 client fail on a stored document that lacks it, and without @default(now()) the Prisma 6 client no longer fills it. Make the field required once every stored document has a value, or set the value in application code and remove @default(now())."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.updatedAt\" is optional and its value comes from @updatedAt, which Prisma 8 cannot express on an optional field yet. Either fix also changes the Prisma 6 app: a required field makes the Prisma 6 client fail on a stored document that lacks it, and without @updatedAt the Prisma 6 client no longer fills it. Make the field required once every stored document has a value, or set the value in application code and remove @updatedAt."
+  }
+]

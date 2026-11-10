@@ -1,0 +1,4 @@
+model Account {
+  id    String @id @default(uuid())
+  token String @default(nanoid())
+}

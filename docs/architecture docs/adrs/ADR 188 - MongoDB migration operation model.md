@@ -1,5 +1,7 @@
 # ADR 188 — MongoDB migration operation model: data-driven commands and checks
 
+> **Update — 2026-10:** document rewrites the planner writes for `--rename` and `--delete` statements are classed by their effect, not as `data`. See § DML operations and unified check shape.
+
 ## Grounding example
 
 The migration planner has compared two contracts and determined that a unique ascending index on `users.email` needs to be created. It needs to produce an operation that the runner can execute.
@@ -16,14 +18,14 @@ Here is what the operation looks like:
 
 ```ts
 const op: MongoMigrationPlanOperation = {
-  id: 'index.users.create(email:1)',
-  label: 'Create index on users (email ascending)',
+  id: 'index.users.create(email_1)',
+  label: 'Create index email_1 on users (email:1)',
   operationClass: 'additive',
   precheck: [
     {
-      description: 'index does not already exist',
+      description: 'no index named email_1 exists on users',
       source: new ListIndexesCommand('users'),
-      filter: MongoFieldFilter.eq('key', { email: 1 }),
+      filter: MongoFieldFilter.eq('name', 'email_1'),
       expect: 'notExists',
     },
   ],
@@ -38,9 +40,10 @@ const op: MongoMigrationPlanOperation = {
   ],
   postcheck: [
     {
-      description: 'unique index exists',
+      description: 'index email_1 exists on users',
       source: new ListIndexesCommand('users'),
       filter: MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'email_1'),
         MongoFieldFilter.eq('key', { email: 1 }),
         MongoFieldFilter.eq('unique', true),
       ]),
@@ -119,26 +122,26 @@ interface MongoMigrationCheck {
 
 This gives checks the same expressive power as MongoDB query filters, without inventing a separate vocabulary.
 
-### Data transform operations and unified check shape
+### DML operations and unified check shape
 
-The envelope described above covers DDL operations — creating indexes, modifying collections. Data transform operations (backfills, renames, seed inserts) use the same three-phase envelope but carry different payloads.
+The envelope described above covers DDL operations — creating indexes, modifying collections. DML operations, which read and write documents (backfills, field renames and removals, seed inserts), use the same three-phase envelope but carry different payloads. A data transform is a DML operation built with `dataTransform`.
 
 ```ts
-interface MongoDataTransformOperation extends MigrationPlanOperation {
-  readonly operationClass: 'data';
+interface MongoDmlOperation extends MigrationPlanOperation {
+  readonly operationClass: MigrationOperationClass;
   readonly name: string;
-  readonly precheck: readonly MongoDataTransformCheck[];
+  readonly precheck: readonly MongoDmlCheck[];
   readonly run: readonly MongoQueryPlan[];
-  readonly postcheck: readonly MongoDataTransformCheck[];
+  readonly postcheck: readonly MongoDmlCheck[];
 }
 ```
 
-The `operationClass` is always `'data'`. The `run` array contains `MongoQueryPlan` objects — aggregation pipelines or raw commands (`rawUpdateMany`, `rawInsertOne`, etc.) — rather than DDL commands. The `precheck` and `postcheck` arrays contain `MongoDataTransformCheck` objects instead of `MongoMigrationCheck`.
+A transform built with `dataTransform`, whether a user writes it or the planner scaffolds it with a placeholder, has `operationClass: 'data'`. The `renameField` and `unsetField` rewrites carry the class of their effect, whoever writes them, as every other operation does: `renameField` is `widening` and `unsetField` is `destructive`. So `db update`, which does not allow `data`, can run a rename. The runner and the serializer tell a DML operation from a DDL operation by its shape (`run` against `execute`), not by its class. The `run` array contains `MongoQueryPlan` objects — aggregation pipelines or raw commands (`rawUpdateMany`, `rawInsertOne`, etc.) — rather than DDL commands. The `precheck` and `postcheck` arrays contain `MongoDmlCheck` objects instead of `MongoMigrationCheck`.
 
-`MongoDataTransformCheck` has the same four-field shape as `MongoMigrationCheck`:
+`MongoDmlCheck` has the same four-field shape as `MongoMigrationCheck`:
 
 ```ts
-interface MongoDataTransformCheck {
+interface MongoDmlCheck {
   readonly description: string;
   readonly source: MongoQueryPlan;
   readonly filter: MongoFilterExpr;
@@ -148,7 +151,7 @@ interface MongoDataTransformCheck {
 
 The only difference is the `source` type: `MongoQueryPlan` (an aggregation or raw command) instead of `AnyMongoInspectionCommand`. Both use `MongoFilterExpr` for `filter` and `'exists' | 'notExists'` for `expect`. Both are evaluated by the same `FilterEvaluator` path in the runner — run the source query, apply the filter client-side, check against the expectation.
 
-The two types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>` because the source types need different executors — DDL checks dispatch through `MongoInspectionCommandVisitor`, data transform checks dispatch through `MongoAdapter.lower()` → `MongoDriver.execute()`. Two concrete types with a shared shape let the runner dispatch internally based on which operation type it's processing.
+The two types are kept concrete rather than collapsed into a generic `MigrationCheck<TSource>` because the source types need different executors — DDL checks dispatch through `MongoInspectionCommandVisitor`, DML checks dispatch through `MongoAdapter.lower()` → `MongoDriver.execute()`. Two concrete types with a shared shape let the runner dispatch internally based on which operation type it's processing.
 
 #### One factory derives both precheck and postcheck
 
@@ -169,11 +172,11 @@ The factory resolves this into a precheck with `expect: 'exists'` (violations fo
 
 #### DML execution
 
-Data transform `run` commands execute via `MongoAdapter.lower()` → `MongoDriver.execute()` — the same adapter+driver transport used for runtime queries. No bespoke DML executor is needed; the adapter lowers each `MongoQueryPlan` to a wire command, and the driver executes it against the database.
+DML `run` commands execute via `MongoAdapter.lower()` → `MongoDriver.execute()` — the same adapter+driver transport used for runtime queries. No bespoke DML executor is needed; the adapter lowers each `MongoQueryPlan` to a wire command, and the driver executes it against the database.
 
 #### Relationship to the generic envelope
 
-Both DDL and data transform operations are specializations of the generic three-phase migration operation envelope described in [ADR 191](ADR%20191%20-%20Generic%20three-phase%20migration%20operation%20envelope.md). The DDL variant fills the phases with inspection commands, DDL commands, and `MongoMigrationCheck`; the data transform variant fills them with query plans and `MongoDataTransformCheck`. The runner processes both through the same three-phase loop.
+Both DDL and DML operations are specializations of the generic three-phase migration operation envelope described in [ADR 191](ADR%20191%20-%20Generic%20three-phase%20migration%20operation%20envelope.md). The DDL variant fills the phases with inspection commands, DDL commands, and `MongoMigrationCheck`; the DML variant fills them with query plans and `MongoDmlCheck`. The runner processes both through the same three-phase loop.
 
 ## Serialization
 

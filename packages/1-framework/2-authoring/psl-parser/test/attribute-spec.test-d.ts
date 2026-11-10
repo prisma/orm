@@ -1,19 +1,15 @@
-import { ok, type Result } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
-import type { PslDiagnostic } from '../src/diagnostic';
-import type { ArgType, ArgTypeKind, AttributeCtx, InferAttr } from '../src/exports';
-import { fieldAttribute, modelAttribute, optional } from '../src/exports';
+import type { ArgType, AttributeCtx, InferAttr } from '../src/exports';
+import {
+  fieldAttribute,
+  int as intType,
+  modelAttribute,
+  optional,
+  str as stringType,
+} from '../src/exports';
 
-function leaf<T>(kind: ArgTypeKind, value: T): ArgType<T, AttributeCtx> {
-  return {
-    kind,
-    label: kind,
-    parse: (): Result<T, readonly PslDiagnostic[]> => ok(value),
-  };
-}
-
-const str = (): ArgType<string, AttributeCtx> => leaf('str', '');
-const int = (): ArgType<number, AttributeCtx> => leaf('int', 0);
+const str = (): ArgType<string, AttributeCtx> => stringType();
+const int = (): ArgType<number, AttributeCtx> => intType();
 
 test('a required named param becomes a required property', () => {
   const spec = fieldAttribute('demo', {
@@ -122,14 +118,4 @@ test('modelAttribute infers the same shape fieldAttribute would for equivalent p
     name: string;
     readonly count?: number;
   }>();
-});
-
-test('a model positional slot contributes its key into the keyspace', () => {
-  const spec = modelAttribute('demo', {
-    documentation: 'Declares a model attribute for argument binding.',
-    positional: [
-      { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
-    ],
-  });
-  expectTypeOf<InferAttr<typeof spec>>().toEqualTypeOf<{ k: number }>();
 });

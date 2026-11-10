@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -16,6 +17,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
+import { testBinder } from './helpers/binder';
 
 const completionOnlyNestedSignature = {
   documentation: 'Selects fields from the declaring and referenced models.',
@@ -48,15 +50,18 @@ const authoringContributions = assembleAuthoringContributions([
   },
 ]);
 
-function complete(markedSource: string) {
+function complete(markedSource: string, siblings: readonly string[] = []) {
   const offset = markedSource.indexOf('|');
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
-  const { document, sources } = parse(source, 'language-server-test.psl');
+  const parsed = parse(source, 'language-server-test.psl');
+  const { document } = parsed;
+  const others = siblings.map((text, index) => parse(text, `sibling-${index}.psl`));
+  const sources = parsed.sources.merge(...others.map((other) => other.sources));
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
-    documents: [document],
+    documents: [...others.map((other) => other.document), document],
     sources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
@@ -66,16 +71,26 @@ function complete(markedSource: string) {
     }),
     sourceFile,
     candidates: {
+      binder: testBinder({ sources, symbolTable, scalarTypes: ['String'], authoringContributions }),
       scalarTypes: ['String'],
       symbolTable,
       pslBlockDescriptors: {},
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
     clientSupportsSnippets: false,
   });
   return { labels: items.map((item) => item.label), items, sourceFile };
 }
+
+it('selects the actual owner when another document has identical declaration spans', () => {
+  expect(
+    complete('model Bravo { other String\n @@probe(local: [|]) }', [
+      'model Alpha { first String\n @@probe(local: []) }',
+    ]).labels,
+  ).toEqual(['other']);
+});
 
 function schema(type: string, args: string) {
   return `model Target { topOnly String }
@@ -177,5 +192,54 @@ namespace unrelated { model Target { unrelatedOnly String } }`;
       ),
     ).toBe('remoteOnly');
     expect(edit.newText).toBe('remoteOnly');
+  });
+});
+
+describe('field names offered inside a mixin body', () => {
+  const body = ['  first String', '  second String', '  other Target'];
+
+  it.each([
+    ['a block attribute', '  @@probe(local: [|])'],
+    ['a field attribute', '  third String @probe(local: [|])'],
+    ['a nested call of a field attribute', '  third String @probe(nested: fields(local: [|]))'],
+  ])(
+    'are the fields of the mixin, as a model with the same fields offers its own, in %s',
+    (_position, line) => {
+      const inMixin = complete(
+        ['model Target { remote String }', 'model mixin Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+      const inModel = complete(
+        ['model Target { remote String }', 'model Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+
+      expect(inMixin).toEqual(inModel);
+      expect(inMixin).toEqual(expect.arrayContaining(['first', 'second']));
+    },
+  );
+
+  it('are the fields of the referenced model for a referenced-field position', () => {
+    const line = '  link Target @probe(remote: [|])';
+    const inMixin = complete(
+      ['model Target { remote String }', 'model mixin Probe {', line, '}'].join('\n'),
+    ).labels;
+
+    expect(inMixin).toEqual(['remote']);
+  });
+
+  it('do not include the fields of a model that includes the mixin', () => {
+    const labels = complete(
+      [
+        'model mixin Probe {',
+        '  first String',
+        '  @@probe(local: [|])',
+        '}',
+        'model User {',
+        '  own String',
+        '  +Probe',
+        '}',
+      ].join('\n'),
+    ).labels;
+
+    expect(labels).toEqual(['first']);
   });
 });

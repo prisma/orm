@@ -18,7 +18,6 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import type { Char } from '@internal/target-postgres/codec-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { getExecutionDefaultedTagsContract } from './helpers';
@@ -29,10 +28,10 @@ import {
 } from './integration-helpers';
 import { seedRoles, seedTags, seedUserRoles, seedUsers, seedUserTags } from './runtime-helpers';
 
-const TAG_RUST = 'tag-rust' as Char<36>;
-const TAG_TS = 'tag-typescript' as Char<36>;
-const ROLE_ADMIN = 'role-admin' as Char<36>;
-const ROLE_EDITOR = 'role-editor' as Char<36>;
+const TAG_RUST = 'tag-rust';
+const TAG_TS = 'tag-typescript';
+const ROLE_ADMIN = 'role-admin';
+const ROLE_EDITOR = 'role-editor';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -145,7 +144,7 @@ describe('integration/mn-nested-write', () => {
   );
 
   it(
-    'update(): connect to an already-linked tag rejects and preserves the junction link',
+    'update(): connect to an already-linked tag keeps the one junction link',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createReturningUsersCollection(runtime);
@@ -154,15 +153,15 @@ describe('integration/mn-nested-write', () => {
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
         await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
 
-        await expect(
-          users
-            .where({ id: 1 })
-            .select('id', 'name')
-            .include('tags', (tags) => tags.select('id', 'name'))
-            .update({
-              tags: (t) => t.connect({ id: TAG_RUST }),
-            }),
-        ).rejects.toThrow(/violated a unique constraint on junction "user_tags"/);
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .update({
+            tags: (t) => t.connect({ id: TAG_RUST }),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', tags: [{ id: TAG_RUST, name: 'Rust' }] });
 
         const junctionRows = await runtime.query<{ user_id: number; tag_id: string }>(
           'select user_id, tag_id from user_tags',
@@ -661,6 +660,32 @@ describe('integration/mn-nested-write', () => {
           'select user_id, role_id from user_roles',
         );
         expect(junctionRows).toEqual([{ user_id: 1, role_id: ROLE_EDITOR }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'create(): connect with two criteria that find the same tag links it once',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
+
+        const created = await users
+          .select('id')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .create({
+            id: 1,
+            name: 'Ada',
+            email: 'ada@example.com',
+            tags: (tags) => tags.connect([{ id: TAG_RUST }, { name: 'Rust' }]),
+          });
+
+        expect(created).toEqual({ id: 1, tags: [{ id: TAG_RUST, name: 'Rust' }] });
+        expect(await runtime.query('select user_id, tag_id from user_tags')).toEqual([
+          { user_id: 1, tag_id: TAG_RUST },
+        ]);
       });
     },
     timeouts.spinUpPpgDev,

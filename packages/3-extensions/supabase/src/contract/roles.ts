@@ -12,7 +12,7 @@ import { enumType, member } from '@internal/sql-contract-ts/contract-builder';
  */
 export const SupabaseRole = enumType(
   'SupabaseRole',
-  { codecId: 'pg/text@1', nativeType: 'text' },
+  { codecId: 'pg/text@1' },
   member('Anon', 'anon'),
   member('Authenticated', 'authenticated'),
   member('ServiceRole', 'service_role'),
