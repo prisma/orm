@@ -161,6 +161,23 @@ describe('singleLineDeclarations', () => {
     ).toBe('export type A = \'https://example.com\'; export type B = "a//b";\n');
   });
 
+  it('joins a block comment that contains a double slash', () => {
+    expect(singleLineDeclarations('/** See https://example.com */\nexport type A = 1;\n')).toBe(
+      '/** See https://example.com */ export type A = 1;\n',
+    );
+  });
+
+  it('refuses a line comment after a block comment that contains an apostrophe', () => {
+    expect(() =>
+      singleLineDeclarations("/* it's */ export type A = 1; // note 'x'\nexport type B = 2;\n"),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'InternalError',
+        message: expect.stringContaining('// note'),
+      }),
+    );
+  });
+
   it('refuses a triple-slash directive after the header', () => {
     expect(() =>
       singleLineDeclarations('export type A = 1;\n/// <reference types="node" />\n'),
