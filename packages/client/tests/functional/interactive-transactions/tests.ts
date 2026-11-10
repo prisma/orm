@@ -2,6 +2,7 @@ import { copycat } from '@snaplet/copycat'
 
 import { AdapterProviders, Providers } from '../_utils/providers'
 import { NewPrismaClient } from '../_utils/types'
+import { MAX_BIND_VALUES_BY_PROVIDER } from '../chunking-query/_utils'
 import testMatrix from './_matrix'
 // @ts-ignore
 import type { Prisma as PrismaNamespace, PrismaClient } from './generated/prisma/client'
@@ -886,6 +887,35 @@ testMatrix.setupTestSuite(
 
       expect(users.length).toBe(1)
     })
+
+    // Regression test for https://github.com/prisma/prisma/issues/29952.
+    testIf(provider !== Providers.MONGODB)(
+      'rollback stops the remaining statements of a createMany that is still running',
+      async () => {
+        const rowsPerStatement = Math.floor(MAX_BIND_VALUES_BY_PROVIDER[provider] / 4)
+        const data = Array.from({ length: 3 * rowsPerStatement + 1 }, (_, i) => ({
+          id: `${i}`,
+          email: `user_${i}@website.com`,
+          name: `user ${i}`,
+          val: i,
+        }))
+        let createMany!: Promise<unknown>
+
+        const result = prisma.$transaction(async (tx) => {
+          createMany = tx.user.createMany({ data })
+          await Promise.all([
+            createMany,
+            // A missing row fails the query without aborting the database transaction, as a constraint error would on PostgreSQL.
+            tx.user.findUniqueOrThrow({ where: { id: 'missing' } }),
+          ])
+        })
+
+        await expect(result).rejects.toMatchObject({ code: 'P2025' })
+        const [createManyOutcome] = await Promise.allSettled([createMany])
+        expect(await prisma.user.count()).toBe(0)
+        expect(createManyOutcome).toMatchObject({ status: 'rejected', reason: { code: 'P2028' } })
+      },
+    )
 
     /**
      * Two concurrent transactions should work
