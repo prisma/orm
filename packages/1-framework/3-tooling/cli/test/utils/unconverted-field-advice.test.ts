@@ -41,7 +41,22 @@ describe('the advice for a type change whose cast failed', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `A value of field "My Model.age" cannot be converted to its new type by the database's cast. \`migrations/app/20261012T1041_lossy/migration.ts\` changes field "My Model.age" with the database's cast, which met a value it cannot cast: replace that cast with your own conversion of the values there, run \`node migrations/app/20261012T1041_lossy/migration.ts\`, and re-run \`{bin} db migrate\`; re-planning with --convert writes one for you to fill in. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db migrate\`. Or: Delete \`migrations/app/20261012T1041_lossy\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name lossy --convert 'My Model.age'\`, adding any other statements you planned it with except any \`--delete 'My Model.age'\`, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\`.`,
+      `A value of field "My Model.age" cannot be converted to its new type by the database's cast. \`migrations/app/20261012T1041_lossy/migration.ts\` changes field "My Model.age" with the database's cast, which met a value it cannot cast: replace that cast with your own conversion of the values there, run \`node migrations/app/20261012T1041_lossy/migration.ts\`, and re-run \`{bin} db migrate\`. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db migrate\`. Or: Delete \`migrations/app/20261012T1041_lossy\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name lossy --convert 'My Model.age'\`, adding any other statements you planned it with except any \`--delete 'My Model.age'\`, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\`.`,
+    );
+  });
+
+  it('says the failed migration casts the field with a cast the database does not have, when it has none', () => {
+    const advice = migrateError(
+      {
+        ...runnerFailed,
+        failedTypeChange: { field: 'User.age', by: 'cast', reason: 'noCast' },
+        failedMigration: { directory: `${PROJECT}/migrations/app/20261012T1041_lossy`, from: FROM },
+      },
+      FROM_PROJECT,
+    ).fix;
+
+    expect(advice).toMatch(
+      /^The database has no cast from the old type of field "User\.age" to its new type\. `migrations\/app\/20261012T1041_lossy\/migration\.ts` changes field "User\.age" with a cast the database does not have between these types: replace it with your own conversion of the values there, run `node migrations\/app\/20261012T1041_lossy\/migration\.ts`, and re-run `\{bin\} db migrate`\. Or: Delete /,
     );
   });
 

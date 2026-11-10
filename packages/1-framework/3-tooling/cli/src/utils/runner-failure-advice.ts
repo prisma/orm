@@ -427,7 +427,11 @@ function migrateFailedTypeChangeAdvice(
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
   return [
     editFileAction(
-      `${changeText} ${file} changes field "${change.field}" with the database's cast, which met a value it cannot cast: replace that cast with your own conversion of the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}; re-planning with --convert writes one for you to fill in`,
+      `${changeText} ${file} changes field "${change.field}" ${
+        change.reason === 'noCast'
+          ? 'with a cast the database does not have between these types: replace it'
+          : "with the database's cast, which met a value it cannot cast: replace that cast"
+      } with your own conversion of the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
     ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
