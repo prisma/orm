@@ -34,6 +34,7 @@ import {
   defaultMongoIndexName,
   type MongoContract,
   modelFieldStoredAs,
+  propertyBsonTypesOf,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
   validatorRootShapesOf,
@@ -220,16 +221,10 @@ function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undef
   return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
 }
 
-const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];
-
 /** The BSON types a property schema's `bsonType` allows, or `undefined` when it names none. */
 function allowedBsonTypes(schema: unknown): ReadonlySet<string> | undefined {
-  const bsonType: unknown =
-    typeof schema === 'object' && schema !== null ? Reflect.get(schema, 'bsonType') : undefined;
-  const names = typeof bsonType === 'string' ? [bsonType] : Array.isArray(bsonType) ? bsonType : [];
-  const strings = names.filter((name): name is string => typeof name === 'string');
-  if (strings.length === 0) return undefined;
-  return new Set(strings.flatMap((name) => (name === 'number' ? NUMBER_TYPES : [name])));
+  const types = propertyBsonTypesOf(schema);
+  return types.length === 0 ? undefined : new Set(types);
 }
 
 interface DocumentField {

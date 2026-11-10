@@ -11,6 +11,7 @@ import {
   collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
+  propertyBsonTypesOf,
   validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
@@ -72,9 +73,7 @@ function isRecord(value: unknown): value is Document {
 }
 
 function bsonTypesOf(schema: Document): readonly string[] {
-  const bsonType = schema['bsonType'];
-  const types = Array.isArray(bsonType) ? bsonType : bsonType === undefined ? [] : [bsonType];
-  return withoutNull(types.filter((type): type is string => typeof type === 'string'));
+  return withoutNull(propertyBsonTypesOf(schema));
 }
 
 function isObjectSchema(schema: Document): boolean {

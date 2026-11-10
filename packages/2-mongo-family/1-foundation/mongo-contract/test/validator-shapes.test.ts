@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  propertyBsonTypesOf,
   validatorDocumentShapesOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,
@@ -120,5 +121,17 @@ describe('validatorDocumentShapesOf, a base field with a one-value enum', () => 
       { key: '0:["type","bug"]', discriminator: { field: 'type', value: 'bug' } },
       { key: '0:["type","feature"]', discriminator: { field: 'type', value: 'feature' } },
     ]);
+  });
+});
+
+describe('propertyBsonTypesOf', () => {
+  it('reads one type, a list of types, and number as every numeric type', () => {
+    expect([
+      propertyBsonTypesOf({ bsonType: 'string' }),
+      propertyBsonTypesOf({ bsonType: ['null', 'int'] }),
+      propertyBsonTypesOf({ bsonType: 'number' }),
+      propertyBsonTypesOf({}),
+      propertyBsonTypesOf(undefined),
+    ]).toEqual([['string'], ['null', 'int'], ['int', 'long', 'double', 'decimal'], [], []]);
   });
 });

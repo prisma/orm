@@ -402,6 +402,28 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it('reads number in a validator as every numeric type', () => {
+      const destination = contract(
+        'to',
+        { User: { collection: 'users', fields: ['_id', 'age'], types: { _id: OBJECT_ID } } },
+        { users: { jsonSchema: closedSchema({ age: { bsonType: 'long' } }) } },
+      );
+
+      expect(
+        planned(
+          plan({
+            from: null,
+            to: destination,
+            schema: [
+              schemaCollection('users', {
+                jsonSchema: closedSchema({ age: { bsonType: 'number' } }),
+              }),
+            ],
+          }),
+        ).labels[1],
+      ).toBe('Cast field age in collection users from int, long, double, decimal to long');
+    });
+
     it('refuses Bson to Json, since a Bson field can hold values Json cannot, pointing to --from', () => {
       const live = schemaCollection('users', { jsonSchema: closedSchema({ meta: {} }) });
       const destination = contract(
