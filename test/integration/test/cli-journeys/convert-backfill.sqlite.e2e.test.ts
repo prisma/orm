@@ -295,7 +295,7 @@ withTempDir(({ createTempDir }) => {
           .nextActions.map(({ label }) => label)
           .join('\n');
         expect(unconvertedAdvice).toContain(
-          `\`${relative(ctx.testDir, migrationTs)}\` changes field "User.age" with the database's cast, which met a value it cannot cast: replace that cast with a data transform that converts the values there, run \`node ${relative(ctx.testDir, migrationTs)}`,
+          `\`${relative(ctx.testDir, migrationTs)}\` changes field "User.age" with the database's cast, which met a value it cannot cast: replace that cast with your own conversion of the values there, run \`node ${relative(ctx.testDir, migrationTs)}`,
         );
         expect(query(ctx.dbPath, `SELECT id, age FROM "User" ORDER BY id`)).toEqual([
           { id: 1, age: 'ten' },
@@ -439,7 +439,7 @@ withTempDir(({ createTempDir }) => {
         );
         expect(castFailed).not.toContain('The conversion of field');
         expect(castFailed).toContain(
-          'changes field "User.nickname" with the database\'s cast, which met a value it cannot cast: replace that cast with a data transform that converts the values there',
+          'changes field "User.nickname" with the database\'s cast, which met a value it cannot cast: replace that cast with your own conversion of the values there',
         );
 
         exec(
