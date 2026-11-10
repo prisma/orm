@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
-import type { Graph } from '../../src/mutation-graph/graph';
+import { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
-import { StateEdge } from '../../src/mutation-graph/state';
+import { State, StateEdge } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
+import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 import {
   columnMappings,
@@ -26,6 +27,8 @@ const sameId = columnMappings('users', 'users', [['id', 'id']]);
 const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
 const emailToTitle = columnMappings('users', 'posts', [['email', 'title']]);
 const posts = { namespaceId: 'public', tableName: 'posts' };
+const users = { namespaceId: 'public', tableName: 'users' };
+const { contract } = getTestContext();
 
 function returned(graph: Graph, id: NodeId): string[] {
   return graph
@@ -124,6 +127,35 @@ describe('Graph', () => {
         left: new Rows(left, sameId),
         right: new Rows(right, sameId),
       });
+    });
+  });
+
+  describe('rules', () => {
+    it('see the state edges the graph computed for the node in its state slot, with its data edges', () => {
+      const seen: unknown[] = [];
+      const graph = new Graph(contract, [
+        (_graph, _node, inputs) => {
+          seen.push(inputs);
+          return undefined;
+        },
+      ]);
+      const update = graph.add(updateUsers({ name: 'Ada' }), {});
+
+      const find = graph.add(findUsers(), { filter: [new FilterData(update, sameId)] });
+
+      expect(seen[1]).toEqual({
+        filter: [new FilterData(update, sameId)],
+        state: graph.inputsOf(find)['state'],
+      });
+      expect(graph.inputsOf(find)['state']).toEqual([new StateEdge(expect.any(Number), users)]);
+    });
+
+    it('stand the node a rule returns in for the added node, which is not added', () => {
+      const graph = new Graph(contract, [(_graph, _node, inputs) => inputs.state?.[0]?.from]);
+      const id = graph.add(findUsers(), {});
+
+      expect(graph.nodeAt(id)).toBeInstanceOf(State);
+      expect(printGraph(graph)).toBe('result: none');
     });
   });
 

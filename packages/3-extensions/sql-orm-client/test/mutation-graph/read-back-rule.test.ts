@@ -1,12 +1,25 @@
-import { InsertOnConflict } from '@internal/sql-relational-core/ast';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import {
+  ColumnRef,
+  DeleteAst,
+  InsertOnConflict,
+  ProjectionItem,
+  SelectAst,
+  TableSource,
+} from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { Delete } from '../../src/mutation-graph/delete';
 import { FilterData } from '../../src/mutation-graph/filter-data';
+import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
+import { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { createCollectionFor } from '../collection-fixtures';
+import { cascadeContract } from './cascade-contract';
 import { printGraph } from './print-graph';
 import {
   columnMappings,
@@ -27,6 +40,22 @@ const create = { operation: 'create', modelName: 'User' };
 
 function readBackByKeys(columns: readonly string[]): FindByKeys {
   return new FindByKeys(findUsers([], [...columns]).ast, sameId, create);
+}
+
+const cascadeWithReturning: Contract<SqlStorage> = {
+  ...cascadeContract,
+  capabilities: { sql: { returning: true } },
+};
+const memberId = ProjectionItem.of('id', ColumnRef.of('Member', 'id'));
+
+function deleteFrom(name: string): Delete {
+  return new Delete(DeleteAst.from(TableSource.named(name, undefined, 'public')));
+}
+
+function findMembers(): Find {
+  return new Find(
+    SelectAst.from(TableSource.named('Member', undefined, 'public')).withProjection([memberId]),
+  );
 }
 
 function usersWithPosts() {
@@ -189,6 +218,32 @@ describe('the read-back rule, on a contract with returning', () => {
         'n1 Insert users',
         "n2 Update users set name = 'Bob'",
         'n3 FindByKeys users by (id) for create <- Rows n1',
+        'result: none',
+      ].join('\n'),
+    );
+  });
+
+  it('collapses a read-back of a Delete on a table other tables cascade into', () => {
+    const graph = new Graph(cascadeWithReturning);
+    const del = graph.add(deleteFrom('Member'));
+
+    expect(
+      graph.add(findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] }),
+    ).toBe(del);
+  });
+
+  it('adds a read-back as it is when a cascade from a write to another table follows the write it reads', () => {
+    const graph = new Graph(cascadeWithReturning);
+    const del = graph.add(deleteFrom('Member'));
+    graph.add(deleteFrom('Org'));
+
+    graph.add(findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] });
+
+    expect(printGraph(graph)).toBe(
+      [
+        'n1 Delete Member',
+        'n2 Delete Org',
+        'n3 Find Member <- FilterData n1 (id->id)',
         'result: none',
       ].join('\n'),
     );

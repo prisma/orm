@@ -33,9 +33,9 @@ export class Graph {
   #states = new Map<string, NodeId>();
   #result: NodeId | undefined = undefined;
 
-  constructor(contract: Contract<SqlStorage>) {
+  constructor(contract: Contract<SqlStorage>, rules: readonly Rule[] = rulesFor(contract)) {
     this.#contract = contract;
-    this.#rules = rulesFor(contract);
+    this.#rules = rules;
   }
 
   get result(): NodeId | undefined {
@@ -49,16 +49,17 @@ export class Graph {
   add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs>;
   add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId;
   add<Inputs extends Slots>(node: Node<Inputs>, inputs?: InputEdges<Inputs>): NodeId {
+    const state = this.#stateEdgesOf(node);
     if (inputs === undefined) {
-      return this.#addNode(node);
+      return this.#addNode(node, state);
     }
     for (const rule of this.#rules) {
-      const standing = rule(this, node, inputs);
+      const standing = rule(this, node, { ...inputs, state });
       if (standing !== undefined) {
         return standing;
       }
     }
-    const id = this.#addNode(node);
+    const id = this.#addNode(node, state);
     for (const [slot, edges] of Object.entries<Slot | undefined>(inputs)) {
       for (const edge of [edges ?? []].flat()) {
         this.#addEdge(id, slot, edge);
@@ -67,16 +68,19 @@ export class Graph {
     return id;
   }
 
-  #addNode<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
-    if (!(node instanceof StatementNode)) {
-      return this.#append(node);
-    }
-    const stateEdges = tablesReadBy(node.statements).map(
-      (table) => new StateEdge(this.#stateOf(table), table),
-    );
+  #stateEdgesOf(node: Node): StateEdge[] {
+    return node instanceof StatementNode
+      ? tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table))
+      : [];
+  }
+
+  #addNode<Inputs extends Slots>(node: Node<Inputs>, state: readonly StateEdge[]): NodeId<Inputs> {
     const id = this.#append(node);
-    for (const edge of stateEdges) {
+    for (const edge of state) {
       this.#connect(id, 'state', edge);
+    }
+    if (!(node instanceof StatementNode)) {
+      return id;
     }
     for (const table of this.#tablesWrittenBy(node.statements)) {
       const state = this.#append(new State(table));
@@ -136,15 +140,6 @@ export class Graph {
 
   nodeAt(id: NodeId): Node | undefined {
     return this.#nodes[id];
-  }
-
-  latestWriteOf(table: TableSource): NodeId | undefined {
-    const state = this.#states.get(tableKey(storageOf(table)));
-    if (state === undefined) {
-      return undefined;
-    }
-    const [write] = edgesIn(this.inputsOf(state));
-    return write?.from;
   }
 
   sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
