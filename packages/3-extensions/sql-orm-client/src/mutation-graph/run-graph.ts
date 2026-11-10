@@ -3,6 +3,7 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
 import { consumeCollectionRows, type DescribeCollectionRowsOptions } from '../collection-dispatch';
@@ -10,10 +11,9 @@ import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
 import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
-import type { CollectionContext } from '../types';
+import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
-import { withMutationScope } from './mutation-scope';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
@@ -69,17 +69,39 @@ function returnCallerColumns(graph: Graph, callerRows: DescribeCollectionRowsOpt
   }
 }
 
-function runAllNodes<Row>(
+async function runAllNodes<Row>(
   graph: Graph,
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
-  if (statementNodes(graph).length > 1) {
-    return withMutationScope(ctx.runtime, (scope) =>
+  const { runtime } = ctx;
+  if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
+    return runInTransaction(await runtime.transaction(), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
   }
-  return runNodesInOrder<Row>(graph, ctx, ctx.runtime, callerRows);
+  return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);
+}
+
+async function runInTransaction<T>(
+  transaction: RuntimeTransaction,
+  run: (scope: RuntimeScope) => Promise<T>,
+): Promise<T> {
+  try {
+    const result = await run(transaction);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
+      const settlement = settlementOf(transaction);
+      if (settlement?.rolledBack !== true) throw rollbackError;
+      settlement.logDroppedError(rollbackError);
+    }
+    throw error;
+  }
 }
 
 async function runNodesInOrder<Row>(
