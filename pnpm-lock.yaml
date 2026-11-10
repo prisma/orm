@@ -6641,6 +6641,9 @@ importers:
       '@internal/sqlite':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/3-targets/sqlite/9-facade
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../packages/3-targets/mysql/2-mariadb/1-target
       '@internal/target-mongo':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/3-targets/mongo/1-target
