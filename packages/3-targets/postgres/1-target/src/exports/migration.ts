@@ -19,12 +19,10 @@ export {
   primaryKey,
   unique,
 } from '@internal/sql-relational-core/contract-free';
-export {
-  type DataTransformClosure,
-  type DataTransformOptions,
-  dataTransform,
+export type {
+  DataTransformClosure,
+  DataTransformOptions,
 } from '../core/migrations/operations/data-transform';
-export { createExtension } from '../core/migrations/operations/dependencies';
 export { rawSql } from '../core/migrations/operations/raw';
 // Target-owned base class for migrations. Aliased to `Migration` so
 // user-edited migration.ts files (and the renderer's scaffold) read as
