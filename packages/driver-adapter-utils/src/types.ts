@@ -281,17 +281,21 @@ export type TransactionOptions = {
   usePhantomQuery: boolean
 }
 
+/**
+ * A transaction on one connection. The caller calls either `commit()` or `rollback()`, once,
+ * and sends nothing on the transaction afterwards.
+ */
 export interface Transaction extends AdapterInfo, SqlQueryable {
   /**
    * Transaction options.
    */
   readonly options: TransactionOptions
   /**
-   * Commit the transaction.
+   * Commit the transaction. Called at most once, and never after `rollback()`.
    */
   commit(): Promise<void>
   /**
-   * Roll back the transaction.
+   * Roll back the transaction. Called at most once, and never after `commit()`.
    */
   rollback(): Promise<void>
   /**
