@@ -68,12 +68,13 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 | `delete()`/`deleteAll()` with includes, or of a variant in its own table | The `Find` reads the rows with their includes before the `Delete`; no rule applies. |
 | `updateAll()` with `RETURNING` | One statement, as on main: the fold rule merges the `Find` into the `Update` and the read-back rule merges the read-back into it. |
 | `update()` that sets a key column, without `RETURNING` | The read-back finds the row by its new key. |
+| `createAll()` of several rows with a generated key, without `RETURNING` | Refused with the same `ORM.CAPABILITY_MISSING` error before any statement runs, now as a rejection of the result, as `create()` reports it, instead of a throw at the call (decided 2026-11-10). The integration test "refuses createAll() of several rows whose ids the database generates, before running, and counts them with createAndCount()" changes from `toThrow` to `rejects`. |
 | `upsert()` without `RETURNING` | Reads its row back by the create's values for the conflict columns, with main's refusals. |
 
 ## Slice-specific done conditions
 
 - [ ] No builder takes a `returns` argument or reads the `returning` capability; `readsBack` and `Translation.readsBack` do not exist.
-- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the five order assertions above.
+- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the five order assertions and the `createAll()` refusal above.
 - [ ] Tests assert effects and printed graphs, never generated SQL.
 
 ## Open questions
