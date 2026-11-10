@@ -406,3 +406,31 @@ describe('MongoMigrationRunner, a data transform whose update leaves documents i
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a planner rewrite whose check still finds documents', () => {
+  it(
+    'says what happened without pointing to an update in migration.ts',
+    async () => {
+      await db.createCollection('users');
+      await db
+        .collection('users')
+        .insertMany([{ _id: new ObjectId('64b7f0c2a1b2c3d4e5f60718'), name: 'Ada' }]);
+
+      const result = await run(
+        [fillField({ collection: 'users', field: 'nickname', value: { $literal: null } })],
+        usersContract({ name: { bsonType: 'string' }, nickname: { bsonType: 'string' } }),
+      );
+
+      if (result.ok) throw new Error('Expected the fill to fail its check');
+      expect({ message: result.failure.message, why: result.failure.why }).toEqual({
+        message:
+          'Operation field.users.nickname.fill failed: after its update, 1 document in collection users still matches its check',
+        why: expect.stringMatching(
+          /^It has _id ObjectId\("64b7f0c2a1b2c3d4e5f60718"\)\. Find them all with .* in mongosh\. The update this operation runs did not change them: another client may have written them during the apply, or the value it writes does not pass its own check\. Run the command again; operations that already ran are skipped\. If they are still found, change them by hand\./,
+        ),
+      });
+      expect(result.failure.why).not.toContain('migration.ts');
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

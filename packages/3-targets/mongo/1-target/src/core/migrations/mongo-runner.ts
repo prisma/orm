@@ -1073,8 +1073,8 @@ export class MongoMigrationRunner {
   }
 
   /**
-   * The failure when a data transform's check still finds documents after its update: how many, one
-   * `_id`, and the query that finds them all.
+   * The failure when a rewrite's check still finds documents after its update: how many, one `_id`,
+   * and the query that finds them all. Only a data transform's update is the user's to change.
    */
   private async documentsStillMatchingFailure(
     op: MongoDmlOperation,
@@ -1101,7 +1101,12 @@ export class MongoMigrationRunner {
       'MIGRATION.POSTCHECK_FAILED',
       `Operation ${op.id} failed: after its update, ${documents} ${one ? 'document' : 'documents'} in collection ${command.collection} still ${one ? 'matches' : 'match'} its check`,
       {
-        why: `${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh. Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped.`,
+        why: [
+          `${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh.`,
+          op.operationClass === 'data'
+            ? "Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped."
+            : 'The update this operation runs did not change them: another client may have written them during the apply, or the value it writes does not pass its own check. Run the command again; operations that already ran are skipped. If they are still found, change them by hand.',
+        ].join(' '),
         meta: {
           operationId: op.id,
           name: op.name,
