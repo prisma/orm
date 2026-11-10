@@ -227,7 +227,7 @@ The runner needs to know what some operations are: which field a cast changes an
 { meta: { checkDocuments: { collection: 'users', rewrittenFields: ['plan'], renamedFields: {} } } }
 ```
 
-`castField` and `fillField` write `rewrite`, whose `kind` is the kind the planner's rewrite refusals use. `checkDocuments` writes `checkDocuments`. The runner reads these, rather than working the facts out of the operation's pipelines. A data transform is known by its class, `data`. `renameField` and `unsetField` write no `meta`, so committed migrations that hold them emit the same `ops.json`; the runner still reads their `$rename` and `$unset`.
+This `meta` is unrelated to the third argument of `collMod(collection, options, meta)`, which sets the operation's `id`, `label`, `operationClass` and `checkDocuments` when it is built and is not written as `meta`. `castField` and `fillField` write `rewrite`, whose `kind` is the kind the planner's rewrite refusals use. `checkDocuments` writes `checkDocuments`. The runner reads these, rather than working the facts out of the operation's pipelines. A data transform is known by its class, `data`. `renameField` and `unsetField` write no `meta`, so committed migrations that hold them emit the same `ops.json`; the runner still reads their `$rename` and `$unset`.
 
 #### DML execution
 
