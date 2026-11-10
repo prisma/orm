@@ -7,7 +7,6 @@ import {
   resolveRequirementSpecifiers,
 } from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
-import { canonicalize } from '@internal/mongo-contract';
 import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
 import {
   type OpFactoryCall,
@@ -78,7 +77,8 @@ export function renderCallsToTypeScript(
   const imports = buildImports(calls, meta);
   const shared = sharedDeclarations(calls);
   const names: SharedNames = {
-    nameOf: (value) => shared.find((declaration) => declaration.key === canonicalize(value))?.name,
+    nameOf: (collection, value) =>
+      shared.find((declaration) => declaration.key === sharedKey(collection, value))?.name,
   };
   const operationsBody = calls
     .map((call: OpFactoryCallNode) => call.renderTypeScript(names))
@@ -117,22 +117,26 @@ function constName(stem: string, taken: ReadonlySet<string>): string {
   }
 }
 
+/** What makes two declared values one shared value: the same collection and the same value, key order included. */
+function sharedKey(collection: string, value: unknown): string {
+  return JSON.stringify([collection, value]);
+}
+
 /**
- * The values more than one call declares, each declared once as a `const` the calls refer to, so an
- * edit of it applies to all of them. Values are matched by their canonical form; a value only one
- * call declares is written out in that call.
+ * The values more than one call on the same collection declares, each declared once as a `const` the
+ * calls refer to, so an edit of it applies to all of them. A value only one call declares is written
+ * out in that call.
  */
 function sharedDeclarations(
   calls: ReadonlyArray<OpFactoryCallNode>,
 ): readonly { readonly key: string; readonly name: string; readonly value: unknown }[] {
-  const declared = calls.flatMap((call) => call.sharedValues());
+  const declared = calls
+    .flatMap((call) => call.sharedValues())
+    .map((shared) => ({ ...shared, key: sharedKey(shared.collection, shared.value) }));
   const taken = new Set<string>();
   const keys = new Set<string>();
-  return declared.flatMap(({ stem, value }) => {
-    const key = canonicalize(value);
-    if (keys.has(key) || declared.filter((other) => canonicalize(other.value) === key).length < 2) {
-      return [];
-    }
+  return declared.flatMap(({ stem, key, value }) => {
+    if (keys.has(key) || declared.filter((other) => other.key === key).length < 2) return [];
     keys.add(key);
     const name = constName(stem, taken);
     taken.add(name);

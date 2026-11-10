@@ -107,4 +107,38 @@ describe('a migration.ts with an early document check', () => {
       JSON.parse(serializeMongoOps(twoChanges.map((call) => call.toOp()))),
     );
   });
+
+  it('gives each collection its own const, even when two collections have equal validators', async () => {
+    const forCollection = (collection: string) => [
+      new CheckDocumentsCall({ collection, validator, rewrittenFields: ['plan'] }),
+      new CollModCall(
+        collection,
+        {
+          validator: { $jsonSchema: validator },
+          validationLevel: 'strict',
+          validationAction: 'error',
+        },
+        {
+          id: `validator.${collection}.update`,
+          label: `Update validator on ${collection}`,
+          checkDocuments: true,
+        },
+      ),
+    ];
+    const twoCollections = [...forCollection('users'), ...forCollection('accounts')];
+    const source = renderCallsToTypeScript(twoCollections, meta).replace(
+      "'@internal/target-mongo/migration'",
+      `'${factoryExport}'`,
+    );
+    await directory.writeMigration(source, meta);
+
+    expect({
+      users: source.match(/usersValidator\b/g)?.length,
+      accounts: source.match(/accountsValidator\b/g)?.length,
+      run: await directory.runMigration(),
+    }).toEqual({ users: 3, accounts: 3, run: { exitCode: 0, stderr: '' } });
+    expect(await directory.readOps()).toEqual(
+      JSON.parse(serializeMongoOps(twoCollections.map((call) => call.toOp()))),
+    );
+  });
 });

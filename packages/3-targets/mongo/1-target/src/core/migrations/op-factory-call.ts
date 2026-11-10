@@ -3,7 +3,7 @@
  * `migration-factories.ts`, plus a shared `OpFactoryCallNode` abstract
  * base. Every call class carries the literal arguments its backing
  * factory would receive, computes a human-readable `label` in its
- * constructor, and implements two polymorphic hooks:
+ * constructor, and implements these polymorphic hooks:
  *
  * - `toOp()` — converts the IR node to a runtime
  *   `MongoMigrationPlanOperation` by delegating to the matching pure
@@ -11,6 +11,11 @@
  * - `renderTypeScript()` / `importRequirements()` — inherited from
  *   `TsExpression`. Used by `renderCallsToTypeScript` to emit the call
  *   as a TypeScript expression inside the scaffolded `migration.ts`.
+ *   `renderTypeScript` takes the names of the shared `const`s, so a call
+ *   writes a shared value by name.
+ * - `sharedValues()` — the values a call wants `migration.ts` to declare
+ *   once, as a `const` other calls on the same collection can use.
+ *   `renderCallsToTypeScript` gathers them as it gathers imports.
  *
  * The abstract base and all concrete classes are package-private.
  * External consumers see only the framework-level `OpFactoryCall`
@@ -86,20 +91,22 @@ export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
  */
 export interface SharedValue {
   readonly stem: string;
+  /** The collection the value belongs to; only calls on the same collection share it. */
+  readonly collection: string;
   readonly value: unknown;
 }
 
 /** The names `migration.ts` declares shared values under, looked up by value. */
 export interface SharedNames {
   /** The name of the `const` that holds `value`, when the file declares it once. */
-  nameOf(value: unknown): string | undefined;
+  nameOf(collection: string, value: unknown): string | undefined;
 }
 
 const NO_SHARED_NAMES: SharedNames = { nameOf: () => undefined };
 
-/** The source of `value`: the name of the `const` that holds it, or the value written out. */
-function sharedSource(value: unknown, names: SharedNames): string {
-  return names.nameOf(value) ?? jsonToTsSource(value);
+/** The source of `value`: the name of the `const` that holds it for `collection`, or the value written out. */
+function sharedSource(collection: string, value: unknown, names: SharedNames): string {
+  return names.nameOf(collection, value) ?? jsonToTsSource(value);
 }
 
 export abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
@@ -452,13 +459,22 @@ export class CheckDocumentsCall extends OpFactoryCallNode {
   }
 
   override sharedValues(): readonly SharedValue[] {
-    return [{ stem: `${this.collection}Validator`, value: this.options.validator }];
+    return [
+      {
+        stem: `${this.collection}Validator`,
+        collection: this.collection,
+        value: this.options.validator,
+      },
+    ];
   }
 
   renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
     const entries = Object.entries(this.options).map(
       ([key, value]) =>
-        [key, key === 'validator' ? sharedSource(value, names) : jsonToTsSource(value)] as const,
+        [
+          key,
+          key === 'validator' ? sharedSource(this.collection, value, names) : jsonToTsSource(value),
+        ] as const,
     );
     return `checkDocuments(${tsObjectSource(entries)})`;
   }
@@ -490,7 +506,7 @@ export class CollModCall extends OpFactoryCallNode {
     const jsonSchema = this.options.validator?.['$jsonSchema'];
     return jsonSchema === undefined
       ? []
-      : [{ stem: `${this.collection}Validator`, value: jsonSchema }];
+      : [{ stem: `${this.collection}Validator`, collection: this.collection, value: jsonSchema }];
   }
 
   renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
@@ -504,7 +520,7 @@ export class CollModCall extends OpFactoryCallNode {
                 Object.entries(value).map(([validatorKey, validatorValue]) => [
                   validatorKey,
                   validatorKey === '$jsonSchema'
-                    ? sharedSource(validatorValue, names)
+                    ? sharedSource(this.collection, validatorValue, names)
                     : jsonToTsSource(validatorValue),
                 ]),
               )
