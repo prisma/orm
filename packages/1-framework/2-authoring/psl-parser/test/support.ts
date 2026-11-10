@@ -137,13 +137,11 @@ export function binderContext(
   const dataTypes = input.dataTypes ?? EMPTY_DATA_TYPES;
   return {
     authoringContributions: {
-      field: {},
       type: input.contributedTypes ?? {},
       entityTypes: {},
       pslBlockDescriptors: input.pslBlockDescriptors ?? {},
       modelAttributes: {},
       attributeSpecs: input.attributeSpecs ?? { model: {}, field: {} },
-      textDataTypes: [],
       dataTypes: dataTypes.entries,
     },
     controlMutationDefaults: {

@@ -157,7 +157,7 @@ export async function createPgIntegrationRuntime(
       if (!driver) {
         throw new Error('Driver descriptor missing from execution stack');
       }
-      await driver.connect({ kind: 'pgClient', client });
+      await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
       const realRuntime = new PostgresRuntimeImpl({
         closeRefusal: undefined,
@@ -246,7 +246,11 @@ export async function createPgIntegrationRuntime(
       executions.length = 0;
     },
     async close() {
-      await realRuntime.close();
+      try {
+        await realRuntime.close();
+      } finally {
+        await client.end();
+      }
     },
     async execute(
       plan: SqlExecutionPlan | SqlQueryPlan,

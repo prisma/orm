@@ -1,9 +1,8 @@
-export type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+export type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 export type { SimplifyDeep } from '@internal/utils/simplify-deep';
-export type { MongoCollection, MongoOrmEnums } from '../collection';
+export type { MongoCollection, MongoCollectionContext } from '../collection';
 export { createMongoCollection } from '../collection';
 export { compileMongoQuery } from '../compile';
-export type { MongoQueryExecutor } from '../executor';
 export type {
   DotPath,
   FieldAccessor,

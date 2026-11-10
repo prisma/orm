@@ -102,24 +102,27 @@ type InputClosedWhenEmpty<Side extends ValueTypeSide, T> = Side extends 'input'
   ? ClosedWhenEmpty<T>
   : T;
 
-type NamespaceParts<ValueObjects, NamespaceOverrides> = {
-  readonly valueObjects: ValueObjects;
-  readonly overrides: NamespaceOverrides;
+type ContractParts<StorageNamespaces, Overrides> = {
+  readonly storage: StorageNamespaces;
+  readonly overrides: Overrides;
 };
 
+type ValueObjectFields<Ns, Name, Parts> = Lookup<
+  Lookup<Lookup<Lookup<Lookup<Lookup<Parts, 'storage'>, Ns>, 'entries'>, 'valueObject'>, Name>,
+  'fields'
+>;
+
 type ValueObjectType<
+  Ns,
   Name,
   Parts,
   CodecTypes,
   ParameterizedOutputs extends ParameterizedOutputTypesFunction,
   Side extends ValueTypeSide,
 > = ClosedWhenEmpty<{
-  readonly [F in keyof Lookup<
-    Lookup<Lookup<Parts, 'valueObjects'>, Name>,
-    'fields'
-  >]: FieldValueType<
-    Lookup<Lookup<Lookup<Parts, 'valueObjects'>, Name>, 'fields'>[F],
-    Lookup<Lookup<Lookup<Lookup<Parts, 'overrides'>, 'valueObjects'>, Name>, F>,
+  readonly [F in keyof ValueObjectFields<Ns, Name, Parts>]: FieldValueType<
+    ValueObjectFields<Ns, Name, Parts>[F],
+    Lookup<Lookup<Lookup<Lookup<Lookup<Parts, 'overrides'>, Ns>, 'valueObjects'>, Name>, F>,
     Parts,
     CodecTypes,
     ParameterizedOutputs,
@@ -134,8 +137,12 @@ type ElementType<
   CodecTypes,
   ParameterizedOutputs extends ParameterizedOutputTypesFunction,
   Side extends ValueTypeSide,
-> = FieldType extends { readonly kind: 'valueObject'; readonly name: infer Name }
-  ? ValueObjectType<Name, Parts, CodecTypes, ParameterizedOutputs, Side>
+> = FieldType extends {
+  readonly kind: 'valueObject';
+  readonly namespaceId: infer Ns;
+  readonly entityName: infer Name;
+}
+  ? ValueObjectType<Ns, Name, Parts, CodecTypes, ParameterizedOutputs, Side>
   : FieldType extends {
         readonly kind: 'union';
         readonly members: infer Members extends readonly unknown[];
@@ -215,16 +222,20 @@ type FieldValueType<
       ParameterizedOutputs,
       Side
     >
-  : // `ElementType` types value objects too; this branch keys their instantiations by name alone, which costs less.
+  : // `ElementType` types value objects too; this branch keys their instantiations by namespace and name alone, which costs less.
     Field extends {
-        readonly type: { readonly kind: 'valueObject'; readonly name: infer Name };
+        readonly type: {
+          readonly kind: 'valueObject';
+          readonly namespaceId: infer Ns;
+          readonly entityName: infer Name;
+        };
         readonly many?: infer Many;
         readonly dict?: infer Dictionary;
       }
     ? WithModifiers<
         BaseType<
           Override,
-          ValueObjectType<Name, Parts, CodecTypes, ParameterizedOutputs, Side>,
+          ValueObjectType<Ns, Name, Parts, CodecTypes, ParameterizedOutputs, Side>,
           Side
         >,
         NullableFlag<Field>,
@@ -248,19 +259,14 @@ type FieldValueType<
         >
       : never;
 
-type NamespacePartsOf<DomainNamespaces, Ns, Overrides> = NamespaceParts<
-  Lookup<Lookup<DomainNamespaces, Ns>, 'valueObjects'>,
-  Lookup<Overrides, Ns>
->;
-
 /**
- * `FieldOutputTypes` (`Side` `'output'`) or `FieldInputTypes` (`'input'`) of a contract whose domain namespaces are `DomainNamespaces`, computed from the contract's literal shape. Both an emitted `contract.d.ts` and a contract written with `defineContract` type their fields through it.
+ * `FieldOutputTypes` (`Side` `'output'`) or `FieldInputTypes` (`'input'`) of a contract whose domain namespaces are `DomainNamespaces` and whose storage namespaces are `StorageNamespaces`, computed from the contract's literal shape. It reads both planes: the domain for the fields, and storage for the value objects the fields refer to, so it always takes both. Both an emitted `contract.d.ts` and a contract written with `defineContract` type their fields through it.
  *
  * Each value is typed by, in order:
  *
- * 1. its override for that side, `{ output?, input? }`, from `Overrides` at `[namespace]['models'][model][field]` for a model field, or at `[namespace]['valueObjects'][valueObject][field]` for a value object field. An override is the type of a field that the contract's shape and the codec types cannot give: the members of the value set it holds, the type its codec renders as text, or the type a family's storage entry gives it;
+ * 1. its override for that side, `{ output?, input? }`, from `Overrides` at `[namespace]['models'][model][field]` for a model field, or at `[storage namespace]['valueObjects'][valueObject][field]` for a value object field. An override is the type of a field that the contract's shape and the codec types cannot give: the members of the value set it holds, the type its codec renders as text, or the type a family's storage entry gives it;
  * 2. for a scalar field, on the output side, the type a pack's type function in `ParameterizedOutputs` gives it for its type parameters (`ParameterizedOutputType`), else its codec's `output` or `input` type, or `unknown` for a codec `CodecTypes` lacks;
- * 3. for a value object field, an object of the value object's field types from the same namespace's `valueObjects`, computed by these rules;
+ * 3. for a value object field, an object of the field types of the value object its reference names in `StorageNamespaces`, at `[namespaceId]['entries']['valueObject'][entityName]`, computed by these rules;
  * 4. for a union field, the union of its members' types, each a codec's plain type or a value object's type;
  *
  * then wrapped in `ReadonlyArray` for a list and in `Readonly<Record<string, …>>` for a dictionary, with `null` for a nullable element or value. A model without fields has `{}` output types and `Record<string, never>` input types; a value object without fields has `Record<string, never>` on both sides.
@@ -271,10 +277,12 @@ export type FieldTypesFromDomain<
   ParameterizedOutputs extends ParameterizedOutputTypesFunction,
   Overrides,
   Side extends ValueTypeSide,
+  StorageNamespaces,
 > = {
   readonly [Ns in keyof DomainNamespaces]: NamespaceFieldTypes<
     Lookup<DomainNamespaces[Ns], 'models'>,
-    NamespacePartsOf<DomainNamespaces, Ns, Overrides>,
+    Lookup<Overrides, Ns>,
+    ContractParts<StorageNamespaces, Overrides>,
     CodecTypes,
     ParameterizedOutputs,
     Side
@@ -283,6 +291,7 @@ export type FieldTypesFromDomain<
 
 type NamespaceFieldTypes<
   Models,
+  NamespaceOverrides,
   Parts,
   CodecTypes,
   ParameterizedOutputs extends ParameterizedOutputTypesFunction,
@@ -297,7 +306,7 @@ type NamespaceFieldTypes<
           {
             readonly [F in keyof Fields]: FieldValueType<
               Fields[F],
-              Lookup<Lookup<Lookup<Lookup<Parts, 'overrides'>, 'models'>, M>, F>,
+              Lookup<Lookup<Lookup<NamespaceOverrides, 'models'>, M>, F>,
               Parts,
               CodecTypes,
               ParameterizedOutputs,
@@ -309,19 +318,23 @@ type NamespaceFieldTypes<
 };
 
 /**
- * The output (`Side` `'output'`) or input (`'input'`) type of each value object of a contract whose domain namespaces are `DomainNamespaces`, keyed by namespace and value object name, by the rules of {@link FieldTypesFromDomain}.
+ * The output (`Side` `'output'`) or input (`'input'`) type of each value object of a contract whose storage namespaces are `StorageNamespaces`, keyed by storage namespace and value object name, by the rules of {@link FieldTypesFromDomain}.
  */
-export type ValueObjectTypesFromDomain<
-  DomainNamespaces,
+export type ValueObjectTypesFromStorage<
+  StorageNamespaces,
   CodecTypes,
   ParameterizedOutputs extends ParameterizedOutputTypesFunction,
   Overrides,
   Side extends ValueTypeSide,
 > = {
-  readonly [Ns in keyof DomainNamespaces]: {
-    readonly [V in keyof Lookup<DomainNamespaces[Ns], 'valueObjects'>]: ValueObjectType<
+  readonly [Ns in keyof StorageNamespaces]: {
+    readonly [V in keyof Lookup<
+      Lookup<StorageNamespaces[Ns], 'entries'>,
+      'valueObject'
+    >]: ValueObjectType<
+      Ns,
       V,
-      NamespacePartsOf<DomainNamespaces, Ns, Overrides>,
+      ContractParts<StorageNamespaces, Overrides>,
       CodecTypes,
       ParameterizedOutputs,
       Side

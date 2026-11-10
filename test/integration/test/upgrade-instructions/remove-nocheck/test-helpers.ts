@@ -13,9 +13,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/remove-nocheck/app/scripts/remove-nocheck/remove-nocheck.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/remove-nocheck/remove-nocheck.ts',
   extension:
-    'upgrade-instructions/pending/remove-nocheck/extension/scripts/remove-nocheck/remove-nocheck.ts',
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/remove-nocheck/remove-nocheck.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -54,9 +54,9 @@ export function writeTree(root: string, tree: Tree): void {
   }
 }
 
-export function copyFixture(side: 'before' | 'after'): string {
+export function copyFixture(side: 'before' | 'after', fixture = 'nocheck'): string {
   const root = makeWorkDir();
-  cpSync(join(fixturesDir, side), root, { recursive: true });
+  cpSync(join(fixturesDir, fixture, side), root, { recursive: true });
   return root;
 }
 
@@ -67,11 +67,14 @@ export interface Run {
   readonly stderr: string;
 }
 
-export function runScript(root: string, script = appScript): Run {
-  const result = spawnSync(process.execPath, [script, root], { encoding: 'utf8' });
+export function runScript(root: string, script = appScript, args: readonly string[] = []): Run {
+  const result = spawnSync(process.execPath, [script, root, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, NODE_PATH: '' },
+  });
   return { root, status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-export function fixtureTree(side: 'before' | 'after'): Tree {
-  return readTree(join(fixturesDir, side));
+export function fixtureTree(side: 'before' | 'after', fixture = 'nocheck'): Tree {
+  return readTree(join(fixturesDir, fixture, side));
 }

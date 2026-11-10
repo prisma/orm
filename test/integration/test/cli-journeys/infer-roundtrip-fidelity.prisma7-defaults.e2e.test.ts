@@ -189,55 +189,55 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model ListDefaults {
-              id             Int                 @id(map: "list_defaults_pkey")
-              negInts        Int?[]?             @default([-1, 2])
-              negSmallInts   SmallInt?[]?        @default([-1, 2])
-              bigInts        BigInt?[]?          @default([1, 2])
-              negBigInts     BigInt?[]?          @default([-1, 2])
-              emptyBigInts   BigInt?[]?          @default([])
-              hugeBigInts    BigInt?[]?          @default([9007199254740993, -9007199254740993])
-              negFloats      Float?[]?           @default([-1.5, 2])
-              negDecimals    Numeric(65, 30)?[]? @default([-1.5, 2])
-              longDecimals   Numeric(65, 30)?[]? @default([12345678901234567890.123456789, 0.000000000000000001])
-              scaledDecimals Numeric(10, 2)?[]?  @default([-1.25, 2])
-              emptyVarchars  VarChar(32)?[]?     @default([])
+              id             Int                                      @id(map: "list_defaults_pkey")
+              negInts        Int?[]?                                  @default([-1, 2])
+              negSmallInts   Int(storage: int2)?[]?                   @default([-1, 2])
+              bigInts        BigInt?[]?                               @default([1, 2])
+              negBigInts     BigInt?[]?                               @default([-1, 2])
+              emptyBigInts   BigInt?[]?                               @default([])
+              hugeBigInts    BigInt?[]?                               @default([9007199254740993, -9007199254740993])
+              negFloats      Float?[]?                                @default([-1.5, 2])
+              negDecimals    Decimal(precision: 65, scale: 30)?[]?    @default([-1.5, 2])
+              longDecimals   Decimal(precision: 65, scale: 30)?[]?    @default([12345678901234567890.123456789, 0.000000000000000001])
+              scaledDecimals Decimal(precision: 10, scale: 2)?[]?     @default([-1.25, 2])
+              emptyVarchars  String(storage: varchar, length: 32)?[]? @default([])
 
               @@map("list_defaults")
             }
 
             model NumberDefaults {
-              id            Int                @id(map: "number_defaults_pkey")
-              negInt        Int                @default(-1)
-              negSmallInt   SmallInt           @default(-2)
-              negFloat      Float              @default(-1.5)
-              tinyFloat     Float              @default(0.0000001)
-              negReal       Real               @default(-2.5)
-              negDecimal    Numeric(65, 30)    @default(-0.5)
-              longDecimal   Numeric(65, 30)    @default(12345678901234567890.123456789)
-              tinyDecimal   Numeric(65, 30)    @default(0.000000000000000001)
-              scaleDecimal  Numeric(65, 30)    @default(1.5)
-              wholeDecimal  Numeric(65, 30)    @default(10)
-              scaledDecimal Numeric(10, 2)     @default(-1.25)
-              negSafeBigInt BigInt             @default(-5)
-              negBigInt     BigInt             @default(-9007199254740993)
-              hugeBigInt    BigInt             @default(9007199254740993)
-              stamp         TimestampString(3) @default(timestamp\`2024-01-01T00:00:00\`)
-              jsonNull      Jsonb?             @default(json\`null\`)
+              id            Int                               @id(map: "number_defaults_pkey")
+              negInt        Int                               @default(-1)
+              negSmallInt   Int(storage: int2)                @default(-2)
+              negFloat      Float                             @default(-1.5)
+              tinyFloat     Float                             @default(0.0000001)
+              negReal       Float(storage: float4)            @default(-2.5)
+              negDecimal    Decimal(precision: 65, scale: 30) @default(-0.5)
+              longDecimal   Decimal(precision: 65, scale: 30) @default(12345678901234567890.123456789)
+              tinyDecimal   Decimal(precision: 65, scale: 30) @default(0.000000000000000001)
+              scaleDecimal  Decimal(precision: 65, scale: 30) @default(1.5)
+              wholeDecimal  Decimal(precision: 65, scale: 30) @default(10)
+              scaledDecimal Decimal(precision: 10, scale: 2)  @default(-1.25)
+              negSafeBigInt BigInt                            @default(-5)
+              negBigInt     BigInt                            @default(-9007199254740993)
+              hugeBigInt    BigInt                            @default(9007199254740993)
+              stamp         DateTime(storage: timestamp)      @default(timestamp\`2024-01-01T00:00:00\`)
+              jsonNull      Jsonb?                            @default(json\`null\`)
 
               @@map("number_defaults")
             }
 
             model SqlDefaults {
-              id             Int                  @id(map: "sql_defaults_pkey")
-              textNull       VarChar(32)?         @default(sql\`NULL::character varying\`)
-              floatNaN       Float                @default(NaN)
-              floatNegInf    Float                @default(-Infinity)
-              realNaN        Real                 @default(NaN)
-              decimalNaN     Numeric              @default(NaN)
-              timeWithZone   Timetz               @default(timetz\`12:34:56Z\`)
-              stampInfinity  TimestampString(3)   @default(timestamp\`infinity\`)
-              dayNegInfinity DateString           @default(date\`-infinity\`)
-              instantBc      TimestamptzString(6) @default(timestamptz\`-000043-03-15T00:00:00Z\`)
+              id             Int                                                    @id(map: "sql_defaults_pkey")
+              textNull       String(storage: varchar, length: 32)?                  @default(sql\`NULL::character varying\`)
+              floatNaN       Float                                                  @default(NaN)
+              floatNegInf    Float                                                  @default(-Infinity)
+              realNaN        Float(storage: float4)                                 @default(NaN)
+              decimalNaN     Decimal                                                @default(NaN)
+              timeWithZone   Time(storage: timetz)                                  @default(timetz\`12:34:56Z\`)
+              stampInfinity  DateTime(as: string, storage: timestamp, precision: 3) @default(timestamp\`infinity\`)
+              dayNegInfinity Date                                                   @default(date\`-infinity\`)
+              instantBc      DateTime(precision: 6)                                 @default(timestamptz\`-000043-03-15T00:00:00Z\`)
 
               @@map("sql_defaults")
             }
@@ -305,7 +305,7 @@ withTempDir(({ createTempDir }) => {
       });
 
       it(
-        'infer prints each element as the string its codec reads, which emit accepts',
+        'infer prints each element as the literal its codec reads, which emit accepts',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -318,8 +318,8 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model RawListDefaults {
-              id         Int                    @id(map: "raw_list_defaults_pkey")
-              timestamps TimestampString(3)?[]? @default([timestamp\`2024-01-01T00:00:00\`])
+              id         Int                              @id(map: "raw_list_defaults_pkey")
+              timestamps DateTime(storage: timestamp)?[]? @default([timestamp\`2024-01-01T00:00:00\`])
 
               @@map("raw_list_defaults")
             }

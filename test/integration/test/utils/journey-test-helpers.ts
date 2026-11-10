@@ -16,12 +16,17 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import {
+  issueOutcome,
+  type VerifyDatabaseSchemaResult,
+} from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { EngineEvent, PresentedResult, StreamEvent } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { isAbsolute, join } from 'pathe';
-import { afterAll, beforeAll } from 'vitest';
+import stripAnsi from 'strip-ansi';
+import { afterAll, beforeAll, expect } from 'vitest';
 
 import {
   runOnEngine as runCommandOnEngine,
@@ -210,6 +215,8 @@ export const pslContractFixtures = {
   'contract-base': join(JOURNEY_FIXTURES_DIR, 'contract-base.prisma'),
   'contract-additive': join(JOURNEY_FIXTURES_DIR, 'contract-additive.prisma'),
   'contract-composite-pk': join(JOURNEY_FIXTURES_DIR, 'contract-composite-pk.prisma'),
+  'contract-extensions': join(JOURNEY_FIXTURES_DIR, 'contract-extensions.prisma'),
+  'contract-extensions-name': join(JOURNEY_FIXTURES_DIR, 'contract-extensions-name.prisma'),
   'contract-index-upgrade': join(JOURNEY_FIXTURES_DIR, 'contract-index-upgrade.prisma'),
   'contract-expression-authored': join(JOURNEY_FIXTURES_DIR, 'contract-expression-authored.prisma'),
   'contract-expression-authored-renamed': join(
@@ -242,11 +249,41 @@ export const pslContractFixtures = {
     JOURNEY_FIXTURES_DIR,
     'contract-rename-statements-to.prisma',
   ),
+  'contract-move-statements-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-move-statements-from.prisma',
+  ),
+  'contract-move-statements-to': join(JOURNEY_FIXTURES_DIR, 'contract-move-statements-to.prisma'),
+  'contract-namespace-statements-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-from.prisma',
+  ),
+  'contract-namespace-statements-renamed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-renamed.prisma',
+  ),
+  'contract-namespace-statements-removed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-removed.prisma',
+  ),
+  'contract-namespace-statements-kept': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-kept.prisma',
+  ),
+  'contract-namespace-statements-public-renamed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-public-renamed.prisma',
+  ),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
 
 export const sqlitePslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.sqlite.psl.ts');
+export const mysqlPslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.mysql.psl.ts');
+export const pgvectorPslConfigFixture = join(
+  JOURNEY_FIXTURES_DIR,
+  'prisma.config.with-db.pgvector.psl.ts',
+);
 
 /**
  * Swaps the active contract in the test directory to a different variant.
@@ -274,7 +311,7 @@ export function swapPslContract(ctx: JourneyContext, variant: PslContractVariant
 
 /** Options for controlling the test environment when running a CLI command. */
 export interface RunCommandOptions {
-  /** Simulate piped stdout (isTTY=false) to test auto-JSON forwarding. Default: true (interactive). */
+  /** Simulate piped stdout (isTTY=false), which receives the command's data lines. Default: true (interactive). */
   readonly isTTY?: boolean;
 }
 
@@ -730,6 +767,43 @@ export function engineDiagnosticCodes(run: EngineCommandResult): readonly string
     throw new Error(`Step never presented a result (exit ${run.exitCode}):\n${run.stderr}`);
   }
   return presented.diagnostics.map((diagnostic) => diagnostic.code);
+}
+
+/** A schema issue as the journeys assert it: where it is, what kind of node, and whether it is missing, extra or different. */
+export interface ExpectedVerifyIssue {
+  readonly path: readonly string[];
+  readonly nodeKind: string;
+  readonly outcome: ReturnType<typeof issueOutcome>;
+}
+
+/**
+ * Asserts that `db verify --schema-only --strict` ran in strict mode and reported exactly `expectedIssues` and no warnings. Strict mode is what makes a live column or constraint the contract leaves out an issue.
+ */
+export async function expectStrictVerifyIssues(
+  ctx: JourneyContext,
+  subject: string,
+  expectedIssues: readonly ExpectedVerifyIssue[] = [],
+): Promise<void> {
+  const result = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
+  const document = engineDocument<VerifyDatabaseSchemaResult>(result);
+  expect(
+    {
+      ok: document.ok,
+      strict: document.meta?.strict,
+      issues: document.schema.issues.map((issue) => ({
+        path: issue.path,
+        nodeKind: (issue.expected ?? issue.actual)?.nodeKind,
+        outcome: issueOutcome(issue),
+      })),
+      warnings: document.schema.warnings?.issues ?? [],
+    },
+    `${subject}: db verify --schema-only --strict\n${stripAnsi(result.stderr)}`,
+  ).toEqual({
+    ok: expectedIssues.length === 0,
+    strict: true,
+    issues: expectedIssues,
+    warnings: [],
+  });
 }
 
 export { EMPTY_CONTRACT_HASH };

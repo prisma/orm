@@ -6,6 +6,7 @@
  * Codec authors `extend` the abstract bases: {@link CodecImpl} and {@link CodecDescriptorImpl}. They write a per-codec column helper that calls `descriptor.factory(...)` directly and tie the helper to its descriptor with `satisfies ColumnHelperFor<D>` (or `ColumnHelperForStrict<D>`).
  */
 
+export { asFloat, asNumeralText, castUnchanged, refuseWrongShape } from '../shared/casts';
 export type { Codec } from '../shared/codec';
 export { CodecImpl, readContractValue } from '../shared/codec';
 export type {
@@ -69,6 +70,8 @@ export {
   schemaKeysAllowing,
 } from '../shared/data-type';
 export { DATA_TYPE_ID_PATTERN } from '../shared/data-type-id-pattern';
+export type { DateTimeShape, DateTimeStoredTextOptions } from '../shared/date-time-stored-form';
+export { dateTimeStoredText, isoDateStringText } from '../shared/date-time-stored-form';
 export { decimalTextEqualityKey } from '../shared/decimal-text-equality';
 export type { BigIntRange, IntegerRange } from '../shared/json-readers';
 export {
@@ -87,6 +90,19 @@ export {
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
 } from '../shared/json-readers';
+export { parseJsonText, printJsonText } from '../shared/json-text';
+export type {
+  IntegerStep,
+  NumberClassification,
+  NumberClassifierSpec,
+} from '../shared/number-classifier';
+export {
+  createNumberClassifier,
+  isNumeralText,
+  signedRange,
+  storedNumeralText,
+} from '../shared/number-classifier';
+export { numeralText } from '../shared/numeral-text';
 export {
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,

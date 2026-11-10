@@ -10,7 +10,8 @@ body:
         Before filing, please check that:
 
         - There isn't already an [open issue](https://github.com/prisma/orm/issues?q=is%3Aissue) covering the same idea.
-        - The feature fits the [project's contract-first direction](https://github.com/prisma/orm/blob/main/README.md). Suggestions that conflict with the architecture (e.g. "emit imperative client code") are unlikely to land — that doesn't mean we don't want to hear them, but please understand they may be declined.
+        - The feature fits the [project's vision](https://github.com/prisma/orm/blob/main/docs/design/00-purpose/vision.md). Suggestions that conflict with the architecture (e.g. "emit imperative client code") are unlikely to land — that doesn't mean we don't want to hear them, but please understand they may be declined.
+        - The [steering list](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/ADR-INDEX.md#steering-list) doesn't already answer it. Each entry says what to use instead.
 
         If your idea is large enough that it would meaningfully change the public API, expect that landing it will likely require a brief design discussion in the issue before any PR is opened.
 

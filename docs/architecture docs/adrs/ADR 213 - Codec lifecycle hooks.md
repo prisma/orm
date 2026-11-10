@@ -36,7 +36,7 @@ Codecs may declare an optional **plan-time** `onFieldEvent` hook. The framework'
 ### Hook contract
 
 ```ts
-// packages/2-sql/9-family/src/core/migrations/types.ts
+// packages/2-sql-family/9-family/src/core/migrations/types.ts
 export type FieldEvent = 'added' | 'dropped' | 'altered';
 
 export interface FieldEventContext {

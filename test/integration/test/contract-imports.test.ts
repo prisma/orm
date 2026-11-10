@@ -259,13 +259,13 @@ type UserIdColumn = UserColumns['id'];
           baseUrl: '.',
           paths: {
             '@internal/sql-contract/types': [
-              `${relativeToWorkspace}/packages/2-sql/1-core/contract/dist/types.d.mts`,
+              `${relativeToWorkspace}/packages/2-sql-family/1-core/contract/dist/types.d.mts`,
             ],
             '@internal/sql-contract/types/*': [
-              `${relativeToWorkspace}/packages/2-sql/1-core/contract/dist/*`,
+              `${relativeToWorkspace}/packages/2-sql-family/1-core/contract/dist/*`,
             ],
             '@internal/adapter-postgres/*': [
-              `${relativeToWorkspace}/packages/3-targets/6-adapters/postgres/dist/*`,
+              `${relativeToWorkspace}/packages/3-targets/postgres/2-adapter/dist/*`,
             ],
           },
         },
@@ -421,26 +421,28 @@ type CodecIntType = CodecTypes['pg/int4@1'];
           baseUrl: '.',
           paths: {
             '@internal/sql-contract-ts/*': [
-              `${relativeToWorkspace}/packages/2-sql/2-authoring/contract-ts/dist/*`,
+              `${relativeToWorkspace}/packages/2-sql-family/2-authoring/contract-ts/dist/*`,
             ],
             '@internal/sql-contract/types': [
-              `${relativeToWorkspace}/packages/2-sql/1-core/contract/dist/types.d.mts`,
+              `${relativeToWorkspace}/packages/2-sql-family/1-core/contract/dist/types.d.mts`,
             ],
             '@internal/sql-contract/types/*': [
-              `${relativeToWorkspace}/packages/2-sql/1-core/contract/dist/*`,
+              `${relativeToWorkspace}/packages/2-sql-family/1-core/contract/dist/*`,
             ],
             '@internal/family-sql/ir': [
-              `${relativeToWorkspace}/packages/2-sql/9-family/dist/ir.d.mts`,
+              `${relativeToWorkspace}/packages/2-sql-family/9-family/dist/ir.d.mts`,
             ],
-            '@internal/family-sql/*': [`${relativeToWorkspace}/packages/2-sql/9-family/dist/*`],
+            '@internal/family-sql/*': [
+              `${relativeToWorkspace}/packages/2-sql-family/9-family/dist/*`,
+            ],
             '@internal/adapter-postgres/*': [
-              `${relativeToWorkspace}/packages/3-targets/6-adapters/postgres/dist/*`,
+              `${relativeToWorkspace}/packages/3-targets/postgres/2-adapter/dist/*`,
             ],
             '@internal/target-postgres/runtime': [
-              `${relativeToWorkspace}/packages/3-targets/3-targets/postgres/dist/runtime.d.mts`,
+              `${relativeToWorkspace}/packages/3-targets/postgres/1-target/dist/runtime.d.mts`,
             ],
             '@internal/target-postgres/*': [
-              `${relativeToWorkspace}/packages/3-targets/3-targets/postgres/dist/*`,
+              `${relativeToWorkspace}/packages/3-targets/postgres/1-target/dist/*`,
             ],
             '@internal/framework-components/codec': [
               `${relativeToWorkspace}/packages/1-framework/1-core/framework-components/dist/codec.d.mts`,

@@ -1,26 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { detectionPatterns } from '../guide-detections';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, '../../../../..');
+const GUIDE_PATHS = {
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+} as const;
 
 function detectionOf(audience: 'app' | 'extension', id: string): readonly RegExp[] {
-  const guide = readFileSync(
-    join(
-      repoRoot,
-      'upgrade-instructions/pending/generator-function-arguments-and-column-length',
-      audience,
-      'instructions.md',
-    ),
-    'utf-8',
-  );
-  const entry = guide.split(/\n {2}- id: /).find((block) => block.startsWith(`${id}\n`));
-  if (entry === undefined) throw new Error(`The ${audience} fragment has no change ${id}`);
-  return [...entry.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
+  return detectionPatterns(GUIDE_PATHS[audience], id);
 }
 
 function detects(audience: 'app' | 'extension', id: string, content: string): boolean {
@@ -78,6 +66,36 @@ describe('app detection', () => {
       'prisma7-default-function-arguments-checked',
       'a String @default(nanoid(8.5))',
       'a String @default(nanoid())',
+    ],
+    [
+      'prisma7-default-function-arguments-checked',
+      'a String @default(nanoid(-1))',
+      'a String @default(nanoid(21))',
+    ],
+    [
+      'prisma7-default-function-arguments-checked',
+      'a String @default(nanoid("8"))',
+      'a String @default(nanoid(255))',
+    ],
+    [
+      'prisma7-datetime-default-finer-than-column',
+      'at DateTime @db.Timestamptz(0) @default("2024-01-02T03:04:05.5Z")',
+      'at DateTime @db.Timestamptz(3) @default("2024-01-02T03:04:05.123Z")',
+    ],
+    [
+      'prisma7-datetime-default-finer-than-column',
+      'at DateTime @default("2024-01-02T03:04:05.12Z") @db.Timestamp(1)',
+      'at DateTime @db.Timestamp(6) @default("2024-01-02T03:04:05.1234Z")',
+    ],
+    [
+      'prisma7-lists-allow-null-elements',
+      'model Post {\n  id   Int      @id\n  tags String[]\n}',
+      'model Post {\n  id    Int    @id\n  posts Post[]\n}',
+    ],
+    [
+      'prisma7-lists-allow-null-elements',
+      'enum Role {\n  A\n}\n\nmodel User {\n  roles Role[]\n}',
+      '// use prisma-8\n\nmodel Post {\n  tags String[]\n}',
     ],
     [
       'generator-function-argument-with-fraction',
@@ -138,8 +156,8 @@ describe('extension detection', () => {
   it.each([
     [
       'sql-target-declares-integer-argument-generators',
-      'generatorFunctions: [...idGeneratorFunctionBindings({ text: [MY_TEXT_CODEC_ID] })],',
-      'generatorFunctions: [...sqlIntegerArgumentGeneratorFunctions({ integer: myInt4.id }), ...idGeneratorFunctionBindings({ text: [MY_TEXT_CODEC_ID] })],',
+      "export const myTargetMeta = { kind: 'target', familyId: 'sql', targetId: 'my' } as const;",
+      "export const myTargetMeta = {\n  kind: 'target',\n  familyId: 'sql',\n  generatorFunctions: [...sqlIntegerArgumentGeneratorFunctions({ integer: myInt4.id })],\n} as const;",
     ],
     [
       'generator-signature-from-data-types',
@@ -148,13 +166,8 @@ describe('extension detection', () => {
     ],
     [
       'generator-signature-from-data-types',
+      'const entry = stack.defaultFunctionRegistry.get(name);\nconst sig = entry?.signature;',
       'for (const fn of pack.generatorFunctions) arms.push(funcCall(fn.name, fn.signature as FuncCallSig));',
-      'for (const { name, signature } of pack.generatorFunctions) arms.push(generatorFunctionCall(name, signature, dataTypes));',
-    ],
-    [
-      'generator-function-field-length',
-      'const resolution = generatorFunctions.resolve(call, { codecId, typeParams });',
-      'const resolution = registry.lookup(call.name);',
     ],
     [
       'build-contract-definition-takes-lookups',

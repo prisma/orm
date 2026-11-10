@@ -1,10 +1,10 @@
-import type { JsonValue } from '@internal/contract/types';
-import { isInternalError } from '@internal/utils/internal-error';
+import { InternalError } from '@internal/utils/internal-error';
 import { type Codec, readContractValue } from './codec';
 import type { EnumMemberProblem } from './enum-members';
 import { duplicateStoredMembers, type StoredEnumMember } from './enum-stored-members';
 import type { AuthoringEntityContext } from './framework-authoring';
 import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
+import { readWrittenValueIntoCodec, type WrittenValue } from './written-value';
 
 export interface EnumBlockMember {
   readonly name: string;
@@ -77,13 +77,27 @@ export function enumMemberProblemDiagnostic(
   }
 }
 
+/** A member as it is written: its recorded written value, or a bare member's name, as text. */
+function writtenMember(
+  block: ParsedPslExtensionBlock<Readonly<Record<string, unknown>>>,
+  memberName: string,
+  memberValue: unknown,
+): WrittenValue {
+  const written = block.writtenValues?.[memberName];
+  if (written !== undefined) return written;
+  if (memberValue === undefined) return { kind: 'string', text: memberName };
+  throw new InternalError(
+    `enum "${block.name}" member "${memberName}" has a value, but the block holds no written value for it.`,
+  );
+}
+
 /**
- * Reads the members of an `enum` block through its codec. When the family gives a reader for written values (`ctx.readWrittenValueForCodec`), each member is read as a column default is read: its syntax gives it a data type, the codec's data type takes it directly or through a cast, and the codec checks it, so a number keeps every digit and a quoted value is text. A bare member is read from its own name, as text. Without that reader, a member is read as JSON by the codec's data type and then the codec.
+ * Reads the members of an `enum` block through its codec with {@link readWrittenValueIntoCodec}: each member's syntax gives it a data type, the codec's data type takes it directly or through a cast, and the codec checks it, so a number keeps every digit and a quoted value is text. A bare member is read from its own name, as text.
  * Pushes a diagnostic and returns `undefined` when a member is refused, when two members
  * store the same value, or when the block has no members. Shared by every family's enum factory.
  */
 export function readEnumBlockMembers(
-  block: ParsedPslExtensionBlock<Readonly<Record<string, JsonValue | undefined>>>,
+  block: ParsedPslExtensionBlock<Readonly<Record<string, unknown>>>,
   codecId: string,
   codec: Codec,
   ctx: AuthoringEntityContext,
@@ -103,56 +117,28 @@ export function readEnumBlockMembers(
 
   for (const [memberName, memberValue] of Object.entries(block.values)) {
     const span = block.parameterSpans[memberName] ?? block.span;
-    const bareMemberRefused = (): EnumBlockDiagnostic => ({
-      code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
-      message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
-      sourceId,
-      span,
+    const reading = readWrittenValueIntoCodec({
+      support: ctx.dataTypes,
+      codecLookup: ctx.codecLookup,
+      ref: { codecId },
+      written: writtenMember(block, memberName, memberValue),
+      subject: `enum "${block.name}" member "${memberName}"`,
     });
-    const written =
-      block.writtenValues?.[memberName] ??
-      (memberValue === undefined ? { kind: 'string' as const, text: memberName } : undefined);
-    const reading =
-      written === undefined
-        ? undefined
-        : ctx.readWrittenValueForCodec?.({
-            written,
-            codecId,
-            subject: `enum "${block.name}" member "${memberName}"`,
-          });
-    if (reading !== undefined && !reading.ok) {
+    if (!reading.ok) {
       diagnostics?.push(
         memberValue === undefined
-          ? bareMemberRefused()
-          : { code: reading.code, message: reading.message, sourceId, span },
-      );
-      memberError = true;
-      continue;
-    }
-    const stored = reading?.ok
-      ? reading.value
-      : memberValue === undefined
-        ? memberName
-        : memberValue;
-    let read: unknown;
-    try {
-      read = readContractValue(codec, stored, undefined);
-    } catch (err) {
-      if (isInternalError(err)) throw err;
-      diagnostics?.push(
-        memberValue === undefined
-          ? bareMemberRefused()
-          : {
-              code: 'PSL_EXTENSION_INVALID_VALUE',
-              message: `enum "${block.name}" member "${memberName}" was rejected by codec "${codecId}": ${err instanceof Error ? err.message : String(err)}`,
+          ? {
+              code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
+              message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
               sourceId,
               span,
-            },
+            }
+          : { ...reading.failure, sourceId, span },
       );
       memberError = true;
       continue;
     }
-
+    const read = readContractValue(codec, reading.value, undefined);
     members.push({ name: memberName, value: read });
     storedMembers.push({
       name: memberName,

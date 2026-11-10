@@ -13,7 +13,7 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
   followRenameCollectionAdvice,
@@ -26,6 +26,7 @@ import {
   runMigrationPlan,
   runPrintedSelfEmit,
 } from '../utils/journey-test-helpers';
+import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
 
 const FIXTURES_DIR = join(fixtureAppDir, 'fixtures/mongo-cli-journeys');
 
@@ -47,16 +48,7 @@ function setupProject(connectionString: string): JourneyContext {
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-delete-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
   copyFileSync(join(FIXTURES_DIR, 'contract-with-events.ts'), join(testDir, 'contract.ts'));
   const config = readFileSync(join(FIXTURES_DIR, 'prisma.config.with-db.ts'), 'utf-8').replace(
     /\{\{DB_URL\}\}/g,
@@ -91,34 +83,9 @@ function setupPslProject(connectionString: string): JourneyContext {
   );
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-delete-psl-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
   writeFileSync(join(testDir, 'contract.prisma'), USERS_PSL, 'utf-8');
-  const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(
-    configPath,
-    [
-      "import { defineConfig as ormConfig } from '@prisma/orm-mongo/config';",
-      "import { definePrismaConfig } from '@prisma/cli-engine';",
-      '',
-      'export default definePrismaConfig({',
-      '  orm: ormConfig({',
-      "    contract: './contract.prisma',",
-      "    output: 'output',",
-      `    db: { connection: ${JSON.stringify(connectionString)} },`,
-      '  }),',
-      '});',
-      '',
-    ].join('\n'),
-  );
+  const configPath = writeMongoPslConfig(testDir, connectionString);
   return { testDir, configPath, outputDir };
 }
 

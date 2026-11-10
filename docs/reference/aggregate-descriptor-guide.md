@@ -180,9 +180,9 @@ The fix is to make the two agree. Either compose the extension into the runtime 
 
 ## Where to look
 
-- **PostgreSQL's matrix**: [packages/3-targets/3-targets/postgres/src/core/aggregates.ts](../../packages/3-targets/3-targets/postgres/src/core/aggregates.ts) — every row read off a live database rather than inferred.
-- **SQLite's matrix, including the lowering**: [packages/3-targets/3-targets/sqlite/src/core/aggregates.ts](../../packages/3-targets/3-targets/sqlite/src/core/aggregates.ts).
-- **The vocabulary**: `AggregateDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/aggregate-descriptor.ts`; the precedence rule beside it in `aggregate-overloads.ts`; the SQL specialization and registry, including the lowering rule, in `packages/2-sql/4-lanes/relational-core/src/aggregate-descriptor{,-registry}.ts`.
+- **PostgreSQL's matrix**: [packages/3-targets/postgres/1-target/src/core/aggregates.ts](../../packages/3-targets/postgres/1-target/src/core/aggregates.ts) — every row read off a live database rather than inferred.
+- **SQLite's matrix, including the lowering**: [packages/3-targets/sqlite/1-target/src/core/aggregates.ts](../../packages/3-targets/sqlite/1-target/src/core/aggregates.ts).
+- **The vocabulary**: `AggregateDescriptor` in `packages/1-framework/1-core/framework-components/src/shared/aggregate-descriptor.ts`; the precedence rule beside it in `aggregate-overloads.ts`; the SQL specialization and registry, including the lowering rule, in `packages/2-sql-family/4-lanes/relational-core/src/aggregate-descriptor{,-registry}.ts`.
 - **A contribution end to end**: [test/integration/test/sql-orm-client/contributed-aggregates.test.ts](../../test/integration/test/sql-orm-client/contributed-aggregates.test.ts) contributes two operations from a test-only extension and reads their results back from PostgreSQL.
 - **A contribution you can run**: [examples/prisma-8-demo/src/extensions/engagement-stats.ts](../../examples/prisma-8-demo/src/extensions/engagement-stats.ts) contributes `stddev` from a local extension composed on both planes, and `pnpm start -- aggregate-stddev` calls it as a statically typed method.
 - **The rules the surfaces follow**: [ADR 020 § Contributed aggregate operations](../architecture%20docs/adrs/ADR%20020%20-%20Result%20Typing%20Rules.md#contributed-aggregate-operations).

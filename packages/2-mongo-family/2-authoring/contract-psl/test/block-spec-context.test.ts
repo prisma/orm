@@ -7,6 +7,7 @@ import { hasPslInterpreter } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
+import { mongoTestStack } from '../src/test';
 
 const SCHEMA = `// use prisma-8
 audit_rule Reads {
@@ -45,9 +46,7 @@ function mongoContext(seen: BlockSpecContext[]): ContractSourceContext {
     defaultNamespaceId: '__unbound__',
     composedExtensionContracts: new Map(),
     authoringContributions: {
-      textDataTypes: [],
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {
         audit_rule: {
@@ -73,7 +72,7 @@ describe('block spec context', () => {
   it("receives the stack's data types through the Mongo provider", () => {
     const seen: BlockSpecContext[] = [];
     const context = mongoContext(seen);
-    const source = mongoContract('./schema.prisma').source;
+    const source = mongoContract('./schema.prisma', mongoTestStack).source;
     if (!hasPslInterpreter(source)) throw new Error('expected an interpret-capable source');
     source.interpret(bindPslSchema(SCHEMA, { sourceId: './schema.prisma', context }), context);
 

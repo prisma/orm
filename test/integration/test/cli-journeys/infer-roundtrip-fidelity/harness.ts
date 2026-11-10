@@ -1,8 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import stripAnsi from 'strip-ansi';
-import { expect } from 'vitest';
-import { type JourneyContext, runDbVerify } from '../../utils/journey-test-helpers';
+import type { ExpectedVerifyIssue, JourneyContext } from '../../utils/journey-test-helpers';
 
 export const SEED_SQL = `
   CREATE SCHEMA secure;
@@ -82,18 +80,10 @@ export function fixIndexTypes(psl: string): string {
 }
 
 /**
- * Asserts a pulled schema verifies clean immediately.
- *
- * `contract infer` writes `T?[]` for every list column whose live database does not carry the derived, wire-named element-non-null check, so the emitted contract declares exactly what the database enforces and `db verify --schema-only` exits 0 with zero issues right after infer -> emit.
+ * `contract infer` reads one schema and leaves out `sessions.owner_ref -> secure.owners` as a dangling foreign key (`resolveForeignKeys` in packages/3-targets/postgres/1-target/src/core/psl-infer/infer-foreign-keys.ts), so strict verify reports the live constraint as extra.
  */
-export async function expectVerifiesCleanAfterPull(
-  ctx: JourneyContext,
-  subject: string,
-): Promise<void> {
-  const result = await runDbVerify(ctx, ['--schema-only']);
-  const output = `${stripAnsi(result.stderr)}\n${stripAnsi(result.stdout)}`;
-  expect(result.exitCode, `${subject}: db verify --schema-only\n${output}`).toBe(0);
-  expect(output, `${subject}: verify reported issues after a pull`).not.toMatch(
-    /✖ (?:missing|extra):/,
-  );
-}
+export const SESSIONS_CROSS_SCHEMA_FOREIGN_KEY: ExpectedVerifyIssue = {
+  path: ['database', 'public', 'sessions', 'foreign-key:owner_ref->secure.owners(id)'],
+  nodeKind: 'sql-foreign-key',
+  outcome: 'not-expected',
+};

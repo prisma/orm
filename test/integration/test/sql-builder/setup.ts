@@ -150,7 +150,7 @@ export function setupIntegrationTest() {
       Adapter<AnyQueryAst, typeof sqlContract, LoweredStatement>,
       'the stack-composed adapter lowers this contract; the instance type erases the contract parameter'
     >(stackInstance.adapter);
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     runtime = new PostgresRuntimeImpl({
       closeRefusal: undefined,

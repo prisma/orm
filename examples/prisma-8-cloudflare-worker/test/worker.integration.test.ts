@@ -113,7 +113,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     let consumed = 0;
 
     const rowsSent = await countPostRowsSent(connectionString, async () => {
-      const iter = db.runtime().query(
+      const iter = db.query(
         db.sql.public.post
           .select('id', 'title')
           .orderBy((f) => f.createdAt, { direction: 'asc' })

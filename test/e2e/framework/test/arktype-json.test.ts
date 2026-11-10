@@ -76,7 +76,7 @@ describe('arktype-json column round-trip', { timeout: timeouts.spinUpPpgDev }, (
 // `packages/3-extensions/arktype-json/test/arktype-json-codec.test.ts`
 // (decode rejects pre-parsed payloads that violate the schema) and at
 // the runtime level in
-// `packages/2-sql/5-runtime/test/json-schema-validation.test.ts` (the
+// `packages/2-sql-family/5-runtime/test/json-schema-validation.test.ts` (the
 // runtime preserves `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED` thrown from
 // codec.decode without rewrapping). Reproducing it through the ORM is
 // awkward because `create` returns a decoded row via `RETURNING`, so a

@@ -12,13 +12,13 @@
       "notes": "Recovery via dedicated canonicalization.ts branch tests covering the domain-plane ordering and typeParams preservation paths. Renewed 2026-08-28: expired 2026-08-27 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged (93.75% branches against a 94% threshold, the same 15 uncovered branches as when the waiver was written) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-targets/3-targets/sqlite",
+      "package": "3-targets/sqlite/1-target",
       "reason": "runner.ts, statement-builders.ts, codecs.ts, default-normalizer.ts, and other foundational files moved into target-sqlite to break a workspace cycle. They are exhaustively exercised by full target\u2194adapter\u2194driver tests in adapter-sqlite/test/migrations and the e2e framework's sqlite migrations suite, but those run in a separate vitest config so the per-package coverage report doesn't see them. Mirrors the equivalent Postgres situation.",
-      "addedDate": "2026-07-27",
+      "addedDate": "2026-10-27",
       "expiryDays": 90,
       "assignee": null,
-      "linear": null,
-      "notes": "See packages/3-targets/6-adapters/sqlite/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply."
+      "linear": "TML-3756",
+      "notes": "See packages/3-targets/sqlite/2-adapter/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply. Renewed 2026-10-27: expired 2026-10-25 and turned the Coverage check red on every open PR; the coverage is unchanged (85.49% functions against an 88% threshold) and the recovery above still applies (tracked on TML-3756)."
     },
     {
       "package": "3-extensions/sql-orm-client",
@@ -30,7 +30,7 @@
       "notes": "Recovery requires either reorganising coverage scopes (so integration tests count toward this package's report) or adding equivalent unit-level tests inside the package that don't need pgvector fixtures. Renewed 2026-08-21: expired 2026-08-20 before the cross-config coverage recovery was completed; the underlying coverage situation is unchanged and recovery remains tracked in TML-2526."
     },
     {
-      "package": "2-sql/1-core/contract",
+      "package": "2-sql-family/1-core/contract",
       "reason": "M9 target-extensible-IR refactor introduced new SQL Contract IR classes (postgres-enum-storage-entry.ts, sql-storage.ts, storage-column.ts, storage-table.ts, storage-type-instance.ts, unique-constraint.ts) and grew validators.ts to handle polymorphic storage type entries. IR classes are exercised through integration paths (contract-ts builder, family serializer round-trips, target-postgres hydration); per-class direct unit tests and additional validator branch coverage tracked as a follow-up before 0.9 release.",
       "addedDate": "2026-08-17",
       "expiryDays": 90,
@@ -39,7 +39,7 @@
       "notes": "vitest.config.ts excludes the IR class-only files from coverage (mirroring the existing pack-types.ts pattern); validators.ts and index-type-validation.ts remain under-covered pending dedicated branch-coverage tests. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "2-sql/2-authoring/contract-ts",
+      "package": "2-sql-family/2-authoring/contract-ts",
       "reason": "M9 target-extensible-IR refactor reshaped build-contract.ts, composed-authoring-helpers.ts, config-types.ts, contract-builder.ts, and contract-warnings.ts to thread polymorphic storage type entries and composed authoring contributions through the SQL contract-ts builder. Coverage delta is small (1-5% below threshold) and falls on new authoring branches exercised through integration paths.",
       "addedDate": "2026-08-17",
       "expiryDays": 90,
@@ -48,7 +48,7 @@
       "notes": "Direct branch-coverage tests for the new authoring helpers tracked as a follow-up before 0.9 release. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-mongo-target/1-mongo-target",
+      "package": "3-targets/mongo/1-target",
       "reason": "M9 target-extensible-IR refactor formed the target-mongo package alongside its family residence. Per-target unit coverage is not yet present; the target is exercised through mongo-family integration tests and the retail-store/mongo-blog-leaderboard examples.",
       "addedDate": "2026-08-17",
       "expiryDays": 90,
@@ -57,7 +57,7 @@
       "notes": "Per-target unit tests tracked as a follow-up before 0.9 release; mirrors the equivalent target-postgres/target-sqlite warning entries for the same architectural reason. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-mongo-target/2-mongo-adapter",
+      "package": "3-targets/mongo/2-adapter",
       "reason": "M9 target-extensible-IR refactor introduced mongo-control-adapter.ts, mongo-control-driver.ts, and runner-deps.ts in the mongo-adapter package. They are exercised end-to-end through mongo-family integration tests rather than per-class unit tests at the adapter layer.",
       "addedDate": "2026-08-17",
       "expiryDays": 90,

@@ -38,6 +38,6 @@ Calibrate from operator's historic pace; defaults below are placeholders to be u
 ## Common false-positives (signals to ignore in this repo)
 
 - **`pnpm fixtures:check` failure on a dispatch that touched extensions**: not drift; expected; the dispatch should explicitly regenerate. Don't flag unless the regenerate step was missed.
-- **Long wallclock on dispatches that include a full `pnpm test:all` run**: not drift; expected when the dispatch touches cross-cutting code.
+- **A dispatch that runs a whole suite** (`pnpm test:packages`, `pnpm test:all`, integration or e2e) locally: drift. Whole suites run in CI ([`running-tests.mdc`](../../.agents/rules/running-tests.mdc)).
 
 _(Living; add as the team accrues data.)_

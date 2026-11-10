@@ -68,10 +68,10 @@ The design does not add multidimensional array semantics. Postgres does not enco
 ## Implementation anchors
 
 - `CodecRef.many` is the family-agnostic contract bit that marks scalar-array columns: [`codec-types.ts`](../../../packages/1-framework/1-core/framework-components/src/shared/codec-types.ts).
-- SQL row decoding records `many` aliases and invokes the selected list decoder; `SqlRuntimeBase` selects the native-array default and Postgres overrides it with the target-owned text decoder: [`decoding.ts`](../../../packages/2-sql/5-runtime/src/codecs/decoding.ts) and [`sql-runtime.ts`](../../../packages/2-sql/5-runtime/src/sql-runtime.ts).
-- The Postgres runtime supplies `decodePostgresListText` as its list decoder: [`postgres-runtime.ts`](../../../packages/3-extensions/postgres/src/runtime/postgres-runtime.ts) and [`list-decoder.ts`](../../../packages/3-targets/3-targets/postgres/src/core/list-decoder.ts).
-- The Postgres driver parser policy is `PG_TYPES_ARRAY_OIDS`, `controlTextTypes`, and `serverTextTypes`: [`server-text-types.ts`](../../../packages/3-targets/7-drivers/postgres/src/server-text-types.ts).
-- Control-plane marker rows are normalized through `parsePostgresListText` before shared marker validation: [`control-adapter.ts`](../../../packages/3-targets/6-adapters/postgres/src/core/control-adapter.ts).
+- SQL row decoding records `many` aliases and invokes the selected list decoder; `SqlRuntimeBase` selects the native-array default and Postgres overrides it with the target-owned text decoder: [`decoding.ts`](../../../packages/2-sql-family/5-runtime/src/codecs/decoding.ts) and [`sql-runtime.ts`](../../../packages/2-sql-family/5-runtime/src/sql-runtime.ts).
+- The Postgres runtime supplies `decodePostgresListText` as its list decoder: [`postgres-runtime.ts`](../../../packages/3-targets/postgres/9-facade/src/runtime/postgres-runtime.ts) and [`list-decoder.ts`](../../../packages/3-targets/postgres/1-target/src/core/list-decoder.ts).
+- The Postgres driver parser policy is `PG_TYPES_ARRAY_OIDS`, `controlTextTypes`, and `serverTextTypes`: [`server-text-types.ts`](../../../packages/3-targets/postgres/3-driver/src/server-text-types.ts).
+- Control-plane marker rows are normalized through `parsePostgresListText` before shared marker validation: [`control-adapter.ts`](../../../packages/3-targets/postgres/2-adapter/src/core/control-adapter.ts).
 
 ## Alternatives considered
 

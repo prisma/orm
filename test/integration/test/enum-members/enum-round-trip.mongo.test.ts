@@ -6,6 +6,10 @@ import type { Contract, JsonValue } from '@internal/contract/types';
 import mongoDriverControl from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import {
+  type DataTypeAuthoringEntry,
+  printTaggedLiteral,
+} from '@internal/framework-components/authoring';
 import { enumRefusalOf } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { defineContract, enumType, member } from '@internal/mongo/contract-builder';
@@ -17,6 +21,7 @@ import type {
 } from '@internal/mongo-contract';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { mongoTargetDescriptor as mongoTargetControl } from '@internal/target-mongo/control';
+import mongoTargetPack from '@internal/target-mongo/pack';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../_harness/mongo';
@@ -83,9 +88,46 @@ const buildRefusals: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-function enumBlock(codecId: string, stored: JsonValue): string {
+/** The entry that writes a value of `dataType`: its own, or the number entry when a number of that type is written. */
+function entryFor(dataType: string): DataTypeAuthoringEntry | undefined {
+  return (
+    stack.dataTypes.entries[dataType] ??
+    Object.values(stack.dataTypes.entries).find(
+      ({ written }) =>
+        written.kind === 'plain' &&
+        written.syntax === 'number' &&
+        written.types.some((type) => type === dataType),
+    )
+  );
+}
+
+/** A stored value as its entry prints it, in the syntax the entry reads. */
+function literal(entry: DataTypeAuthoringEntry, stored: JsonValue): string {
+  const text = entry.print(stored);
+  const { written } = entry;
+  if (written.kind === 'tag') return printTaggedLiteral(written.tag, text);
+  return written.syntax === 'string' ? JSON.stringify(text) : text;
+}
+
+/** A member stored as `stored` written in the syntax of the data type: through its own entry, through the entry of a type it casts from, or as a list through its list cast. */
+function writtenMember(dataType: string, stored: JsonValue): string {
+  const own = entryFor(dataType);
+  if (own !== undefined) return literal(own, stored);
+  const type = stack.dataTypes.lookup.get(dataType);
+  const elementEntry = type?.listCast?.of.map(entryFor).find((entry) => entry !== undefined);
+  if (elementEntry !== undefined && Array.isArray(stored)) {
+    return `[${stored.map((element) => literal(elementEntry, element)).join(', ')}]`;
+  }
+  const castEntry = Object.keys(type?.casts ?? {})
+    .map(entryFor)
+    .find((entry) => entry !== undefined);
+  if (castEntry === undefined) throw new Error(`no contract source can write ${dataType}`);
+  return literal(castEntry, stored);
+}
+
+function enumBlock(codecId: string, dataType: string, stored: JsonValue): string {
   const name = enumNameOf(codecId);
-  return `enum ${name} {\n  @@type("${codecId}")\n  Only = ${JSON.stringify(stored)}\n}\n\nmodel ${name}Model {\n  id    ObjectId @id @map("_id")\n  value ${name}\n\n  @@map("${tableNameOf(name)}")\n}\n`;
+  return `enum ${name} {\n  @@type("${codecId}")\n  Only = ${writtenMember(dataType, stored)}\n}\n\nmodel ${name}Model {\n  id    ObjectId @id @map("_id")\n  value ${name}\n\n  @@map("${tableNameOf(name)}")\n}\n`;
 }
 
 /** Reads PSL text through the Mongo PSL contract source, the way `contract emit` does. */
@@ -96,7 +138,9 @@ async function readPsl(
   try {
     const path = join(directory, 'contract.prisma');
     writeFileSync(path, `// use prisma-8\n\n${text}`);
-    const result = await mongoContract(path).source.load({
+    const result = await mongoContract(path, {
+      target: mongoTargetPack,
+    }).source.load({
       ...sourceContext,
       resolvedInputs: [path],
     });
@@ -122,7 +166,7 @@ const accepted = await Promise.all(
         codecId: descriptor.codecId,
         dataType: descriptor.dataType,
         stored,
-        read: await readPsl(enumBlock(descriptor.codecId, stored.member)),
+        read: await readPsl(enumBlock(descriptor.codecId, descriptor.dataType, stored.member)),
       };
     }),
 );
@@ -134,7 +178,9 @@ const roundTripped = accepted.filter(({ read }) => 'contract' in read);
 type AnyMongoContract = MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>;
 
 const combined = await readPsl(
-  roundTripped.map(({ codecId, stored }) => enumBlock(codecId, stored.member)).join('\n'),
+  roundTripped
+    .map(({ codecId, dataType, stored }) => enumBlock(codecId, dataType, stored.member))
+    .join('\n'),
 );
 if (!('contract' in combined)) throw new Error(`the PSL did not load: ${combined.messages}`);
 const contractJson = new MongoContractSerializer().serializeContract(

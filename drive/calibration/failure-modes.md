@@ -315,7 +315,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Reviewers grep their diff for self-acknowledgment vocabulary as part of the review pass. Any hit is a must-fix finding regardless of the rest of the diff.
 - Briefs that authorise "Option A: add field X to layer Y" must reference the architectural pattern the addition is consistent with (or admit it isn't). If the implementer needs to acknowledge a violation to comply, the brief picked the wrong option.
 
-**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D1. Implementer added `TableSource.schema?: string` to the generic SQL core (`packages/2-sql/4-lanes/relational-core/src/ast/types.ts`) with an inline comment explaining the addition was a Postgres-only concept living on a shared base. Both implementer and reviewer (subagent) shipped it green. Operator caught at PR #712 review with *"You even added a comment explaining the layering violation."* Brief root cause is F17 (Option A was authorised at orchestrator level because Slice 1 had `PostgresCreateTable.schema` — but Slice 1's shape was a *target-contributed subclass*, the parallel was wrong).
+**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D1. Implementer added `TableSource.schema?: string` to the generic SQL core (`packages/2-sql-family/4-lanes/relational-core/src/ast/types.ts`) with an inline comment explaining the addition was a Postgres-only concept living on a shared base. Both implementer and reviewer (subagent) shipped it green. Operator caught at PR #712 review with *"You even added a comment explaining the layering violation."* Brief root cause is F17 (Option A was authorised at orchestrator level because Slice 1 had `PostgresCreateTable.schema` — but Slice 1's shape was a *target-contributed subclass*, the parallel was wrong).
 
 ### F17. Dispatch brief frames the win as mechanics; implementer + reviewer ship wrong-shape work that satisfies it
 
@@ -355,7 +355,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - 10–20 lines of "duplicated" orchestration between two adapters is the right kind of duplication: it's the cost of giving each adapter end-to-end control, which is what the adapter pattern exists for.
 - Symmetry check: if the *write* side of the same family owns its operations end-to-end, the *read* side must too. Cross-family symmetry (SQL ↔ Mongo) is also a check — if Mongo owns `readMarker` end-to-end and SQL routes through a shared orchestrator, the SQL side is wrong-shaped.
 
-**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D3. `readMarkerResult(queryable, shape)` lived in `packages/2-sql/9-family/src/core/verify.ts`; each adapter exported a `MarkerReadShape` (`tableProbe`, `selectRow`, optional `decodeRow`) of type `MarkerStatement` (`{sql, params}`). The write-side SPI in the same slice (D1/D2) correctly owned `initMarker`/`updateMarker`/`writeLedgerEntry` end-to-end in each adapter — the asymmetry was the giveaway. Brief-framing root cause is F17 (the D3 brief said *"one read home + one parser"*).
+**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D3. `readMarkerResult(queryable, shape)` lived in `packages/2-sql-family/9-family/src/core/verify.ts`; each adapter exported a `MarkerReadShape` (`tableProbe`, `selectRow`, optional `decodeRow`) of type `MarkerStatement` (`{sql, params}`). The write-side SPI in the same slice (D1/D2) correctly owned `initMarker`/`updateMarker`/`writeLedgerEntry` end-to-end in each adapter — the asymmetry was the giveaway. Brief-framing root cause is F17 (the D3 brief said *"one read home + one parser"*).
 
 ### F19. Single-primitive collapse changes semantics for some callers but not others
 
@@ -436,6 +436,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Reviewer DoR for any dispatch that involves verifying behaviour against a different ref ("is this failure pre-existing on `origin/main`?", "does this regression reproduce at the merge-base?"): use **`git worktree add ../tmp-<dispatch>-verify <ref>`** to create a sibling tree, run there, then `git worktree remove ../tmp-<dispatch>-verify`. Never `git stash` to swap working states.
 - Reviewer briefs MUST include the rule: *"Do NOT run `git stash` / `git stash pop` in this worktree or any other. Stash is global to the repository."* Add to the boilerplate of every review brief that involves an integration / e2e gate. The rule is in `drive/calibration/failure-modes.md` § F22; briefs link there rather than restating the full rationale.
 - If the reviewer has already popped a stash before this is caught: do not revert blindly. Capture the popped diff (`git diff` from a clean tree post-pop) and surface it to the operator with the message "I popped stash@{0} which appears to be unrelated to this worktree — diff attached, dangling-commit-recoverable via `git fsck --no-reflogs --unreachable` in <suspected-worktree>". Recovery is operator-led, not reviewer-led.
+- The same holds for `git checkout` or `git switch` to another commit in a worktree another agent is using: the working tree is shared, so the implementer or orchestrator then builds and tests the wrong code. A reviewer that needs another commit uses `git worktree add`, or reads files with `git show <ref>:<path>`. (2026-10-20, raw-columns: a reviewer checked out another commit in the shared worktree during a review.)
 - Implementer / orchestrator preflight: if you're about to dispatch a reviewer whose checks may include "verify against base", mention `git worktree add` as the prescribed mechanism in the brief. Do not assume the reviewer remembers F22.
 
 **Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D8 R1 review. Reviewer (`claude-opus-4-7-thinking-high`) hit a stale-`dist` typecheck red post-`origin/main`-merge, ran `git stash` (no-op — tree was clean) then `git stash pop`, which popped `stash@{0}` from the unrelated `tml-2812-render-polish-and-ledger-tests` worktree (message: `d5-wip-2`). The pop applied cleanly because changes were textually conflict-free; reviewer reverted what they saw in the D8 tree (`git checkout --` + `rm -rf` on new untracked dirs), but the original `d5-wip-2` stash entry was permanently removed from the operator's `git stash list`. Recovery path: `git fsck --no-reflogs --unreachable | rg 'dangling commit'` in the `tml-2812-…` worktree. Subsequent reviewer (D9 R1) honored the new rule via `git worktree add ../tmp-d9-verify <merge-base>` for the pre-existing-flake verification; no incident.
@@ -510,7 +511,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Response protocol is class-first: name the class → sweep the entire PR diff for it (grep + reading, including fields added to pre-existing types) → fix every instance in one round → the reply states the sweep (searched what, fixed what, excluded what and why). See [`.agents/rules/fix-the-class-not-the-instance.mdc`](../../.agents/rules/fix-the-class-not-the-instance.mdc).
 - Grandfathering never covers new surface: a type/field/hook the PR authored must be clean even when its pre-existing neighbors are not.
 - Reviewer side: findings should name the class explicitly so the responder can sweep; review-pass briefs must not frame the design as settled (a comment invalidating a design decision invalidates every consequence of it — chase them).
-- Mechanical backstop where the class is vocabulary-shaped: `pnpm lint:framework-vocabulary` (committed high-water-mark threshold; PR #918).
+- Mechanical backstop where the class is vocabulary-shaped: the vocabulary check in `pnpm lint:ratchets`, which compares against a committed threshold (PR #918).
 
 **Reference incident.** 2026-07-02→06, native-postgres-enums (PR #906). Round 1: `CodecRef.nativeType` flagged ("SQL-specific, cannot live in the framework domain") — fixed by moving the cast to a codec hook placed on the *framework* `CodecDescriptor`. Round 2: the hook flagged ("NATIVETYPE CANNOT BE REFERENCED IN THE FRAMEWORK DOMAIN") — relocated, but a new framework type (`AuthoringEntityRefResolution`) kept `nativeType` + a `valueSetEnforcement` strategy string-enum under a grandfathering argument. Round 3: both flagged, plus derivation logic (`deriveValueSet`) in framework core. Three rounds, one class. Operator intervention produced the class-sweep rule, the vocabulary ratchet, and this entry.
 
@@ -745,7 +746,7 @@ Per-repo stop conditions beyond the canonical ones:
 - A self-consistent comparison such as `db verify` after infer is not evidence that a value is correct. It shows only that the parser agrees with itself.
 - Sibling of F34: that entry covers SQL the code writes; this one covers text the database writes and the code reads.
 
-**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
+**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/postgres/1-target/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
 
 ### F37. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
 
@@ -888,3 +889,60 @@ Per-repo stop conditions beyond the canonical ones:
 - The orchestrator applies the same test to each review finding before accepting it.
 
 **Reference incident.** Cross-namespace inheritance, table-scope slice (prisma/orm#30646, 2026-10): four additions were written and then removed at the operator's direction: a check that `merge()` rejects a scope the package did not create; a planner helper that checked derived-table aliases against every `combine` branch scope; a rename pass for hand-built `where()` expressions in an aliased child; and a rejection of an include refinement that returns a collection it was not handed. The third slice (prisma/orm#30696) put the rule in the plan's standing rules and in the reviewer prompt, and the pattern did not recur.
+
+### F50. Rules are moved into one place, and an invariant that a derived artefact relies on was never a rule
+
+**Symptom.** A refactor gathers every existing check into one builder and proves each source applies them the same way. Review then finds inputs that build without error and produce a broken artefact, because the artefact assumes something no check ever enforced. The defect is usually on `main` too.
+
+**Root cause.** The spec inventoried the rules that existed. It did not list the artefacts the builder derives (a collection validator, an index set, a storage hash) and the input shapes each one assumes. So the parity suite proved the sources agree, not that what they agree on is valid.
+
+**Detection signal.**
+
+- An artefact is derived from part of the input, such as a MongoDB collection validator written from the base model while variants share the collection.
+- A review finding says "this builds, but the database refuses it at run time".
+
+**Mitigation.**
+
+- When a spec moves rules into one place, it also lists each derived artefact and the assumptions it makes about the input, and names the rule or test that enforces each assumption.
+- The parity suite gets a case per assumption, accepted and refused, not only a case per existing rule.
+
+**Reference incident.** One MongoDB definition and builder (prisma/orm#30846, 2026-10): the principal-engineer review found, in two rounds, that a variant field could be stored under a name its base used, and that a variant could restate a base field with another type or stored name. Both built, and MongoDB then refused the variant's documents, because the validator is written from the base. Both were on `main` before the refactor.
+
+### F51. A merge of `main` that resolves a large overlapping change goes to review as if it were not new work
+
+**Symptom.** A branch that review has already passed merges `main`, and `main` has a change that rewrote the same code. The merge resolves dozens of conflicts with design choices of its own, such as which side's concept survives. The branch is then handed to the operator for review with no review round on the merge, and the next round finds many defects in it.
+
+**Root cause.** The slice DoD treats review as done once a round has passed, and a merge of `main` reads as routine upkeep. A conflict resolution that keeps one side's concept, rewrites the other side's new code to new names, or edits docs both sides changed is implementation work, and nothing in the DoD asks for it to be reviewed.
+
+**Detection signal.**
+
+- The merge commit touches more than a handful of conflicted files, or `git diff <main commit> <merge commit>` shows the branch editing code `main` just added.
+- The resolver's report contains decisions ("kept X only for Y", "moved Z into W").
+
+**Mitigation.** After a merge of `main` like this, run a review round on what the branch adds on top of `main` (`git diff <main commit> <merge commit>`) before asking the operator to review, and fix its findings first.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): the merge of the field-presets removal resolved 42 conflicted files and kept the `option` argument kind for type choices only. The operator had to ask whether it had been reviewed; the round that followed found twelve defects, including refusal messages that did not parse and upgrade text written into a released guide.
+
+### F52. A release bump archives pending upgrade instructions, and the branch's later edits land in the released copy
+
+**Symptom.** A branch edits a pending upgrade instruction that another change created. A release then moves the pending instructions into `upgrade-instructions/releases/<from>-to-<to>/sources/`. Merging `main` carries the branch's edits into the released sources, which now describe a later release and disagree with the assembled guide that shipped.
+
+**Root cause.** Git follows the rename, so the branch's edit applies cleanly to the moved file. Nothing checks that released sources stay as they shipped.
+
+**Detection signal.** After merging a release bump, `git diff <release commit> HEAD -- upgrade-instructions/releases/` is not empty.
+
+**Mitigation.** After merging a release bump, run that diff. Restore any released file the branch changed (`git checkout <release commit> -- <path>`) and put the branch's guidance in its own pending instruction, with a sentence for readers who followed the released guide.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): the 8.0.0-rc.21 bump archived `remove-field-presets` and `prisma7-now-default-on-create` while the branch was rewriting them; the code review found the released sources describing rc.22 behaviour.
+
+### F53. A name changes meaning, and a hand-written source that `fixtures:check` does not emit keeps the old meaning
+
+**Symptom.** A change gives an existing type name a new meaning (here `DateTime`, from a Temporal value to a JavaScript `Date`) and rewrites every emitted fixture so no contract changes. `pnpm fixtures:check` passes. The merge queue then fails a test whose own PSL or TypeScript source is written inside a test fixture directory and emitted only by that test.
+
+**Root cause.** The rewrite was driven by the emitted fixtures `fixtures:check` knows about. Sources that a test emits at run time are not in that list, and PR CI skips the integration tests that read them.
+
+**Detection signal.** `git grep -n "<Name>" -- 'test/**/*.psl' 'test/**/*.prisma' 'test/**/*.ts' 'examples/**/*.prisma' 'examples/**/*.ts'` lists files the branch did not change.
+
+**Mitigation.** When a name changes meaning, grep every PSL and TypeScript source under `test/` and `examples/` for the name, rewrite each one that relied on the old meaning, and run the integration file that emits it before enabling auto-merge.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): `cli.emit-command.test.ts` emits `fixtures/emit-command/schema.parity.psl`, which still wrote bare `DateTime` beside a TypeScript side written with the Temporal type; the queue dropped the PR on the hash mismatch.

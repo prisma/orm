@@ -73,7 +73,7 @@ function createMockMigrations(overrides?: {
   const planResult: MigrationPlannerResult = overrides?.planResult ?? {
     kind: 'success',
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     temporaryValues: [],
     appliedStatements: [],
     plan: {
@@ -196,7 +196,7 @@ describe('executeDbUpdate', () => {
       planResult: {
         kind: 'success',
         dataLoss: [],
-        accessWidening: [],
+        accessChanges: [],
         temporaryValues: [],
         appliedStatements: [],
         plan: {
@@ -291,7 +291,7 @@ describe('executeDbUpdate', () => {
         code: 'MIGRATION.MARKER_ORIGIN_MISMATCH',
         message: 'Origin mismatch',
         why: 'Marker drifted',
-        fix: 'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`',
+        fix: 'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`.',
         meta: { drift: true, failingSpace: 'app' },
       });
       expect(result.failure.cause).toBe(runnerFailure);
@@ -318,7 +318,7 @@ describe('executeDbUpdate', () => {
         planResult: {
           kind: 'success',
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
           appliedStatements: [],
           warnings: [warning],
@@ -363,7 +363,7 @@ describe('executeDbUpdate', () => {
         planResult: {
           kind: 'success',
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
           appliedStatements: [],
           warnings: [warning],
@@ -500,7 +500,7 @@ describe('executeDbUpdate', () => {
         planResult: {
           kind: 'success',
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
           appliedStatements: [],
           plan: {
@@ -543,7 +543,7 @@ describe('executeDbUpdate', () => {
       planResult: {
         kind: 'success',
         dataLoss: [],
-        accessWidening: [],
+        accessChanges: [],
         temporaryValues: [],
         appliedStatements: [],
         plan: {
@@ -596,7 +596,7 @@ describe('executeDbUpdate', () => {
     const planFn = vi.fn().mockReturnValue({
       kind: 'success',
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
       appliedStatements: [],
       plan: {
@@ -660,7 +660,7 @@ describe('executeDbUpdate', () => {
           dataLoss: [
             { operationIndex: 0, subject: NICKNAME, loss: 'drop', label: 'Drop column nickname' },
           ],
-          accessWidening: [{ operationIndex: 2, subject: USER, widens: true }],
+          accessChanges: [{ operationIndex: 2, subject: USER, widens: true }],
           temporaryValues: [],
           appliedStatements: [],
           plan: {
@@ -715,7 +715,7 @@ describe('executeDbUpdate', () => {
       };
     }
 
-    it('asks about each loss and each access widening in one batch before applying', async () => {
+    it('asks about each loss and each access change in one batch before applying', async () => {
       const asked: { question: string; subject: string; verbs: readonly string[] }[] = [];
       const execute = vi.fn().mockResolvedValue(
         ok({
@@ -748,7 +748,7 @@ describe('executeDbUpdate', () => {
         },
         {
           question:
-            'Disable row-level security on user would widen who can read and write its rows.',
+            'Disable row-level security on user would widen who can read and write its data.',
           subject: 'user',
           verbs: ['allow'],
         },
@@ -803,6 +803,7 @@ describe('executeDbUpdate', () => {
       expect(error).toMatchObject({
         code: 'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
         message: 'Statements "--delete Nope" and "--allow post" answer no question of the plan',
+        why: 'A delete or allow statement consents to an operation the plan asks about, and these name no subject the plan would lose data from or change access to.',
         meta: {
           statements: [
             { verb: 'delete', text: 'Nope' },
@@ -830,10 +831,10 @@ describe('executeDbUpdate', () => {
       expect(asked).toEqual(['user']);
     });
 
-    it('answers every question with acceptDataLoss and acceptAccessWidening', async () => {
+    it('answers every question with acceptDataLoss and acceptAccessChanges', async () => {
       const answerQuestions = vi.fn(noQuestions);
       const result = await executeDbUpdate(
-        applyInputs({ acceptDataLoss: true, acceptAccessWidening: true, answerQuestions }),
+        applyInputs({ acceptDataLoss: true, acceptAccessChanges: true, answerQuestions }),
       );
 
       expect(result.ok).toBe(true);
@@ -874,7 +875,7 @@ describe('executeDbUpdate', () => {
       expect(error).toBeInstanceOf(InternalError);
       expect(error).toMatchObject({
         message:
-          'answerQuestions answered "Disable row-level security on user would widen who can read and write its rows." with delete, which it does not accept; it accepts allow.',
+          'answerQuestions answered "Disable row-level security on user would widen who can read and write its data." with delete, which it does not accept; it accepts allow.',
         cause: { question: 'user', verbs: ['allow'], answer: { verb: 'delete', text: 'user' } },
       });
       expect(execute).not.toHaveBeenCalled();
@@ -922,7 +923,7 @@ describe('executeDbUpdate', () => {
       expect(
         result.ok && {
           dataLoss: result.value.dataLoss,
-          accessWidening: result.value.accessWidening,
+          accessChanges: result.value.accessChanges,
         },
       ).toEqual({
         dataLoss: [
@@ -934,7 +935,7 @@ describe('executeDbUpdate', () => {
             text: 'user.nickname',
           },
         ],
-        accessWidening: [{ operationIndex: 2, subject: USER, widens: true, text: 'user' }],
+        accessChanges: [{ operationIndex: 2, subject: USER, widens: true, text: 'user' }],
       });
     });
   });
@@ -950,7 +951,7 @@ describe('executeDbUpdate', () => {
         plan: vi.fn().mockReturnValue({
           kind: 'success',
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
           appliedStatements: [],
           plan: {

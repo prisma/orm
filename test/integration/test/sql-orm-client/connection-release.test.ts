@@ -74,7 +74,7 @@ async function createPooledRuntime(pool: Pool) {
   const context = createExecutionContext({ contract, stack });
   const instance = instantiateExecutionStack(stack);
   if (!instance.adapter || !instance.driver) throw new Error('Missing adapter or driver');
-  await instance.driver.connect({ kind: 'pgPool', pool });
+  await instance.driver.connect({ kind: 'pgPool', pool, ownedByDriver: true });
   const runtime = new PostgresRuntimeImpl({
     closeRefusal: undefined,
     context,

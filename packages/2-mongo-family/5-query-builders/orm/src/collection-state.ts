@@ -1,10 +1,11 @@
-import type { MongoModelDefinition } from '@internal/mongo-contract';
+import type { ContractModel } from '@internal/contract/types';
+import type { MongoModelStorage } from '@internal/mongo-contract';
 import type { MongoFilterExpr } from '@internal/mongo-query-ast/execution';
 
 export interface MongoIncludeExpr {
   readonly relationName: string;
   readonly targetModelName: string;
-  readonly targetModel: MongoModelDefinition;
+  readonly targetModel: ContractModel<MongoModelStorage>;
   readonly from: string;
   readonly localField: string;
   readonly foreignField: string;

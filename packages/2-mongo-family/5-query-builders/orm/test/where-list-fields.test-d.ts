@@ -69,16 +69,17 @@ type ListsContract = MongoContractWithTypeMaps<
                 readonly entries: {
                   readonly nullable: false;
                   readonly many: { readonly elementNullable: false };
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'Entry' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'Entry';
+                  };
                 };
               };
               readonly relations: Record<string, never>;
               readonly storage: { readonly collection: 'lists' };
-            };
-          };
-          readonly valueObjects: {
-            readonly Entry: {
-              readonly fields: { readonly value: ScalarField<false> };
             };
           };
         };
@@ -90,7 +91,14 @@ type ListsContract = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly lists: MongoStorageCollection } };
+          readonly entries: {
+            readonly collection: { readonly lists: MongoStorageCollection };
+            readonly valueObject: {
+              readonly Entry: {
+                readonly fields: { readonly value: ScalarField<false> };
+              };
+            };
+          };
         };
       };
     };

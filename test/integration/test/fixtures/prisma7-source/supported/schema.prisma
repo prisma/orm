@@ -68,13 +68,18 @@ model NativeTypes {
   charNoLength    String   @db.Char
   uuid            String   @db.Uuid
   inet            String   @db.Inet
+  bit             String   @db.Bit(8)
+  varBit          String   @db.VarBit(8)
+  xml             String   @db.Xml
   boolean         Boolean  @db.Boolean
   integer         Int      @db.Integer
   smallInt        Int      @db.SmallInt
+  oid             Int      @db.Oid
   bigInt          BigInt   @db.BigInt
   real            Float    @db.Real
   doublePrecision Float    @db.DoublePrecision
   decimal         Decimal  @db.Decimal(10, 2)
+  money           Decimal  @db.Money
   timestamp       DateTime @db.Timestamp(6)
   timestamptz     DateTime @db.Timestamptz(6)
   date            DateTime @db.Date

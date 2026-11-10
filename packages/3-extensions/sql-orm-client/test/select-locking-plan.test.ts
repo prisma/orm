@@ -2,7 +2,7 @@ import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { Collection } from '../src/collection';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import {

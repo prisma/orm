@@ -1,7 +1,10 @@
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import type { AuthoringStorageTypeTemplate } from '../src/shared/framework-authoring';
-import { validateAuthoringTypeParams } from '../src/shared/framework-authoring';
+import {
+  instantiateAuthoringTypeConstructorFromValues,
+  validateAuthoringTypeParams,
+} from '../src/shared/framework-authoring';
 
 const lengthSchema = type({ 'length?': 'number.integer >= 1 & number.integer <= 10' });
 
@@ -58,5 +61,24 @@ describe('validateAuthoringTypeParams', () => {
     expect(() =>
       validateAuthoringTypeParams('Sized', sized, { length: 11 }, undefined),
     ).not.toThrow();
+  });
+});
+
+describe('instantiateAuthoringTypeConstructorFromValues', () => {
+  const sizedConstructor = { kind: 'typeConstructor', output: sized } as const;
+
+  it('gives the column the values make, when the codec schema accepts them', () => {
+    expect(
+      instantiateAuthoringTypeConstructorFromValues(sizedConstructor, ['unused', 10], lengthSchema),
+    ).toMatchObject({ ok: true, value: { codecId: 'test/sized@1', typeParams: { length: 10 } } });
+  });
+
+  it('refuses values the codec schema refuses, with the message and argument validateAuthoringTypeParams reports', () => {
+    expect(
+      instantiateAuthoringTypeConstructorFromValues(sizedConstructor, ['unused', 11], lengthSchema),
+    ).toMatchObject({
+      ok: false,
+      failure: { message: 'length must be at most 10 (was 11)', argumentIndex: 1 },
+    });
   });
 });

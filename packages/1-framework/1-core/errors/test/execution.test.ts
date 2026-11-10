@@ -138,23 +138,26 @@ describe('Runtime Errors', () => {
     expect(error.meta).toEqual({ space: 'app' });
   });
 
-  it('rethrowMarkerReadError maps parse failures to CONTRACT.MARKER_ROW_CORRUPT', () => {
-    expect(() =>
-      rethrowMarkerReadError(new Error('Invalid contract marker row: core_hash must be string'), {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      }),
-    ).toThrow(CliStructuredError);
+  it('rethrowMarkerReadError maps a CONTRACT.MARKER_ROW_CORRUPT error to the corrupt-row error, whatever its message', () => {
+    const corrupt = structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'the marker is broken');
 
-    try {
-      rethrowMarkerReadError(new Error('Invalid contract marker row: core_hash must be string'), {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      });
-    } catch (err) {
-      expect(CliStructuredError.is(err)).toBe(true);
-      expect((err as CliStructuredError).toEnvelope().code).toBe('CONTRACT.MARKER_ROW_CORRUPT');
-    }
+    expect(() =>
+      rethrowMarkerReadError(corrupt, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.MARKER_ROW_CORRUPT',
+        why: 'the marker is broken',
+        cause: corrupt,
+      }),
+    );
+  });
+
+  it('rethrowMarkerReadError reads a plain Error as a read failure, even when its message names a corrupt row', () => {
+    const plain = new Error('Invalid contract marker row: core_hash must be string');
+
+    expect(() =>
+      rethrowMarkerReadError(plain, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_READ_FAILED', cause: plain }));
   });
 
   it('rethrowMarkerReadError maps driver failures to CONTRACT.MARKER_READ_FAILED', () => {
@@ -178,7 +181,7 @@ describe('Runtime Errors', () => {
   });
 
   it('rethrowMarkerReadError preserves cause on the corrupt-row path', () => {
-    const original = new Error('Invalid contract marker row: core_hash must be string');
+    const original = structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'core_hash must be string');
     expect(() =>
       rethrowMarkerReadError(original, {
         space: 'app',
@@ -285,10 +288,10 @@ describe('Runtime Errors', () => {
       parseMarkerRowSafely(
         {},
         () => {
-          throw new Error('Invalid contract marker row: invariants must be string[]');
+          throw structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'invariants must be string[]');
         },
         { space: 'ext', markerLocation: '_prisma_marker' },
       ),
-    ).toThrow(CliStructuredError);
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_ROW_CORRUPT' }));
   });
 });

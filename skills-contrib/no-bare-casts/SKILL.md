@@ -54,4 +54,4 @@ A vague reason is the reviewer's signal to push back and the author's signal to 
 
 ## "Convert when you touch"
 
-When you touch a file that contains a bare `as` cast — even as part of unrelated work — convert it to one of the accepted forms or eliminate it. The CI ratchet (`pnpm lint:casts`) rejects per-PR cast-count increases; converting on contact is how the total comes down over time.
+When you touch a file that contains a bare `as` cast — even as part of unrelated work — convert it to one of the accepted forms or eliminate it. The CI ratchet (`pnpm lint:ratchets`) rejects per-PR cast-count increases; converting on contact is how the total comes down over time.

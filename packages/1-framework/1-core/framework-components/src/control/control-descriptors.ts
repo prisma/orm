@@ -4,8 +4,11 @@ import type {
   DriverDescriptor,
   ExtensionDescriptor,
   FamilyDescriptor,
+  SessionSettings,
   TargetDescriptor,
 } from '../shared/framework-components';
+import type { GeneratorFunctionField } from '../shared/generator-functions';
+import type { DataTypeSupport } from '../shared/written-value';
 import type { ContractSerializer } from './contract-serializer';
 import type {
   ControlAdapterInstance,
@@ -26,6 +29,11 @@ export interface ControlFamilyDescriptor<
   >,
 > extends FamilyDescriptor<TFamilyId> {
   readonly emission: EmissionSpi;
+  /** The length of a field of a codec and type params, in its data type's normal form, as a generator binding reads {@link GeneratorFunctionField.length}. A family whose fields have no length omits it. */
+  readonly fieldLength?: (
+    field: Omit<GeneratorFunctionField, 'length'>,
+    dataTypes: DataTypeSupport,
+  ) => number | undefined;
   readonly pslDiagnostics?: {
     readonly describeUnsupportedAttribute?: unknown;
     readonly describeUnresolvedType?: unknown;
@@ -93,6 +101,8 @@ export interface ControlDriverConnectOptions {
   readonly existingDatabaseOnly?: boolean;
   /** Give up connecting after this many milliseconds, where the driver connects over a network. */
   readonly connectTimeoutMs?: number;
+  /** Session settings the stack's target declares, which the driver ensures on its connection. */
+  readonly sessionSettings?: SessionSettings;
 }
 
 export interface ControlExtensionDescriptor<

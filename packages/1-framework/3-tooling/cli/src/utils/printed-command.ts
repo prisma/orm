@@ -9,6 +9,10 @@ export interface CliInvocation {
   readonly cwd: string;
   readonly configPath: string | undefined;
   readonly dbGiven: boolean;
+  /** The arguments a re-run of the same command repeats, such as its statements. */
+  readonly rerunArgs?: readonly string[];
+  /** The run's statements, as flags, which another command that plans the same change repeats. */
+  readonly statementArgs?: readonly string[];
 }
 
 /** The invocation of a command run with `ctx`, given `--db` when `db` is defined. */
@@ -82,6 +86,13 @@ export function selfEmitCommand(invocation: CliInvocation, migrationTs: string):
     shellQuoted(printedPath(invocation, migrationTs)),
     ...configWords(invocation.configPath),
   ].join(' ');
+}
+
+/** The command that runs the `migration.ts` a `migration plan` writes, with its directory a placeholder. */
+export function writtenMigrationRunCommand(invocation: CliInvocation): string {
+  return ['node', '<migration directory>/migration.ts', ...configWords(invocation.configPath)].join(
+    ' ',
+  );
 }
 
 /** A path as advice prints it: relative to the directory the CLI ran in. */

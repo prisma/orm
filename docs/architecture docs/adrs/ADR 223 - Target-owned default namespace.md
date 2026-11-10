@@ -4,6 +4,8 @@
 **Date:** 2026-06-01
 **Linear:** TML-2605
 
+> **Update — emission takes several namespaces.** The single-namespace emission guard this ADR describes (`assertSingleDomainNamespaceForEmission`) no longer exists: `contract emit` emits a contract that declares several domain namespaces, and `migration plan` and `db update` plan and apply changes across them, including statements that move a model to another namespace and rename or remove a namespace. The runtime's sole-namespace helpers still throw for such a contract, as described below.
+
 ---
 
 ## A concrete example

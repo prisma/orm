@@ -13,6 +13,19 @@
   },
   "storage": {
     "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "extension": {
+            "vector": {
+              "kind": "extension",
+              "name": "vector"
+            }
+          },
+          "table": {}
+        },
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
+      },
       "public": {
         "entries": {
           "table": {}
@@ -21,7 +34,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "4a96b488a4ce92b434e5f7d6607b6435c0955f0d36b0018077045787764240e6",
+    "storageHash": "e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15",
     "types": {
       "vector": {
         "codecId": "pg/vector@1",
@@ -48,6 +61,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

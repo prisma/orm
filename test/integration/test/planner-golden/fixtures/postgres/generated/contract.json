@@ -1069,32 +1069,37 @@
                 "code": {
                   "codecId": "sql/char@1",
                   "dataType": "pg/char",
-                  "nullable": false,
-                  "typeRef": "Code"
+                  "nullable": false
                 },
                 "embedding": {
                   "codecId": "pg/vector@1",
                   "dataType": "pgvector/vector",
                   "nullable": false,
-                  "typeRef": "Embedding"
+                  "typeParams": {
+                    "length": 3
+                  }
                 },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "dataType": "pg/uuid",
-                  "nullable": false,
-                  "typeRef": "Id"
+                  "nullable": false
                 },
                 "money": {
                   "codecId": "pg/numeric@1",
                   "dataType": "pg/numeric",
                   "nullable": false,
-                  "typeRef": "Money"
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
                 },
                 "shortText": {
                   "codecId": "sql/varchar@1",
                   "dataType": "pg/varchar",
                   "nullable": false,
-                  "typeRef": "ShortText"
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "foreignKeys": [],
@@ -1819,44 +1824,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "531ec46a776734805df922f0305e819346a0dcbfee1579c69e94412c1183bb9c",
-    "types": {
-      "Code": {
-        "codecId": "sql/char@1",
-        "dataType": "pg/char",
-        "kind": "codec-instance"
-      },
-      "Embedding": {
-        "codecId": "pg/vector@1",
-        "dataType": "pgvector/vector",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 3
-        }
-      },
-      "Id": {
-        "codecId": "pg/uuid@1",
-        "dataType": "pg/uuid",
-        "kind": "codec-instance"
-      },
-      "Money": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 10,
-          "scale": 2
-        }
-      },
-      "ShortText": {
-        "codecId": "sql/varchar@1",
-        "dataType": "pg/varchar",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 255
-        }
-      }
-    }
+    "storageHash": "018544d82152345e985ce99a09f122369935d2fba23e35a960117a2464dbb38d"
   },
   "capabilities": {
     "postgres": {
@@ -1878,6 +1846,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

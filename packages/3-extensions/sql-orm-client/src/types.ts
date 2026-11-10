@@ -5,6 +5,8 @@ import type {
   ExtractFieldInputTypes,
   ExtractFieldOutputTypes,
   ExtractQueryOperationTypes,
+  HasExecutionCreateDefault,
+  IsOptionalCreateColumn,
   QueryOperationTypesBase,
   SqlStorage,
   StorageColumn,
@@ -180,13 +182,13 @@ export type WithNsId<State extends CollectionTypeState, NsId extends string> = O
 > & { readonly nsId: NsId };
 
 export interface RuntimeConnection extends RuntimeScope {
-  release?(): Promise<void>;
-  transaction?(): Promise<RuntimeTransaction>;
+  release(): Promise<void>;
+  transaction(): Promise<RuntimeTransaction>;
 }
 
 export interface RuntimeTransaction extends RuntimeScope {
-  commit?(): Promise<void>;
-  rollback?(): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
 }
 
 /** What the ORM sends its statements to. It must carry an `activitySource` member, as the SQL runtime's queryables, connections, transactions and activity handles do: every terminal method starts an `orm-call` activity through it, and a terminal method on a queryable without one fails with `ORM.ACTIVITY_SOURCE_MISSING`. The member is optional in this type only because the public runtime types do not show it. */
@@ -1623,41 +1625,17 @@ export type NumericFieldNames<
     : never;
 }[keyof DefaultModelRow<TContract, ModelName, NsId> & string];
 
-type ExecutionDefaultEntry<TContract extends Contract<SqlStorage>> =
-  TContract['execution'] extends {
-    readonly mutations: {
-      readonly defaults: infer Defaults;
-    };
-  }
-    ? Defaults extends ReadonlyArray<unknown>
-      ? Defaults[number]
-      : never
-    : never;
-
-type HasExecutionCreateDefault<
+type FieldHasExecutionCreateDefault<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
   NsId extends string = never,
-> = [
-  Extract<
-    ExecutionDefaultEntry<TContract>,
-    {
-      // Execution-default refs are namespace-scoped. When a namespace is known
-      // (e.g. a junction resolved through its declared `namespaceId`), the match
-      // must include it so a same-named `table.column` in another namespace
-      // cannot borrow this namespace's default. With no namespace (`never`), fall
-      // back to table/column matching.
-      readonly ref: {
-        readonly entry: ModelTableName<TContract, ModelName, NsId>;
-        readonly field: FieldColumnName<TContract, ModelName, FieldName, NsId>;
-      } & ([NsId] extends [never] ? unknown : { readonly namespace: NsId });
-      readonly onCreate?: unknown;
-    }
-  >,
-] extends [never]
-  ? false
-  : true;
+> = HasExecutionCreateDefault<
+  TContract,
+  ResolvedNsId<TContract, ModelName, NsId>,
+  ModelTableName<TContract, ModelName, NsId>,
+  FieldColumnName<TContract, ModelName, FieldName, NsId>
+>;
 
 type IsOptionalCreateField<
   TContract extends Contract<SqlStorage>,
@@ -1667,13 +1645,15 @@ type IsOptionalCreateField<
 > =
   FieldStorageColumn<TContract, ModelName, FieldName, NsId> extends infer Column
     ? Column extends StorageColumn
-      ? Column['nullable'] extends true
-        ? true
-        : Column extends { readonly default: unknown }
-          ? true
-          : HasExecutionCreateDefault<TContract, ModelName, FieldName, NsId>
-      : HasExecutionCreateDefault<TContract, ModelName, FieldName, NsId>
-    : HasExecutionCreateDefault<TContract, ModelName, FieldName, NsId>;
+      ? IsOptionalCreateColumn<
+          TContract,
+          Column,
+          ResolvedNsId<TContract, ModelName, NsId>,
+          ModelTableName<TContract, ModelName, NsId>,
+          FieldColumnName<TContract, ModelName, FieldName, NsId>
+        >
+      : FieldHasExecutionCreateDefault<TContract, ModelName, FieldName, NsId>
+    : FieldHasExecutionCreateDefault<TContract, ModelName, FieldName, NsId>;
 
 type CreateFieldNames<
   TContract extends Contract<SqlStorage>,
@@ -2003,7 +1983,7 @@ type JunctionPayloadFieldNames<
  * column — a non-join column that is not nullable and has no default. Such a
  * relation can't be populated through nested `create`, so its create input is
  * disabled at the type level (mirroring the runtime guard in
- * `mutation-executor.ts`).
+ * `relation-mutations.ts`).
  */
 type HasRequiredJunctionPayload<
   TContract extends Contract<SqlStorage>,

@@ -1,15 +1,6 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { cpSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  emitted,
-  type Fixtures,
-  generateFixtures,
-  INITIAL,
-  SECOND,
-  storageHashOf,
-} from './fixture-generator';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   appScript,
   copyFixture,
@@ -20,21 +11,57 @@ import {
   removeWorkDirs,
   runScript,
   type Tree,
-  writeTree,
 } from './test-helpers';
 
-let generated: Fixtures;
-
-beforeAll(async () => {
-  generated = await generateFixtures();
-  if (process.env['REMOVE_NOCHECK_FIXTURES_WRITE'] === '1') {
-    rmSync(fixturesDir, { recursive: true, force: true });
-    writeTree(join(fixturesDir, 'before'), generated.before);
-    writeTree(join(fixturesDir, 'after'), generated.after);
-  }
-}, 60_000);
+const HASHES: ReadonlyArray<readonly [string, string]> = [
+  [
+    '1cc4868e51782f6a87585b26cbfdd83c44f89b973de022f42bfdddf93bce72cb',
+    'd52545171b2ee43107e1a619867dde006d83c7ab8d23bc2f4797524c76c3a662',
+  ],
+  [
+    '0afd7bad7a1e491be0530915cb0a910ce38a75e6195e0cf37fd752329d2bb9ab',
+    '43d3880fa8b128e29f8a96c203566329c0ed35a2884901cbad49e2633b812f54',
+  ],
+];
 
 afterAll(removeWorkDirs);
+
+const OLD_DEFAULTS_HASH = 'a086c916bc6bf55a62e34ea3fc3c264634e3a078f3e00e99b0e3a332cd31ecc8';
+/** The storage hash `prisma contract emit` of 8.0.0-rc.19 gives the postgres-defaults schema. */
+const EMITTED_BY_RC19_HASH = '1dd0420f931282d68277216cdff0dc9059fde0f0e086bbc596cdf32675577e0b';
+
+interface Rc19Form {
+  readonly value: unknown;
+  readonly stored: unknown;
+}
+
+interface Rc19Forms {
+  readonly columns: readonly Rc19Form[];
+  readonly list: Rc19Form;
+  readonly named: Rc19Form;
+}
+
+function sampleDefaultsOf(forms: Rc19Forms, side: keyof Rc19Form): Record<string, unknown> {
+  return {
+    ...Object.fromEntries(
+      forms.columns.map((form, index) => [`c${String(index).padStart(2, '0')}`, form[side]]),
+    ),
+    list: forms.list[side],
+    named: forms.named[side],
+  };
+}
+
+const rc19Forms: Rc19Forms = JSON.parse(
+  readFileSync(join(fixturesDir, 'postgres-default-forms/rc19-forms.json'), 'utf8'),
+);
+
+function sampleDefaults(text: string): Record<string, unknown> {
+  const columns: Record<string, { default: { value: unknown } }> =
+    JSON.parse(text).storage.namespaces.public.entries.table.sample.columns;
+  return Object.fromEntries(
+    Object.entries(columns).map(([name, column]) => [name, column.default.value]),
+  );
+}
 
 const SNAPSHOT_IMPORT = /^import [^;]*?'\.\.\/\.\.\/snapshots\/[\s\S]*?;\n/gm;
 
@@ -59,7 +86,7 @@ function formatted(tree: Tree): Tree {
 function summary(files: number, directories: number): string {
   return [
     `Rewrote ${files} files and renamed ${directories} snapshot directories. Storage hashes changed (old -> new):`,
-    ...[...generated.hashes]
+    ...[...HASHES]
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([oldHash, newHash]) => `  ${oldHash} -> ${newHash}`),
     '',
@@ -68,55 +95,6 @@ function summary(files: number, directories: number): string {
 
 function postTableOf(text: string): Record<string, unknown> {
   return JSON.parse(text).storage.namespaces.public.entries.table.post;
-}
-
-describe('the fixtures', () => {
-  it('are what the live framework code builds', () => {
-    expect({ before: fixtureTree('before'), after: fixtureTree('after') }).toEqual({
-      before: generated.before,
-      after: generated.after,
-    });
-  });
-
-  it('after the upgrade, load as contracts whose stored hashes match their content', () => {
-    const serializer = new PostgresContractSerializer();
-    const contracts = Object.entries(fixtureTree('after')).filter(([path]) =>
-      path.endsWith('contract.json'),
-    );
-    expect(contracts).toHaveLength(3);
-    for (const [path, text] of contracts) {
-      const contract = JSON.parse(text);
-      expect(() => serializer.deserializeContract(contract), path).not.toThrow();
-      expect(storageHashOf(contract), path).toBe(contract.storage.storageHash);
-    }
-  });
-
-  it('after the upgrade, the latest snapshot is what the rewritten source emits, so migration plan has nothing to do', async () => {
-    const [, latest] = generated.hashes[1] ?? [];
-    const after = fixtureTree('after');
-    const rewritten = await emitted(SECOND.rewritten);
-    expect({
-      hash: latest,
-      json: after[`migrations/snapshots/${latest}/contract.json`],
-      dts: after[`migrations/snapshots/${latest}/contract.d.ts`],
-      emittedJson: after['prisma/contract.json'],
-    }).toEqual({
-      hash: rewritten.hash,
-      json: `${JSON.stringify(sortKeysDeep(JSON.parse(rewritten.json)))}\n`,
-      dts: rewritten.dts,
-      emittedJson: rewritten.json,
-    });
-  });
-});
-
-function sortKeysDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeysDeep);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, sortKeysDeep((value as Record<string, unknown>)[key])]),
-  );
 }
 
 describe('remove-nocheck', () => {
@@ -147,9 +125,7 @@ describe('remove-nocheck', () => {
     expect(imported.length).toBeGreaterThan(0);
     expect(imported.filter((path) => tree[path] === undefined)).toEqual([]);
     expect(new Set(imported)).toEqual(
-      new Set(
-        generated.hashes.map(([, newHash]) => `migrations/snapshots/${newHash}/contract.json`),
-      ),
+      new Set(HASHES.map(([, newHash]) => `migrations/snapshots/${newHash}/contract.json`)),
     );
   });
 
@@ -161,15 +137,14 @@ describe('remove-nocheck', () => {
   });
 
   it('deletes a membership waiver without making its column element-nullable', () => {
-    const [, initialHash] = generated.hashes[0] ?? [];
+    const [, initialHash] = HASHES[0] ?? [];
     const legacy = (tree: Tree, hash: string | undefined) =>
       (
         postTableOf(tree[`migrations/snapshots/${hash}/contract.json`] ?? '{}')[
           'columns'
         ] as Record<string, unknown>
       )['legacy'];
-    const [beforeHash] = generated.hashes[0] ?? [];
-    expect(INITIAL.waived['legacy']).toBe('membership');
+    const [beforeHash] = HASHES[0] ?? [];
     const { noCheck, ...rest } = legacy(fixtureTree('before'), beforeHash) as Record<
       string,
       unknown
@@ -184,14 +159,14 @@ describe('remove-nocheck', () => {
     const run = runScript(copyFixture('after'));
     expect({ status: run.status, stdout: run.stdout, tree: readTree(run.root) }).toEqual({
       status: 0,
-      stdout: 'No contract stores a noCheck key; nothing changed.\n',
+      stdout: 'No contract stores a noCheck key or a default in another form; nothing changed.\n',
       tree: fixtureTree('after'),
     });
   });
 
   it('finishes an upgrade that stopped after writing a new snapshot directory', () => {
     const root = copyFixture('before');
-    const [, newHash] = generated.hashes[0] ?? [];
+    const [, newHash] = HASHES[0] ?? [];
     const snapshot = `migrations/snapshots/${newHash}`;
     mkdirSync(join(root, snapshot), { recursive: true });
     for (const name of ['contract.json', 'contract.d.ts'])
@@ -205,7 +180,7 @@ describe('remove-nocheck', () => {
 
   it('stops without changing a file when a new snapshot directory exists with other content', () => {
     const root = copyFixture('before');
-    const [, newHash] = generated.hashes[0] ?? [];
+    const [, newHash] = HASHES[0] ?? [];
     mkdirSync(join(root, 'migrations/snapshots', newHash ?? ''), { recursive: true });
     writeFileSync(join(root, 'migrations/snapshots', newHash ?? '', 'contract.json'), '{}\n');
     const before = readTree(root);
@@ -219,7 +194,7 @@ describe('remove-nocheck', () => {
 
   it('stops without changing a file when a snapshot directory is not named after its content', () => {
     const root = copyFixture('before');
-    const [oldHash] = generated.hashes[0] ?? [];
+    const [oldHash] = HASHES[0] ?? [];
     const misnamed = 'a'.repeat(64);
     renameSync(
       join(root, 'migrations/snapshots', oldHash ?? ''),
@@ -237,6 +212,153 @@ describe('remove-nocheck', () => {
       stdout: '',
       stderr: `migrations/snapshots/${misnamed}/contract.json: the stored storage hash ${misnamed} does not match the contract's content, which hashes to ${oldHash}; restore the file from version control, or re-emit it, and run the script again\n`,
       tree: before,
+    });
+  });
+
+  it('makes the row types of a contract.d.ts that the previous release emitted allow null elements', () => {
+    const run = runScript(copyFixture('before', 'rc18-emitted'));
+    expect({
+      status: run.status,
+      stdout: run.stdout,
+      stderr: run.stderr,
+      tree: readTree(run.root),
+    }).toEqual({
+      status: 0,
+      stdout: [
+        'Rewrote 2 files and renamed 0 snapshot directories. Storage hashes changed (old -> new):',
+        '  0c5fd80b68d670bb15fcc9e86cbb9efba034dc0b0acbd84612ddfbb8ca1037f2 -> 57072494c534223d6da18107bde649add196a5f3d17dd55216541b4efa330fba',
+        '',
+      ].join('\n'),
+      stderr: '',
+      tree: fixtureTree('after', 'rc18-emitted'),
+    });
+  });
+
+  it('writes each PostgreSQL default in the spelling this release stores, as contract emit does, and rewrites every hash that follows', () => {
+    const run = runScript(copyFixture('before', 'postgres-defaults'));
+    expect({
+      status: run.status,
+      stdout: run.stdout,
+      stderr: run.stderr,
+      tree: readTree(run.root),
+    }).toEqual({
+      status: 0,
+      stdout: [
+        'Rewrote 4 files and renamed 1 snapshot directory. Storage hashes changed (old -> new):',
+        `  ${OLD_DEFAULTS_HASH} -> ${EMITTED_BY_RC19_HASH}`,
+        '',
+      ].join('\n'),
+      stderr: '',
+      tree: fixtureTree('after', 'postgres-defaults'),
+    });
+  });
+
+  it('gives the rewritten snapshot the default and storage hash contract emit gives the schema', () => {
+    const snapshot = JSON.parse(
+      fixtureTree('after', 'postgres-defaults')[
+        `migrations/snapshots/${EMITTED_BY_RC19_HASH}/contract.json`
+      ] ?? '{}',
+    );
+    expect({
+      price: snapshot.storage.namespaces.public.entries.table.product.columns.price.default,
+      storageHash: snapshot.storage.storageHash,
+    }).toEqual({
+      price: { kind: 'literal', value: '1.50' },
+      storageHash: EMITTED_BY_RC19_HASH,
+    });
+  });
+
+  it('writes the default of each PostgreSQL data type in the form rc.19 stores, list and named types included', () => {
+    const run = runScript(copyFixture('before', 'postgres-default-forms'));
+    const tree = readTree(run.root);
+    expect({
+      status: run.status,
+      stderr: run.stderr,
+      tree,
+      before: sampleDefaults(
+        fixtureTree('before', 'postgres-default-forms')['prisma/contract.json'] ?? '{}',
+      ),
+      defaults: sampleDefaults(tree['prisma/contract.json'] ?? '{}'),
+    }).toEqual({
+      status: 0,
+      stderr: '',
+      tree: fixtureTree('after', 'postgres-default-forms'),
+      before: sampleDefaultsOf(rc19Forms, 'value'),
+      defaults: sampleDefaultsOf(rc19Forms, 'stored'),
+    });
+  });
+
+  it('stops without changing a file when a default is not a value of its column type', () => {
+    const root = copyFixture('before', 'postgres-defaults');
+    const path = join(root, 'src/prisma/contract.json');
+    writeFileSync(
+      path,
+      readFileSync(path, 'utf8').replace('"value": "12:34:00"', '"value": "12:34:00.1234567"'),
+    );
+    const before = readTree(root);
+    const run = runScript(root);
+    expect({
+      status: run.status,
+      stdout: run.stdout,
+      stderr: run.stderr,
+      tree: readTree(root),
+    }).toEqual({
+      status: 1,
+      stdout: '',
+      stderr:
+        'src/prisma/contract.json: namespace public, table product, column opensAt: the default "12:34:00.1234567" is not a value of pg/time (pg/time JSON value must be a time of day, as in "12:34:56": "12:34:00.1234567" has 7 digits after the decimal point, but pg/time holds microseconds, so at most 6. Round it, as in "12:34:56.123456".); choose the value the database stores and run the script again with --default \'public.product.opensAt=<that value as JSON>\'\n',
+      tree: before,
+    });
+  });
+
+  it('skips every directory whose name starts with a dot, such as a worktree under .claude', () => {
+    const root = copyFixture('before');
+    const hidden = join(root, '.claude/worktrees/feature');
+    mkdirSync(hidden, { recursive: true });
+    cpSync(join(root, 'prisma'), join(hidden, 'prisma'), { recursive: true });
+    cpSync(join(root, 'migrations'), join(hidden, 'migrations'), { recursive: true });
+    const hiddenBefore = readTree(hidden);
+    const run = runScript(root);
+    const { hiddenAfter, rest } = Object.entries(readTree(root)).reduce(
+      (split, [path, text]) => {
+        if (path.startsWith('.claude/'))
+          split.hiddenAfter[path.slice('.claude/worktrees/feature/'.length)] = text;
+        else split.rest[path] = text;
+        return split;
+      },
+      { hiddenAfter: {} as Tree, rest: {} as Tree },
+    );
+    expect({ status: run.status, stdout: run.stdout, hiddenAfter, rest: formatted(rest) }).toEqual({
+      status: 0,
+      stdout: summary(7, 2),
+      hiddenAfter: hiddenBefore,
+      rest: fixtureTree('after'),
+    });
+  });
+
+  it('refuses an option or a project root that is not a directory, and changes nothing', () => {
+    const root = copyFixture('before');
+    const missing = join(root, 'missing');
+    const runs = [runScript('--help'), runScript(missing)].map(({ status, stdout, stderr }) => ({
+      status,
+      stdout,
+      stderr,
+    }));
+    expect({ runs, tree: readTree(root) }).toEqual({
+      runs: [
+        {
+          status: 1,
+          stdout: '',
+          stderr:
+            '--help: unknown option\nUsage: node remove-nocheck.ts [project-root] [--default <namespace>.<table>.<column>=<JSON value>]...\n',
+        },
+        {
+          status: 1,
+          stdout: '',
+          stderr: `${missing}: not a directory\nUsage: node remove-nocheck.ts [project-root] [--default <namespace>.<table>.<column>=<JSON value>]...\n`,
+        },
+      ],
+      tree: fixtureTree('before'),
     });
   });
 

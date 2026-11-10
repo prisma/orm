@@ -46,7 +46,7 @@ model Profile {
   userId    String   @unique
   email     String   @unique
   alias     String   @unique
-  createdAt DateTime @default(now())
+  createdAt TimestamptzTemporal @default(now())
   @@map("profile")
 }
 

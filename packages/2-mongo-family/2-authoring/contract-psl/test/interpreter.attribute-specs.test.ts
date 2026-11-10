@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 import { mongoDataTypeSupport } from './mongo-type-lookups';
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
@@ -13,7 +13,7 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds,
+    scalarTypes,
     codecLookup: mongoCodecLookup,
     dataTypes: mongoDataTypeSupport,
     defaultFunctionRegistry: new Map(),
@@ -165,7 +165,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
-  it('points @updatedAt at @onCreate(now()) @onUpdate(now())', () => {
+  it('points @updatedAt at @onCreate(now()) @onUpdate(now()) and temporal.UpdatedAt', () => {
     expect(
       diagnosticsOf(`
         model Item {
@@ -177,7 +177,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
-          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". Use @onCreate(now()) @onUpdate(now()) instead.',
+          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.',
       }),
     ]);
   });

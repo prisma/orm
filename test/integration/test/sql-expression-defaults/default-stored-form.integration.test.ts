@@ -29,7 +29,7 @@ const EXPLANATION = `The database reads this default back as sql\`${STORED}\`; t
 async function contractWithDefault(expression: string): Promise<Contract<SqlStorage>> {
   const authored = await authorSqlContractFromPsl(`model Event {
   id Int      @id
-  at DateTime @default(sql\`${expression}\`)
+  at TimestamptzTemporal @default(sql\`${expression}\`)
 }`);
   expect(authored.diagnostics).toEqual([]);
   if (authored.contract === undefined) throw new Error('authoring produced no contract');

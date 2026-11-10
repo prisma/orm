@@ -1,0 +1,175 @@
+# Prisma 8 Demo (MySQL)
+
+A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL
+application installs. It has a PSL contract with three models, a relation, an
+enum and the convenience date and time types, and two committed migrations
+written by `prisma migration plan`.
+
+MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB has an example of its own, [`prisma-8-demo-mariadb`](../prisma-8-demo-mariadb/README.md), because the target id is part of the contract and every migration.
+
+## Reading
+
+`src/prisma/db.ts` builds the client from `@prisma/orm-mysql/runtime` and the
+emitted contract, read with `contractFromJson` from `@prisma/orm-mysql/static`:
+
+```ts
+import mysql from '@prisma/orm-mysql/runtime';
+import { contractFromJson } from '@prisma/orm-mysql/static';
+
+const db = mysql({ contract: contractFromJson<Contract>(contractJson), url });
+```
+
+`src/orm-client/` holds the ORM reads and `src/queries/` the SQL builder read, one file each. Each read is one SQL statement:
+
+```ts
+// Admins ordered by email
+await db.orm.User.where({ role: 'ADMIN' }).orderBy((u) => u.email.asc()).limit(2).all();
+// A user with their posts, in the order the include asks for
+await db.orm.User.include('posts', (posts) => posts.orderBy((p) => p.title.desc())).first({ id: 1 });
+// Every post with its author
+await db.orm.Post.include('author').all();
+// The SQL builder
+await db.query(db.sql.User.select('id', 'email').where((f, fns) => fns.eq(f.role, 'ADMIN')).build());
+```
+
+## Writing
+
+`src/seed.ts` writes the demo rows with `createAndCount`, and `src/orm-client/user-writes.ts` holds the other writes. Each returns what it returns on Postgres:
+
+```ts
+const user = await db.orm.User.create({ email: 'a@example.com', role: 'USER' });
+await db.orm.User.where({ id: user.id }).update({ role: 'ADMIN' });
+await db.orm.User.upsert({
+  create: { email: 'a@example.com', role: 'USER' },
+  update: { role: 'ADMIN' },
+  conflictOn: { email: 'a@example.com' },
+});
+await db.orm.User.where({ id: user.id }).delete();
+const n = await db.orm.User.where({ role: 'USER' }).updateAndCount({ role: 'ADMIN' });
+```
+
+MySQL has no `RETURNING`, so a write that returns rows runs inside a transaction and reads them back with a `SELECT` by key; `create` reads the id MySQL generated. A `createAll` that returns several rows whose ids MySQL generates is refused; `createAndCount` writes them. See [Writes without `RETURNING`](../../packages/3-extensions/sql-orm-client/README.md#writes-without-returning).
+
+## Dates and times
+
+`Event` has a `DateTime`, a `Date` and a `Time` field:
+
+```prisma
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startsAt  DateTime                  // datetime(3), read as a JavaScript Date in UTC
+  day       Date                      // date, read as "2024-02-29"
+  opensAt   Time                      // time(6), read as "09:30:00"
+  createdAt DateTime @default(now())  // filled by MySQL with CURRENT_TIMESTAMP(3)
+}
+```
+
+`src/raw/create-event.ts` inserts an event through the raw SQL lane. Each
+value is a parameter, wrapped in `param(value, { codecId })` from
+`@prisma/orm-mysql/relational-core/expression`, so the column's codec
+encodes it: the `Date` is written in UTC, and a date or time MySQL does not
+hold is refused before it reaches the database. `src/orm-client/get-events-on.ts`
+reads the events on a day through the ORM.
+
+## Setup
+
+You need a MySQL 8 server and an empty application database for the example.
+The repository's `docker-compose.yaml` starts a server on port 3307; create the
+`prisma_demo` database on it before running anything. `MYSQL_URL` must name
+that database, never MySQL's own `mysql` system database, or the CLI creates
+the example's tables inside it.
+
+The URL sets `allowPublicKeyRetrieval=true` because the local server has no
+TLS: MySQL 8.4 signs `root` in with `caching_sha2_password`, which then needs
+the server's public key to send the password. Without it, connecting fails
+once the server no longer has the account cached, such as after a restart.
+Against a server reached over a network, use TLS (`sslmode=verify-full`, or
+`ssl=true`) instead, since fetching the key without TLS lets a machine in between read the
+password.
+
+```bash
+docker compose up -d mysql
+docker compose exec mysql mysql -uroot -proot -e 'CREATE DATABASE prisma_demo'
+pnpm install
+pnpm emit                                   # generates src/prisma/contract.json + contract.d.ts
+export MYSQL_URL='mysql://root:root@127.0.0.1:3307/prisma_demo?allowPublicKeyRetrieval=true'
+pnpm db:migrate                             # applies migrations/ to the database
+pnpm db:verify                              # checks the database matches the contract
+pnpm db:sign                                # records the contract the database now satisfies
+```
+
+`db sign` writes `migrations/app/refs/db.json`, the migration graph's record of
+which contract the database is at.
+
+## Commands
+
+| Script | Runs | What it does |
+| --- | --- | --- |
+| `emit` | `prisma contract emit` | Writes `src/prisma/contract.json` and `contract.d.ts` from `prisma/contract.prisma` |
+| `emit:check` | `emit`, then `git diff` | Fails when the committed contract is out of date |
+| `migration:plan` | `prisma migration plan` | Writes a new migration under `migrations/app/` when the contract has changed; name it with `pnpm migration:plan --name <name>` |
+| `db:migrate` | `prisma db migrate` | Applies the migrations the database does not have yet |
+| `db:verify` | `prisma db verify` | Checks the database's marker and schema against the contract |
+| `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
+| `test` | `vitest run` | The whole flow against fresh databases at `MYSQL_URL` |
+
+`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it
+creates a uniquely named database on that server and drops it afterwards.
+`test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and
+`migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with
+`db migrate`, seeds the rows and checks the whole result of each read.
+`test/events.test.ts` writes events and reads back their dates and times. Without `MYSQL_URL` the tests are skipped.
+
+## What the migrations create
+
+```sql
+CREATE TABLE `Post` (
+  `authorId` int NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `title` varchar(191) NOT NULL,
+  PRIMARY KEY (`id`)
+);
+CREATE TABLE `User` (
+  `email` varchar(191) NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `role` enum('USER','ADMIN') NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `User_email_key` UNIQUE (`email`)
+);
+```
+
+plus an index on `Post.authorId` and the foreign key to `User`. The second
+migration creates the events table:
+
+```sql
+CREATE TABLE `Event` (
+  `createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
+  `day` date NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `opensAt` time(6) NOT NULL,
+  `startsAt` datetime(3) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  PRIMARY KEY (`id`)
+);
+```
+
+The PSL enum `Role` becomes a native MySQL `enum` column, so the database enforces its
+members. `String` becomes `varchar(191)`, because MySQL cannot put a unique
+index on a `text` column without a key length.
+
+## Key files
+
+- `prisma/contract.prisma` — the contract (User, Post, Event, Role)
+- `prisma.config.ts` — CLI config; reads the connection from `MYSQL_URL`
+- `migrations/` — the committed migrations and their contract snapshots
+- `src/prisma/db.ts` — the client
+- `src/orm-client/` — the ORM reads, one file each
+- `src/queries/` — the SQL builder read
+- `src/seed.ts` — the demo rows
+- `src/raw/create-event.ts` — an event written through the raw SQL lane, its values encoded by their codecs
+- `test/migrations.test.ts` — the migration flow
+- `test/reads.test.ts` — the reads against a migrated, seeded database
+- `test/events.test.ts` — events written and read back with their dates and times
+- `test/cli.ts` — runs the `prisma` CLI on a copy of the example
+- `test/database.ts` — creates and drops a database for each test file

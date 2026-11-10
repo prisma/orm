@@ -32,6 +32,12 @@ import { describe, expect, it } from 'vitest';
 
 const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
 
+const mongoStack = createControlStack({
+  family: mongoFamilyDescriptor,
+  target: mongoTargetDescriptor,
+  adapter: mongoAdapter,
+});
+
 function identityCodec(id: string): Codec | undefined {
   const descriptor = mongoDescriptorById(id);
   const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
@@ -48,7 +54,6 @@ function identityCodec(id: string): Codec | undefined {
 
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
-  field: {},
   type: {},
   pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
 };
@@ -88,20 +93,18 @@ function interpret(
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: authoringContributions.field ?? {},
         type: { ...scalarTypeConstructors, ...authoringContributions.type },
         entityTypes: authoringContributions.entityTypes ?? {},
         pslBlockDescriptors: authoringContributions.pslBlockDescriptors ?? {},
         modelAttributes: {},
         attributeSpecs: mongoAttributeSpecs,
-        textDataTypes: [],
-        dataTypes: {},
+        dataTypes: mongoStack.dataTypes.entries,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: overrides?.codecLookup ?? mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
+      dataTypes: mongoStack.dataTypes,
       resolvedInputs: [],
       capabilities: {},
     },
@@ -331,11 +334,7 @@ model Account {
 describe('PSL enum members read by the target codecs', {
   timeout: timeouts.typeScriptCompilation,
 }, () => {
-  const { codecLookup } = createControlStack({
-    family: mongoFamilyDescriptor,
-    target: mongoTargetDescriptor,
-    adapter: mongoAdapter,
-  });
+  const { codecLookup } = mongoStack;
 
   function enumDiagnostics(enumBlock: string) {
     const result = interpret(enumBlock, { codecLookup });
@@ -377,9 +376,8 @@ enum Priority {
 }`),
     ).toEqual([
       {
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message:
-          'enum "Priority" member "Low" was rejected by codec "mongo/int32@1": mongo/int32 JSON value must be an integer from -2147483648 to 2147483647',
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "Low": Expected a number',
       },
     ]);
   });
@@ -409,9 +407,71 @@ enum Priority {
 }`),
     ).toEqual([
       {
-        code: 'PSL_EXTENSION_INVALID_VALUE',
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "Low": Expected a quoted string',
+      },
+    ]);
+  });
+
+  function enumMembers(enumBlock: string) {
+    const result = interpret(enumBlock, { codecLookup });
+    if (!result.ok) {
+      return result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
+    }
+    return Object.values(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.enum ?? {}).map(
+      (entry) => entry.members,
+    );
+  }
+
+  it('stores a Double member written as NaN as its word, and refuses one quoted, with the number to write', () => {
+    expect({
+      unquoted: enumMembers(
+        'enum Ratio {\n  @@type("mongo/double@1")\n  Unknown = NaN\n  Half = 0.5\n}',
+      ),
+      quoted: enumMembers('enum Ratio {\n  @@type("mongo/double@1")\n  Unknown = "NaN"\n}'),
+    }).toEqual({
+      unquoted: [
+        [
+          { name: 'Unknown', value: 'NaN' },
+          { name: 'Half', value: 0.5 },
+        ],
+      ],
+      quoted: [
+        {
+          code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+          message: 'enum "Ratio" member "Unknown": Expected a number; write NaN',
+        },
+      ],
+    });
+  });
+
+  it('refuses an Int32 member written with a fraction', () => {
+    expect(enumMembers('enum Level {\n  @@type("mongo/int32@1")\n  One = 1.0\n}')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
         message:
-          'enum "Priority" member "Low" was rejected by codec "mongo/string@1": mongo/string JSON value must be a string',
+          'enum "Level" member "One": Expected a number that mongo/int32 can hold; got mongo/decimal128',
+      },
+    ]);
+  });
+
+  it('reads an unquoted Int64 member past 2^53 on an enum no field uses, keeping every digit', () => {
+    expect(
+      enumMembers('enum Big {\n  @@type("mongo/int64@1")\n  Huge = 9007199254740993\n}'),
+    ).toEqual([[{ name: 'Huge', value: '9007199254740993' }]]);
+  });
+
+  it('reads a vector member written as a list', () => {
+    expect(
+      enumMembers('enum Direction {\n  @@type("mongo/vector@1")\n  Up = [0, 1, -0.5]\n}'),
+    ).toEqual([[{ name: 'Up', value: [0, 1, -0.5] }]]);
+  });
+
+  it('refuses a quoted Decimal128 "-0" without offering -0, which stores zero without its sign', () => {
+    expect(enumMembers('enum Signed {\n  @@type("mongo/decimal128@1")\n  Zero = "-0"\n}')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Signed" member "Zero": Expected a number',
       },
     ]);
   });

@@ -16,6 +16,7 @@ import { ifDefined } from '@internal/utils/defined';
 
 function convertIndex(index: MongoIndex): MongoSchemaIndex {
   return new MongoSchemaIndex({
+    name: index.name,
     keys: index.keys,
     unique: index.unique,
     sparse: index.sparse,
@@ -91,7 +92,7 @@ function convertCollection(name: string, def: MongoCollection): MongoSchemaColle
 
 export function contractToMongoSchemaIR(contract: MongoContract | null): MongoSchemaIR {
   if (!contract) {
-    return new MongoSchemaIR([]);
+    return new MongoSchemaIR([], { fromDatabase: false });
   }
 
   const collections: MongoSchemaCollection[] = [];
@@ -101,5 +102,5 @@ export function contractToMongoSchemaIR(contract: MongoContract | null): MongoSc
     }
   }
 
-  return new MongoSchemaIR(collections);
+  return new MongoSchemaIR(collections, { fromDatabase: false });
 }

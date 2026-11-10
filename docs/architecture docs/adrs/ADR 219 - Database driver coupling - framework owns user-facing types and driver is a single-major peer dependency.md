@@ -39,7 +39,7 @@ The framework re-exports these types from the underlying driver (`@internal/mong
 The framework's runtime-consumer packages declare the driver in `peerDependencies` with a single-major range:
 
 ```jsonc
-// packages/3-extensions/mongo/package.json
+// packages/3-targets/mongo/9-facade/package.json
 {
   "peerDependencies": { "mongodb": "^7.0.0" }
 }

@@ -200,18 +200,16 @@ export function schemaVerdictDiagnostic(inputs: {
 }): Diagnostic {
   const code = inputs.result.code;
   const dotted = code !== undefined && isStructuredErrorCode(code);
-  const issues = inputs.result.schema.issues.map(issueLabel);
+  const { issues } = inputs.result.schema;
   return {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(issues.length === 0
-      ? {}
-      : { why: schemaIssuesWhy('The live schema differs', inputs.result.schema.issues) }),
+    ...(issues.length === 0 ? {} : { why: schemaIssuesWhy('The live schema differs', issues) }),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
-      issues,
+      schemaIssues: issues,
       ...(dotted || code === undefined ? {} : { code }),
     },
   };

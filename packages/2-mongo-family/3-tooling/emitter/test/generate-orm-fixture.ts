@@ -1,22 +1,32 @@
 import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { type Contract, coreHash, crossRef, profileHash } from '@internal/contract/types';
 import { generateContractDts } from '@internal/emitter';
 import { blindCast } from '@internal/utils/casts';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import storedNamesContractJson from '../../../5-query-builders/orm/test/fixtures/stored-names-contract.json';
+import migrationContractJson from '../../../9-family/test/fixtures/migration-contract.json';
 import { mongoEmission } from '../src/index';
 
-const codecImports = [
-  {
-    package: '@internal/target-mongo/codec-types',
-    named: 'CodecTypes',
-    alias: 'MongoCodecTypes',
-  },
-];
+const targetCodecTypes = resolve(
+  import.meta.dirname,
+  '../../../../3-targets/mongo/1-target/src/exports/codec-types',
+);
+
+function codecImportsFrom(fixtureDir: string, viaPackage: boolean) {
+  return [
+    {
+      package: viaPackage
+        ? '@internal/target-mongo/codec-types'
+        : relative(fixtureDir, targetCodecTypes),
+      named: 'CodecTypes',
+      alias: 'MongoCodecTypes',
+    },
+  ];
+}
 
 function fixtureContract(
-  json: typeof ormContractJson | typeof storedNamesContractJson,
+  json: typeof ormContractJson | typeof storedNamesContractJson | typeof migrationContractJson,
   hash: string,
 ) {
   return {
@@ -40,46 +50,46 @@ function fixtureContract(
   } as Contract;
 }
 
-const fixturesDir = resolve(
+const mongoContractFixtures = resolve(
   import.meta.dirname,
   '../../../1-foundation/mongo-contract/test/fixtures',
 );
+const familyFixtures = resolve(import.meta.dirname, '../../../9-family/test/fixtures');
+const ormFixtures = resolve(import.meta.dirname, '../../../5-query-builders/orm/test/fixtures');
 
-const outputs = [
+const fixtures = [
   {
-    output: generateContractDts(
-      fixtureContract(ormContractJson, 'orm'),
-      mongoEmission,
-      codecImports,
-      {
-        storageHash: 'orm-storage',
-        profileHash: 'orm-profile',
-      },
-    ),
+    json: ormContractJson,
+    hash: 'orm',
     targets: [
-      resolve(fixturesDir, 'orm-contract.d.ts'),
-      resolve(import.meta.dirname, '../../../9-family/test/fixtures/orm-contract.d.ts'),
+      { dir: mongoContractFixtures, file: 'orm-contract.d.ts', viaPackage: false },
+      { dir: familyFixtures, file: 'orm-contract.d.ts', viaPackage: false },
     ],
   },
   {
-    output: generateContractDts(
-      fixtureContract(storedNamesContractJson, 'stored-names'),
-      mongoEmission,
-      codecImports,
-      { storageHash: 'stored-names-storage', profileHash: 'stored-names-profile' },
-    ),
-    targets: [
-      resolve(
-        import.meta.dirname,
-        '../../../5-query-builders/orm/test/fixtures/stored-names-contract.d.ts',
-      ),
-    ],
+    json: storedNamesContractJson,
+    hash: 'stored-names',
+    targets: [{ dir: ormFixtures, file: 'stored-names-contract.d.ts', viaPackage: true }],
+  },
+  {
+    json: migrationContractJson,
+    hash: 'migration',
+    targets: [{ dir: familyFixtures, file: 'migration-contract.d.ts', viaPackage: false }],
   },
 ];
 
-for (const { output, targets } of outputs) {
-  for (const target of targets) {
-    writeFileSync(target, output);
+for (const { json, hash, targets } of fixtures) {
+  for (const { dir, file, viaPackage } of targets) {
+    const target = resolve(dir, file);
+    writeFileSync(
+      target,
+      generateContractDts(
+        fixtureContract(json, hash),
+        mongoEmission,
+        codecImportsFrom(dir, viaPackage),
+        { storageHash: `${hash}-storage`, profileHash: `${hash}-profile` },
+      ),
+    );
     console.log(`Generated ${target}`);
   }
 }

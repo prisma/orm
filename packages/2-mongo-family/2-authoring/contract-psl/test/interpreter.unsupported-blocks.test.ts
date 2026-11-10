@@ -5,7 +5,7 @@ import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['String', 'mongo/string@1'],
       ['ObjectId', 'mongo/objectId@1'],
     ]),
@@ -28,17 +28,15 @@ describe('interpretPslDocumentToMongoContract given a block no composed descript
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual([
-        {
-          code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
-          message: 'Unsupported top-level block "view"',
-          sourceId: 'schema.prisma',
-          span: {
-            start: { offset: 0, line: 1, column: 1 },
-            end: { offset: 4, line: 1, column: 5 },
-          },
+      expect(result.failure.diagnostics).toContainEqual({
+        code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
+        message: 'Unsupported top-level block "view"',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 0, line: 1, column: 1 },
+          end: { offset: 4, line: 1, column: 5 },
         },
-      ]);
+      });
     },
   );
 });

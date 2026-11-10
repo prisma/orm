@@ -59,6 +59,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -220,7 +221,19 @@ function statusPresentations(inputs: {
 }): Presentations {
   const legend = inputs.legend;
   return {
-    stdout: () => [],
+    stdout: () =>
+      inputs.document.spaces.flatMap((space) =>
+        space.migrations.map((migration) =>
+          dataLine([
+            space.space,
+            migration.name,
+            migration.fromContract,
+            migration.toContract,
+            migration.operationCount,
+            migration.status,
+          ]),
+        ),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       {

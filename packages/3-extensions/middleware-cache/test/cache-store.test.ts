@@ -396,6 +396,19 @@ describe('createInMemoryCacheStore', () => {
       expect(await storedResult(store, 'c')).toBeUndefined();
     });
 
+    it('treats a field the caller leaves out as undefined', async () => {
+      const store = createInMemoryCacheStore();
+      await putResult(store, 'a', 'A');
+      const entry = await store.get({ key: 'a' });
+
+      await store.unset({});
+      await store.unset({ keys: ['a'] });
+
+      expect(entry).toMatchObject({ key: 'a', meta: undefined, version: 0 });
+      expect(await storedResult(store, 'a')).toBeUndefined();
+      expect(await store.set(entry, { kind: 'call-result', result: 'stale' })).toBe(false);
+    });
+
     it('does nothing when neither keys nor meta is given', async () => {
       const store = createInMemoryCacheStore();
       await putResult(store, 'a', 'A');

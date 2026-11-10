@@ -24,8 +24,8 @@ import { executeRun } from './db-run';
  * 2. The aggregate planner runs with `callerPolicy.ignoreGraphFor`
  *    locked to the app space — synth strategy for the app, graph-walk
  *    for every extension.
- * 3. The runner's `execute` applies the per-space plans
- *    inside one outer transaction.
+ * 3. The runner's `execute` applies the per-space plans; a failure
+ *    says whether the database changed.
  *
  * `extensions` mirrors `Config.extensions` (descriptor list).
  * The loader (sub-spec § Loader) is the sole descriptor-import boundary.

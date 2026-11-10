@@ -21,7 +21,10 @@ const POLICY: MigrationOperationPolicy = {
 const STUB_ADAPTER: ControlAdapterInstance<'sql', 'postgres'> =
   {} as unknown as ControlAdapterInstance<'sql', 'postgres'>;
 
-const STUB_OWNERSHIP: SchemaOwnership = { declaresEntity: () => false };
+const STUB_OWNERSHIP: SchemaOwnership = {
+  declaresEntity: () => false,
+  namespaceDeclaringSpaces: () => [],
+};
 
 function makeSpace(spaceId: string, tables: Record<string, unknown>): AggregateContractSpace {
   return makeAggregateContractSpace({
@@ -60,7 +63,7 @@ describe('planFromDiff', () => {
           plan: makeStubPlan('placeholder'),
           appliedStatements: [],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
         };
       },
@@ -94,6 +97,7 @@ describe('planFromDiff', () => {
     // verbatim. Here `cipher_state` is owned by some (sibling) space.
     const ownership: SchemaOwnership = {
       declaresEntity: (coordinate) => coordinate.entityName === 'cipher_state',
+      namespaceDeclaringSpaces: () => [],
     };
 
     const outcome = await planFromDiff({
@@ -157,7 +161,7 @@ describe('planFromDiff', () => {
           plan: { ...makeStubPlan('placeholder'), origin: options.origin },
           appliedStatements: [],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
         };
       },
@@ -238,7 +242,7 @@ describe('planFromDiff', () => {
         plan: makeStubPlan('placeholder'),
         appliedStatements: [],
         dataLoss: [{ operationIndex: 0, subject, loss: 'drop', label: 'Drop table audit_log' }],
-        accessWidening: [{ operationIndex: 0, subject, widens: true }],
+        accessChanges: [{ operationIndex: 0, subject, widens: true }],
         temporaryValues: [],
       }),
       emptyMigration: () => {
@@ -267,7 +271,7 @@ describe('planFromDiff', () => {
 
     expect(outcome.kind === 'ok' && outcome.result).toMatchObject({
       dataLoss: [{ operationIndex: 0, subject }],
-      accessWidening: [{ operationIndex: 0, subject }],
+      accessChanges: [{ operationIndex: 0, subject }],
       temporaryValues: [],
     });
   });

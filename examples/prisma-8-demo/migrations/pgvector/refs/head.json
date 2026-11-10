@@ -1,4 +1,1 @@
-{
-  "hash": "4a96b488a4ce92b434e5f7d6607b6435c0955f0d36b0018077045787764240e6",
-  "invariants": ["pgvector:install-vector-v1"]
-}
+{ "hash": "e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15", "invariants": [] }

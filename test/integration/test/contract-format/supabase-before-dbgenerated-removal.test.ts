@@ -28,7 +28,7 @@ describe('a contract emitted before columns named their data type', () => {
     const contractJson: unknown = JSON.parse(readFileSync(fixturePath, 'utf8'));
     expect(() => new PostgresContractSerializer().deserializeContract(contractJson)).toThrow(
       expect.objectContaining({
-        message: expect.stringMatching(/"dataType"; and 328 more paths \(333 in all\)$/),
+        message: expect.stringMatching(/"dataType"; and 319 more paths \(324 in all\)$/),
       }),
     );
   });

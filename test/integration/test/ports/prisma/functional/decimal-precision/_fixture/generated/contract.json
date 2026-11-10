@@ -91,19 +91,28 @@
                   "codecId": "pg/numeric@1",
                   "dataType": "pg/numeric",
                   "nullable": true,
-                  "typeRef": "Decimal10_0"
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 0
+                  }
                 },
                 "d20_10": {
                   "codecId": "pg/numeric@1",
                   "dataType": "pg/numeric",
                   "nullable": true,
-                  "typeRef": "Decimal20_10"
+                  "typeParams": {
+                    "precision": 20,
+                    "scale": 10
+                  }
                 },
                 "d38_30": {
                   "codecId": "pg/numeric@1",
                   "dataType": "pg/numeric",
                   "nullable": true,
-                  "typeRef": "Decimal38_30"
+                  "typeParams": {
+                    "precision": 38,
+                    "scale": 30
+                  }
                 },
                 "id": {
                   "codecId": "pg/text@1",
@@ -126,36 +135,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8a61748a8475b31d2bf4f2dc9ff6060d8f4920dc60720ef04d629a799eb51327",
-    "types": {
-      "Decimal10_0": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 10,
-          "scale": 0
-        }
-      },
-      "Decimal20_10": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 20,
-          "scale": 10
-        }
-      },
-      "Decimal38_30": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 38,
-          "scale": 30
-        }
-      }
-    }
+    "storageHash": "8b6862e1d11ebebcd95ea7fa1f6426bc4e959aa2c1ab14b18ba451535c9d019e"
   },
   "execution": {
     "executionHash": "1d956b68d7bc7f9dffef3e648e3ba465e3f17a0c8bde1877dbd3f9b742ebfe64",
@@ -193,6 +173,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

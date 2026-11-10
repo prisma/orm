@@ -4,6 +4,9 @@ import { createPreserveEmptyPredicate, type PathPattern } from '@internal/contra
 const preserveEmptyPatterns = [
   ['storage', 'namespaces', '*', 'entries', 'collection'],
   ['storage', 'namespaces', '*', 'entries', 'collection', '*'],
+  // A model's `fields` and its storage `fields` are required: a variant with no fields of its own has `fields: {}` in both.
+  ['domain', 'namespaces', '*', 'models', '*', 'fields'],
+  ['domain', 'namespaces', '*', 'models', '*', 'storage', 'fields'],
 ] as const satisfies readonly PathPattern[];
 
 const matchesPreserveEmptyPattern = createPreserveEmptyPredicate(preserveEmptyPatterns);

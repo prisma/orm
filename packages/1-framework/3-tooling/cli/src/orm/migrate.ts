@@ -2,6 +2,7 @@ import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
@@ -19,8 +20,8 @@ import {
   loadContractSpaceAggregateForCli,
   refuseContractSpaceIntegrity,
 } from '../control-api/operations/contract-space-aggregate-loader';
-import { refuseMarkerOutsideGraph } from '../control-api/operations/graph-queries';
 import { refuseUnknownInvariants } from '../control-api/operations/invariants';
+import { planEverySpace } from '../control-api/operations/migrate';
 import {
   executeMigrateShowPlan,
   type MigrateShowMigration,
@@ -35,6 +36,7 @@ import {
   resolveContractRef,
   retryCommandFor,
 } from '../control-api/operations/ref-resolution';
+import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
@@ -55,6 +57,7 @@ import { toneDrawing } from '../utils/formatters/tone-markup';
 import { runCommandAction } from '../utils/next-actions';
 import { type CliInvocation, cliCommand, cliInvocation } from '../utils/printed-command';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
+import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
@@ -97,6 +100,10 @@ function statusAction(invocation: CliInvocation): NextAction {
   );
 }
 
+function fromField(from: string): string | undefined {
+  return from === EMPTY_CONTRACT_HASH ? undefined : from;
+}
+
 /**
  * The route the migration will take. The graph is a drawing — the engine cannot
  * derive a lane gutter — and the ordered list under it is drawn with the same
@@ -114,7 +121,10 @@ function showPresentations(inputs: {
   const { document, graph, runList } = inputs;
   const count = document.migrations.length;
   return {
-    stdout: () => [],
+    stdout: () =>
+      document.migrations.map((migration) =>
+        dataLine([migration.spaceId, migration.dirName, fromField(migration.from), migration.to]),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -153,7 +163,16 @@ function applyPresentations(inputs: {
   const { document } = inputs;
   const advanced = document.advancedRef;
   return {
-    stdout: () => [],
+    stdout: () =>
+      document.applied.map((migration) =>
+        dataLine([
+          migration.spaceId,
+          migration.dirName,
+          fromField(migration.from),
+          migration.to,
+          migration.operationsExecuted,
+        ]),
+      ),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -269,6 +288,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const planned = await executeMigrateShowPlan({
           config: ctx.config,
           cwd: ctx.cwd,
+          invocation: cliInvocation(ctx, args.flags.db),
           createClient,
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
@@ -387,21 +407,29 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
         const appGraph = aggregate.app.graph();
-        const appMarker = (await client.readAllMarkers()).get('app') ?? null;
-
-        if (appMarker !== null) {
-          const markerRefusal = refuseMarkerOutsideGraph({
-            markerHash: appMarker.storageHash,
-            graph: appGraph,
-          });
-          if (markerRefusal) {
-            return notOk(normalizeError(markerRefusal));
-          }
-        }
+        const markers = await client.readAllMarkers();
+        const appMarker = markers.get(aggregate.app.spaceId) ?? null;
 
         const target: RequestedTarget =
           offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
+
         const refEntry = target.entry;
+        const planned = await planEverySpace({
+          aggregate,
+          markers,
+          appTarget: {
+            hash: refEntry?.hash ?? appContract.storage.storageHash,
+            invariants: refEntry?.invariants,
+            refName: target.refName,
+          },
+          storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
+          readLedger: (spaceId) => client.readLedger(spaceId),
+        });
+        if (!planned.ok) {
+          return notOk(normalizeError(planned.failure));
+        }
         if (refEntry !== undefined && refEntry.invariants.length > 0) {
           const invariantRefusal = refuseUnknownInvariants({
             graph: appGraph,
@@ -467,7 +495,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const applied = await client.migrate({
           contract: applyContract,
           migrationsDir,
-          invocation: cliInvocation(ctx, args.flags.db),
+          invocation: {
+            ...cliInvocation(ctx, args.flags.db),
+            rerunArgs: [
+              ...(args.flags.to === undefined ? [] : ['--to', shellQuoted(args.flags.to)]),
+              ...(args.flags.advanceRef === undefined
+                ? []
+                : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
+            ],
+          },
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('refHash', refEntry?.hash),
           ...(refEntry?.invariants === undefined ? {} : { refInvariants: refEntry.invariants }),

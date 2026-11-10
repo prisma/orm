@@ -34,6 +34,7 @@ function inferFrom(
     reportedType: geometry(text),
   });
   const tree = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

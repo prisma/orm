@@ -79,10 +79,10 @@ function makePerSpacePlan(): PerSpacePlan {
   } as unknown as PerSpacePlan;
 }
 
-/** The facts the advice names when the runner of the one space, `app`, fails with `runnerFailure`. */
-export async function failureOf(
+/** The failure `runMigration` returns when the runner of the one space, `app`, fails with `runnerFailure`. */
+export async function runFailure(
   runnerFailure: MigrationRunnerFailure,
-  origin: MigrationPlan['origin'],
+  origin: MigrationPlan['origin'] = null,
 ) {
   const failingResult: MigrationRunnerResult = notOk(runnerFailure);
   const migrations = {
@@ -92,13 +92,9 @@ export async function failureOf(
     'postgres',
     ControlFamilyInstance<'sql', unknown>
   >;
-  const perSpacePlan = makePerSpacePlan();
-  const perSpacePlans = new Map([
-    ['app', { ...perSpacePlan, plan: { ...perSpacePlan.plan, origin } } as unknown as PerSpacePlan],
-  ]);
   const result = await runMigration<'sql', 'postgres'>({
     aggregate: makeAggregate(),
-    perSpacePlans,
+    perSpacePlans: perSpacePlansFrom(origin),
     applyOrder: ['app'],
     driver: {} as ControlDriverInstance<'sql', 'postgres'>,
     familyInstance: { familyId: 'sql' } as unknown as ControlFamilyInstance<'sql', unknown>,
@@ -107,7 +103,23 @@ export async function failureOf(
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
     action: 'migrate',
   });
-  return result.ok
+  return result.ok ? undefined : result.failure;
+}
+
+function perSpacePlansFrom(origin: MigrationPlan['origin']): ReadonlyMap<string, PerSpacePlan> {
+  const perSpacePlan = makePerSpacePlan();
+  return new Map([
+    ['app', { ...perSpacePlan, plan: { ...perSpacePlan.plan, origin } } as unknown as PerSpacePlan],
+  ]);
+}
+
+/** The facts the advice names when the runner of the one space, `app`, fails with `runnerFailure`. */
+export async function failureOf(
+  runnerFailure: MigrationRunnerFailure,
+  origin: MigrationPlan['origin'],
+) {
+  const failure = await runFailure(runnerFailure, origin);
+  return failure === undefined
     ? undefined
-    : runnerFailureFacts(result.failure, collectOrdered(['app'], perSpacePlans));
+    : runnerFailureFacts(failure, collectOrdered(['app'], perSpacePlansFrom(origin)));
 }

@@ -12,10 +12,10 @@ import {
   OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
-  RENDERED_CONTRACT_DTS,
   removeOfflineProjects,
   renderContractDtsMock,
   resetRenderContractDtsMock,
+  SNAPSHOT_CONTRACT_DTS,
   seedDbRef,
   seedMigrationPackage,
 } from './fixtures/offline-project';
@@ -159,16 +159,13 @@ describe('migration new', () => {
     });
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('prints the directory it scaffolded', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
-    const run = await harness(project).run(['migration', 'new'], {
-      cwd: project.dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(project).run(['migration', 'new'], { cwd: project.dir });
+    const [dirName] = await scaffoldedDirs(project);
 
-    expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirName ?? '')}\n`);
   });
 
   it('takes the db ref as the origin when --from is absent', async () => {
@@ -514,7 +511,7 @@ describe('migration new destination snapshot', () => {
       resolveImportSpecifier: expect.any(Function),
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
   });
 
   it('refuses before writing anything when the declarations cannot be rendered', async () => {

@@ -1,5 +1,7 @@
 # ADR 246 — Option arguments and select templates for authoring helpers
 
+**Status:** Superseded 2026-10-22 by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md), except its two omission rules. Field presets, the `option` argument kind and the `select` template node were removed; [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) gives a type choice its own `option` arguments, which only a type choice takes. The two omission rules, no empty `typeParams` and no empty `executionDefaults`, stand as canonicalization rules in [Data Contract](../subsystems/1.%20Data%20Contract.md#deterministic-emission). The content below is preserved as a historical record.
+
 ## At a glance
 
 Field presets take enumerated arguments, spelled as bare tokens in PSL and string literals in TypeScript, declared with an `option` argument kind and dispatched to fragments of the preset's output by `select` template nodes. Two omission rules complete the design: an argument the author does not supply leaves no trace in the contract.
@@ -85,7 +87,7 @@ case 'option': {
 
 That case checks **syntax only**; membership in `values` is validated by the framework layer, which owns the error message. A quoted `onCreate: "now"` is rejected — one spelling, not two — and reports through the existing `PSL_INVALID_ATTRIBUTE_ARGUMENT` plumbing. The option kind introduces no diagnostic code of its own.
 
-**TypeScript spells an option as a string literal** (`'now'`). `ArgTypeFromDescriptor` ([authoring-type-utils.ts](../../../packages/2-sql/2-authoring/contract-ts/src/authoring-type-utils.ts)) resolves an option descriptor to the literal union of its `values`, so the legal set is autocompleted and enforced by the compiler.
+**TypeScript spells an option as a string literal** (`'now'`). `ArgTypeFromDescriptor` ([authoring-type-utils.ts](../../../packages/2-sql-family/2-authoring/contract-ts/src/authoring-type-utils.ts)) resolves an option descriptor to the literal union of its `values`, so the legal set is autocompleted and enforced by the compiler.
 
 ## `select`: preset vocabulary is not generator vocabulary
 
@@ -141,7 +143,7 @@ The two surfaces are validated by different mechanisms, and deliberately do not 
 | TypeScript | the literal union, at compile time | a type error |
 | TypeScript, type bypassed | the select node's throw | `Authoring template select has no case for value "<value>"` |
 
-The asymmetry follows from a standing architectural property: **the TypeScript authoring surface performs no runtime argument validation.** `buildFieldPreset` ([contract-dsl.ts](../../../packages/2-sql/2-authoring/contract-ts/src/contract-dsl.ts)) calls `instantiateAuthoringFieldPreset` directly and never calls `validateAuthoringHelperArguments`; that validator exists for the PSL path, which has to coerce untyped source text. On the TypeScript surface the type system *is* the check. Where a caller bypasses the type — a `string` variable, an untyped JavaScript caller — the select node's throw is the only backstop, and it reads as an internal invariant rather than user-facing guidance, which is appropriate for a case the types already exclude.
+The asymmetry follows from a standing architectural property: **the TypeScript authoring surface performs no runtime argument validation.** `buildFieldPreset` ([contract-dsl.ts](../../../packages/2-sql-family/2-authoring/contract-ts/src/contract-dsl.ts)) calls `instantiateAuthoringFieldPreset` directly and never calls `validateAuthoringHelperArguments`; that validator exists for the PSL path, which has to coerce untyped source text. On the TypeScript surface the type system *is* the check. Where a caller bypasses the type — a `string` variable, an untyped JavaScript caller — the select node's throw is the only backstop, and it reads as an internal invariant rather than user-facing guidance, which is appropriate for a case the types already exclude.
 
 A future author adding an argument kind should know which check they are relying on, because the answer differs by surface.
 
@@ -192,10 +194,10 @@ Two factories exist because the codecs differ in whether they take parameters: `
 
 `temporal.createdAt()` and `temporal.updatedAt()` are the behavioral spellings. `createdAt` is a **storage** default (`now()` rendered into DDL) — a different mechanism from execution defaults, and deliberately not expressible through `onCreate: now`. `updatedAt` is shorthand for `temporal.timestamptz(onCreate: now, onUpdate: now)`.
 
-That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` ([temporal-presets.ts](../../../packages/1-framework/1-core/framework-components/src/shared/temporal-presets.ts)) and `temporalCodecPresetWithPrecision` ([timestamp-now-generator.ts](../../../packages/2-sql/9-family/src/core/timestamp-now-generator.ts)) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
+That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` ([temporal-presets.ts](../../../packages/1-framework/1-core/framework-components/src/shared/temporal-presets.ts)) and `temporalCodecPresetWithPrecision` ([timestamp-now-generator.ts](../../../packages/2-sql-family/9-family/src/core/timestamp-now-generator.ts)) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
 
-- `it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)')` in [interpreter.defaults.test.ts](../../../packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.test.ts)
-- `describe('temporal.updatedAt() three-way byte-identity')` in [ts-psl-parity.test.ts](../../../packages/2-sql/2-authoring/contract-psl/test/ts-psl-parity.test.ts), covering PSL-full ≡ PSL-convenience ≡ TS-full
+- `it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)')` in [interpreter.defaults.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.test.ts)
+- `describe('temporal.updatedAt() three-way byte-identity')` in [ts-psl-parity.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/ts-psl-parity.test.ts), covering PSL-full ≡ PSL-convenience ≡ TS-full
 
 An editor changing either factory must keep those green, or the shorthand silently stops being a shorthand.
 
@@ -203,7 +205,7 @@ An editor changing either factory must keep those green, or the shorthand silent
 
 All four spellings — PSL and TypeScript, convenience and full — funnel through the same `instantiateAuthoringFieldPreset`. So the parity assertions prove **the spellings agree with each other**. They cannot prove the output is correct: a resolver bug moves all four together and every parity test stays green.
 
-Correctness is proved by the **absolute** assertions in `describe('temporal per-codec preset lowering')` in [interpreter.defaults.test.ts](../../../packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.test.ts), which pin whole column shapes and whole execution-defaults lists against literals. The two kinds of test are not substitutes.
+Correctness is proved by the **absolute** assertions in `describe('temporal per-codec preset lowering')` in [interpreter.defaults.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.test.ts), which pin whole column shapes and whole execution-defaults lists against literals. The two kinds of test are not substitutes.
 
 ## Optional arguments on the TypeScript surface
 
@@ -240,7 +242,7 @@ An argument object with **required** properties is not weak, and relies on the o
 Three facts about the wider system make the presets safe without any adapter or runtime involvement:
 
 - `{ precision }` typeParams on the postgres timestamp codecs flow through DDL rendering; the `Timestamp(3)` type-position constructor produces the same contract shape and exercises the same path.
-- A parameterized codec with absent `typeParams` is probed with `{}` in [sql-context.ts](../../../packages/2-sql/5-runtime/src/sql-context.ts), and `undefined` is normalized to `{}` in resolve-codec — so omitting `typeParams` entirely is equivalent to every consumer that reads it.
+- A parameterized codec with absent `typeParams` is probed with `{}` in [sql-context.ts](../../../packages/2-sql-family/5-runtime/src/sql-context.ts), and `undefined` is normalized to `{}` in resolve-codec — so omitting `typeParams` entirely is equivalent to every consumer that reads it.
 - The `timestampNow` generator — control descriptor, runtime generator, adapter lowering — is target-agnostic and serves both the postgres and sqlite presets.
 
 ## Alternatives considered

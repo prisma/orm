@@ -5,7 +5,7 @@ export const pgvectorAuthoringTypes = {
     Vector: {
       kind: 'typeConstructor',
       inferred: true,
-      args: [{ kind: 'number', name: 'length', integer: true }],
+      args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
       output: {
         codecId: 'pg/vector@1',
         typeParams: {

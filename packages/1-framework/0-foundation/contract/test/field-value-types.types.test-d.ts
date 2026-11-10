@@ -3,7 +3,7 @@ import type {
   FieldTypesFromDomain,
   ParameterizedOutputTypesFunction,
   StoredValueType,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '../src/exports/types';
 
 type CodecTypes = {
@@ -31,6 +31,14 @@ interface CharOutputTypes extends ParameterizedOutputTypesFunction {
 }
 
 type Scalar<CodecId extends string> = { readonly kind: 'scalar'; readonly codecId: CodecId };
+
+type ValueObjectRef<Name extends string, Ns extends string = 'shared'> = {
+  readonly kind: 'valueObject';
+  readonly plane: 'storage';
+  readonly namespaceId: Ns;
+  readonly entityKind: 'valueObject';
+  readonly entityName: Name;
+};
 
 type Domain = {
   readonly app: {
@@ -74,59 +82,80 @@ type Domain = {
             readonly type: Scalar<'test/text@1'>;
           };
           readonly homeWithoutNullable: {
-            readonly type: { readonly kind: 'valueObject'; readonly name: 'Point' };
+            readonly type: ValueObjectRef<'Point'>;
           };
           readonly home: {
             readonly nullable: true;
-            readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+            readonly type: ValueObjectRef<'Address'>;
           };
           readonly pastHomes: {
             readonly nullable: false;
-            readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+            readonly type: ValueObjectRef<'Address'>;
             readonly many: { readonly elementNullable: false };
+          };
+          readonly elsewhere: {
+            readonly nullable: false;
+            readonly type: ValueObjectRef<'Address', 'other'>;
           };
           readonly contact: {
             readonly nullable: false;
             readonly type: {
               readonly kind: 'union';
-              readonly members: readonly [
-                Scalar<'test/text@1'>,
-                { readonly kind: 'valueObject'; readonly name: 'Address' },
-              ];
+              readonly members: readonly [Scalar<'test/text@1'>, ValueObjectRef<'Address'>];
             };
           };
         };
       };
       readonly Empty: { readonly fields: Record<never, never> };
     };
-    readonly valueObjects: {
-      readonly Address: {
-        readonly fields: {
-          readonly street: { readonly nullable: false; readonly type: Scalar<'test/text@1'> };
-          readonly code: {
-            readonly nullable: false;
-            readonly type: Scalar<'test/char@1'> & { readonly typeParams: { readonly length: 5 } };
+  };
+};
+
+type Storage = {
+  readonly shared: {
+    readonly entries: {
+      readonly valueObject: {
+        readonly Address: {
+          readonly fields: {
+            readonly street: { readonly nullable: false; readonly type: Scalar<'test/text@1'> };
+            readonly code: {
+              readonly nullable: false;
+              readonly type: Scalar<'test/char@1'> & {
+                readonly typeParams: { readonly length: 5 };
+              };
+            };
+            readonly geo: {
+              readonly nullable: true;
+              readonly type: ValueObjectRef<'Point'>;
+            };
+            readonly kind: { readonly nullable: true; readonly type: Scalar<'test/text@1'> };
+            readonly meta: { readonly nullable: false; readonly type: Scalar<'test/json@1'> };
           };
-          readonly geo: {
-            readonly nullable: true;
-            readonly type: { readonly kind: 'valueObject'; readonly name: 'Point' };
+        };
+        readonly Point: {
+          readonly fields: {
+            readonly x: { readonly nullable: false; readonly type: Scalar<'test/int@1'> };
           };
-          readonly kind: { readonly nullable: true; readonly type: Scalar<'test/text@1'> };
-          readonly meta: { readonly nullable: false; readonly type: Scalar<'test/json@1'> };
+        };
+        readonly Nothing: { readonly fields: Record<never, never> };
+        readonly Tree: {
+          readonly fields: {
+            readonly children: {
+              readonly nullable: false;
+              readonly type: ValueObjectRef<'Tree'>;
+              readonly many: { readonly elementNullable: false };
+            };
+          };
         };
       };
-      readonly Point: {
-        readonly fields: {
-          readonly x: { readonly nullable: false; readonly type: Scalar<'test/int@1'> };
-        };
-      };
-      readonly Nothing: { readonly fields: Record<never, never> };
-      readonly Tree: {
-        readonly fields: {
-          readonly children: {
-            readonly nullable: false;
-            readonly type: { readonly kind: 'valueObject'; readonly name: 'Tree' };
-            readonly many: { readonly elementNullable: false };
+    };
+  };
+  readonly other: {
+    readonly entries: {
+      readonly valueObject: {
+        readonly Address: {
+          readonly fields: {
+            readonly elsewhere: { readonly nullable: false; readonly type: Scalar<'test/int@1'> };
           };
         };
       };
@@ -142,6 +171,8 @@ type Overrides = {
         readonly settings: { readonly output: { readonly theme: string } };
       };
     };
+  };
+  readonly shared: {
     readonly valueObjects: {
       readonly Address: {
         readonly kind: { readonly output: 'home' | 'work'; readonly input: 'home' | 'work' };
@@ -151,8 +182,15 @@ type Overrides = {
   };
 };
 
-type Output = FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Overrides, 'output'>;
-type Input = FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Overrides, 'input'>;
+type Output = FieldTypesFromDomain<
+  Domain,
+  CodecTypes,
+  CharOutputTypes,
+  Overrides,
+  'output',
+  Storage
+>;
+type Input = FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Overrides, 'input', Storage>;
 type User = Output['app']['User'];
 type UserInput = Input['app']['User'];
 
@@ -223,6 +261,15 @@ describe('field types from a contract domain', () => {
     expectTypeOf<User['pastHomes']>().toEqualTypeOf<ReadonlyArray<AddressOutput>>();
   });
 
+  test('a value object field reads the value object of the storage namespace its reference names', () => {
+    expectTypeOf<User['elsewhere']>().toEqualTypeOf<{ readonly elsewhere: bigint }>();
+  });
+
+  test('the storage namespaces are required, so no value object field goes untyped', () => {
+    // @ts-expect-error FieldTypesFromDomain reads both planes and takes the storage namespaces
+    expectTypeOf<FieldTypesFromDomain<Domain, CodecTypes, CharOutputTypes, Overrides, 'output'>>();
+  });
+
   test('a union field is the union of its members, a scalar member taking its plain codec type', () => {
     expectTypeOf<User['contact']>().toEqualTypeOf<string | AddressOutput>();
     expectTypeOf<UserInput['contact']>().toEqualTypeOf<string | AddressInput>();
@@ -234,16 +281,16 @@ describe('field types from a contract domain', () => {
   });
 });
 
-describe('value object types from a contract domain', () => {
-  type ValueObjects = ValueObjectTypesFromDomain<
-    Domain,
+describe('value object types from contract storage', () => {
+  type ValueObjects = ValueObjectTypesFromStorage<
+    Storage,
     CodecTypes,
     CharOutputTypes,
     Overrides,
     'output'
   >;
-  type ValueObjectInputs = ValueObjectTypesFromDomain<
-    Domain,
+  type ValueObjectInputs = ValueObjectTypesFromStorage<
+    Storage,
     CodecTypes,
     CharOutputTypes,
     Overrides,
@@ -251,17 +298,23 @@ describe('value object types from a contract domain', () => {
   >;
 
   test('each value object is keyed by namespace and name', () => {
-    expectTypeOf<ValueObjects['app']['Address']>().toEqualTypeOf<AddressOutput>();
-    expectTypeOf<ValueObjectInputs['app']['Address']>().toEqualTypeOf<AddressInput>();
+    expectTypeOf<ValueObjects['shared']['Address']>().toEqualTypeOf<AddressOutput>();
+    expectTypeOf<ValueObjectInputs['shared']['Address']>().toEqualTypeOf<AddressInput>();
+  });
+
+  test('a value object is keyed by the storage namespace that holds it', () => {
+    expectTypeOf<ValueObjects['other']['Address']>().toEqualTypeOf<{
+      readonly elsewhere: bigint;
+    }>();
   });
 
   test('a value object without fields is closed on both sides', () => {
-    expectTypeOf<ValueObjects['app']['Nothing']>().toEqualTypeOf<Record<string, never>>();
-    expectTypeOf<ValueObjectInputs['app']['Nothing']>().toEqualTypeOf<Record<string, never>>();
+    expectTypeOf<ValueObjects['shared']['Nothing']>().toEqualTypeOf<Record<string, never>>();
+    expectTypeOf<ValueObjectInputs['shared']['Nothing']>().toEqualTypeOf<Record<string, never>>();
   });
 
   test('a value object that holds itself resolves one level at a time', () => {
-    type Tree = ValueObjects['app']['Tree'];
+    type Tree = ValueObjects['shared']['Tree'];
     expectTypeOf<Tree['children'][number]['children'][number]>().toEqualTypeOf<Tree>();
   });
 });

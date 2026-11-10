@@ -1,5 +1,11 @@
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { DeleteAst, InsertAst, SelectAst, UpdateAst } from '@internal/sql-relational-core/ast';
+import type {
+  DeleteAst,
+  InsertAst,
+  SelectAst,
+  SqlStatementStats,
+  UpdateAst,
+} from '@internal/sql-relational-core/ast';
 import type { Edge, StorageRow } from './edge';
 
 export type StatementAst = SelectAst | InsertAst | UpdateAst | DeleteAst;
@@ -18,13 +24,23 @@ export type OutputsOf<Inputs extends Slots> = {
   readonly [Name in keyof Inputs]: OutputsOfSlot<Inputs[Name]>;
 };
 
-export type Executed = AsyncIterableResult<StorageRow> | Promise<number>;
+export type Executed = AsyncIterableResult<StorageRow> | Promise<SqlStatementStats>;
 
 export interface Run {
   query(ast: StatementAst): AsyncIterableResult<StorageRow>;
-  execute(ast: StatementAst): Promise<number>;
+  execute(ast: StatementAst): Promise<SqlStatementStats>;
 }
 
+export type SlotLayout<Inputs extends Slots> = {
+  readonly [Name in keyof Inputs]: Inputs[Name] extends Edge<unknown>[]
+    ? 'list'
+    : Inputs[Name] extends Edge<unknown>
+      ? 'one'
+      : 'list' | 'one';
+};
+
 export abstract class Node<Inputs extends Slots = Slots> {
+  abstract readonly slots: SlotLayout<Inputs>;
+
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 }

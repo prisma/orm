@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"NativeTypeDefaults.bitLength\": @default holds a value that pg/bit@1 does not read: pg/bit JSON value must be a string of exactly 8 bits"
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"NativeTypeDefaults.bitDigits\": @default holds a value that pg/bit@1 does not read: pg/bit JSON value must be a string of 0 and 1 digits"
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"NativeTypeDefaults.oidNegative\": @default holds text that this contract source does not read: -1 is out of range: oid holds a whole number from 0 to 4294967295."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"NativeTypeDefaults.moneyCents\": @default holds text that this contract source does not read: 1.234 is not a money value: money holds a number with at most two fraction digits, from -92233720368547758.08 to 92233720368547758.07."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"NativeTypeDefaults.moneyText\": @default holds a pg/text value, which pg/money has no cast from; it casts from pg/int2, pg/int4, pg/int8, pg/numeric."
+  }
+]

@@ -19,10 +19,10 @@ The TypeScript authoring surface couples the element option to list construction
 
 ```ts
 const fields = {
-  strict: field.text().many(),
-  nullableElements: field.text().many({ elementsNullable: true }),
-  nullableList: field.text().many().optional(),
-  fullyNullable: field.text().many({ elementsNullable: true }).optional(),
+  strict: field.column(type.String()).many(),
+  nullableElements: field.column(type.String()).many({ elementsNullable: true }),
+  nullableList: field.column(type.String()).many().optional(),
+  fullyNullable: field.column(type.String()).many({ elementsNullable: true }).optional(),
 };
 ```
 
@@ -63,8 +63,8 @@ Value-object lists stored as JSON do not receive a scalar-list `StorageColumn.ma
 (Updated October 15, 2026.) PostgreSQL derives an `elementNotNull` check exactly when a native array column has `many !== false` and `many.elementNullable === false`. There is no way to keep a non-null element type and drop its check: the per-column waiver `noCheck` that allowed it is removed, because it let the declared type claim more than the database enforced.
 
 ```ts
-field.text().many({ elementsNullable: true })   // ReadonlyArray<string | null>, no element check
-field.text().many()                             // ReadonlyArray<string>, element check derived
+field.column(type.String()).many({ elementsNullable: true })   // ReadonlyArray<string | null>, no element check
+field.column(type.String()).many()                             // ReadonlyArray<string>, element check derived
 ```
 
 Two producers describe a schema Prisma 8 did not create, and both write the nullability the database enforces. When the live database lacks the derived check, `contract infer` writes `Foo?[]`. The Prisma 7 reader reads every list in a Prisma 7 `schema.prisma` as nullable elements, because Prisma 7 creates no element check. A project that keeps its Prisma 7 schema as the contract source therefore always gets nullable element types. To get non-null elements, the project moves to a Prisma 8 source and writes `Foo[]`, and the next migration adds the check.

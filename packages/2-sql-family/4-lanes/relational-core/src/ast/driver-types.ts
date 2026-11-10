@@ -1,0 +1,98 @@
+/**
+ * A fully lowered SQL statement ready for a driver to execute: SQL text plus
+ * driver-ready (codec-encoded) parameter values. The output of the control
+ * adapter's `lowerToExecuteRequest`, handed to a driver via `SqlQueryable.query`
+ * or `execute`. Inline-substituted positions (e.g. DDL `DEFAULT`
+ * clauses) carry no param; `params` holds the wire values for the `$N`/`?`
+ * positions, in order.
+ */
+export interface PreparedStatementHandle {
+  get(): unknown;
+  set(value: unknown): void;
+}
+
+export interface SqlExecuteRequest {
+  readonly sql: string;
+  readonly params?: readonly unknown[];
+  readonly preparedStatementHandle?: PreparedStatementHandle;
+}
+
+export interface PreparedExecuteRequest extends SqlExecuteRequest {
+  readonly preparedStatementHandle: PreparedStatementHandle;
+}
+
+export interface SqlStatementStats {
+  readonly affectedRows: number;
+  /**
+   * A value the database numbers itself, such as an auto-increment column's, as decimal text. A driver reports it only when the statement changed one row and the database reported a value. It identifies that row only after a one-row insert; after any other statement its value means nothing. A middleware that answers the statement in place of the database may leave it out.
+   */
+  readonly insertId?: string;
+}
+
+export interface SqlExplainResult<Row = Record<string, unknown>> {
+  readonly rows: ReadonlyArray<Row>;
+}
+
+export type SqlDriverState = 'unbound' | 'connected' | 'closed';
+
+export interface SqlDriver<TBinding = void> extends SqlQueryable {
+  readonly state?: SqlDriverState;
+  connect(binding: TBinding): Promise<void>;
+  acquireConnection(): Promise<SqlConnection>;
+  /**
+   * The SQL runtime stops waiting for a query once the driver has answered its first row, so it relies on `close()` waiting for every connection the driver has handed out to be released, and for every query stream it has started to finish or be returned, before it releases its resources. The Postgres drivers do this; the SQLite driver does not yet.
+   */
+  close(): Promise<void>;
+}
+
+export interface SqlConnection extends SqlQueryable {
+  /**
+   * Begins a transaction on this connection's session. Until it commits or rolls back, a statement sent on this connection runs inside it.
+   */
+  beginTransaction(): Promise<SqlTransaction>;
+  /**
+   * Returns the connection to the pool for reuse. Must only be called when the
+   * connection is known to be in a clean, reusable state. If a transaction
+   * operation (commit/rollback) failed or the connection is otherwise suspect,
+   * call `destroy(reason)` instead.
+   */
+  release(): Promise<void>;
+  /**
+   * Evicts the connection so it is never reused. Call this when the
+   * connection may be in an indeterminate state (e.g. a failed rollback
+   * leaving an open transaction, or a broken socket).
+   *
+   * Implementations MUST:
+   * - Leave the connection retryable if teardown fails, so a follow-up
+   *   call can actually dispose of the handle. Calling destroy() or
+   *   release() more than once after a successful teardown is caller
+   *   error and behaves as the underlying primitive dictates (typically
+   *   a thrown error).
+   * - Treat `reason` as advisory context only. It may be surfaced to
+   *   driver-level observability hooks (e.g. pg-pool's `'release'` event)
+   *   but MUST NOT influence eviction behavior and MUST NOT be rethrown.
+   * - Dispose of any driver-wide state that depends on this single
+   *   connection (e.g. a direct-client driver should close itself, since a
+   *   destroyed connection means its one underlying socket is unusable).
+   * - Propagate errors raised while tearing down the underlying connection.
+   *   The caller has context the driver does not (whether it is already
+   *   about to throw a more informative error, whether it is shutting
+   *   down, etc.) and is better positioned to decide whether to swallow
+   *   or surface the failure.
+   */
+  destroy(reason?: unknown): Promise<void>;
+}
+
+/**
+ * A transaction begun on a connection. A statement sent on the transaction or on its connection after `commit()` or `rollback()` is called reaches the database after the `COMMIT` or `ROLLBACK`.
+ */
+export interface SqlTransaction extends SqlQueryable {
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+}
+
+export interface SqlQueryable {
+  query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row>;
+  execute(request: SqlExecuteRequest): Promise<SqlStatementStats>;
+  explain?(request: SqlExecuteRequest): Promise<SqlExplainResult>;
+}

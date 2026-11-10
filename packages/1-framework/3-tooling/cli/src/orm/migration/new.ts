@@ -11,6 +11,7 @@ import { executeMigrationNewCommand } from '../../control-api/operations/migrati
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
 import { type CliInvocation, cliInvocation, selfEmitCommand } from '../../utils/printed-command';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
@@ -24,7 +25,7 @@ function newPresentations(inputs: {
   const { document } = inputs;
   const migrationTs = join(document.dir, 'migration.ts');
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.dir]),
     human: (): readonly Block[] => [
       {
         kind: 'fields',

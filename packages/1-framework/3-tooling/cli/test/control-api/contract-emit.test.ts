@@ -1,9 +1,12 @@
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type * as configLoader from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import type { EmitResult } from '@internal/emitter';
+import { CliStructuredError } from '@internal/errors/control';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeContractEmit } from '../../src/control-api/operations/contract-emit';
 import type { ContractEmitOptions } from '../../src/control-api/types';
@@ -378,6 +381,76 @@ describe('executeContractEmit', () => {
       expect(withWarning.result.sourceWarnings).toEqual([warning]);
       expect(withoutWarning.result).not.toHaveProperty('sourceWarnings');
     });
+
+    it.each([
+      {
+        label: 'returns diagnostics',
+        failWith: () => ({
+          ok: false,
+          failure: {
+            summary: 'Source interpretation failed',
+            diagnostics: [
+              {
+                code: 'PSL_PARSE_ERROR',
+                message: 'Unexpected token',
+                sourceId: 'prisma/schema.prisma',
+              },
+            ],
+          },
+        }),
+        code: 'CONTRACT.SOURCE_LOAD_FAILED',
+        firstFinding: { severity: 'error', code: 'CONTRACT.SOURCE_DIAGNOSTIC' },
+      },
+      {
+        label: 'throws a structured error',
+        failWith: () => {
+          throw new CliStructuredError('CONTRACT.DEFAULT_INVALID', 'Default refused', {
+            diagnostics: [
+              {
+                code: 'CONTRACT.DEFAULT_INVALID',
+                severity: 'error',
+                summary: 'Default refused',
+                nextActions: [],
+              },
+            ],
+          });
+        },
+        code: 'CONTRACT.DEFAULT_INVALID',
+        firstFinding: { severity: 'error', code: 'CONTRACT.DEFAULT_INVALID' },
+      },
+    ])(
+      'keeps the warning when the source then $label',
+      async ({ failWith, code, firstFinding }) => {
+        const source = {
+          load: async (context: { reportWarning?: (d: unknown) => void }) => {
+            context.reportWarning?.(warning);
+            return failWith();
+          },
+        };
+        const error = await executeContractEmitWithMock(
+          emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+        ).then(
+          () => expect.unreachable('contract emit succeeded'),
+          (thrown: unknown) => thrown,
+        );
+
+        expect(error).toMatchObject({
+          code,
+          diagnostics: [
+            expect.objectContaining(firstFinding),
+            {
+              code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+              severity: 'warn',
+              summary:
+                'prisma/schema.prisma PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32".',
+              nextActions: [],
+              where: { path: 'prisma/schema.prisma' },
+              meta: { code: 'PSL_DEPRECATED_SCALAR_NAME' },
+            },
+          ],
+        });
+      },
+    );
   });
 
   it('passes deserializeContract output to emit, not the pre-hydration envelope', async () => {
@@ -422,6 +495,135 @@ describe('executeContractEmit', () => {
     );
 
     expect(mockedEmit.mock.calls.at(-1)?.[3]?.supportsNamespaces).toBe(false);
+  });
+
+  it('writes each composed pack space under the migrations directory', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const packHash = 'a'.repeat(64);
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: packHash } },
+        headRef: { hash: packHash, invariants: [] },
+        migrations: [
+          {
+            dirName: '20260101T0000_create_testpack',
+            metadata: {
+              from: null,
+              to: packHash,
+              migrationHash: 'mh',
+              providedInvariants: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            ops: [],
+          },
+        ],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('pack'));
+
+    const result = await executeContractEmitWithMock(
+      emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+    );
+
+    const spaceDir = join(tmpDir, 'migrations', 'testpack');
+    expect(result.pinnedFiles).toEqual([
+      { spaceId: 'testpack', path: contractSnapshotDir(join(tmpDir, 'migrations'), packHash) },
+      { spaceId: 'testpack', path: join(spaceDir, 'refs', 'head.json') },
+      { spaceId: 'testpack', path: join(spaceDir, '20260101T0000_create_testpack') },
+    ]);
+    expect(JSON.parse(await readFile(join(spaceDir, 'refs', 'head.json'), 'utf-8'))).toEqual({
+      hash: packHash,
+      invariants: [],
+    });
+    expect(
+      JSON.parse(
+        await readFile(join(spaceDir, '20260101T0000_create_testpack', 'migration.json'), 'utf-8'),
+      ),
+    ).toMatchObject({ from: null, to: packHash });
+  });
+
+  it('publishes no contract when writing a pack space fails', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'b'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('broken-pack'));
+
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+      ),
+    ).rejects.toThrow();
+    expect(existsSync(join(tmpDir, 'src/contract.json'))).toBe(false);
+  });
+
+  it('writes no pack space and no contract once cancelled during emit', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    const controller = new AbortController();
+    mockedEmit.mockImplementationOnce(async () => {
+      queueMicrotask(() => controller.abort());
+      return createEmitResult('cancelled');
+    });
+
+    await expect(
+      executeContractEmitWithMock({
+        ...emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+        signal: controller.signal,
+      }),
+    ).rejects.toSatisfy((error: unknown) => error instanceof Error && error.name === 'AbortError');
+    expect(existsSync(join(tmpDir, 'migrations'))).toBe(false);
+    expect(existsSync(join(tmpDir, 'src/contract.json'))).toBe(false);
+  });
+
+  it('writes no pack space when the contract goes to an output path of its own', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('elsewhere'));
+
+    const result = await executeContractEmitWithMock({
+      ...emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+      outputPath: join(tmpDir, 'elsewhere'),
+    });
+
+    expect(existsSync(join(tmpDir, 'migrations'))).toBe(false);
+    expect(result.pinnedFiles).toEqual([]);
   });
 
   describe('the import root the emitted files are written against', () => {

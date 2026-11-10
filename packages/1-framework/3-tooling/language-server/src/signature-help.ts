@@ -1,4 +1,4 @@
-import type { Param, PositionalParam } from '@internal/psl-parser';
+import { groupedTypeLabel, type Param, type PositionalParam } from '@internal/psl-parser';
 import {
   MarkupKind,
   type ParameterInformation,
@@ -144,8 +144,7 @@ export function renderSignatureLabel(
     if (index > 0) label += ', ';
     const positional = index < (signature.positional?.length ?? 0);
     const optional = 'optional' in param.type && param.type.optional === true;
-    const typeLabel =
-      optional && param.type.label.includes(' | ') ? `(${param.type.label})` : param.type.label;
+    const typeLabel = optional ? groupedTypeLabel(param.type) : param.type.label;
     const text = positional
       ? `${typeLabel}${optional ? '?' : ''}`
       : namedParameterText(param.key, param.type);

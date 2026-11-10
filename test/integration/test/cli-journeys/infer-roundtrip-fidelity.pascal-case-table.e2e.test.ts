@@ -3,6 +3,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   runContractEmit,
   runContractInfer,
@@ -10,7 +11,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
-import { expectVerifiesCleanAfterPull, readContractPsl } from './infer-roundtrip-fidelity/harness';
+import { readContractPsl } from './infer-roundtrip-fidelity/harness';
 
 withTempDir(({ createTempDir }) => {
   describe('Journey: a PascalCase table round-trips through infer -> emit -> verify', () => {
@@ -44,7 +45,7 @@ withTempDir(({ createTempDir }) => {
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'LegacyAccount');
+        await expectStrictVerifyIssues(ctx, 'LegacyAccount');
 
         const psl = readContractPsl(ctx);
         expect(psl, 'the model keeps the PascalCase name').toMatch(/^model LegacyAccount \{/m);

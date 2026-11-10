@@ -15,11 +15,11 @@ import {
   float8Column,
   int2Column,
   int4Column,
-  int8Column,
-  intervalColumn,
+  int8BigIntColumn,
+  intervalPartsColumn,
   jsonbColumn,
   jsonColumn,
-  numericColumn,
+  numericStringColumn,
   textColumn,
   timeStringColumn,
   timestampStringColumn,
@@ -78,54 +78,30 @@ const sqlText = { codecId: 'sql/text@1' } as const;
 const int8Number = { codecId: 'pg/int8number@1' } as const;
 const unboundedInt = { codecId: 'pg/unboundedint@1' } as const;
 
-const shortText = {
-  kind: 'codec-instance',
-  codecId: 'sql/varchar@1',
-  typeParams: { length: 255 },
-} as const;
-const code = {
-  kind: 'codec-instance',
-  codecId: 'sql/char@1',
-  typeParams: {},
-} as const;
-const id = {
-  kind: 'codec-instance',
-  codecId: 'pg/uuid@1',
-  typeParams: {},
-} as const;
-const money = {
-  kind: 'codec-instance',
+const ShortText = field.column({ codecId: 'sql/varchar@1', typeParams: { length: 255 } } as const);
+const Code = field.column({ codecId: 'sql/char@1' } as const);
+const Id = field.column({ codecId: 'pg/uuid@1' } as const);
+const Money = field.column({
   codecId: 'pg/numeric@1',
   typeParams: { precision: 10, scale: 2 },
-} as const;
-const embedding = {
-  kind: 'codec-instance',
-  codecId: 'pg/vector@1',
-  typeParams: { length: 3 },
-} as const;
+} as const);
+const Embedding = field.column({ codecId: 'pg/vector@1', typeParams: { length: 3 } } as const);
 
 export const contract = defineContract({
   extensions: { pgvector, postgis },
-  types: {
-    ShortText: shortText,
-    Code: code,
-    Id: id,
-    Money: money,
-    Embedding: embedding,
-  },
   models: {
     Scalar: model('Scalar', {
       fields: {
         id: field.column(int4Column).default(autoincrement()).id(),
         text: field.column(textColumn),
         int2: field.column(int2Column),
-        int8: field.column(int8Column),
+        int8: field.column(int8BigIntColumn),
         float4: field.column(float4Column),
         float8: field.column(float8Column),
         bool: field.column(boolColumn),
         numeric: field.column(numeric),
-        numericPrecision: field.column(numericColumn(10)),
-        numericPrecisionScale: field.column(numericColumn(10, 2)),
+        numericPrecision: field.column(numericStringColumn(10)),
+        numericPrecisionScale: field.column(numericStringColumn(10, 2)),
         json: field.column(jsonColumn),
         jsonb: field.column(jsonbColumn),
         uuid: field.column(uuid),
@@ -149,8 +125,8 @@ export const contract = defineContract({
         timestampPrecision: field.column(timestamp3),
         timestamptz: field.column(timestamptzTemporalColumn),
         timestamptzPrecision: field.column(timestamptz3),
-        interval: field.column(intervalColumn()),
-        intervalPrecision: field.column(intervalColumn(3)),
+        interval: field.column(intervalPartsColumn()),
+        intervalPrecision: field.column(intervalPartsColumn(3)),
         mood: field.column(pg.enum(Mood)),
         vector: field.column(vector(3)),
         geometry: field.column(geometryColumn),
@@ -159,7 +135,7 @@ export const contract = defineContract({
     }).sql({ table: 'scalar' }),
     OtherCodec: model('OtherCodec', {
       fields: {
-        id: field.column(int8Column).default(autoincrement()).id(),
+        id: field.column(int8BigIntColumn).default(autoincrement()).id(),
         small: field.column(int2Column).default(autoincrement()),
         pgChar: field.column(pgChar5),
         pgVarchar: field.column(pgVarchar),
@@ -183,8 +159,8 @@ export const contract = defineContract({
         text: field.column(textColumn).many(),
         int4: field.column(int4Column).many(),
         numeric: field.column(numeric).many(),
-        numericPrecision: field.column(numericColumn(10)).many(),
-        numericPrecisionScale: field.column(numericColumn(10, 2)).many(),
+        numericPrecision: field.column(numericStringColumn(10)).many(),
+        numericPrecisionScale: field.column(numericStringColumn(10, 2)).many(),
         char: field.column(char).many(),
         charLength: field.column(charColumn(5)).many(),
         varchar: field.column(varchar).many(),
@@ -195,7 +171,7 @@ export const contract = defineContract({
         timePrecision: field.column(timeTemporalColumn(3)).many(),
         timestamptz: field.column(timestamptzTemporalColumn).many(),
         timestamptzPrecision: field.column(timestamptz3).many(),
-        interval: field.column(intervalColumn()).many(),
+        interval: field.column(intervalPartsColumn()).many(),
         jsonb: field.column(jsonbColumn).many(),
         uuid: field.column(uuid).many(),
         mood: field.column(pg.enum(Mood)).many(),
@@ -205,11 +181,11 @@ export const contract = defineContract({
     }).sql({ table: 'list' }),
     Alias: model('Alias', {
       fields: {
-        id: field.namedType(id).id(),
-        shortText: field.namedType(shortText),
-        code: field.namedType(code),
-        money: field.namedType(money),
-        embedding: field.namedType(embedding),
+        id: Id.id(),
+        shortText: ShortText,
+        code: Code,
+        money: Money,
+        embedding: Embedding,
       },
     }).sql({ table: 'alias' }),
   },

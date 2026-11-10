@@ -62,7 +62,6 @@ function stubStackWithContext(): ControlStack {
     extensionContracts: new Map([['ext-a', { targetFamily: 'demo' }]]),
     scalarTypes: ['Int'],
     authoringContributions: {
-      field: {},
       type: {
         Int: { kind: 'typeConstructor', output: { codecId: 'demo/int@1' } },
       },

@@ -11,7 +11,14 @@ import type {
   MigrationOperationPolicy,
   MigrationRunnerFailure,
   MigrationSubject,
+  RowsFailingCheck,
+  RowsHoldingValue,
   TargetMigrationsCapability,
+} from '@internal/framework-components/control';
+import {
+  enumValueCoordinateFromJson,
+  enumValueStatementText,
+  modelStatementText,
 } from '@internal/framework-components/control';
 import type {
   AggregateMigrationEdgeRef,
@@ -28,6 +35,8 @@ import type {
   FailedTypeChangeReport,
   OnControlProgress,
   PerSpaceExecutionEntry,
+  RowsFailingCheckReport,
+  RowsHoldingValueReport,
   RunnerFailureFacts,
 } from '../types';
 
@@ -61,17 +70,53 @@ function failedTypeChangeReport(change: FailedTypeChange, field: string): Failed
     : { field, by: 'conversion', reason: change.reason };
 }
 
+function rowsHoldingValueReport(
+  fact: RowsHoldingValue,
+  contract: OrderedResolution['entry']['destinationContract'],
+): RowsHoldingValueReport {
+  const enumValue = enumValueCoordinateFromJson(fact.enumValue);
+  return {
+    enumValue: enumValueStatementText(contract, enumValue),
+    enumName: modelStatementText(contract, {
+      namespaceId: enumValue.namespaceId,
+      model: enumValue.enum,
+    }),
+    value: fact.value,
+    rows: fact.rows,
+    ...ifDefined('keepDataEdit', fact.keepDataEdit),
+  };
+}
+
+function rowsFailingCheckReport(
+  fact: RowsFailingCheck | undefined,
+): RowsFailingCheckReport | undefined {
+  if (fact === undefined) return undefined;
+  const { operationIndex: _operationIndex, ...report } = fact;
+  return report;
+}
+
 /** What the runner said blocked the failed operation, named as the advice names it. */
 function failureReports(
   failure: MigrationRunnerFailure,
   resolutions: readonly OrderedResolution[],
-): Pick<RunnerFailureFacts, 'failedTypeChange' | 'rowsWithoutValue' | 'failedMigration'> {
+): Pick<
+  RunnerFailureFacts,
+  | 'failedTypeChange'
+  | 'rowsWithoutValue'
+  | 'rowsHoldingValue'
+  | 'rowsFailingCheck'
+  | 'failedMigration'
+> {
   const resolution = resolutions.find(({ spaceId }) => spaceId === failure.meta.failingSpace);
   if (resolution === undefined) return {};
   const fieldText = (field: MigrationSubject) =>
     subjectText(field, { origin: resolution.entry.destinationContract, statements: [] });
-  const { failedTypeChange, rowsWithoutValue } = failure.meta;
-  const operationIndex = failedTypeChange?.operationIndex ?? rowsWithoutValue?.[0]?.operationIndex;
+  const { failedTypeChange, rowsWithoutValue, rowsHoldingValue, rowsFailingCheck } = failure.meta;
+  const operationIndex =
+    failedTypeChange?.operationIndex ??
+    rowsWithoutValue?.[0]?.operationIndex ??
+    rowsHoldingValue?.[0]?.operationIndex ??
+    rowsFailingCheck?.operationIndex;
   const edge =
     operationIndex !== undefined
       ? edgeOfOperation(resolution.entry.migrationEdges, operationIndex)
@@ -87,11 +132,19 @@ function failureReports(
     ),
     ...ifDefined(
       'rowsWithoutValue',
-      rowsWithoutValue?.map(({ field, reason }) => ({
+      rowsWithoutValue?.map(({ field, reason, rows }) => ({
         field: field === undefined ? undefined : fieldText(field),
         reason,
+        rows,
       })),
     ),
+    ...ifDefined(
+      'rowsHoldingValue',
+      rowsHoldingValue?.map((fact) =>
+        rowsHoldingValueReport(fact, resolution.entry.destinationContract),
+      ),
+    ),
+    ...ifDefined('rowsFailingCheck', rowsFailingCheckReport(rowsFailingCheck)),
     ...ifDefined(
       'failedMigration',
       edge === undefined ? undefined : { spaceId: resolution.spaceId, edge },
@@ -188,11 +241,11 @@ export type RunMigrationResult = Result<RunMigrationValue, MigrationRunnerFailur
  * plans (the planner-vs-replay distinction is owned by the caller) and
  * dispatches them to the runner in canonical order.
  *
- * Marker advancement is part of the runner's per-space transaction
- * (the SQL family runner writes the marker as the last step of each
- * space's transaction), so this primitive does not advance markers
- * separately — by the time `execute` returns ok, every
- * space's marker has been advanced to its plan's destination.
+ * The runner writes each space's marker as the last step of applying that
+ * space, so this primitive does not advance markers separately — by the time
+ * `execute` returns ok, every space's marker has been advanced to its plan's
+ * destination. A failure is returned as the runner reported it; its `why`
+ * says whether the database changed.
  *
  * Span emission (`spanStart 'apply'` / `spanEnd 'apply'`) is owned here
  * so callers don't have to duplicate it; the `action` field on each
@@ -275,7 +328,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
  *
  * `includeMarkers` is `true` for apply-mode (each space's marker is
  * the `destination.storageHash` of its plan, which the runner
- * advances as the last step of each space's transaction) and `false`
+ * advances as the last step of applying each space) and `false`
  * for plan-mode (no marker has been written yet).
  *
  * Exported alongside {@link runMigration} so plan-mode callers can

@@ -76,6 +76,12 @@ import type {
  * @see {@link ControlClient} for the client interface
  * @see README.md "Programmatic Control API" section for usage examples
  */
+function sourceWarningsOf(warnings: readonly ContractSourceDiagnostic[]): {
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
+} {
+  return ifDefined('sourceWarnings', warnings.length > 0 ? warnings : undefined);
+}
+
 export function createControlClient(options: ControlClientOptions): ControlClient {
   return new ControlClientImpl(options);
 }
@@ -437,7 +443,7 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
-      ...ifDefined('acceptAccessWidening', options.acceptAccessWidening),
+      ...ifDefined('acceptAccessChanges', options.acceptAccessChanges),
       ...ifDefined('statements', options.statements),
       answerQuestions: options.answerQuestions,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
@@ -624,7 +630,6 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
-    const sourceWarnings: ContractSourceDiagnostic[] = [];
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -636,9 +641,6 @@ class ControlClientImpl implements ControlClient {
       stack: this.stack!,
       source: contractConfig.source,
       cwd: undefined,
-      reportWarning: (diagnostic) => {
-        sourceWarnings.push(diagnostic);
-      },
     });
     onProgress?.({
       action: 'emit',
@@ -647,7 +649,7 @@ class ControlClientImpl implements ControlClient {
       outcome: loaded.ok ? 'ok' : 'error',
     });
     if (!loaded.ok) {
-      const { error, sourceDiagnostics } = loaded.failure;
+      const { error, sourceDiagnostics, warnings } = loaded.failure;
       const thrownBySource = error.code !== 'CONTRACT.SOURCE_LOAD_FAILED';
       return notOk({
         code: 'CONTRACT_SOURCE_INVALID',
@@ -655,8 +657,10 @@ class ControlClientImpl implements ControlClient {
         why: error.why,
         meta: thrownBySource ? { code: error.code, ...error.meta } : sourceDiagnostics?.meta,
         ...ifDefined('diagnostics', sourceDiagnostics),
+        ...sourceWarningsOf(warnings),
       });
     }
+    const { contract, warnings } = loaded.value;
 
     // Emit contract
     onProgress?.({
@@ -667,7 +671,7 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      const enrichedIR = enrichContract(loaded.value, this.frameworkComponents ?? []);
+      const enrichedIR = enrichContract(contract, this.frameworkComponents ?? []);
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
 
       let deserializedContract: Contract;
@@ -686,6 +690,7 @@ class ControlClientImpl implements ControlClient {
           summary: 'Contract validation failed',
           why: message,
           meta: undefined,
+          ...sourceWarningsOf(warnings),
         });
       }
 
@@ -704,7 +709,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
-        ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
+        ...sourceWarningsOf(warnings),
       });
     } catch (error) {
       onProgress?.({
@@ -719,6 +724,7 @@ class ControlClientImpl implements ControlClient {
         summary: 'Failed to emit contract',
         why: error instanceof Error ? error.message : String(error),
         meta: undefined,
+        ...sourceWarningsOf(warnings),
       });
     }
   }

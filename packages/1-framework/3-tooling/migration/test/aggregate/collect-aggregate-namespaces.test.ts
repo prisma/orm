@@ -38,6 +38,26 @@ function makeAggregate(
 }
 
 describe('collectAggregateNamespaces', () => {
+  it('adds the namespaces of the origin contract, so the tables of a removed namespace are read too', () => {
+    const app = makeSpace('app', { public: { table: { user: {} } } });
+    const origin = makeSpace('app', {
+      public: { table: { user: {}, legacy: {} } },
+      billing: { table: { invoice: {} } },
+    }).contract();
+
+    const collected = collectAggregateNamespaces(makeAggregate(app, []), origin);
+
+    expect(
+      Object.fromEntries(
+        Object.entries(collected.storage.namespaces).map(([id, ns]) => [
+          id,
+          Object.keys(ns.entries['table'] ?? {}).sort(),
+        ]),
+      ),
+    ).toEqual({ public: ['legacy', 'user'], billing: ['invoice'] });
+    expect(collected.contracts).toEqual([app.contract(), origin]);
+  });
+
   it('unions tables when two contract spaces share a namespaceId', () => {
     const app = makeSpace('app', { public: { table: { user: {} } } });
     const ext = makeSpace('cipher', { public: { table: { cipher_state: {} } } });

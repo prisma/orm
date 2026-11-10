@@ -1,22 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { detectionPatterns } from '../guide-detections';
 
 const GUIDE_PATHS = {
-  app: 'upgrade-instructions/pending/orm-call-activities/app/instructions.md',
-  extension: 'upgrade-instructions/pending/orm-call-activities/extension/instructions.md',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
 } as const;
 
-const here = dirname(fileURLToPath(import.meta.url));
-
 function detectionOf(audience: keyof typeof GUIDE_PATHS, id: string): readonly RegExp[] {
-  const guide = readFileSync(join(here, '../../../../..', GUIDE_PATHS[audience]), 'utf-8');
-  const entry = guide.split(/\n {2}- id: /).find((block) => block.startsWith(`${id}\n`));
-  if (entry === undefined) throw new Error(`The ${audience} guide has no change ${id}`);
-  return [...entry.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
+  return detectionPatterns(GUIDE_PATHS[audience], id);
 }
 
 function detects(audience: keyof typeof GUIDE_PATHS, id: string, content: string): boolean {
@@ -27,17 +19,37 @@ describe.each(['app', 'extension'] as const)(
   '%s orm-annotations-on-the-call detection',
   (audience) => {
     it.each([
-      ['handle.read(plan)', 'const actor = auditAnnotation.read(plan);'],
-      ['handle.read(exec)', 'cacheAnnotation.read( exec )'],
-      ['plan.meta.annotations', "const stored = plan.meta.annotations?.['audit'];"],
+      [
+        'handle.read(plan) in beforeEncode',
+        'async beforeEncode(plan) {\n  const actor = auditAnnotation.read(plan);\n}',
+      ],
+      [
+        'handle.read(exec) in onQuery',
+        'intercept: { async onQuery(exec) { cacheAnnotation.read( exec ); } }',
+      ],
+      [
+        'another parameter name',
+        'async beforeEncode(statement, ctx) {\n  const actor = auditAnnotation.read(statement);\n}',
+      ],
+      [
+        'plan.meta.annotations',
+        "async onRow(row, plan) {\n  const stored = plan.meta.annotations?.['audit'];\n}",
+      ],
     ])('finds %s', (_name, content) => {
       expect(detects(audience, 'orm-annotations-on-the-call', content)).toBe(true);
     });
 
     it.each([
-      ['handle.read(planner)', 'auditAnnotation.read(planner)'],
-      ['handle.read(activity)', 'auditAnnotation.read(activity)'],
-      ['meta.annotationsList', 'meta.annotationsList'],
+      [
+        'handle.read(activity)',
+        'async activityStarted(activity) {\n  auditAnnotation.read(activity);\n}',
+      ],
+      ['meta.annotationsList', 'async beforeEncode(plan) { meta.annotationsList; }'],
+      ['a read outside a middleware', 'const actor = auditAnnotation.read(plan);'],
+      [
+        'a Mongo middleware',
+        "const m = { familyId: 'mongo', async beforeEncode(plan) { cacheAnnotation.read(plan); } };",
+      ],
     ])('skips %s', (_name, content) => {
       expect(detects(audience, 'orm-annotations-on-the-call', content)).toBe(false);
     });
@@ -65,6 +77,29 @@ describe.each(['app', 'extension'] as const)(
 
     it('skips a longer name', () => {
       expect(detects(audience, 'cache-store-holds-cached-values', 'MyCachedRowsStore')).toBe(false);
+    });
+
+    it.each([
+      [
+        'a store typed with only its meta type',
+        "import type { CacheStore } from '@prisma/orm-extension-middleware-cache';\nconst store: CacheStore<TagMeta> = createRedisStore();",
+      ],
+      [
+        'a store typed with its own rows type',
+        "import type { CacheStore } from '@internal/middleware-cache';\nclass RedisStore implements CacheStore<unknown, MyRows> {}",
+      ],
+    ])('finds %s', (_name, content) => {
+      expect(detects(audience, 'cache-store-holds-cached-values', content)).toBe(true);
+    });
+
+    it.each([
+      [
+        'a store typed with CachedValue',
+        "import type { CachedValue, CacheStore } from '@prisma/orm-extension-middleware-cache';\nconst store: CacheStore<TagMeta, CachedValue> = createRedisStore();",
+      ],
+      ['a CacheEntry type of its own', "type CacheEntry = { readonly kind: 'pending' };"],
+    ])('skips %s', (_name, content) => {
+      expect(detects(audience, 'cache-store-holds-cached-values', content)).toBe(false);
     });
 
     it('skips a default store given only a meta type', () => {
@@ -138,16 +173,79 @@ describe('extension queryable-carries-the-activity-source detection', () => {
     ['another spread name', 'return { ...inner, query: record(inner) };'],
     ['execute before query', '{ ...conn, execute: async (plan) => conn.execute(plan) }'],
     ['a member spread', '{ ...this.runtime, query: wrap(this.runtime) }'],
+    ['an async method', '{ ...runtime, async execute(plan) { return runtime.execute(plan); } }'],
+    [
+      'other members between the spread and query',
+      '{\n  ...runtime,\n  connection: () => runtime.connection(),\n  query(plan) {',
+    ],
   ])('finds %s', (_name, content) => {
     expect(detects('extension', 'queryable-carries-the-activity-source', content)).toBe(true);
   });
 
-  it('skips a spread followed by another member', () => {
+  it.each([
+    ['a spread followed by another member', '{ ...runtime,\n  queryTimeout: 1000 }'],
+    ['query in a nested object after the spread', '{ ...options, hooks: { query: log } }'],
+    ['query in a later object', '{ ...options };\nconst other = { query: log };'],
+  ])('skips %s', (_name, content) => {
+    expect(detects('extension', 'queryable-carries-the-activity-source', content)).toBe(false);
+  });
+});
+
+describe('extension activity detections', () => {
+  it.each([
+    [
+      'activity-includes-client-activities',
+      "if (result.kind === 'transaction') return;\nrecord(result.latencyMs);",
+      "if (result.kind !== 'statement') return;\nrecord(result.latencyMs);",
+    ],
+    [
+      'orm-runtime-objects-carry-an-activity-source',
+      'const client = orm({\n  runtime: {\n    query: (plan) => getRuntime().query(plan),\n  },\n  context,\n});',
+      'const client = orm({\n  runtime: {\n    query: (plan) => getRuntime().query(plan),\n    [activitySource]: delegatingActivitySource(() => getRuntime()),\n  },\n  context,\n});',
+    ],
+    [
+      'runtime-connections-carry-an-activity-source',
+      'const session = {\n  [transactionStart]: createTransactionStart(),\n  query,\n};',
+      'const session = {\n  [transactionStart]: createTransactionStart(),\n  [activitySource]: self.connectionActivitySource(conn, () => session),\n};',
+    ],
+    [
+      'transaction-activity-takes-a-parent',
+      'await startTransactionActivity({ middleware, context, holdFinishedChildren });',
+      'await startTransactionActivity({ middleware, context, parent: undefined, holdFinishedChildren });',
+    ],
+    [
+      'transaction-activity-takes-a-parent',
+      'class Parent implements ActivityParent {\n  adopt(child) {\n    return () => {};\n  }\n}',
+      'class Parent implements ActivityParent {\n  adopt(child): ActivityChildSlot {\n    return slot;\n  }\n}',
+    ],
+  ])('%s finds the old form and skips the new one', (id, before, after) => {
+    expect({
+      before: detects('extension', id, before),
+      after: detects('extension', id, after),
+    }).toEqual({ before: true, after: false });
+  });
+});
+
+describe('app orm-collection-member-using-reserved detection', () => {
+  it.each([
+    [
+      'a method on the class header line',
+      "class PostCollection extends Collection<Contract, 'Post'> { using(tag: string) { return this.where({ tag }); } }",
+    ],
+    [
+      'a method on its own line',
+      "class PostCollection extends Collection<Contract, 'Post'> {\n  using(tag: string) {\n    return this.where({ tag });\n  }\n}",
+    ],
+  ])('finds %s', (_name, content) => {
+    expect(detects('app', 'orm-collection-member-using-reserved', content)).toBe(true);
+  });
+
+  it('skips a read of the using member', () => {
     expect(
       detects(
-        'extension',
-        'queryable-carries-the-activity-source',
-        '{ ...runtime,\n  queryTimeout: 1000 }',
+        'app',
+        'orm-collection-member-using-reserved',
+        "class PostCollection extends Collection<Contract, 'Post'> { search(q: string) { return this.using.post_search(q); } }",
       ),
     ).toBe(false);
   });

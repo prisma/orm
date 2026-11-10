@@ -4,10 +4,13 @@ A typed CRUD query builder for MongoDB contracts. Reads, writes, pipeline aggreg
 
 ## Quick start
 
-```typescript
-import { mongoQuery } from '@internal/mongo-query-builder';
+`mongoQuery({ context })` takes an execution context, as `sql({ context })` does. Applications get the builder as `mongoStatic({ contract }).query` or `db.query`, whose context holds the contract `mongoStatic()` or `mongo()` validated.
 
-const q = mongoQuery({ contract });
+```typescript
+import { acc } from '@prisma/orm-mongo/query-builder';
+import mongoStatic from '@prisma/orm-mongo/static';
+
+const q = mongoStatic({ contract }).query;
 
 // Read — aggregation pipeline
 const analytics = q

@@ -11,7 +11,7 @@ import { isExpression } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import type { StructuredError } from '@internal/utils/structured-error';
+import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
 import { cachedFor } from './contract-cache';
 import { ormError } from './orm-errors';
 import {
@@ -472,6 +472,10 @@ export function resolveVariantFieldColumns(
   );
 }
 
+function isTableAmbiguousError(error: unknown): boolean {
+  return isStructuredError(error) && error.code === 'CONTRACT.TABLE_AMBIGUOUS';
+}
+
 /** Every column of a table, in table order. */
 export function getAllTableColumns(
   contract: Contract<SqlStorage>,
@@ -483,7 +487,7 @@ export function getAllTableColumns(
   } catch (error) {
     // Surface the ambiguous-bare-name fail-fast rather than masking it as an
     // unknown table.
-    if (error instanceof Error && error.message.includes('ambiguous')) {
+    if (isTableAmbiguousError(error)) {
       throw error;
     }
     throw ormError('ORM.TABLE_UNKNOWN', `Unknown table "${tableName}" in SQL ORM query planner`, {
@@ -566,11 +570,11 @@ export function addressedModel(
     : [variant.namespaceId, variant.modelName];
 }
 
-interface ResolvedThrough extends ContractRelationThrough {
+export interface ResolvedThrough extends ContractRelationThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface ResolvedRelation {
+export interface ResolvedRelation {
   readonly to: string;
   readonly toNamespace: string;
   readonly cardinality: RelationCardinalityTag | undefined;
@@ -861,7 +865,7 @@ export function resolveRowIdentityColumns(
     // mask it as "table has no identity columns" (which surfaces as a
     // misleading "no primary key" error). A genuinely unknown table stays
     // lenient and resolves to no identity columns.
-    if (error instanceof Error && error.message.includes('ambiguous')) {
+    if (isTableAmbiguousError(error)) {
       throw error;
     }
     return [];
@@ -921,6 +925,18 @@ export function hasCompleteUniqueKey(
   );
 }
 
+/** Whether the contract gives the column an `autoincrement()` default, so the database numbers its value itself. */
+export function isAutoIncrementColumn(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  column: string,
+): boolean {
+  const columnDefault = storageTableForContract(contract, namespaceId, tableName).columns[column]
+    ?.default;
+  return columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()';
+}
+
 export function assertReturningCapability(contract: Contract<SqlStorage>, action: string): void {
   if (hasContractCapability(contract, 'returning')) {
     return;
@@ -937,9 +953,11 @@ export function assertInsertConflictSkipCapability(
   targeted: boolean,
 ): void {
   requireCapability(contract, action, 'insertOnConflictSkip');
-  if (!targeted) {
-    requireCapability(contract, action, 'insertOnConflictWithoutTarget');
-  }
+  requireCapability(
+    contract,
+    action,
+    targeted ? 'insertOnConflictTarget' : 'insertOnConflictWithoutTarget',
+  );
 }
 
 function requireCapability(
@@ -998,6 +1016,10 @@ export function assertLockCapability(
   throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
     meta: { capability, method: methodName },
   });
+}
+
+export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
+  return contract.capabilities['sql']?.['defaultInInsert'] === true;
 }
 
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {

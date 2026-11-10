@@ -130,9 +130,9 @@ To prevent this, the store keeps a version number for every key, including keys 
 const store = createInMemoryCacheStore();
 const cache = createCacheMiddleware({ store });
 
-const entry = await store.get({ key: 'user-1', meta: undefined }); // version 0, no value
-await cache.invalidate({ keys: ['user-1'] });                      // the store moves user-1 to version 1
-await store.set(entry, rows);                                      // false: version 0 is no longer current
+const entry = await store.get({ key: 'user-1' }); // version 0, no value
+await cache.invalidate({ keys: ['user-1'] });     // the store moves user-1 to version 1
+await store.set(entry, rows);                     // false: version 0 is no longer current
 ```
 
 For each read in flight, the middleware keeps the entry `get` returned. When the read completes from the database, the middleware calls `set` with that entry and the rows. If the store refuses, the middleware logs the debug event `middleware.cache.store-skipped` and moves on. The middleware keeps no counters of its own. Because the version lives in the store, the check works across every process that shares the store: an invalidation in one process stops a read already running in another process from storing its rows.
@@ -173,12 +173,12 @@ export interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
 export interface CacheStore<TMeta = unknown, TValue = CachedValue> {
   get(target: {
     readonly key: string;
-    readonly meta: TMeta | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<CacheEntry<TMeta, TValue>>;
   set(entry: CacheEntry<TMeta, TValue>, value: TValue): Promise<boolean>;
   unset(target: {
-    readonly keys: readonly string[] | undefined;
-    readonly meta: TMeta | undefined;
+    readonly keys?: readonly string[] | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<void>;
 }
 ```
@@ -195,8 +195,9 @@ A store author takes on these obligations:
 3. `unset` removes a key from every `meta` index when it removes the key.
 4. An increased version is kept at least as long as a read can take.
 5. A store that cannot act on a `meta` it is given throws rather than ignoring it.
-6. `unset` does not run queries through the runtime that uses the middleware.
-7. `get` gives back a value equivalent to the one `set` was given, `kind` included. A call result holds the values codecs decoded, such as `Date`, `bigint`, Temporal values and extension class instances, so a store that serializes needs a serializer that rebuilds those types; JSON does not. The key does not cover how values are decoded, so a deploy that changes what a codec returns needs a new key prefix for a shared store.
+6. A field the caller leaves out of `get` or `unset` means the same as `undefined`. The store does not tell the two apart.
+7. `unset` does not run queries through the runtime that uses the middleware.
+8. `get` gives back a value equivalent to the one `set` was given, `kind` included. A call result holds the values codecs decoded, such as `Date`, `bigint`, Temporal values and extension class instances, so a store that serializes needs a serializer that rebuilds those types; JSON does not. The key does not cover how values are decoded, so a deploy that changes what a codec returns needs a new key prefix for a shared store.
 
 The value type defaults to `CachedValue`, what this middleware stores: the raw rows of a statement, or the result of a client activity, such as an ORM call (ADR 271). The middleware tags each value with what produced it, `statement-rows` or `call-result`, and serves `statement-rows` only to a statement and `call-result` only to a client activity, so under one key a statement's rows and a client activity's result never stand in for each other. `createCacheMiddleware` accepts only a store of `CachedValue`. The value type is a parameter so the same store type can serve other caches. Every method takes one object, or an entry and a value, so a store written against a different argument shape fails to compile instead of misreading its arguments. `unset` is required, because a store that cannot remove entries brings back the stale reads this design exists to prevent.
 

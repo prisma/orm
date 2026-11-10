@@ -27,8 +27,9 @@ import type { JsonValue } from '@internal/target-postgres/codec-types';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { type as arktype } from 'arktype';
+import type { Temporal as TemporalTypes } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 import type { Contract } from './fixtures/contract.d';
 import contractJson from './fixtures/contract.json' with { type: 'json' };
 import { postgresTypeLookups } from './postgres-type-lookups';
@@ -211,27 +212,24 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
         pgvector: pgvectorPack,
       },
     },
-    ({ type, field, model }) => {
+    ({ type, field, model, gen }) => {
       const Embedding = type.pgvector.Vector(1536);
 
       expectTypeOf(Embedding.codecId).toEqualTypeOf<'pg/vector@1'>();
       expectTypeOf(Embedding.typeParams.length).toEqualTypeOf<1536>();
 
       return {
-        types: {
-          Embedding,
-        },
         models: {
           User: model('User', {
             fields: {
-              id: field.int().default(autoincrement()).id(),
-              email: field.text().unique(),
-              age: field.int(),
-              isActive: field.boolean().default(true),
-              score: field.float().optional(),
-              profile: field.json().optional(),
-              embedding: field.namedType(Embedding).optional(),
-              createdAt: field.temporal.createdAt(),
+              id: field.column(type.Int()).default(autoincrement()).id(),
+              email: field.column(type.String()).unique(),
+              age: field.column(type.Int()),
+              isActive: field.column(type.Boolean()).default(true),
+              score: field.column(type.Float()).optional(),
+              profile: field.column(type.Jsonb()).optional(),
+              embedding: field.column(Embedding).optional(),
+              createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
             },
           }).sql({
             table: 'user',
@@ -241,9 +239,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
     },
   );
 
-  type CallbackStorageTypes = NonNullable<typeof contract.storage.types>;
-
-  expectTypeOf<CallbackStorageTypes['Embedding']['codecId']>().toEqualTypeOf<'pg/vector@1'>();
+  expectTypeOf<keyof NonNullable<typeof contract.storage.types>>().toBeNever();
   expectTypeOf(
     contract.storage.namespaces['public'].entries.table.user.columns.id.codecId,
   ).toEqualTypeOf<'pg/int4@1'>();
@@ -265,12 +261,9 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
   expectTypeOf(
     contract.storage.namespaces['public'].entries.table.user.columns.createdAt.codecId,
   ).toEqualTypeOf<'pg/timestamptz-temporal@1'>();
-  // `role.typeRef` and `embedding.typeRef` capture is gated on the
-  // descriptor-level generic forwarding noted above; the contract
-  // still carries the correct typeRef strings at runtime.
   expectTypeOf(
-    contract.storage.namespaces['public'].entries.table.user.columns.embedding.typeRef,
-  ).toEqualTypeOf<'Embedding'>();
+    contract.storage.namespaces['public'].entries.table.user.columns.embedding.typeParams,
+  ).toEqualTypeOf<{ readonly length: 1536 }>();
 });
 
 test('integrated callback authoring hides extension namespaces when packs are absent', () => {
@@ -302,12 +295,16 @@ test('local field and belongsTo sql overlays stay typed', () => {
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
     },
-    ({ field }) => {
+    ({ field, gen, type }) => {
       const User = model('User', {
         fields: {
-          id: field.id.uuidv4String().sql({ id: { name: 'user_pkey' } }),
+          id: field
+            .column(type.Char(36))
+            .id()
+            .onCreate(gen.uuid())
+            .sql({ id: { name: 'user_pkey' } }),
           email: field
-            .text()
+            .column(type.String())
             .unique()
             .sql({ unique: { name: 'user_email_key' } }),
         },
@@ -315,8 +312,8 @@ test('local field and belongsTo sql overlays stay typed', () => {
 
       const Post = model('Post', {
         fields: {
-          id: field.id.uuidv4String(),
-          authorId: field.uuidString().sql({ column: 'author_id' }),
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          authorId: field.column(type.Char(36)).sql({ column: 'author_id' }),
         },
         relations: {
           author: rel
@@ -353,12 +350,12 @@ test('explicit generated id helpers stay typed', () => {
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
     },
-    ({ field }) => {
+    ({ field, gen, type }) => {
       const ShortLink = model('ShortLink', {
         fields: {
-          id: field.id.nanoid({ size: 16 }, { name: 'short_link_pkey' }),
-          ownerId: field.uuidString(),
-          publicId: field.nanoid({ size: 16 }),
+          id: field.column(type.Char(16)).id({ name: 'short_link_pkey' }).onCreate(gen.nanoid(16)),
+          ownerId: field.column(type.Char(36)),
+          publicId: field.column(type.Char(16)),
         },
       }).sql({
         table: 'short_link',
@@ -372,17 +369,6 @@ test('explicit generated id helpers stay typed', () => {
           }
         | undefined
       >();
-
-      if (typecheckOnly) {
-        // @ts-expect-error uuidv7String helper accepts only an optional trailing PK-name object
-        field.id.uuidv7String({ size: 16 });
-
-        // @ts-expect-error nanoid size must be a number
-        field.id.nanoid({ size: '16' });
-
-        // @ts-expect-error scalar nanoid size must be a number
-        field.nanoid({ size: '16' });
-      }
 
       return { models: {} };
     },
@@ -606,24 +592,26 @@ test('read: non-enum fields keep their codec output, unchanged from main', () =>
   type Row = ResultType<typeof plan>;
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
   expectTypeOf<Row['email']>().toEqualTypeOf<string>();
-  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Temporal.Instant>();
+  expectTypeOf<Row['createdAt']>().toEqualTypeOf<TemporalTypes.Instant>();
 });
 
+declare const createdAt: Temporal.Instant;
+
 test('write: enum insert accepts the value union and rejects out-of-union literals', () => {
-  enumDb.public.account.insert([{ id: 1, email: 'a@b.c', role: 'user', priority: 1 }]);
+  enumDb.public.account.insert([{ id: 1, email: 'a@b.c', createdAt, role: 'user', priority: 1 }]);
   enumDb.public.account.insert([
-    { id: 2, email: 'a@b.c', role: 'admin', status: 'active', priority: 10 },
+    { id: 2, email: 'a@b.c', createdAt, role: 'admin', status: 'active', priority: 10 },
   ]);
   enumDb.public.account.insert([
-    { id: 3, email: 'a@b.c', role: 'user', status: null, priority: 10 },
+    { id: 3, email: 'a@b.c', createdAt, role: 'user', status: null, priority: 10 },
   ]);
 
   enumDb.public.account.insert([
     // @ts-expect-error 'nope' is not a Role member value.
-    { id: 4, email: 'a@b.c', role: 'nope', priority: 1 },
+    { id: 4, email: 'a@b.c', createdAt, role: 'nope', priority: 1 },
   ]);
   enumDb.public.account.insert([
     // @ts-expect-error 99 is not a PriorityInt member value.
-    { id: 5, email: 'a@b.c', role: 'user', priority: 99 },
+    { id: 5, email: 'a@b.c', createdAt, role: 'user', priority: 99 },
   ]);
 });

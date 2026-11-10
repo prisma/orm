@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
-import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
+import { errorMigrationPlanningFailed, errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
@@ -211,18 +211,22 @@ describe('migration plan --rename', () => {
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
   });
 
-  it('fails planning when the storage changed but the planner planned nothing, statements or not', async () => {
+  it('writes a migration with no operations when the storage changed but the planner planned nothing', async () => {
     const project = await renamingProject();
     const run = await harness(project, { operations: [] }).run(
-      ['migration', 'plan', '--rename', 'Profile:User', '--json'],
+      ['migration', 'plan', '--name', 'delta', '--rename', 'Profile:User', '--json'],
       { cwd: project.dir },
     );
 
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: { ok: false, error: { code: 'MIGRATION.PLANNING_FAILED' } },
+    expect(run.presented?.data).toMatchObject({
+      noOp: false,
+      operations: [],
+      appliedStatements: [{ statement: profileToUser, operationIndexes: [] }],
     });
-    expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    expect((await plannedDirs(project)).map((dir) => dir.replace(/^\d{8}T\d{4}_/, ''))).toEqual([
+      'initial',
+      'delta',
+    ]);
   });
 
   it('passes the statements to the delta of an auto-baseline plan only', async () => {
@@ -331,7 +335,7 @@ describe('migration plan --rename', () => {
     });
   });
 
-  it('writes nothing when the auto-baseline delta is refused, and only the baseline when it has no operations', async () => {
+  it('writes nothing when the auto-baseline delta is refused, and the baseline and the delta when it has no operations', async () => {
     const refusedProject = await renamingProject({ history: false });
     const refused = await harness(refusedProject, { refuseStatements: true }).run(
       ['migration', 'plan', '--name', 'delta', '--rename', 'Profile:User', '--json'],
@@ -360,7 +364,7 @@ describe('migration plan --rename', () => {
       },
     }).toEqual({
       refused: { kind: 'statementRefused', dirs: [] },
-      empty: { kind: 'noDatabaseChange', dirs: ['baseline'] },
+      empty: { kind: undefined, dirs: ['baseline', 'delta'] },
     });
   });
 });
@@ -471,6 +475,35 @@ describe('migration plan --convert and --backfill', () => {
       text: `Existing rows get '' in field "User.email". To choose the value, plan again with --backfill User.email.`,
     });
   });
+
+  it.each([
+    ['an error', new Error('codec lookup failed'), 'CLI.UNEXPECTED'],
+    [
+      'a planning refusal',
+      errorMigrationPlanningFailed({
+        conflicts: [
+          {
+            kind: 'nullabilityConflict',
+            summary: 'Value object field "GeoPoint.country" is required',
+          },
+        ],
+      }),
+      'MIGRATION.PLANNING_FAILED',
+    ],
+  ])(
+    'fails on %s an operation rejects with beside a placeholder, and writes nothing',
+    async (_, rejection, code) => {
+      const project = await typeChangeProject();
+      const run = await harness(project, {
+        operations: [ADDITIVE_OP],
+        throwOnOperations: errorUnfilledPlaceholder('backfill'),
+        alsoThrowOnOperations: rejection,
+      }).run(['migration', 'plan', '--json'], { cwd: project.dir });
+
+      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code } });
+      expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    },
+  );
 
   it('reports a delete that answers a type change as accepting the lossy type change', async () => {
     const project = await typeChangeProject();

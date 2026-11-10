@@ -5,7 +5,7 @@ import type { StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  accessWideningQuestion,
+  accessChangeQuestion,
   dataLossQuestion,
   type PlanAnswer,
   type PlanQuestion,
@@ -63,9 +63,11 @@ const origin = {
       },
     },
   },
+  storage: { namespaces: {} },
 };
 const destination = {
   domain: { namespaces: { app: { models: { User: { fields: {}, relations: {}, storage: {} } } } } },
+  storage: { namespaces: {} },
 };
 const contracts = {
   origin,
@@ -96,7 +98,7 @@ function planQuestions(): readonly PlanQuestion[] {
       },
       contracts,
     ),
-    accessWideningQuestion(
+    accessChangeQuestion(
       {
         operationIndex: 2,
         label: 'Disable row-level security on "User"',
@@ -118,7 +120,7 @@ function askThenApply(questions: () => readonly PlanQuestion[]) {
   };
 }
 
-const answers: PlanAnswer[] = [];
+const answers: (PlanAnswer | undefined)[] = [];
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-db-update-consent');
@@ -172,7 +174,7 @@ function applySuccess(mode: 'plan' | 'apply'): Record<string, unknown> {
     marker: { storageHash: MARKER_HASH },
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     summary: 'Database updated',
   };
 }
@@ -280,7 +282,7 @@ describe('db update questions', () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(answers.map(({ verb }) => verb)).toEqual(['delete', 'delete', 'allow']);
+    expect(answers.map((answer) => answer?.verb)).toEqual(['delete', 'delete', 'allow']);
   });
 
   it('does not take --confirm or --yes as an answer', async () => {
@@ -298,7 +300,31 @@ describe('db update questions', () => {
     ]);
   });
 
-  it('refuses --convert and --backfill before it plans anything, naming migration plan', async () => {
+  it('refuses a --delete of what a --rename of the same run renames, before it plans anything', async () => {
+    const run = await harness().run(
+      [
+        'db',
+        'update',
+        '--rename',
+        'Status.ARCHIVED:Status.RETIRED',
+        '--delete',
+        'Status.ARCHIVED',
+        '--json',
+      ],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).not.toBe(0);
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_INVALID',
+        why: '--delete Status.ARCHIVED names what --rename Status.ARCHIVED:Status.RETIRED renames in the same run, so it cannot also be deleted.',
+      },
+    });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
     mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
     const run = await harness().run(
       [
@@ -328,12 +354,7 @@ describe('db update questions', () => {
           }),
           expect.anything(),
         ],
-        meta: {
-          statements: [
-            { verb: 'convert', text: 'User.age' },
-            { verb: 'backfill', text: 'User.email' },
-          ],
-        },
+        meta: { statements: [{ verb: 'backfill', text: 'User.email' }] },
       },
     });
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
@@ -388,6 +409,37 @@ describe('db update questions', () => {
     });
 
     expect(envelopeOf(run.json)).toMatchObject({ error: { code: 'CLI.CONSENT_UNUSED' } });
+  });
+
+  it('hands a --convert with one or two names to the control API, which tells a variant from a field', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--dry-run', '--convert', 'Bug', '--convert', 'app.Epic', '--json'],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statements: [
+          { verb: 'convert', text: 'Bug' },
+          { verb: 'convert', text: 'app.Epic' },
+        ],
+      }),
+    );
+  });
+
+  it('refuses a --convert with three names before it plans anything, since it names a field', async () => {
+    const run = await harness().run(['db', 'update', '--convert', 'app.User.age', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        meta: { statements: [{ verb: 'convert', text: 'app.User.age' }] },
+      },
+    });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
   });
 
   it('asks nothing on a dry run, and hands it the delete and allow flags to check', async () => {

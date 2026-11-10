@@ -32,6 +32,7 @@ import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
 import { type ParseDiagnostic, parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -333,7 +334,7 @@ const resolveToSchemaWithMapAttributes: ResolveInputs = async () => {
 async function recursiveCompletionResolution(): Promise<ConfigResolution> {
   const sql = (await import(
     new URL(
-      '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+      '../../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
       import.meta.url,
     ).href
   )) as { sqlAttributeSpecs: AttributeSpecNamespace };
@@ -4261,7 +4262,7 @@ describe('language server config failure surfacing', {
     ]);
   });
 
-  it('publishes the structured error why text instead of the generic envelope title', async () => {
+  it('publishes the structured error why text and fix instead of the generic envelope title', async () => {
     harness = startHarness(async () => {
       throw errorUnexpected('boom', { why: 'Failed to load config: boom' });
     });
@@ -4269,7 +4270,25 @@ describe('language server config failure surfacing', {
     openDocument(harness, schemaUri, cleanSchema);
 
     const published = await harness.waitForDiagnostics(configUri);
-    expect(published).toEqual([expectedConfigFailure('Failed to load config: boom')]);
+    expect(published).toEqual([
+      expectedConfigFailure('Failed to load config: boom\nCheck the error message and try again'),
+    ]);
+  });
+
+  it('publishes the why and fix of a plain structured error that is not a CLI error', async () => {
+    harness = startHarness(async () => {
+      throw structuredError('CONFIG.LOAD_FAILED', 'Config failed', {
+        why: 'The adapter package is missing',
+        fix: 'Install the adapter package',
+      });
+    });
+    await harness.initialize();
+    openDocument(harness, schemaUri, cleanSchema);
+
+    const published = await harness.waitForDiagnostics(configUri);
+    expect(published).toEqual([
+      expectedConfigFailure('The adapter package is missing\nInstall the adapter package'),
+    ]);
   });
 
   it('publishes the config diagnostic exactly once when two documents await the same load', async () => {
