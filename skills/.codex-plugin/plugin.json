@@ -1,9 +1,10 @@
 {
   "name": "prisma",
-  "description": "Prisma 8 agent skill",
+  "version": "0.1.1",
+  "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries.",
   "author": {
     "name": "Prisma",
-    "url": "https://github.com/prisma"
+    "url": "https://www.prisma.io"
   },
   "homepage": "https://www.prisma.io",
   "repository": "https://github.com/prisma/orm",
@@ -13,17 +14,30 @@
     "orm",
     "database",
     "typescript",
-    "migrations"
+    "migrations",
+    "contract-first",
+    "coding-agents"
   ],
-  "skills": [
-    "./prisma-8"
-  ],
+  "skills": ["./prisma-8"],
   "interface": {
     "displayName": "Prisma",
-    "shortDescription": "Prisma 8 agent skill",
-    "longDescription": "Agent skill for Prisma 8, installed from the skill already in this repository. Complements prisma skills sync from the installed packages.",
+    "shortDescription": "Build with Prisma 8 through its agent skill",
+    "longDescription": "Prisma 8 is a contract-first TypeScript data layer. This plugin installs the prisma-8 agent skill already maintained in this repository, so coding agents edit the data contract, run prisma contract emit, plan and apply migrations, and write typed db.orm / db.sql / db.query queries against the version the skill describes.\n\nUse it in projects that depend on @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo (Prisma 8, formerly Prisma Next): changing contract.prisma or a contract.ts builder, wiring db.ts or middleware, integrating a build tool, using the Supabase extension or RLS, upgrading Prisma 8, or reading a dotted error code such as MIGRATION.HASH_MISMATCH. Do not use it for Prisma ORM 7 or earlier (schema.prisma + @prisma/client).\n\nThe skill ships inside the ORM packages and is also copied with prisma skills sync. This marketplace listing is a second install path for users who want the skill from the repo before or without that sync.",
     "developerName": "Prisma",
     "category": "Developer Tools",
-    "websiteURL": "https://www.prisma.io"
+    "capabilities": [
+      "Contract-first data modelling",
+      "Migration authoring and review",
+      "Typed ORM and SQL queries"
+    ],
+    "websiteURL": "https://www.prisma.io",
+    "defaultPrompt": [
+      "Add a User model with a posts relation and emit the Prisma 8 contract",
+      "Write a Prisma 8 query that loads each user with their five most recent published posts",
+      "Plan a migration after I change the data contract"
+    ],
+    "brandColor": "#01D7E4",
+    "composerIcon": "./assets/logo.svg",
+    "logo": "./assets/logo.svg"
   }
 }
