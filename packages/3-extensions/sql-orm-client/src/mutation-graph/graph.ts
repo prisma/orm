@@ -10,10 +10,11 @@ import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId, type StorageRow } from './edge';
 import { FilterData } from './filter-data';
-import type { Node, Slot, Slots, StatementAst } from './node';
+import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
 import { PayloadData } from './payload-data';
 import { Requires } from './requires';
 import { Rows } from './rows';
+import { type Rule, rulesFor } from './rules';
 import { State, StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
@@ -24,6 +25,7 @@ export interface Reader {
 
 export class Graph {
   readonly #contract: Contract<SqlStorage>;
+  readonly #rules: readonly Rule[];
   #ids: NodeId[] = [];
   #nodes: (Node | undefined)[] = [];
   #inputs: Record<string, Slot>[] = [];
@@ -33,6 +35,7 @@ export class Graph {
 
   constructor(contract: Contract<SqlStorage>) {
     this.#contract = contract;
+    this.#rules = rulesFor(contract);
   }
 
   get result(): NodeId | undefined {
@@ -43,7 +46,28 @@ export class Graph {
     this.#result = node;
   }
 
-  add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
+  add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs>;
+  add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId;
+  add<Inputs extends Slots>(node: Node<Inputs>, inputs?: InputEdges<Inputs>): NodeId {
+    if (inputs === undefined) {
+      return this.#addNode(node);
+    }
+    for (const rule of this.#rules) {
+      const standing = rule(this, node, inputs);
+      if (standing !== undefined) {
+        return standing;
+      }
+    }
+    const id = this.#addNode(node);
+    for (const [slot, edges] of Object.entries<Slot | undefined>(inputs)) {
+      for (const edge of [edges ?? []].flat()) {
+        this.#addEdge(id, slot, edge);
+      }
+    }
+    return id;
+  }
+
+  #addNode<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
     if (!(node instanceof StatementNode)) {
       return this.#append(node);
     }
@@ -68,8 +92,7 @@ export class Graph {
     columns: readonly ColumnMapping[],
     changed: Readonly<StorageRow> = {},
   ): void {
-    this.#read(from, columns);
-    this.#connect(to, 'filter', new FilterData(from, columns, changed));
+    this.#addEdge(to, 'filter', new FilterData(from, columns, changed));
   }
 
   addPayloadDataEdge(
@@ -77,8 +100,7 @@ export class Graph {
     to: NodeId<{ payload: PayloadData[] }>,
     columns: readonly ColumnMapping[],
   ): void {
-    this.#read(from, columns);
-    this.#connect(to, 'payload', new PayloadData(from, columns));
+    this.#addEdge(to, 'payload', new PayloadData(from, columns));
   }
 
   addRowsEdge<Name extends string>(
@@ -87,12 +109,42 @@ export class Graph {
     slot: Name,
     columns: readonly ColumnMapping[],
   ): void {
-    this.#read(from, columns);
-    this.#connect(to, slot, new Rows(from, columns));
+    this.#addEdge(to, slot, new Rows(from, columns));
   }
 
   addRequiresEdge(from: NodeId, to: NodeId<{ requires: Requires[] }>): void {
-    this.#connect(to, 'requires', new Requires(from));
+    this.#addEdge(to, 'requires', new Requires(from));
+  }
+
+  moveReaders(from: NodeId, to: NodeId): void {
+    for (const { reader, edge } of this.readersOf(from)) {
+      const moved = edge.withFrom(to);
+      const swap = (other: Edge<unknown>) => (other === edge ? moved : other);
+      this.#inputs[reader] = Object.fromEntries(
+        Object.entries(this.inputsOf(reader)).map(([name, slot]) => [
+          name,
+          Array.isArray(slot) ? slot.map(swap) : swap(slot),
+        ]),
+      );
+      if (moved instanceof DataEdge) {
+        this.#read(to, moved.columns);
+      }
+      this.#readers[to]?.push({ reader, edge: moved });
+    }
+    this.#readers[from] = [];
+  }
+
+  nodeAt(id: NodeId): Node | undefined {
+    return this.#nodes[id];
+  }
+
+  latestWriteOf(table: TableSource): NodeId | undefined {
+    const state = this.#states.get(tableKey(storageOf(table)));
+    if (state === undefined) {
+      return undefined;
+    }
+    const [write] = edgesIn(this.inputsOf(state));
+    return write?.from;
   }
 
   sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
@@ -157,6 +209,13 @@ export class Graph {
     );
     this.#readers.push([]);
     return id;
+  }
+
+  #addEdge(to: NodeId, slot: string, edge: Edge<unknown>): void {
+    if (edge instanceof DataEdge) {
+      this.#read(edge.from, edge.columns);
+    }
+    this.#connect(to, slot, edge);
   }
 
   #connect(to: NodeId, slot: string, edge: Edge<unknown>): void {

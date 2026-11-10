@@ -15,6 +15,7 @@ import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
+import { removeUnreadFinds } from './remove-unread-finds';
 import { StatementNode } from './statement-node';
 
 type Context = CollectionContext<Contract<SqlStorage>>;
@@ -30,6 +31,7 @@ export function queryGraph<Row>(
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions,
 ): AsyncIterableResult<Row> {
+  removeUnreadFinds(graph);
   returnCallerColumns(graph, callerRows);
   const [only, ...others] = statementNodes(graph);
   // A graph with one statement node is one statement. It runs without a transaction and its rows
@@ -39,7 +41,9 @@ export function queryGraph<Row>(
   if (only !== undefined && others.length === 0 && only[0] === graph.result) {
     const [id, node] = only;
     const run = runOn(ctx, ctx.runtime);
-    const storageRows = rowStream(node.execute(inputsOf(graph, id, []), run));
+    const storageRows = afterChecks(graph, ctx, () =>
+      rowStream(node.execute(inputsOf(graph, id, []), run)),
+    );
     return shapeRows<Row>(graph, id, storageRows, callerRows);
   }
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
@@ -50,6 +54,7 @@ export function queryGraph<Row>(
 }
 
 export async function executeGraph(graph: Graph, ctx: Context): Promise<SqlStatementStats> {
+  removeUnreadFinds(graph);
   const outcome = await runAllNodes(graph, ctx, undefined);
   return { affectedRows: outcome.count };
 }
@@ -74,6 +79,7 @@ async function runAllNodes<Row>(
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
+  checkNodes(graph, ctx);
   const { runtime } = ctx;
   if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
     return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
@@ -145,11 +151,30 @@ function inputsOf(graph: Graph, id: NodeId, collected: Collected): OutputsOf<Slo
   return outputs;
 }
 
+function checkNodes(graph: Graph, ctx: Context): void {
+  for (const [id, node] of graph.nodes()) {
+    node.check(graph, id, ctx.context);
+  }
+}
+
+function afterChecks(
+  graph: Graph,
+  ctx: Context,
+  rows: () => AsyncIterableResult<StorageRow>,
+): AsyncIterableResult<StorageRow> {
+  const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
+    checkNodes(graph, ctx);
+    yield* rows();
+  };
+  return new AsyncIterableResult(generator());
+}
+
 function runOn(ctx: Context, scope: RuntimeScope): Run {
-  const { contract } = ctx.context;
+  const { context } = ctx;
   const planOf = (ast: StatementAst) =>
-    buildOrmQueryPlan<StorageRow>(contract, ast, deriveParamsFromAst(ast).params);
+    buildOrmQueryPlan<StorageRow>(context.contract, ast, deriveParamsFromAst(ast).params);
   return {
+    context,
     query: (ast) => queryPlanRows(scope, planOf(ast)),
     execute: (ast) => scope.execute(planOf(ast)),
   };

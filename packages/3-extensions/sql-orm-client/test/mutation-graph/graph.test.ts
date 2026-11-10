@@ -10,6 +10,7 @@ import { Rows } from '../../src/mutation-graph/rows';
 import { StateEdge } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
+import { printGraph } from './print-graph';
 import {
   columnMappings,
   deletePosts,
@@ -60,6 +61,132 @@ describe('Graph', () => {
 
       expect(graph.inputsOf(graph.add(new UnionAll()))).toEqual({ rows: [] });
       expect(graph.inputsOf(graph.add(new CrossJoin()))).toEqual({});
+    });
+  });
+
+  describe('add with inputs', () => {
+    it('adds the node with each edge in its slot, and the source lists the node as its reader', () => {
+      const graph = newGraph();
+      const find = graph.add(findUsers([], ['id', 'email']));
+
+      const del = graph.add(deletePosts(), {
+        filter: [new FilterData(find, idToUserId), new FilterData(find, emailToTitle)],
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find users',
+          'n2 Delete posts <- FilterData n1 (id->user_id), FilterData n1 (email->title)',
+          'result: none',
+        ].join('\n'),
+      );
+      expect(graph.readersOf(find)).toEqual([
+        { reader: del, edge: new FilterData(find, idToUserId) },
+        { reader: del, edge: new FilterData(find, emailToTitle) },
+      ]);
+    });
+
+    it('adds the same state edges as adding the node and then its edges', () => {
+      const withInputs = newGraph();
+      const update = withInputs.add(updateUsers({ name: 'Ada' }));
+      withInputs.add(deletePosts(), { filter: [new FilterData(update, idToUserId)] });
+      const edgeByEdge = newGraph();
+      const sameUpdate = edgeByEdge.add(updateUsers({ name: 'Ada' }));
+      edgeByEdge.addFilterDataEdge(sameUpdate, edgeByEdge.add(deletePosts()), idToUserId);
+
+      expect(printGraph(withInputs, { state: true })).toBe(printGraph(edgeByEdge, { state: true }));
+    });
+
+    it('makes each source of a data edge return the columns the edge reads', () => {
+      const graph = newGraph();
+      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+      const find = graph.add(findUsers([], ['name']));
+
+      graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])), {
+        payload: [new PayloadData(user, idToUserId)],
+        requires: [new Requires(find)],
+      });
+
+      expect([returned(graph, user), returned(graph, find)]).toEqual([['id'], ['name']]);
+    });
+
+    it('puts an edge into a slot that holds one edge', () => {
+      const graph = newGraph();
+      const left = graph.add(findUsers());
+      const right = graph.add(findUsers());
+
+      const join = graph.add(new CrossJoin(), {
+        left: new Rows(left, sameId),
+        right: new Rows(right, sameId),
+      });
+
+      expect(graph.inputsOf(join)).toEqual({
+        left: new Rows(left, sameId),
+        right: new Rows(right, sameId),
+      });
+    });
+  });
+
+  describe('moveReaders', () => {
+    it('points every edge that reads one node at another, in the slot it was in', () => {
+      const graph = newGraph();
+      const first = graph.add(findUsers());
+      const second = graph.add(findUsers());
+      const del = graph.add(deletePosts(), { filter: [new FilterData(first, idToUserId)] });
+      const join = graph.add(new CrossJoin(), {
+        left: new Rows(first, sameId),
+        right: new Rows(second, sameId),
+      });
+
+      graph.moveReaders(first, second);
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find users',
+          'n2 Find users',
+          'n3 Delete posts <- FilterData n2 (id->user_id)',
+          'n4 CrossJoin <- Rows n2, Rows n2',
+          'result: none',
+        ].join('\n'),
+      );
+      expect(graph.readersOf(first)).toEqual([]);
+      expect(graph.readersOf(second)).toEqual([
+        { reader: join, edge: new Rows(second, sameId) },
+        { reader: del, edge: new FilterData(second, idToUserId) },
+        { reader: join, edge: new Rows(second, sameId) },
+      ]);
+    });
+
+    it('keeps the new values a FilterData edge gives and moves Requires edges', () => {
+      const graph = newGraph();
+      const first = graph.add(findUsers());
+      const second = graph.add(findUsers());
+      const update = graph.add(updateUsers({ name: 'Ada' }), {
+        filter: [new FilterData(first, sameId, { id: 2 })],
+        requires: [new Requires(first)],
+      });
+
+      graph.moveReaders(first, second);
+
+      expect(graph.inputsOf(update)).toEqual({
+        filter: [new FilterData(second, sameId, { id: 2 })],
+        payload: [],
+        state: [expect.any(StateEdge)],
+        requires: [new Requires(second)],
+      });
+    });
+
+    it('makes the node the edges now read return the columns they read', () => {
+      const graph = newGraph();
+      const first = graph.add(findUsers([], ['id', 'email']));
+      const second = graph.add(findUsers([], ['name']));
+      graph.add(deletePosts(), {
+        filter: [new FilterData(first, idToUserId), new FilterData(first, emailToTitle)],
+      });
+
+      graph.moveReaders(first, second);
+
+      expect(returned(graph, second)).toEqual(['name', 'id', 'email']);
     });
   });
 

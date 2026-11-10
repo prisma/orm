@@ -1,8 +1,18 @@
+import type { ProjectionItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
+import type { NodeId } from '../../src/mutation-graph/edge';
+import { FilterData } from '../../src/mutation-graph/filter-data';
+import { Find } from '../../src/mutation-graph/find';
 import type { Graph } from '../../src/mutation-graph/graph';
+import { type Executed, Node, type Run } from '../../src/mutation-graph/node';
 import { executeGraph, queryGraph } from '../../src/mutation-graph/run-graph';
 import { createCollectionFor } from '../collection-fixtures';
-import { createMockRuntime, type MockExecution, type MockRuntime } from '../helpers';
+import {
+  createMockRuntime,
+  getTestContext,
+  type MockExecution,
+  type MockRuntime,
+} from '../helpers';
 import { printExpression } from './print-expression';
 import {
   addFiltered,
@@ -83,6 +93,45 @@ const idAndName = columnMappings('users', 'posts', [
   ['id', 'user_id'],
   ['name', 'title'],
 ]);
+
+class RefusingFind extends Find {
+  override check(): void {
+    throw new Error('this Find cannot run');
+  }
+
+  override withReturning(columns: readonly ProjectionItem[]): RefusingFind {
+    return new RefusingFind(super.withReturning(columns).ast);
+  }
+}
+
+class ReadsTarget extends Node<Record<string, never>> {
+  readonly slots = {};
+
+  override execute(_inputs: Record<string, never>, run: Run): Executed {
+    return Promise.resolve({ affectedRows: run.context === getTestContext() ? 1 : 0 });
+  }
+}
+
+class Checked extends Node<Record<string, never>> {
+  readonly slots = {};
+  readonly checked: (readonly [NodeId, unknown])[] = [];
+
+  override check(graph: Graph, id: NodeId, context: unknown): void {
+    this.checked.push([id, context === getTestContext() && graph.result === id]);
+  }
+
+  override execute(): Executed {
+    return Promise.resolve({ affectedRows: 0 });
+  }
+}
+
+function failingQueries(runtime: MockRuntime): MockRuntime {
+  return Object.assign(runtime, {
+    query: () => {
+      throw new Error('a select ran');
+    },
+  });
+}
 
 function findThenUpdatePost(columns = idToUserId): Graph {
   const graph = newGraph();
@@ -189,13 +238,13 @@ describe('running a graph', () => {
       expect(runtime.executions).toEqual([]);
     });
 
-    it('still executes the nodes of the graph', async () => {
+    it('still executes the writes of the graph', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.add(findUsers([nameIsAda]));
+      graph.add(deleteUsers(nameIsAda));
 
       expect(await firstRowOf(graph, contextOf(runtime), rowsOfUsers())).toBeNull();
-      expect(statements(runtime)).toEqual(['query select']);
+      expect(statements(runtime)).toEqual(['execute delete']);
     });
   });
 
@@ -465,6 +514,71 @@ describe('running a graph', () => {
       expect(row).toEqual({ name: 'Ada', posts: [] });
       expect(returnedColumns(runtime.executions[0]!)).toEqual(['name', 'posts', 'id']);
       expect(whereText(runtime.executions[1]!, 'users')).toBe('id = 1');
+    });
+  });
+
+  describe('before it runs the first node', () => {
+    it('removes every Find that is not the result and that no node reads', async () => {
+      const runtime = failingQueries(createMockRuntime());
+      runtime.setNextStats([{ affectedRows: 2 }]);
+      const graph = newGraph();
+      const find = graph.add(findUsers([nameIsAda]));
+      graph.add(findUsers(), {
+        filter: [new FilterData(find, columnMappings('users', 'users', [['id', 'id']]))],
+      });
+      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+
+      expect(await affectedBy(graph, contextOf(runtime))).toBe(2);
+    });
+
+    it('fails without running a node when a node refuses to run', async () => {
+      const runtime = createMockRuntime();
+      const graph = newGraph();
+      graph.add(deleteUsers(nameIsAda));
+      graph.setResult(graph.add(new RefusingFind(findUsers().ast)));
+
+      await expect(affectedBy(graph, contextOf(runtime))).rejects.toThrow('this Find cannot run');
+      await expect(queryGraph(graph, contextOf(runtime), rowsOfUsers()).toArray()).rejects.toThrow(
+        'this Find cannot run',
+      );
+      expect(runtime.executions).toEqual([]);
+    });
+
+    it('fails when the only node of the graph refuses to run', async () => {
+      const graph = newGraph();
+      graph.setResult(graph.add(new RefusingFind(findUsers().ast)));
+
+      await expect(
+        queryGraph(graph, contextOf(createMockRuntime()), rowsOfUsers()).toArray(),
+      ).rejects.toThrow('this Find cannot run');
+    });
+
+    it('does not ask a Find it removed', async () => {
+      const graph = newGraph();
+      graph.add(new RefusingFind(findUsers().ast));
+      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+
+      expect(await affectedBy(graph, contextOf(createMockRuntime()))).toBe(0);
+    });
+
+    it('gives each node the graph, its position and the execution context', async () => {
+      const graph = newGraph();
+      const checked = new Checked();
+      const id = graph.add(checked);
+      graph.setResult(id);
+
+      await affectedBy(graph, contextOf(createMockRuntime()));
+
+      expect(checked.checked).toEqual([[id, true]]);
+    });
+  });
+
+  describe('a node', () => {
+    it('reads the execution context from the run it is given', async () => {
+      const graph = newGraph();
+      graph.setResult(graph.add(new ReadsTarget()));
+
+      expect(await affectedBy(graph, contextOf(createMockRuntime()))).toBe(1);
     });
   });
 });

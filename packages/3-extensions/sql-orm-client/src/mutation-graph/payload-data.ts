@@ -21,4 +21,8 @@ export class PayloadData extends DataEdge<Payload> {
       ]),
     );
   }
+
+  override withFrom(from: NodeId): PayloadData {
+    return new PayloadData(from, this.columns);
+  }
 }

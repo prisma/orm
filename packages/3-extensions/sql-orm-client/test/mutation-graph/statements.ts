@@ -30,6 +30,7 @@ import {
   emptyState,
   type RuntimeQueryable,
 } from '../../src/types';
+import { baseContract, withoutCapabilityKeys } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 
 const { contract, aggregateDescriptors } = getTestContext();
@@ -167,6 +168,7 @@ export function recordingRun(
   return {
     queried,
     executed,
+    context: getTestContext(),
     query(ast) {
       queried.push(ast);
       const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
@@ -195,6 +197,10 @@ export function addFiltered<Inputs extends Slots & { filter: FilterData[] }>(
 
 export function newGraph(): Graph {
   return new Graph(contract);
+}
+
+export function newGraphWithoutReturning(): Graph {
+  return new Graph(withoutCapabilityKeys(baseContract, ['returning']));
 }
 
 export function positions(): [NodeId, NodeId, NodeId] {

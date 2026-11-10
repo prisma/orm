@@ -15,6 +15,10 @@ export class StateEdge extends Edge<undefined> {
   override output(): undefined {
     return undefined;
   }
+
+  override withFrom(from: NodeId): StateEdge {
+    return new StateEdge(from, this.table);
+  }
 }
 
 export type StateSlot = { state: StateEdge[] };

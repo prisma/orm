@@ -38,4 +38,8 @@ export class FilterData extends DataEdge<AnyExpression> {
   override output(sourceRow: StorageRow): AnyExpression {
     return keyCondition(this.columns, { ...sourceRow, ...this.changed });
   }
+
+  override withFrom(from: NodeId): FilterData {
+    return new FilterData(from, this.columns, this.changed);
+  }
 }
