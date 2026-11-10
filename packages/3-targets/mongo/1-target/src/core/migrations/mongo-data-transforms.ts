@@ -8,6 +8,7 @@ import {
   type ResolvedFieldConvertStatement,
 } from '@internal/framework-components/control';
 import {
+  collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
   validatorDocumentShapesOf,
@@ -21,7 +22,6 @@ import {
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   collectionControlPolicy,
-  collectionOf,
   EMBEDDED_MODEL_WHY,
   embeddedModelReason,
   type ModelMatchInput,
@@ -76,7 +76,7 @@ function withFilter(filter: Document | undefined, condition: Document): Document
 function unrewritableReason(contract: MongoContract, field: FieldCoordinate): string | undefined {
   const model = modelAt(contract, field);
   if (model === undefined || !Object.hasOwn(model.fields, field.field)) return undefined;
-  const collection = collectionOf(contract, field);
+  const collection = collectionOfModel(contract.domain, field);
   if (collection === undefined) return noCollectionReason(field);
   const storedName = ownStoredNameOf(model, field.field);
   const nameReason = unrewritableFieldNameReason(storedName);
@@ -194,7 +194,7 @@ export function backfillTransform(
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
   }
-  const collection = collectionOf(input.contract, statement.field);
+  const collection = collectionOfModel(input.contract.domain, statement.field);
   if (collection === undefined) {
     return refuse(
       statement,

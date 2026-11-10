@@ -8,6 +8,7 @@ import {
   type ResolvedFieldConvertStatement,
 } from '@internal/framework-components/control';
 import {
+  collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
   validatorDocumentShapesOf,
@@ -18,7 +19,6 @@ import { castsFrom, isConvertTarget } from './bson-convert';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
-  collectionOf,
   destinationFieldOf,
   destinationModelOf,
   embeddedModelReason,
@@ -146,7 +146,7 @@ export function planFieldTypeChanges(
     const destinationModel =
       destination === undefined ? undefined : modelAt(input.contract, destination);
     if (destination === undefined || destinationModel === undefined) return [];
-    const collection = collectionOf(input.contract, destination);
+    const collection = collectionOfModel(input.contract.domain, destination);
     if (collection === undefined || !input.keptCollections.has(collection)) return [];
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
     return Object.keys(model.fields)

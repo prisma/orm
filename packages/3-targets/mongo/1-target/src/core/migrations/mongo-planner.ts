@@ -26,6 +26,7 @@ import {
 } from '@internal/framework-components/control';
 import {
   canonicalize,
+  collectionOfModel,
   indexLookupKey,
   type MongoContract,
   validatorDocumentShapesOf,
@@ -54,7 +55,6 @@ import {
 import {
   type CollectionControl,
   collectionControlOf,
-  collectionOf,
   type DocumentCheckFields,
   type FieldRemoval,
   keepCollectionByHandAdvice,
@@ -82,7 +82,6 @@ import {
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
-  FillFieldCall,
   type RenameFieldCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
@@ -227,7 +226,7 @@ function modelStoredIn(
     ([namespaceId, namespace]) =>
       Object.entries(namespace.models).flatMap(([model, definition]) => {
         const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-        return collectionOf(fromContract, coordinate) === collection
+        return collectionOfModel(fromContract.domain, coordinate) === collection
           ? [{ coordinate, isRoot: definition.base === undefined }]
           : [];
       }),
@@ -295,7 +294,7 @@ function modelStoredInDestination(
 ): string | undefined {
   const namespace = contract.domain.namespaces[model.namespaceId];
   return namespace !== undefined && Object.hasOwn(namespace.models, model.model)
-    ? collectionOf(contract, model)
+    ? collectionOfModel(contract.domain, model)
     : undefined;
 }
 
@@ -495,8 +494,7 @@ function documentChecksOf(
 }
 
 function callCollection(call: OpFactoryCall): string | undefined {
-  if (call instanceof FillFieldCall) return call.options.collection;
-  return 'collection' in call && typeof call.collection === 'string' ? call.collection : undefined;
+  return 'collection' in call ? call.collection : undefined;
 }
 
 /**

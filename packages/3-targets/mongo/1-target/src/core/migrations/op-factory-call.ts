@@ -376,11 +376,15 @@ export class DataTransformCall extends OpFactoryCallNode {
 export class FillFieldCall extends OpFactoryCallNode {
   readonly factoryName = 'fillField' as const;
   readonly operationClass = 'widening' as const;
+  readonly collection: string;
+  readonly field: string;
   readonly options: FillFieldOptions;
   readonly label: string;
 
   constructor(options: FillFieldOptions) {
     super();
+    this.collection = options.collection;
+    this.field = options.field;
     this.options = options;
     this.label = this.toOp().label;
     this.freeze();
@@ -398,11 +402,13 @@ export class FillFieldCall extends OpFactoryCallNode {
 export class CheckDocumentsCall extends OpFactoryCallNode {
   readonly factoryName = 'checkDocuments' as const;
   readonly operationClass = 'widening' as const;
+  readonly collection: string;
   readonly options: CheckDocumentsOptions;
   readonly label: string;
 
   constructor(options: CheckDocumentsOptions) {
     super();
+    this.collection = options.collection;
     this.options = options;
     this.label = this.toOp().label;
     this.freeze();

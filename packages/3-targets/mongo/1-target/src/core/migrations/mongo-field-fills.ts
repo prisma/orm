@@ -6,6 +6,7 @@ import type {
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import {
+  collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
   validatorFieldNamesOf,
@@ -18,7 +19,6 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
-  collectionOf,
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
@@ -113,7 +113,7 @@ function underUniqueIndex(
 export function planFieldFills(input: FillInput): readonly FieldFill[] {
   return modelCoordinates(input.contract).flatMap((model) => {
     const definition = modelAt(input.contract, model);
-    const collection = collectionOf(input.contract, model);
+    const collection = collectionOfModel(input.contract.domain, model);
     if (
       definition === undefined ||
       collection === undefined ||
