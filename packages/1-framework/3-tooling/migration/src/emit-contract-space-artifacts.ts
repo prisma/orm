@@ -17,8 +17,8 @@ import { assertValidSpaceId, spaceRefsDirectory } from './space-layout';
  *
  * - `contractDts` is the pre-rendered `.d.ts` text. Rendering happens in
  *   the SQL family (which owns the codec / typemap input the renderer
- *   needs), so this helper accepts the text verbatim and writes it out
- *   without further transformation.
+ *   needs); this helper writes it through the snapshot store, which puts
+ *   it on one line.
  *
  * - `headRef` is the head reference for the space.
  *   `invariants` are sorted alphabetically before serialisation so two
