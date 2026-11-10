@@ -329,4 +329,36 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'names a field stored under a dotted name, which the validator cannot check',
+    async () => {
+      const dotted = {
+        bsonType: 'object',
+        required: ['_id', 'name', 'addr.zip'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          name: { bsonType: 'string' },
+          'addr.zip': { bsonType: 'string' },
+        },
+        additionalProperties: false,
+      };
+      await live.db().createCollection('users');
+      await live.db().collection('users').insertOne({ name: 'Ada', 'addr.zip': '10115' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: dotted } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        'That document has "addr.zip", which the new validator cannot check: MongoDB reads a name containing "." as a path into embedded documents.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });

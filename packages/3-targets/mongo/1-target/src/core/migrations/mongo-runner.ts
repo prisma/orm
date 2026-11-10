@@ -259,10 +259,19 @@ function problemsAgainst(
   path: string,
 ): readonly string[] {
   const named = (field: string) => JSON.stringify(`${path}${field}`);
+  const unreadable = (field: string) =>
+    field === '_id' ? undefined : unrewritableFieldNameReason(field);
+  const unchecked = [...fields.keys()].flatMap((field) => {
+    const reason = unreadable(field);
+    return reason === undefined
+      ? []
+      : [`has ${named(field)}, which the new validator cannot check: ${reason}`];
+  });
   const missing = shape.required
     .filter((field) => !fields.has(field))
     .map((field) => `has no ${named(field)}`);
   const retyped = [...fields].flatMap(([field, { type }]) => {
+    if (unreadable(field) !== undefined) return [];
     const allowed = allowedBsonTypes(shape.properties[field]);
     return allowed === undefined || allowed.has(type)
       ? []
@@ -272,10 +281,12 @@ function problemsAgainst(
   });
   const undeclared = shape.closed
     ? [...fields.keys()]
-        .filter((field) => !Object.hasOwn(shape.properties, field))
+        .filter(
+          (field) => !Object.hasOwn(shape.properties, field) && unreadable(field) === undefined,
+        )
         .map((field) => `has ${named(field)}, a field the new validator does not name`)
     : [];
-  return [...missing, ...retyped, ...undeclared];
+  return [...unchecked, ...missing, ...retyped, ...undeclared];
 }
 
 /**
