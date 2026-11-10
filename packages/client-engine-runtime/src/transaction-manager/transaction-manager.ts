@@ -300,28 +300,30 @@ export class TransactionManager {
   }
 
   async commitTransaction(transactionId: string): Promise<void> {
-    return await this.tracingHelper.runInChildSpan('commit_transaction', async () => {
-      await this.#withActiveTransactionLock(transactionId, 'commit', async (txw) => {
-        if (txw.depth > 1) {
-          if (!txw.transaction) throw new TransactionNotFoundError()
-          const savepointName = txw.savepoints.at(-1)
-          if (!savepointName) {
-            throw new TransactionInternalConsistencyError(
-              `Missing savepoint for nested commit. Depth: ${txw.depth}, transactionId: ${txw.id}`,
-            )
+    return await this.tracingHelper
+      .runInChildSpan('commit_transaction', async () => {
+        await this.#withActiveTransactionLock(transactionId, 'commit', async (txw) => {
+          if (txw.depth > 1) {
+            if (!txw.transaction) throw new TransactionNotFoundError()
+            const savepointName = txw.savepoints.at(-1)
+            if (!savepointName) {
+              throw new TransactionInternalConsistencyError(
+                `Missing savepoint for nested commit. Depth: ${txw.depth}, transactionId: ${txw.id}`,
+              )
+            }
+            try {
+              await this.#releaseSavepoint(txw.transaction, savepointName)
+            } finally {
+              // Keep internal state consistent even if releasing the savepoint fails.
+              txw.savepoints.pop()
+              txw.depth -= 1
+            }
+            return
           }
-          try {
-            await this.#releaseSavepoint(txw.transaction, savepointName)
-          } finally {
-            // Keep internal state consistent even if releasing the savepoint fails.
-            txw.savepoints.pop()
-            txw.depth -= 1
-          }
-          return
-        }
-        await this.#closeTransaction(txw, 'committed')
+          await this.#closeTransaction(txw, 'committed')
+        })
       })
-    })
+      .catch(rethrowAsUserFacing)
   }
 
   async rollbackTransaction(transactionId: string): Promise<void> {
