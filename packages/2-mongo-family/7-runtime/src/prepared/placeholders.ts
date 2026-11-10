@@ -32,26 +32,30 @@ const isRawDraftKind: Readonly<Record<MongoLoweredDraft['kind'], boolean>> = {
 export function buildPlaceholders(
   declaration: MongoDeclaration,
 ): Readonly<Record<string, MongoPreparedParamRef>> {
-  const placeholders: Record<string, MongoPreparedParamRef> = {};
-  for (const [name, spec] of Object.entries(declaration)) {
-    placeholders[name] =
+  const placeholders = Object.fromEntries(
+    Object.entries(declaration).map(([name, spec]) => [
+      name,
       typeof spec === 'string'
         ? new MongoPreparedParamRef(name, spec, false)
-        : new MongoPreparedParamRef(name, spec.codecId, spec.nullable === true);
-  }
+        : new MongoPreparedParamRef(name, spec.codecId, spec.nullable === true),
+    ]),
+  );
   return Object.freeze(placeholders);
 }
 
-function matchesDeclared(
+function nullability(placeholder: MongoPreparedParamRef): string {
+  return placeholder.nullable ? 'nullable' : 'not nullable';
+}
+
+function undeclaredReason(
   placeholder: MongoPreparedParamRef,
   declared: Readonly<Record<string, MongoPreparedParamRef>>,
-): boolean {
+): string | undefined {
   const own = Object.hasOwn(declared, placeholder.name) ? declared[placeholder.name] : undefined;
-  return (
-    own !== undefined &&
-    own.codecId === placeholder.codecId &&
-    own.nullable === placeholder.nullable
-  );
+  if (own === undefined) return 'whose name the declaration does not give';
+  if (own.codecId === placeholder.codecId && own.nullable === placeholder.nullable)
+    return undefined;
+  return `with codec '${placeholder.codecId}' (${nullability(placeholder)}), but the declaration gives codec '${own.codecId}' (${nullability(own)})`;
 }
 
 /** The distinct placeholders in a draft, in walk order. Refuses a placeholder in a raw command, which is sent to the driver without its values being resolved, and one whose name, codec or nullability the declaration does not give. */
@@ -69,10 +73,11 @@ export function collectPlaceholders(
         { name: leaf.name },
       );
     }
-    if (!matchesDeclared(leaf, declared)) {
+    const reason = undeclaredReason(leaf, declared);
+    if (reason !== undefined) {
       throw runtimeError(
         'RUNTIME.PREPARE_UNDECLARED_PARAM',
-        `The plan has a placeholder for '${leaf.name}' that the declaration does not give: its name, codec or nullability differs. Use the placeholders passed to the callback.`,
+        `The plan has a placeholder for '${leaf.name}' ${reason}. Use the placeholders passed to the callback.`,
         { name: leaf.name },
       );
     }

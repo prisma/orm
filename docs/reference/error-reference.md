@@ -1428,7 +1428,7 @@ On MongoDB, `prepare(declaration, callback)` found a placeholder in a raw comman
 
 ### RUNTIME.PREPARE_UNDECLARED_PARAM
 
-On MongoDB, `prepare(declaration, callback)` found a placeholder in the plan whose name, codec id or nullability the declaration does not give, such as one built by hand or taken from another `prepare` call. Use the placeholders passed to the callback. Payload: `name`.
+On MongoDB, `prepare(declaration, callback)` found a placeholder in the plan whose name, codec id or nullability the declaration does not give. Such a placeholder was built by hand or taken from another `prepare` call. The message names the declared and the given codec and nullability. Use the placeholders passed to the callback. Payload: `name`.
 
 ### RUNTIME.PREPARE_UNUSED_PARAM
 
