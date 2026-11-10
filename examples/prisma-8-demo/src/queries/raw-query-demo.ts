@@ -151,11 +151,12 @@ export async function rawQueryCopyPosts(
 ) {
   const copies = post
     .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+    .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
     .select((f, fns) => ({
       id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
       title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
       body: f.post.body,
-      userId: fns.raw`(SELECT id FROM "user" WHERE email = ${toEmail})`.returns('pg/uuid@1'),
+      userId: f.target.id,
     }))
     .where((f, fns) => fns.eq(f.user.email, fromEmail));
 

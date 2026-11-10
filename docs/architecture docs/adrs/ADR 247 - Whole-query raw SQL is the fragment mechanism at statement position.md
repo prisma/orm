@@ -149,11 +149,12 @@ A raw template also accepts a query written with the SQL builder. A `SelectQuery
 ```ts
 const copies = post
   .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+  .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
   .select((f, fns) => ({
     id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
     title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
     body: f.post.body,
-    userId: fns.raw`(SELECT id FROM "user" WHERE email = ${toEmail})`.returns('pg/uuid@1'),
+    userId: f.target.id,
   }))
   .where((f, fns) => fns.eq(f.user.email, fromEmail));
 
@@ -170,7 +171,15 @@ const plan = db.raw.sql`
   .build();
 ```
 
-On Postgres the plan lowers to `INSERT INTO "post" (id, title, body, "userId") SELECT gen_random_uuid() AS "id", $1 || "post"."title" AS "title", … WHERE "user"."email" = $3 RETURNING id, title, "userId"`. The builder query's parameters take their place in template order.
+On Postgres the plan lowers to:
+
+```sql
+INSERT INTO "post" (id, title, body, "userId")
+SELECT gen_random_uuid() AS "id", $1 || "post"."title" AS "title", "post"."body" AS "body", "target"."id" AS "userId" FROM "public"."post" INNER JOIN "public"."user" ON "user"."id" = "post"."userId" INNER JOIN "public"."user" AS "target" ON "target"."email" = $3 WHERE "user"."email" = $2
+RETURNING id, title, "userId"
+```
+
+The builder query's parameters take their place in template order. The two `fns.raw` fragments cover what the builder has no function for: `gen_random_uuid()` and text concatenation.
 
 **The statement AST is one part.** The tag calls the query's `buildAst()` once and decides by the class of what comes back. A `RawQueryAst` is still flattened into the outer parts, as described under "Composition". A `SelectAst`, `InsertAst`, `UpdateAst` or `DeleteAst` is placed in the parts as one element. The parts type is `RawPart = string | AnyExpression | SelectAst | InsertAst | UpdateAst | DeleteAst`, shared by `RawExpr` and `RawQueryAst`. The node walkers handle the statement kinds: `RawQueryAst.rewrite` rewrites a statement part, so a `beforeCompile` rewriter reaches into it; `collectParamRefs` collects its parameters in place; and `RawExpr.fold` folds a select part through the folder's `select` arm and a mutation part through its `mutation` arm. Because parameters are numbered from that collection, a parameter written before, inside or after the embedded query keeps its template position.
 
