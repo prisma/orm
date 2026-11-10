@@ -735,8 +735,9 @@ function deserializeInspectionCommand(json: unknown): AnyMongoInspectionCommand 
   }
 }
 
+/** An inspection command has a `kind`, which its deserializer checks; a query plan has none. */
 function deserializeCheckSource(json: Record<string, unknown>): MongoMigrationCheckSource {
-  return 'command' in json ? deserializeMongoQueryPlan(json) : deserializeInspectionCommand(json);
+  return 'kind' in json ? deserializeInspectionCommand(json) : deserializeMongoQueryPlan(json);
 }
 
 function deserializeCheck(json: unknown): MongoMigrationCheck {

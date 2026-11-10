@@ -13,10 +13,15 @@ import type { MongoQueryPlan } from './query-plan';
  */
 export type MongoMigrationCheckSource = AnyMongoInspectionCommand | MongoQueryPlan;
 
+const INSPECTION_COMMAND_KINDS: ReadonlySet<unknown> = new Set<AnyMongoInspectionCommand['kind']>([
+  'listIndexes',
+  'listCollections',
+]);
+
 export function isInspectionCheckSource(
   source: MongoMigrationCheckSource,
 ): source is AnyMongoInspectionCommand {
-  return !('command' in source);
+  return 'kind' in source && INSPECTION_COMMAND_KINDS.has(source.kind);
 }
 
 export interface MongoMigrationCheck {

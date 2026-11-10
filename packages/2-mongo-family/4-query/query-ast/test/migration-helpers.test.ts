@@ -56,21 +56,22 @@ describe('isMongoDmlOperation', () => {
 });
 
 describe('isInspectionCheckSource', () => {
-  it('tells a catalog inspection from a read of documents', () => {
+  it("tells a catalog inspection from a read of documents by the inspection command's kind", () => {
     const documents = {
       collection: 'users',
       command: new RawAggregateCommand('users', [{ $limit: 1 }]),
       meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
     };
-    const anotherInspection = {
-      kind: 'listSearchIndexes',
+    const inspectionWithACommandField = {
+      kind: 'listIndexes',
       collection: 'users',
+      command: 'listIndexes',
       accept: () => [],
     } as unknown as MongoMigrationCheckSource;
     expect([
       isInspectionCheckSource(new ListCollectionsCommand()),
       isInspectionCheckSource(new ListIndexesCommand('users')),
-      isInspectionCheckSource(anotherInspection),
+      isInspectionCheckSource(inspectionWithACommandField),
       isInspectionCheckSource(documents),
     ]).toEqual([true, true, true, false]);
   });

@@ -122,7 +122,10 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
 
 const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];
 
-/** The BSON types a property schema's `bsonType` names, `number` read as every numeric type; none when it names none. */
+/**
+ * The BSON types a property schema's `bsonType` names, `number` read as every numeric type; none
+ * when it names none.
+ */
 export function propertyBsonTypesOf(schema: unknown): readonly string[] {
   const bsonType = isRecord(schema) ? schema['bsonType'] : undefined;
   const names = Array.isArray(bsonType) ? bsonType : bsonType === undefined ? [] : [bsonType];
