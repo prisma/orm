@@ -844,7 +844,10 @@ testMatrix.setupTestSuite(
         ])
       })
 
-      expect(results).toMatchObject([{ status: 'rejected' }, { status: 'rejected' }])
+      expect(results).toMatchObject([
+        { status: 'rejected', reason: expect.objectContaining({ code: 'P2002' }) },
+        { status: 'rejected', reason: expect.objectContaining({ code: 'P2002' }) },
+      ])
     })
 
     test('batching timeout override', async () => {
