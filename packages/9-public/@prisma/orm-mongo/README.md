@@ -40,6 +40,22 @@ Generated contract files import their types from the facade, so an application n
 
 These forward; they do not copy. `@prisma/orm-mongo/contract/types` and `@prisma/orm-framework/contract/types` are the same module, so shared registries and `instanceof` checks hold across the boundary.
 
+## Prepared statements
+
+`db.prepare(declaration, callback)` builds a query once and runs it many times with different values. Run the handle against `await db.runtime()`:
+
+```ts
+const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.query
+    .from('users')
+    .match((f) => f.email.eq(p.email))
+    .build(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com' }).toArray();
+```
+
+The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`.
+
 ## The CLI
 
 This package ships no bin. The ORM commands run inside the unified `prisma` CLI, which mounts the command family published at `@prisma/orm-toolchain/cli`.

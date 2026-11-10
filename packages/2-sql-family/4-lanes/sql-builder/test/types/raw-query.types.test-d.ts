@@ -131,3 +131,99 @@ test('a constructor column cannot be declared against the contract codec map', (
   // @ts-expect-error — the codec id cannot stay literal under this key
   raw.sql`SELECT 1 AS "constructor"`.returnsRow({ constructor: 'pg/int4@1' });
 });
+
+test('a select builder query interpolates into a template', () => {
+  const invitees = db.public.users
+    .select('id', 'email')
+    .where((f, fns) => fns.eq(f.invited_by_id, 1));
+
+  const plan = raw.sql`INSERT INTO users (id, email) ${invitees} RETURNING id`
+    .returnsRow({ id: users.columns.id })
+    .build();
+  type Row = ResultType<typeof plan>;
+
+  expectTypeOf<Row['id']>().toEqualTypeOf<number>();
+});
+
+test('a grouped builder query interpolates into a template', () => {
+  const counted = db.public.posts
+    .select('user_id')
+    .groupBy('user_id')
+    .having((f, fns) => fns.gt(fns.count(f.id), 1));
+
+  const plan = raw.sql`WITH counted AS (${counted}) SELECT count(*) AS n FROM counted`
+    .returnsRow({ n: 'pg/int8@1' })
+    .build();
+  type Row = ResultType<typeof plan>;
+
+  expectTypeOf<Row['n']>().toEqualTypeOf<bigint>();
+});
+
+test('an insert builder with returning interpolates into a template', () => {
+  const insert = db.public.users
+    .insert([{ id: 1, name: 'Ada', email: 'ada@example.com' }])
+    .returning('id');
+
+  const plan = raw.sql`WITH inserted AS (${insert}) SELECT id FROM inserted`
+    .returnsRow({ id: users.columns.id })
+    .build();
+
+  expectTypeOf<ResultType<typeof plan>['id']>().toEqualTypeOf<number>();
+});
+
+test('an update builder with returning interpolates into a template', () => {
+  const update = db.public.users
+    .update({ name: 'Ada' })
+    .where((f, fns) => fns.eq(f.id, 1))
+    .returning('id');
+
+  raw.sql`WITH updated AS (${update}) SELECT id FROM updated`.returnsRow({ id: users.columns.id });
+});
+
+test('a delete builder with returning interpolates into a template', () => {
+  const remove = db.public.users
+    .delete()
+    .where((f, fns) => fns.eq(f.id, 1))
+    .returning('id', 'email');
+
+  raw.sql`WITH removed AS (${remove}) SELECT id FROM removed`.returnsRow({ id: users.columns.id });
+});
+
+test('a returning mutation stays embeddable after a later chained call', () => {
+  const update = db.public.users
+    .update({ name: 'Ada' })
+    .returning('id')
+    .where((f, fns) => fns.eq(f.id, 1));
+
+  raw.sql`WITH updated AS (${update}) SELECT id FROM updated`.returnsRow({ id: users.columns.id });
+});
+
+test('an insert builder without returning is rejected as an interpolation', () => {
+  const insert = db.public.users.insert([{ id: 1, name: 'Ada', email: 'ada@example.com' }]);
+
+  // @ts-expect-error — a mutation embeds only once it returns rows
+  raw.sql`WITH inserted AS (${insert}) SELECT 1`.returnsRow({ one: 'pg/int4@1' });
+});
+
+test('an update builder without returning is rejected as an interpolation', () => {
+  const update = db.public.users.update({ name: 'Ada' }).where((f, fns) => fns.eq(f.id, 1));
+
+  // @ts-expect-error — a mutation embeds only once it returns rows
+  raw.sql`WITH updated AS (${update}) SELECT 1`.returnsRow({ one: 'pg/int4@1' });
+});
+
+test('a delete builder without returning is rejected as an interpolation', () => {
+  const remove = db.public.users.delete().where((f, fns) => fns.eq(f.id, 1));
+
+  // @ts-expect-error — a mutation embeds only once it returns rows
+  raw.sql`WITH removed AS (${remove}) SELECT 1`.returnsRow({ one: 'pg/int4@1' });
+});
+
+test('a mutation builder with an empty returning list is rejected as an interpolation', () => {
+  const insert = db.public.users
+    .insert([{ id: 1, name: 'Ada', email: 'ada@example.com' }])
+    .returning();
+
+  // @ts-expect-error — no RETURNING column means no rows to embed
+  raw.sql`WITH inserted AS (${insert}) SELECT 1`.returnsRow({ one: 'pg/int4@1' });
+});

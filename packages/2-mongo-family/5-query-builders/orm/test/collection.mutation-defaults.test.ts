@@ -7,14 +7,13 @@ import {
   type MutationDefaults,
   type MutationDefaultsOptions,
 } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
 import { collectionContext, contextOf } from './collection-context';
 

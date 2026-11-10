@@ -4,13 +4,13 @@ import {
   mongoCodec,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
-import { MongoParamRef, type MongoValue } from '@internal/mongo-value';
+import { MongoParamRef, MongoPreparedParamRef, type MongoValue } from '@internal/mongo-value';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
-import { resolveValue } from '../src/resolve-value';
+import { resolveDraftDoc, resolveValue } from '../src/resolve-value';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -437,5 +437,61 @@ describe('resolveValue', () => {
       expect(err.code).toBe('RUNTIME.ENCODE_FAILED');
       expect((err.cause as Error).message).toBe('plain failure');
     });
+  });
+
+  describe('null values', () => {
+    function spyRegistry() {
+      const toWire = vi.fn((value: string) => {
+        if (value === null) throw new Error('null is not a string');
+        return value.toUpperCase();
+      });
+      const registry = newMongoCodecRegistry();
+      registry.register(
+        mongoCodec({
+          typeId: 'test/spy@1',
+          fromWire: (wire: string) => wire,
+          toWire,
+          dataType: textType,
+          fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+        }),
+      );
+      return { registry, toWire };
+    }
+
+    it('sends null without the codec when the ref is nullable', async () => {
+      const { registry, toWire } = spyRegistry();
+      const ref = new MongoParamRef(null, { codecId: 'test/spy@1', nullable: true });
+      expect(await resolveValue(ref, registry, noCtx)).toBeNull();
+      expect(toWire).not.toHaveBeenCalled();
+    });
+
+    it('passes null to the codec when the ref is not nullable', async () => {
+      const { registry } = spyRegistry();
+      const ref = new MongoParamRef(null, { codecId: 'test/spy@1' });
+      await expect(resolveValue(ref, registry, noCtx)).rejects.toMatchObject({
+        code: 'RUNTIME.ENCODE_FAILED',
+      });
+    });
+  });
+});
+
+describe('placeholders outside prepare', () => {
+  const placeholder = new MongoPreparedParamRef('email', 'mongo/string@1', false);
+  const expected = { code: 'RUNTIME.PREPARE_BIND_ON_ADHOC', details: { name: 'email' } };
+
+  it('resolveValue refuses a placeholder', async () => {
+    await expect(resolveValue(placeholder, emptyRegistry(), noCtx)).rejects.toMatchObject(expected);
+  });
+
+  it('resolveValue refuses a nested placeholder', async () => {
+    await expect(
+      resolveValue({ email: { $in: [placeholder] } }, emptyRegistry(), noCtx),
+    ).rejects.toMatchObject(expected);
+  });
+
+  it('resolveDraftDoc refuses a placeholder in a stage slot', async () => {
+    await expect(
+      resolveDraftDoc({ $limit: placeholder }, emptyRegistry(), noCtx),
+    ).rejects.toMatchObject(expected);
   });
 });

@@ -12,13 +12,16 @@ import {
 import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatch';
 import { createCollectionTables } from '../../src/collection-tables';
 import { Delete } from '../../src/mutation-graph/delete';
-import type { ColumnPair, NodeId, StorageRow } from '../../src/mutation-graph/edge';
+import type { ColumnMapping, NodeId, StorageRow } from '../../src/mutation-graph/edge';
+import type { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { Graph } from '../../src/mutation-graph/graph';
-import type { Run, StatementAst } from '../../src/mutation-graph/node';
+import type { Node, Run, Slots, StatementAst } from '../../src/mutation-graph/node';
+import { State } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
+import { UnionAll } from '../../src/mutation-graph/union-all';
 import { Update } from '../../src/mutation-graph/update';
-import { deleteAst, projectTableColumns, updateAst } from '../../src/query-plan-mutations';
+import { deleteAst, projectTableColumns, updateAst } from '../../src/mutation-statements';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../../src/query-plan-select';
 import type { AliasedTable } from '../../src/table-scope';
 import {
@@ -110,18 +113,18 @@ export function columnsOf(
   return projectTableColumns(contract, tablesOf[table].root, columns);
 }
 
-export function columnPairs(
+export function columnMappings(
   sourceTable: 'users' | 'posts',
   targetTable: 'users' | 'posts',
   names: readonly (readonly [string, string])[],
-): ColumnPair[] {
+): ColumnMapping[] {
   const source = tablesOf[sourceTable].root;
   const target = tablesOf[targetTable].root;
   return names.map(([sourceColumn, targetColumn]) => {
     const [sourceItem] = projectTableColumns(contract, source, [sourceColumn]);
     const [targetItem] = projectTableColumns(contract, target, [targetColumn]);
     if (sourceItem === undefined || targetItem === undefined) {
-      throw new Error('a column pair needs both columns');
+      throw new Error('a column mapping needs both columns');
     }
     return [sourceItem, targetItem];
   });
@@ -178,16 +181,32 @@ export function recordingRun(
   };
 }
 
+export function addFiltered<Inputs extends Slots & { filter: FilterData[] }>(
+  graph: Graph,
+  node: Node<Inputs>,
+  ...sources: readonly (readonly [NodeId, readonly ColumnMapping[]])[]
+): NodeId<Inputs> {
+  const id = graph.add(node);
+  for (const [from, columns] of sources) {
+    graph.addFilterDataEdge(from, id, columns);
+  }
+  return id;
+}
+
+export function newGraph(): Graph {
+  return new Graph(contract);
+}
+
 export function positions(): [NodeId, NodeId, NodeId] {
-  const graph = new Graph();
-  return [
-    graph.add(findUsers(), { filter: [] }),
-    graph.add(findUsers(), { filter: [] }),
-    graph.add(findUsers(), { filter: [] }),
-  ];
+  const graph = newGraph();
+  return [graph.add(new UnionAll()), graph.add(new UnionAll()), graph.add(new UnionAll())];
+}
+
+export function visibleNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {
+  return graph.nodes().filter(([, node]) => !(node instanceof State));
 }
 
 export function returnedAt(graph: Graph, index: number): string[] {
-  const [, node] = graph.nodes()[index] ?? [];
+  const [, node] = visibleNodes(graph)[index] ?? [];
   return (node instanceof StatementNode ? node.returns : []).map((column) => column.alias);
 }

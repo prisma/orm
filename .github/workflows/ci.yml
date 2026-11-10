@@ -172,6 +172,7 @@ jobs:
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
       MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
+      MARIADB_URL: mysql://root:root@127.0.0.1:3308/mysql
     services:
       postgres:
         image: postgres:15
@@ -194,6 +195,17 @@ jobs:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -243,6 +255,7 @@ jobs:
       # the postgres CMD to enable shared_preload_libraries=pg_stat_statements).
       WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:postgres@127.0.0.1:5433/prisma_8_cloudflare_worker
       MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
+      MARIADB_URL: mysql://root:root@127.0.0.1:3308/mysql
     services:
       postgres:
         image: postgres:15
@@ -265,6 +278,17 @@ jobs:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10

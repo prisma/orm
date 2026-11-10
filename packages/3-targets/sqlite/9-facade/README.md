@@ -37,7 +37,7 @@ export default defineContract({}, ({ field, model, gen, type }) => ({
 
 ### `@internal/sqlite/config`
 
-Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 ```typescript
 import { defineConfig } from '@internal/sqlite/config';

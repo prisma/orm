@@ -106,21 +106,16 @@ A data edge can only point backwards: a node reads only from nodes already in th
 - **Why.** Every data dependency already forces its source to be added first, and every other order requirement in this project is "as the caller wrote it", which the translation satisfies by walking the caller's input in order and appending. An `After` edge was built first and nothing in the runner read it: position order was already dependency order. The fixed phases of the old executor are a consequence of data edges here, and the defect of the first build, lookups hoisted in front of a write they should have seen, cannot be produced by appending in order.
 - **Assumes.** Nothing moves a node after it is added. Order edges become necessary, and are the way to state the constraints, as soon as one of these exists: a step that reorders nodes or hoists lookups; running independent nodes concurrently or batching them into one round trip; a rule that inserts a node in front of existing ones. Until then an order requirement that is not a data dependency is visible only as the order of nodes in a test's printed graph.
 
-### D4. Table state is nodes in the graph
+### D4. Table state is nodes and edges the graph creates
 
-> To be reconsidered when slice `graph-nested` is specified. "The latest state of its table" means the latest at the time a node is added, so these edges restate the add order (D3) and never contradict it. They are worth building only if something will reorder nodes. D5 depends on this one.
+Every version of a table is a `State` node. The graph creates them; the builder never does. When a node is added, the graph:
+- adds an edge from the current `State` of every table its statement reads (every table in its AST) to the node;
+- if the node writes, adds a new `State` for its target and for every table a foreign-key action can change from there (`changedBy`, derived once from the contract: tables whose foreign keys point at a changed table with `CASCADE`, `SET NULL` or `SET DEFAULT`, followed transitively over the contract's tables), each with an edge from the write.
 
-Per table, `State(table, n)`. A read depends on the latest state of its table. A write depends on the latest state and produces the next. A write also depends on every read of the state it replaces.
+State edges are ordinary edges in an input slot of the node, resolved by the runner like any other; a `State` has no statement and produces no rows, and a node that has no use for its state inputs ignores them. `sameState(a, b, table)` compares the `State` sources of the two nodes' state edges for that table: a lookup on each side and one comparison, no traversal.
 
-- **Why.** This orders a lookup after earlier writes to the same table, which fixes the defect where a lookup read rows as they were before an earlier write in the same call, without anyone having to remember to add an edge. State as nodes, not as bookkeeping in the builder, because peephole rules need to ask "do these two nodes see the same version of this table" and that must be readable from the graph.
-- **Assumes.** Two nodes that touch different tables and share no data edge need no order between them, except as D5 says.
-
-### D5. A write to the target of a `through` relation also advances the junction's state
-
-Reads and junction writes use only their own table's state. An update or delete on the target table of a many-to-many relation depends on and advances the state of that relation's junction table.
-
-- **Why.** `[t.connect(x), t.deleteAll()]` inserts into the junction and deletes from the target: two tables, no shared state, no order. The order matters, because deleting the target changes junction rows through the foreign key. The rule models that one hop and nothing more.
-- **Assumes.** The only cross-table ordering that matters within one relation's array is target-versus-junction. A schema that also declares a direct relation from the parent to the junction model can still produce two writes with no defined order; that case is accepted as unordered.
+- **Why.** An optimisation such as merging two identical lookups needs to know, without walking the nodes between them, that no write to the looked-up tables happened in between. Edges are the one way the graph states a dependency; a version number per table, kept in the graph or stamped on nodes, would be a second one. Making state edges ordinary inputs instead of a special kind of edge keeps one resolution path in the runner. The first version of this decision had the builder create state nodes and covered only the junction table (D5); `changedBy` covers every table a write can change through foreign keys.
+- **Assumes.** State edges always point from an earlier position to a later one, so nodes still run in the order they were added (D3). Triggers are invisible. A write does not yet depend on the reads of the state it replaces: no rule reorders nodes; that edge is added with the first one that does.
 
 ### D6. An empty source skips its consumers; `Assert` is the only way empty becomes an error
 
@@ -242,6 +237,9 @@ Stage 1 builds the graph for what main does today. The bar is that every integra
 | An order-only edge between consecutive operations of one array | Table state already orders most pairs; D5 covers the remaining many-to-many pairs without a per-array rule |
 | A write advancing the state of every table that references its table | Spreads through the schema, needs cycle handling, and depends on foreign keys the contract does not always have |
 | Table state as bookkeeping in the builder | Peephole rules could not ask whether two nodes see the same version of a table |
+| Per-table version numbers in the graph, or stamped on nodes | A second way of stating a dependency beside edges |
+| State edges as a special kind of edge that nodes never receive | An exception in the runner's resolution for no gain; a node that does not use them ignores them |
+| D5: only a write to a many-to-many target advances the junction's state | Replaced by `changedBy`, which covers every table a foreign-key action can change |
 | A junction-aware edge lowered to `EXISTS` | A special edge where a peephole belongs; and `EXISTS` is slow on SQLite |
 | Optimisation passes run in a chosen order | Order between passes has to be found by trial; peepholes at construction have none |
 | A worklist run after the graph is built | Not needed for the rules we have; added only when a rule requires it |

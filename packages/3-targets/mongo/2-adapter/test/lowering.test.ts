@@ -52,7 +52,7 @@ import {
   MongoUnwindStage,
   MongoVectorSearchStage,
 } from '@internal/mongo-query-ast/execution';
-import { MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { lowerAggExpr, lowerFilter, lowerPipeline, lowerStage } from '../src/lowering';
 
@@ -269,6 +269,14 @@ describe('lowerStage', () => {
 
   it('lowers $skip stage', async () => {
     expect(await lowerStage(new MongoSkipStage(5), registry, ctx)).toEqual({ $skip: 5 });
+  });
+
+  it('refuses a placeholder in $limit', async () => {
+    const take = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
+    await expect(lowerStage(new MongoLimitStage(take), registry, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.PREPARE_BIND_ON_ADHOC',
+      details: { name: 'take' },
+    });
   });
 
   it('lowers $lookup stage without pipeline', async () => {
@@ -509,6 +517,14 @@ describe('lowerAggExpr', () => {
     const param = new MongoParamRef('plain', { codecId: 'mongo/string@1' });
     expect(lowerAggExpr(MongoAggLiteral.of(param))).toEqual({ $literal: param });
     expect(lowerAggExpr(MongoAggLiteral.of([param]))).toEqual({ $literal: [param] });
+  });
+
+  it('wraps a placeholder in $literal', () => {
+    const placeholder = new MongoPreparedParamRef('label', 'mongo/string@1', false);
+    expect(lowerAggExpr(MongoAggLiteral.of(placeholder))).toEqual({ $literal: placeholder });
+    expect(lowerAggExpr(MongoAggLiteral.of({ label: placeholder }))).toEqual({
+      $literal: { label: placeholder },
+    });
   });
 
   it('wraps object with $-prefixed keys in $literal', () => {
