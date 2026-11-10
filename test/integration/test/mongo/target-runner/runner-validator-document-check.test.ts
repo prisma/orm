@@ -232,7 +232,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. These operations of this apply already ran and stay applied: Create index name_1 on users (name:1). Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
       });
@@ -338,7 +338,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         ),
         notChanged: result.failure.why?.includes('The validator was not changed.'),
         ran: result.failure.why?.includes(
-          'These operations of this apply already changed collection users and stay applied: Set the first validator on users.',
+          'These operations of this apply already ran and stay applied: Set the first validator on users.',
         ),
       }).toEqual({ inPlace: true, notChanged: false, ran: true });
     },

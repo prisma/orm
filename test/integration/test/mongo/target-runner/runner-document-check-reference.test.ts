@@ -1,4 +1,4 @@
-import { checkDocuments, fillField } from '@internal/target-mongo/migration';
+import { checkDocuments, dropIndex, fillField } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -105,6 +105,40 @@ describe('MongoMigrationRunner, the check before a collection rewrites', () => {
           'Documents this apply already rewrote in collection users',
         ),
       }).toEqual({ nothingRewritten: false, warning: true });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names every operation of the apply that ran before the failing check, on any collection',
+    async () => {
+      await live.db().createCollection('accounts');
+      await live.db().collection('accounts').createIndex({ code: 1 }, { name: 'code_1' });
+      await live.db().createCollection('users');
+      await live.db().collection('users').insertOne({ email: 'ada@example.com' });
+      const after = {
+        email: { bsonType: 'string' },
+        plan: { bsonType: 'string' },
+        born: { bsonType: 'date' },
+      };
+
+      const result = await live.run(
+        [
+          dropIndex('accounts', [{ field: 'code', direction: 1 }]),
+          fillField({ collection: 'users', field: 'plan', value: { $literal: '' } }),
+          checkDocuments({
+            collection: 'users',
+            validator: usersSchema(after),
+            rewrittenFields: ['plan'],
+          }),
+        ],
+        usersContract(after),
+      );
+
+      if (result.ok) throw new Error('Expected the check to stop the apply');
+      expect(result.failure.why).toContain(
+        'These operations of this apply already ran and stay applied: Drop index code_1 on accounts (code:1); Fill field plan in collection users where it is missing or null.',
+      );
     },
     timeouts.spinUpMongoMemoryServer,
   );
