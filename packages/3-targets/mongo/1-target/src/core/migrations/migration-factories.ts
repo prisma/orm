@@ -1,11 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
+import { documentsFitValidator } from '@internal/family-mongo/control';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
   type MongoIndexOptionKey,
 } from '@internal/mongo-contract';
 import type {
-  MongoCheckDocumentsMeta,
   MongoDmlCheck,
   MongoDmlOperation,
   MongoFilterExpr,
@@ -25,7 +25,6 @@ import {
   MongoAndExpr,
   MongoExistsExpr,
   MongoFieldFilter,
-  type MongoMigrationCheck,
   type MongoMigrationPlanOperation,
   MongoNotExpr,
   RenameCollectionCommand,
@@ -826,75 +825,6 @@ export function setValidation(
   };
 }
 
-function documentsFitValidator(
-  collectionName: string,
-  validator: Readonly<Record<string, unknown>>,
-): MongoMigrationCheck {
-  return {
-    description: `every document in ${collectionName} fits the new validator`,
-    source: rewritePlan(
-      collectionName,
-      new RawAggregateCommand(collectionName, [{ $match: { $nor: [validator] } }, { $limit: 1 }]),
-    ),
-    filter: MATCH_ALL_FILTER,
-    expect: 'notExists',
-  };
-}
-
-function isSchemaNode(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-interface RelaxedFields {
-  readonly rewritten: readonly string[];
-  readonly renamed: Readonly<Record<string, string>>;
-}
-
-/**
- * `schema` at the top of the document and in each root model and variant branch, with each rewritten
- * field optional and allowed to hold any value, and each renamed field optional under its new name and
- * allowed under its old name with the new name's schema, so that a discriminator's `enum` still
- * selects one branch under either name. MongoDB refuses an empty `required`, so one left empty is
- * dropped.
- */
-function relaxedSchema(
-  schema: Readonly<Record<string, unknown>>,
-  fields: RelaxedFields,
-): Record<string, unknown> {
-  const { required, properties, ...rest } = schema;
-  const relaxed: Record<string, unknown> = { ...rest };
-  const renamedTo = new Set(Object.values(fields.renamed));
-  if (Array.isArray(required)) {
-    const stillRequired = required.filter(
-      (field) => !fields.rewritten.includes(field) && !renamedTo.has(field),
-    );
-    if (stillRequired.length > 0) relaxed['required'] = stillRequired;
-  }
-  if (isSchemaNode(properties) || schema['additionalProperties'] === false) {
-    const declared: Record<string, unknown> = {
-      ...(isSchemaNode(properties) ? properties : {}),
-      ...Object.fromEntries(fields.rewritten.map((field) => [field, {}])),
-    };
-    relaxed['properties'] = {
-      ...declared,
-      ...Object.fromEntries(
-        Object.entries(fields.renamed).flatMap(([from, to]) =>
-          Object.hasOwn(declared, to) ? [[from, declared[to]]] : [],
-        ),
-      ),
-    };
-  }
-  for (const branches of ['anyOf', 'oneOf']) {
-    const entries = schema[branches];
-    if (Array.isArray(entries)) {
-      relaxed[branches] = entries.map((entry) =>
-        isSchemaNode(entry) ? relaxedSchema(entry, fields) : entry,
-      );
-    }
-  }
-  return relaxed;
-}
-
 export interface CheckDocumentsOptions {
   readonly collection: string;
   /** The stored names whose values the plan's rewrites change on the collection, removed ones included. */
@@ -907,8 +837,9 @@ export interface CheckDocumentsOptions {
  * Checks, before the plan rewrites a collection's documents, that each fits the validator the
  * collection's validator change later in the same migration sets, once the fields the plan rewrites
  * are left out of it. A document that does not fit fails for a reason no rewrite of the plan fixes,
- * so the apply stops before any rewrite runs. The operation names the fields; the runner reads the
- * validator from the validator change, so `migration.ts` holds it once.
+ * so the apply stops before any rewrite runs. The operation names the fields; when the migration
+ * emits its operations, `resolveDocumentChecks` writes its check against the validator of that
+ * validator change, so `migration.ts` holds the validator once.
  */
 export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
   const { collection } = options;
@@ -927,27 +858,6 @@ export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPl
     execute: [],
     postcheck: [],
   };
-}
-
-/** The validator a `checkDocuments` operation checks against: `jsonSchema`, the one its collection's validator change sets, with its fields left out. */
-export function relaxedValidator(
-  fields: MongoCheckDocumentsMeta,
-  jsonSchema: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  return {
-    $jsonSchema: relaxedSchema(jsonSchema, {
-      rewritten: fields.rewrittenFields,
-      renamed: fields.renamedFields,
-    }),
-  };
-}
-
-/** The check a `checkDocuments` operation runs, against the relaxed validator. */
-export function relaxedDocumentsCheck(
-  fields: MongoCheckDocumentsMeta,
-  jsonSchema: Readonly<Record<string, unknown>>,
-): MongoMigrationCheck {
-  return documentsFitValidator(fields.collection, relaxedValidator(fields, jsonSchema));
 }
 
 /**

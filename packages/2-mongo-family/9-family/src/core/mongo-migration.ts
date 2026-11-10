@@ -1,6 +1,8 @@
 import { Migration, MigrationContractViews } from '@internal/migration-tools/migration';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
+import { InternalError } from '@internal/utils/internal-error';
+import { resolveDocumentChecks } from './document-checks';
 import { MongoContractView } from './ir/mongo-contract-view';
 
 /**
@@ -59,4 +61,28 @@ export abstract class MongoMigration<
   get startContract(): MongoContractView<Start> | null {
     return this.#startView.startContract;
   }
+
+  /**
+   * Has this read of `operations` give each `checkDocuments` operation its check, against the
+   * validator change after it in the same list, so `ops.json` holds the check itself while
+   * `migration.ts` holds the validator once.
+   */
+  protected override beginOperationsRead(): void {
+    const read = operationsGetterOf(Object.getPrototypeOf(this));
+    Object.defineProperty(this, 'operations', {
+      configurable: true,
+      get: () => resolveDocumentChecks(read.call(this)),
+    });
+  }
+}
+
+/** The `operations` getter a migration class declares, read from its prototype chain. */
+function operationsGetterOf(
+  prototype: object | null,
+): () => readonly (AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>)[] {
+  for (let current = prototype; current !== null; current = Object.getPrototypeOf(current)) {
+    const getter = Object.getOwnPropertyDescriptor(current, 'operations')?.get;
+    if (getter !== undefined) return getter;
+  }
+  throw new InternalError('A Mongo migration class declares no operations getter');
 }

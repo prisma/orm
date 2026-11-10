@@ -1,3 +1,4 @@
+import { resolveDocumentChecks } from '@internal/family-mongo/control';
 import type { MigrationPlanWithAuthoringSurface } from '@internal/framework-components/control';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { Migration, type MigrationMeta } from '@internal/migration-tools/migration';
@@ -39,7 +40,7 @@ export class PlannerProducedMongoMigration
     | AnyMongoMigrationOperation
     | Promise<AnyMongoMigrationOperation>
   )[] {
-    return renderOps(this.calls);
+    return resolveDocumentChecks(renderOps(this.calls));
   }
 
   override describe(): MigrationMeta {
