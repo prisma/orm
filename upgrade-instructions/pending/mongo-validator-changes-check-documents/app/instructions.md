@@ -9,9 +9,6 @@ changes:
   - id: mongo-new-required-field-gets-temporary-value
     summary: |
       A new required MongoDB field is now filled with a temporary value in the documents that lack it, as on SQL, unless `--backfill` names it.
-  - id: planner-warnings-json-field
-    summary: |
-      In `--json` output, `db update` and `db init` list the planner's warnings under `plannerWarnings` instead of `warnings`, as `migration plan` does.
 ---
 
 # MongoDB plans rewrite the documents a schema change touches
@@ -34,7 +31,3 @@ Where a plan now asks about a field, answer with `--delete Model.field`, which c
 ## `mongo-new-required-field-gets-temporary-value`
 
 To write your own value instead of the temporary one, plan the change with `migration plan --backfill Model.field` and write the update in the `placeholder('Model.field:update')` slot of the data transform it writes. A new required field under a unique index gets no temporary value, since every document would get the same one: on a collection with documents, the unique index build stops the apply first, because the documents that lack the field all hold `null`, and its error names `--backfill`. Plan it with `--backfill`.
-
-## `planner-warnings-json-field`
-
-A script that reads the planner's warnings from the `--json` result of `db update` or `db init` reads `plannerWarnings` instead of `warnings`. Each entry is unchanged: `kind`, `summary` and `why`. `migration plan --json` lists them under `plannerWarnings` too, and its `warnings` keeps its own messages, such as a default origin that forks the migration graph.
