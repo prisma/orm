@@ -118,14 +118,26 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
       );
   }
 
+  /**
+   * The database matches the contract, a further plan is empty, and every document of `users`
+   * accepts an update that does not skip document validation. The update changes `email`, so read
+   * the documents before.
+   */
   async function verifiedAndSettled(
     ctx: JourneyContext,
+    dbName: string,
     label: string,
     further: () => Promise<readonly unknown[]>,
   ) {
     const verify = await runDbVerify(ctx, ['--schema-only']);
     expect(verify.exitCode, `${label}: db verify --schema-only: ${verify.stderr}`).toBe(0);
     expect(await further(), `${label}: a further plan is empty`).toEqual([]);
+    const users = client.db(dbName).collection('users');
+    const count = await users.countDocuments();
+    const updated = await users.updateMany({}, [
+      { $set: { email: { $concat: ['$email', '.updated'] } } },
+    ]);
+    expect(updated.modifiedCount, `${label}: every document accepts an update`).toBe(count);
   }
 
   /** Plans the change with `migration plan`, fills its slot if it has one, applies it with `db migrate`, and returns the documents. */
@@ -168,11 +180,12 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
       0,
     );
     const changed = latestMigrationDirName(ctx);
-    await verifiedAndSettled(ctx, label, async () => {
+    const after = await documents(dbName);
+    await verifiedAndSettled(ctx, dbName, label, async () => {
       const further = await runMigrationPlan(ctx, ['--from', changed, '--json']);
       return parseJsonOutput<{ operations: readonly unknown[] }>(further).operations;
     });
-    return { documents: await documents(dbName), planned: parseJsonOutput(planned) };
+    return { documents: after, planned: parseJsonOutput(planned) };
   }
 
   /** Applies the change with `db update` and returns the documents and the output. */
@@ -191,11 +204,12 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
     expect(updated.exitCode, `${label}.14: db update: ${updated.stdout}\n${updated.stderr}`).toBe(
       0,
     );
-    await verifiedAndSettled(ctx, label, async () => {
+    const after = await documents(dbName);
+    await verifiedAndSettled(ctx, dbName, label, async () => {
       const further = await runDbUpdate(ctx, ['--dry-run', '--no-interactive', '--json']);
       return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
     });
-    return { documents: await documents(dbName), updated: parseJsonOutput(updated) };
+    return { documents: after, updated: parseJsonOutput(updated) };
   }
 
   it('C1: --convert writes a data transform, and the filled update converts the values', async () => {
