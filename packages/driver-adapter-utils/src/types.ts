@@ -291,11 +291,11 @@ export interface Transaction extends AdapterInfo, SqlQueryable {
    */
   readonly options: TransactionOptions
   /**
-   * Commit the transaction. Called at most once, and never after `rollback()`.
+   * Commit the transaction.
    */
   commit(): Promise<void>
   /**
-   * Roll back the transaction. Called at most once, and never after `commit()`.
+   * Roll back the transaction. May be called while a statement on the transaction is still running.
    */
   rollback(): Promise<void>
   /**
