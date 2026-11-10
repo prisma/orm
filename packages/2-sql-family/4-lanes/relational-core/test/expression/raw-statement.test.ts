@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BinaryExpr,
   ColumnRef,
+  DeleteAst,
   InsertAst,
   type ParamRef,
   ProjectionItem,
@@ -12,6 +13,7 @@ import {
   type RawSqlLiteral,
   SelectAst,
   TableSource,
+  UpdateAst,
 } from '../../src/exports/ast';
 import {
   createRawSql,
@@ -301,6 +303,36 @@ describe('composition: a row-returning builder mutation as a template interpolat
       '',
     ]);
     expect(node.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual(['inside', 7]);
+  });
+});
+
+describe('a builder mutation without RETURNING as a template interpolation', () => {
+  function builderMutation(
+    ast: InsertAst | UpdateAst | DeleteAst,
+  ): RowReturningStatement<Record<string, ScopeField>> {
+    return { buildAst: () => ast } as unknown as RowReturningStatement<Record<string, ScopeField>>;
+  }
+
+  const user = TableSource.named('user');
+  const byId = BinaryExpr.eq(ColumnRef.of('user', 'id'), param(1, { codecId: 'pg/int4@1' }));
+
+  it.each([
+    ['insert', InsertAst.into(user).withRows([{ email: param('a', { codecId: 'test/str' }) }])],
+    ['update', UpdateAst.table(user).withSet({ email: param('a', { codecId: 'test/str' }) })],
+    ['delete', DeleteAst.from(user).withWhere(byId)],
+    [
+      'insert with an empty returning list',
+      InsertAst.into(user)
+        .withRows([{ email: param('a', { codecId: 'test/str' }) }])
+        .withReturning([]),
+    ],
+  ] as const)('refuses an embedded %s', (_name, ast) => {
+    expect(() => rawSql`with x as (${builderMutation(ast)}) select 1`).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION',
+        message: expect.stringContaining('.returning('),
+      }),
+    );
   });
 });
 

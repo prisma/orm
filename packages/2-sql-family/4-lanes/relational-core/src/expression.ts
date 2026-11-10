@@ -344,12 +344,6 @@ type RawExprInterpolation = Expression<ScopeField> | ParamRef | RawSqlLiteral;
 
 export declare const RowReturningStatementMarker: unique symbol;
 
-/**
- * A builder INSERT, UPDATE or DELETE that returns rows. The marker is a type
- * only: a mutation builder types it with its row once `.returning()` has named
- * at least one column, and with a non-row type before that, so a mutation
- * without `RETURNING` is not an interpolation.
- */
 export type RowReturningStatement<RowType extends Record<string, ScopeField>> = {
   readonly [RowReturningStatementMarker]?: RowType;
   buildAst(): InsertAst | UpdateAst | DeleteAst;
@@ -401,7 +395,18 @@ function templatePart(adapter: RawCodecInferer, value: RawSqlInterpolation): Raw
   if (ast instanceof RawQueryAst) {
     return [...ast.parts];
   }
+  if (isMutationAst(ast) && (ast.returning?.length ?? 0) === 0) {
+    throw runtimeError(
+      'RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION',
+      `an embedded ${ast.kind} must return rows: call \`.returning(...)\` on the builder before interpolating it`,
+      { kind: ast.kind },
+    );
+  }
   return [ast];
+}
+
+function isMutationAst(ast: { readonly kind: string }): ast is InsertAst | UpdateAst | DeleteAst {
+  return ast.kind === 'insert' || ast.kind === 'update' || ast.kind === 'delete';
 }
 
 function templateParts(

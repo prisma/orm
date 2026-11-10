@@ -13,12 +13,6 @@ import type { EmptyRow, GatedMethod, QueryContext, Scope, ScopeField } from '../
 
 export type ReturningCapability = { sql: { returning: true } };
 
-/**
- * The row type a mutation builder publishes under
- * `RowReturningStatementMarker`: its returned row once `.returning()` names a
- * column, and a marker no row type matches before that, so only a
- * row-returning mutation is a raw template interpolation.
- */
 export type ReturnedRow<RowType extends Record<string, ScopeField>> = [keyof RowType] extends [
   never,
 ]
