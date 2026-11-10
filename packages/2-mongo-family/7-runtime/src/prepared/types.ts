@@ -93,7 +93,7 @@ export interface MongoPrepareMember<
   /**
    * Builds a reusable prepared statement. The callback runs once with one placeholder per declared name, and the plan it returns is lowered once. Each run of the handle fills in the values, runs `beforeEncode`, encodes with the declared codecs and sends the command. Does no I/O.
    *
-   * Refuses an unknown codec id with `RUNTIME.CODEC_DESCRIPTOR_MISSING`, a placeholder in a raw command with `RUNTIME.PREPARE_RAW_PLACEHOLDER`, and a declared name the plan does not use with `RUNTIME.PREPARE_UNUSED_PARAM`.
+   * Refuses an unknown codec id with `RUNTIME.CODEC_DESCRIPTOR_MISSING`, a placeholder in a raw command with `RUNTIME.PREPARE_RAW_PLACEHOLDER`, a placeholder the declaration does not give with `RUNTIME.PREPARE_UNDECLARED_PARAM`, and a declared name the plan does not use with `RUNTIME.PREPARE_UNUSED_PARAM`.
    */
   prepare<
     D extends MongoDeclaration<CT>,

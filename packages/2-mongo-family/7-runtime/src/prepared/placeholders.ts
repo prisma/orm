@@ -42,9 +42,22 @@ export function buildPlaceholders(
   return Object.freeze(placeholders);
 }
 
-/** The distinct placeholders in a draft, in walk order. Refuses a placeholder in a raw command, which is sent to the driver without its values being resolved. */
+function matchesDeclared(
+  placeholder: MongoPreparedParamRef,
+  declared: Readonly<Record<string, MongoPreparedParamRef>>,
+): boolean {
+  const own = Object.hasOwn(declared, placeholder.name) ? declared[placeholder.name] : undefined;
+  return (
+    own !== undefined &&
+    own.codecId === placeholder.codecId &&
+    own.nullable === placeholder.nullable
+  );
+}
+
+/** The distinct placeholders in a draft, in walk order. Refuses a placeholder in a raw command, which is sent to the driver without its values being resolved, and one whose name, codec or nullability the declaration does not give. */
 export function collectPlaceholders(
   draft: MongoLoweredDraft,
+  declared: Readonly<Record<string, MongoPreparedParamRef>>,
 ): ReadonlyArray<MongoPreparedParamRef> {
   const found = new Set<MongoPreparedParamRef>();
   for (const leaf of flattenMongoDraftLeaves(draft)) {
@@ -53,6 +66,13 @@ export function collectPlaceholders(
       throw runtimeError(
         'RUNTIME.PREPARE_RAW_PLACEHOLDER',
         `The raw command has a placeholder for '${leaf.name}'. Raw commands are sent as written, so they cannot take prepared parameters.`,
+        { name: leaf.name },
+      );
+    }
+    if (!matchesDeclared(leaf, declared)) {
+      throw runtimeError(
+        'RUNTIME.PREPARE_UNDECLARED_PARAM',
+        `The plan has a placeholder for '${leaf.name}' that the declaration does not give: its name, codec or nullability differs. Use the placeholders passed to the callback.`,
         { name: leaf.name },
       );
     }

@@ -1,13 +1,13 @@
 import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
-import { defineContract, field, model } from '../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    email: field.scalar(type.String()),
   },
 });
 

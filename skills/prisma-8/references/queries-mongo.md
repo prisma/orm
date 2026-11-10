@@ -228,7 +228,7 @@ const runtime = await db.runtime();
 const recent = await byAuthor.query(runtime, { authorId: someHexId, take: 10 }).toArray();
 ```
 
-An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` is the same thing on a `MongoRuntime`. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run. ORM reads (`.prepared.all()`) cannot be prepared yet. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` is the same thing on a `MongoRuntime`. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a placeholder not passed to this callback throws `RUNTIME.PREPARE_UNDECLARED_PARAM`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run. ORM reads (`.prepared.all()`) cannot be prepared yet. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
 
 ## Common Pitfalls (Mongo)
 

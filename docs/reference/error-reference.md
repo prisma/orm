@@ -1426,6 +1426,10 @@ Running a prepared statement without supplying a value for one of its declared p
 
 On MongoDB, `prepare(declaration, callback)` found a placeholder in a raw command. Raw commands are sent to the driver as written, so they cannot take prepared parameters; use the query builder for a prepared statement, or put the value into the raw command directly. Payload: `name`.
 
+### RUNTIME.PREPARE_UNDECLARED_PARAM
+
+On MongoDB, `prepare(declaration, callback)` found a placeholder in the plan whose name, codec id or nullability the declaration does not give, such as one built by hand or taken from another `prepare` call. Use the placeholders passed to the callback. Payload: `name`.
+
 ### RUNTIME.PREPARE_UNUSED_PARAM
 
 `prepare(declaration, callback)` found declared parameter names that the callback's plan never references, on SQL or MongoDB. Remove the unused declarations or reference them in the plan. Payload: `unused`.

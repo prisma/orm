@@ -60,7 +60,7 @@ The walkers that meet values treat it as follows:
 3. Calls the callback once.
 4. Runs `runBeforeCompile` once. MongoDB has no `beforeCompile` hook, so this returns the plan unchanged; it is called so a future hook runs at prepare time, as ADR 210 requires.
 5. Runs `structuralLower` once and keeps the draft.
-6. Collects the placeholders in the draft. A placeholder in a raw command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER` with `{ name }`, because raw commands go to the driver as written and the placeholder object would be sent as a document. A declared name the plan does not use throws `RUNTIME.PREPARE_UNUSED_PARAM` with `{ unused }`.
+6. Collects the placeholders in the draft. A placeholder in a raw command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER` with `{ name }`, because raw commands go to the driver as written and the placeholder object would be sent as a document. A placeholder whose name, codec id or nullability the declaration does not give throws `RUNTIME.PREPARE_UNDECLARED_PARAM` with `{ name }`, for example one built by hand or taken from another `prepare` call: its codec was never checked, and the adapter sends a value with an unknown codec id unencoded. A declared name the plan does not use throws `RUNTIME.PREPARE_UNUSED_PARAM` with `{ unused }`.
 7. Returns a frozen handle.
 
 It does no I/O. It is `async`, so a future async `beforeCompile` fits without an interface change. A raw plan with no placeholders may be prepared; each run sends it as it is.
@@ -103,7 +103,7 @@ Paging is the most common prepared query, and SQL accepts placeholders there, so
 
 `MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. The rule is the one ad-hoc `execute` uses: a raw `updateOne` lowers to an `updateOne` wire command, which `runtime.execute` gives statistics for, so its prepared handle has `execute` too. The raw lane's plans carry their raw command type, so the type agrees. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
 
-The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. `execute` is not a second result: it is `query`'s single result row, the driver's response, reduced to `{ affectedRows }`. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. Each method sends the command on its own: `execute` reduces its own driver response to `{ affectedRows }`, the same row `query` would yield. They are two ways to run the statement, not two steps, so calling `query` and then `execute` runs a delete twice. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
 
 ## The runtime is the only target, and the bridge is internal
 
@@ -136,6 +136,7 @@ SQL raises `RUNTIME.CODEC_DESCRIPTOR_MISSING` at the first run. MongoDB raises i
 |---|---|---|
 | Unknown codec id in the declaration | `RUNTIME.CODEC_DESCRIPTOR_MISSING` | `prepare` |
 | Placeholder in a raw command | `RUNTIME.PREPARE_RAW_PLACEHOLDER` | `prepare` |
+| Placeholder the declaration does not give | `RUNTIME.PREPARE_UNDECLARED_PARAM` | `prepare` |
 | Declared name not used | `RUNTIME.PREPARE_UNUSED_PARAM` | `prepare` |
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
 | Name missing at run, or params not an object | `RUNTIME.PREPARE_MISSING_PARAM` | run, before the activity |

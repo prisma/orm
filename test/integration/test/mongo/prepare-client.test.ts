@@ -1,4 +1,4 @@
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 import mongo from '@internal/mongo/runtime';
 import { MongoPreparedParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
@@ -11,17 +11,17 @@ const contract = defineContract({
     Account: model('Account', {
       collection: 'accounts',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
-        status: field.string(),
-        visits: field.int32(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
+        status: field.scalar(type.String()),
+        visits: field.scalar(type.Int32()),
       },
     }),
     Event: model('Event', {
       collection: 'events',
       fields: {
-        _id: field.objectId(),
-        data: field.json(),
+        _id: field.scalar(type.ObjectId()),
+        data: field.scalar(type.Json()),
       },
     }),
   },

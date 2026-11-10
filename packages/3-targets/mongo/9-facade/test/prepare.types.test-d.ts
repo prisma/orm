@@ -1,15 +1,15 @@
 import type { MongoQueryExecutor } from '@internal/mongo-orm';
 import type { MongoRuntime } from '@internal/mongo-runtime';
 import { describe, expectTypeOf, test } from 'vitest';
-import { defineContract, field, model } from '../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../src/exports/contract-builder';
 import mongo from '../src/runtime/mongo';
 import mongoStatic from '../src/static/mongo-static';
 
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    email: field.scalar(type.String()),
   },
 });
 

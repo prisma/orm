@@ -260,14 +260,15 @@ class MongoRuntimeImpl
       }
     }
 
+    const declared = buildPlaceholders(declaration);
     const placeholders = blindCast<
       MongoPlaceholders<D>,
       'buildPlaceholders makes one placeholder per declared name with its codec id and nullability'
-    >(buildPlaceholders(declaration));
+    >(declared);
     const compiled = await this.runBeforeCompile(callback(placeholders));
     const draft = this.#adapter.structuralLower(compiled);
 
-    const used = collectPlaceholders(draft);
+    const used = collectPlaceholders(draft, declared);
     const usedNames = new Set(used.map((placeholder) => placeholder.name));
     const unused = Object.keys(declaration).filter((name) => !usedNames.has(name));
     if (unused.length > 0) {

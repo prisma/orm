@@ -189,6 +189,7 @@ Positions that take a placeholder:
 |---|---|---|
 | Unknown codec id in the declaration | `RUNTIME.CODEC_DESCRIPTOR_MISSING` (existing) | `prepare` |
 | Placeholder in a raw command | `RUNTIME.PREPARE_RAW_PLACEHOLDER` (new) | `prepare` |
+| Placeholder the declaration does not give | `RUNTIME.PREPARE_UNDECLARED_PARAM` (new) | `prepare` |
 | Declared name not used | `RUNTIME.PREPARE_UNUSED_PARAM` | `prepare` |
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
 | Placeholder in an ORM write or value-object literal | `ORM.ARGUMENT_INVALID` (existing) | when the write runs, or when the `where` is built |
