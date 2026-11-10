@@ -3,18 +3,20 @@ import type { EngineEvent } from '@prisma/cli-engine';
 import { plannerWarningText } from '../../utils/planner-warning-text';
 
 /**
- * Reports each planner warning a run hands to `onPlannerWarnings` as a `warn` message when the
- * planner returns it, before the apply, and keeps them for a successful run's result.
+ * Collects the planner's warnings a run hands to `onPlannerWarnings`. A successful run shows them
+ * in its result; a failed one reports them as `warn` messages, which come before its error.
  */
 export function plannerWarningsCollector(report: (event: EngineEvent) => void) {
   let collected: readonly MigrationPlannerConflict[] = [];
   return {
     onPlannerWarnings: (warnings: readonly MigrationPlannerConflict[]): void => {
       collected = warnings;
-      for (const warning of warnings) {
+    },
+    collected: (): readonly MigrationPlannerConflict[] => collected,
+    reportCollected: (): void => {
+      for (const warning of collected) {
         report({ kind: 'message', severity: 'warn', text: plannerWarningText(warning) });
       }
     },
-    collected: (): readonly MigrationPlannerConflict[] => collected,
   };
 }

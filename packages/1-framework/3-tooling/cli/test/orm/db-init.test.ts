@@ -559,7 +559,7 @@ describe('db init', () => {
     });
   }
 
-  it('reports the planner`s warnings once when the apply succeeds', async () => {
+  it('shows the planner`s warnings as warnings when the apply succeeds', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init'], {
@@ -571,17 +571,20 @@ describe('db init', () => {
     expect({
       exitCode: run.exitCode,
       messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
-      headers: blocks.filter(
-        (block) => block.kind === 'summary' && block.text === 'Planner warnings',
+      warnings: blocks.filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
       ),
     }).toEqual({
       exitCode: 0,
-      messages: [{ kind: 'message', severity: 'warn', text: WARNING.summary }],
-      headers: [],
+      messages: [],
+      warnings: [{ kind: 'summary', status: 'warn', text: WARNING.summary }],
     });
   });
 
-  it('writes the planner`s warnings as warn frames and lists them in the --json result of a successful apply', async () => {
+  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -592,13 +595,7 @@ describe('db init', () => {
       messages: frames.filter((frame) => frame['kind'] === 'message'),
       warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
         .warnings,
-    }).toEqual({
-      exitCode: 0,
-      messages: [
-        expect.objectContaining({ kind: 'message', severity: 'warn', text: WARNING.summary }),
-      ],
-      warnings: [WARNING],
-    });
+    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
   });
 
   it('shows the planner`s warnings when the apply fails', async () => {

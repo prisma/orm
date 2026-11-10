@@ -743,7 +743,7 @@ describe('db update', () => {
     expect(run.stdout).toBe('');
   });
 
-  it('reports each planner warning with its why before the apply runs, and lists it once', async () => {
+  it('shows each planner warning with its why as a warning, as migration plan does', async () => {
     mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
       options.onPlannerWarnings?.([
         {
@@ -752,12 +752,6 @@ describe('db update', () => {
           why: 'Its values are lost.',
         },
       ]);
-      options.onProgress?.({
-        action: 'dbUpdate',
-        kind: 'spanStart',
-        spanId: 'apply',
-        label: 'Applying migration plan',
-      });
       return ok(applySuccess());
     });
 
@@ -768,24 +762,23 @@ describe('db update', () => {
 
     expect({
       exitCode: run.exitCode,
-      events: run.events.filter(
-        (event) =>
-          (event.kind === 'message' && event.severity === 'warn') || event.kind === 'step-started',
-      ),
-      headers: (run.presented?.presentation.human ?? []).filter(
-        (block) => block.kind === 'summary' && block.text === 'Planner warnings',
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      warnings: (run.presented?.presentation.human ?? []).filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
       ),
     }).toEqual({
       exitCode: 0,
-      events: [
+      messages: [],
+      warnings: [
         {
-          kind: 'message',
-          severity: 'warn',
+          kind: 'summary',
+          status: 'warn',
           text: 'Column user.legacy is dropped without a backfill. Its values are lost.',
         },
-        { kind: 'step-started', step: 'Applying migration plan', id: 'apply' },
       ],
-      headers: [],
     });
   });
 
@@ -1009,7 +1002,7 @@ describe('db update', () => {
     });
   });
 
-  it('writes the planner`s warnings as warn frames and lists them in the --json result of a successful run', async () => {
+  it('lists the planner`s warnings in the --json result of a successful run', async () => {
     mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
       options.onPlannerWarnings?.([WARNING]);
       return ok(applySuccess());
@@ -1023,13 +1016,7 @@ describe('db update', () => {
       messages: frames.filter((frame) => frame['kind'] === 'message'),
       warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
         .warnings,
-    }).toEqual({
-      exitCode: 0,
-      messages: [
-        expect.objectContaining({ kind: 'message', severity: 'warn', text: WARNING.summary }),
-      ],
-      warnings: [WARNING],
-    });
+    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
   });
 
   it('writes the planner`s warnings of a failed run as warn frames before the --json error', async () => {

@@ -11,6 +11,7 @@ import {
   renderPreviewStatement,
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
@@ -103,6 +104,13 @@ function operationBlocks(result: MigrationCommandResult): readonly Block[] {
     { kind: 'tree', roots: result.plan.operations.map(operationNode) },
     ...destructiveWarningBlocks(hasDestructive),
   ];
+}
+
+/** What the planner flagged without refusing to plan it, each its summary followed by its why. */
+function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
+  return (result.warnings ?? []).map(
+    (warning): Block => ({ kind: 'summary', status: 'warn', text: plannerWarningText(warning) }),
+  );
 }
 
 /** The statements a database would run, printed verbatim rather than laid out. */
@@ -233,6 +241,7 @@ function planBlocks(
   const planned = result.plannedAdvanceRef;
   return [
     { kind: 'summary', status: 'ok', text: planSummaryText(result) },
+    ...plannerWarningBlocks(result),
     ...operationBlocks(result),
     ...temporaryValueBlocks(result, invocation, databaseStorageHash),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
@@ -303,6 +312,7 @@ function applyBlocks(
   const advanced = result.advancedRef;
   return [
     { kind: 'summary', status: 'ok', text: applySummaryText(result) },
+    ...plannerWarningBlocks(result),
     ...operationBlocks(result),
     ...temporaryValueBlocks(result, invocation, databaseStorageHash),
     ...appliedStatementBlocks(result.appliedStatements ?? []),

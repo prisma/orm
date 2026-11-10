@@ -995,7 +995,7 @@ Update your database schema to match the currently emitted contract.
 - Disables per-operation runner execution checks by default (precheck/postcheck/idempotency)
 - In `--dry-run` mode for SQL targets, prints a DDL preview derived from planned operations
 - Before an apply, asks what each operation that would lose data means and whether each that would change access may run (see **Questions before an apply** below)
-- Prints each warning the planner raises, its summary followed by its why, as soon as the plan is made and before the apply, so it comes before any failure; the JSON result of a successful run also lists them as `warnings`. `db init` does the same
+- Shows each warning the planner raises, its summary followed by its why, as a warning, as `migration plan` does; the JSON result of a successful run lists them as `warnings`. When the run fails, they are printed as warnings before its error. `db init` does the same
 - Says when the runner skipped operations whose postcheck already held: `Applied 1 of 2 operation(s) across 1 contract space; the other 1 had nothing to do, since their postchecks already held`. `db init` does the same
 
 **Command:**
