@@ -218,8 +218,8 @@ export class MysqlMigrationPlanner<TargetId extends string = 'mysql'>
 function statementNotYetSupported(statement: ResolvedMigrationStatement): SqlPlannerConflict {
   return {
     kind: 'statementRefused',
-    summary: `A ${statement.kind} statement is not yet supported on MySQL`,
-    why: 'The MySQL planner plans no rename, conversion or backfill yet. Plan the change without the statement, or write it by hand in a migration of its own with `migration new`.',
+    summary: `A ${statement.kind} statement is not yet supported by the migration planner`,
+    why: 'The migration planner plans no rename, conversion or backfill yet. Plan the change without the statement, or write it by hand in a migration of its own with `migration new`.',
     refusedStatement: statement,
   };
 }

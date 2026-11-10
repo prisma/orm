@@ -1,4 +1,7 @@
-import type { ControlStack } from '@internal/framework-components/control';
+import type {
+  ControlStack,
+  ResolvedMigrationStatement,
+} from '@internal/framework-components/control';
 import { col } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
 import { mysqlTargetDescriptorMeta } from '../../src/core/descriptor-meta';
@@ -119,6 +122,32 @@ describe('a target that extends MySQL', () => {
       targetId: 'mariadb',
       operationTargets: ['mariadb'],
       modules: ['@internal/mariadb/migration'],
+    });
+  });
+
+  it('refuses a statement without naming MySQL', () => {
+    const rename = { kind: 'rename' } as unknown as ResolvedMigrationStatement;
+    const result = createMysqlMigrationPlanner(stubLowerer, MARIADB).plan({
+      contract: contractOf('c'.repeat(64), {}),
+      schema: mysqlControlTarget().migrations.contractToSchema(null, frameworkComponents),
+      policy: { allowedOperationClasses: ['additive'] },
+      fromContract: null,
+      origin: null,
+      statements: [rename],
+      frameworkComponents,
+      spaceId: 'app',
+      snapshotsImportPath: '../../snapshots',
+    });
+    expect(result).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary: 'A rename statement is not yet supported by the migration planner',
+          why: 'The migration planner plans no rename, conversion or backfill yet. Plan the change without the statement, or write it by hand in a migration of its own with `migration new`.',
+          refusedStatement: rename,
+        },
+      ],
     });
   });
 

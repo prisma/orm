@@ -174,7 +174,7 @@ describe('the MySQL planner', () => {
     ]);
   });
 
-  it('refuses a statement such as a rename as not yet supported on MySQL', () => {
+  it('refuses a statement such as a rename as not yet supported by the migration planner', () => {
     const rename = { kind: 'rename' } as unknown as ResolvedMigrationStatement;
     const result = createPlanner().plan({
       contract: loadExampleContract(),
@@ -188,7 +188,10 @@ describe('the MySQL planner', () => {
       snapshotsImportPath: '../../snapshots',
     });
     expect(conflictsOf(result)).toEqual([
-      { kind: 'statementRefused', summary: 'A rename statement is not yet supported on MySQL' },
+      {
+        kind: 'statementRefused',
+        summary: 'A rename statement is not yet supported by the migration planner',
+      },
     ]);
   });
 });
