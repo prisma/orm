@@ -301,4 +301,47 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'says an earlier validator change of the apply set the validator in place, and lists it with what ran',
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertOne({ name: 'Ada' });
+      const nameOnly = { ...schemaWithPlan, required: ['_id', 'name'] };
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: nameOnly } },
+          {
+            id: 'validator.users.first',
+            label: 'Set the first validator on users',
+            checkDocuments: true,
+          },
+        ),
+        collMod(
+          'users',
+          { validator: { $jsonSchema: schemaWithPlan } },
+          {
+            id: 'validator.users.second',
+            label: 'Set the second validator on users',
+            checkDocuments: true,
+          },
+        ),
+      ]);
+
+      if (result.ok)
+        throw new Error('Expected the second validator change to stop at its document check');
+      expect({
+        inPlace: result.failure.why?.includes(
+          'The validator in place is the one an earlier operation of this apply set: Set the first validator on users.',
+        ),
+        notChanged: result.failure.why?.includes('The validator was not changed.'),
+        ran: result.failure.why?.includes(
+          'These operations of this apply already changed collection users and stay applied: Set the first validator on users.',
+        ),
+      }).toEqual({ inPlace: true, notChanged: false, ran: true });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });

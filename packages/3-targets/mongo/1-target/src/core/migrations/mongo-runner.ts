@@ -738,6 +738,7 @@ export class MongoMigrationRunner {
     let operationsExecuted = 0;
     const rewritesRan = new Map<string, string[]>();
     const ranOn = (collection: string): readonly string[] => rewritesRan.get(collection) ?? [];
+    const validatorSetOn = new Map<string, string>();
 
     for (const [operationIndex, operation] of operations.entries()) {
       options.callbacks?.onOperationStart?.(operation);
@@ -787,6 +788,7 @@ export class MongoMigrationRunner {
               renameTargetExistsRefusal(operation, failing) ??
               (await this.documentsFailingValidatorRefusal(operation, failing, {
                 ranOn,
+                validatorSetBy: (collection) => validatorSetOn.get(collection),
                 contract: options.destinationContract,
               })) ??
               runnerFailure(
@@ -830,7 +832,11 @@ export class MongoMigrationRunner {
 
         operationsExecuted += 1;
         const validated = validatorSetBy(operation)?.collection;
-        if (validated !== undefined) rewrittenBeforeValidator.delete(validated);
+        if (validated !== undefined) {
+          rewrittenBeforeValidator.delete(validated);
+          rewritesRan.set(validated, [...ranOn(validated), operation.label]);
+          validatorSetOn.set(validated, operation.label);
+        }
       } finally {
         options.callbacks?.onOperationComplete?.(operation);
       }
@@ -1038,6 +1044,8 @@ export class MongoMigrationRunner {
     failed: MongoMigrationCheck,
     apply: {
       readonly ranOn: (collection: string) => readonly string[];
+      /** The label of the operation of this apply that last set the collection's validator, if one did. */
+      readonly validatorSetBy: (collection: string) => string | undefined;
       readonly contract: MongoContract;
     },
   ): Promise<MongoMigrationRunnerResult | undefined> {
@@ -1127,6 +1135,7 @@ export class MongoMigrationRunner {
           ]
         : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const ran = apply.ranOn(collection);
+    const setBy = apply.validatorSetBy(collection);
     const why = beforeRewrites
       ? [
           ...found,
@@ -1141,7 +1150,9 @@ export class MongoMigrationRunner {
           ...found,
           ...advice,
           `Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
-          'The validator was not changed.',
+          setBy === undefined
+            ? 'The validator was not changed.'
+            : `The validator in place is the one an earlier operation of this apply set: ${setBy}.`,
           ...(ran.length === 0
             ? []
             : [
