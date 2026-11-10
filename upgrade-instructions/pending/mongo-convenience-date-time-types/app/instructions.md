@@ -45,7 +45,7 @@ MongoDB now has the convenience date and time types PostgreSQL, SQLite and MySQL
 node scripts/rewrite-mongo-date-types.ts
 ```
 
-It rewrites `Date` to `DateTime` in MongoDB schemas, including in `types {}` aliases, and `type.Date()` to `type.DateTime()` in MongoDB TypeScript contracts. Pass files or directories to limit it. Fix by hand each line it reports, then run `prisma contract emit`: the contract must not change.
+It rewrites `Date` to `DateTime` in MongoDB schemas, including in `types {}` aliases, and `type.Date()` to `type.DateTime()` in MongoDB TypeScript contracts. No release had `type.Date()` for an instant, because MongoDB's `type` helpers ship in this release too; the script rewrites it in case a contract was written by hand with it. Pass files or directories to limit it. Fix by hand each line it reports, then run `prisma contract emit`: the contract must not change.
 
 A field you miss still compiles. Its TypeScript type becomes `string`, and reading a document whose value has a time of day fails with an error that names the field. Worse, `@onCreate(now())` or `@onUpdate(now())` on it writes today's date at midnight UTC, losing the time, with no error, so check every generated timestamp field. A field that really holds a calendar date can stay `Date`, if every stored value is at midnight UTC; it then reads `"2024-02-29"` instead of a `Date`. A Prisma 6 schema read with `prisma6Schema` is not rewritten: its `DateTime` and `DateTime @db.Date` stay instants read as a JavaScript `Date`.
 
