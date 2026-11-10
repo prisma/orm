@@ -20,7 +20,7 @@ import {
 type AnyField = ContractField | ContractValueObjectField;
 
 const NOT_A_STATEMENT =
-  'This change is not a statement, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.';
+  'No statement (--rename, --delete, --convert, --backfill) covers this change, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.';
 
 function warning(summary: string): MigrationPlannerConflict {
   return { kind: 'documentsNotRewritten', summary, why: NOT_A_STATEMENT };
