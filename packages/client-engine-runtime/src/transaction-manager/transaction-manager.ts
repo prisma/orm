@@ -330,11 +330,10 @@ export class TransactionManager {
       await this.#withActiveTransactionLock(transactionId, 'rollback', async (txw) => {
         const scope = innermostScope(txw)
         if (scope.savepoint !== undefined) {
-          if (!txw.transaction) throw new TransactionNotFoundError()
           try {
-            const rollbackToSavepoint = this.#requiredRollbackToSavepoint(txw.transaction)
             await this.#closeScopes([scope], 'rolled_back')
-            await rollbackToSavepoint(scope.savepoint)
+            if (!txw.transaction) throw new TransactionNotFoundError()
+            await this.#requiredRollbackToSavepoint(txw.transaction)(scope.savepoint)
             await this.#releaseSavepoint(txw.transaction, scope.savepoint)
           } finally {
             txw.scopes.pop()

@@ -312,8 +312,16 @@ test('missing rollbackToSavepoint fails nested rollback', async () => {
 
   const id = await startTransaction(transactionManager)
   await transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, newTxId: id })
+  const nested = await transactionManager.getTransaction({ id }, 'query')
 
   await expect(transactionManager.rollbackTransaction(id)).rejects.toThrow('rollbackToSavepoint is not implemented')
+
+  await expect(nested.executeRaw({ sql: 'INSERT', args: [], argTypes: [] })).rejects.toEqual(
+    new TransactionRolledBackError('query'),
+  )
+  expect(driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)).toEqual([
+    expect.stringMatching(/^SAVEPOINT /),
+  ])
 })
 
 test('transaction is rolled back', async () => {
