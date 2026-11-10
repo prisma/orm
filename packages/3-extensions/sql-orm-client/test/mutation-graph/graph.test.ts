@@ -195,6 +195,18 @@ describe('Graph', () => {
       expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['email', 'id']);
       expect(graph.columnsReadFrom(union)).toEqual([]);
     });
+
+    it('leaves out the columns of an edge whose reader was removed', () => {
+      const graph = newGraph();
+      const find = graph.add(findUsers());
+      const removed = graph.add(new UnionAll());
+      graph.addRowsEdge(find, removed, 'rows', emailToTitle);
+      graph.addRowsEdge(find, graph.add(new UnionAll()), 'rows', sameId);
+
+      graph.remove(removed);
+
+      expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['id']);
+    });
   });
 
   describe('readersOf', () => {

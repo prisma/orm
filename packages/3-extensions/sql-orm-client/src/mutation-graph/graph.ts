@@ -8,7 +8,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
-import type { ColumnPair, Edge, NodeId, StorageRow } from './edge';
+import { type ColumnPair, DataEdge, type Edge, type NodeId, type StorageRow } from './edge';
 import { FilterData } from './filter-data';
 import type { Node, Slot, Slots, StatementAst } from './node';
 import { PayloadData } from './payload-data';
@@ -28,7 +28,6 @@ export class Graph {
   #nodes: (Node | undefined)[] = [];
   #inputs: Record<string, Slot>[] = [];
   #readers: Reader[][] = [];
-  #columnsRead: ProjectionItem[][] = [];
   #states = new Map<string, NodeId>();
   #result: NodeId | undefined = undefined;
 
@@ -102,7 +101,9 @@ export class Graph {
   }
 
   columnsReadFrom(id: NodeId): readonly ProjectionItem[] {
-    return this.#columnsRead[id] ?? [];
+    return this.readersOf(id).flatMap(({ edge }) =>
+      edge instanceof DataEdge ? edge.columns.map(([source]) => source) : [],
+    );
   }
 
   replace(id: NodeId, next: Node): void {
@@ -155,7 +156,6 @@ export class Graph {
       ),
     );
     this.#readers.push([]);
-    this.#columnsRead.push([]);
     return id;
   }
 
@@ -169,11 +169,9 @@ export class Graph {
   }
 
   #read(from: NodeId, columns: readonly ColumnPair[]): void {
-    const read = columns.map(([source]) => source);
-    this.#columnsRead[from]?.push(...read);
     const source = this.#nodes[from];
     if (source instanceof StatementNode) {
-      this.#nodes[from] = source.withReturning(read);
+      this.#nodes[from] = source.withReturning(columns.map(([column]) => column));
     }
   }
 
