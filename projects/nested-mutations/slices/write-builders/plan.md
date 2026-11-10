@@ -25,7 +25,7 @@ Slice spec: `projects/nested-mutations/slices/write-builders/spec.md`. Five disp
 
 ### Dispatch 4: delete and the rest of the builders
 
-- **Outcome:** Delete as decided by the spec's open question 1; every write builder adds its read-back; no builder takes `returns` or reads `returning`; `readsBack`, `Translation.readsBack`, `addReadBack`, `addFindOfWrittenRows`, `addWithIncludes` collapse into the builders; `create()` has one path; nested child `connect`/`disconnect` and junction `disconnect` use the update and delete builders; one identity check.
+- **Outcome:** The delete rule and id forwarding as the spec states them; `deleteFirstGraph` and `deleteAllGraph` build `Find` → `Delete` on every database, reading the result from the `Find`'s id; every write builder adds its read-back; no builder takes `returns` or reads `returning`; `readsBack`, `Translation.readsBack`, `addReadBack`, `addFindOfWrittenRows`, `addWithIncludes` collapse into the builders; `create()` has one path; nested child `connect`/`disconnect` and junction `disconnect` use the update and delete builders; one identity check.
 - **Builds on:** Dispatch 3.
 - **Hands to:** The builders later slices use.
 - **Focus:** Results unchanged for callers; count calls return the count.
