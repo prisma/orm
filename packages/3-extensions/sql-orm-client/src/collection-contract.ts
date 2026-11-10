@@ -570,11 +570,11 @@ export function addressedModel(
     : [variant.namespaceId, variant.modelName];
 }
 
-interface ResolvedThrough extends ContractRelationThrough {
+export interface ResolvedThrough extends ContractRelationThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface ResolvedRelation {
+export interface ResolvedRelation {
   readonly to: string;
   readonly toNamespace: string;
   readonly cardinality: RelationCardinalityTag | undefined;

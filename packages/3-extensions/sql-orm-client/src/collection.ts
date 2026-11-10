@@ -156,7 +156,7 @@ import {
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
-import { hasRelationFields, parseMutationInput } from './relation-mutations';
+import { parseMutationInput } from './relation-mutations';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -179,6 +179,7 @@ import {
   type IncludeScalar,
   type InferRootRow,
   type ModelCallbackTools,
+  type MutationCreateInput,
   type MutationCreateInputWithRelations,
   type MutationUpdateInput,
   type RelatedModelName,
@@ -1940,12 +1941,17 @@ export class CollectionBase<
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
   ): Promise<Row> {
-    const input = blindCast<
-      Record<string, unknown>,
-      'create overload inputs are model-field records inspected for relation callbacks'
-    >(data);
-    if (hasRelationFields(this.contract, this.namespaceId, this.modelName, input)) {
-      const graph = createGraph(this.#descriptionOptions(), input);
+    const parsed = parseMutationInput(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
+      blindCast<
+        MutationCreateInput<Contract<SqlStorage>, string>,
+        'create overload inputs are model-field records whose relation fields are callbacks'
+      >(data),
+    );
+    if (parsed.relationMutations.length > 0) {
+      const graph = createGraph(this.#descriptionOptions(), parsed);
       const [created] = await queryGraph<Row>(
         graph,
         this.#on(queryable),
@@ -2392,9 +2398,7 @@ export class CollectionBase<
       MutationUpdateInput<Contract<SqlStorage>, string>,
       'update input is a model-field record whose relation fields are callbacks'
     >(data);
-    const parsed = hasRelationFields(this.contract, this.namespaceId, this.modelName, input)
-      ? parseMutationInput(this.contract, this.namespaceId, this.modelName, input)
-      : { scalarData: input, relationMutations: [] };
+    const parsed = parseMutationInput(this.contract, this.namespaceId, this.modelName, input);
     if (parsed.relationMutations.length > 0) {
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
     }

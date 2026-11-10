@@ -27,7 +27,7 @@ import {
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
 import { variantReturning } from '../query-plan-source';
-import type { ParsedRelationMutation } from '../relation-mutations';
+import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
@@ -233,7 +233,7 @@ export function createAllGraph(
 
 export function createGraph(
   collection: DescribeCollectionRowsOptions,
-  data: Readonly<Record<string, unknown>>,
+  parsed: ParsedMutationInput,
 ): Graph {
   const { context } = collection;
   const graph = new Graph(context.contract);
@@ -241,7 +241,7 @@ export function createGraph(
   const created = addCreateWithRelations(
     { graph, context, gate: undefined, readsBack: readsBack(collection, 'rows') },
     modelOf(collection),
-    data,
+    parsed,
     [],
   );
   graph.setResult(addWithIncludes(graph, collection, created));

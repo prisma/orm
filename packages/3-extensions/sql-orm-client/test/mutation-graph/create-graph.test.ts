@@ -2,6 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createGraph } from '../../src/mutation-graph/collection-graphs';
+import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
 import { createCollectionFor, withoutDefaultInInsert } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
@@ -9,6 +10,21 @@ import { printGraph } from './print-graph';
 
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
 type Callback = (mutator: Mutator) => unknown;
+
+function graphOf(
+  target: Parameters<typeof createGraph>[0],
+  data: Record<string, unknown>,
+): ReturnType<typeof createGraph> {
+  return createGraph(
+    target,
+    parseMutationInput(
+      target.context.contract,
+      target.namespaceId,
+      target.modelName,
+      data as never,
+    ),
+  );
+}
 
 function targetOf(modelName: 'User' | 'Post' | 'Project', withPosts = false) {
   const state = withPosts
@@ -21,7 +37,7 @@ function printCreate(
   modelName: 'User' | 'Post' | 'Project',
   data: Record<string, unknown>,
 ): string {
-  return printGraph(createGraph(targetOf(modelName), data));
+  return printGraph(graphOf(targetOf(modelName), data));
 }
 
 const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
@@ -58,7 +74,7 @@ describe('createGraph', () => {
 
     it('rejects disconnect while the graph is built', () => {
       expect(() =>
-        createGraph(targetOf('Post'), {
+        graphOf(targetOf('Post'), {
           ...hello,
           author: (author: Mutator) => author.disconnect(),
         }),
@@ -106,7 +122,7 @@ describe('createGraph', () => {
 
     it('rejects disconnect while the graph is built', () => {
       expect(() =>
-        createGraph(targetOf('User'), {
+        graphOf(targetOf('User'), {
           ...ada,
           posts: (posts: Mutator) => posts.disconnect(),
         }),
@@ -172,7 +188,7 @@ describe('createGraph', () => {
 
     it('rejects a junction with a required column the relation cannot fill', () => {
       expect(() =>
-        createGraph(targetOf('User'), {
+        graphOf(targetOf('User'), {
           ...ada,
           roles: (roles: Mutator) => roles.connect({ id: 1 }),
         }),
@@ -237,7 +253,7 @@ describe('createGraph', () => {
     });
 
     it('reads the parent with its includes after every child operation', () => {
-      const graph = createGraph(targetOf('User', true), { ...ada, posts: createPost });
+      const graph = graphOf(targetOf('User', true), { ...ada, posts: createPost });
 
       expect(printGraph(graph)).toBe(
         [
@@ -252,9 +268,7 @@ describe('createGraph', () => {
 
   describe('rejections while the graph is built', () => {
     it('rejects a relation field that is not a callback', () => {
-      expect(() =>
-        createGraph(targetOf('User'), { ...ada, posts: [hello], tags: createPost }),
-      ).toThrow(
+      expect(() => graphOf(targetOf('User'), { ...ada, posts: [hello], tags: createPost })).toThrow(
         expect.objectContaining({
           code: 'ORM.RELATION_MUTATION_INVALID',
           message: 'Relation field "posts" on model "User" expects a mutator callback',
@@ -265,7 +279,7 @@ describe('createGraph', () => {
 
     it('rejects a relation field that is not a callback in a nested child row', () => {
       expect(() =>
-        createGraph(targetOf('User'), {
+        graphOf(targetOf('User'), {
           ...ada,
           posts: (posts: Mutator) => posts.create([{ ...hello, comments: [] }]),
         }),
@@ -279,9 +293,7 @@ describe('createGraph', () => {
     });
 
     it('rejects a callback that returns no relation operation', () => {
-      expect(() =>
-        createGraph(targetOf('User'), { ...ada, posts: () => ({ invalid: true }) }),
-      ).toThrow(
+      expect(() => graphOf(targetOf('User'), { ...ada, posts: () => ({ invalid: true }) })).toThrow(
         expect.objectContaining({
           code: 'ORM.RELATION_MUTATION_INVALID',
           meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor' },
@@ -291,7 +303,7 @@ describe('createGraph', () => {
 
     it('rejects a connect without a criterion on a relation the parent holds the key for', () => {
       expect(() =>
-        createGraph(targetOf('Post'), {
+        graphOf(targetOf('Post'), {
           ...hello,
           author: (author: Mutator) => author.connect([]),
         }),
@@ -306,7 +318,7 @@ describe('createGraph', () => {
 
     it('rejects an empty criterion on a relation the child holds the key for', () => {
       expect(() =>
-        createGraph(targetOf('User'), { ...ada, posts: (posts: Mutator) => posts.connect({}) }),
+        graphOf(targetOf('User'), { ...ada, posts: (posts: Mutator) => posts.connect({}) }),
       ).toThrow(
         expect.objectContaining({
           code: 'ORM.RELATION_MUTATION_INVALID',
@@ -318,7 +330,7 @@ describe('createGraph', () => {
 
     it('rejects an empty connect criterion on a relation the parent holds the key for', () => {
       expect(() =>
-        createGraph(targetOf('Post'), {
+        graphOf(targetOf('Post'), {
           ...hello,
           author: (author: Mutator) => author.connect({}),
         }),
@@ -344,7 +356,7 @@ describe('createGraph', () => {
     it('inserts the children in one InsertChunked of the runs of rows that set the same columns', () => {
       expect(
         printGraph(
-          createGraph(target, {
+          graphOf(target, {
             ...ada,
             posts: (posts: Mutator) => posts.create([hello, { id: 11, title: 'Again' }]),
           }),
@@ -361,7 +373,7 @@ describe('createGraph', () => {
     it('inserts the target row and the junction row as InsertChunked', () => {
       expect(
         printGraph(
-          createGraph(target, {
+          graphOf(target, {
             ...ada,
             tags: (tags: Mutator) => tags.create([{ id: 't1', name: 'SQL' }]),
           }),

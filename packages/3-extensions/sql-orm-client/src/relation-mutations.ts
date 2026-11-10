@@ -2,10 +2,9 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  columnOfContractField,
+  type ResolvedRelation,
+  type ResolvedThrough,
   resolveModelRelations,
-  resolveModelTableName,
-  resolveRelationTargetColumns,
 } from './collection-contract';
 import { ormError } from './orm-errors';
 import {
@@ -13,47 +12,23 @@ import {
   isRelationMutationCallback,
   isRelationMutationDescriptor,
 } from './relation-mutator';
-import type {
-  MutationCreateInput,
-  MutationUpdateInput,
-  RelationCardinalityTag,
-  RelationMutation,
-} from './types';
+import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from './types';
 
-interface JunctionThrough {
-  readonly table: string;
-  readonly namespaceId: string;
-  readonly parentColumns: readonly string[];
-  readonly childColumns: readonly string[];
-  readonly targetColumns: readonly string[];
-  readonly requiredPayloadColumns: readonly string[];
+export interface JunctionRelation extends ResolvedRelation {
+  readonly through: ResolvedThrough;
 }
 
-export interface RelationDefinition {
-  readonly relationName: string;
-  readonly relatedModelName: string;
-  readonly relatedNamespaceId: string;
-  readonly relatedTableName: string;
-  readonly cardinality: RelationCardinalityTag | undefined;
-  readonly localColumns: readonly string[];
-  readonly targetColumns: readonly string[];
-  readonly through: JunctionThrough | undefined;
-}
-
-export interface JunctionRelationDefinition extends RelationDefinition {
-  readonly through: JunctionThrough;
-}
-
-export function hasThrough(relation: RelationDefinition): relation is JunctionRelationDefinition {
+export function hasThrough(relation: ResolvedRelation): relation is JunctionRelation {
   return relation.through !== undefined;
 }
 
 export interface ParsedRelationMutation {
-  readonly relation: RelationDefinition;
+  readonly name: string;
+  readonly relation: ResolvedRelation;
   readonly mutation: RelationMutation<Contract<SqlStorage>, string>;
 }
 
-interface ParsedMutationInput {
+export interface ParsedMutationInput {
   readonly scalarData: Record<string, unknown>;
   readonly relationMutations: readonly ParsedRelationMutation[];
 }
@@ -67,18 +42,13 @@ export function parseMutationInput(
     | MutationUpdateInput<Contract<SqlStorage>, string>,
 ): ParsedMutationInput {
   const scalarData: Record<string, unknown> = {};
-  const relationDefinitions = new Map(
-    getRelationDefinitions(contract, namespaceId, modelName).map((relation) => [
-      relation.relationName,
-      relation,
-    ]),
-  );
+  const relations = resolveModelRelations(contract, namespaceId, modelName);
 
   const relationMutations: ParsedRelationMutation[] = [];
 
   for (const [fieldName, value] of Object.entries(input)) {
-    const relation = relationDefinitions.get(fieldName);
-    if (!relation) {
+    const relation = Object.hasOwn(relations, fieldName) ? relations[fieldName] : undefined;
+    if (relation === undefined) {
       scalarData[fieldName] = value;
       continue;
     }
@@ -104,10 +74,7 @@ export function parseMutationInput(
       );
     }
 
-    relationMutations.push({
-      relation,
-      mutation,
-    });
+    relationMutations.push({ name: fieldName, relation, mutation });
   }
 
   return {
@@ -116,25 +83,22 @@ export function parseMutationInput(
   };
 }
 
-interface JunctionParsedRelationMutation extends ParsedRelationMutation {
-  readonly relation: JunctionRelationDefinition;
+export interface JunctionRelationMutation extends ParsedRelationMutation {
+  readonly relation: JunctionRelation;
 }
 
 export function partitionByOwnership(relationMutations: readonly ParsedRelationMutation[]): {
   parentOwned: ParsedRelationMutation[];
   childOwned: ParsedRelationMutation[];
-  junctionOwned: JunctionParsedRelationMutation[];
+  junctionOwned: JunctionRelationMutation[];
 } {
   const parentOwned: ParsedRelationMutation[] = [];
   const childOwned: ParsedRelationMutation[] = [];
-  const junctionOwned: JunctionParsedRelationMutation[] = [];
+  const junctionOwned: JunctionRelationMutation[] = [];
 
   for (const relationMutation of relationMutations) {
     if (hasThrough(relationMutation.relation)) {
-      junctionOwned.push({
-        relation: relationMutation.relation,
-        mutation: relationMutation.mutation,
-      });
+      junctionOwned.push({ ...relationMutation, relation: relationMutation.relation });
       continue;
     }
 
@@ -153,13 +117,14 @@ export function partitionByOwnership(relationMutations: readonly ParsedRelationM
   };
 }
 
-export function assertJunctionPayloadWritable(
-  relation: JunctionRelationDefinition,
-  mutationKind: RelationMutation<Contract<SqlStorage>, string>['kind'],
-): void {
-  const through = relation.through;
+export function assertJunctionPayloadWritable({
+  name,
+  relation,
+  mutation,
+}: JunctionRelationMutation): void {
+  const { through } = relation;
   if (
-    (mutationKind !== 'create' && mutationKind !== 'connect') ||
+    (mutation.kind !== 'create' && mutation.kind !== 'connect') ||
     through.requiredPayloadColumns.length === 0
   ) {
     return;
@@ -168,11 +133,11 @@ export function assertJunctionPayloadWritable(
   const cols = through.requiredPayloadColumns.map((c) => `\`${c}\``).join(', ');
   throw ormError(
     'ORM.RELATION_MUTATION_UNSUPPORTED',
-    `Cannot \`${mutationKind}\` on relation \`${relation.relationName}\`: its junction \`${through.table}\` has required column(s) ${cols} the relation API can't populate. Write the \`${through.table}\` junction directly or use the SQL builder.`,
+    `Cannot \`${mutation.kind}\` on relation \`${name}\`: its junction \`${through.table}\` has required column(s) ${cols} the relation API can't populate. Write the \`${through.table}\` junction directly or use the SQL builder.`,
     {
       meta: {
-        kind: mutationKind,
-        relation: relation.relationName,
+        kind: mutation.kind,
+        relation: name,
         reason: 'junction-required-columns',
         junction: through.table,
       },
@@ -181,7 +146,7 @@ export function assertJunctionPayloadWritable(
 }
 
 function assertJunctionMetadataLength(
-  relation: JunctionRelationDefinition,
+  name: string,
   throughColumnName: string,
   throughColumns: readonly string[],
   pairedColumnName: string,
@@ -192,88 +157,23 @@ function assertJunctionMetadataLength(
   }
 
   throw new InternalError(
-    `Relation "${relation.relationName}" has invalid junction metadata: ${throughColumnName} has ${throughColumns.length} column(s), but ${pairedColumnName} has ${pairedColumns.length}`,
+    `Relation "${name}" has invalid junction metadata: ${throughColumnName} has ${throughColumns.length} column(s), but ${pairedColumnName} has ${pairedColumns.length}`,
   );
 }
 
-function assertJunctionParentMetadataLength(relation: JunctionRelationDefinition): void {
+export function assertJunctionMetadataShape({ name, relation }: JunctionRelationMutation): void {
   assertJunctionMetadataLength(
-    relation,
+    name,
     'parentColumns',
     relation.through.parentColumns,
     'localColumns',
-    relation.localColumns,
+    relation.on.localFields,
   );
-}
-
-function assertJunctionTargetMetadataLength(relation: JunctionRelationDefinition): void {
   assertJunctionMetadataLength(
-    relation,
+    name,
     'childColumns',
     relation.through.childColumns,
     'targetColumns',
     relation.through.targetColumns,
   );
-}
-
-export function assertJunctionMetadataShape(relation: JunctionRelationDefinition): void {
-  assertJunctionParentMetadataLength(relation);
-  assertJunctionTargetMetadataLength(relation);
-}
-
-const relationDefsCache = new WeakMap<object, Map<string, RelationDefinition[]>>();
-
-function getRelationDefinitions(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-): RelationDefinition[] {
-  let perContract = relationDefsCache.get(contract);
-  if (!perContract) {
-    perContract = new Map();
-    relationDefsCache.set(contract, perContract);
-  }
-  const cacheKey = JSON.stringify([namespaceId, modelName]);
-  const cached = perContract.get(cacheKey);
-  if (cached) return cached;
-
-  // The base model's relations resolve within its namespace; relation
-  // targets resolve within the target model's namespace (`relation.toNamespace`,
-  // carried by the cross-reference) so a cross-namespace relation does not
-  // fall back to the default/first-match path.
-  const relations = resolveModelRelations(contract, namespaceId, modelName);
-  const definitions = Object.entries(relations).map(([relationName, relation]) => ({
-    relationName,
-    relatedModelName: relation.to,
-    relatedNamespaceId: relation.toNamespace,
-    relatedTableName: resolveModelTableName(contract, relation.toNamespace, relation.to),
-    cardinality: relation.cardinality,
-    localColumns: relation.on.localFields.map((f) =>
-      columnOfContractField(contract, namespaceId, modelName, f),
-    ),
-    targetColumns: resolveRelationTargetColumns(contract, relation),
-    through: relation.through
-      ? {
-          table: relation.through.table,
-          namespaceId: relation.through.namespaceId,
-          parentColumns: relation.through.parentColumns,
-          childColumns: relation.through.childColumns,
-          targetColumns: relation.through.targetColumns,
-          requiredPayloadColumns: relation.through.requiredPayloadColumns,
-        }
-      : undefined,
-  }));
-
-  perContract.set(cacheKey, definitions);
-  return definitions;
-}
-
-export function hasRelationFields(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  data: Readonly<Record<string, unknown>>,
-): boolean {
-  const relationNames = Object.keys(resolveModelRelations(contract, namespaceId, modelName));
-  return relationNames.some((name) => data[name] !== undefined);
 }

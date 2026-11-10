@@ -16,6 +16,21 @@ const withoutReturning = withoutCapabilityKeys(baseContract, [
 ]);
 const context = { ...getTestContext(), contract: withoutReturning };
 
+function graphOf(
+  target: Parameters<typeof createGraph>[0],
+  data: Record<string, unknown>,
+): ReturnType<typeof createGraph> {
+  return createGraph(
+    target,
+    parseMutationInput(
+      target.context.contract,
+      target.namespaceId,
+      target.modelName,
+      data as never,
+    ),
+  );
+}
+
 function targetOf(modelName: 'User' | 'Post') {
   const { collection } = createCollectionFor(modelName, withoutReturning);
   return { context, state: collection.where({ id: 1 }).state, modelName, namespaceId: 'public' };
@@ -26,7 +41,7 @@ const hello = { id: 10, title: 'Hello', views: 0 };
 
 describe('nested write graphs on a contract without capability "returning"', () => {
   it('inserts each row another node reads, reports its key and reads it back by that key', () => {
-    const graph = createGraph(
+    const graph = graphOf(
       {
         ...targetOf('Post'),
         state: createCollectionFor('Post', withoutReturning).collection.state,
@@ -46,7 +61,7 @@ describe('nested write graphs on a contract without capability "returning"', () 
   });
 
   it('inserts children no node reads in one Insert with the key of the parent', () => {
-    const graph = createGraph(
+    const graph = graphOf(
       {
         ...targetOf('User'),
         state: createCollectionFor('User', withoutReturning).collection.state,
