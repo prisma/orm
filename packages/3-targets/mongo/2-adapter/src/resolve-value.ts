@@ -11,6 +11,7 @@ import {
   MongoParamRef,
   type MongoPreparedParamRef,
 } from '@internal/mongo-value';
+import { isDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
@@ -20,7 +21,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
  * A value the driver serializes as one BSON value rather than a document: a `Date`, `RegExp` or `Uint8Array`, or an instance of a `bson` class, recognised by its `_bsontype` tag because the driver's classes come from its own load of `bson`. A plain object carrying a `_bsontype` key is a stored subdocument, not a class.
  */
 function isWireScalar(value: object): boolean {
-  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return true;
+  if (isDate(value) || value instanceof RegExp || value instanceof Uint8Array) return true;
   const prototype: unknown = Object.getPrototypeOf(value);
   return (
     prototype !== Object.prototype &&

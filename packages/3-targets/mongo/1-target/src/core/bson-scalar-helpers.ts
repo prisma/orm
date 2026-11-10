@@ -10,6 +10,7 @@ import {
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
+import { isDate, isValidDate } from '@internal/type-implementations/date';
 import { counted } from '@internal/utils/text';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
@@ -63,7 +64,7 @@ function describeReceived(value: unknown): string {
     return `string ${JSON.stringify(value.slice(0, RECEIVED_PREVIEW_LIMIT))}`;
   }
   if (value === null) return 'null';
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'an invalid Date' : 'a Date';
+  if (isDate(value)) return isValidDate(value) ? 'a Date' : 'an invalid Date';
   if (Array.isArray(value)) return 'an array';
   return typeof value;
 }
@@ -91,7 +92,7 @@ export function booleanEncode(codecId: string, value: boolean): boolean {
  * The driver writes an invalid `Date` as the epoch, so one is refused with any other non-`Date` value.
  */
 export function dateEncode(codecId: string, value: Date): Date {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+  if (!isValidDate(value)) {
     refuseType(codecId, 'a valid Date', value);
   }
   return value;
@@ -199,7 +200,7 @@ export function readInt32Json(owner: string, json: JsonValue): number {
 }
 
 export function dateToJson(codecId: string, value: Date): string {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+  if (!isValidDate(value)) {
     encodeFailed(codecId, 'value must be a valid Date', value);
   }
   return value.toISOString();

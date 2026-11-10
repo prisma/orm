@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { BSON, Double, ObjectId } from 'bson';
 import { ObjectId as DriverObjectId } from 'mongodb';
@@ -122,6 +123,11 @@ describe('codecs that check the type of the value they write', () => {
       new Date('not a date'),
     ],
     [
+      'mongo/string@1 value must be a string; received a Date',
+      mongoStringCodec,
+      runInNewContext('new Date("2020-01-01T00:00:00Z")'),
+    ],
+    [
       'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received null',
       mongoObjectIdCodec,
       null,
@@ -208,6 +214,17 @@ describe('mongoDateCodec', () => {
   it('encodes Date through identity', async () => {
     const d = new Date('2024-01-02T03:04:05.000Z');
     expect(await mongoDateCodec.toWire(d, {})).toBe(d);
+  });
+
+  it('encodes a Date created in another realm', async () => {
+    const d: Date = runInNewContext('new Date("2024-01-02T03:04:05.000Z")');
+    expect({
+      wire: await mongoDateCodec.toWire(d, {}),
+      json: toContractJson(mongoDateCodec, d),
+    }).toEqual({
+      wire: d,
+      json: '2024-01-02T03:04:05.000Z',
+    });
   });
 
   it('toDataTypeValue writes the ISO string the contract stores', () => {

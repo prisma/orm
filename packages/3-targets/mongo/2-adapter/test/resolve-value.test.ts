@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import {
   assembleMongoCodecRegistry,
@@ -155,6 +156,11 @@ describe('resolveValue', () => {
     expect(await resolveValue('raw', emptyRegistry(), noCtx)).toBe('raw');
     const d = new Date();
     expect(await resolveValue(d, emptyRegistry(), noCtx)).toBe(d);
+  });
+
+  it('passes a Date created in another realm through unchanged', async () => {
+    const d: Date = runInNewContext('new Date(0)');
+    expect(await resolveValue({ at: d }, emptyRegistry(), noCtx)).toEqual({ at: d });
   });
 
   describe('async dispatch — codec encode + concurrent encoding', () => {

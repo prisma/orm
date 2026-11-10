@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { JsonValue } from '@internal/contract/types';
 import { INT32_RANGE, refuseJsonValue } from '@internal/framework-components/codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
+import { isDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { Binary, Code, type Document, Double, EJSON } from 'bson';
 import {
@@ -68,7 +69,7 @@ function assertBsonValue(value: unknown, path: string, ancestors: Set<object>): 
     }
     return;
   }
-  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return;
+  if (isDate(value) || value instanceof RegExp || value instanceof Uint8Array) return;
   if (!isPlainArray(value) && !isPlainObject(value)) {
     encodeRefused(constructorName(value), path);
     return;

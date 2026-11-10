@@ -30,6 +30,7 @@
     "@internal/mongo-query-builder": "workspace:8.0.0-rc.23",
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.23",
     "@internal/mongo-value": "workspace:8.0.0-rc.23",
+    "@internal/type-implementations": "workspace:8.0.0-rc.23",
     "@internal/utils": "workspace:8.0.0-rc.23",
     "arktype": "catalog:",
     "bson": "catalog:"
