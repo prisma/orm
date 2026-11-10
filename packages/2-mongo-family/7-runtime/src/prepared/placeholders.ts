@@ -77,7 +77,6 @@ export function bindPlaceholders(
       'Prepared statement parameters must be an object',
     );
   }
-  const bound = new Map<MongoPreparedParamRef, MongoParamRef>();
   for (const placeholder of placeholders) {
     if (!Object.hasOwn(params, placeholder.name)) {
       throw runtimeError(
@@ -86,17 +85,19 @@ export function bindPlaceholders(
         { name: placeholder.name },
       );
     }
-    bound.set(
-      placeholder,
-      new MongoParamRef(params[placeholder.name], {
-        name: placeholder.name,
-        codecId: placeholder.codecId,
-        nullable: placeholder.nullable,
-      }),
-    );
   }
-  if (bound.size === 0) return draft;
-  return mapMongoDraftLeaves(draft, (leaf) =>
-    isMongoPreparedParamRef(leaf) ? (bound.get(leaf) ?? leaf) : leaf,
-  );
+  if (placeholders.length === 0) return draft;
+  const bound = new Map<MongoPreparedParamRef, MongoParamRef>();
+  return mapMongoDraftLeaves(draft, (leaf) => {
+    if (!isMongoPreparedParamRef(leaf)) return leaf;
+    const existing = bound.get(leaf);
+    if (existing !== undefined) return existing;
+    const ref = new MongoParamRef(params[leaf.name], {
+      name: leaf.name,
+      codecId: leaf.codecId,
+      nullable: leaf.nullable,
+    });
+    bound.set(leaf, ref);
+    return ref;
+  });
 }

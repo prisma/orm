@@ -155,6 +155,18 @@ describe('runtime.prepare', () => {
     ]);
   });
 
+  it('lists every declared name the plan does not use', async () => {
+    const { runtime } = preparedRuntime();
+    await expect(
+      runtime.prepare({ email: 'test/string@1', take: 'test/int@1', skip: 'test/int@1' }, byEmail),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.PREPARE_UNUSED_PARAM',
+      message:
+        "Prepared statement declaration includes parameters not referenced by the callback's plan: take, skip",
+      details: { unused: ['take', 'skip'] },
+    });
+  });
+
   it('refuses a declared name the plan does not use', async () => {
     const { runtime } = preparedRuntime();
     await expect(
@@ -191,6 +203,32 @@ describe('running a prepared statement', () => {
         },
       },
       { $limit: new MongoParamRef(5, { name: 'take', codecId: 'test/int@1', nullable: false }) },
+    ]);
+  });
+
+  it('keeps a fixed parameter in the plan beside the bound placeholders', async () => {
+    const { runtime, resolvedDrafts } = preparedRuntime();
+    const status = new MongoParamRef('active', { codecId: 'test/string@1' });
+    const statement = await runtime.prepare({ email: 'test/string@1' }, (p) =>
+      aggregatePlan(
+        new MongoMatchStage(MongoFieldFilter.eq('status', status)),
+        new MongoMatchStage(MongoFieldFilter.eq('email', p.email)),
+      ),
+    );
+    await statement.query(runtime, { email: 'a' }).toArray();
+    expect(pipelineOf(resolvedDrafts[0])).toEqual([
+      { $match: { status: { $eq: status } } },
+      {
+        $match: {
+          email: {
+            $eq: new MongoParamRef('a', {
+              name: 'email',
+              codecId: 'test/string@1',
+              nullable: false,
+            }),
+          },
+        },
+      },
     ]);
   });
 

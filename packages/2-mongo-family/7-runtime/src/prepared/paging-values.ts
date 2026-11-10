@@ -18,6 +18,10 @@ function assertPagingValue(stageName: '$limit' | '$skip', value: unknown): void 
   });
 }
 
+function isPipeline(value: unknown): value is ReadonlyArray<Record<string, unknown>> {
+  return Array.isArray(value) && value.every(isPlainRecord);
+}
+
 function subPipelines(stageName: string, body: unknown): ReadonlyArray<unknown> {
   if (!isPlainRecord(body)) return [];
   switch (stageName) {
@@ -33,15 +37,13 @@ function subPipelines(stageName: string, body: unknown): ReadonlyArray<unknown> 
   }
 }
 
-function assertPipeline(pipeline: unknown): void {
-  if (!Array.isArray(pipeline)) return;
+function assertPipeline(pipeline: ReadonlyArray<Record<string, unknown>>): void {
   for (const stage of pipeline) {
-    if (!isPlainRecord(stage)) continue;
     for (const [stageName, body] of Object.entries(stage)) {
       if (stageName === '$limit' || stageName === '$skip') {
         assertPagingValue(stageName, body);
       }
-      for (const sub of subPipelines(stageName, body)) {
+      for (const sub of subPipelines(stageName, body).filter(isPipeline)) {
         assertPipeline(sub);
       }
     }

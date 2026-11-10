@@ -87,6 +87,17 @@ describe('assertPagingValues', () => {
     expect(() => assertPagingValues(aggregate({ $skip: zero() }))).not.toThrow();
   });
 
+  it('accepts a $lookup with no sub-pipeline and a $merge whose whenMatched is a mode', () => {
+    expect(() =>
+      assertPagingValues(
+        aggregate(
+          { $lookup: { from: 'p', localField: 'a', foreignField: 'b', as: 'p' } },
+          { $merge: { into: 'p', whenMatched: 'replace' } },
+        ),
+      ),
+    ).not.toThrow();
+  });
+
   it('leaves raw commands and plain numbers alone', () => {
     expect(() =>
       assertPagingValues({

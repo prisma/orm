@@ -7,7 +7,7 @@ export type OrmCode = `ORM.${OrmSubcode}`;
 export function ormError(
   code: OrmCode,
   message: string,
-  meta?: Record<string, unknown>,
+  meta: Record<string, unknown>,
 ): StructuredError {
-  return structuredError(code, message, meta === undefined ? undefined : { meta });
+  return structuredError(code, message, { meta });
 }
