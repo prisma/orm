@@ -37,19 +37,27 @@ const ROLLBACK_GRACE_MS = 2_000
 
 type ClosingReason = 'committed' | 'rolled_back' | 'timed_out'
 
+type InterruptReason = Exclude<ClosingReason, 'committed'>
+
 /**
  * One level of a transaction: the outermost transaction, or a nested transaction on top of it.
  * Handles from {@link TransactionManager.getTransaction} belong to the scope that was innermost
- * when they were issued.
+ * when they were issued. A committed nested transaction's scope is merged into its parent, and
+ * its handles carry on there.
  */
 type Scope = {
   savepoint: string | undefined
   closingReason?: ClosingReason
   runningStatements: Set<Promise<void>>
+  mergedInto?: Scope
 }
 
 function createScope(savepoint: string | undefined): Scope {
   return { savepoint, closingReason: undefined, runningStatements: new Set() }
+}
+
+function currentScope(scope: Scope): Scope {
+  return scope.mergedInto ? currentScope(scope.mergedInto) : scope
 }
 
 type TransactionWrapper = {
@@ -61,11 +69,22 @@ type TransactionWrapper = {
   operationQueue: Promise<void>
   savepointCounter: number
   scopes: Scope[]
+  /** Resolves once the timeout or a disconnect has stopped any commit from waiting any longer. */
+  commitInterrupted: Promise<InterruptReason>
+  interruptCommit: (reason: InterruptReason) => void
 } & TransactionState
 
 type TransactionState =
   | { status: 'waiting' | 'running' | ClosingReason }
-  | { status: 'closing'; closing: Promise<void>; reason: ClosingReason }
+  | { status: 'closing'; closing: Promise<ClosingReason> }
+
+function createCommitInterruption(): Pick<TransactionWrapper, 'commitInterrupted' | 'interruptCommit'> {
+  let interruptCommit!: (reason: InterruptReason) => void
+  const commitInterrupted = new Promise<InterruptReason>((resolve) => {
+    interruptCommit = resolve
+  })
+  return { commitInterrupted, interruptCommit }
+}
 
 /**
  * A transaction whose `startTransaction` call has not returned yet. Such a transaction is not
@@ -204,6 +223,7 @@ export class TransactionManager {
         operationQueue: Promise.resolve(),
         savepointCounter: 0,
         scopes: [createScope(undefined)],
+        ...createCommitInterruption(),
       }
 
       // An abort that arrived while the id was being generated would be missed by the listener
@@ -312,15 +332,20 @@ export class TransactionManager {
         const scope = innermostScope(txw)
         if (scope.savepoint !== undefined) {
           if (!txw.transaction) throw new TransactionNotFoundError()
+          const outcome = await statementsSettledOrCommitInterrupted(txw, [...scope.runningStatements])
+          if (outcome !== 'committed') {
+            await this.#closeTransaction(txw, outcome)
+            throw closedTransactionError(txw, outcome, 'commit')
+          }
           try {
-            await this.#closeScopes([scope], 'committed')
             await this.#releaseSavepoint(txw.transaction, scope.savepoint)
           } finally {
-            txw.scopes.pop()
+            mergeInnermostScope(txw)
           }
           return
         }
-        await this.#closeTransaction(txw, 'committed')
+        const outcome = await this.#closeTransaction(txw, 'committed')
+        if (outcome !== 'committed') throw closedTransactionError(txw, outcome, 'commit')
       })
     })
   }
@@ -331,7 +356,7 @@ export class TransactionManager {
         const scope = innermostScope(txw)
         if (scope.savepoint !== undefined) {
           try {
-            await this.#closeScopes([scope], 'rolled_back')
+            await this.#closeScopes(txw, [scope], 'rolled_back')
             if (!txw.transaction) throw new TransactionNotFoundError()
             await this.#requiredRollbackToSavepoint(txw.transaction)(scope.savepoint)
             await this.#releaseSavepoint(txw.transaction, scope.savepoint)
@@ -348,7 +373,8 @@ export class TransactionManager {
   /**
    * Returns a handle for running statements in the transaction. The handle rejects every
    * statement issued after the transaction, or the nested transaction that is innermost now,
-   * has started to close.
+   * has started to close. Once that nested transaction commits, the handle runs its statements
+   * in the enclosing transaction.
    */
   getTransaction(txInfo: TransactionInfo, operation: string): Promise<SqlQueryable> {
     return new Promise((resolve) => resolve(this.#issueHandle(txInfo, operation)))
@@ -356,9 +382,10 @@ export class TransactionManager {
 
   #issueHandle(txInfo: TransactionInfo, operation: string): SqlQueryable {
     const tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
-    if (tx.status === 'closing') throw closedTransactionError(tx, tx.reason, operation)
+    const scope = innermostScope(tx)
+    if (scope.closingReason !== undefined) throw closedTransactionError(tx, scope.closingReason, operation)
     if (!tx.transaction) throw new TransactionNotFoundError()
-    return this.#guardedQueryable(tx, tx.transaction, innermostScope(tx), operation)
+    return this.#guardedQueryable(tx, tx.transaction, scope, operation)
   }
 
   #guardedQueryable(tx: TransactionWrapper, transaction: Transaction, scope: Scope, operation: string): SqlQueryable {
@@ -372,10 +399,11 @@ export class TransactionManager {
 
   async #runStatement<T>(
     tx: TransactionWrapper,
-    scope: Scope,
+    issuedIn: Scope,
     operation: string,
     execute: () => Promise<T>,
   ): Promise<T> {
+    const scope = currentScope(issuedIn)
     if (scope.closingReason !== undefined) {
       throw closedTransactionError(tx, scope.closingReason, operation)
     }
@@ -388,25 +416,30 @@ export class TransactionManager {
     try {
       return await execute()
     } finally {
-      scope.runningStatements.delete(settled)
+      currentScope(issuedIn).runningStatements.delete(settled)
       markSettled()
     }
   }
 
   /**
    * Stops `scopes` from accepting statements, then waits for the ones already running. A commit
-   * waits for as long as they take; a rollback waits at most {@link ROLLBACK_GRACE_MS}.
+   * waits until they settle or the timeout or a disconnect interrupts it, and then becomes a
+   * rollback. A rollback waits at most {@link ROLLBACK_GRACE_MS}. Resolves with how the
+   * transaction is to be closed.
    */
-  async #closeScopes(scopes: Scope[], reason: ClosingReason): Promise<void> {
-    for (const scope of scopes) {
-      scope.closingReason ??= reason
-    }
+  async #closeScopes(tx: TransactionWrapper, scopes: Scope[], reason: ClosingReason): Promise<ClosingReason> {
+    markClosing(scopes, reason)
 
     const running = scopes.flatMap((scope) => [...scope.runningStatements])
-    if (running.length === 0) return
+    if (running.length === 0) return reason
 
+    const outcome = reason === 'committed' ? await statementsSettledOrCommitInterrupted(tx, running) : reason
+    if (outcome === 'committed') return outcome
+
+    markClosing(scopes, outcome)
     const allSettled = Promise.all(running).then(() => {})
-    await (reason === 'committed' ? allSettled : settleWithin(allSettled, ROLLBACK_GRACE_MS))
+    await settleWithin(allSettled, ROLLBACK_GRACE_MS)
+    return outcome
   }
 
   #getActiveOrClosingTransaction(transactionId: string, operation: string): TransactionWrapper {
@@ -444,6 +477,9 @@ export class TransactionManager {
     const starting = [...this.#startingTransactions]
     for (const { abortController } of starting) {
       abortController.abort()
+    }
+    for (const tx of this.transactions.values()) {
+      tx.interruptCommit('rolled_back')
     }
 
     // TODO: call `map` on the iterator directly without collecting it into an array first
@@ -517,6 +553,7 @@ export class TransactionManager {
           return
         }
 
+        tx.interruptCommit('timed_out')
         await this.#runSerialized(tx, async () => {
           const current = this.transactions.get(transactionId)
           if (current && ['running', 'waiting'].includes(current.status)) {
@@ -566,12 +603,13 @@ export class TransactionManager {
     }
   }
 
-  async #closeTransaction(tx: TransactionWrapper, status: ClosingReason): Promise<void> {
-    const createClosingPromise = async (scopesClosed: Promise<void>) => {
+  /** Resolves with how the transaction was closed, which differs from `status` for an interrupted commit. */
+  async #closeTransaction(tx: TransactionWrapper, status: ClosingReason): Promise<ClosingReason> {
+    const createClosingPromise = async (scopesClosed: Promise<ClosingReason>) => {
       debug('Closing transaction.', { transactionId: tx.id, status })
+      const outcome = await scopesClosed
       try {
-        await scopesClosed
-        if (tx.transaction && status === 'committed') {
+        if (tx.transaction && outcome === 'committed') {
           if (tx.transaction.options.usePhantomQuery) {
             await this.#withQuerySpanAndEvent(PHANTOM_COMMIT_QUERY(), tx.transaction, () => tx.transaction!.commit())
           } else {
@@ -599,7 +637,7 @@ export class TransactionManager {
           }
         }
       } finally {
-        tx.status = status
+        tx.status = outcome
         clearTimeout(tx.timer)
         tx.timer = undefined
 
@@ -610,20 +648,20 @@ export class TransactionManager {
           this.closedTransactions.shift()
         }
       }
+      return outcome
     }
 
     if (tx.status === 'closing') {
       await tx.closing
       // Fetch again to ensure proper error propagation after it's been closed.
       this.#getActiveOrClosingTransaction(tx.id, status === 'committed' ? 'commit' : 'rollback')
-    } else {
-      const scopesClosed = this.#closeScopes(tx.scopes, status)
-      await Object.assign(tx, {
-        status: 'closing',
-        reason: status,
-        closing: createClosingPromise(scopesClosed),
-      }).closing
+      return status
     }
+    const scopesClosed = this.#closeScopes(tx, tx.scopes, status)
+    return await Object.assign(tx, {
+      status: 'closing',
+      closing: createClosingPromise(scopesClosed),
+    }).closing
   }
 
   #validateOptions(options: Options) {
@@ -654,6 +692,31 @@ export class TransactionManager {
 
 function innermostScope(tx: TransactionWrapper): Scope {
   return tx.scopes[tx.scopes.length - 1]
+}
+
+function mergeInnermostScope(tx: TransactionWrapper): void {
+  const child = innermostScope(tx)
+  tx.scopes.pop()
+  const parent = innermostScope(tx)
+  for (const statement of child.runningStatements) {
+    parent.runningStatements.add(statement)
+  }
+  child.runningStatements.clear()
+  child.mergedInto = parent
+}
+
+function markClosing(scopes: Scope[], reason: ClosingReason): void {
+  for (const scope of scopes) {
+    scope.closingReason = reason
+  }
+}
+
+async function statementsSettledOrCommitInterrupted(
+  tx: TransactionWrapper,
+  running: Promise<void>[],
+): Promise<ClosingReason> {
+  if (running.length === 0) return 'committed'
+  return await Promise.race([Promise.all(running).then(() => 'committed' as const), tx.commitInterrupted])
 }
 
 function closedTransactionError(
