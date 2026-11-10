@@ -59,7 +59,7 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 
 | Case | Behaviour that must hold |
 | --- | --- |
-| `createAll()` without `RETURNING`, rows in a different order than their keys | The rows come back, in any order. `without-returning-sqlite.test.ts` "createAll() returns the rows in the order it was given them, not in key order" and "reads back more rows than one statement takes, in the order it was given them" assert order on main; they change to assert the set of rows (decided 2026-11-09). |
+| `createAll()` without `RETURNING`, rows in a different order than their keys | The rows come back, in any order. `without-returning-sqlite.test.ts` "createAll() returns the rows in the order it was given them, not in key order" and "reads back more rows than one statement takes, in the order it was given them" assert order on main, as do three tests in `packages/3-targets/mysql/9-facade/test/runtime/orm-writes.live.test.ts` ("createAll returns the rows in the order it was given them, not in key order", "createAll returns rows keyed by a DATETIME(3) with milliseconds in the order it was given them", "createAll reads back more rows than one statement takes, in the order it was given them"); they change to assert the rows regardless of order (decided 2026-11-09). |
 | `createAndCount()`, `updateAndCount()`, `deleteAndCount()` | Return the count as on main; their read-backs are removed before the graph runs. |
 | `createAndCount()` of several rows with a generated key, without `RETURNING` | Allowed, as on main (its error text tells callers to use it): its read-back is removed, so nothing reads from the insert and the check does not refuse it. |
 | `update()` whose parent write reads back into child operations, without `RETURNING` | Children read the keys from the read-back, as on `graph-nested`. |
@@ -73,7 +73,7 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 ## Slice-specific done conditions
 
 - [ ] No builder takes a `returns` argument or reads the `returning` capability; `readsBack` and `Translation.readsBack` do not exist.
-- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the two order assertions above.
+- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the five order assertions above.
 - [ ] Tests assert effects and printed graphs, never generated SQL.
 
 ## Open questions
