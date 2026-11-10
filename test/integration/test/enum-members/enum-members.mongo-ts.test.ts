@@ -1,5 +1,12 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { defineContract, enumType, field, member, model } from '@internal/mongo/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '@internal/mongo/contract-builder';
 import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../_harness/mongo';
@@ -29,7 +36,7 @@ const contract = defineContract({
     Reading: model('Reading', {
       collection: 'readings',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         text: field.namedType(TextLevel),
         int32: field.namedType(Int32Level),
         double: field.namedType(DoubleLevel),

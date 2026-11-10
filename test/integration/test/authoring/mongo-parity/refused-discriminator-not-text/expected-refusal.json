@@ -1,7 +1,7 @@
 {
   "ts": {
     "code": "CONTRACT.ARGUMENT_INVALID",
-    "message": "Discriminator field \"Task.type\" must be text, such as field.string(), but its data type is \"mongo/int32\"."
+    "message": "Discriminator field \"Task.type\" must be text, such as field.scalar(type.String()), but its data type is \"mongo/int32\"."
   },
   "psl": [
     {

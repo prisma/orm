@@ -28,8 +28,8 @@ The current implementation supports:
 - top-level value objects referenced from fields
 - Mongo collection index authoring via model-local `indexes`
 - Mongo collection option authoring via model-local `collectionOptions`
-- base Mongo codec helpers (`field.string()`, `field.int32()`, `field.json()`, `field.bson()` and the rest), listed with their codecs and application types in [Scalar types](../../../../docs/reference/scalar-types.md#mongodb); a read of a removed preset, such as `field.temporal.createdAt`, throws `CONTRACT.FIELD_HELPER_UNKNOWN`, with the preset's rewrite
-- `.onCreate(call)` and `.onUpdate(call)` on a field builder, with a call from `gen` such as `field.date().onCreate(gen.now()).onUpdate(gen.now())`, which resolves by the field's codec through the generator functions of the packs when the contract is built; `gen` comes from the `defineContract` callback (or the facade's `gen` export) and holds only the functions the stack's packs declare, which for Mongo is `now`; a field with generated values cannot be a list, on a variant, on a model without a collection, or on a value object; it may be optional
+- a field typed by a `type.*` helper, `field.scalar(type.String())`, `field.scalar(type.Int32())`, `field.scalar(type.Vector(3))` and the rest, where `type` holds the type constructors the family, target and extension packs contribute, the same names PSL reads (a read of a removed scalar helper such as `field.objectId` throws `CONTRACT.FIELD_HELPER_UNKNOWN` naming the `type.*` call to write), listed with their codecs and application types in [Scalar types](../../../../docs/reference/scalar-types.md#mongodb); a read of a removed preset, such as `field.temporal.createdAt`, throws `CONTRACT.FIELD_HELPER_UNKNOWN`, with the preset's rewrite
+- `.onCreate(call)` and `.onUpdate(call)` on a field builder, with a call from `gen` such as `field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now())`, which resolves by the field's codec through the generator functions of the packs when the contract is built; `gen` comes from the `defineContract` callback (or the facade's `gen` export) and holds only the functions the stack's packs declare, which for Mongo is `now`; a field with generated values cannot be a list, on a variant, on a model without a collection, or on a value object; it may be optional
 
 This first slice does not yet cover union or dict authoring, or Mongo validator authoring.
 
@@ -42,21 +42,23 @@ This first slice does not yet cover union or dict authoring, or Mongo validator 
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, index, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
 const User = model('User', {
   collection: 'users',
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    email: field.string(),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    email: field.scalar(type.String()),
     homeAddress: field.valueObject(Address).optional(),
   },
   indexes: [
@@ -70,9 +72,9 @@ const User = model('User', {
 const Post = model('Post', {
   collection: 'posts',
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    authorId: field.objectId().mongo({ field: 'author_id' }),
-    title: field.string(),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    authorId: field.scalar(type.ObjectId()).mongo({ field: 'author_id' }),
+    title: field.scalar(type.String()),
   },
   relations: {
     author: rel.belongsTo(User, {
