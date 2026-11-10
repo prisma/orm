@@ -6,12 +6,7 @@ export {
 } from '../core/control-instance';
 export type { MongoControlTargetDescriptor } from '../core/control-target-descriptor';
 export type { MongoControlExtensionDescriptor } from '../core/control-types';
-export {
-  documentsFitValidator,
-  RAW_PLAN_META,
-  relaxedDocumentsCheck,
-  validatorCheckedBy,
-} from '../core/document-checks';
+export { documentsFitValidator, RAW_PLAN_META } from '../core/document-checks';
 export { type FieldRewrite, fieldRewriteOf } from '../core/field-rewrite';
 export {
   formatMongoOperations,

@@ -1,5 +1,5 @@
 import { asNamespaceId, type ContractMarkerRecord } from '@internal/contract/types';
-import { fieldRewriteOf, validatorCheckedBy } from '@internal/family-mongo/control';
+import { fieldRewriteOf } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
   MongoRunnerDependencies,
@@ -653,60 +653,28 @@ function rewriteFailure(
   );
 }
 
-/**
- * The failure, saying which collections a rewrite of this apply changed while their validator change
- * has not run: their documents may no longer fit the validator still in place.
- */
-function withRewrittenBeforeValidator(
-  failure: MongoMigrationRunnerFailure,
-  collections: ReadonlySet<string>,
-): MongoMigrationRunnerFailure {
-  if (collections.size === 0) return failure;
-  const named = [...collections].map((collection) => `collection ${collection}`).join(', ');
-  const sentence = `Documents this apply already rewrote in ${named} may no longer fit the collection's current validator, so updates to them fail until the migration finishes.`;
-  const why =
-    failure.why === undefined ? sentence : `${failure.why.replace(/\.?$/, '.')} ${sentence}`;
-  const attributed = migrationRunnerFailure(failure.code, failure.message, {
-    why,
-    meta: failure.meta,
-    ...ifDefined('cause', failure.cause),
-  });
-  if (failure.stack !== undefined) attributed.stack = failure.stack;
-  return attributed;
-}
-
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
-    const rewrittenBeforeValidator = new Set<string>();
-    const result = await this.apply(
-      options,
-      () => {
-        changedDatabase = true;
-      },
-      rewrittenBeforeValidator,
-    );
+    const result = await this.apply(options, () => {
+      changedDatabase = true;
+    });
     return result.ok
       ? ok({ ...result.value, changedDatabase })
       : notOk(
           withDatabaseUnchanged(
-            withRewrittenBeforeValidator(result.failure, rewrittenBeforeValidator),
+            result.failure,
             options.databaseChangedBefore !== true && !changedDatabase,
           ),
         );
   }
 
-  /**
-   * Applies the plan, calling `wrote` after each command that changes the database, and keeping in
-   * `rewrittenBeforeValidator` each collection a rewrite changed whose validator change has not run
-   * since.
-   */
+  /** Applies the plan, calling `wrote` after each command that changes the database. */
   private async apply(
     options: MongoMigrationRunnerExecuteOptions,
     wrote: () => void,
-    rewrittenBeforeValidator: Set<string>,
   ): Promise<Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>> {
     const { inspectionExecutor, adapter, driver, executeDdl, markerOps } = this.deps;
     const operations = deserializeMongoOps(
@@ -736,9 +704,6 @@ export class MongoMigrationRunner {
     const filterEvaluator = new FilterEvaluator();
 
     let operationsExecuted = 0;
-    const ranInApply: string[] = [];
-    let rewroteBefore = false;
-    const validatorSetOn = new Map<string, string>();
 
     for (const [operationIndex, operation] of operations.entries()) {
       options.callbacks?.onOperationStart?.(operation);
@@ -756,13 +721,7 @@ export class MongoMigrationRunner {
             { operationIndex, contract: options.destinationContract },
           );
           if (result.failure) return result.failure;
-          if (result.executed) {
-            operationsExecuted += 1;
-            ranInApply.push(operation.label);
-            rewroteBefore = true;
-            const collection = operation.run[0]?.collection;
-            if (collection !== undefined) rewrittenBeforeValidator.add(collection);
-          }
+          if (result.executed) operationsExecuted += 1;
           continue;
         }
 
@@ -785,12 +744,11 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
-              (await this.documentsFailingValidatorRefusal(operation, failing, {
-                ran: [...ranInApply],
-                validatorSetBy: (collection) => validatorSetOn.get(collection),
-                rewroteBefore,
-                contract: options.destinationContract,
-              })) ??
+              (await this.documentsFailingValidatorRefusal(
+                operation,
+                failing,
+                options.destinationContract,
+              )) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
                 `Operation ${operation.id} failed during precheck: ${failing.description}`,
@@ -831,13 +789,6 @@ export class MongoMigrationRunner {
         }
 
         operationsExecuted += 1;
-        if (operation.execute.length > 0) ranInApply.push(operation.label);
-        const validated = validatorSetBy(operation)?.collection;
-        if (validated !== undefined) {
-          rewrittenBeforeValidator.delete(validated);
-          rewroteBefore = true;
-          validatorSetOn.set(validated, operation.label);
-        }
       } finally {
         options.callbacks?.onOperationComplete?.(operation);
       }
@@ -1036,38 +987,18 @@ export class MongoMigrationRunner {
   }
 
   /**
-   * The failure when a validator change's before-check, or the check before a collection's first
-   * rewrite, finds documents the new validator rejects: how many, one `_id`, and the query that finds
-   * them all.
+   * The failure when a validator change's precheck finds documents the new validator rejects: how
+   * many, one `_id`, and the query that finds them all.
    */
   private async documentsFailingValidatorRefusal(
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
-    apply: {
-      /** The labels of the operations of this apply that changed the database, in order. */
-      readonly ran: readonly string[];
-      /** The label of the operation of this apply that last set the collection's validator, if one did. */
-      readonly validatorSetBy: (collection: string) => string | undefined;
-      /** Whether an operation of this apply already changed documents or a validator. */
-      readonly rewroteBefore: boolean;
-      readonly contract: MongoContract;
-    },
+    contract: MongoContract,
   ): Promise<MongoMigrationRunnerResult | undefined> {
     if (isInspectionCheckSource(failed.source)) return undefined;
     const collMod = validatorSetBy(op);
-    const earlyValidator = validatorCheckedBy(failed.source);
-    const checked =
-      op.meta?.checkDocuments !== undefined && earlyValidator !== undefined
-        ? {
-            collection: op.meta.checkDocuments.collection,
-            validator: earlyValidator,
-            beforeRewrites: true,
-          }
-        : collMod?.validator !== undefined
-          ? { collection: collMod.collection, validator: collMod.validator, beforeRewrites: false }
-          : undefined;
-    if (checked === undefined) return undefined;
-    const { collection, validator, beforeRewrites } = checked;
+    if (collMod?.validator === undefined) return undefined;
+    const { collection, validator } = collMod;
     const failing = { $nor: [validator] };
     const counted = await this.firstRow({
       ...failed.source,
@@ -1128,7 +1059,7 @@ export class MongoMigrationRunner {
         ]
       : hadValidator
         ? [
-            ...backfillAdvice(apply.contract, collection, touched.requires, {
+            ...backfillAdvice(contract, collection, touched.requires, {
               timeSeries:
                 typeof options === 'object' &&
                 options !== null &&
@@ -1138,37 +1069,16 @@ export class MongoMigrationRunner {
             byHandAdvice(collection),
           ]
         : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
-    const ranSentence =
-      apply.ran.length === 0
-        ? []
-        : [`These operations of this apply already ran and stay applied: ${apply.ran.join('; ')}.`];
-    const setBy = apply.validatorSetBy(collection);
-    const why = beforeRewrites
-      ? [
-          ...found,
-          apply.rewroteBefore
-            ? `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail.`
-            : `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
-          ...ranSentence,
-          ...advice,
-          `Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
-          uncheckable
-            ? 'Then run the command again.'
-            : 'Once the documents are fixed, run the command again.',
-        ].join(' ')
-      : [
-          ...found,
-          ...advice,
-          `Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
-          setBy === undefined
-            ? 'The validator was not changed.'
-            : `The validator in place is the one an earlier operation of this apply set: ${setBy}.`,
-          ...ranSentence,
-          `${uncheckable ? 'Then run the command again' : 'Once the documents are fixed, run the command again'}; operations that already ran are skipped.`,
-        ].join(' ');
+    const why = [
+      ...found,
+      ...advice,
+      `Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
+      'This operation did not change the validator.',
+      `${uncheckable ? 'Then run the command again' : 'Once the documents are fixed, run the command again'}; operations that already ran are skipped.`,
+    ].join(' ');
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
-      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'does' : 'do'} not fit the new validator${beforeRewrites ? `, and no rewrite of this plan makes ${one ? 'it' : 'them'} fit` : ''}`,
+      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'does' : 'do'} not fit the new validator`,
       {
         why,
         meta: {

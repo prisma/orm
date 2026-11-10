@@ -51,7 +51,6 @@ import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
   collectionControlOf,
-  type DocumentCheckFields,
   type FieldRemoval,
   keepCollectionByHandAdvice,
   type ModelMatchInput,
@@ -72,13 +71,11 @@ import {
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
 import type { OpFactoryCall } from './op-factory-call';
 import {
-  CheckDocumentsCall,
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
-  type RenameFieldCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
 } from './op-factory-call';
@@ -456,71 +453,6 @@ function comparableIndexes(
   };
 }
 
-function isDocument(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function documentChecksOf(
-  rewrites: readonly PlannedRewrite[],
-  fieldRenames: readonly RenameFieldCall[],
-): ReadonlyMap<string, DocumentCheckFields> {
-  const collections = new Set([
-    ...rewrites.map(({ collection }) => collection),
-    ...fieldRenames.map(({ collection }) => collection),
-  ]);
-  return new Map(
-    [...collections].map((collection) => [
-      collection,
-      {
-        rewrittenFields: [
-          ...new Set(
-            rewrites
-              .filter((rewrite) => rewrite.collection === collection)
-              .map(({ field }) => field),
-          ),
-        ].sort(),
-        renamedFields: Object.fromEntries(
-          fieldRenames
-            .filter((rename) => rename.collection === collection)
-            .map((rename) => [rename.from, rename.to]),
-        ),
-      },
-    ]),
-  );
-}
-
-/**
- * A check for each collection whose validator change checks documents, that its documents can fit
- * the new validator once the fields the plan rewrites in it are left out. The checks only read
- * documents, and run after the collection renames and creates but before the index drops, rewrites
- * and index creates of any collection. So a check that fails stops the apply before it changes any
- * index, document or validator: an index drop, a rewrite or an earlier validator change would
- * otherwise stay applied while a validator change fails, and a unique index build could fail on
- * documents that lack the field. A plan whose only such change is one validator change needs no
- * early check, since that change's own check stops it first.
- */
-function documentChecksFor(
-  validatorOps: readonly OpFactoryCall[],
-  documentChecks: ReadonlyMap<string, DocumentCheckFields>,
-): readonly OpFactoryCall[] {
-  return validatorOps.flatMap((op): OpFactoryCall[] => {
-    if (!(op instanceof CollModCall) || op.meta?.checkDocuments !== true) return [];
-    const validator: unknown = op.options.validator?.['$jsonSchema'];
-    if (!isDocument(validator)) return [];
-    const fields = documentChecks.get(op.collection);
-    return [
-      new CheckDocumentsCall({
-        collection: op.collection,
-        validator,
-        rewrittenFields: fields?.rewrittenFields ?? [],
-        ...(fields === undefined || Object.keys(fields.renamedFields).length === 0
-          ? {}
-          : { renamedFields: fields.renamedFields }),
-      }),
-    ];
-  });
-}
-
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
     readonly contract: unknown;
@@ -589,15 +521,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       return { kind: 'failure', conflicts };
     }
 
-    const rewrites = options.statementCalls?.rewrites ?? [];
     const allCalls = [
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
-      ...(drops.length + rewrites.length + creates.length + validatorOps.length <= 1
-        ? []
-        : documentChecksFor(validatorOps, options.statementCalls?.documentChecks ?? new Map())),
       ...drops,
-      ...rewrites,
+      ...(options.statementCalls?.rewrites ?? []),
       ...creates,
       ...validatorOps,
       ...mutableOptionOps,
@@ -821,7 +749,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
         ],
-        documentChecks: documentChecksOf(rewrites, fieldRenames),
       },
     });
     if (result.kind === 'failure') return result;

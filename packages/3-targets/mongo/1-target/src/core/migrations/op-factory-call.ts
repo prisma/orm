@@ -3,7 +3,7 @@
  * `migration-factories.ts`, plus a shared `OpFactoryCallNode` abstract
  * base. Every call class carries the literal arguments its backing
  * factory would receive, computes a human-readable `label` in its
- * constructor, and implements these polymorphic hooks:
+ * constructor, and implements two polymorphic hooks:
  *
  * - `toOp()` — converts the IR node to a runtime
  *   `MongoMigrationPlanOperation` by delegating to the matching pure
@@ -11,11 +11,6 @@
  * - `renderTypeScript()` / `importRequirements()` — inherited from
  *   `TsExpression`. Used by `renderCallsToTypeScript` to emit the call
  *   as a TypeScript expression inside the scaffolded `migration.ts`.
- *   `renderTypeScript` takes the names of the shared `const`s, so a call
- *   writes a shared value by name.
- * - `sharedValues()` — the values a call wants `migration.ts` to declare
- *   once, as a `const` other calls on the same collection can use.
- *   `renderCallsToTypeScript` gathers them as it gathers imports.
  *
  * The abstract base and all concrete classes are package-private.
  * External consumers see only the framework-level `OpFactoryCall`
@@ -44,18 +39,11 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import type { Document } from '@internal/mongo-value';
-import {
-  type ImportRequirement,
-  jsonToTsSource,
-  TsExpression,
-  tsObjectSource,
-} from '@internal/ts-render';
+import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type CastFieldOptions,
-  type CheckDocumentsOptions,
   castField,
-  checkDocuments,
   collMod,
   createCollection,
   createIndex,
@@ -85,40 +73,10 @@ export interface CollModMeta {
  */
 export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
 
-/**
- * A value a call wants `migration.ts` to declare once, as a `const` other calls can share:
- * `stem` suggests the `const`'s name.
- */
-export interface SharedValue {
-  readonly stem: string;
-  /** The collection the value belongs to; only calls on the same collection share it. */
-  readonly collection: string;
-  readonly value: unknown;
-}
-
-/** The names `migration.ts` declares shared values under, looked up by value. */
-export interface SharedNames {
-  /** The name of the `const` that holds `value`, when the file declares it once. */
-  nameOf(collection: string, value: unknown): string | undefined;
-}
-
-const NO_SHARED_NAMES: SharedNames = { nameOf: () => undefined };
-
-/** The source of `value`: the name of the `const` that holds it for `collection`, or the value written out. */
-function sharedSource(collection: string, value: unknown, names: SharedNames): string {
-  return names.nameOf(collection, value) ?? jsonToTsSource(value);
-}
-
 export abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;
-  abstract override renderTypeScript(names?: SharedNames): string;
-
-  /** The values this call wants declared once in `migration.ts`, so other calls can use the same `const`. */
-  sharedValues(): readonly SharedValue[] {
-    return [];
-  }
   abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
@@ -439,47 +397,6 @@ export class FillFieldCall extends OpFactoryCallNode {
   }
 }
 
-export class CheckDocumentsCall extends OpFactoryCallNode {
-  readonly factoryName = 'checkDocuments' as const;
-  readonly operationClass = 'widening' as const;
-  readonly collection: string;
-  readonly options: CheckDocumentsOptions;
-  readonly label: string;
-
-  constructor(options: CheckDocumentsOptions) {
-    super();
-    this.collection = options.collection;
-    this.options = options;
-    this.label = this.toOp().label;
-    this.freeze();
-  }
-
-  toOp(): MongoMigrationPlanOperation {
-    return checkDocuments(this.options);
-  }
-
-  override sharedValues(): readonly SharedValue[] {
-    return [
-      {
-        stem: `${this.collection}Validator`,
-        collection: this.collection,
-        value: this.options.validator,
-      },
-    ];
-  }
-
-  renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
-    const entries = Object.entries(this.options).map(
-      ([key, value]) =>
-        [
-          key,
-          key === 'validator' ? sharedSource(this.collection, value, names) : jsonToTsSource(value),
-        ] as const,
-    );
-    return `checkDocuments(${tsObjectSource(entries)})`;
-  }
-}
-
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -502,34 +419,10 @@ export class CollModCall extends OpFactoryCallNode {
     return collMod(this.collection, this.options, this.meta);
   }
 
-  override sharedValues(): readonly SharedValue[] {
-    const jsonSchema = this.options.validator?.['$jsonSchema'];
-    return jsonSchema === undefined
-      ? []
-      : [{ stem: `${this.collection}Validator`, collection: this.collection, value: jsonSchema }];
-  }
-
-  renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
-    const options = tsObjectSource(
-      Object.entries(this.options)
-        .filter(([, value]) => value !== undefined)
-        .map(([key, value]) => [
-          key,
-          key === 'validator' && typeof value === 'object' && value !== null
-            ? tsObjectSource(
-                Object.entries(value).map(([validatorKey, validatorValue]) => [
-                  validatorKey,
-                  validatorKey === '$jsonSchema'
-                    ? sharedSource(this.collection, validatorValue, names)
-                    : jsonToTsSource(validatorValue),
-                ]),
-              )
-            : jsonToTsSource(value),
-        ]),
-    );
+  renderTypeScript(): string {
     return this.meta
-      ? `collMod(${jsonToTsSource(this.collection)}, ${options}, ${jsonToTsSource(this.meta)})`
-      : `collMod(${jsonToTsSource(this.collection)}, ${options})`;
+      ? `collMod(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.options)}, ${jsonToTsSource(this.meta)})`
+      : `collMod(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.options)})`;
   }
 }
 
@@ -544,7 +437,6 @@ export type OpFactoryCall =
   | CastFieldCall
   | DataTransformCall
   | FillFieldCall
-  | CheckDocumentsCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {

@@ -312,11 +312,6 @@ const OperationMetaJson = type({
     field: 'string',
     to: 'string',
   }).or({ kind: '"fill"', collection: 'string', field: 'string' }),
-  'checkDocuments?': {
-    collection: 'string',
-    rewrittenFields: 'string[]',
-    renamedFields: 'Record<string, string>',
-  },
 });
 
 const DdlOperationJson = type({
@@ -781,18 +776,6 @@ function isDmlOperationJson(json: unknown): boolean {
 
 function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
   const data = validate(DdlOperationJson, json, 'migration operation');
-  const checkDocuments = data.meta?.checkDocuments;
-  if (checkDocuments !== undefined && data.precheck.length === 0) {
-    throw mongoTargetError(
-      'MIGRATION.INVALID_OPERATION_ENTRY',
-      `Operation ${data.id} checks the documents of collection ${checkDocuments.collection}, but has no check.`,
-      {
-        why: 'A checkDocuments operation carries the check its migration.ts builds; without it the operation would check nothing.',
-        fix: 'Run the migration.ts of that migration with node again, so it writes ops.json with the check.',
-        meta: { context: 'migration operation', operationId: data.id },
-      },
-    );
-  }
   return {
     id: data.id,
     label: data.label,

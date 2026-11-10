@@ -1,9 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import {
-  documentsFitValidator,
-  RAW_PLAN_META,
-  relaxedDocumentsCheck,
-} from '@internal/family-mongo/control';
+import { documentsFitValidator, RAW_PLAN_META } from '@internal/family-mongo/control';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
@@ -824,41 +820,6 @@ export function setValidation(
       },
     ],
     postcheck: checks.postcheck,
-  };
-}
-
-export interface CheckDocumentsOptions {
-  readonly collection: string;
-  /** The `$jsonSchema` of the validator the collection's validator change sets; `migration.ts` passes both the same value. */
-  readonly validator: Readonly<Record<string, unknown>>;
-  /** The stored names whose values the plan's rewrites change on the collection, removed ones included. */
-  readonly rewrittenFields: readonly string[];
-  /** Each field the plan renames on the collection: its old stored name, with its new one. */
-  readonly renamedFields?: Readonly<Record<string, string>>;
-}
-
-/**
- * Checks, before the plan rewrites a collection's documents, that each fits `validator`, the
- * validator the collection's validator change later in the same migration sets, once the fields the
- * plan rewrites are left out of it. A document that does not fit fails for a reason no rewrite of
- * the plan fixes, so the apply stops before any rewrite runs. `migration.ts` passes the check and the
- * validator change one shared value, so an edit of it applies to both.
- */
-export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
-  const { collection } = options;
-  const fields = {
-    collection,
-    rewrittenFields: options.rewrittenFields,
-    renamedFields: options.renamedFields ?? {},
-  };
-  return {
-    id: `collection.${collection}.checkDocuments`,
-    label: `Check that the documents in ${collection} can fit the new validator`,
-    operationClass: 'widening',
-    meta: { checkDocuments: fields },
-    precheck: [relaxedDocumentsCheck(fields, options.validator)],
-    execute: [],
-    postcheck: [],
   };
 }
 

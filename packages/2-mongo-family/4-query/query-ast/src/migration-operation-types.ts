@@ -49,21 +49,12 @@ export type MongoFieldRewriteMeta =
     }
   | { readonly kind: 'fill'; readonly collection: string; readonly field: string };
 
-/** The fields a check before a collection's rewrites leaves out of the validator the plan sets on it. */
-export interface MongoCheckDocumentsMeta {
-  readonly collection: string;
-  readonly rewrittenFields: readonly string[];
-  /** Each renamed field's old stored name, with its new one. */
-  readonly renamedFields: Readonly<Record<string, string>>;
-}
-
 /**
  * What an operation is, as the factory that builds it writes it into `ops.json`, so the runner reads
  * it rather than working it out from the operation's commands.
  */
 export interface MongoOperationMeta {
   readonly rewrite?: MongoFieldRewriteMeta;
-  readonly checkDocuments?: MongoCheckDocumentsMeta;
 }
 
 export interface MongoMigrationPlanOperation extends MigrationPlanOperation {

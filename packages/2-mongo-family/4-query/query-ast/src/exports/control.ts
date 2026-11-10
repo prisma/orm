@@ -28,7 +28,6 @@ export { ListCollectionsCommand, ListIndexesCommand } from '../inspection-comman
 export { buildIndexOpId, keysToKeySpec } from '../migration-helpers';
 export type {
   AnyMongoMigrationOperation,
-  MongoCheckDocumentsMeta,
   MongoDmlCheck,
   MongoDmlOperation,
   MongoFieldRewriteMeta,
