@@ -73,7 +73,7 @@ export interface CollModMeta {
  */
 export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
 
-export abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
+abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;

@@ -1,5 +1,4 @@
 import type { JsonValue } from '@internal/contract/types';
-import { documentsFitValidator, RAW_PLAN_META } from '@internal/family-mongo/control';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
@@ -10,6 +9,7 @@ import type {
   MongoDmlOperation,
   MongoFilterExpr,
   MongoIndexKey,
+  MongoMigrationCheck,
 } from '@internal/mongo-query-ast/control';
 import {
   buildIndexOpId,
@@ -183,6 +183,9 @@ const UNREWRITABLE_FIELD_NAMES: ReadonlyArray<{
 export function unrewritableFieldNameReason(field: string): string | undefined {
   return UNREWRITABLE_FIELD_NAMES.find((rule) => rule.matches(field))?.reason;
 }
+
+/** The plan meta of the raw queries a migration's operations run and check with. */
+const RAW_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
 
 function assertRewritableField(collectionName: string, field: string): void {
   const reason = unrewritableFieldNameReason(field);
@@ -836,6 +839,29 @@ function validatorBodyFilter(validator: Readonly<Record<string, unknown>>): Mong
         blindCast<MongoValue, 'a $jsonSchema validator is a plain BSON document'>($jsonSchema),
       )
     : MongoFieldFilter.eq('options.validator', documentValue(validator));
+}
+
+/**
+ * A check that no document of `collection` fails `validator`: an aggregate that matches the
+ * documents the validator rejects.
+ */
+function documentsFitValidator(
+  collection: string,
+  validator: Readonly<Record<string, unknown>>,
+): MongoMigrationCheck {
+  return {
+    description: `every document in ${collection} fits the new validator`,
+    source: {
+      collection,
+      command: new RawAggregateCommand(collection, [
+        { $match: { $nor: [validator] } },
+        { $limit: 1 },
+      ]),
+      meta: { ...RAW_PLAN_META },
+    },
+    filter: MongoExistsExpr.exists('_id'),
+    expect: 'notExists',
+  };
 }
 
 export function collMod(
