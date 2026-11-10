@@ -176,7 +176,7 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
       this.cleanup?.()
     } finally {
       if (this.runningStatements > 0) {
-        this.client.release(new Error('Transaction settled with statements still in flight'))
+        this.client.release(new Error('Transaction closed with a statement still running'))
       } else {
         this.client.release()
       }
