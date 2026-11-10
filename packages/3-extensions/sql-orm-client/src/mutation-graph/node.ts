@@ -9,7 +9,6 @@ import type {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
-import type { StateEdge } from './state';
 
 export type StatementAst = SelectAst | InsertAst | UpdateAst | DeleteAst;
 
@@ -18,10 +17,8 @@ export type Slot = Edge<unknown> | Edge<unknown>[];
 export type Slots = Record<string, Slot>;
 
 export type InputEdges<Inputs extends Slots> = {
-  readonly [Name in Exclude<keyof Inputs, 'state'>]?: Inputs[Name];
+  readonly [Name in keyof Inputs]?: Inputs[Name];
 };
-
-export type RuleInputs = InputEdges<Slots> & { readonly state: StateEdge[] };
 
 type OutputOf<E> = E extends Edge<infer Output> ? Output : never;
 

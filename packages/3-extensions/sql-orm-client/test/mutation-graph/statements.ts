@@ -13,11 +13,12 @@ import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatc
 import { createCollectionTables } from '../../src/collection-tables';
 import { Delete } from '../../src/mutation-graph/delete';
 import type { ColumnMapping, NodeId, StorageRow } from '../../src/mutation-graph/edge';
-import type { FilterData } from '../../src/mutation-graph/filter-data';
+import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { Graph } from '../../src/mutation-graph/graph';
-import type { Node, Run, Slots, StatementAst } from '../../src/mutation-graph/node';
-import { State } from '../../src/mutation-graph/state';
+import type { InputEdges, Node, Run, Slots, StatementAst } from '../../src/mutation-graph/node';
+import type { RequiresSlot } from '../../src/mutation-graph/requires';
+import { State, type StateSlot } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { Update } from '../../src/mutation-graph/update';
@@ -183,16 +184,24 @@ export function recordingRun(
   };
 }
 
-export function addFiltered<Inputs extends Slots & { filter: FilterData[] }>(
+export function addFiltered<
+  Inputs extends Slots & StateSlot & RequiresSlot & { filter: FilterData[] },
+>(
   graph: Graph,
-  node: Node<Inputs>,
+  node: StatementNode<Inputs>,
   ...sources: readonly (readonly [NodeId, readonly ColumnMapping[]])[]
-): NodeId<Inputs> {
-  const id = graph.add(node);
-  for (const [from, columns] of sources) {
-    graph.addFilterDataEdge(from, id, columns);
-  }
-  return id;
+): NodeId {
+  return addWithState(graph, node, {
+    filter: sources.map(([from, columns]) => new FilterData(from, columns)),
+  } as InputEdges<Inputs>);
+}
+
+export function addWithState<Inputs extends Slots & StateSlot & RequiresSlot>(
+  graph: Graph,
+  node: StatementNode<Inputs>,
+  inputs: InputEdges<Inputs> = {},
+): NodeId {
+  return graph.add(node, { ...inputs, state: graph.stateEdgesFor(node) } as InputEdges<Inputs>);
 }
 
 export function newGraph(): Graph {

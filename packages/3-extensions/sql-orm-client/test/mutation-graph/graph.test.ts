@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
-import { Graph } from '../../src/mutation-graph/graph';
+import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
 import { Requires } from '../../src/mutation-graph/requires';
@@ -10,7 +10,6 @@ import { Rows } from '../../src/mutation-graph/rows';
 import { State, StateEdge } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
-import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 import {
   columnMappings,
@@ -28,7 +27,6 @@ const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
 const emailToTitle = columnMappings('users', 'posts', [['email', 'title']]);
 const posts = { namespaceId: 'public', tableName: 'posts' };
 const users = { namespaceId: 'public', tableName: 'users' };
-const { contract } = getTestContext();
 
 function returned(graph: Graph, id: NodeId): string[] {
   return graph
@@ -67,6 +65,32 @@ describe('Graph', () => {
     });
   });
 
+  describe('stateEdgesFor', () => {
+    it('gives an edge from the current State of each table the statements of a node read', () => {
+      const graph = newGraph();
+      const update = graph.add(updateUsers({ name: 'Ada' }));
+      const [written] = graph.readersOf(update);
+
+      const edges = graph.stateEdgesFor(findUsers());
+
+      expect(edges).toEqual(written === undefined ? [] : [new StateEdge(written.reader, users)]);
+      expect(edges).toHaveLength(1);
+      expect(printGraph(graph, { state: true })).toBe(
+        ["n1 Update users set name = 'Ada'", 'n2 State users <- state n1', 'result: none'].join(
+          '\n',
+        ),
+      );
+    });
+
+    it('adds the first State of a table that no node has read or written', () => {
+      const graph = newGraph();
+
+      const [edge] = graph.stateEdgesFor(findUsers());
+
+      expect(graph.nodes()).toEqual([[edge?.from, new State(users)]]);
+    });
+  });
+
   describe('add with inputs', () => {
     it('adds the node with each edge in its slot, and the source lists the node as its reader', () => {
       const graph = newGraph();
@@ -89,15 +113,25 @@ describe('Graph', () => {
       ]);
     });
 
-    it('adds the same state edges as adding the node and then its edges', () => {
-      const withInputs = newGraph();
-      const update = withInputs.add(updateUsers({ name: 'Ada' }));
-      withInputs.add(deletePosts(), { filter: [new FilterData(update, idToUserId)] });
-      const edgeByEdge = newGraph();
-      const sameUpdate = edgeByEdge.add(updateUsers({ name: 'Ada' }));
-      edgeByEdge.addFilterDataEdge(sameUpdate, edgeByEdge.add(deletePosts()), idToUserId);
+    it('adds the state edges the caller passes, and none when it passes none', () => {
+      const graph = newGraph();
+      const update = graph.add(updateUsers({ name: 'Ada' }));
+      const unread = findUsers();
+      const read = findUsers();
 
-      expect(printGraph(withInputs, { state: true })).toBe(printGraph(edgeByEdge, { state: true }));
+      graph.add(unread, {});
+      graph.add(read, { state: graph.stateEdgesFor(read) });
+
+      expect(printGraph(graph, { state: true })).toBe(
+        [
+          "n1 Update users set name = 'Ada'",
+          'n2 State users <- state n1',
+          'n3 Find users',
+          'n4 Find users <- state n2',
+          'result: none',
+        ].join('\n'),
+      );
+      expect(graph.readersOf(update)).toEqual([{ reader: 1, edge: new StateEdge(update, users) }]);
     });
 
     it('makes each source of a data edge return the columns the edge reads', () => {
@@ -127,35 +161,6 @@ describe('Graph', () => {
         left: new Rows(left, sameId),
         right: new Rows(right, sameId),
       });
-    });
-  });
-
-  describe('rules', () => {
-    it('see the state edges the graph computed for the node in its state slot, with its data edges', () => {
-      const seen: unknown[] = [];
-      const graph = new Graph(contract, [
-        (_graph, _node, inputs) => {
-          seen.push(inputs);
-          return undefined;
-        },
-      ]);
-      const update = graph.add(updateUsers({ name: 'Ada' }), {});
-
-      const find = graph.add(findUsers(), { filter: [new FilterData(update, sameId)] });
-
-      expect(seen[1]).toEqual({
-        filter: [new FilterData(update, sameId)],
-        state: graph.inputsOf(find)['state'],
-      });
-      expect(graph.inputsOf(find)['state']).toEqual([new StateEdge(expect.any(Number), users)]);
-    });
-
-    it('stand the node a rule returns in for the added node, which is not added', () => {
-      const graph = new Graph(contract, [(_graph, _node, inputs) => inputs.state?.[0]?.from]);
-      const id = graph.add(findUsers(), {});
-
-      expect(graph.nodeAt(id)).toBeInstanceOf(State);
-      expect(printGraph(graph)).toBe('result: none');
     });
   });
 
@@ -203,7 +208,7 @@ describe('Graph', () => {
       expect(graph.inputsOf(update)).toEqual({
         filter: [new FilterData(second, sameId, { id: 2 })],
         payload: [],
-        state: [expect.any(StateEdge)],
+        state: [],
         requires: [new Requires(second)],
       });
     });

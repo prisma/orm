@@ -4,7 +4,7 @@ import type { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { resolveUniqueKeyColumnSets } from '../collection-contract';
 import { Delete } from './delete';
-import type { ColumnMapping, NodeId } from './edge';
+import type { ColumnMapping, Edge, NodeId } from './edge';
 import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
@@ -14,7 +14,7 @@ import { InsertChunked } from './insert-chunked';
 import type { Node } from './node';
 import { Rows } from './rows';
 import type { Rule } from './rules';
-import type { StateEdge } from './state';
+import { StateEdge } from './state';
 import { Update } from './update';
 
 type Write = Insert | InsertChunked | Update | Delete;
@@ -31,7 +31,7 @@ export function readBackRule(contract: Contract<SqlStorage>): Rule {
       table === undefined ||
       others.length > 0 ||
       !(edge instanceof FilterData || edge instanceof Rows) ||
-      !readsStateWrittenBy(graph, state, table, edge.from)
+      !readsStateWrittenBy(graph, [state ?? []].flat(), table, edge.from)
     ) {
       return undefined;
     }
@@ -46,12 +46,15 @@ export function readBackRule(contract: Contract<SqlStorage>): Rule {
 
 function readsStateWrittenBy(
   graph: Graph,
-  state: readonly StateEdge[],
+  state: readonly Edge<unknown>[],
   table: TableSource,
   write: NodeId,
 ): boolean {
   const read = state.find(
-    (edge) => edge.table.tableName === table.name && edge.table.namespaceId === table.namespaceId,
+    (edge): edge is StateEdge =>
+      edge instanceof StateEdge &&
+      edge.table.tableName === table.name &&
+      edge.table.namespaceId === table.namespaceId,
   );
   return (
     read !== undefined &&

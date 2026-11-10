@@ -16,10 +16,12 @@ import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
 import { Delete } from './delete';
 import type { ColumnMapping, NodeId } from './edge';
+import { FilterData } from './filter-data';
 import type { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
 import type { JunctionWrite } from './junction-write';
+import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
 import { Update } from './update';
 
@@ -38,6 +40,7 @@ export interface InsertRows {
   readonly conflict: InsertConflictSkip | undefined;
   readonly keys: readonly KeySource[];
   readonly junction: JunctionWrite | undefined;
+  readonly requires: readonly Requires[];
 }
 
 export function addInsertRows(
@@ -45,22 +48,21 @@ export function addInsertRows(
   contract: Contract<SqlStorage>,
   table: AliasedTable,
   rows: readonly Record<string, unknown>[],
-  { conflict, keys, junction }: InsertRows,
-): NodeId<{ requires: Requires[] }> {
+  { conflict, keys, junction, requires }: InsertRows,
+): NodeId {
   const inserted = supportsDefaultInInsert(contract)
-    ? graph.add(new Insert(insertAst(contract, table, rows, conflict), junction))
-    : graph.add(
-        new InsertChunked(
-          groupRowsByColumnSignature(rows).map((group) =>
-            insertAst(contract, table, group, conflict),
-          ),
-          junction,
+    ? new Insert(insertAst(contract, table, rows, conflict), junction)
+    : new InsertChunked(
+        groupRowsByColumnSignature(rows).map((group) =>
+          insertAst(contract, table, group, conflict),
         ),
+        junction,
       );
-  for (const { from, columns } of keys) {
-    graph.addPayloadDataEdge(from, inserted, columns);
-  }
-  return inserted;
+  return graph.add(inserted, {
+    payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
+    state: graph.stateEdgesFor(inserted),
+    requires: [...requires],
+  });
 }
 
 export type SelectedColumns = 'identity' | 'selection';
@@ -99,15 +101,13 @@ export function addUpdateRows(
   tables: CollectionTables,
   values: Readonly<Record<string, unknown>>,
   { where, filters, payloads }: UpdateRows,
-): NodeId<{ requires: Requires[] }> {
-  const updated = graph.add(new Update(updateAst(contract, tables, values, where)));
-  for (const { from, columns } of filters) {
-    graph.addFilterDataEdge(from, updated, columns);
-  }
-  for (const { from, columns } of payloads) {
-    graph.addPayloadDataEdge(from, updated, columns);
-  }
-  return updated;
+): NodeId {
+  const updated = new Update(updateAst(contract, tables, values, where));
+  return graph.add(updated, {
+    filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
+    payload: payloads.map(({ from, columns }) => new PayloadData(from, columns)),
+    state: graph.stateEdgesFor(updated),
+  });
 }
 
 export interface DeleteRows {
@@ -120,10 +120,10 @@ export function addDeleteRows(
   contract: Contract<SqlStorage>,
   tables: CollectionTables,
   { where, filters }: DeleteRows,
-): NodeId<{ requires: Requires[] }> {
-  const deleted = graph.add(new Delete(deleteAst(contract, tables, where)));
-  for (const { from, columns } of filters) {
-    graph.addFilterDataEdge(from, deleted, columns);
-  }
-  return deleted;
+): NodeId {
+  const deleted = new Delete(deleteAst(contract, tables, where));
+  return graph.add(deleted, {
+    filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
+    state: graph.stateEdgesFor(deleted),
+  });
 }

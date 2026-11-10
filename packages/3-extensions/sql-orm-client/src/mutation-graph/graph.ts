@@ -33,9 +33,9 @@ export class Graph {
   #states = new Map<string, NodeId>();
   #result: NodeId | undefined = undefined;
 
-  constructor(contract: Contract<SqlStorage>, rules: readonly Rule[] = rulesFor(contract)) {
+  constructor(contract: Contract<SqlStorage>) {
     this.#contract = contract;
-    this.#rules = rules;
+    this.#rules = rulesFor(contract);
   }
 
   get result(): NodeId | undefined {
@@ -49,17 +49,16 @@ export class Graph {
   add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs>;
   add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId;
   add<Inputs extends Slots>(node: Node<Inputs>, inputs?: InputEdges<Inputs>): NodeId {
-    const state = this.#stateEdgesOf(node);
     if (inputs === undefined) {
-      return this.#addNode(node, state);
+      return this.#addNode(node);
     }
     for (const rule of this.#rules) {
-      const standing = rule(this, node, { ...inputs, state });
+      const standing = rule(this, node, inputs);
       if (standing !== undefined) {
         return standing;
       }
     }
-    const id = this.#addNode(node, state);
+    const id = this.#addNode(node);
     for (const [slot, edges] of Object.entries<Slot | undefined>(inputs)) {
       for (const edge of [edges ?? []].flat()) {
         this.#addEdge(id, slot, edge);
@@ -68,17 +67,12 @@ export class Graph {
     return id;
   }
 
-  #stateEdgesOf(node: Node): StateEdge[] {
-    return node instanceof StatementNode
-      ? tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table))
-      : [];
+  stateEdgesFor(node: StatementNode): StateEdge[] {
+    return tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table));
   }
 
-  #addNode<Inputs extends Slots>(node: Node<Inputs>, state: readonly StateEdge[]): NodeId<Inputs> {
+  #addNode<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
     const id = this.#append(node);
-    for (const edge of state) {
-      this.#connect(id, 'state', edge);
-    }
     if (!(node instanceof StatementNode)) {
       return id;
     }

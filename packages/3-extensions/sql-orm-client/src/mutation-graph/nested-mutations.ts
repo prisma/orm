@@ -47,7 +47,9 @@ import {
   type Model,
   selectAstOf,
 } from './model-statements';
-import type { Requires } from './requires';
+import { PayloadData } from './payload-data';
+import { Requires } from './requires';
+import { Rows } from './rows';
 import { createRowOf, withCreateDefaults } from './storage-rows';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
@@ -92,15 +94,12 @@ function addParentInsert(
   keys: readonly KeySource[],
   requiresParentRow: boolean,
 ): NodeId {
-  const insert = addInsertRows(t.graph, t.context.contract, model.tables.root, [row], {
+  return addInsertRows(t.graph, t.context.contract, model.tables.root, [row], {
     conflict: undefined,
     keys,
     junction: undefined,
+    requires: requiresParentRow ? parentRowRequired(t) : [],
   });
-  if (requiresParentRow) {
-    requireParentRow(t, insert);
-  }
-  return insert;
 }
 
 function addInsertAndReadBack(
@@ -116,33 +115,30 @@ function addInsertAndReadBack(
   const { namespaceId, tableName } = root.storage;
   const owner = { operation: 'create', modelName: model.modelName };
   const written = writtenKeysOf(t, model, row, keys);
-  const insert = graph.add(
-    new InsertReportingKeys(
-      [insertAst(contract, root, [row], undefined)],
-      written.keys,
-      written.generated,
-      owner,
-    ),
+  const inserted = new InsertReportingKeys(
+    [insertAst(contract, root, [row], undefined)],
+    written.keys,
+    written.generated,
+    owner,
   );
-  for (const { from, columns } of keys) {
-    graph.addPayloadDataEdge(from, insert, columns);
-  }
-  if (requiresParentRow) {
-    requireParentRow(t, insert);
-  }
+  const insert = graph.add(inserted, {
+    payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
+    state: graph.stateEdgesFor(inserted),
+    requires: requiresParentRow ? parentRowRequired(t) : [],
+  });
   const identity = readBackIdentity(contract, namespaceId, tableName, model.modelName, 'create()');
   const identityMappings = projectTableColumns(contract, root, identity).map(
     (column): ColumnMapping => [column, column],
   );
-  const read = graph.add(
-    new FindByKeys(
-      collectionSelectAst(contract, model.modelName, emptyState(model.tables)),
-      identityMappings,
-      owner,
-    ),
+  const read = new FindByKeys(
+    collectionSelectAst(contract, model.modelName, emptyState(model.tables)),
+    identityMappings,
+    owner,
   );
-  graph.addRowsEdge(insert, read, 'keys', identityMappings);
-  return read;
+  return graph.add(read, {
+    keys: new Rows(insert, identityMappings),
+    state: graph.stateEdgesFor(read),
+  });
 }
 
 function writtenKeysOf(
@@ -357,6 +353,7 @@ function addJunctionOwned(
         { from: target, columns: fromTarget },
       ],
       junction: { relation: name, junction: through.table },
+      requires: [],
     });
   };
 
@@ -412,6 +409,7 @@ function addChildInserts(
     conflict: undefined,
     keys,
     junction: undefined,
+    requires: [],
   });
 }
 
@@ -425,18 +423,19 @@ function addFindAndAssert(
 ): NodeId {
   const { graph, context } = t;
   const where = requiredCriterion(context, related, name, kind, criterion);
-  const find = graph.add(
-    new Find(
-      selectAstOf(
-        context,
-        related,
-        { ...emptyState(related.tables), filters: [where], limit: 1 },
-        'selection',
-      ),
+  const found = new Find(
+    selectAstOf(
+      context,
+      related,
+      { ...emptyState(related.tables), filters: [where], limit: 1 },
+      'selection',
     ),
   );
-  requireParentRow(t, find);
-  const assert = graph.add(
+  const find = graph.add(found, {
+    state: graph.stateEdgesFor(found),
+    requires: parentRowRequired(t),
+  });
+  graph.add(
     new Assert(
       ormError(
         'ORM.RELATION_ROW_MISSING',
@@ -444,14 +443,14 @@ function addFindAndAssert(
         { meta: { kind, relation: name } },
       ),
     ),
+    {
+      rows: new Rows(
+        find,
+        columns.map(([source]) => [source, source]),
+      ),
+      requires: parentRowRequired(t),
+    },
   );
-  graph.addRowsEdge(
-    find,
-    assert,
-    'rows',
-    columns.map(([source]) => [source, source]),
-  );
-  requireParentRow(t, assert);
   return find;
 }
 
@@ -473,10 +472,8 @@ function requiredCriterion(
   return where;
 }
 
-function requireParentRow(t: Translation, node: NodeId<{ requires: Requires[] }>): void {
-  if (t.parentRow !== undefined) {
-    t.graph.addRequiresEdge(t.parentRow, node);
-  }
+function parentRowRequired(t: Translation): Requires[] {
+  return t.parentRow === undefined ? [] : [new Requires(t.parentRow)];
 }
 
 function criterionWhere(

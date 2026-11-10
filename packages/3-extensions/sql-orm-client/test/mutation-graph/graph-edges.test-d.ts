@@ -3,6 +3,7 @@ import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
+import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { StateEdge } from '../../src/mutation-graph/state';
 import { UnionAll } from '../../src/mutation-graph/union-all';
@@ -51,7 +52,8 @@ describe('graph edge methods', () => {
     graph.add(findUsers(), { payload: [new PayloadData(find, sameId)] });
     // @ts-expect-error the filter slot of a Find holds FilterData edges
     graph.add(findUsers(), { filter: [new Rows(find, sameId)] });
-    // @ts-expect-error the graph adds the state edges
     graph.add(findUsers(), { state: [new StateEdge(find, users)] });
+    // @ts-expect-error the state slot of a Find holds StateEdge edges
+    graph.add(findUsers(), { state: [new Requires(find)] });
   });
 });

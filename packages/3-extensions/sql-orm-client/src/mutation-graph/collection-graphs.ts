@@ -33,6 +33,7 @@ import { type CollectionState, emptyState } from '../types';
 import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId, StorageRow } from './edge';
+import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
@@ -45,6 +46,8 @@ import {
   addCreateWithRelations,
   type Translation,
 } from './nested-mutations';
+import { PayloadData } from './payload-data';
+import { Rows } from './rows';
 import {
   createRowOf,
   createRowsOf,
@@ -68,7 +71,7 @@ export function updateAllGraph(
   const { context, state } = collection;
   const graph = new Graph(context.contract);
   if (Object.keys(set).length === 0) {
-    graph.setResult(graph.add(new Find(selectRowsAst(collection, state))));
+    graph.setResult(addFind(graph, selectRowsAst(collection, state)));
     return graph;
   }
 
@@ -77,7 +80,7 @@ export function updateAllGraph(
   if (readsBack(collection, returns)) {
     const { namespaceId, tableName } = state.tables.root.storage;
     readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
-    const found = graph.add(new Find(selectIdentityAst(collection, state)));
+    const found = addFind(graph, selectIdentityAst(collection, state));
     addUpdateRows(graph, context.contract, state.tables, set, update);
     graph.setResult(
       addReadBack(graph, collection, found, keyOverrides(collection, set), state.includes),
@@ -101,7 +104,7 @@ export function deleteAllGraph(
     return graph;
   }
 
-  graph.setResult(graph.add(new Find(selectRowsAst(collection, state))));
+  graph.setResult(addFind(graph, selectRowsAst(collection, state)));
   addDeleteRows(graph, context.contract, state.tables, del);
   return graph;
 }
@@ -221,7 +224,8 @@ export function createAllGraph(
       operation: rows.length === 1 ? 'create' : 'createAll',
       modelName: collection.modelName,
     };
-    const inserted = graph.add(new InsertReportingKeys(asts, keys, generated, owner));
+    const reporting = new InsertReportingKeys(asts, keys, generated, owner);
+    const inserted = graph.add(reporting, { state: graph.stateEdgesFor(reporting) });
     graph.setResult(
       addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), owner),
     );
@@ -231,6 +235,7 @@ export function createAllGraph(
     conflict,
     keys: [],
     junction: undefined,
+    requires: [],
   });
   graph.setResult(addWithIncludes(graph, collection, inserted));
   return graph;
@@ -280,13 +285,17 @@ export function createAllVariantGraph(
   const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
 
   const joins = rows.map((row) => {
-    const baseInsert = insertAst(contract, root, [row.base], undefined).withReturning(baseColumns);
-    const base = graph.add(new Insert(baseInsert));
-    const variantInsert = insertAst(contract, variantTable, [row.variant], undefined).withReturning(
-      variantColumns,
+    const baseInsert = new Insert(
+      insertAst(contract, root, [row.base], undefined).withReturning(baseColumns),
     );
-    const variant = graph.add(new Insert(variantInsert));
-    graph.addPayloadDataEdge(base, variant, keyMappings);
+    const base = graph.add(baseInsert, { state: graph.stateEdgesFor(baseInsert) });
+    const variantInsert = new Insert(
+      insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns),
+    );
+    const variant = graph.add(variantInsert, {
+      payload: [new PayloadData(base, keyMappings)],
+      state: graph.stateEdgesFor(variantInsert),
+    });
     const join = graph.add(new CrossJoin());
     graph.addRowsEdge(base, join, 'left', sameColumns(baseColumns));
     graph.addRowsEdge(variant, join, 'right', sameColumns(variantColumns));
@@ -344,9 +353,8 @@ export function upsertGraph(
   if (readsBack(collection, 'rows')) {
     const conflictValues = upsertConflictValues(collection, create, update, conflictColumns);
     const upsertOwner = { operation: 'upsert', modelName: collection.modelName };
-    const upserted = graph.add(
-      new InsertReportingKeys([upsert], [conflictValues], undefined, upsertOwner),
-    );
+    const reporting = new InsertReportingKeys([upsert], [conflictValues], undefined, upsertOwner);
+    const upserted = graph.add(reporting, { state: graph.stateEdgesFor(reporting) });
     graph.setResult(
       addFindOfWrittenRows(
         graph,
@@ -358,7 +366,8 @@ export function upsertGraph(
     );
     return graph;
   }
-  const upserted = graph.add(new Insert(upsert));
+  const upsertInsert = new Insert(upsert);
+  const upserted = graph.add(upsertInsert, { state: graph.stateEdgesFor(upsertInsert) });
   graph.setResult(addWithIncludes(graph, collection, upserted));
   return graph;
 }
@@ -371,9 +380,9 @@ function addWithIncludes(
   if (collection.state.includes.length === 0) {
     return written;
   }
-  const find = graph.add(new Find(readBackAst(collection, collection.state.includes)));
-  graph.addFilterDataEdge(written, find, sameRowColumns(collection));
-  return find;
+  return addFind(graph, readBackAst(collection, collection.state.includes), [
+    new FilterData(written, sameRowColumns(collection)),
+  ]);
 }
 
 function readBackAst(
@@ -403,9 +412,9 @@ function addReadBack(
   changed: Readonly<StorageRow>,
   includes: CollectionState['includes'],
 ): NodeId {
-  const find = graph.add(new Find(readBackAst(collection, includes)));
-  graph.addFilterDataEdge(keysFrom, find, sameColumns(identityProjection(collection)), changed);
-  return find;
+  return addFind(graph, readBackAst(collection, includes), [
+    new FilterData(keysFrom, sameColumns(identityProjection(collection)), changed),
+  ]);
 }
 
 function addFindOfWrittenRows(
@@ -416,11 +425,16 @@ function addFindOfWrittenRows(
   owner: WrittenRowOwner,
 ): NodeId {
   const mappings = sameColumns(keyColumns);
-  const found = graph.add(
-    new FindByKeys(readBackAst(collection, collection.state.includes), mappings, owner),
-  );
-  graph.addRowsEdge(inserted, found, 'keys', mappings);
-  return found;
+  const found = new FindByKeys(readBackAst(collection, collection.state.includes), mappings, owner);
+  return graph.add(found, {
+    keys: new Rows(inserted, mappings),
+    state: graph.stateEdgesFor(found),
+  });
+}
+
+function addFind(graph: Graph, ast: SelectAst, filter: FilterData[] = []): NodeId {
+  const find = new Find(ast);
+  return graph.add(find, { filter, state: graph.stateEdgesFor(find) });
 }
 
 function identityProjection(collection: DescribeCollectionRowsOptions): readonly ProjectionItem[] {
@@ -527,7 +541,7 @@ function addFindOfFirstRow(
   if (state.limit === 0) {
     return undefined;
   }
-  return graph.add(new Find(select(collection, { ...state, limit: 1 })));
+  return addFind(graph, select(collection, { ...state, limit: 1 }));
 }
 
 function requireIdentityColumns(collection: DescribeCollectionRowsOptions): void {

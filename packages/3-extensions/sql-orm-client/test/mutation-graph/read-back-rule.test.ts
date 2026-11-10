@@ -22,6 +22,7 @@ import { createCollectionFor } from '../collection-fixtures';
 import { cascadeContract } from './cascade-contract';
 import { printGraph } from './print-graph';
 import {
+  addWithState,
   columnMappings,
   deleteUsers,
   findUsers,
@@ -66,9 +67,14 @@ function usersWithPosts() {
 describe('the read-back rule, on a contract with returning', () => {
   it('collapses a FindByKeys of the rows an Insert wrote into the Insert, which returns its columns', () => {
     const graph = newGraph();
-    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }, { name: 'Bob' }])));
+    const insert = addWithState(
+      graph,
+      new Insert(insertInto('users', [{ name: 'Ada' }, { name: 'Bob' }])),
+    );
 
-    const read = graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+    const read = addWithState(graph, readBackByKeys(['id', 'name']), {
+      keys: new Rows(insert, sameId),
+    });
 
     expect(read).toBe(insert);
     expect(printGraph(graph)).toBe(['n1 Insert users 2 rows', 'result: none'].join('\n'));
@@ -77,14 +83,17 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('collapses a FindByKeys of the rows an InsertChunked wrote into it', () => {
     const graph = newGraph();
-    const inserted = graph.add(
+    const inserted = addWithState(
+      graph,
       new InsertChunked([
         insertInto('users', [{ name: 'Ada' }]),
         insertInto('users', [{ name: 'Bob', email: 'bob@example.com' }]),
       ]),
     );
 
-    const read = graph.add(readBackByKeys(['id', 'email']), { keys: new Rows(inserted, sameId) });
+    const read = addWithState(graph, readBackByKeys(['id', 'email']), {
+      keys: new Rows(inserted, sameId),
+    });
 
     expect(read).toBe(inserted);
     expect(printGraph(graph)).toBe(
@@ -95,9 +104,9 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('collapses a Find of the rows an Update changed by their key into the Update', () => {
     const graph = newGraph();
-    const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+    const update = addWithState(graph, updateUsers({ name: 'Ada' }, nameIsAda));
 
-    const read = graph.add(findUsers([], ['id', 'email']), {
+    const read = addWithState(graph, findUsers([], ['id', 'email']), {
       filter: [new FilterData(update, sameId)],
     });
 
@@ -110,9 +119,9 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('collapses a Find of the rows a Delete removed by their key into the Delete', () => {
     const graph = newGraph();
-    const del = graph.add(deleteUsers(nameIsAda));
+    const del = addWithState(graph, deleteUsers(nameIsAda));
 
-    const read = graph.add(findUsers([], ['id', 'name']), {
+    const read = addWithState(graph, findUsers([], ['id', 'name']), {
       filter: [new FilterData(del, sameId)],
     });
 
@@ -125,9 +134,9 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a read-back with includes as it is', () => {
     const graph = newGraph();
-    const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+    const update = addWithState(graph, updateUsers({ name: 'Ada' }, nameIsAda));
 
-    const read = graph.add(findUsersWith(usersWithPosts()), {
+    const read = addWithState(graph, findUsersWith(usersWithPosts()), {
       filter: [new FilterData(update, sameId)],
     });
 
@@ -143,9 +152,9 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a Find that reads by columns that are not a key as it is', () => {
     const graph = newGraph();
-    const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+    const update = addWithState(graph, updateUsers({ name: 'Ada' }, nameIsAda));
 
-    graph.add(findUsers([], ['id']), { filter: [new FilterData(update, sameName)] });
+    addWithState(graph, findUsers([], ['id']), { filter: [new FilterData(update, sameName)] });
 
     expect(printGraph(graph)).toBe(
       [
@@ -158,9 +167,11 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a Find with a condition of its own as it is', () => {
     const graph = newGraph();
-    const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+    const update = addWithState(graph, updateUsers({ name: 'Ada' }, nameIsAda));
 
-    graph.add(findUsers([nameIsAda], ['id']), { filter: [new FilterData(update, sameId)] });
+    addWithState(graph, findUsers([nameIsAda], ['id']), {
+      filter: [new FilterData(update, sameId)],
+    });
 
     expect(printGraph(graph)).toBe(
       [
@@ -173,9 +184,9 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a Find that reads a node that does not write as it is', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers([nameIsAda], ['id']));
+    const find = addWithState(graph, findUsers([nameIsAda], ['id']));
 
-    graph.add(findUsers([], ['id', 'name']), { filter: [new FilterData(find, sameId)] });
+    addWithState(graph, findUsers([], ['id', 'name']), { filter: [new FilterData(find, sameId)] });
 
     expect(printGraph(graph)).toBe(
       [
@@ -188,10 +199,10 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a read-back with an input besides the write as it is', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers([nameIsAda], ['id']));
-    const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+    const find = addWithState(graph, findUsers([nameIsAda], ['id']));
+    const update = addWithState(graph, updateUsers({ name: 'Ada' }, nameIsAda));
 
-    graph.add(findUsers([], ['id', 'name']), {
+    addWithState(graph, findUsers([], ['id', 'name']), {
       filter: [new FilterData(update, sameId)],
       requires: [new Requires(find)],
     });
@@ -208,10 +219,10 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a read-back as it is when another write to the table follows the write it reads', () => {
     const graph = newGraph();
-    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
-    graph.add(updateUsers({ name: 'Bob' }));
+    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
+    addWithState(graph, updateUsers({ name: 'Bob' }));
 
-    graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+    addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
     expect(printGraph(graph)).toBe(
       [
@@ -225,19 +236,19 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('collapses a read-back of a Delete on a table other tables cascade into', () => {
     const graph = new Graph(cascadeWithReturning);
-    const del = graph.add(deleteFrom('Member'));
+    const del = addWithState(graph, deleteFrom('Member'));
 
     expect(
-      graph.add(findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] }),
+      addWithState(graph, findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] }),
     ).toBe(del);
   });
 
   it('adds a read-back as it is when a cascade from a write to another table follows the write it reads', () => {
     const graph = new Graph(cascadeWithReturning);
-    const del = graph.add(deleteFrom('Member'));
-    graph.add(deleteFrom('Org'));
+    const del = addWithState(graph, deleteFrom('Member'));
+    addWithState(graph, deleteFrom('Org'));
 
-    graph.add(findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] });
+    addWithState(graph, findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] });
 
     expect(printGraph(graph)).toBe(
       [
@@ -249,12 +260,25 @@ describe('the read-back rule, on a contract with returning', () => {
     );
   });
 
+  it('adds a read-back as it is when the caller passes it no state edge', () => {
+    const graph = newGraph();
+    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
+
+    graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+
+    expect(printGraph(graph)).toBe(
+      ['n1 Insert users', 'n2 FindByKeys users by (id) for create <- Rows n1', 'result: none'].join(
+        '\n',
+      ),
+    );
+  });
+
   it('adds a read-back of an Insert that skips conflicting rows as it is', () => {
     const graph = newGraph();
     const ast = insertInto('users', [{ name: 'Ada' }]).withOnConflict(InsertOnConflict.doNothing());
-    const insert = graph.add(new Insert(ast));
+    const insert = addWithState(graph, new Insert(ast));
 
-    graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+    addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
     expect(printGraph(graph)).toBe(
       [
@@ -269,9 +293,11 @@ describe('the read-back rule, on a contract with returning', () => {
 describe('the read-back rule, on a contract without returning', () => {
   it('adds the read-back as it is, and the write returns the key it reads', () => {
     const graph = newGraphWithoutReturning();
-    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
 
-    const read = graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+    const read = addWithState(graph, readBackByKeys(['id', 'name']), {
+      keys: new Rows(insert, sameId),
+    });
 
     expect(read).not.toBe(insert);
     expect(printGraph(graph)).toBe(
