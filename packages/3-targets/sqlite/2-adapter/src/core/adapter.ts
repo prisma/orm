@@ -728,14 +728,32 @@ function projectJsonThroughCodec(
   return descriptor.projectJson(value, codec);
 }
 
+// SQLite builds before 3.48 take at most 127 arguments per function: json_object takes two per entry, and json_set, which appends entries in order, one plus two per entry.
+const SQLITE_JSON_CALL_MAX_ENTRIES = 63;
+
 function renderJsonObjectExpr(expr: JsonObjectExpr, ctx: SqliteRenderContext): string {
-  const args = expr.entries
-    .flatMap((entry): [string, string] => {
-      const key = `'${escapeLiteral(entry.key)}'`;
-      return [key, renderJsonValueProjection(entry.value, ctx)];
-    })
-    .join(', ');
-  return `json_object(${args})`;
+  const rendered = expr.entries.map((entry) => ({
+    key: entry.key,
+    value: renderJsonValueProjection(entry.value, ctx),
+  }));
+  const first = rendered.slice(0, SQLITE_JSON_CALL_MAX_ENTRIES);
+  let object = `json_object(${first.map(({ key, value }) => `'${escapeLiteral(key)}', ${value}`).join(', ')})`;
+  for (
+    let start = SQLITE_JSON_CALL_MAX_ENTRIES;
+    start < rendered.length;
+    start += SQLITE_JSON_CALL_MAX_ENTRIES
+  ) {
+    const chunk = rendered.slice(start, start + SQLITE_JSON_CALL_MAX_ENTRIES);
+    const appended = chunk.map(
+      ({ key, value }) => `'${escapeLiteral(jsonPathOfKey(key))}', ${value}`,
+    );
+    object = `json_set(${object}, ${appended.join(', ')})`;
+  }
+  return object;
+}
+
+function jsonPathOfKey(key: string): string {
+  return `$."${key.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
 function renderOrderByItems(items: ReadonlyArray<OrderByItem>, ctx: SqliteRenderContext): string {

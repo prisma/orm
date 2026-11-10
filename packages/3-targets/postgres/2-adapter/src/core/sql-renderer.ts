@@ -715,7 +715,7 @@ function projectJsonThroughCodec(
   return descriptor.projectJson(value, codec);
 }
 
-// PostgreSQL caps a function call at 100 arguments, and each entry takes two.
+// A PostgreSQL function takes at most 100 arguments, two per entry. A wider object joins the members of several calls as text, which keeps the entries in order; merging jsonb would sort the keys.
 const JSON_BUILD_OBJECT_MAX_ENTRIES = 50;
 
 function renderJsonObjectExpr(
@@ -730,12 +730,12 @@ function renderJsonObjectExpr(
   if (pairs.length <= JSON_BUILD_OBJECT_MAX_ENTRIES) {
     return `json_build_object(${pairs.join(', ')})`;
   }
-  const chunks: string[] = [];
+  const members: string[] = [];
   for (let start = 0; start < pairs.length; start += JSON_BUILD_OBJECT_MAX_ENTRIES) {
     const chunk = pairs.slice(start, start + JSON_BUILD_OBJECT_MAX_ENTRIES);
-    chunks.push(`jsonb_build_object(${chunk.join(', ')})`);
+    members.push(`left(substr(json_build_object(${chunk.join(', ')})::text, 2), -1)`);
   }
-  return `(${chunks.join(' || ')})::json`;
+  return `('{' || ${members.join(" || ', ' || ")} || '}')::json`;
 }
 
 function renderOrderByItems(

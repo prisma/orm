@@ -7,31 +7,37 @@ import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
-const wideColumns = Array.from({ length: 49 }, (_, index) => `c${index + 1}`);
+function wideContract(wideColumns: readonly string[]) {
+  const Comment = model('Comment', {
+    fields: {
+      id: field.column(int4Column).id(),
+      postId: field.column(int4Column).column('post_id'),
+      ...Object.fromEntries(wideColumns.map((name) => [name, field.column(textColumn)])),
+    },
+  }).sql({ table: 'wide_comments' });
 
-const Comment = model('Comment', {
-  fields: {
-    id: field.column(int4Column).id(),
-    postId: field.column(int4Column).column('post_id'),
-    ...Object.fromEntries(wideColumns.map((name) => [name, field.column(textColumn)])),
-  },
-}).sql({ table: 'wide_comments' });
+  const Post = model('Post', {
+    fields: { id: field.column(int4Column).id() },
+    relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
+  }).sql({ table: 'wide_posts' });
 
-const Post = model('Post', {
-  fields: { id: field.column(int4Column).id() },
-  relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
-}).sql({ table: 'wide_posts' });
-
-const contract = defineContract({ models: { Post, Comment } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+  return defineContract({ models: { Post, Comment } });
+}
 
 describe('a to-many include of a model with more than 50 columns', () => {
-  it(
-    'returns every column of the related rows',
-    async () => {
+  it.each([51, 120])(
+    'returns every column of the related rows in field order, for %i columns',
+    async (columnCount) => {
+      const wideColumns = Array.from(
+        { length: columnCount - 2 },
+        (_, index) => `c${columnCount - 2 - index}`,
+      );
+      const contract = wideContract(wideColumns);
+      const context = createExecutionContext({
+        contract,
+        stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
+      });
+
       await withPushedContractRuntime(contract, async (runtime) => {
         await runtime.query(`
           insert into wide_posts (id) values (1);
@@ -42,18 +48,13 @@ describe('a to-many include of a model with more than 50 columns', () => {
 
         const rows = await posts.include('comments').all();
 
-        expect(rows).toEqual([
-          {
-            id: 1,
-            comments: [
-              {
-                id: 1,
-                postId: 1,
-                ...Object.fromEntries(wideColumns.map((name) => [name, name])),
-              },
-            ],
-          },
-        ]);
+        const comment = {
+          id: 1,
+          postId: 1,
+          ...Object.fromEntries(wideColumns.map((name) => [name, name])),
+        };
+        expect(rows).toEqual([{ id: 1, comments: [comment] }]);
+        expect(Object.keys(rows[0]?.comments[0] ?? {})).toEqual(Object.keys(comment));
       });
     },
     timeouts.spinUpPpgDev,
