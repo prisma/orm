@@ -19,6 +19,7 @@ import type { ShellDefinition, ShellName } from '../src/shells';
 const postgresFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-postgres' };
 const mongoFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mongo' };
 const mysqlFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mysql' };
+const mariadbFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mariadb' };
 const platform: ImportRoot = { mode: 'platform' };
 
 describe('resolveImportSpecifier', () => {
@@ -157,6 +158,40 @@ describe('resolveImportSpecifier', () => {
       expect(resolveImportSpecifier('@internal/mysql/migration', mysqlFacade)).toBe(
         '@prisma/orm-mysql/migration',
       );
+    });
+
+    it('resolves what emitted MariaDB contracts, migrations and configs name to the MariaDB facade', () => {
+      expect(
+        [
+          '@internal/adapter-mariadb/codec-types',
+          '@internal/sql-contract/types',
+          '@internal/contract/types',
+          '@internal/mariadb/migration',
+          '@internal/mariadb/config',
+          '@internal/mariadb/control',
+          '@internal/driver-mariadb/control',
+        ].map((specifier) => resolveImportSpecifier(specifier, mariadbFacade)),
+      ).toEqual([
+        '@prisma/orm-mariadb/adapter/codec-types',
+        '@prisma/orm-mariadb/family-contract/types',
+        '@prisma/orm-mariadb/contract/types',
+        '@prisma/orm-mariadb/migration',
+        '@prisma/orm-mariadb/config',
+        '@prisma/orm-mariadb/control',
+        '@prisma/orm-mariadb/driver/control',
+      ]);
+    });
+
+    it('gives the MariaDB facade no name for MySQL modules or a query runtime', () => {
+      for (const specifier of [
+        '@internal/adapter-mysql/codec-types',
+        '@internal/mysql/migration',
+        '@internal/sql-runtime',
+      ]) {
+        expect(() => resolveImportSpecifier(specifier, mariadbFacade)).toThrow(
+          /has no name under @prisma\/orm-mariadb/,
+        );
+      }
     });
 
     it('resolves what a MySQL application queries with to the MySQL facade', () => {

@@ -6,29 +6,50 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import type { StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
-import type { Executed, OutputsOf, Run } from './node';
+import { payloadOf, withPayload } from './insert';
+import type { JunctionWrite } from './junction-write';
+import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import type { PayloadData } from './payload-data';
+import { type Requires, requirementUnmet } from './requires';
+import { rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type NoInputs = Record<never, never>;
+type Payloads = { payload: PayloadData[]; state: StateEdge[]; requires: Requires[] };
 
-export class InsertChunked extends StatementNode<NoInputs> {
+export class InsertChunked extends StatementNode<Payloads> {
+  readonly slots = { payload: 'list', state: 'list', requires: 'list' } as const;
   readonly asts: readonly InsertAst[];
+  readonly junction: JunctionWrite | undefined;
 
-  constructor(asts: readonly InsertAst[]) {
+  constructor(asts: readonly InsertAst[], junction?: JunctionWrite) {
     super();
     this.asts = Object.freeze([...asts]);
+    this.junction = junction;
     Object.freeze(this);
+  }
+
+  get statements(): readonly StatementAst[] {
+    return this.asts;
   }
 
   get returns(): readonly ProjectionItem[] {
     return this.asts[0]?.returning ?? [];
   }
 
-  override execute(_inputs: OutputsOf<NoInputs>, run: Run): Executed {
-    if (this.returns.length === 0) {
-      return this.#sumOfCounts(run);
+  override execute(inputs: OutputsOf<Payloads>, run: Run): Executed {
+    if (requirementUnmet(inputs.requires)) {
+      return rowsResult([]);
     }
-    const asts = this.asts;
+    if (inputs.payload?.some((records) => records.length === 0)) {
+      return rowsResult([]);
+    }
+    const payload = inputs.payload === null ? undefined : payloadOf(inputs.payload, this.junction);
+    const asts =
+      payload === undefined ? this.asts : this.asts.map((ast) => withPayload(ast, payload));
+    if (this.returns.length === 0) {
+      return this.#sumOfCounts(asts, run);
+    }
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const ast of asts) {
         yield* run.query(ast);
@@ -40,12 +61,13 @@ export class InsertChunked extends StatementNode<NoInputs> {
   override withReturning(columns: readonly ProjectionItem[]): InsertChunked {
     return new InsertChunked(
       this.asts.map((ast) => ast.withReturning(withColumns(ast.returning ?? [], columns))),
+      this.junction,
     );
   }
 
-  async #sumOfCounts(run: Run): Promise<SqlStatementStats> {
+  async #sumOfCounts(asts: readonly InsertAst[], run: Run): Promise<SqlStatementStats> {
     let affectedRows = 0;
-    for (const ast of this.asts) {
+    for (const ast of asts) {
       affectedRows += (await run.execute(ast)).affectedRows;
     }
     return { affectedRows };

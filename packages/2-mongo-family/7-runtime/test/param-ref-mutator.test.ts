@@ -275,11 +275,12 @@ describe('createMongoParamRefMutator', () => {
       }
     });
 
-    it('keeps the name, codec id and collection of a parameter it replaces', () => {
+    it('keeps the name, codec id, collection and nullability of a parameter it replaces', () => {
       const ref = new MongoParamRef('Alice', {
         name: 'profile.name',
         codecId: 'mongo/string@1',
         collection: 'users',
+        nullable: true,
       });
       const draft: MongoLoweredDraft = {
         kind: 'insertOne',
@@ -295,6 +296,7 @@ describe('createMongoParamRefMutator', () => {
           name: 'profile.name',
           codecId: 'mongo/string@1',
           collection: 'users',
+          nullable: true,
         }),
       ]);
     });

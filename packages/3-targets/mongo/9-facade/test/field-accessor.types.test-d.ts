@@ -1,12 +1,12 @@
 import type { FieldAccessor } from '@internal/mongo-orm';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, field, model } from '../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../src/exports/contract-builder';
 
 const noEmit = defineContract({
   models: {
     Note: model('Note', {
       collection: 'notes',
-      fields: { _id: field.objectId(), title: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), title: field.scalar(type.String()) },
     }),
   },
 });

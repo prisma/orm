@@ -99,7 +99,32 @@ describe('a relation join field', () => {
   });
 });
 
-function contractWithTags(targetFields: readonly string[]) {
+describe('the link column lists of a relation', () => {
+  it('refuse an empty on.localFields or on.targetFields', () => {
+    expect(() => validateSqlContractFully(contractWith(postsOn([], ['userId'])))).toThrow(
+      /relations\.posts\.on\.localFields must be non-empty/,
+    );
+    expect(() => validateSqlContractFully(contractWith(postsOn(['id'], [])))).toThrow(
+      /relations\.posts\.on\.targetFields must be non-empty/,
+    );
+  });
+
+  it.each(['parentColumns', 'childColumns', 'targetColumns'] as const)(
+    'refuse an empty through.%s',
+    (list) => {
+      expect(() => validateSqlContractFully(contractWithTags(['user_id'], { [list]: [] }))).toThrow(
+        new RegExp(`relations\\.tags\\.through\\.${list} must be non-empty`),
+      );
+    },
+  );
+});
+
+function contractWithTags(
+  targetFields: readonly string[],
+  throughLists: Partial<
+    Record<'parentColumns' | 'childColumns' | 'targetColumns', readonly string[]>
+  > = {},
+) {
   return createContract<SqlStorage>({
     storage,
     models: {
@@ -117,6 +142,7 @@ function contractWithTags(targetFields: readonly string[]) {
               parentColumns: ['user_id'],
               childColumns: ['tag_id'],
               targetColumns: ['id'],
+              ...throughLists,
             },
           },
         },

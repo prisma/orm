@@ -345,7 +345,7 @@ withTempDir(({ createTempDir }) => {
           ]);
           expect(changed.exitCode).not.toBe(0);
           expect(output(changed)).toContain(
-            "Changing a column's type is not yet supported on MySQL (event.dbAt)",
+            "Changing a column's type is not yet supported by the migration planner (event.dbAt)",
           );
         });
       },

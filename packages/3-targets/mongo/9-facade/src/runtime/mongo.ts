@@ -3,12 +3,13 @@ import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/ru
 import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
+  ExtractMongoCodecTypes,
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
 import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
-import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
+import type { MongoMiddleware, MongoPrepareMember, MongoRuntime } from '@internal/mongo-runtime';
 import {
   createMongoExecutionStack,
   createMongoRuntime,
@@ -31,9 +32,12 @@ import type { MongoTargetId } from './mongo-target-id';
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
 
+/**
+ * A MongoDB client. `prepare` opens no connection, so a client with no binding can prepare; run the handle against `await db.runtime()`. Declarations are checked against the contract's codec types.
+ */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> {
+> extends MongoPrepareMember<ExtractMongoCodecTypes<TContract>> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -214,6 +218,13 @@ export default function mongo<
 
     runtime(): Promise<MongoRuntime> {
       return getRuntime();
+    },
+
+    async prepare(declaration, callback) {
+      if (closed) {
+        throw closedError();
+      }
+      return createRuntime().runtime.prepare(declaration, callback);
     },
 
     async close(): Promise<void> {

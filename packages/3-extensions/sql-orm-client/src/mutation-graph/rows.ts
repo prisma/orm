@@ -1,7 +1,7 @@
-import { type ColumnPair, Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type NodeId, type StorageRow } from './edge';
 
-export class Rows extends Edge<StorageRow> {
-  constructor(from: NodeId, columns: readonly ColumnPair[]) {
+export class Rows extends DataEdge<StorageRow> {
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
     super(from, columns);
     Object.freeze(this);
   }

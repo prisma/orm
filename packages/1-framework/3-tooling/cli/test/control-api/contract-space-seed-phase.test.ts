@@ -140,7 +140,7 @@ describe('runContractSpaceSeedPhase', () => {
       join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.d.ts'),
       'utf-8',
     );
-    expect(dts).toBe('// first write\n');
+    expect(dts).toBe('/* first write */\n');
   });
 
   it('reports action=updated when descriptor hash differs from on-disk head', async () => {

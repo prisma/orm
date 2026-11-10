@@ -1,6 +1,6 @@
 import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { defineContract, field, model } from '../../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../../src/exports/contract-builder';
 
 describe('mongo defineContract wrap', () => {
   it('pre-binds family and target (definition form, no models)', () => {
@@ -10,9 +10,9 @@ describe('mongo defineContract wrap', () => {
   });
 
   it('pre-binds family and target (factory form)', () => {
-    const result = defineContract({}, ({ model: m, field: f }) => ({
+    const result = defineContract({}, ({ model: m, field: f, type: t }) => ({
       models: {
-        Foo: m('Foo', { fields: { id: f.objectId() } }),
+        Foo: m('Foo', { fields: { id: f.scalar(t.ObjectId()) } }),
       },
     }));
     expect(result.target).toBe('mongo');
@@ -28,7 +28,7 @@ describe('mongo defineContract wrap', () => {
   it('produces a model when defined inline', () => {
     const result = defineContract({
       models: {
-        Bar: model('Bar', { fields: { id: field.objectId() } }),
+        Bar: model('Bar', { fields: { id: field.scalar(type.ObjectId()) } }),
       },
     });
     expect(domainModelsAtDefaultNamespace(result.domain)['Bar']).toBeDefined();

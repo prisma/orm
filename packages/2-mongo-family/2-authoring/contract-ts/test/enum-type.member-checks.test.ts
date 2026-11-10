@@ -5,6 +5,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
+import { type } from './mongo-test-packs';
 
 const mongoFamilyPack = {
   kind: 'family',
@@ -70,7 +71,7 @@ const target = {
 function build(handle: ReturnType<typeof enumType>) {
   const Holder = model('Holder', {
     collection: 'holders',
-    fields: { _id: field.objectId(), value: field.namedType(handle) },
+    fields: { _id: field.scalar(type.ObjectId()), value: field.namedType(handle) },
   });
   return () =>
     defineContract({

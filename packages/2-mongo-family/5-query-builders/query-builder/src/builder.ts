@@ -77,6 +77,7 @@ import type {
   ExtractDocShape,
   GroupedDocShape,
   GroupSpec,
+  PagingCount,
   ProjectedShape,
   ResolveRow,
   SortSpec,
@@ -210,7 +211,7 @@ export class PipelineChain<
    * semantics (so `.limit(...)` adds no meaning, only ambiguity).
    */
   limit(
-    n: number,
+    n: PagingCount<TContract>,
   ): PipelineChain<TContract, Shape, 'update-cleared', 'fam-cleared', 'past-leading', N> {
     return this.#withStage<Shape, 'update-cleared', 'fam-cleared', 'past-leading', N>(
       new MongoLimitStage(n),
@@ -224,7 +225,7 @@ export class PipelineChain<
    * system reflect the same constraint (see ADR 201 marker table).
    */
   skip(
-    n: number,
+    n: PagingCount<TContract>,
   ): PipelineChain<TContract, Shape, 'update-cleared', 'fam-cleared', 'past-leading', N> {
     return this.#withStage<Shape, 'update-cleared', 'fam-cleared', 'past-leading', N>(
       new MongoSkipStage(n),
