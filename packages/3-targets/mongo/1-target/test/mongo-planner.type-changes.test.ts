@@ -469,6 +469,44 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it("filters a variant's cast on its discriminator next to a base field with a one-value enum", () => {
+      const region = { bsonType: 'string', enum: ['EU'] };
+      const tasks = (severity: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'type', 'region'],
+        properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' }, region },
+        oneOf: [
+          {
+            required: ['type', 'severity'],
+            properties: { region, type: { enum: ['bug'] }, severity: { bsonType: severity } },
+            additionalProperties: false,
+          },
+          {
+            required: ['type'],
+            properties: { region, type: { enum: ['task'] } },
+            additionalProperties: false,
+          },
+        ],
+      });
+      const destination = contract(
+        'to',
+        { Task: { collection: 'tasks', fields: ['_id', 'type'], types: { _id: OBJECT_ID } } },
+        { tasks: { jsonSchema: tasks('long') } },
+      );
+
+      expect(
+        planned(
+          plan({
+            from: null,
+            to: destination,
+            schema: [schemaCollection('tasks', { jsonSchema: tasks('int') })],
+          }),
+        ).labels[1],
+      ).toBe(
+        'Cast field severity in collection tasks from int to long in documents whose type is "bug"',
+      );
+    });
+
     it('reads null as allowed on both sides, an empty set as any value, and a list through its items', () => {
       const live = schemaCollection('users', {
         jsonSchema: closedSchema({

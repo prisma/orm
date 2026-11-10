@@ -96,3 +96,29 @@ describe('validatorDocumentShapesOf', () => {
     expect(validatorDocumentShapesOf(unnamed).map(({ key }) => key)).toEqual(['0:0']);
   });
 });
+
+describe('validatorDocumentShapesOf, a base field with a one-value enum', () => {
+  it('reads the discriminator as the property that is only an enum, not a field typed by a one-value enum', () => {
+    const region = { bsonType: 'string', enum: ['EU'] };
+    const withRegion = {
+      bsonType: 'object',
+      required: ['_id', 'type', 'region'],
+      properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' }, region },
+      oneOf: ['bug', 'feature'].map((value) => ({
+        required: ['type'],
+        properties: { region, type: { enum: [value] } },
+        additionalProperties: false,
+      })),
+    };
+
+    expect(
+      validatorDocumentShapesOf(withRegion).map(({ key, discriminator }) => ({
+        key,
+        discriminator,
+      })),
+    ).toEqual([
+      { key: '0:["type","bug"]', discriminator: { field: 'type', value: 'bug' } },
+      { key: '0:["type","feature"]', discriminator: { field: 'type', value: 'feature' } },
+    ]);
+  });
+});

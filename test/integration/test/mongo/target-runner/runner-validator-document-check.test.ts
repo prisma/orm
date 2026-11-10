@@ -362,6 +362,55 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
   );
 
   it(
+    'names the reasons against the right variant next to a base field with a one-value enum',
+    async () => {
+      const region = { bsonType: 'string', enum: ['EU'] };
+      const variants = {
+        bsonType: 'object',
+        required: ['_id', 'kind', 'region'],
+        properties: { _id: { bsonType: 'objectId' }, kind: { bsonType: 'string' }, region },
+        oneOf: [
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              region,
+              kind: { enum: ['a'] },
+              x: { bsonType: 'string' },
+            },
+            required: ['kind', 'x'],
+            additionalProperties: false,
+          },
+          {
+            properties: {
+              _id: { bsonType: 'objectId' },
+              region,
+              kind: { enum: ['b'] },
+              y: { bsonType: 'string' },
+              z: { bsonType: 'string' },
+            },
+            required: ['kind', 'y', 'z'],
+            additionalProperties: false,
+          },
+        ],
+      };
+      await db.createCollection('users');
+      await db.collection('users').insertOne({ kind: 'b', region: 'EU' });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: variants } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain('That document has no "y" and has no "z".');
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'names the fields whose accepted values the change alters, as what it touches',
     async () => {
       const ageSchema = (bsonType: string) => ({

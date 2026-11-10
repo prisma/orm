@@ -53,7 +53,11 @@ export function validatorFieldNamesOf(jsonSchema: unknown): ReadonlySet<string> 
   );
 }
 
-/** The discriminator a variant branch selects on: its one property whose schema allows exactly one value. */
+/**
+ * The discriminator a variant branch selects on: its one property whose schema is only
+ * `{ enum: [value] }`, as the derived validator writes it. A field typed by a one-value enum also has
+ * a `bsonType`.
+ */
 export interface ValidatorDiscriminator {
   readonly field: string;
   readonly value: unknown;
@@ -79,7 +83,8 @@ function discriminatorOf(
   properties: Readonly<Record<string, unknown>>,
 ): ValidatorDiscriminator | undefined {
   const named = Object.entries(properties).flatMap(([field, schema]) => {
-    const values = isRecord(schema) ? schema['enum'] : undefined;
+    if (!isRecord(schema) || Object.keys(schema).length !== 1) return [];
+    const values = schema['enum'];
     return Array.isArray(values) && values.length === 1 ? [{ field, value: values[0] }] : [];
   });
   const [only, ...others] = named;
