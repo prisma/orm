@@ -107,8 +107,8 @@ export function notYetSupported(
 ): SqlPlannerConflict {
   return {
     kind,
-    summary: `${change} is not yet supported on MySQL (${placeOf(issue, conflictLocation)})`,
-    why: 'The MySQL planner creates and drops tables, columns, indexes, unique constraints and foreign keys; it does not change a column, a default, a primary key or a CHECK constraint yet. Use `migration new` to write this change by hand.',
+    summary: `${change} is not yet supported by the migration planner (${placeOf(issue, conflictLocation)})`,
+    why: 'The migration planner creates and drops tables, columns, indexes, unique constraints and foreign keys; it does not change a column, a default, a primary key or a CHECK constraint yet. Use `migration new` to write this change by hand.',
     ...(conflictLocation === undefined ? {} : { location: conflictLocation }),
   };
 }
@@ -398,8 +398,8 @@ function longNameConflicts(call: MysqlOpFactoryCall): readonly SqlPlannerConflic
     .filter(({ name }) => Array.from(name).length > MAX_IDENTIFIER_CHARACTERS)
     .map(({ name, at }) => ({
       kind: 'unsupportedOperation',
-      summary: `The name ${name} is longer than the ${MAX_IDENTIFIER_CHARACTERS} characters MySQL allows (${placeText(at)})`,
-      why: `MySQL refuses a table, column, index or constraint name longer than ${MAX_IDENTIFIER_CHARACTERS} characters. Give it a shorter name in the contract.`,
+      summary: `The name ${name} is longer than the ${MAX_IDENTIFIER_CHARACTERS} characters the database allows (${placeText(at)})`,
+      why: `The database refuses a table, column, index or constraint name longer than ${MAX_IDENTIFIER_CHARACTERS} characters. Give it a shorter name in the contract.`,
       location: at,
     }));
 }
@@ -426,8 +426,8 @@ function autoincrementKeyConflicts(call: MysqlOpFactoryCall): readonly SqlPlanne
     )
     .map((column) => ({
       kind: 'unsupportedOperation',
-      summary: `An autoincrement column that is not the first column of the primary key or a unique constraint is not supported on MySQL (${call.tableName}.${column.name})`,
-      why: 'MySQL requires an AUTO_INCREMENT column to be the first column of a key, and refuses the table otherwise.',
+      summary: `An autoincrement column that is not the first column of the primary key or a unique constraint is not supported by the database (${call.tableName}.${column.name})`,
+      why: 'The database requires an AUTO_INCREMENT column to be the first column of a key, and refuses the table otherwise.',
       location: location(call.tableName, column.name),
     }));
 }
@@ -536,8 +536,8 @@ function conflictForIndexAKeyUses(
   if (key === undefined) return undefined;
   return {
     kind: 'indexIncompatible',
-    summary: `Dropping index ${dropped.indexName}, which foreign key ${foreignKeySpecOf(key, tableName).name} uses, is not yet supported on MySQL (${tableName})`,
-    why: "MySQL refuses to drop an index a foreign key uses. Keep an index whose first columns are the foreign key's columns, or use `migration new` to drop the foreign key, drop the index and add the foreign key again.",
+    summary: `Dropping index ${dropped.indexName}, which foreign key ${foreignKeySpecOf(key, tableName).name} uses, is not yet supported by the migration planner (${tableName})`,
+    why: "The database refuses to drop an index a foreign key uses. Keep an index whose first columns are the foreign key's columns, or use `migration new` to drop the foreign key, drop the index and add the foreign key again.",
     location: { entityKind: 'table', entityName: tableName, index: dropped.indexName },
   };
 }

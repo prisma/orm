@@ -355,7 +355,7 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
           unchanged: (await indexNames(driver, 'Post')).join() === before.join(),
         }).toEqual({
           conflicts: [
-            `Dropping index ${before.find((name) => name.startsWith('Post_authorId_idx'))}, which foreign key Post_authorId_fkey uses, is not yet supported on MySQL (Post)`,
+            `Dropping index ${before.find((name) => name.startsWith('Post_authorId_idx'))}, which foreign key Post_authorId_fkey uses, is not yet supported by the migration planner (Post)`,
           ],
           unchanged: true,
         });

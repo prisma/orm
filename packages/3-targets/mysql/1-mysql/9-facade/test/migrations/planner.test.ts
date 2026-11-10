@@ -164,12 +164,12 @@ describe('the MySQL planner', () => {
         at: 'Account.nickname',
       },
     ],
-  ])('refuses %s as not yet supported on MySQL', (_name, from, to, expected) => {
+  ])('refuses %s as not yet supported by the migration planner', (_name, from, to, expected) => {
     const conflicts = conflictsOf(planFrom(from, to));
     expect(conflicts).toEqual([
       {
         kind: expected.kind,
-        summary: `${expected.change} is not yet supported on MySQL (${expected.at})`,
+        summary: `${expected.change} is not yet supported by the migration planner (${expected.at})`,
       },
     ]);
   });

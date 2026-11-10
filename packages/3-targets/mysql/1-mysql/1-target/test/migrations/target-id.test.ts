@@ -151,6 +151,29 @@ describe('a target that extends MySQL', () => {
     });
   });
 
+  it('refuses a name longer than 64 characters without naming MySQL', () => {
+    const long = 'T'.repeat(65);
+    const result = createMysqlMigrationPlanner(stubLowerer, MARIADB).plan({
+      contract: contractOf('c'.repeat(64), {
+        [long]: { columns: { id: int }, primaryKey: { columns: ['id'] } },
+      }),
+      schema: mysqlControlTarget().migrations.contractToSchema(null, frameworkComponents),
+      policy: { allowedOperationClasses: ['additive'] },
+      fromContract: null,
+      origin: null,
+      statements: [],
+      frameworkComponents,
+      spaceId: 'app',
+      snapshotsImportPath: '../../snapshots',
+    });
+    expect(result.kind === 'failure' ? result.conflicts : []).toEqual([
+      expect.objectContaining({
+        summary: `The name ${long} is longer than the 64 characters the database allows (${long})`,
+        why: 'The database refuses a table, column, index or constraint name longer than 64 characters. Give it a shorter name in the contract.',
+      }),
+    ]);
+  });
+
   it('builds a control target from its own descriptor meta, with its session settings and planner', () => {
     const target = createMysqlControlTargetDescriptor({
       descriptorMeta: mariadbMeta,

@@ -95,7 +95,7 @@ describe('MysqlMigrationPlanner', () => {
       dropped: await sqlOf(plan(from, withoutForeignKey)),
       added: await sqlOf(plan(withoutForeignKey, to)),
     }).toEqual({
-      changed: ['Changing a foreign key is not yet supported on MySQL (Post)'],
+      changed: ['Changing a foreign key is not yet supported by the migration planner (Post)'],
       dropped: [
         {
           id: 'dropForeignKey.Post.Post_authorId_fkey',
@@ -213,7 +213,7 @@ describe('MysqlMigrationPlanner', () => {
         {
           kind: 'indexIncompatible',
           summary:
-            'Dropping index Post_authorId_idx, which foreign key Post_authorId_fkey uses, is not yet supported on MySQL (Post)',
+            'Dropping index Post_authorId_idx, which foreign key Post_authorId_fkey uses, is not yet supported by the migration planner (Post)',
           location: { entityKind: 'table', entityName: 'Post', index: 'Post_authorId_idx' },
         },
       ],
@@ -302,9 +302,9 @@ describe('MysqlMigrationPlanner', () => {
         ),
       ),
     }).toEqual({
-      primaryKey: ['Changing a primary key is not yet supported on MySQL (User)'],
+      primaryKey: ['Changing a primary key is not yet supported by the migration planner (User)'],
       autoincrement: [
-        'Adding a required column without a default is not yet supported on MySQL (User.seq)',
+        'Adding a required column without a default is not yet supported by the migration planner (User.seq)',
       ],
     });
   });
@@ -320,9 +320,9 @@ describe('MysqlMigrationPlanner', () => {
       },
     });
     expect(summaries(plan(contractOf('from', { User: user }), to))).toEqual([
-      `The name ${long('T')} is longer than the 64 characters MySQL allows (${long('T')})`,
-      `The name ${long('c')} is longer than the 64 characters MySQL allows (User.${long('c')})`,
-      `The name ${long('i')} is longer than the 64 characters MySQL allows (User)`,
+      `The name ${long('T')} is longer than the 64 characters the database allows (${long('T')})`,
+      `The name ${long('c')} is longer than the 64 characters the database allows (User.${long('c')})`,
+      `The name ${long('i')} is longer than the 64 characters the database allows (User)`,
     ]);
   });
 
@@ -345,8 +345,8 @@ describe('MysqlMigrationPlanner', () => {
       keyed: summaries(plan(null, keyed)),
     }).toEqual({
       refused: [
-        'An autoincrement column that is not the first column of the primary key or a unique constraint is not supported on MySQL (Counter.seq)',
-        'An autoincrement column that is not the first column of the primary key or a unique constraint is not supported on MySQL (Pair.seq)',
+        'An autoincrement column that is not the first column of the primary key or a unique constraint is not supported by the database (Counter.seq)',
+        'An autoincrement column that is not the first column of the primary key or a unique constraint is not supported by the database (Pair.seq)',
       ],
       keyed: 'planned',
     });
