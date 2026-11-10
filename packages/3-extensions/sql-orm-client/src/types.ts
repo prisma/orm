@@ -200,7 +200,7 @@ export interface RuntimeQueryable extends RuntimeScope, Partial<ActivitySourceTa
 
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: RuntimeQueryable;
-  readonly implicitTransactionOptions?: SqlTransactionOptions;
+  readonly implicitTransactionOptions?: SqlTransactionOptions | undefined;
   readonly context: ExecutionContext<TContract>;
 }
 
