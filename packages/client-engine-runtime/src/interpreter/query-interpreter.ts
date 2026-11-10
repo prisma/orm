@@ -130,7 +130,7 @@ export class QueryInterpreter {
     switch (node.type) {
       case 'value': {
         return {
-          value: evaluateArg(node.args, context.scope, context.generators),
+          value: node.isEvaluated ? node.args : evaluateArg(node.args, context.scope, context.generators),
           lastInsertId: node.lastInsertId,
         }
       }
@@ -339,7 +339,10 @@ export class QueryInterpreter {
   ): IntermediateValue {
     switch (node.type) {
       case 'value': {
-        return { value: evaluateArg(node.args, scope, generators), lastInsertId: node.lastInsertId }
+        return {
+          value: node.isEvaluated ? node.args : evaluateArg(node.args, scope, generators),
+          lastInsertId: node.lastInsertId,
+        }
       }
 
       case 'seq': {
@@ -807,6 +810,7 @@ export function purifyQueryPlan(
       type: 'value',
       args: result.value as PrismaValue,
       lastInsertId: result.lastInsertId,
+      isEvaluated: true,
     }
     const purified = replaceImpureNode(node, impureNode, evaluated)
     if (!purified) {
