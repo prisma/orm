@@ -137,6 +137,32 @@ describe('executeFormat', () => {
     expect(await readFile(inputPath, 'utf-8')).toBe(broken);
   });
 
+  it('parses the files with the parser options the source declares', async () => {
+    const inputPath = join(tmpDir, 'schema.prisma');
+    await writeFile(inputPath, 'view ActiveUsers {\nid Int @unique\nemail   String\n}\n', 'utf-8');
+
+    const result = await executeFormat({
+      config: mockConfig({
+        contract: {
+          source: {
+            format: 'psl',
+            inputs: [inputPath],
+            parserOptions: { grammar: 'prisma-7' },
+            load: () => {},
+          },
+          output: join(tmpDir, 'contract.json'),
+        },
+      }),
+      cwd: tmpDir,
+      eol: '\n',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await readFile(inputPath, 'utf-8')).toBe(
+      'view ActiveUsers {\n  id    Int    @unique\n  email String\n}\n',
+    );
+  });
+
   it('formats every resolvedInputs member, not just the first', async () => {
     const a = join(tmpDir, 'a.prisma');
     const b = join(tmpDir, 'b.prisma');

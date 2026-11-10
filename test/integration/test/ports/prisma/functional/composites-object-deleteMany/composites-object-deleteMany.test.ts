@@ -8,9 +8,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (mongodb matrix entry). Upstream seeds one Comment (required content, always set),
 // deleteMany by id, then asserts `count === 0` via a follow-up count().
 //
-// Prisma 8's deleteMany equivalent is `.where({ _id }).deleteAndCount()`, which
+// Prisma 8's deleteMany equivalent is `.where({ id }).deleteAndCount()`, which
 // returns the number deleted. The "rows are gone" post-condition is verified
-// faithfully by re-reading: `.where({ _id }).first()` returns null. Prisma 8 has
+// faithfully by re-reading: `.where({ id }).first()` returns null. Prisma 8 has
 // no read-side count() to mirror the upstream verification query.
 //
 // This suite is not matrix-parameterised upstream (content is always set), so this
@@ -27,7 +27,7 @@ describe('ports/prisma/functional/composites/object/deleteMany', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comments_required.create({
-          _id: id,
+          id,
           country: 'France',
           content: {
             text: 'Hello World',
@@ -35,10 +35,10 @@ describe('ports/prisma/functional/composites/object/deleteMany', () => {
           },
         });
 
-        const deleted = await db.comments_required.where({ _id: id }).deleteAndCount();
+        const deleted = await db.comments_required.where({ id }).deleteAndCount();
         expect(deleted).toEqual(1);
 
-        const stillThere = await db.comments_required.where({ _id: id }).first();
+        const stillThere = await db.comments_required.where({ id }).first();
         expect(stillThere).toBeNull();
       }),
     timeouts.spinUpMongoMemoryServer,

@@ -1,6 +1,6 @@
 // use prisma-8
 
 model User {
-  id Char(21) @id @default(nanoid())
+  id Char(21) @id @onCreate(nanoid())
   @@map("user")
 }

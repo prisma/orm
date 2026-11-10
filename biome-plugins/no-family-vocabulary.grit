@@ -79,9 +79,18 @@
 // `$filename` is biome's built-in current-file path; the two file-exclusion
 // regexes mirror no-bare-cast.grit and biome's test-file override includes.
 //
+// Order matters for speed. Biome's GritQL pays a large cost for every regex
+// match it evaluates, while an `includes` substring check is nearly free, and
+// this plugin runs on every token of every file in the repo. So the clauses
+// open with substring checks: the file must be in the framework, and the
+// lowercased token must contain the stem of some term. Every regex below needs
+// one of those stems, so the check removes no match; it only means the regexes
+// run on a few hundred tokens instead of millions. The long s `ſ` is listed on
+// its own because the regexes' `(?i:s)` matches it but `lowercase` keeps it.
+//
 // Severity is "info" so the plugin runs without breaking existing builds
 // (hundreds of pre-existing sites). The CI ratchet
-// (scripts/lint-framework-vocabulary.mjs) enforces the threshold by counting
+// (scripts/lint-ratchets.mjs) enforces the threshold by counting
 // these diagnostics from biome's JSON reporter, deduplicated by file and line;
 // "info" entries still appear there with the distinctive
 // `no-family-vocabulary: ` prefix.
@@ -103,12 +112,34 @@ or {
   JsRegexLiteralExpression(),
   JsTemplateChunkElement()
 } as $tok where {
-  $filename <: r".*packages/1-framework/.*",
+  $filename <: includes "packages/1-framework/",
+  $lowercased = lowercase($tok),
+  $lowercased <: or {
+    includes "prisma",
+    includes "postgre",
+    includes "sql",
+    includes "mariadb",
+    includes "cockroach",
+    includes "pglite",
+    includes "mongo",
+    includes "collection",
+    includes "column",
+    includes "table",
+    includes "constraint",
+    includes "varchar",
+    includes "jsonb",
+    includes "dialect",
+    includes "rls",
+    includes "native",
+    includes "primar",
+    includes "foreig",
+    includes "ſ"
+  },
   not $filename <: r".*\.(?:test|test-d)\.ts",
   not $filename <: r".*/test/.*\.ts",
   or {
     and {
-      not $filename <: r".*packages/1-framework/3-tooling/cli/.*",
+      not $filename <: includes "packages/1-framework/3-tooling/cli/",
       $tok <: r"(?s)(?:(?:|.*[^A-Za-z0-9])p|(?:|.*[^A-Za-z0-9]|.*[a-z0-9])P)(?i:risma)[^A-Za-z0-9]*[1-7](?:|[^A-Za-z0-9].*|[A-Z].*)"
     },
     $tok <: r"(?s)(?:|.*[^A-Za-z0-9])(?:p(?i:ostgre)s|p(?i:ostgresq)l|s(?i:qlit)e|m(?i:ysq)l|m(?i:ariad)b|m(?i:ssq)l|s(?i:qlserve)r|c(?i:ockroac)h|p(?i:glit)e|m(?i:ong)o|m(?i:ongod)b|c(?i:ollectio)n|c(?i:olum)n|t(?i:abl)e|c(?i:onstrain)t|s(?i:q)l|v(?i:archa)r|j(?i:son)b|d(?i:ialec)t|r(?i:l)s|n(?i:ativ)(?:[eE][^A-Za-z0-9]+[tT]|eT)(?i:yp)e|p(?i:rimar)(?:[yY][^A-Za-z0-9]+[kK]|yK)(?i:e)y|f(?i:oreig)(?:[nN][^A-Za-z0-9]+[kK]|nK)(?i:e)y)[sS]?(?:|[^A-Za-z0-9].*|[A-Z].*)",

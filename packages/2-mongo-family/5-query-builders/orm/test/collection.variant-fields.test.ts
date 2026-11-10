@@ -1,11 +1,11 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
+import { collectionContext } from './collection-context';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -36,8 +36,8 @@ function paramRefs(value: unknown): MongoParamRef[] {
 describe('a variant collection', () => {
   it("encodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'Task', executor)
-      .variant('Bug')
+    await createMongoCollection(collectionContext(contract, executor), 'Task')
+      .variant('bug')
       .create({ title: 'Crash', assigneeId: 'a1', severity: 'high', comments: [] });
 
     const severity = paramRefs(plans[0]?.command).find((ref) => ref.name === 'severity');
@@ -52,7 +52,10 @@ describe('a variant collection', () => {
 
   it("decodes a field declared only on the variant with the variant field's codec", async () => {
     const { executor, plans } = recordingExecutor();
-    await createMongoCollection(contract, 'Task', executor).variant('Bug').all().toArray();
+    await createMongoCollection(collectionContext(contract, executor), 'Task')
+      .variant('bug')
+      .all()
+      .toArray();
 
     expect(plans[0]?.resultShape).toMatchObject({
       kind: 'document',

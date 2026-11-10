@@ -1,7 +1,6 @@
 import { bold, createColors, cyan, cyanBright, dim, green, yellow } from 'colorette';
 import { describe, expect, it } from 'vitest';
 import {
-  IDENTITY_MIGRATION_LIST_STYLER,
   renderMigrationList,
   renderMigrationListWithStyle,
 } from '../../../src/utils/formatters/migration-list-render';
@@ -242,28 +241,5 @@ describe('renderMigrationListWithStyle', () => {
       );
     }
     expect(stripAnsi(styled)).toBe(plain);
-  });
-});
-
-describe('IDENTITY_MIGRATION_LIST_STYLER', () => {
-  it('is what renderMigrationList uses (pure-text path equivalence)', () => {
-    const r = result(
-      [
-        {
-          space: 'app',
-          migrations: [
-            migration({
-              name: '20260422T0720_initial',
-              fromContract: null,
-              toContract: HASH_C,
-            }),
-          ],
-        },
-      ],
-      '1 migration(s) on disk',
-    );
-    expect(renderMigrationList(r)).toBe(
-      renderMigrationListWithStyle(r, IDENTITY_MIGRATION_LIST_STYLER),
-    );
   });
 });

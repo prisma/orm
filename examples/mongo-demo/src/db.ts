@@ -1,12 +1,15 @@
 import { createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import type { MongoRuntime } from '@prisma/orm-mongo/family-runtime';
 import mongo from '@prisma/orm-mongo/runtime';
+import { contractFromJson } from '@prisma/orm-mongo/static';
 import type { Contract } from './contract';
 import contractJson from './contract.json' with { type: 'json' };
 
+export const contract = contractFromJson<Contract>(contractJson);
+
 export async function createClient(connectionUri: string, dbName: string) {
-  const db = mongo<Contract>({
-    contractJson,
+  const db = mongo({
+    contract,
     url: connectionUri,
     dbName,
     middleware: [createCacheMiddleware()],

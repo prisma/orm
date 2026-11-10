@@ -1,6 +1,7 @@
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
+import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
 
 /**
  * Non-interactive mode is missing one or more required inputs. Lists every
@@ -511,6 +512,34 @@ export function errorInitPrisma7SchemaRefused(options: {
         summary: options.summary,
         diagnostics: options.diagnostics,
         packagesAdded: options.added?.packages ?? [],
+      },
+    },
+  );
+}
+
+/**
+ * The project's schema is a Prisma 6 MongoDB schema. Init stops before changing anything and gives
+ * the side-by-side setup as its next actions: set up by init, Prisma 8 would take the `prisma`
+ * package name and `prisma.config.ts` from the Prisma 6 CLI the app still runs.
+ */
+export function errorInitPrisma6SchemaFound(options: {
+  readonly schemaPath: string;
+  /** The database the schema is for, as the user knows it. */
+  readonly database: string;
+  readonly setup: Prisma6SideBySideSetup;
+}): CliStructuredError {
+  const { database } = options;
+  return new CliStructuredError(
+    'CLI.INIT_PRISMA6_SCHEMA_FOUND',
+    `Prisma 6 ${database} schema found`,
+    {
+      why: `${options.schemaPath} is a Prisma 6 ${database} schema. Prisma 8 can read it as its contract source through prisma6Schema while Prisma 6 keeps running the app, but init does not set that up: both CLIs are published as \`prisma\`, and the Prisma 6 CLI also reads prisma.config.ts. Nothing was changed. Follow the steps below. Passing --target and --authoring instead sets up a Prisma 8 starter in this same project, which breaks the Prisma 6 CLI: it writes prisma.config.ts, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest.`,
+      nextActions: options.setup.steps,
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA6_SCHEMA_FOUND'),
+      meta: {
+        schemaPath: options.schemaPath,
+        prismaConfig: options.setup.prismaConfig,
+        prisma6Config: options.setup.prisma6Config,
       },
     },
   );

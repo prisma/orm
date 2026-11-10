@@ -1,0 +1,203 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Post": {
+            "storage": {
+              "table": "posts",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "slug": {
+                  "column": "slug"
+                },
+                "code": {
+                  "column": "code"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "category": {
+                  "column": "category_name"
+                },
+                "hashed": {
+                  "column": "hashed"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "slug": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "code": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "category": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "hashed": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "posts": {
+      "namespace": "public",
+      "model": "Post"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "5d488f49440bb02116faea2a14f76ab1ddd5f064a9523b8d7aa8961cb6859d38",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "posts": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "slug": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "code": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "title": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "category_name": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "hashed": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "posts_title_category_name_key",
+                  "unique": true,
+                  "columns": ["title", "category_name"]
+                },
+                {
+                  "name": "post_slug_title_unique",
+                  "unique": true,
+                  "columns": ["slug", "title"]
+                },
+                {
+                  "name": "posts_slug_key",
+                  "unique": true,
+                  "columns": ["slug"]
+                },
+                {
+                  "name": "post_code_unique",
+                  "unique": true,
+                  "columns": ["code"]
+                },
+                {
+                  "name": "posts_category_name_idx",
+                  "unique": false,
+                  "columns": ["category_name"]
+                },
+                {
+                  "name": "post_title_category",
+                  "unique": false,
+                  "columns": ["title", "category_name"]
+                },
+                {
+                  "name": "posts_hashed_idx",
+                  "unique": false,
+                  "columns": ["hashed"],
+                  "type": "hash",
+                  "options": {}
+                },
+                {
+                  "name": "posts_title_idx",
+                  "unique": false,
+                  "columns": ["title"],
+                  "type": "btree",
+                  "options": {}
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

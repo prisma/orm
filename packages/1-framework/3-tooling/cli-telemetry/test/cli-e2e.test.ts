@@ -137,8 +137,6 @@ function seedConsent(xdg: string, installationId: string): void {
   );
 }
 
-const V4_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 // A cheap run that errors but settles: `migration list` in a project
 // directory with no config file settles errored (CONFIG.FILE_NOT_FOUND)
 // at exit 2, which is exactly what the settlement hook reports.
@@ -166,7 +164,6 @@ describe('cli-telemetry e2e — engine bin against the real backend', () => {
     const rows = await harness.awaitRowsForInstallation(installationId, 1);
 
     expect(rows[0]?.installationId).toBe(installationId);
-    expect(rows[0]?.installationId).toMatch(V4_UUID);
     expect(rows[0]?.command).toBe('migration list');
   });
 
@@ -181,6 +178,29 @@ describe('cli-telemetry e2e — engine bin against the real backend', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]?.installationId).toBe(installationId);
     expect(rows[1]?.installationId).toBe(installationId);
+  });
+
+  it('transmits only flag names, never flag values or positionals', async () => {
+    const installationId = randomUUID();
+    seedConsent(xdgDir, installationId);
+
+    await spawnCli(
+      [
+        'migration',
+        'show',
+        'customer-acme-payments',
+        '--config',
+        '/Users/alice/secrets/prisma.config.ts',
+      ],
+      { env: buildEnv(xdgDir), cwd: projectDir },
+    );
+    const [row] = await harness.awaitRowsForInstallation(installationId, 1);
+
+    expect(row?.command).toBe('migration show');
+    expect(row?.flags).toEqual(['config']);
+    const serialised = JSON.stringify(row);
+    expect(serialised).not.toContain('customer-acme-payments');
+    expect(serialised).not.toContain('/Users/alice/secrets');
   });
 
   it('an erroring-but-settling run produces a row carrying the exit code', async () => {

@@ -1,6 +1,6 @@
 // use prisma-8
 
 model User {
-  id String @id @default(slugid())
+  id String @id @onCreate(slugid())
   @@map("user")
 }

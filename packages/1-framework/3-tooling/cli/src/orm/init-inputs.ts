@@ -2,9 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { basename, extname, join } from 'pathe';
+import type { PackageManager } from '../commands/init/detect-package-manager';
 import {
   errorInitFlagConflict,
   errorInitMissingFlags,
+  errorInitPrisma6SchemaFound,
   errorInitPrisma7ConfigCollision,
   errorInitPrisma7ConfigUnreadable,
   errorInitPrisma7ProviderUnsupported,
@@ -20,8 +22,11 @@ import {
   targetFromProviderName,
   validateSchemaPath,
 } from '../commands/init/input-values';
+import { prisma6OnlyTarget, prisma6SideBySideSetup } from '../commands/init/prisma6-side-by-side';
 import {
+  conventionalSchemaPath,
   detectPrisma7Project,
+  detectSchema,
   type Prisma7Detection,
   type Prisma7SchemaDetection,
 } from '../commands/init/prisma7-detect';
@@ -30,8 +35,10 @@ import {
   defaultSchemaPath,
   scaffoldSpecifierResolverFor,
   type TargetId,
+  targetEntrypoint,
   targetLabel,
   targetPackageName,
+  targetPeerPackages,
 } from '../commands/init/templates/code-templates';
 import {
   type CheckPrisma7Source,
@@ -611,6 +618,59 @@ async function resolveStarterInputs(ctx: {
   };
 }
 
+interface Prisma6Schema {
+  readonly schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>;
+  readonly target: TargetId;
+}
+
+function prisma6Schema(schema: Prisma7SchemaDetection): Prisma6Schema | undefined {
+  if (schema.kind !== 'datasource') return undefined;
+  const target = prisma6OnlyTarget(schema.provider);
+  return target === undefined ? undefined : { schema, target };
+}
+
+/**
+ * The stop for a Prisma 6 project, carrying the side-by-side setup. The provider names the target;
+ * the project's own `prisma.config.*`, when it evaluates to an earlier version's config, is renamed
+ * for the Prisma 6 CLI instead of a new one written.
+ */
+function prisma6SchemaFound(
+  detection: Prisma7Detection,
+  { schema, target }: Prisma6Schema,
+  packageManager: PackageManager,
+) {
+  const resolveImportSpecifier = scaffoldSpecifierResolverFor(target);
+  const { config, cli } = detection;
+  const ownConfigPath =
+    (config.kind === 'prisma7' || config.kind === 'unreadable') &&
+    config.path.startsWith(PRISMA7_CONFIG_STEM)
+      ? config.path
+      : undefined;
+  return errorInitPrisma6SchemaFound({
+    schemaPath: schema.path,
+    database: targetLabel(target),
+    setup: prisma6SideBySideSetup({
+      schemaPath: schema.path,
+      urlEnv: schema.urlEnv,
+      packageManager,
+      cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
+      ownConfigPath,
+      targetPackage: targetPackageName(target, resolveImportSpecifier),
+      peerPackages: targetPeerPackages(target),
+      targetConfigEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
+    }),
+  });
+}
+
+/** Said to a starter run in a Prisma 6 project, which it leaves alone but crowds. */
+function starterBesidePrisma6Warnings(cwd: string): readonly string[] {
+  const found = prisma6Schema(detectSchema(cwd, conventionalSchemaPath(cwd).path));
+  if (found === undefined) return [];
+  return [
+    `${found.schema.path} is a Prisma 6 ${targetLabel(found.target)} schema, which this run leaves alone, but this run breaks the Prisma 6 CLI: it writes prisma.config.ts, which the Prisma 6 CLI reads too, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest. Run \`prisma orm init\` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.`,
+  ];
+}
+
 /**
  * Resolves every input from the flags and, where a flag is absent, from the
  * engine's prompt surface.
@@ -628,6 +688,8 @@ export async function resolveInitInputs(ctx: {
   readonly checkPrisma7Source: CheckPrisma7Source;
   /** Reports a warning at once, for what the user should know before the next question. */
   readonly warn: (text: string) => void;
+  /** The manager the printed Prisma 6 setup names in its commands. */
+  readonly packageManager: PackageManager;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
 
@@ -647,6 +709,10 @@ export async function resolveInitInputs(ctx: {
   let prisma7SchemaPath: string | undefined;
   if (mayAdoptPrisma7) {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
+    const prisma6 = prisma6Schema(detection.schema);
+    if (prisma6 !== undefined) {
+      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager);
+    }
     if (await choosePrisma7Path({ flags, prompt, detection, flagTarget })) {
       return resolvePrisma7Inputs({
         cwd,
@@ -668,7 +734,7 @@ export async function resolveInitInputs(ctx: {
     target: flagTarget,
     flagAuthoring,
     prisma7SchemaPath,
-    warnings: [],
+    warnings: mayAdoptPrisma7 ? [] : starterBesidePrisma6Warnings(cwd),
     installed: [],
   });
 }

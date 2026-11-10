@@ -1,10 +1,6 @@
 import type { SectionProvenance } from '@prisma/cli-engine';
 import { describe, expect, it } from 'vitest';
-import {
-  descriptorRelationshipProblems,
-  ormConfigSection,
-  validateOrmSection,
-} from '../src/orm-section';
+import { descriptorRelationshipProblems, validateOrmSection } from '../src/orm-section';
 
 const FILE = '/project/prisma.config.ts';
 
@@ -43,10 +39,6 @@ function fields(raw: Record<string, unknown>): readonly string[] {
 }
 
 describe('the orm section', () => {
-  it('is the section the commands declare', () => {
-    expect(ormConfigSection.name).toBe('orm');
-  });
-
   it('supplies the default contract output next to the default source directory', () => {
     const raw = validRaw({ contract: { source: { format: 'typescript', load: () => ({}) } } });
 
@@ -202,6 +194,22 @@ describe('the orm section', () => {
     ['a format other than psl or typescript', { format: 'prisma7', load: () => ({}) }],
   ])('reports a contract source with %s', (_label, source) => {
     expect(fields(validRaw({ contract: { source } }))).toEqual(['contract.source.format']);
+  });
+
+  it('reports a grammar it does not know, and parser options it does not know', () => {
+    const source = (parserOptions: unknown) => ({ format: 'psl', load: () => ({}), parserOptions });
+
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-5' }) } }))).toEqual([
+      'contract.source.parserOptions.grammar',
+    ]);
+    expect(fields(validRaw({ contract: { source: source(true) } }))).toEqual([
+      'contract.source.parserOptions',
+    ]);
+    expect(fields(validRaw({ contract: { source: source({ grammer: 'prisma-7' }) } }))).toEqual([
+      'contract.source.parserOptions.grammer',
+    ]);
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-7' }) } }))).toEqual([]);
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-8' }) } }))).toEqual([]);
   });
 
   it('reports migrations and formatter problems', () => {

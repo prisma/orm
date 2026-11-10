@@ -1,14 +1,16 @@
-import { readdirSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from './utils/cli-test-helpers';
 import {
+  getLatestMigrationDir,
   type JourneyContext,
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
   runDbInit,
+  runDbUpdate,
   runMigrate,
   setupJourney,
   swapContract,
@@ -26,8 +28,8 @@ interface MigrateErrorJson {
   readonly code?: string;
   readonly meta?: {
     readonly markerHash?: string;
-    readonly reachableHashes?: readonly string[];
-    readonly graphTip?: string;
+    readonly lastGraphHash?: string;
+    readonly missingMigrations?: readonly string[];
     readonly fromHash?: string;
     readonly targetHash?: string;
     readonly kind?: string;
@@ -40,12 +42,59 @@ function appMigrationsDir(ctx: JourneyContext): string {
   return join(ctx.testDir, 'migrations', 'app');
 }
 
+function migrationTo(ctx: JourneyContext, dirName: string): string {
+  const manifest = JSON.parse(
+    readFileSync(join(appMigrationsDir(ctx), dirName, 'migration.json'), 'utf-8'),
+  ) as { to: string };
+  return manifest.to;
+}
+
 function removeAppMigrationBundles(ctx: JourneyContext): void {
   const dir = appMigrationsDir(ctx);
   for (const name of readdirSync(dir)) {
     if (name === 'refs' || name.startsWith('.')) continue;
     rmSync(join(dir, name), { recursive: true, force: true });
   }
+}
+
+interface Incident {
+  readonly initialHash: string;
+  readonly deleted: string;
+  readonly markerHash: string;
+  readonly targetHash: string;
+}
+
+/**
+ * A database that applied a migration which was then deleted, in a project whose graph has since
+ * moved on to a new target from the migration before it.
+ */
+async function incidentDatabase(ctx: JourneyContext): Promise<Incident> {
+  expect((await runContractEmit(ctx)).exitCode).toBe(0);
+  expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+  const initialHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
+  expect((await runMigrate(ctx, ['--advance-ref', 'db'])).exitCode).toBe(0);
+
+  swapContract(ctx, 'contract-additive');
+  expect((await runContractEmit(ctx)).exitCode).toBe(0);
+  expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
+  const deleted = getLatestMigrationDir(ctx)!;
+  const markerHash = migrationTo(ctx, deleted);
+  expect((await runMigrate(ctx)).exitCode).toBe(0);
+
+  rmSync(join(appMigrationsDir(ctx), deleted), { recursive: true, force: true });
+  swapContract(ctx, 'contract-phone');
+  expect((await runContractEmit(ctx)).exitCode).toBe(0);
+  expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-phone'])).exitCode).toBe(0);
+  const targetHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
+  return { initialHash, deleted, markerHash, targetHash };
+}
+
+/** The `db update` arguments of a printed next action, after `<bin> db update`. */
+function printedDbUpdateArgs(error: MigrateErrorJson, label: string): readonly string[] {
+  const command = error.nextActions?.find((action) => action.label === label)?.command;
+  const words = command?.split(' ') ?? [];
+  expect(words.slice(1, 3)).toEqual(['db', 'update']);
+  return words.slice(3);
 }
 
 async function withJourney(
@@ -82,11 +131,94 @@ withTempDir(({ createTempDir }) => {
             expect(drift.exitCode).not.toBe(0);
             const err = parseJsonOutput<MigrateErrorJson>(drift);
             expect(err.code).toBe('MIGRATION.MARKER_MISMATCH');
-            expect(err.meta?.markerHash).toBe(staleMarker);
-            expect(err.meta?.reachableHashes?.length).toBeGreaterThan(0);
-            expect(err.meta?.reachableHashes).not.toContain(staleMarker);
-            expect(remediation(err)).toMatch(/migration plan/);
-            expect(remediation(err)).toMatch(/ref set db/);
+            expect(err.meta).toMatchObject({ markerHash: staleMarker, missingMigrations: [] });
+            expect(err.meta?.lastGraphHash).toBeUndefined();
+            expect(remediation(err)).toMatch(/db update/);
+            expect(remediation(err)).not.toMatch(/ref set db/);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'explains a marker left by a deleted migration from the ledger, without a reset',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            const { initialHash, deleted, markerHash, targetHash } = await incidentDatabase(ctx);
+
+            const drift = await runMigrate(ctx, ['--json']);
+
+            expect(drift.exitCode).toBe(2);
+            expect(parseJsonOutput(drift)).toEqual({
+              code: 'MIGRATION.MARKER_MISMATCH',
+              severity: 'error',
+              docsUrl:
+                'https://docs.prisma.io/docs/orm/v8/reference/error-reference/MIGRATION.MARKER_MISMATCH',
+              summary: 'The database is at a contract that is not in the migration graph',
+              why: `The database's marker names ${markerHash}, which no migration in migrations/app starts or ends at. After ${initialHash}, the last graph contract it reached, it applied ${deleted}, which is no longer on disk.`,
+              nextActions: [
+                {
+                  kind: 'user-choice',
+                  label:
+                    'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
+                },
+                {
+                  kind: 'run-command',
+                  label: 'Preview the changes',
+                  command: `prisma-test db update --to ${targetHash} --dry-run`,
+                },
+                {
+                  kind: 'run-command',
+                  label: 'Reconcile the database',
+                  command: `prisma-test db update --to ${targetHash}`,
+                },
+                {
+                  kind: 'user-choice',
+                  label: `Otherwise plan a migration from ${initialHash} to its current contract, then one to ${targetHash}, and deploy again.`,
+                },
+              ],
+              meta: {
+                spaceId: 'app',
+                markerHash,
+                targetHash,
+                lastGraphHash: initialHash,
+                missingMigrations: [deleted],
+              },
+            });
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'brings the incident database to the target with the db update the error prints',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            const { targetHash } = await incidentDatabase(ctx);
+            const refused = parseJsonOutput<MigrateErrorJson>(await runMigrate(ctx, ['--json']));
+            expect(refused.code).toBe('MIGRATION.MARKER_MISMATCH');
+
+            const preview = await runDbUpdate(ctx, [
+              ...printedDbUpdateArgs(refused, 'Preview the changes'),
+              '--json',
+            ]);
+            expect(preview.exitCode).toBe(0);
+            expect(preview.stdout).toContain('User.name');
+
+            const reconciled = await runDbUpdate(ctx, [
+              ...printedDbUpdateArgs(refused, 'Reconcile the database'),
+              '--delete',
+              'User.name',
+            ]);
+            expect(reconciled.exitCode).toBe(0);
+
+            const migrated = await runMigrate(ctx, ['--json']);
+            expect(migrated.exitCode).toBe(0);
+            expect(parseJsonOutput<{ markerHash: string }>(migrated).markerHash).toBe(targetHash);
           });
         });
       },
@@ -139,7 +271,7 @@ withTempDir(({ createTempDir }) => {
             const err = parseJsonOutput<MigrateErrorJson>(drift);
             expect(err.code).toBe('MIGRATION.MARKER_MISMATCH');
             expect(err.meta?.markerHash).toMatch(/^[a-f0-9]{64}$/);
-            expect(err.meta?.reachableHashes).toEqual([]);
+            expect(err.meta?.missingMigrations).toEqual([]);
           });
         });
       },

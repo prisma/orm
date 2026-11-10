@@ -6,11 +6,11 @@ export function getUserOrders(db: Db, userId: string) {
 }
 
 export function getOrderById(db: Db, id: string) {
-  return db.orm.orders.where({ _id: id }).first();
+  return db.orm.orders.where({ id }).first();
 }
 
 export function getOrderWithUser(db: Db, id: string) {
-  return db.orm.orders.include('user').where({ _id: id }).first();
+  return db.orm.orders.include('user').where({ id }).first();
 }
 
 export function createOrder(
@@ -33,9 +33,9 @@ export function createOrder(
 }
 
 export function deleteOrder(db: Db, id: string) {
-  return db.orm.orders.where({ _id: id }).delete();
+  return db.orm.orders.where({ id }).delete();
 }
 
 export function updateOrderStatus(db: Db, orderId: string, entry: StatusEntryInput) {
-  return db.orm.orders.where({ _id: orderId }).update((u) => [u.statusHistory.push(entry)]);
+  return db.orm.orders.where({ id: orderId }).update((u) => [u.statusHistory.push(entry)]);
 }

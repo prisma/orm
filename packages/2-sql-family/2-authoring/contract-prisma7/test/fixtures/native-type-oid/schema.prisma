@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeType {
+  id    Int   @id
+  value Int   @db.Oid
+  list  Int[] @db.Oid
+}

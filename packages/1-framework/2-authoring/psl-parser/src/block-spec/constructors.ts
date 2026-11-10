@@ -1,14 +1,14 @@
-import type { ArgType, AttributeCtx, NamedOut, OutOf, Param } from '../attribute-spec/types';
+import type { ArgType, BlockAttributeCtx, NamedOut, OutOf, Param } from '../attribute-spec/types';
 import type { MapBlockSpec, StructBlockSpec } from './types';
 
-export function structBlock<const P extends Record<string, Param<unknown, AttributeCtx>>>(config: {
-  readonly parameters: P;
-}): StructBlockSpec<NamedOut<P>> {
+export function structBlock<
+  const P extends Record<string, Param<unknown, BlockAttributeCtx>>,
+>(config: { readonly parameters: P }): StructBlockSpec<NamedOut<P>> {
   return { mode: 'struct', parameters: config.parameters };
 }
 
 export function mapBlock<
-  R extends ArgType<unknown, AttributeCtx>,
+  R extends ArgType<unknown, BlockAttributeCtx>,
   Bare extends boolean = false,
 >(config: {
   readonly value: { readonly type: R; readonly documentation: string };

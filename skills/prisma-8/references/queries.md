@@ -10,7 +10,7 @@ Once the contract is emitted and the DB is up to date, this skill covers everyth
 - User wants to read, write, update, or delete data.
 - User wants to include / eager-load relations.
 - User wants to paginate, sort, filter, project.
-- User wants to wrap operations in a transaction (`db.transaction(...)` — Postgres and SQLite).
+- User wants to wrap operations in a transaction (`db.transaction(...)` — Postgres, SQLite and Supabase role-bound clients).
 - User wants to aggregate (`count`, `sum`, `avg`, …).
 - User asks about query lanes (ORM vs SQL builder / query builder).
 - User mentions: *query, select, where, orderBy, limit, offset, take, skip, include, eager load, first, all, count, aggregate, create, update, delete, upsert, returning, drizzle-style, kysely-style, prisma client*.
@@ -76,7 +76,7 @@ for await (const user of db.orm.public.User.select('id', 'email').all()) {
 }
 ```
 
-Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` (which issues `LIMIT 1` on Postgres):
+Two single-row shortcuts also exist on the result, in addition to the collection-level `.first()` and `.firstOrThrow()` (which issue `LIMIT 1` on Postgres):
 
 ```typescript
 const user = await db.orm.public.User.where({ id }).all().first();
@@ -85,7 +85,7 @@ const required = await db.orm.public.User.where({ id }).all().firstOrThrow();
 //    ^? Row          ← buffers; throws `RUNTIME.NO_ROWS` if empty.
 ```
 
-For genuine single-row reads, prefer the *collection*-level `.first()` (which adds `LIMIT 1` to the SQL on Postgres) over `.all().first()` (which fetches all rows and discards the rest). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
+For genuine single-row reads, prefer the *collection*-level `.first()` or `.firstOrThrow()` (which add `LIMIT 1` to the SQL on Postgres) over `.all().first()` / `.all().firstOrThrow()` (which fetch all rows and discard the rest). Collection-level `.firstOrThrow()` runs the same query as `.first()`, returns the row without `null`, and rejects with `RUNTIME.NO_ROWS` when nothing matches: `await db.orm.public.User.firstOrThrow({ id })` on Postgres, `await db.orm.users.where({ email }).firstOrThrow()` on Mongo (no arguments there). The result-level helpers are for cases where you already need the full result and want the first row without an extra round-trip.
 
 **The result is single-consumption.** Each `AsyncIterableResult` instance can be consumed once — by `await`, by `.toArray()`, or by `for await`. Trying to consume it a second time throws **`RUNTIME.ITERATOR_CONSUMED`**. The fix is almost always to store the array in a variable on first consumption and reuse the variable:
 
@@ -125,23 +125,38 @@ console.log('Seeded.');
 await db.close();
 ```
 
+## Running a plan and printing its SQL (SQL targets)
+
+A plan from `db.sql`, `db.raw` or the ORM (`.prepared.all().plan`) runs on the client: `db.query(plan)` returns its rows as an `AsyncIterableResult`, and `db.execute(plan)` resolves `{ affectedRows }` with no rows. Inside a transaction use `tx.query` / `tx.execute`; they have the same types. On Supabase, call them on a role-bound client (`db.asAnon()`, `await db.asUser(jwt)`). `db.query` on an ORM plan yields the database rows, not the result the ORM builds from them. To run a plan, use `db.query` and `db.execute`, not `db.runtime()`. `db.runtime()` remains for runtime-level work: `connection()`, `close()`, `telemetry()`, and as the target of a prepared statement (`ps.query(db.runtime(), params)`).
+
+`db.toSql(plan)` returns `{ sql, params }` and needs no database, so a script can import `db.ts` with no `DATABASE_URL` set and print what a query would send. `params` are the plan's values before codecs encode them for the driver. Middleware rewrites (`beforeCompile`) are not applied. A plan with `prepare` bind sites throws `RUNTIME.PREPARE_BIND_ON_ADHOC`. `postgresStatic()` and `sqliteStatic()` have `toSql` too.
+
+```typescript
+import { db } from '../src/prisma/db';
+
+const plan = db.orm.public.Post.where({ published: true }).prepared.all().plan;
+console.log(db.toSql(plan));
+```
+
 ## Streaming
 
-Every read terminal (`.all()`, and `runtime.query(plan)` for a SQL-builder plan) returns an `AsyncIterableResult`, so `for await` is always available. What it buys you depends on the `cursor` option, which `postgres()` and `postgresServerless()` (`@prisma/orm-postgres/serverless`) both accept:
+Every read terminal (`.all()`, and `db.query(plan)` for a SQL-builder plan) returns an `AsyncIterableResult`, so `for await` is always available. What it buys you depends on the `cursor` option, which `postgres()` and `postgresServerless()` (`@prisma/orm-postgres/serverless`) both accept:
 
 - **Default (cursors off), on a client and on a connection:** the full result set is fetched from the server before the first row is yielded; only *decoding* happens per row. `for await` therefore does not bound the memory held by the raw result. For very large sets, paginate (`.limit()` / `.offset()`, or `.orderBy(...).cursor(...)`) instead.
-- **`cursor` set in the options of `postgres()` or `postgresServerless()` (`{ batchSize: 100 }`; `{}` or `{ batchSize: undefined }` for batches of 100; a `batchSize` that is not a positive integer fails the factory call; there is no flag that turns cursors off):** the driver reads through a server-side cursor in batches of that size, so `for await` over `db.orm...all()` or `db.runtime().query(plan)` really does stream, and an early `break` stops reading. In a Worker, put the option only on a second serverless client that the streaming paths open their connections from, and keep the serverless client every other path uses without it. On a connection with cursors on, finish or `break` the `for await` loop before sending another query through `db`: the cursor holds the connection's only database connection until the loop ends, so a query inside the loop waits forever. On a client, the same query takes another database connection from the pool. Behind Cloudflare Hyperdrive, reads with cursors on hang, so the streaming paths hang there and the other paths do not.
+- **`cursor` set in the options of `postgres()` or `postgresServerless()` (`{ batchSize: 100 }`; `{}` or `{ batchSize: undefined }` for batches of 100; a `batchSize` that is not a positive integer fails the factory call; there is no flag that turns cursors off):** the driver reads through a server-side cursor in batches of that size, so `for await` over `db.orm...all()` or `db.query(plan)` really does stream, and an early `break` stops reading. In a Worker, put the option only on a second serverless client that the streaming paths open their connections from, and keep the serverless client every other path uses without it. On a connection with cursors on, finish or `break` the `for await` loop before sending another query through `db`: the cursor holds the connection's only database connection until the loop ends, so a query inside the loop waits forever. On a client, the same query takes another database connection from the pool. Behind Cloudflare Hyperdrive, reads with cursors on hang, so the streaming paths hang there and the other paths do not.
 
 There is no `.stream()` method on a client or on a connection.
 
-## Prepared statements (Postgres, SQLite)
+## Prepared statements (Postgres, SQLite, MySQL, MongoDB)
 
-`db.prepare(declaration, (sql, params) => plan)` builds a statement once and binds it per call. The declaration names each parameter's codec (`{ email: 'pg/text@1' }`); the callback receives the façade's `sql` builder plus typed `params` and returns a plan. A row-returning plan gives a `PreparedStatement` you run with `ps.query(runtime, params)`; a plan whose result is an affected count gives a `PreparedExecution` you run with `ps.execute(runtime, params)`. Declaring a parameter the plan never references throws `RUNTIME.PREPARE_UNUSED_PARAM`. `runtime.prepare(declaration, (params) => plan)` is the same thing on a `Runtime`.
+This section covers the SQL clients. MongoDB's `db.prepare` has the same shape and runs against `await db.runtime()`; see *Workflow — Prepared statements* in [`queries-mongo.md`](queries-mongo.md).
+
+`db.prepare(declaration, (params) => plan)` builds a statement once and binds it per call. The declaration names each parameter's codec (`{ email: 'pg/text@1' }`); the callback receives typed `params`, builds the plan with `db.sql` (or an ORM `.prepared` description), and returns it. A row-returning plan gives a `PreparedStatement` you run with `ps.query(target, params)`; a plan whose result is an affected count gives a `PreparedExecution` you run with `ps.execute(target, params)`. A prepared statement runs on what it is given: the runtime, a connection, a transaction's `tx`, or a Supabase role-bound client, which runs it under its role. `ps.query(tx, params)` runs inside the transaction. Preparing sends nothing to the database. Inside a transaction, `tx.prepare(...)` prepares without the outer client. Declaring a parameter the plan never references throws `RUNTIME.PREPARE_UNUSED_PARAM`. `runtime.prepare(declaration, (params) => plan)` is the same thing on a `Runtime`.
 
 ```typescript
 // examples/prisma-8-demo/src/queries/get-user-by-email-prepared.ts
-const ps = await db.prepare({ email: 'pg/text@1' }, (sql, params) =>
-  sql.public.user
+const ps = await db.prepare({ email: 'pg/text@1' }, (params) =>
+  db.sql.public.user
     .select('id', 'email', 'displayName', 'createdAt', 'kind')
     .where((f, fns) => fns.eq(f.email, params.email))
     .limit(1)
@@ -161,7 +176,7 @@ The model is the whole row plus its relations, and each related model carries it
 - `Models.<ns>_<Model>` (from `contract.d.ts`) — every scalar field and every relation. On SQLite, which has no schemas, the name is bare: `Models.User` and `typeof models.User`. On Postgres the schema is part of the name: `Models.public_User`, or `typeof models.public.User` by dotted access — a model declared outside any `namespace { }` block is in `public`, so that is also its name. Mongo names its models the same way. A polymorphic base also emits one member per variant and an `Any<Base>` union (`Models.public_AnyTask`).
 - `Scalars<M>` — the model without relations; what a default fetch returns. Distributes over unions, so `Scalars<Models.public_AnyTask>` is the union of variant rows.
 - `Shape<M, Spec>` — a data structure derived from the model, for declaring an endpoint's response type once and having the compiler check the body at the `return`. At every level of `Spec`: `'+'` is a union of scalar and relation names to keep (a relation named there comes with all of its scalars and none of its relations; the scalars are narrowed only when `'+'` names a scalar, so `'+': 'posts'` alone is every scalar plus posts); `'-'` is a union of scalar names to drop; `'+'` naming a scalar beside `'-'` is a compile error, while `{ '-': 'passwordHash'; '+': 'posts' }` is every scalar but the hash plus posts; any other key is a relation whose value is a nested spec that narrows the related model. Relations are absent unless asked for; `X[]`, `X | null`, or `X` comes from the model. Wrong names, a relation in `'-'`, a non-object relation value, and a relation both in `'+'` and as a key are compile errors. No `where`/`orderBy`/`limit`; compose extras with TypeScript (`Shape<M> & { postCount: number }`).
-- `ResultType<typeof query>` — the row of any ORM collection value (plain, `.include()`, `.select()`, `.variant()`), and of SQL lane plans. Bind the query to a name first; `typeof` needs a value.
+- `ResultType<typeof query>` — the row of any ORM collection value (plain, `.include()`, `.select()`, `.variant()`), and of SQL lane plans. Bind the query to a name first; `typeof` needs a value. `.variant()` takes the variant's discriminator value, not its model name: `db.orm.public.Task.variant('bug')` for `@@base(Task, "bug")`. Call it once, on the base collection; a second `.variant()` on a variant collection is refused.
 
 ```ts
 import type { models, Models } from './prisma/contract';
@@ -214,7 +229,7 @@ Target-specific pitfalls live in the per-target guides.
 - **Many-to-many relations work through the junction.** `.include('tags', (tag) => tag.select(...))` traverses an N:M relation's `through` table, and nested `create` / `connect` / `disconnect` on an N:M relation write the junction rows for you (`examples/prisma-8-demo/src/orm-client/get-post-tags.ts`, `create-post-with-tags.ts`). The one refusal: a junction with required payload columns the relation API cannot populate throws `ORM.RELATION_MUTATION_UNSUPPORTED` — write that junction directly or use the SQL builder.
 - **Ordering grouped aggregates by an aggregate alias (Postgres).** `db.orm.<ns>.<Model>.groupBy(...)` supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but the grouped collection cannot order by an aggregate alias such as `SUM(amount)`. A "top-N groups by SUM" query therefore falls back to JS-side sort + slice over the full grouped result, which is fine at small cardinalities and bad at scale. Workarounds: (a) drop to `db.sql.<ns>.<table>` and write the `GROUP BY` + `ORDER BY` + `LIMIT` against the aggregated table directly; (b) live with the JS-side sort/slice if the grouped cardinality is bounded. File a feature request via `references/feedback.md` if this is hitting you in production.
 - **A raw-SQL lane.** This one exists. Write whole-query raw SQL through the client's raw lane: ``db.raw.sql`SELECT ...`.returnsRow({ ... }).build()`` for rows, or `.affectedCount()` for a mutation's row count. Each declared column names the codec that decodes it, so the row stays typed. For an expression fragment inside a builder query, use `fns.raw` in a `.select(...)` callback instead.
-- **TypedSQL (`.sql` files compiled into typed callables).** Not implemented. For a repeated query, use `db.prepare(...)` (see *Prepared statements* above) or a function that returns the built plan and `db.runtime().query(plan)` at the call site. If you want a `.sql`-file compile path, file a feature request via `references/feedback.md`.
+- **TypedSQL (`.sql` files compiled into typed callables).** Not implemented. For a repeated query, use `db.prepare(...)` (see *Prepared statements* above) or a function that returns the built plan and `db.query(plan)` at the call site. If you want a `.sql`-file compile path, file a feature request via `references/feedback.md`.
 - **`EXPLAIN` / query-plan inspection.** Prisma 8 does not expose an `.explain()` method. Workaround: connect a `pg.Pool` you control via the runtime's `pg:` binding (see `references/runtime.md`) and issue `EXPLAIN ANALYZE` through it. If you want a first-class plan-inspection surface, file a feature request via `references/feedback.md`.
 - **Multi-statement batching (Prisma-7-style `db.$transaction([call1, call2])`).** Prisma 8 runs each call sequentially. Workaround: wrap atomically-related work in `db.transaction(async (tx) => { ... })` on Postgres. If you want batch-as-array semantics, file a feature request via `references/feedback.md`.
 - **Mongo façade transactions.** `@internal/mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo façade. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class façade surface.

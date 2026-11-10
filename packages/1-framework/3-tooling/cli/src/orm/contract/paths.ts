@@ -59,7 +59,7 @@ function withCaseSwapped(path: string): string {
 
 /** Whether `existingPath` names the same file with the case of its letters swapped. */
 async function volumeIgnoresCase(existingPath: string): Promise<boolean> {
-  const swapped = withCaseSwapped(existingPath);
+  const swapped = join(dirname(existingPath), withCaseSwapped(basename(existingPath)));
   if (swapped === existingPath) {
     return false;
   }

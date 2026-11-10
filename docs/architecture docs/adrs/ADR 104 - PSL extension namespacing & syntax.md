@@ -2,6 +2,8 @@
 
 Historical note: the current SQL PSL provider exposes extension-owned storage types via constructor expressions such as `pgvector.Vector(...)`. The attribute-based examples below describe the generic namespaced extension syntax direction captured in this ADR.
 
+**Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) (2026-10-21):** a named type in `types { ... }` is authoring shorthand. The interpreter expands it into each column that uses it, and the contract stores each column's codec and parameters inline; it stores neither the named type nor a `typeRef`. "Named storage type for reuse" therefore describes PSL syntax only, not storage. Under "Enforceable coupling", the checks run on each expanded column, so an attribute on a named type is checked once, at the declaration.
+
 ## Context
 
 We need a stable way for database and domain feature packs to extend PSL while keeping the emitted data contract deterministic and code-free. Examples include vector types and operators (pgvector), geospatial types and functions (PostGIS), and custom index strategies.

@@ -103,6 +103,18 @@ describe('expandContractInputs', () => {
 
     expect(result).toEqual([first, second]);
   });
+
+  it('passes a Windows UNC literal through byte-intact, without collapsing the authority', async () => {
+    const uncPath = '\\\\server\\share\\schema.prisma';
+
+    expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
+  });
+
+  it('passes a forward-slash-normalized UNC literal through byte-intact', async () => {
+    const uncPath = '//server/share/schema.prisma';
+
+    expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
+  });
 });
 
 describe('globContractInputMatching', () => {

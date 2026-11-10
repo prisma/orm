@@ -9,7 +9,7 @@
 // idForProvider(postgresql) = String @id
 
 model User {
-  id   String    @id @default(cuid(2))
-  date DateTime?
+  id   String    @id @onCreate(cuid(2))
+  date TimestamptzTemporal?
   @@map("user")
 }

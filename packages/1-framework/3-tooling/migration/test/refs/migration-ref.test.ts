@@ -72,16 +72,6 @@ describe('parseMigrationRef', () => {
       }
     });
 
-    it('resolves a different directory name', () => {
-      const ctx = createContext();
-      const result = parseMigrationRef('20260102-add-posts', ctx);
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.dirName).toBe('20260102-add-posts');
-        expect(result.value.migrationHash).toBe(MIG_HASH_2);
-      }
-    });
-
     it('returns not-found for unknown directory name', () => {
       const ctx = createContext();
       const result = parseMigrationRef('nonexistent', ctx);

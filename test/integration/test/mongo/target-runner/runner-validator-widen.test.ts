@@ -141,16 +141,19 @@ describe('MongoMigrationRunner - validator widen', () => {
       profileHash: 'p1',
     });
 
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...ORIGIN_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...ORIGIN_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 
@@ -160,6 +163,8 @@ describe('MongoMigrationRunner - validator widen', () => {
       schema: originIR,
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: [],
       snapshotsImportPath: '../../snapshots',
     });
@@ -179,7 +184,7 @@ describe('MongoMigrationRunner - validator widen', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
-      throw new Error(`Runner failed: ${result.failure.code} — ${result.failure.summary}`);
+      throw new Error(`Runner failed: ${result.failure.code} — ${result.failure.message}`);
     }
 
     // The collMod must have executed — not been skipped by the idempotency probe.
@@ -213,16 +218,19 @@ describe('MongoMigrationRunner - validator widen', () => {
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 
     // Origin IR also matches the widened schema (simulating a retry / re-apply).
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...WIDENED_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...WIDENED_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const planner = new MongoMigrationPlanner();
     const planResult = planner.plan({
@@ -230,6 +238,8 @@ describe('MongoMigrationRunner - validator widen', () => {
       schema: originIR,
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: [],
       snapshotsImportPath: '../../snapshots',
     });
@@ -257,16 +267,19 @@ describe('MongoMigrationRunner - validator widen', () => {
     // origin assumption lags the live database. The op targets the same widened
     // schema the live collection already has, so the runner's postcheck idempotency
     // probe must skip it rather than re-executing.
-    const staleOriginIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { ...ORIGIN_SCHEMA },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const staleOriginIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { ...ORIGIN_SCHEMA },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const destContract = makeContractWithValidator('users', { ...WIDENED_SCHEMA }, 'dest');
 
@@ -276,6 +289,8 @@ describe('MongoMigrationRunner - validator widen', () => {
       schema: staleOriginIR,
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: [],
       snapshotsImportPath: '../../snapshots',
     });
@@ -302,7 +317,7 @@ describe('MongoMigrationRunner - validator widen', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
-      throw new Error(`Runner failed: ${result.failure.code} — ${result.failure.summary}`);
+      throw new Error(`Runner failed: ${result.failure.code} — ${result.failure.message}`);
     }
 
     // The collMod was skipped by the postcheck idempotency probe (live === target).

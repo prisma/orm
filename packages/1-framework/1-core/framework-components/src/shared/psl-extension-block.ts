@@ -1,3 +1,4 @@
+import type { WrittenValue } from './written-value';
 export interface PslPosition {
   readonly offset: number;
   readonly line: number;
@@ -66,8 +67,14 @@ export type PslDiagnosticCode =
   | 'PSL_UNTERMINATED_STRING'
   /** A backtick string that is not the string literal of a tagged literal; anchored on the string. */
   | 'PSL_BACKTICK_STRING_REQUIRES_TAG'
-  /** A `@default` tagged literal whose tag no pack in the stack registered. */
-  | 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG'
+  /** A tagged literal whose tag no pack in the stack registered. */
+  | 'PSL_UNKNOWN_LITERAL_TAG'
+  /** A written value has a data type the receiving position's type neither is nor casts from, or the target has no data type for its syntax. */
+  | 'PSL_VALUE_TYPE_INCOMPATIBLE'
+  /** A written value that its authoring entry's parse or a cast refused. */
+  | 'PSL_INVALID_LITERAL'
+  /** A written value the receiving type, under the receiving position's type parameters, or the receiving codec refused. */
+  | 'PSL_VALUE_REFUSED'
   /** A tagged literal body contains a NUL character. */
   | 'PSL_TAGGED_LITERAL_NUL'
   /** A tagged literal body is larger than 65536 UTF-8 bytes. */
@@ -96,7 +103,8 @@ export type PslDiagnosticCode =
    * Duplicate scopes are top level, namespace body, or block fields; diagnostics
    * are first-wins and anchored on later name spans.
    */
-  | 'PSL_DUPLICATE_DECLARATION';
+  | 'PSL_DUPLICATE_DECLARATION'
+  | 'PSL_UNRESOLVED_REFERENCE';
 
 /**
  * A PSL diagnostic code contributed by a family or target package (e.g. an
@@ -164,6 +172,8 @@ export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknow
   readonly name: string;
   readonly values: Values;
   readonly parameterSpans: Readonly<Record<string, PslSpan>>;
+  /** Each entry whose value is a literal, by key, as it is written: its syntax and source text, so a reader takes it by the cast rule and keeps digits a JavaScript number loses. ADR 254. */
+  readonly writtenValues?: Readonly<Record<string, WrittenValue>>;
   readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly span: PslSpan;
 }

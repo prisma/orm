@@ -23,8 +23,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 function withDollarSearch(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, async (ctx) => {
-    await ctx.db.users.create({ _id: new ObjectId().toHexString(), firstName: 'foo' });
-    await ctx.db.users.create({ _id: new ObjectId().toHexString(), firstName: '$foo' });
+    await ctx.db.users.create({ id: new ObjectId().toHexString(), firstName: 'foo' });
+    await ctx.db.users.create({ id: new ObjectId().toHexString(), firstName: '$foo' });
     await fn(ctx);
   });
 }

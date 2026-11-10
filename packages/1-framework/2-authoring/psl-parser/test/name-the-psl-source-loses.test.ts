@@ -8,9 +8,10 @@ function blockMemberNames(source: string, blockName: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  expect(symbolTable.topLevel.blocks[blockName]).toBeDefined();
-  return Array.from(symbolTable.topLevel.blocks[blockName]!.node.entries(), (entry) =>
+  expect(symbolTable.defaultNamespace.blocks[blockName]).toBeDefined();
+  return Array.from(symbolTable.defaultNamespace.blocks[blockName]!.node.entries(), (entry) =>
     entry.key()?.name(),
   );
 }

@@ -1,0 +1,576 @@
+import type { Contract } from '@internal/contract/types';
+import { structBlock } from '@internal/psl-parser';
+import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
+import { describe, expect, it } from 'vitest';
+import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
+import {
+  documentScopedTypes,
+  interpretSqlContract,
+  pgvectorAuthoringContributions,
+  pgvectorExtensionPack,
+  postgresScalarTypeDescriptors,
+  postgresTarget,
+} from './fixtures';
+import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
+import { unboundTables } from './unbound-tables';
+
+function columnsOf(contract: Contract, table: string) {
+  return unboundTables(sqlStorageFromSuccessfulSqlInterpretation(contract))[table]?.columns;
+}
+
+const baseInput = {
+  ...fixtureInterpreterTypes,
+  target: postgresTarget,
+  scalarColumnDescriptors: postgresScalarTypeDescriptors,
+  composedExtensionContracts: new Map(),
+  createNamespace: createTestSqlNamespace,
+  capabilities: { sql: { scalarList: true } },
+} as const;
+
+describe('interpretPslDocumentToSqlContract extensions', () => {
+  it('rejects legacy pgvector.column attributes even when the extension is composed', () => {
+    const namedTypeResult = interpretSqlContract(
+      `types {
+  Embedding1536 = Bytes @pgvector.column(length: 1536)
+}
+
+model Document {
+  id Int @id
+  embedding Embedding1536
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
+    expect(namedTypeResult.ok).toBe(false);
+    if (namedTypeResult.ok) return;
+    expect(namedTypeResult.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
+          message: expect.stringContaining('pgvector.column'),
+        }),
+      ]),
+    );
+
+    const fieldResult = interpretSqlContract(
+      `model Document {
+  id Int @id
+  embedding Bytes @pgvector.column(length: 1536)
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
+    expect(fieldResult.ok).toBe(false);
+    if (fieldResult.ok) return;
+    expect(fieldResult.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+          message: expect.stringContaining('pgvector.column'),
+        }),
+      ]),
+    );
+  });
+
+  it('rejects attributes attached to constructor-based named types', () => {
+    const result = interpretSqlContract(
+      `types {
+  Embedding1536 = pgvector.Vector(1536) @pgvector.column
+}
+
+model Document {
+  id Int @id
+  embedding Embedding1536
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
+          message: expect.stringContaining('pgvector.column'),
+        }),
+      ]),
+    );
+  });
+
+  it('preserves composed extension pack versions when refs are provided', () => {
+    const result = interpretSqlContract(
+      `types {
+  Embedding1536 = pgvector.Vector(1536)
+}
+
+model Document {
+  id Int @id
+  embedding Embedding1536
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        composedExtensionPackRefs: [pgvectorExtensionPack],
+        authoringContributions: pgvectorAuthoringContributions,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.extensions).toMatchObject({
+      pgvector: {
+        version: pgvectorExtensionPack.version,
+      },
+    });
+  });
+
+  it('instantiates family-owned and extension-owned constructor expressions from shared authoring contributions', () => {
+    const result = interpretSqlContract(
+      `types {
+  ShortName = sql.String(length: 35)
+  Embedding1536 = pgvector.Vector(1536)
+}
+
+model Document {
+  id Int @id
+  shortName ShortName
+  embedding Embedding1536
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: {
+          type: {
+            sql: {
+              String: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+                output: {
+                  codecId: 'custom/varchar@1',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
+                },
+              },
+            },
+            pgvector: {
+              Vector: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+                output: {
+                  codecId: 'custom/vector@1',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(documentScopedTypes(result.value)).toBeUndefined();
+    expect(columnsOf(result.value, 'Document')).toMatchObject({
+      shortName: { codecId: 'custom/varchar@1', typeParams: { length: 35 } },
+      embedding: { codecId: 'custom/vector@1', typeParams: { length: 1536 } },
+    });
+  });
+
+  it('instantiates inline field constructor expressions from shared authoring contributions', () => {
+    const result = interpretSqlContract(
+      `model Document {
+  id Int @id
+  shortName sql.String(length: 35)
+  embedding pgvector.Vector(length: 1536)?
+}
+`,
+      {
+        ...baseInput,
+        composedExtensions: ['pgvector'],
+        authoringContributions: {
+          type: {
+            sql: {
+              String: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+                output: {
+                  codecId: 'custom/varchar@1',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
+                },
+              },
+            },
+            pgvector: {
+              Vector: {
+                kind: 'typeConstructor',
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+                output: {
+                  codecId: 'custom/vector@1',
+                  typeParams: {
+                    length: { kind: 'arg', index: 0 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(documentScopedTypes(result.value) ?? {}).toEqual({});
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              Document: {
+                columns: {
+                  shortName: {
+                    codecId: 'custom/varchar@1',
+                    dataType: 'custom/varchar',
+                    nullable: false,
+                  },
+                  embedding: {
+                    codecId: 'custom/vector@1',
+                    dataType: 'custom/vector',
+                    nullable: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('routes lowered extension entities to entries[discriminator] via explicit createNamespace', () => {
+    const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
+    const pslBlockDescriptors = {
+      test_block: {
+        kind: 'pslBlock' as const,
+        keyword: 'test_block',
+        discriminator: 'test-custom-block',
+        name: { required: true },
+        spec: () => structBlock({ parameters: {} }),
+      },
+    };
+    const authoringContributions = {
+      entityTypes: {
+        test: {
+          kind: 'entity' as const,
+          discriminator: 'test-custom-block',
+          output: {
+            factory: (raw: unknown) => raw,
+          },
+        },
+      },
+      pslBlockDescriptors,
+    };
+    const createNamespace = (input: SqlNamespaceInput): SqlNamespaceBase => {
+      capturedEntries[input.id] = {
+        ...(capturedEntries[input.id] ?? {}),
+        ...input.entries,
+      };
+      return createTestSqlNamespace(input);
+    };
+
+    const result = interpretSqlContract(
+      `
+namespace public {
+  model Foo {
+    id Int @id
+  }
+
+  test_block my_entry {
+  }
+}
+`,
+      {
+        ...fixtureInterpreterTypes,
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        authoringContributions,
+        createNamespace,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(capturedEntries).toMatchObject({
+      public: {
+        'test-custom-block': {
+          my_entry: expect.objectContaining({ kind: 'test-custom-block' }),
+        },
+      },
+    });
+  });
+
+  describe('top-level extension blocks', () => {
+    const topThingPslBlockDescriptors = {
+      top_thing: {
+        kind: 'pslBlock' as const,
+        keyword: 'top_thing',
+        discriminator: 'top-thing',
+        name: { required: true },
+        spec: () => structBlock({ parameters: {} }),
+      },
+    };
+    const topThingAuthoringContributions = {
+      entityTypes: {
+        topThing: {
+          kind: 'entity' as const,
+          discriminator: 'top-thing',
+          output: {
+            factory: (raw: unknown) => raw,
+          },
+        },
+      },
+      pslBlockDescriptors: topThingPslBlockDescriptors,
+    };
+
+    it('lowers a top-level block into the default namespace bucket, like top-level models', () => {
+      const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
+      const createNamespace = (input: SqlNamespaceInput): SqlNamespaceBase => {
+        capturedEntries[input.id] = {
+          ...(capturedEntries[input.id] ?? {}),
+          ...input.entries,
+        };
+        return createTestSqlNamespace(input);
+      };
+
+      const result = interpretSqlContract(
+        `
+top_thing my_entry {
+}
+
+model Foo {
+  id Int @id
+}
+`,
+        {
+          ...fixtureInterpreterTypes,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(capturedEntries['public']).toMatchObject({
+        'top-thing': {
+          my_entry: expect.objectContaining({ kind: 'top-thing', name: 'my_entry' }),
+        },
+      });
+    });
+
+    it('accepts a blocks-only `namespace unbound { … }` alongside named namespaces and lowers its blocks into the unbound bucket', () => {
+      const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
+      const createNamespace = (input: SqlNamespaceInput): SqlNamespaceBase => {
+        capturedEntries[input.id] = {
+          ...(capturedEntries[input.id] ?? {}),
+          ...input.entries,
+        };
+        return createTestSqlNamespace(input);
+      };
+
+      const result = interpretSqlContract(
+        `
+namespace unbound {
+  top_thing my_entry {
+  }
+}
+
+namespace auth {
+  model Foo {
+    id Int @id
+  }
+}
+`,
+        {
+          ...fixtureInterpreterTypes,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(capturedEntries['__unbound__']).toMatchObject({
+        'top-thing': {
+          my_entry: expect.objectContaining({ kind: 'top-thing', name: 'my_entry' }),
+        },
+      });
+      expect(result.value.storage.namespaces['__unbound__']).toBeDefined();
+    });
+
+    it('the raw sentinel spelling `namespace __unbound__ { … }` lowers blocks into the unbound bucket like the `unbound` spelling', () => {
+      const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
+      const createNamespace = (input: SqlNamespaceInput): SqlNamespaceBase => {
+        capturedEntries[input.id] = {
+          ...(capturedEntries[input.id] ?? {}),
+          ...input.entries,
+        };
+        return createTestSqlNamespace(input);
+      };
+
+      const result = interpretSqlContract(
+        `
+namespace __unbound__ {
+  top_thing my_entry {
+  }
+}
+
+namespace auth {
+  model Foo {
+    id Int @id
+  }
+}
+`,
+        {
+          ...fixtureInterpreterTypes,
+          target: postgresTarget,
+          scalarColumnDescriptors: postgresScalarTypeDescriptors,
+          composedExtensionContracts: new Map(),
+          authoringContributions: topThingAuthoringContributions,
+          createNamespace,
+          capabilities: { sql: { scalarList: true } },
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(capturedEntries['__unbound__']).toMatchObject({
+        'top-thing': {
+          my_entry: expect.objectContaining({ kind: 'top-thing', name: 'my_entry' }),
+        },
+      });
+    });
+  });
+
+  describe('extension entity merge collisions across reopened namespace spellings', () => {
+    const thingPslBlockDescriptors = {
+      thing: {
+        kind: 'pslBlock' as const,
+        keyword: 'thing',
+        discriminator: 'thing',
+        name: { required: true },
+        spec: () => structBlock({ parameters: {} }),
+      },
+    };
+    const thingAuthoringContributions = {
+      entityTypes: {
+        thing: {
+          kind: 'entity' as const,
+          discriminator: 'thing',
+          output: { factory: (raw: unknown) => raw },
+        },
+      },
+      pslBlockDescriptors: thingPslBlockDescriptors,
+    };
+
+    it('rejects two unbound spellings declaring the same named block as a duplicate declaration', () => {
+      const result = interpretSqlContract(
+        `namespace unbound {
+  thing shared {
+  }
+}
+
+namespace __unbound__ {
+  thing shared {
+  }
+}
+`,
+        {
+          ...baseInput,
+          authoringContributions: thingAuthoringContributions,
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_DUPLICATE_DECLARATION',
+            message: 'Duplicate declaration of "shared"',
+          }),
+        ]),
+      );
+    });
+
+    it('allows disjoint entity names across the two unbound spellings and unions them into the unbound bucket', () => {
+      const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
+      const createNamespace = (input: SqlNamespaceInput): SqlNamespaceBase => {
+        capturedEntries[input.id] = {
+          ...(capturedEntries[input.id] ?? {}),
+          ...input.entries,
+        };
+        return createTestSqlNamespace(input);
+      };
+
+      const result = interpretSqlContract(
+        `namespace unbound {
+  thing entry_a {
+  }
+}
+
+namespace __unbound__ {
+  thing entry_b {
+  }
+}
+`,
+        {
+          ...baseInput,
+          authoringContributions: thingAuthoringContributions,
+          createNamespace,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(capturedEntries['__unbound__']).toMatchObject({
+        thing: {
+          entry_a: expect.objectContaining({ name: 'entry_a' }),
+          entry_b: expect.objectContaining({ name: 'entry_b' }),
+        },
+      });
+    });
+  });
+});

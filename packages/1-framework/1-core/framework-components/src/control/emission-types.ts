@@ -7,6 +7,8 @@ import type { TypesImportSpec } from '../shared/types-import-spec';
 
 export interface GenerateContractTypesOptions {
   readonly queryOperationTypeImports?: ReadonlyArray<TypesImportSpec>;
+  /** The type functions that give the output types of the stack's codecs for a column's type parameters (`types.codecTypes.parameterizedOutputTypes`). */
+  readonly parameterizedOutputTypeImports?: ReadonlyArray<TypesImportSpec>;
   /**
    * The aggregate overloads the composed stack contributes, and the codec descriptors they are settled against. A family emits result types from these — the same declarations its runtime registry resolves against, so emitted types and decoded results cannot disagree.
    */
@@ -16,11 +18,6 @@ export interface GenerateContractTypesOptions {
    * The target's namespace declaration. `false` drops the namespace segment from emitted `Models` member names and from the `models` constant; absent means `true`.
    */
   readonly supportsNamespaces?: boolean;
-}
-
-export interface ValidationContext {
-  readonly codecTypeImports?: ReadonlyArray<TypesImportSpec>;
-  readonly extensionIds?: ReadonlyArray<string>;
 }
 
 export interface EmissionSpi {
@@ -43,20 +40,13 @@ export interface EmissionSpi {
 
   getContractWrapper(contractBaseName: string, typeMapsName: string): string;
 
-  resolveFieldTypeParams?(
-    modelName: string,
-    fieldName: string,
-    model: ContractModelBase,
-    contract: Contract,
-  ): Record<string, unknown> | undefined;
-
   /**
-   * Resolves a field's permitted values (codec-encoded) plus the codec that types them, or
+   * Resolves a model field's permitted values (codec-encoded) plus the codec that types them, or
    * `undefined` for a field with no restricted value set. The framework renders the values into a TS
-   * literal union through the codec seam. Each family decides where the values live — a value set in
-   * its own storage plane, or another family-owned source.
+   * literal union through the codec seam. The framework resolves a field's reference to a domain
+   * enum itself and calls this only for other fields, whose values live in the family's storage.
    */
-  resolveFieldValueSet?(
+  resolveStorageValueSet?(
     modelName: string,
     fieldName: string,
     model: ContractModelBase,

@@ -41,6 +41,7 @@ function buildTagWithUpdatedAtContract(
   const tagFields = tagModel['fields'] as Record<string, unknown>;
   tagFields['updatedAt'] = {
     nullable: false,
+    many: false,
     type: { kind: 'scalar', codecId },
   };
   const tagStorage = tagModel['storage'] as Record<string, unknown>;
@@ -54,7 +55,7 @@ function buildTagWithUpdatedAtContract(
     throw new Error('Test contract is missing the tags table');
   }
   tagsTable.columns['updated_at'] = {
-    nativeType: 'timestamptz',
+    dataType: 'pg/timestamptz',
     codecId,
     nullable: false,
   };
@@ -259,7 +260,7 @@ describe('@updatedAt mutation defaults via Collection', () => {
       expect(dateParams[0]?.getTime()).toBe(explicit.getTime());
     });
 
-    it('emits no SQL and no timestamp on an empty update payload', async () => {
+    it('reads the rows and writes no timestamp on an empty update payload', async () => {
       const { collection, runtime } = setupTagCollection();
 
       await collection
@@ -267,7 +268,9 @@ describe('@updatedAt mutation defaults via Collection', () => {
         .updateAll({})
         .toArray();
 
-      expect(runtime.executions).toHaveLength(0);
+      expect(runtime.executions).toHaveLength(1);
+      expect(runtime.executions[0]?.plan).toMatchObject({ ast: { kind: 'select' } });
+      expect(planParams(runtime.executions[0]).filter((p) => p instanceof Date)).toEqual([]);
     });
   });
 

@@ -14,6 +14,8 @@ export type {
   ContractSourceProvider,
   ContractSourceProviderBase,
   PslContractSourceProvider,
+  PslGrammar,
+  PslParserOptions,
   TypeScriptContractSourceProvider,
 } from '../contract-source-types';
 export { defaultContractOutputPath } from '../default-contract-output-path';

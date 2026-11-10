@@ -21,8 +21,13 @@ export async function emit(
   }
   requireToOneRelationNullability(contract);
 
-  const { codecTypeImports, queryOperationTypeImports, aggregateDescriptors, codecDescriptors } =
-    stack;
+  const {
+    codecTypeImports,
+    queryOperationTypeImports,
+    parameterizedOutputTypeImports,
+    aggregateDescriptors,
+    codecDescriptors,
+  } = stack;
 
   const { storageHash } = contract.storage;
   const executionHash = contract.execution?.executionHash;
@@ -49,6 +54,7 @@ export async function emit(
 
   const generateOptions = {
     ...ifDefined('queryOperationTypeImports', queryOperationTypeImports),
+    ...ifDefined('parameterizedOutputTypeImports', parameterizedOutputTypeImports),
     ...ifDefined('aggregateDescriptors', aggregateDescriptors),
     ...ifDefined('codecDescriptors', codecDescriptors),
     ...ifDefined('supportsNamespaces', options.supportsNamespaces),

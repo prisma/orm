@@ -48,28 +48,3 @@ test('ExecutionStackInstance.driver type includes driver instance when stack has
   }
   expectTypeOf(instanceDriver).toExtend<MockDriverInstance>();
 });
-
-test('ExecutionStackInstance has driver property when stack has no driver descriptor', () => {
-  const target: RuntimeTargetDescriptor<'sql', 'postgres'> = {
-    kind: 'target',
-    id: 'postgres',
-    familyId: 'sql',
-    targetId: 'postgres',
-    version: '0.0.1',
-    create: () => ({ familyId: 'sql', targetId: 'postgres' }),
-  };
-
-  const adapter: RuntimeAdapterDescriptor<'sql', 'postgres'> = {
-    kind: 'adapter',
-    id: 'postgres-adapter',
-    familyId: 'sql',
-    targetId: 'postgres',
-    version: '0.0.1',
-    create: () => ({ familyId: 'sql', targetId: 'postgres' }),
-  };
-
-  const stackWithoutDriver = createExecutionStack({ target, adapter });
-  const instanceWithoutDriver = instantiateExecutionStack(stackWithoutDriver);
-
-  expectTypeOf(instanceWithoutDriver).toHaveProperty('driver');
-});

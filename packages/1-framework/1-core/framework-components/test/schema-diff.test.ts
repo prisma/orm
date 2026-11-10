@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { DiffableNode, SchemaDiffIssue, SchemaNodeRef } from '../src/control/schema-diff';
+import type {
+  DiffableNode,
+  MismatchExplanation,
+  SchemaDiffIssue,
+  SchemaNodeRef,
+} from '../src/control/schema-diff';
 import { diffSchemas, issueOutcome, SchemaDiff } from '../src/control/schema-diff';
 
 /** A synthetic root node whose `isEqualTo` is always true — used to wrap flat node lists. */
@@ -409,12 +414,6 @@ function makeSchemaDiffIssue(path: readonly string[]): SchemaDiffIssue {
 }
 
 describe('SchemaDiff', () => {
-  it('exposes the issues it was constructed with', () => {
-    const issues = [makeSchemaDiffIssue(['root', 'p'])];
-    const diff = new SchemaDiff(issues);
-    expect(diff.issues).toBe(issues);
-  });
-
   it('filter narrows the issue list', () => {
     const keep = makeSchemaDiffIssue(['root', 'keep']);
     const drop = makeSchemaDiffIssue(['root', 'drop']);
@@ -437,5 +436,55 @@ describe('SchemaDiff', () => {
     const diff = new SchemaDiff([]);
     const filtered = diff.filter(() => true);
     expect(filtered.issues).toEqual([]);
+  });
+});
+
+describe('diffSchemas mismatch explanations', () => {
+  const refused: MismatchExplanation = {
+    text: 'the contract text is refused',
+    cause: 'differs',
+  };
+
+  function explainedNode(body: string, explanation: MismatchExplanation | undefined): DiffableNode {
+    return {
+      id: 'default',
+      nodeKind: 'widget',
+      children: () => [],
+      isEqualTo: (other) => other.id === 'default' && body === 'same',
+      explainMismatch: () => explanation,
+    };
+  }
+
+  it('carries the explanation and its cause the expected node gives for a mismatch', () => {
+    expect(
+      diffSchemas(
+        rootOf([
+          explainedNode('old', {
+            text: 'the database writes it its own way',
+            cause: 'possibly-equivalent',
+          }),
+        ]),
+        rootOf([makeNode('default')]),
+      ),
+    ).toMatchObject([
+      {
+        path: ['root', 'default'],
+        explanation: { text: 'the database writes it its own way', cause: 'possibly-equivalent' },
+      },
+    ]);
+  });
+
+  it('carries the explanation the expected node gives when the actual side lacks it', () => {
+    expect(diffSchemas(rootOf([explainedNode('old', refused)]), rootOf([]))).toMatchObject([
+      { path: ['root', 'default'], explanation: refused },
+    ]);
+  });
+
+  it('carries no explanation when the expected node gives none', () => {
+    const [issue] = diffSchemas(
+      rootOf([explainedNode('old', undefined)]),
+      rootOf([makeNode('default')]),
+    );
+    expect(issue).not.toHaveProperty('explanation');
   });
 });

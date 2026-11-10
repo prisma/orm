@@ -12,6 +12,16 @@ model Post {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   title     String
   views     BigInt
+  likes     Int
+  rank      Int      @db.Int
+  note      String   @db.String
+  pinned    Boolean  @db.Bool
+  score     Float    @db.Double
+  day       DateTime @db.Date
+  blob      Bytes    @db.BinData
+  legacyRef Bytes    @db.ObjectId
+  total     BigInt   @db.Long
+  extra     Json     @db.Json
   meta      Json
   authorId  String   @db.ObjectId
   author    User     @relation(fields: [authorId], references: [id])

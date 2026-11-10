@@ -1,7 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import type { ExecutionMutationDefault } from '@internal/contract/types';
+import { type ExecutionMutationDefault, executionHash } from '@internal/contract/types';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -9,11 +9,15 @@ import {
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const NS = '__unbound__';
 
-function contractWith(defaults: readonly ExecutionMutationDefault[]) {
-  return { execution: { executionHash: 'test', mutations: { defaults } } };
+function contractWith(defaults: readonly ExecutionMutationDefault[]): MongoContract {
+  return {
+    ...fixtureContract,
+    execution: { executionHash: executionHash('test'), mutations: { defaults } },
+  };
 }
 
 function generator(id: string) {
@@ -30,7 +34,6 @@ function extensionWith(
     familyId: 'mongo',
     targetId: 'mongo',
     version: '0.0.1',
-    codecs: () => newMongoCodecRegistry(),
     mutationDefaultGenerators: () => generators,
     create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
   };
@@ -85,7 +88,8 @@ describe('Mongo runtime mutation default generators', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract requires mutation default generator(s) 'slugify', but no runtime component provides them.",
+          "Contract requires mutation default generator 'slugify' for posts.slug, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['slugify'], fields: ['posts.slug'] },
       }),
     );
   });

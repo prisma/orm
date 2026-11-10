@@ -17,7 +17,7 @@
 
 model Event {
   appId     Int
-  createdAt Date
+  createdAt DateTemporal
   value     Int
 
   @@id([appId, createdAt])

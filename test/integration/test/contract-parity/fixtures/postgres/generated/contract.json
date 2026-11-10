@@ -1,0 +1,2450 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "accounts": {
+      "model": "Account",
+      "namespace": "auth"
+    },
+    "badges": {
+      "model": "Badge",
+      "namespace": "public"
+    },
+    "employees": {
+      "model": "Employee",
+      "namespace": "public"
+    },
+    "generated": {
+      "model": "Generated",
+      "namespace": "public"
+    },
+    "key_writers": {
+      "model": "KeyCovered",
+      "namespace": "public"
+    },
+    "organization_membership_invitations": {
+      "model": "LongNamed",
+      "namespace": "public"
+    },
+    "partial_writers": {
+      "model": "PartialIndexed",
+      "namespace": "public"
+    },
+    "plain_writers": {
+      "model": "PlainIndexed",
+      "namespace": "public"
+    },
+    "post_tags": {
+      "model": "PostTag",
+      "namespace": "public"
+    },
+    "posts": {
+      "model": "Post",
+      "namespace": "public"
+    },
+    "profiles": {
+      "model": "Profile",
+      "namespace": "public"
+    },
+    "tags": {
+      "model": "Tag",
+      "namespace": "public"
+    },
+    "unindexed_writers": {
+      "model": "Unindexed",
+      "namespace": "public"
+    },
+    "user_badges": {
+      "model": "UserBadge",
+      "namespace": "public"
+    },
+    "users": {
+      "model": "User",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "auth": {
+        "models": {
+          "Account": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "provider": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "provider": {
+                  "column": "provider"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "auth",
+              "table": "accounts"
+            }
+          }
+        }
+      },
+      "public": {
+        "enum": {
+          "Plan": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "Free",
+                "value": "free"
+              },
+              {
+                "name": "Paid",
+                "value": "paid"
+              }
+            ]
+          },
+          "Ratio": {
+            "codecId": "pg/numeric@1",
+            "members": [
+              {
+                "name": "Half",
+                "value": "0.5"
+              },
+              {
+                "name": "Whole",
+                "value": "1.50"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Badge": {
+            "fields": {
+              "code": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "code": {
+                  "column": "code"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "badges"
+            }
+          },
+          "Employee": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "managerId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              }
+            },
+            "relations": {
+              "manager": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "managerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Employee",
+                  "namespace": "public"
+                }
+              },
+              "reports": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "managerId"
+                  ]
+                },
+                "to": {
+                  "model": "Employee",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "managerId": {
+                  "column": "managerId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "employees"
+            }
+          },
+          "Generated": {
+            "fields": {
+              "cuid2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "ksuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "nanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "shortNanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 12
+                  }
+                }
+              },
+              "ulid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "uuidv7": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ksuid": {
+                  "column": "ksuid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "shortNanoid": {
+                  "column": "shortNanoid"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "uuidv7": {
+                  "column": "uuidv7"
+                }
+              },
+              "namespaceId": "public",
+              "table": "generated"
+            }
+          },
+          "KeyCovered": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "writerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "writerId": {
+                  "column": "writer_id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "key_writers"
+            }
+          },
+          "LongNamed": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "organizationReference": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "organizationReference": {
+                  "column": "organization_reference_identifier"
+                }
+              },
+              "namespaceId": "public",
+              "table": "organization_membership_invitations"
+            }
+          },
+          "PartialIndexed": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "writerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "writerId": {
+                  "column": "writer_id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "partial_writers"
+            }
+          },
+          "PlainIndexed": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "writerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "writerId": {
+                  "column": "writer_id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "plain_writers"
+            }
+          },
+          "Post": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "tags": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "postId"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "tagId"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "postId"
+                  ],
+                  "table": "post_tags",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Tag",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "public",
+              "table": "posts"
+            }
+          },
+          "PostTag": {
+            "fields": {
+              "postId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "tagId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "postId": {
+                  "column": "postId"
+                },
+                "tagId": {
+                  "column": "tagId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "post_tags"
+            }
+          },
+          "Profile": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "rank": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "settings": {
+                "nullable": false,
+                "type": {
+                  "codecId": "arktype/json@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "expression": "{ fontSize: number, theme: string }",
+                    "jsonIr": {
+                      "domain": "object",
+                      "required": [
+                        {
+                          "key": "fontSize",
+                          "value": "number"
+                        },
+                        {
+                          "key": "theme",
+                          "value": "string"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "rank": {
+                  "column": "rank"
+                },
+                "settings": {
+                  "column": "settings"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "profiles"
+            }
+          },
+          "Tag": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "tagId"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "postId"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "tagId"
+                  ],
+                  "table": "post_tags",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "label": {
+                  "column": "label"
+                }
+              },
+              "namespaceId": "public",
+              "table": "tags"
+            }
+          },
+          "Unindexed": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "writerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "writerId": {
+                  "column": "writer_id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "unindexed_writers"
+            }
+          },
+          "User": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "cuid2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 24
+                  }
+                }
+              },
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "handle": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 20
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "ksuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 27
+                  }
+                }
+              },
+              "nanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "plan": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Plan",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Ratio",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "seenAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "shortNanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 10
+                  }
+                }
+              },
+              "timestamp": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timestampString": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timestampStringAlias": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timestamptz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "timestamptzString": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timestamptzStringAlias": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "ulid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "accounts": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Account",
+                  "namespace": "auth"
+                }
+              },
+              "badges": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "badgeCode"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "userId"
+                  ],
+                  "table": "user_badges",
+                  "targetColumns": [
+                    "code"
+                  ]
+                },
+                "to": {
+                  "model": "Badge",
+                  "namespace": "public"
+                }
+              },
+              "posts": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "profile": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Profile",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "email": {
+                  "column": "email"
+                },
+                "externalId": {
+                  "column": "externalId"
+                },
+                "handle": {
+                  "column": "handle"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ksuid": {
+                  "column": "ksuid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "plan": {
+                  "column": "plan"
+                },
+                "ratio": {
+                  "column": "ratio"
+                },
+                "seenAt": {
+                  "column": "seenAt"
+                },
+                "shortNanoid": {
+                  "column": "shortNanoid"
+                },
+                "timestamp": {
+                  "column": "timestamp"
+                },
+                "timestampString": {
+                  "column": "timestampString"
+                },
+                "timestampStringAlias": {
+                  "column": "timestampStringAlias"
+                },
+                "timestamptz": {
+                  "column": "timestamptz"
+                },
+                "timestamptzString": {
+                  "column": "timestamptzString"
+                },
+                "timestamptzStringAlias": {
+                  "column": "timestamptzStringAlias"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "users"
+            }
+          },
+          "UserBadge": {
+            "fields": {
+              "badgeCode": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "badgeCode": {
+                  "column": "badgeCode"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "user_badges"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "auth": {
+        "entries": {
+          "table": {
+            "accounts": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                },
+                "provider": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "auth",
+        "kind": "postgres-schema"
+      },
+      "public": {
+        "entries": {
+          "table": {
+            "badges": {
+              "columns": {
+                "code": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "uniques": [
+                {
+                  "columns": [
+                    "code"
+                  ]
+                }
+              ]
+            },
+            "employees": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "managerId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 21
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "generated": {
+              "columns": {
+                "cuid2": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "ksuid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "nanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "shortNanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 12
+                  }
+                },
+                "ulid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "uuidv7": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "key_writers": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "writer_id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "unique": [
+                      "writer_id"
+                    ]
+                  },
+                  "source": {
+                    "columns": [
+                      "writer_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "key_writers"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "writer_id"
+                  ]
+                }
+              ]
+            },
+            "organization_membership_invitations": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "organization_reference_identifier": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "organization_membership_invitations_organization_refer_629465de"
+                  },
+                  "source": {
+                    "columns": [
+                      "organization_reference_identifier"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "organization_membership_invitations"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "organization_reference_identifier"
+                  ],
+                  "name": "organization_membership_invitations_organization_refer_629465de",
+                  "prefix": "organization_membership_invitations_organization_refer",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "partial_writers": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "writer_id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "partial_writers_writer_id_idx_7e64fa2a"
+                  },
+                  "source": {
+                    "columns": [
+                      "writer_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "partial_writers"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "writer_id"
+                  ],
+                  "name": "partial_writers_writer_id_idx_7e64fa2a",
+                  "prefix": "partial_writers_writer_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "writer_id"
+                  ],
+                  "name": "set_writers_2c1c0b1d",
+                  "prefix": "set_writers",
+                  "unique": false,
+                  "where": "writer_id IS NOT NULL"
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "plain_writers": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "writer_id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "by_writer_7e64fa2a"
+                  },
+                  "source": {
+                    "columns": [
+                      "writer_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "plain_writers"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "writer_id"
+                  ],
+                  "name": "by_writer_7e64fa2a",
+                  "prefix": "by_writer",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "post_tags": {
+              "columns": {
+                "postId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "tagId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "uniques": []
+            },
+            "posts": {
+              "columns": {
+                "authorId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "title": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "posts_authorId_idx_e47547ed"
+                  },
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "posts"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "authorId"
+                  ],
+                  "name": "posts_authorId_idx_e47547ed",
+                  "prefix": "posts_authorId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "profiles": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "rank": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "settings": {
+                  "codecId": "arktype/json@1",
+                  "dataType": "pg/jsonb",
+                  "nullable": false,
+                  "typeParams": {
+                    "expression": "{ fontSize: number, theme: string }",
+                    "jsonIr": {
+                      "domain": "object",
+                      "required": [
+                        {
+                          "key": "fontSize",
+                          "value": "number"
+                        },
+                        {
+                          "key": "theme",
+                          "value": "string"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "userId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "profiles_userId_idx_a489d58a"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "profiles"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "profiles_userId_idx_a489d58a",
+                  "prefix": "profiles_userId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "tags": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "label": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "unindexed_writers": {
+              "columns": {
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "writer_id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "source": {
+                    "columns": [
+                      "writer_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "unindexed_writers"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "users"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "user_badges": {
+              "columns": {
+                "badgeCode": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "uniques": []
+            },
+            "users": {
+              "checks": [
+                {
+                  "expression": "\"plan\" IN ('free', 'paid')",
+                  "name": "users_plan_check_af7dbeb0",
+                  "prefix": "users_plan_check"
+                },
+                {
+                  "expression": "\"ratio\" IN ('0.5', '1.50')",
+                  "name": "users_ratio_check_adc94216",
+                  "prefix": "users_ratio_check"
+                }
+              ],
+              "columns": {
+                "createdAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                },
+                "cuid2": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 24
+                  }
+                },
+                "email": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "externalId": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "handle": {
+                  "codecId": "pg/varchar@1",
+                  "dataType": "pg/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 20
+                  }
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "ksuid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 27
+                  }
+                },
+                "nanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 21
+                  }
+                },
+                "plan": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Plan",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "ratio": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Ratio",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "seenAt": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "shortNanoid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 10
+                  }
+                },
+                "timestamp": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timestampString": {
+                  "codecId": "pg/timestamp-string@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timestampStringAlias": {
+                  "codecId": "pg/timestamp-string@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timestamptz": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timestamptzString": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timestamptzStringAlias": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "ulid": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 26
+                  }
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "nanoid",
+                    "cuid2"
+                  ],
+                  "name": "by_short_ids_4281457c",
+                  "prefix": "by_short_ids",
+                  "unique": true
+                },
+                {
+                  "columns": [
+                    "email",
+                    "handle"
+                  ],
+                  "name": "search_docs_970d795b",
+                  "options": {
+                    "language": "german",
+                    "weightGroups": [
+                      [
+                        "email"
+                      ],
+                      [
+                        "handle"
+                      ]
+                    ]
+                  },
+                  "prefix": "search_docs",
+                  "type": "fullText",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "email"
+                  ],
+                  "name": "users_email_exact",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "handle"
+                  ],
+                  "name": "users_handle_idx_b5b249e4",
+                  "prefix": "users_handle_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "Plan": {
+              "kind": "valueSet",
+              "values": [
+                "free",
+                "paid"
+              ]
+            },
+            "Ratio": {
+              "kind": "valueSet",
+              "values": [
+                "0.5",
+                "1.50"
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "4e5aa929c76c9181dd640f59692e6743a0626b5ab9023a02e5960ec96509c225"
+  },
+  "execution": {
+    "executionHash": "4a96a7146e13898bf97aa37dba3cc7c9cae8e2599993a25be7fe3bdb78b45b9e",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "accounts",
+            "field": "id",
+            "namespace": "auth"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "employees",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "cuid2",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "ksuid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "nanoid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator",
+            "params": {
+              "size": 12
+            }
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "shortNanoid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "ulid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "generated",
+            "field": "uuidv7",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "key_writers",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "organization_membership_invitations",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "partial_writers",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "plain_writers",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "posts",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ksuid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "profiles",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "tags",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "unindexed_writers",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "createdAt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "id",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "ref": {
+            "entry": "users",
+            "field": "timestamptz",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestamptzStringNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "users",
+            "field": "timestamptzString",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "users",
+            "field": "updatedAt",
+            "namespace": "public"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {
+    "arktype-json": {
+      "familyId": "sql",
+      "id": "arktype-json",
+      "kind": "extension",
+      "targetId": "postgres",
+      "types": {
+        "codecTypes": {
+          "import": {
+            "alias": "ArktypeJsonTypes",
+            "named": "CodecTypes",
+            "package": "@internal/extension-arktype-json/codec-types"
+          }
+        }
+      },
+      "version": "0.0.1"
+    }
+  },
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

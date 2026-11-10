@@ -30,10 +30,12 @@ type CrossSpaceModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       userId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
@@ -60,10 +62,12 @@ type CrossSpaceModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       profileId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };

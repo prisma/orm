@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "",
+  "roots": {},
+  "domain": {
+    "namespaces": {}
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "sample": {
+              "columns": {
+                "manyTrue": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": true,
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "1.50",
+                      null
+                    ]
+                  }
+                },
+                "manyEmpty": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": {},
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "2.50"
+                    ]
+                  }
+                },
+                "manyFalse": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "3.50"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": []
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "9055942d6bf54e6bf465903f71cb3060119a115744cdb44193fe2e2867112801"
+  },
+  "extensions": {},
+  "capabilities": {},
+  "meta": {}
+}

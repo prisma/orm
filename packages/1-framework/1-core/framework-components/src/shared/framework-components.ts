@@ -2,6 +2,7 @@ import type { AggregateDescriptor } from './aggregate-descriptor';
 import type { AnyCodecDescriptor } from './codec-descriptor';
 import type { DataType } from './data-type';
 import type { AuthoringContributions } from './framework-authoring';
+import type { GeneratorFunctionContribution } from './generator-functions';
 import type { ControlMutationDefaults } from './mutation-default-types';
 import type { TypesImportSpec } from './types-import-spec';
 
@@ -35,11 +36,15 @@ export interface ComponentMetadata {
        */
       readonly typeImports?: ReadonlyArray<TypesImportSpec>;
       /**
+       * The type function, a `ParameterizedOutputTypesFunction` from `@internal/contract/types`, that gives the output type of each of this component's codecs whose output type depends on a column's type parameters. The emitted `contract.d.ts` types such a column by applying it, so the pack declares that type once.
+       */
+      readonly parameterizedOutputTypes?: TypesImportSpec;
+      /**
        * Optional control-plane hooks keyed by codecId. Used by family-specific planners/verifiers to handle storage types.
        */
       readonly controlPlaneHooks?: Record<string, unknown>;
       /**
-       * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `targetTypes`, `renderOutputType`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
+       * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `renderOutputType`, `renderValueLiteral`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
        */
       readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
     };
@@ -48,12 +53,6 @@ export interface ComponentMetadata {
      */
     readonly aggregateDescriptors?: ReadonlyArray<AggregateDescriptor>;
     readonly queryOperationTypes?: { readonly import: TypesImportSpec };
-    readonly storage?: ReadonlyArray<{
-      readonly typeId: string;
-      readonly familyId: string;
-      readonly targetId: string;
-      readonly nativeType?: string;
-    }>;
   };
 
   /**
@@ -72,9 +71,14 @@ export interface ComponentMetadata {
   readonly authoring?: AuthoringContributions;
 
   /**
-   * Mutation default function handlers and generator descriptors contributed by this component. Assembled by `createControlStack` with duplicate detection.
+   * Mutation default function handlers and generator descriptors contributed by this component. `createControlStack` assembles both with duplicate detection. The generator descriptors are also read from pack refs: `assembleGeneratorFunctions`, which the control stack and the TypeScript builders both call, checks that every generator a binding produces is registered here by some component. A pack ref that contributes only descriptors gives an empty `defaultFunctionRegistry`.
    */
   readonly controlMutationDefaults?: ControlMutationDefaults;
+
+  /**
+   * Generator functions this component declares or binds to its codecs, for `@onCreate(fn())`, `@onUpdate(fn())` and the TypeScript builder's `gen` calls. Assembled by `assembleGeneratorFunctions`.
+   */
+  readonly generatorFunctions?: readonly GeneratorFunctionContribution[];
 }
 
 /**
@@ -208,6 +212,9 @@ export interface FamilyDescriptor<TFamilyId extends string> extends ComponentDes
  * postgres.targetId // 'postgres'
  * ```
  */
+/** Session settings by name, each with the value a database session must hold. */
+export type SessionSettings = Readonly<Record<string, string>>;
+
 export interface TargetDescriptor<TFamilyId extends string, TTargetId extends string>
   extends ComponentDescriptor<'target'> {
   /** The family this target belongs to */
@@ -218,6 +225,9 @@ export interface TargetDescriptor<TFamilyId extends string, TTargetId extends st
 
   /** Whether the target has a namespace mechanism (Postgres schemas, Mongo namespaces). Absent means true. When false, emitted `Models` member names and the `models` constant drop the namespace segment. */
   readonly supportsNamespaces?: boolean;
+
+  /** Session settings the target's codecs need on every connection. A stack passes them to each driver it creates, and the driver ensures them on every connection it hands out. */
+  readonly sessionSettings?: SessionSettings;
 }
 
 /**
@@ -242,6 +252,8 @@ export type TargetPackRef<
   /** The namespace a bare (un-namespaced) entity name resolves to for this target (e.g. Postgres `'public'`). */
   readonly defaultNamespaceId: string;
   readonly supportsNamespaces?: boolean;
+  /** The target's name as messages show it, such as `Postgres`. Absent means the target id. */
+  readonly displayName?: string;
 };
 
 export type AdapterPackRef<

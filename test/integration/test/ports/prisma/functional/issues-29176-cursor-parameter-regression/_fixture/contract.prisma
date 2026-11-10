@@ -15,7 +15,7 @@
 //   }
 
 model ListResult {
-  id              String @id @default(cuid(2))
+  id              String @id @onCreate(cuid(2))
   connection_uuid String
   query_ref       String
   result_index    Int

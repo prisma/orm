@@ -55,6 +55,7 @@ For SQL contracts, use `@internal/sql-contract-ts/schema-sql` instead.
 - `./testing`: Test helpers for creating contract fixtures
 - `./validate-contract`: Contract structure validation
 - `./validate-domain`: Domain model validation
+- `./validate-storage`: Validation of the value objects in storage (`validateStorageValueObjects`)
 
 ## Type System
 

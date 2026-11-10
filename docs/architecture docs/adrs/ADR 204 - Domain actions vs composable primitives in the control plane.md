@@ -9,7 +9,6 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   extends FamilyInstance<TFamilyId> {
   verify(options: { ... }): Promise<VerifyDatabaseResult>;
   schemaVerify(options: { ... }): Promise<VerifyDatabaseSchemaResult>;
-  sign(options: { ... }): Promise<SignDatabaseResult>;
 
   validateContract(contractJson: unknown): Contract;
   introspect(options: { ... }): Promise<TSchemaIR>;
@@ -17,9 +16,9 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
 }
 ```
 
-The first three return CLI-shaped result envelopes (`...Result` types with `summary`, `code`, `meta.contractPath`, `timings`). They model **domain actions** — single intents an actor performs (`prisma-next db verify`, `prisma-next db sign`, `migrate`'s top-level call). Each is the right boundary for one analytics event, one audit record, one CLI render.
+The first two return CLI-shaped result envelopes (`...Result` types with `summary`, `code`, `meta.contractPath`, `timings`). They model **domain actions** — single intents an actor performs (`prisma-next db verify`, `migrate`'s top-level call). Each is the right boundary for one analytics event, one audit record, one CLI render. `prisma-next db sign` is an action too, but the CLI composes it from family primitives (`readAllMarkers`, `verifySchema` and `signSpaces`), so the family has no `sign` method.
 
-The second three return raw data — a `Contract`, a `MongoSchemaIR`, a `ContractMarkerRecord | null`. They model **composable primitives** — pure or bounded I/O steps with no actor-intent attached, suitable for composition inside larger work.
+The other three return raw data — a `Contract`, a `MongoSchemaIR`, a `ContractMarkerRecord | null`. They model **composable primitives** — pure or bounded I/O steps with no actor-intent attached, suitable for composition inside larger work.
 
 The rule:
 
@@ -29,7 +28,7 @@ When a compound action needs the same logic that a peer action implements, the s
 
 ## Context
 
-`ControlFamilyInstance` mixes both shapes deliberately. Every family must expose the same set of high-level intents (verify, schemaVerify, sign, …) so the CLI and other family-agnostic orchestrators can stay generic; every family must also expose primitives (introspect, readMarker, validateContract) so compound work can reuse the underlying capabilities without rebuilding them.
+`ControlFamilyInstance` mixes both shapes deliberately. Every family must expose the same set of high-level intents (verify, schemaVerify, …) so the CLI and other family-agnostic orchestrators can stay generic; every family must also expose primitives (introspect, readMarker, validateContract) so compound work can reuse the underlying capabilities without rebuilding them.
 
 The mix invites a recurring mistake. When a compound action needs to perform something that a peer action already does, the natural reach is to call the peer action — `family.schemaVerify(...)` from inside the migration runner, for example. The call type-checks, the result is structured, and there's no obvious red flag.
 

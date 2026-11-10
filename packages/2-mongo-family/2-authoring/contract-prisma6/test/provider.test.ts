@@ -1,5 +1,7 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { computeExecutionHash } from '@internal/contract/hashing';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -9,7 +11,7 @@ import { fixturesDir, mongoSourceContext, mongoStack } from './support';
 
 const enumSchema = join(fixturesDir, 'enums', 'schema.prisma');
 
-function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookup {
+function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookupWithDescriptors {
   const base = mongoStack.codecLookup;
   return {
     ...base,
@@ -17,24 +19,93 @@ function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookup {
       const codec = base.get(id);
       if (id !== codecId || codec === undefined) return codec;
       return Object.assign(Object.create(codec) as Codec, {
-        encodeJson: () => {
+        toDataTypeValue: () => {
           throw failure;
         },
       });
     },
-    targetTypesFor: (id) => base.targetTypesFor(id),
     renderOutputTypeFor: (id, params) => base.renderOutputTypeFor(id, params),
   };
 }
 
-function loadEnumSchema(codecLookup: CodecLookup) {
+function loadEnumSchema(codecLookup: CodecLookupWithDescriptors) {
   return prisma6Contract('enums/schema.prisma', { binding: prisma6MongoBinding }).source.load({
     ...mongoSourceContext([enumSchema]),
     codecLookup,
   });
 }
 
+function loadFixture(caseName: string) {
+  const schemaPath = join(fixturesDir, caseName, 'schema.prisma');
+  return prisma6Contract(`${caseName}/schema.prisma`, { binding: prisma6MongoBinding }).source.load(
+    mongoSourceContext([schemaPath]),
+  );
+}
+
 describe('prisma6Contract', () => {
+  it('has only the fields every contract source can declare: format, inputs, parser options and a loader', () => {
+    const { source } = prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding });
+
+    expect(Object.keys(source).sort()).toEqual(['format', 'inputs', 'load', 'parserOptions']);
+    expect(source).toMatchObject({
+      format: 'psl',
+      inputs: ['prisma/schema.prisma'],
+      parserOptions: { grammar: 'prisma-7' },
+    });
+  });
+});
+
+describe('prisma6Contract diagnostics', () => {
+  it('lists findings in source order', async () => {
+    const result = await loadFixture('unknown-attribute');
+    if (result.ok) throw new Error('Expected the load to fail');
+    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.span?.start.line)).toEqual([
+      8, 11,
+    ]);
+  });
+
+  it('rejects a top-level model named like the default namespace', async () => {
+    const schemaPath = join(
+      mkdtempSync(join(tmpdir(), 'prisma6-default-namespace-')),
+      'schema.prisma',
+    );
+    writeFileSync(
+      schemaPath,
+      'datasource db {\n  provider = "mongodb"\n}\nmodel unbound {\n  id String @id @default(auto()) @map("_id") @db.ObjectId\n}\n',
+    );
+    const result = await prisma6Contract(schemaPath, { binding: prisma6MongoBinding }).source.load(
+      mongoSourceContext([schemaPath]),
+    );
+
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => [code, message]),
+    ).toEqual([['PSL_DUPLICATE_DECLARATION', 'Duplicate declaration of "unbound"']]);
+  });
+
+  it('says there is no file at a mistyped path and where the path is set', async () => {
+    const missing = join(fixturesDir, 'no-such-case', 'schema.prisma');
+    const result = await prisma6Contract('prisma/schem.prisma', {
+      binding: prisma6MongoBinding,
+    }).source.load(mongoSourceContext([missing]));
+    if (result.ok) throw new Error('Expected the load to fail');
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL.PRISMA6_MONGO_SCHEMA_READ_FAILED',
+        message:
+          'There is no file or directory at "prisma/schem.prisma". Fix the path passed to prisma6Schema() in prisma.config.ts.',
+        sourceId: 'prisma/schem.prisma',
+      },
+    ]);
+  });
+});
+
+describe('prisma6Contract', () => {
+  it('declares the prisma-7 grammar', () => {
+    expect(
+      prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source,
+    ).toMatchObject({ format: 'psl', parserOptions: { grammar: 'prisma-7' } });
+  });
+
   it('reports a structured error from building the contract as PSL.PRISMA6_MONGO_CONTRACT_INVALID', async () => {
     const failure = structuredError('CONTRACT.TEST_FAILURE', 'Enum value cannot be encoded.');
     const result = await loadEnumSchema(lookupWithFailingEncode('mongo/string@1', failure));

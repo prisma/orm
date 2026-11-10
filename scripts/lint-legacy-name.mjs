@@ -46,6 +46,9 @@ const COMPATIBILITY_SITES = new Set([
   'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
   'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
   'docs/Telemetry.md',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/before/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/after/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/detection.test.ts',
 ]);
 
 /**
@@ -87,7 +90,7 @@ const ALLOWED = [
     matches: (relPath) => RETIREMENT_PROOFS.has(relPath),
   },
   {
-    why: 'compatibility with what earlier releases wrote into user projects and shells — the language server still serves a schema headed `// use prisma-next` (and formatting renames it), and the telemetry opt-out still honours `PRISMA_NEXT_DISABLE_TELEMETRY`',
+    why: 'compatibility with what earlier releases wrote into user projects and shells — the language server still serves a schema headed `// use prisma-next` (and formatting renames it), the upgrade script that rewrites `@default` generators still rewrites such a schema, as `contract emit` reads it, and the telemetry opt-out still honours `PRISMA_NEXT_DISABLE_TELEMETRY`',
     matches: (relPath) => COMPATIBILITY_SITES.has(relPath),
   },
 ];

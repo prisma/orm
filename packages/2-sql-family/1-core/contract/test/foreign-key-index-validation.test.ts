@@ -1,0 +1,153 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { createContract } from '@repo/test-utils';
+import { type } from 'arktype';
+import { describe, expect, it } from 'vitest';
+import { col, fk, index, table, unique } from '../src/factories';
+import { ForeignKey, type ForeignKeyIndex } from '../src/ir/foreign-key';
+import { ForeignKeySchema } from '../src/ir/storage-entry-schemas';
+import type { SqlStorage } from '../src/types';
+import { validateStorageSemantics } from '../src/validators';
+
+function postStorage(
+  constraints: Omit<NonNullable<Parameters<typeof table>[1]>, 'fks'>,
+  foreignKeyIndex: ForeignKeyIndex,
+) {
+  return createContract<SqlStorage>({
+    storage: {
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: {
+          id: UNBOUND_NAMESPACE_ID,
+          kind: 'test-sql-namespace',
+          entries: {
+            table: {
+              user: table({ id: col('pg/int4', 'pg/int4@1') }, { pk: { columns: ['id'] } }),
+              post: table(
+                {
+                  id: col('pg/int4', 'pg/int4@1'),
+                  author_id: col('pg/int4', 'pg/int4@1'),
+                  editor_id: col('pg/int4', 'pg/int4@1'),
+                },
+                {
+                  ...constraints,
+                  fks: [fk('post', ['author_id'], 'user', ['id'], { index: foreignKeyIndex })],
+                },
+              ),
+            },
+          },
+        },
+      },
+    },
+  }).storage;
+}
+
+const coordinate = `Namespace "${UNBOUND_NAMESPACE_ID}" table "post": foreign key on columns [author_id]`;
+
+describe('what backs a stored foreign key', () => {
+  it.each([
+    [
+      'an index of its table, by name',
+      { indexes: [index('post_author_idx', ['author_id'])] },
+      { name: 'post_author_idx' },
+    ],
+    ['the primary key on its columns', { pk: { columns: ['author_id'] } }, { primaryKey: true }],
+    [
+      'an index that starts with its columns, by name',
+      { indexes: [index('post_author_editor_idx', ['author_id', 'editor_id'])] },
+      { name: 'post_author_editor_idx' },
+    ],
+    [
+      'a unique constraint on its columns',
+      { uniques: [unique('author_id')] },
+      { unique: ['author_id'] },
+    ],
+    [
+      'a unique constraint that starts with its columns',
+      { uniques: [unique('author_id', 'editor_id')] },
+      { unique: ['author_id', 'editor_id'] },
+    ],
+  ] as const)('may be %s', (_label, constraints, foreignKeyIndex) => {
+    expect(validateStorageSemantics(postStorage(constraints, foreignKeyIndex))).toEqual([]);
+  });
+
+  it.each([
+    [
+      'an index its table does not have',
+      { pk: { columns: ['id'] }, indexes: [index('post_author_idx', ['author_id'])] },
+      { name: 'post_author_gone' },
+      `${coordinate} is indexed by "post_author_gone", but the table has no index with that name`,
+    ],
+    [
+      'a primary key on other columns',
+      { pk: { columns: ['id'] } },
+      { primaryKey: true },
+      `${coordinate} is indexed by the primary key, but the table's primary key does not start with those columns`,
+    ],
+    [
+      'an index on other columns',
+      { indexes: [index('post_editor_idx', ['editor_id', 'author_id'])] },
+      { name: 'post_editor_idx' },
+      `${coordinate} is indexed by "post_editor_idx", but that index does not start with those columns`,
+    ],
+    [
+      'a unique constraint the table does not have',
+      { uniques: [unique('author_id')] },
+      { unique: ['author_id', 'editor_id'] },
+      `${coordinate} is indexed by the unique constraint on [author_id, editor_id], but the table has no unique constraint on those columns`,
+    ],
+    [
+      'a unique constraint that does not start with its columns',
+      { uniques: [unique('editor_id', 'author_id')] },
+      { unique: ['editor_id', 'author_id'] },
+      `${coordinate} is indexed by the unique constraint on [editor_id, author_id], which does not start with those columns`,
+    ],
+  ] as const)('may not be %s', (_label, constraints, foreignKeyIndex, error) => {
+    expect(validateStorageSemantics(postStorage(constraints, foreignKeyIndex))).toEqual([error]);
+  });
+});
+
+describe('the index field of a stored foreign key', () => {
+  const stored = {
+    source: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'post', columns: ['author_id'] },
+    target: { namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'user', columns: ['id'] },
+    index: { name: 'post_author_id_idx_f3862461' },
+  };
+
+  it('is kept on the IR node', () => {
+    expect(ForeignKey.from(stored)).toEqual({
+      source: stored.source,
+      target: stored.target,
+      index: { name: 'post_author_id_idx_f3862461' },
+    });
+  });
+
+  it.each([
+    { name: 'post_author_id_idx_f3862461' },
+    { primaryKey: true },
+    { unique: ['author_id'] },
+  ])('accepts %j', (foreignKeyIndex) => {
+    expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).not.toBeInstanceOf(type.errors);
+  });
+
+  it.each([
+    { name: true },
+    { primaryKey: false },
+    { unique: 'post_author_key' },
+    { name: 'post_author_id_idx_f3862461', unique: ['author_id'] },
+    { unique: true },
+    { unique: 'author_id' },
+    {},
+  ])('refuses %j', (foreignKeyIndex) => {
+    expect(ForeignKeySchema({ ...stored, index: foreignKeyIndex })).toBeInstanceOf(type.errors);
+  });
+
+  it.each([true, false])(
+    'reads index: %s, which contract.json stored before 0.16, as absent',
+    (legacy) => {
+      expect(ForeignKeySchema({ ...stored, index: legacy })).not.toBeInstanceOf(type.errors);
+      expect(ForeignKey.from({ ...stored, index: legacy })).toEqual({
+        source: stored.source,
+        target: stored.target,
+      });
+    },
+  );
+});

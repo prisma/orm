@@ -1,6 +1,10 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
-import type { CapabilityMatrix } from '@internal/framework-components/components';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  CapabilityMatrix,
+  GeneratorFunctionRegistry,
+} from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -44,10 +48,12 @@ export interface ContractSourceContext {
   /** Extension contracts keyed by space ID, required for cross-space FK resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
-  /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  /** The stack's data types with their authoring entries, so a written value can be read and cast into a receiving type. ADR 254. */
+  readonly dataTypes: DataTypeSupport;
   readonly controlMutationDefaults: ControlMutationDefaults;
+  /** The stack's generator functions, which `@onCreate(fn())` and `@onUpdate(fn())` resolve through. */
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   /**
    * The flat, expanded, deduped, sorted member file list — every
    * `source.inputs` glob resolved to the files it currently matches. A glob
@@ -56,10 +62,17 @@ export interface ContractSourceContext {
    */
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;
+  readonly defaultNamespaceId: string;
   /**
    * Receives a warning the source reports while it still produces a contract, such as a deprecated name. Callers that show diagnostics supply it; a source reports through it when present and otherwise drops the warning.
    */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  readonly pslDiagnostics?:
+    | {
+        readonly describeUnsupportedAttribute?: unknown;
+        readonly describeUnresolvedType?: unknown;
+      }
+    | undefined;
 }
 
 /**
@@ -81,8 +94,19 @@ export interface ContractSourceProviderBase {
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
 }
 
+/** The PSL grammar versions the parser knows. `prisma-7` reads the lines of a `view` block as model fields; Prisma 6 schemas use the same grammar. */
+// biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
+export type PslGrammar = 'prisma-7' | 'prisma-8';
+
+/** What a PSL source tells the parser about its files. Every tool that parses the source's files passes these to the parser. */
+export interface PslParserOptions {
+  /** The grammar the files are written in. Defaults to `prisma-8`. */
+  readonly grammar?: PslGrammar;
+}
+
 export interface PslContractSourceProvider extends ContractSourceProviderBase {
   readonly format: 'psl';
+  readonly parserOptions?: PslParserOptions;
 }
 
 export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {

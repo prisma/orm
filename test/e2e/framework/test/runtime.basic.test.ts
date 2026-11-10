@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { timeouts } from '@repo/test-utils';
@@ -9,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 describe('end-to-end basic queries', () => {
   const configPath = resolve(__dirname, 'fixtures/prisma.config.ts');
-  const cliPath = resolve(__dirname, '../../../../packages/1-framework/3-tooling/cli/dist/bin.mjs');
+  const cliPath = createRequire(import.meta.url).resolve('@repo/prisma-bin/bin/prisma.mjs');
   const contractJsonPath = resolve(__dirname, 'fixtures/generated/contract.json');
 
   it(

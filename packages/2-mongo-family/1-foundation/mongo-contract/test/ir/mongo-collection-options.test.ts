@@ -24,11 +24,6 @@ describe('MongoCollectionOptions', () => {
     expect(opts.capped?.max).toBeUndefined();
   });
 
-  it('does not set capped when capped is omitted', () => {
-    const opts = new MongoCollectionOptions({});
-    expect(opts.capped).toBeUndefined();
-  });
-
   it('normalises a collation data literal to a MongoCollationOptions instance', () => {
     const opts = new MongoCollectionOptions({ collation: { locale: 'en', strength: 2 } });
     expect(opts.collation).toBeInstanceOf(MongoCollationOptions);

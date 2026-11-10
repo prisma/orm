@@ -51,7 +51,7 @@ describe('ports/prisma/functional/issues-29331-query-plan-cache-bloat', () => {
     'createMany stress test for cache bloat',
     () =>
       withPostgresPort<Contract>({ contractJson }, async ({ db }) => {
-        // Seed contacts (auto-generated IDs via @default(cuid(2))).
+        // Seed contacts (auto-generated IDs via @onCreate(cuid(2))).
         const contact1 = await db.public.Contact.create({});
         const contact2 = await db.public.Contact.create({});
         const contact3 = await db.public.Contact.create({});

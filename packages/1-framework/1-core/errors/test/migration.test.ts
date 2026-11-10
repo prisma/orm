@@ -3,10 +3,12 @@ import {
   errorDataTransformContractMismatch,
   errorMigrationFileMissing,
   errorMigrationInvalidDefaultExport,
+  errorMigrationOperationOptionRemoved,
   errorMigrationPlanNotArray,
   errorMigrationTargetMismatch,
   errorUnfilledPlaceholder,
   placeholder,
+  unfilledPlaceholderOperation,
 } from '../src/migration';
 
 describe('Migration Errors', () => {
@@ -108,6 +110,30 @@ describe('Migration Errors', () => {
     expect(error.toEnvelope().code).toBe('MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH');
   });
 
+  it('errorMigrationOperationOptionRemoved names the operation and the option, and says how to rewrite the call', () => {
+    const error = errorMigrationOperationOptionRemoved({
+      operation: 'setThing',
+      option: 'thingText',
+      subject: 'item "a"',
+      rewrite: 'Pass the item as a value.',
+      upgradeEntry: 'thing-values',
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      meta: error.meta,
+    }).toEqual({
+      code: 'MIGRATION.OPERATION_OPTION_REMOVED',
+      message:
+        '`setThing` in migration.ts passes `thingText`, which this version no longer reads, for item "a"',
+      why: 'An earlier version wrote this migration.ts. `node migration.ts` does not check its types, so the file runs, and this version would leave out what the option carries.',
+      fix: 'Pass the item as a value. Or, if the migration is not applied, delete its package and run `migration plan` again. The upgrade entry `thing-values` shows the new shape: https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading',
+      meta: { operation: 'setThing', option: 'thingText', upgradeEntry: 'thing-values' },
+    });
+  });
+
   it('errorMigrationTargetMismatch names both target ids', () => {
     const error = errorMigrationTargetMismatch({
       migrationTargetId: 'postgres',
@@ -125,5 +151,28 @@ describe('Migration Errors', () => {
     expect(error.why).toContain('"mongo"');
     expect(error.fix).toContain('--config');
     expect(error.toEnvelope().code).toBe('MIGRATION.TARGET_MISMATCH');
+  });
+});
+
+describe('unfilledPlaceholderOperation', () => {
+  it('rejects with MIGRATION.UNFILLED_PLACEHOLDER naming the slot', async () => {
+    await expect(unfilledPlaceholderOperation('backfill-status:run')).rejects.toMatchObject({
+      code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+      meta: { slot: 'backfill-status:run' },
+    });
+  });
+
+  it('raises no unhandled rejection when nobody awaits it', async () => {
+    const unhandled: unknown[] = [];
+    const listener = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', listener);
+    try {
+      unfilledPlaceholderOperation('backfill-status:run');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', listener);
+    }
+    expect(unhandled).toEqual([]);
   });
 });

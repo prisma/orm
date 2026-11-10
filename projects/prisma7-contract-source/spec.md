@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Prisma 7 users have a `schema.prisma`. Prisma 8 reads a `contract.prisma` in a different dialect. During the side-by-side period Prisma 7 keeps owning the database and its migrations, so the Prisma 7 schema is the source of truth until cutover. Today the only way to get a Prisma 8 contract from an existing database is `contract infer`, which loses relation field names, ORM-side defaults, and `@updatedAt`, and needs hand fixing after every Prisma 7 migration.
+Prisma 7 users have a `schema.prisma`. Prisma 8 reads a `contract.prisma` in a different dialect. During the side-by-side period the Prisma 7 schema is the source of truth until cutover. Prisma 7 owns the migrations at first, and Prisma 8 can take them over before cutover while it still reads the same file. Today the only way to get a Prisma 8 contract from an existing database is `contract infer`, which loses relation field names, ORM-side defaults, and `@updatedAt`, and needs hand fixing after every Prisma 7 migration.
 
 This project lets Prisma 8 read the Prisma 7 schema directly as a contract source, so the transition needs no second schema file, and gives users a converter that prints that contract as Prisma 8 PSL for cutover.
 
@@ -27,6 +27,16 @@ export default definePrismaConfig({
 
 `prisma contract emit` and `prisma db sign` work unchanged. When Prisma 7 migrates, the user runs them again.
 
+To hand migrations to Prisma 8, the user stops running `prisma7 migrate` and, after the last `db sign`, changes the schema with Prisma 8's own loop. There is no baseline step: `db sign` sets the `db` ref, and the first `migration plan` writes the baseline itself (slice 5).
+
+```bash
+# edit prisma/schema.prisma in the Prisma 7 dialect
+prisma contract emit
+prisma migration plan --name add-comments
+prisma db migrate --advance-ref db
+prisma7 generate
+```
+
 At cutover:
 
 ```bash
@@ -37,16 +47,16 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 ## Non-goals
 
-- Filling capability gaps. Views, opaque Postgres columns (`Unsupported(...)` and native types with no codec), referential-action emulation on Mongo, and `relationMode = "prisma"` are hard errors in this project. See § Deferred gaps. Mongo defaults and automatic timestamps, and Mongo `Json`/`Bytes`/`Decimal`/`BigInt`, were gaps here too; `projects/mongo-defaults-codecs-prisma6-source/` filled them.
+- Filling capability gaps. Views, opaque Postgres columns (`Unsupported(...)` and native types with no codec), referential-action emulation on Mongo, and `relationMode = "prisma"` are hard errors in this project. See § Deferred gaps. Mongo defaults and automatic timestamps, and Mongo `Json`/`Bytes`/`Decimal`/`BigInt`, were gaps here too; PRs [#30396](https://github.com/prisma/orm/pull/30396), [#30403](https://github.com/prisma/orm/pull/30403), [#30405](https://github.com/prisma/orm/pull/30405), [#30406](https://github.com/prisma/orm/pull/30406) and [#30439](https://github.com/prisma/orm/pull/30439) filled them.
 - Query-code rewriting.
 - Migration history and `_prisma_migrations`.
 - Prisma 6 SQL schemas that are not valid Prisma 7 schemas. The Mongo slice is the exception it has to be: Prisma 7 has no MongoDB connector, so that slice reads the Prisma 6 MongoDB dialect through `prisma6Schema`.
 - Extending the Prisma 7 dialect. It is frozen.
-- Teaching the language server to read Prisma 7 files. `contract format` formats a Prisma 7 schema with the Prisma 8 formatter when it parses, because the Prisma 7 source is a `psl` source.
+- Teaching the language server to read Prisma 7 files. It reads only files marked `// use prisma-8`, which a Prisma 7 schema does not carry. When it reads a file of a source that declares a grammar, it parses the file in that grammar. `contract format` parses a Prisma 7 source's files in the `prisma-7` grammar and formats them with the Prisma 8 formatter, because the Prisma 7 source is a `psl` source.
 
 ## Place in the larger world
 
-- The transition story this serves is the public upgrade guides listed under § References: Prisma 7 owns migrations, Prisma 8 adopts the database read-only with `db sign`, and cutover happens once. The older note `projects/prisma-8-rc1/parallel-install.md` assumes `prisma-next` and is out of date; `design-notes.md` reads the guides instead.
+- The transition story this serves is the public upgrade guides listed under § References: Prisma 8 adopts the database read-only with `db sign`, Prisma 7 owns migrations until the guide's phase 4 hands them to Prisma 8, and cutover to a Prisma 8 contract file happens once. Slice 5 showed that the handover does not depend on cutover: Prisma 8 owns migrations while it still reads the Prisma 7 schema. The older note `projects/prisma-8-rc1/parallel-install.md` assumes `prisma-next` and is out of date; `design-notes.md` reads the guides instead.
 - Contract sources are `ContractConfig` objects whose `source.load` returns a contract or diagnostics; `contract emit` and `contract print` call it without caring about format (`packages/1-framework/3-tooling/cli/src/control-api/operations/load-contract-source.ts`). The framework knows two source formats, `psl` and `typescript`: the PSL source (`packages/2-sql/2-authoring/contract-psl/src/provider.ts`) and the TypeScript source (`packages/2-sql/2-authoring/contract-ts/src/config-types.ts`). The Prisma 7 source is a `psl` source in its own package per family, mirroring `contract-psl`.
 - The Prisma 8 syntax parser (`@internal/psl-parser`) already reads the Prisma 7 grammar almost completely. See `design-notes.md`.
 - Every existing PSL printer starts from the database schema description, not from a contract. The contract-to-PSL printer is new and exposed as a target-descriptor hook beside `inferPslContract`.
@@ -62,7 +72,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 ## Transitional-shape constraints
 
-None. Each slice lands a complete, usable surface: slice 1 ships the Postgres source end to end, slice 3 the converter. The Mongo source moved to `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`.
+None. Each slice lands a complete, usable surface: slice 1 ships the Postgres source end to end, slice 3 the converter. The Mongo source moved to the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).
 
 ## Contract impact
 
@@ -74,7 +84,7 @@ Postgres and Mongo. SQLite is not a Prisma 7 side-by-side target in this project
 
 ## ADR pointer
 
-[ADR 252 — An earlier Prisma version's schema is a contract source](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the decisions: the earlier dialect as a first-class contract source, hard errors instead of relaxed Prisma 8 checks, fidelity defined by `db verify`, one parser grammar for every PSL document, where dialect rules and target facts live, the public names, and the diagnostic code space. The extension point itself is [ADR 163](<../../docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md>), which this project follows rather than changes.
+[ADR 252 — An earlier Prisma version's schema is a contract source](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the decisions: the earlier dialect as a first-class contract source, hard errors instead of relaxed Prisma 8 checks, fidelity defined by `db verify`, one parser for every PSL document, reading the grammar version the source declares, where dialect rules and target facts live, the public names, and the diagnostic code space. The extension point itself is [ADR 163](<../../docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md>), which this project follows rather than changes.
 
 ## Project Definition of Done
 
@@ -95,17 +105,17 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 2. `now()` default equality against Prisma 7's `CURRENT_TIMESTAMP` (slice 1).
 3. Contract validator acceptance of a column default together with execution generators, and of generators on nullable columns (slice 1).
 4. The version at which the implicit junction gained a primary key (slice 1). Resolved: Prisma 6.0.0; 7.10.0 emits `_AToB_AB_pkey`.
-5. Whether Mongo verify compares index names (resolved by `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`: it does not).
+5. Whether Mongo verify compares index names. Resolved by the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)): it does not.
 6. The exact Prisma 7 Postgres native type table (slice 1). Resolved: `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
-7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key, which `@ignore` and `@@ignore` rely on because Prisma 7 still creates that schema (slice 1).
+7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key (slice 1). Resolved: it does, with zero findings. Since the project "Storage a model does not map", the contract keeps the storage of `@ignore` and `@@ignore` objects, so neither attribute relies on it any more; see [ADR 267](https://github.com/prisma/orm/pull/30641).
 
 ## Deferred gaps
 
 Recorded so they are not lost; each becomes its own project when scheduled.
 
 - Views: no schema node, introspection selects `BASE TABLE` only (`control-adapter.ts:750-756`), verify reports a missing table.
-- Mongo execution defaults: filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
-- Mongo codecs for BSON binary, Decimal128 and Int64, plus a `Json` codec. Embedded documents need no codec: they are value objects, and the Prisma 6 MongoDB source reads Prisma 6 `type` blocks into them. Filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
+- Mongo execution defaults: filled by PRs [#30403](https://github.com/prisma/orm/pull/30403) and [#30406](https://github.com/prisma/orm/pull/30406); the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)), maps Prisma 6 schemas onto them.
+- Mongo codecs for BSON binary, Decimal128 and Int64, plus `Json` and `Bson` codecs: filled by PRs [#30396](https://github.com/prisma/orm/pull/30396) and [#30439](https://github.com/prisma/orm/pull/30439). Embedded documents need no codec: they are value objects, and the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)), reads Prisma 6 `type` blocks into them.
 - `contract infer` prints `Unsupported(...)` for a column type with no codec, and nothing reads that back. It should fail and name the column and the missing codec. Prisma 8 will not add an opaque column type, because a column the contract cannot describe cannot be verified.
 - A cuid v1 generator, if mapping `cuid()` to cuid2 turns out to matter.
 - Referential-action emulation on Mongo.
@@ -114,13 +124,11 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - Partial indexes (`@@index(where: raw(...))` with the `partialIndexes` preview feature). The Prisma 7 source reports a hard error; mapping them is new capability with its own Prisma 7 evidence.
 - **Most of the Postgres PSL printer is SQL family logic.** Pairing models with tables, polymorphism, relations, `@@map`, value objects, named types and domain enums need no Postgres knowledge, but they live in `packages/3-targets/3-targets/postgres/src/core/psl-print/`. A second SQL target would have to copy them. The target state: the SQL family builds the PSL document and calls a narrower target hook for column types, defaults, native enums, derived checks and row-level security.
 - **Shortlisted: `contract print` cannot write an entity kind a pack contributes.** A pack can add an entity kind and the PSL block users write for it, but it has no way to say how an entity becomes that block again. The printer has hand-written code for six kinds (`table`, `valueSet`, `native_enum`, `rls`, `policy`, `role`) and refuses a contract that holds any other kind. Fix: a pack states how its entity becomes a PSL block, and the printer's fixed list goes away. Probably needs an ADR.
-- **Shortlisted, high priority: the default-function registry cannot map a generator back to its PSL call.** The Postgres adapter registers each PSL default function (`uuid()`, `cuid(2)`, `nanoid(n)`) with the stack, and the registry only answers which generator a call produces. The printer, in the Postgres target, keeps its own hand-written table for the reverse question, and a second table from timestamp codecs to `temporal.*` preset names (`psl-print/generated-values.ts`). So the target restates what the adapter owns, and a default function an extension registers is unknown to the printer. Fix: each registry entry states which PSL call produces its generator, the printer asks the stack, and both tables are deleted.
 - **`contract print` refuses a relation into another contract space**, such as a Supabase app's relation to `supabase:auth.AuthUser`. PSL can write it, but the printer would need the composed extension contracts to find the target's columns and foreign key.
 - **Setting a default control policy on a PSL source needs `prismaContract(...)` with its full Postgres options.** The facade `defineConfig` has no option for it.
 - **The storage hash covers neither the domain nor the default control policy**, so after cutover `db verify` and the signed marker cannot see a difference there. The round-trip tests compare the whole serialized contract; changing what the hash covers is a contract design decision.
 - **The PSL reader drops the enum value set from a list field, and the TypeScript builder keeps it.** This concerns domain `enum` list fields only; native enum list fields are not affected. A TypeScript contract with a domain enum list field is therefore refused by `contract print`. Decide which is right, then align the other.
 - **`contract print` cannot protect a config file named with `--config`**, because the CLI engine does not tell a command which file it loaded. It protects the `prisma.config.ts` in the directory of the config that defines the `orm` section.
-- **Shortlisted: the PSL parser reads a `view` body as model fields in every PSL document.** The rule exists for Prisma 7 and Prisma 6 schemas, and it is not grammar Prisma 8 intends to keep (`genericBlockMemberParser` in `psl-parser/src/parse.ts`). It should apply only when a Prisma 7 or Prisma 6 source reads the file. Open question: `contract format` and the language server parse a source's files themselves, so they need a way to learn that a source's files use this rule.
 
 ### What `contract print` cannot write
 
@@ -140,11 +148,12 @@ The refusals that a reader or language change would lift:
 - A value-object field with type parameters or a value set, such as `pgvector.Vector(3)` in a `type` block. The PSL reader keeps only the codec of a value-object field's type (`contract-psl/src/interpreter.ts`, where it builds value objects). Lifted by a reader change.
 - A column whose codec and native type no PSL type in the configured stack produces, such as a `bit` column, or a pgvector column with no length. Lifted by a type constructor, in the target or an extension, that produces it.
 - A union or dictionary field, a column or native enum with its own control policy, and a model with an owner. None has PSL syntax.
-- A generator no PSL default function of the Postgres adapter produces, and a generator on update other than the wall-clock-now generator. None of the Prisma 7 generators meets either.
+- A generator for which there is no default function in the configured stack, and a generator on update other than one a field preset writes. None of the Prisma 7 generators meets either. A default function an extension registers prints when it declares `printArguments`.
+- An id generator together with a database default, such as ``id.uuidv4Native() @default(sql`gen_random_uuid()`)``. The PSL reader reads it, but the printer refuses it, because PSL writes one `@default` per field. Lifted by printing the generator through a field preset that is not temporal.
 
 Most of the other refusals guard against contracts the sources in this repo do not produce, such as a table with no model, a column no field is stored in, or top-level `meta` entries. Three can be met: an index option whose value is not a string, which the TypeScript builder accepts; a string type argument holding a quote, backslash or line break; and the name `__proto__`. The printer refuses them so that a hand-edited or future contract is never changed without a word.
 
-A `Json` object or array literal default was refused in the first version and now prints as a `json` tagged literal through the data types of ADR 254; the `defaults` fixture round-trips. With `dbgenerated` removed (#30380), every function default other than `now()` and `autoincrement()` prints as a `sql` tagged literal. Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (a Prisma 7 `Decimal[]` stored as `numeric(65,30)`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips. A policy expression holding a tab or another control character was refused and now prints: the printer writes the expression as a JSON string, as the PSL printer writes every block value, and the policy reader now decodes every JSON escape, `\t` and `\uXXXX` included. A literal default on a column whose codec an extension contributes, such as a pgvector column's `@default([1, 2, 3])`, was refused and now prints: the printer finds the column's data type through the stack's codecs and data types, as the PSL reader does.
+A `Json` object or array literal default was refused in the first version and now prints as a `json` tagged literal through the data types of ADR 254; the `defaults` fixture round-trips. With `dbgenerated` removed (#30380), every function default other than `now()` and `autoincrement()` prints as a `sql` tagged literal. Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (a Prisma 7 `Decimal[]` stored as `numeric(65,30)`; the SQL contract builder builds a list field's domain type as it builds a single field's, so the domain field keeps them). Every list fixture round-trips. A policy expression holding a tab or another control character was refused and now prints: the printer writes the expression as a JSON string, as the PSL printer writes every block value, and the policy reader now decodes every JSON escape, `\t` and `\uXXXX` included. A literal default on a column whose codec an extension contributes, such as a pgvector column's `@default([1, 2, 3])`, was refused and now prints: the printer finds the column's data type through the stack's codecs and data types, as the PSL reader does.
 
 ### Found outside this project's scope
 
@@ -169,7 +178,7 @@ Each exists on `main` unless the line says otherwise, so none is a regression th
 Found by the adoption example (slice 4). Each is outside this project's scope and needs an owner.
 
 - **Raw SQL in the contract, state of play (researched 2026-09-14; since then #30325 implemented ADR 129 tagged literals for column defaults and #30380 removed `dbgenerated`).** Prisma 8 carries opaque target SQL in three content-addressed places under ADR 234/244 (`@@index` expression and predicate, `@@check`, Postgres RLS predicates); column defaults are the only raw-SQL site compared by normalised text; TS authoring has `.defaultSql(expression)` producing the same arm as `dbgenerated`; ADR 129 (template-tagged literals, `pg.sql\`...\``) is the accepted design for opaque textual payloads in PSL and was never implemented (no backtick token in the tokenizer, no tagged-literal node anywhere); the three existing raw-SQL attribute arguments were built as plain strings instead of ADR 129 literals; generated columns do not exist at all. Whether to remove raw-expression defaults everywhere or design one under ADR 244 is an open decision.
-- **Infer and verify should ignore `_prisma_migrations`.** The public guide has users delete the inferred `PrismaMigrations` model by hand, and strict verify flags the ledger as foreign. Proposed fix: an ignore list supplied by the Postgres facade and passed into both evaluators.
+- **Infer and verify should ignore `_prisma_migrations`.** Resolved (TML-3453, project "Storage a model does not map"): the Postgres control adapter's introspection leaves Prisma 7's `_prisma_migrations` out of an application schema unless a contract declares a table of that name, so `db verify` (strict included), `db update` and `contract infer` never see it, and the guide's hand edit that deletes the inferred `PrismaMigrations` model is no longer needed.
 
 - **Wrong CLI through peer resolution.** `@prisma/client@7.10.0` declares a peer dependency on `prisma`; with pnpm auto-installing peers and no explicit Prisma 8 `prisma` dev dependency, `prisma` resolves to Prisma 7 and `prisma contract emit` runs the wrong CLI. The guide should tell users to keep an explicit Prisma 8 `prisma` dev dependency; the example README does.
 - **Provenance policy refuses `prisma@7.10.0`.** Earlier releases had provenance and 7.10.0 does not, so a `trustPolicy: no-downgrade` workspace needs an exact-version exemption. Worth raising with the Prisma 7 release process.
@@ -180,6 +189,6 @@ Found by the adoption example (slice 4). Each is outside this project's scope an
 
 ## References
 
-- The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
+- The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 hands migrations to Prisma 8, which slice 5 proved needs no baseline step and no Prisma 8 contract file.
 - `design-notes.md` for alternatives considered.
-- `slices/01-postgres-source/spec.md`, `slices/03-contract-to-psl-and-print/spec.md`, and for the Mongo source `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`.
+- `slices/01-postgres-source/spec.md`, `slices/03-contract-to-psl-and-print/spec.md`, `slices/05-migration-ownership-handover/spec.md`, and for the Mongo source the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).

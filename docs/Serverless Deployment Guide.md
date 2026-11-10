@@ -17,9 +17,9 @@ This guide covers the serverless client from `@prisma/orm-postgres/serverless` a
 | Cursor default                                    | off; `cursor: { batchSize }` streams  | off; `cursor: { batchSize }` streams                                |
 | Disposal                                          | `db.close()` at process shutdown      | `await using db = await postgres.connect(...)` closes per request   |
 
-The static members are the same on both sides. They are a pure function of the contract, so they are safe to build once per isolate. Everything bound to a database connection differs in where it lives: `postgres()` keeps it on the client, and `postgresServerless()` puts it on a connection returned by `connect({ url })`. A connection has the members of a `postgres()` client except `connect`. A function meant to take either types its parameter as `PostgresServerlessConnection<Contract>`, which a client also satisfies; a parameter typed `PostgresClient<Contract>` rejects a connection, because a connection has no `connect`. See [ADR 207 — A serverless Postgres connection has the same query interface as a `postgres()` client](./architecture%20docs/adrs/ADR%20207%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) for the architectural rationale and the rejected alternatives.
+The static members are the same on both sides. They are a pure function of the contract, so they are safe to build once per isolate. Everything bound to a database connection differs in where it lives: `postgres()` keeps it on the client, and `postgresServerless()` puts it on a connection returned by `connect({ url })`. A connection has the members of a `postgres()` client except `connect`. A function meant to take either types its parameter as `PostgresServerlessConnection<Contract>`, which a client also satisfies; a parameter typed `PostgresClient<Contract>` rejects a connection, because a connection has no `connect`. See [ADR 263 — A serverless Postgres connection has the same query interface as a `postgres()` client](./architecture%20docs/adrs/ADR%20263%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) for the architectural rationale and the rejected alternatives.
 
-The practical version: a database connection (the `pg.Client` inside a runtime) kept at module scope across `fetch` invocations fails in the four ways ADR 207 lists: it goes stale after the isolate idles, concurrent `fetch` calls share it, nothing closes it, and Workers reject a socket used across requests. The serverless client makes the lifetime explicit at every call site:
+The practical version: a database connection (the `pg.Client` inside a runtime) kept at module scope across `fetch` invocations fails in the four ways ADR 263 lists: it goes stale after the isolate idles, concurrent `fetch` calls share it, nothing closes it, and Workers reject a socket used across requests. The serverless client makes the lifetime explicit at every call site:
 
 ```ts
 export default {
@@ -33,7 +33,7 @@ export default {
 };
 ```
 
-Inside a request, `db` does everything the `db` from `postgres()` does, so any documented `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` or `db.runtime().query(...)` snippet works unchanged. Await every query before the `await using` scope ends: the connection closes when the scope ends, so a query returned from the scope without `await` (`return db.orm...` instead of `return await db.orm...`) fails when its rows are read. With the default options that error is `CONTRACT.MARKER_READ_FAILED` ("Database error while reading contract marker"), whose cause is `DRIVER.NOT_CONNECTED`; after an earlier awaited query on the connection, or with `verifyMarker: false`, it is `DRIVER.NOT_CONNECTED` itself. `connect` connects to the database before it returns; when the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, it rejects with `DRIVER.CONNECTION_FAILED`, so a handler that answers with a 503 catches it there. Answer a request that needs no query, such as an unknown route or a missing parameter, before `connect`: `connect` opens a database connection whether or not a query follows. Never call `connect` at module scope.
+Inside a request, `db` does everything the `db` from `postgres()` does, so any documented `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` or `db.query(...)` snippet works unchanged. Await every query before the `await using` scope ends. The connection's `close()` waits until the runtime has been idle for one turn of the event loop (a `setTimeout(0)`), then refuses new work. A lazy ORM read such as `db.orm.public.User.all()`, or `db.query(plan)`, returned from the scope without `await` starts only when the caller awaits it, after the scope has closed, so it rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"), whose `fix` names the missing `await`. Work that keeps the runtime busy from the close onward completes: a `first()`, `execute()` or `transaction()`, an ORM write of several statements, including `include(...).create()` and a nested `create()`, and an async helper whose steps go through `db.orm`, `db.transaction()` or `db.prepare()`; a transaction commits. Such work is never refused because of the close; if it fails for its own reason, it rejects like any unawaited promise. A helper that calls `db.runtime()` after the scope has ended throws "Postgres connection is closed" at that call. Work that starts after the runtime was idle for a turn is refused. Whether a query sent after waiting on something other than the database counts as idle depends on when that callback runs relative to the timer, so do not rely on it. An unawaited promise that fails then, or fails for its own reason, rejects like any unawaited promise, and Node reports it as unhandled. Write `return await db.orm...`, not `return db.orm...`. `connect` connects to the database before it returns; when the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, it rejects with `DRIVER.CONNECTION_FAILED`, so a handler that answers with a 503 catches it there. Answer a request that needs no query, such as an unknown route or a missing parameter, before `connect`: `connect` opens a database connection whether or not a query follows. Never call `connect` at module scope.
 
 ## Cloudflare Workers + Hyperdrive (worked example)
 
@@ -110,22 +110,25 @@ This goes in `.env`, not `.dev.vars`. `.dev.vars` is for runtime worker secrets;
 
 A serverless client at module scope; a connection from `connect` in each request; SQL, ORM and transactions on that connection; cursor streaming. The full file is `examples/prisma-8-cloudflare-worker/src/worker.ts`.
 
-The samples use extensionless relative imports and `./contract.d`, which need `moduleResolution: "bundler"` in `tsconfig.json`; Worker projects built with wrangler use that setting, and so does the example. On a runtime without a built-in `Temporal`, which today includes Cloudflare Workers at the example's compatibility date and Node.js 24, reading a `DateTime` column needs a Temporal polyfill: add `temporal-polyfill` and import `temporal-polyfill/full/global` before the first query, as the example does at the top of `worker.ts` and `seed.ts`.
+The samples use extensionless relative imports and `./contract.d`, which need `moduleResolution: "bundler"` in `tsconfig.json`; Worker projects built with wrangler use that setting, and so does the example. On a runtime without a built-in `Temporal`, which today includes Cloudflare Workers at the example's compatibility date and Node.js 24, reading a column whose type reads `Temporal` values, such as `TimestamptzTemporal` or `DateTime(as: temporal)`, needs a Temporal polyfill: add `temporal-polyfill` and import `temporal-polyfill/full/global` before the first query, as the example does at the top of `worker.ts` and `seed.ts`.
 
 #### Module scope
 
 ```ts
 // src/prisma/db.ts
 import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
+
+export const contract = contractFromJson<Contract>(contractJson);
 
 // Constructed once per isolate. Holds no database connection: only the
 // static members (sql / raw / enums / nativeEnums / context / contract /
 // stack), which are pure functions of the contract. Each fetch opens its
 // own connection with postgres.connect(...).
-export const postgres = postgresServerless<Contract>({
-  contractJson,
+export const postgres = postgresServerless({
+  contract,
   // middleware: [...],   // optional — telemetry, lints, budgets, ...
   // extensions: [...],   // optional
 });
@@ -158,9 +161,9 @@ export default {
     // across concurrent fetches in this isolate.
     await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString });
 
-    // SQL DSL plan — db.runtime().query returns the rows.
+    // SQL DSL plan — db.query returns the rows.
     if (url.pathname === '/sql/users') {
-      const rows = await db.runtime().query(
+      const rows = await db.query(
         db.sql.public.user.select('id', 'email').limit(10).build(),
       );
       return Response.json(rows);
@@ -205,13 +208,16 @@ Reads are buffered by default. To stream on one route, create a second serverles
 
 ```ts
 // src/prisma/db.ts
-export const postgres = postgresServerless<Contract>({ contractJson });
+const collections = { User: UserCollection, Post: PostCollection };
+
+export const postgres = postgresServerless({ contract, collections });
 
 /**
  * Serverless client with cursors on, used only by the `/cursor/large` route to stream a large result. Reads through its connections hang behind Cloudflare Hyperdrive.
  */
-export const streamingPostgres = postgresServerless<Contract>({
-  contractJson,
+export const streamingPostgres = postgresServerless({
+  contract,
+  collections,
   cursor: { batchSize: 100 },
 });
 
@@ -231,7 +237,7 @@ if (url.pathname === '/cursor/large') {
   // opens a server-side cursor and streams ~100-row batches — early
   // break only fetches one batch and closes the cursor. Cursor-off
   // would buffer all 10_000 rows before yielding the first one.
-  const iter = db.runtime().query(
+  const iter = db.query(
     db.sql.public.post.select('id', 'title').orderBy((f) => f.createdAt, { direction: 'asc' }).limit(10_000).build(),
   );
   for await (const row of iter) {
@@ -246,33 +252,28 @@ if (url.pathname === '/cursor/large') {
 
 ### Wiring the ORM client
 
-`db.orm` is the default way to use the ORM on a connection. When you register custom collection classes, build an ORM client from the connection's runtime and context:
+`db.orm` is the ORM on a connection. To give models their own query methods, pass custom collection classes to the Worker's serverless client with the `collections` option. Every connection's `db.orm`, and the `tx.orm` of its transactions, then returns those classes. A serverless client has the classes only if it is given `collections`, so the streaming client from the previous section is given the same `collections` constant:
 
 ```ts
-// src/orm-client/client.ts
-import { orm } from '@prisma/orm-postgres/orm-client';
-import type { PostgresServerlessConnection } from '@prisma/orm-postgres/serverless';
-import type { Contract } from '../prisma/contract.d';
-import { PostCollection, UserCollection } from './collections';
+// src/prisma/db.ts
+import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
+import { PostCollection, UserCollection } from '../orm-client/collections';
+import type { Contract } from './contract.d';
+import contractJson from './contract.json' with { type: 'json' };
 
-export function createOrmClient(
-  db: Pick<PostgresServerlessConnection<Contract>, 'runtime' | 'context'>,
-) {
-  return orm({
-    runtime: db.runtime(),
-    context: db.context,
-    collections: {
-      User: UserCollection,
-      Post: PostCollection,
-    },
-  }).public;
-}
+export const contract = contractFromJson<Contract>(contractJson);
+
+const collections = { User: UserCollection, Post: PostCollection };
+
+export const postgres = postgresServerless({ contract, collections });
 
 // in fetch:
-// const rows = await createOrmClient(db).User.newestFirst().limit(10).all();
+// await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString });
+// const rows = await db.orm.public.User.newestFirst().limit(10).all();
 ```
 
-Pass `db.runtime()` to `orm()`, not `db` itself. The same holds for anything else that takes a runtime, such as `withTransaction` and a prepared statement's `query(runtime, params)`. Call the factory inside `fetch`, so the ORM client runs on that request's connection.
+The classes are registered once, at module scope, and hold no database connection. Each query still runs on the connection it is called through. Anything that takes a runtime, such as `withTransaction` and a prepared statement's `query(runtime, params)`, takes `db.runtime()`, not `db` itself.
 
 ## Other per-request runtimes
 
@@ -303,9 +304,9 @@ The existing migration commands accept a connection string (typically via `DATAB
 
 ## Known limitations
 
-- **Inside a transaction, run every query through `tx`.** A connection has one database connection, so inside `db.transaction(async (tx) => ...)` a query through `db` is not independent of the transaction; run every query through `tx`. A query that uses the connection's database connection directly, such as a `db.orm` read, a `db.orm` create of one row, an `updateAll(...)` or `deleteAll()`, or `db.runtime().query(...)`, runs inside the open transaction without saying so. An operation that asks for a database connection of its own, such as a `db.orm` `update(...)` or `delete()` of one row, `db.runtime().connection()`, a `db.orm` create that also writes related rows, or a nested `db.transaction(...)`, waits for the database connection the transaction holds, and the request hangs. A second connection opened inside the callback with `await using db2 = await postgres.connect(...)` has its own database connection, so statements sent through it are not part of the transaction.
+- **Inside a transaction, run every query through `tx`.** A connection has one database connection, so inside `db.transaction(async (tx) => ...)` a query through `db` is not independent of the transaction; run every query through `tx`. A query that uses the connection's database connection directly, such as a `db.orm` read, a `db.orm` create of one row, an `updateAll(...)` or `deleteAll()`, or `db.query(...)`, runs inside the open transaction without saying so. An operation that asks for a database connection of its own, such as a `db.orm` `update(...)` or `delete()` of one row, `db.runtime().connection()`, a `db.orm` create that also writes related rows, or a nested `db.transaction(...)`, waits for the database connection the transaction holds, and the request hangs. A second connection opened inside the callback with `await using db2 = await postgres.connect(...)` has its own database connection, so statements sent through it are not part of the transaction.
 
-- **Isolate memory limits.** Workers isolates have bounded memory (128 MiB by default; higher on Workers Unbound). ORM `findMany`-style operations materialize the result set into a JS array before returning; `limit(...)` is your hard memory cap on those. If you need to stream, open the route's connection from a separate serverless client created with `cursor: { batchSize }` (see *Cursor streaming*) and use the SQL DSL with `db.runtime().query(...)` — the iterator then reads through a cursor and yields rows as they arrive, with `for-await ... break` cancelling cleanly without buffering the rest of the result set. On that connection, end the loop before the next query through `db` (see *Cursor streaming*). That route hangs behind real Cloudflare Hyperdrive; see the next entry.
+- **Isolate memory limits.** Workers isolates have bounded memory (128 MiB by default; higher on Workers Unbound). ORM `findMany`-style operations materialize the result set into a JS array before returning; `limit(...)` is your hard memory cap on those. If you need to stream, open the route's connection from a separate serverless client created with `cursor: { batchSize }` (see *Cursor streaming*) and use the SQL DSL with `db.query(...)` — the iterator then reads through a cursor and yields rows as they arrive, with `for-await ... break` cancelling cleanly without buffering the rest of the result set. On that connection, end the loop before the next query through `db` (see *Cursor streaming*). That route hangs behind real Cloudflare Hyperdrive; see the next entry.
 
 - **Reads with cursors on hang on Cloudflare Hyperdrive — cursors are off by default; behind Hyperdrive, only routes whose connections come from a serverless client without the `cursor` option work.** Empirically verified during the May 2026 production smoke. The cursor path uses `pg-cursor`'s extended-query named-portal protocol; after rows are returned and the client sends `Close portal + Sync`, Hyperdrive emits `Protocol Error: Unexpected protocol code: C` (SQLSTATE `58000`) and never follows up with the expected `ReadyForQuery`. The database connection wedges; Cloudflare's runtime kills the request at 30 s with error 1101. With cursors on, this affects every read path (SQL DSL, ORM `.all()` / `.first()`, `for await`) — there is no per-call short-circuit, the cursor decision is made at the driver layer for every read. Wrapping the read in `db.transaction(...)` does not help: the failure is in Hyperdrive's protocol parser state, not in connection pinning. The driver's catch-block fallback to simple-query mode does **not** save you either — it only fires on certain thrown errors, and a hang doesn't throw. Workaround: behind Hyperdrive, open connections from a serverless client without the `cursor` option, so reads take the buffered path. A route whose connection comes from a streaming serverless client hangs. Tracking upstream as a Cloudflare Hyperdrive bug.
 
@@ -321,8 +322,8 @@ The example is intentionally minimal — minimum schema, minimum routes — so y
 
 ## See also
 
-- [ADR 207 — A serverless Postgres connection has the same query interface as a `postgres()` client](./architecture%20docs/adrs/ADR%20207%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) — the architectural rationale for the client, the serverless client and the connection.
-- [ADR 159 — Runtime Driver Lifecycle](./architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) — how the underlying driver lifecycle works. `postgres()` follows it unchanged; a serverless `connect` opens the database connection before it returns, where ADR 159 leaves that to the first query, as ADR 207 explains.
+- [ADR 263 — A serverless Postgres connection has the same query interface as a `postgres()` client](./architecture%20docs/adrs/ADR%20263%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) — the architectural rationale for the client, the serverless client and the connection.
+- [ADR 159 — Runtime Driver Lifecycle](./architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) — how the underlying driver lifecycle works. `postgres()` follows it unchanged; a serverless `connect` opens the database connection before it returns, where ADR 159 leaves that to the first query, as ADR 263 explains.
 - [Architecture Overview](./Architecture%20Overview.md) — Prisma 8's broader plane / target / adapter / driver model.
 - [Cloudflare Hyperdrive docs](https://developers.cloudflare.com/hyperdrive/) — Hyperdrive setup, configuration, and observability.
 - The example: `examples/prisma-8-cloudflare-worker/` (in this repo).

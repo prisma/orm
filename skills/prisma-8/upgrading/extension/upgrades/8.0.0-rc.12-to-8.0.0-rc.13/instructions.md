@@ -67,9 +67,9 @@ changes:
   - id: prisma7-schema-source-declares-psl
     summary: The prisma7Schema() contract source declares format 'psl' instead of 'prisma7'.
   - id: print-psl-description-option
-    summary: printPsl() from @internal/psl-printer opens every file with only the // use prisma-8 marker unless the caller passes description.
+    summary: printPsl() from @internal/psl-printer (@prisma/orm-framework/psl-printer) opens every file with only the // use prisma-8 marker unless the caller passes description.
   - id: family-sql-psl-build-export
-    summary: mapDefault, its option types, the PslTypeMap types and toEnumMemberName moved from @internal/family-sql/psl-infer to @internal/family-sql/psl-build.
+    summary: mapDefault, its option types, the PslTypeMap types and toEnumMemberName moved from @internal/family-sql/psl-infer to @internal/family-sql/psl-build (published as family/psl-infer and family/psl-build of @prisma/orm-family-sql).
   - id: cursor-rejects-expression-orders
     summary: "cursor() now throws ORM.ARGUMENT_INVALID when an active orderBy item is not a plain column (extension-operation orders such as vector distance were previously dropped from the keyset silently)"
     detection:
@@ -77,7 +77,7 @@ changes:
       matches:
         - '\.cursor\('
   - id: order-by-item-nulls
-    summary: "OrderByItem from @internal/sql-relational-core/ast carries a nulls placement: its constructor takes a required third argument, withExpr rebuilds an item around a new expression, and every renderer must emit nulls wherever it emits dir"
+    summary: "OrderByItem from @internal/sql-relational-core/ast (@prisma/orm-family-sql/relational-core/ast) carries a nulls placement: its constructor takes a required third argument, withExpr rebuilds an item around a new expression, and every renderer must emit nulls wherever it emits dir"
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -105,7 +105,8 @@ changes:
         - '@prisma/orm-(?:target-)?mongo/adapter/(?:codec-types|codecs|codec-ids|data-types)(?![\w-])'
   - id: create-mongo-runner-deps-removed
     summary: |
-      `createMongoRunnerDeps(...)` is removed from `@internal/adapter-mongo/control`. Build the
+      `createMongoRunnerDeps(...)` is removed from `@internal/adapter-mongo/control`
+      (`@prisma/orm-mongo/adapter/control`). Build the
       runner dependencies with `new MongoControlAdapterImpl().createRunnerDependencies(controlDriver)`.
     detection:
       glob: "**/*.{ts,mts,cts}"
@@ -114,8 +115,9 @@ changes:
   - id: mongo-runner-dependency-types-move-to-family
     summary: |
       `MongoRunnerDependencies` and `MarkerOperations` are exported from
-      `@internal/family-mongo/control-adapter`, no longer from `@internal/adapter-mongo/control` or
-      `@internal/target-mongo/control`.
+      `@internal/family-mongo/control-adapter` (`@prisma/orm-mongo/family/control-adapter`), no
+      longer from `@internal/adapter-mongo/control` or `@internal/target-mongo/control` (the
+      `adapter/control` and `target/control` subpaths of `@prisma/orm-mongo`).
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -159,12 +161,16 @@ changes:
       defaulting to `undefined`, so a bare `FieldBuilder` constraint rejects preset fields such as
       `field.temporal.createdAt()`; widen it to
       `FieldBuilder<ContractFieldType, boolean, boolean, EnumTypeHandle | undefined, ExecutionMutationDefaultPhases | undefined>`.
+      `ContractFieldType` and `ExecutionMutationDefaultPhases` come from
+      `@prisma/orm-mongo/contract/types`; `FieldBuilder` and `EnumTypeHandle` from
+      `@prisma/orm-mongo/contract-builder`.
   - id: mongo-bson-codec-added
     summary: |
-      The Mongo target gains the codec `mongo/bson@1` for any BSON value, typed `BsonInputValue`
-      on write and `BsonValue` on read in `CodecTypes`; `mongo/json@1` now admits only JSON values.
-      Collection validators now read a codec's whole `targetTypes` list, not only its first entry,
-      and an enum's codec must declare exactly one.
+      The Mongo target gains the codecs `mongo/int64@1`, `mongo/decimal128@1`, `mongo/binary@1`,
+      `mongo/json@1` (JSON values only) and `mongo/bson@1` (any BSON value, typed `BsonInputValue`
+      on write and `BsonValue` on read in `CodecTypes`). Collection validators now read a codec's
+      whole `targetTypes` list, not only its first entry, and an enum's codec must declare exactly
+      one.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -201,7 +207,7 @@ A contract with generated defaults (`temporal.createdAt()`, `temporal.updatedAt(
 
 ### For extension authors
 
-- The framework type `ExecutionMutationDefault['ref']` from `@internal/contract/types` is `{ namespace: string; entry: string; field: string }`. A type that matches refs by shape (for example a create-input type that checks whether a column has a generated default) matches `entry` and `field`.
+- The framework type `ExecutionMutationDefault['ref']` from `@internal/contract/types` (`@prisma/orm-framework/contract/types`) is `{ namespace: string; entry: string; field: string }`. A type that matches refs by shape (for example a create-input type that checks whether a column has a generated default) matches `entry` and `field`.
 - A pack that ships a contract with generated defaults re-emits it with `prisma contract emit`, and updates its pinned contract-space snapshots as in step 2.
 - The options passed to `applyMutationDefaults` change separately: see `mutation-defaults-options-entry-field` below for the rename of `table` to `entry`.
 
@@ -261,7 +267,7 @@ import {
 import { timestampNowControlDescriptor } from '@prisma/orm-framework/components/control';
 ```
 
-The same applies to the `family/control` subpaths of `@prisma/orm-postgres` and `@prisma/orm-sqlite` (move to their `components/authoring` and `components/control` subpaths), and to `@internal/family-sql/control` (move to `@internal/framework-components/authoring` and `@internal/framework-components/control`). Keep importing `temporalCodecPresetWithPrecision` and `temporalStringAuthoringPresets` from `family/control`.
+The same applies to the `family/control` subpaths of `@prisma/orm-postgres` and `@prisma/orm-sqlite` (move to their `components/authoring` and `components/control` subpaths), and to `@internal/family-sql/control` (move to `@internal/framework-components/authoring` and `@internal/framework-components/control`, published as the `components/authoring` and `components/control` subpaths of `@prisma/orm-framework`). Keep importing `temporalCodecPresetWithPrecision` and `temporalStringAuthoringPresets` from `family/control`.
 
 ## `temporal-preset-builders-take-storage-template`
 
@@ -331,7 +337,7 @@ A literal default on a column whose codec no pack in the contract declares now f
 
 ## `contract-source-format-is-psl-or-typescript`
 
-`ContractSourceProvider` from `@internal/config/config-types` is now the union of `PslContractSourceProvider` (`format: 'psl'`) and `TypeScriptContractSourceProvider` (`format: 'typescript'`). `format` is required on both. `OpaqueContractSourceProvider` and every other `format` value are gone, and config validation reports a source with no `format`, or any other value, as an issue on `contract.source.format`.
+`ContractSourceProvider` from `@internal/config/config-types` (`@prisma/orm-framework/config/config-types`) is now the union of `PslContractSourceProvider` (`format: 'psl'`) and `TypeScriptContractSourceProvider` (`format: 'typescript'`). `format` is required on both. `OpaqueContractSourceProvider` and every other `format` value are gone, and config validation reports a source with no `format`, or any other value, as an issue on `contract.source.format`.
 
 Give every contract source an extension defines a `format`: `'psl'` when its inputs are PSL text, and `'typescript'` when it builds the contract in TypeScript. Replace imports of `OpaqueContractSourceProvider` with `ContractSourceProvider`.
 
@@ -341,7 +347,7 @@ The source returned by `prisma7Schema()` now declares `format: 'psl'`, because a
 
 ## `print-psl-description-option`
 
-`printPsl()` from `@internal/psl-printer` used to open every file with the `// use prisma-8` marker and a line saying the contract was inferred from the live database. It now writes only the marker, and a second comment line only when the caller passes `description`. Code that prints an inferred contract and wants the old second line passes it:
+`printPsl()` from `@internal/psl-printer` (`@prisma/orm-framework/psl-printer`) used to open every file with the `// use prisma-8` marker and a line saying the contract was inferred from the live database. It now writes only the marker, and a second comment line only when the caller passes `description`. Code that prints an inferred contract and wants the old second line passes it:
 
 ```ts
 printPsl(ast, {
@@ -353,7 +359,7 @@ printPsl(ast, {
 
 ## `family-sql-psl-build-export`
 
-`contract print` uses some of what `@internal/family-sql/psl-infer` exported, so those exports moved to the new subpath `@internal/family-sql/psl-build`: `mapDefault`, `DefaultMappingOptions`, `DefaultMappingResult`, `PslTypeMap`, `PslTypeReference`, `PslTypeResolution` and `toEnumMemberName`. Import them from `@internal/family-sql/psl-build`. Everything else stays in `@internal/family-sql/psl-infer`.
+`contract print` uses some of what `@internal/family-sql/psl-infer` exported, so those exports moved to the new subpath `@internal/family-sql/psl-build`: `mapDefault`, `DefaultMappingOptions`, `DefaultMappingResult`, `PslTypeMap`, `PslTypeReference`, `PslTypeResolution` and `toEnumMemberName`. Import them from `@internal/family-sql/psl-build` (`@prisma/orm-family-sql/family/psl-build`, or the same subpath of `@prisma/orm-postgres` and `@prisma/orm-sqlite`). Everything else stays in `@internal/family-sql/psl-infer` (`family/psl-infer`).
 
 ## `cursor-rejects-expression-orders`
 
@@ -408,28 +414,30 @@ Rewrite each specifier. The exported names are unchanged.
 | `@prisma/orm-mongo/adapter/<same four>` | `@prisma/orm-mongo/target/<same four>` |
 | `@prisma/orm-target-mongo/adapter/<same four>` | `@prisma/orm-target-mongo/target/<same four>` |
 
-Then re-sort the import block with the package's formatter (the new specifier sorts after `@internal/mongo-*`). A package that imports from `@internal/target-mongo` for the first time needs it in `dependencies`. A pack that emits a Mongo `contract.d.ts` re-emits it with `prisma contract emit`, or applies the same rewrite to the committed file; the contract JSON and hashes do not change.
+An extension outside this repository imports the published forms in the last two rows. Then re-sort the import block with the package's formatter (the new specifier sorts after `@internal/mongo-*`). A package that imports from `@internal/target-mongo` for the first time needs it in `dependencies`. A pack that emits a Mongo `contract.d.ts` re-emits it with `prisma contract emit`, or applies the same rewrite to the committed file; the contract JSON and hashes do not change.
 
-`@internal/target-mongo/codecs` also exports `mongoStandardCodecs` and `buildStandardCodecRegistry`, which the adapter used internally before.
+`@internal/target-mongo/codecs` (`@prisma/orm-mongo/target/codecs`) also exports `mongoStandardCodecs` and `buildStandardCodecRegistry`, which the adapter used internally before.
 
 ## `create-mongo-runner-deps-removed`
 
 ```ts
 // before
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import { createMongoRunnerDeps, extractDb } from '@prisma/orm-mongo/adapter/control';
+import { MongoDriverImpl } from '@prisma/orm-mongo/driver';
 const deps = createMongoRunnerDeps(controlDriver, MongoDriverImpl.fromDb(extractDb(controlDriver)), family);
 
 // after
-import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@prisma/orm-mongo/adapter/control';
 const deps = new MongoControlAdapterImpl().createRunnerDependencies(controlDriver);
 ```
+
+Inside this repository the same imports are `@internal/adapter-mongo/control` and `@internal/driver-mongo`.
 
 Drop imports that are now unused and any family instance built only to pass as the third argument.
 
 ## `mongo-runner-dependency-types-move-to-family`
 
-Change the import of `MongoRunnerDependencies` or `MarkerOperations` to `@internal/family-mongo/control-adapter`. The shapes are unchanged.
+Change the import of `MongoRunnerDependencies` or `MarkerOperations` to `@prisma/orm-mongo/family/control-adapter` (`@internal/family-mongo/control-adapter` inside this repository). The shapes are unchanged.
 
 ## `mongo-control-adapter-creates-runner-dependencies`
 
@@ -467,11 +475,25 @@ const context: MongoExecutionContext = { contract, codecs, stack, applyMutationD
 
 ## `mongo-field-builder-execution-defaults-parameter`
 
-Code that constrains on a bare `FieldBuilder` (for example `Fields extends Record<string, FieldBuilder>`) accepts only builders without execution defaults; pass `ExecutionMutationDefaultPhases | undefined` as the fifth type argument to accept preset fields. There is no detection pattern: a bare `FieldBuilder` reference is too common to tell which uses need the wider type.
+Code that constrains on a bare `FieldBuilder` (for example `Fields extends Record<string, FieldBuilder>`) accepts only builders without execution defaults; pass `ExecutionMutationDefaultPhases | undefined` as the fifth type argument to accept preset fields:
+
+```ts
+import type { ContractFieldType, ExecutionMutationDefaultPhases } from '@prisma/orm-mongo/contract/types';
+import type { EnumTypeHandle, FieldBuilder } from '@prisma/orm-mongo/contract-builder';
+
+type AnyField = FieldBuilder<
+  ContractFieldType,
+  boolean,
+  boolean,
+  EnumTypeHandle | undefined,
+  ExecutionMutationDefaultPhases | undefined
+>;
+```
+ There is no detection pattern: a bare `FieldBuilder` reference is too common to tell which uses need the wider type.
 
 ## `mongo-bson-codec-added`
 
-The Mongo target adds the codec `mongo/bson@1` (data type `mongo/bson`, PSL `Bson`, `field.bson()`), whose `CodecTypes` entry reads `BsonValue` and writes `BsonInputValue` (a `BsonValue`, or a `Uint8Array` at any depth), both exported from `@internal/target-mongo/codec-types` (declared in `@internal/mongo-value`, where the Mongo TypeScript builder reads them). `BsonValue` covers every value the driver returns with its default settings, `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as) included; `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`. A `DBRef` is never returned, because decode turns it back into its `{ $ref, $id[, $db], ...fields }` document. It declares an empty `targetTypes`, so the validator does not constrain its value: a single field gets `{}`, and a list field still must be an array, `{ bsonType: 'array', items: {} }`. An extension that lists every Mongo codec id, or keys a map by `CodecTypes`, adds `mongo/bson@1`. An extension that stores arbitrary BSON in a field of its own contract types it `mongo/bson@1`, because `mongo/json@1` now refuses non-JSON values on encode and decode.
+The Mongo target adds five codecs, none of which existed in 8.0.0-rc.12: `mongo/int64@1` (PSL `Int64`, `bigint`), `mongo/decimal128@1` (PSL `Decimal128`, a decimal string), `mongo/binary@1` (PSL `Binary`, `Uint8Array`), `mongo/json@1` (PSL `Json`, JSON values only, refused on encode and decode otherwise) and `mongo/bson@1` (PSL `Bson`, `field.bson()`, any BSON value). The `mongo/bson@1` entry of `CodecTypes` reads `BsonValue` and writes `BsonInputValue` (a `BsonValue`, or a `Uint8Array` at any depth), both exported from `@prisma/orm-mongo/target/codec-types` (`@internal/target-mongo/codec-types` inside this repository) and declared in `@prisma/orm-mongo/value` (`@internal/mongo-value`), where the Mongo TypeScript builder reads them. `BsonValue` covers every value the driver returns with its default settings, `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as) included; `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`. A `DBRef` is never returned, because decode turns it back into its `{ $ref, $id[, $db], ...fields }` document. It declares an empty `targetTypes`, so the validator does not constrain its value: a single field gets `{}`, and a list field still must be an array, `{ bsonType: 'array', items: {} }`. An extension that lists every Mongo codec id, or keys a map by `CodecTypes`, adds the five new ones. An extension that stores arbitrary BSON in a field of its own contract types it `mongo/bson@1`, not `mongo/json@1`, which refuses non-JSON values.
 
 The detection pattern finds a descriptor whose `targetTypes` lists two or more entries, quoted strings or named constants, on one line or several. It does not see a list built elsewhere and referenced by name (`targetTypes: TYPES`); check those descriptors by hand.
 

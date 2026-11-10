@@ -1,5 +1,18 @@
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import { type DocumentAst, parse, SourceFile } from '@internal/psl-parser/syntax';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
+import {
+  type Binder,
+  buildSymbolTable,
+  entityRef,
+  fieldAttribute,
+  fieldRef,
+  identifier,
+  list,
+  referencedFieldRef,
+  type SymbolTable,
+  structBlock,
+} from '@internal/psl-parser';
+import { type DocumentAst, PslSources, parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
   buildSemanticTokens,
@@ -14,10 +27,12 @@ import {
   semanticTokensLegend,
   semanticTokenTypes,
 } from '../src/semantic-tokens';
+import { testBinder } from './helpers/binder';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime', 'Float', 'Json'] as const;
 
 interface ParsedSemanticTokenSource {
+  readonly binder: Binder;
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
   readonly symbolTable: SymbolTable;
@@ -32,14 +47,24 @@ interface TokenDetails {
   readonly character: number;
 }
 
-function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
+function parseSemanticTokenSource(
+  source: string,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {},
+): ParsedSemanticTokenSource {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  return { document, sourceFile, symbolTable, scalarTypes };
+  return {
+    document,
+    sourceFile,
+    symbolTable,
+    scalarTypes,
+    binder: testBinder({ sources, symbolTable, scalarTypes, pslBlockDescriptors }),
+  };
 }
 
 function collectDetails(source: ParsedSemanticTokenSource): readonly TokenDetails[] {
@@ -149,6 +174,206 @@ function sameModifiers(
 }
 
 describe('semantic token substrate', () => {
+  it('highlights every parsed segment of an overqualified decorator', () => {
+    const source = parseSemanticTokenSource('model User { id Int @foo.bar.baz }');
+    expect(collectDetails(source).filter(({ tokenType }) => tokenType === 'decorator')).toEqual([
+      { text: '@foo', tokenType: 'decorator', modifiers: [], line: 0, character: 20 },
+      { text: 'bar', tokenType: 'decorator', modifiers: [], line: 0, character: 25 },
+      { text: 'baz', tokenType: 'decorator', modifiers: [], line: 0, character: 29 },
+    ]);
+  });
+
+  it('retains syntactic property highlighting for unresolved and cross-space field references', () => {
+    const source = parseSemanticTokenSource(
+      'model Owner { id Int @relation(fields: [missing])\n  external elsewhere:Other @relation(references: [remote])\n}',
+    );
+    const binder = testBinder({
+      sources: new PslSources([[source.document.syntax, source.sourceFile]]),
+      symbolTable: source.symbolTable,
+      scalarTypes,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'relations',
+          authoring: {
+            attributeSpecs: {
+              model: {},
+              field: {
+                relation: () =>
+                  fieldAttribute('relation', {
+                    documentation: '',
+                    named: {
+                      fields: { type: list(fieldRef()), documentation: '' },
+                      references: { type: list(referencedFieldRef()), documentation: '' },
+                    },
+                  }),
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(
+      collectDetails({ ...source, binder }).filter(({ text }) =>
+        ['missing', 'remote'].includes(text),
+      ),
+    ).toEqual([
+      { text: 'missing', tokenType: 'property', modifiers: [], line: 0, character: 40 },
+      { text: 'remote', tokenType: 'property', modifiers: [], line: 1, character: 50 },
+    ]);
+  });
+
+  it('distinguishes descriptor-bound entity references from unrestricted identifiers', () => {
+    const source = parseSemanticTokenSource(
+      `model Invoice { id Int }
+policy Probe { on = Invoice\n unrestricted = Invoice\n scalar = Int }`,
+      {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: () =>
+            structBlock({
+              parameters: {
+                on: { type: entityRef({ kind: 'model' }), documentation: '' },
+                unrestricted: { type: identifier(), documentation: '' },
+                scalar: { type: identifier(), documentation: '' },
+              },
+            }),
+        },
+      },
+    );
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line > 0 && ['Invoice', 'Int'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Invoice', tokenType: 'class', modifiers: [] },
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Int', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('uses the alias definition binding without recursively interpreting aliases', () => {
+    const source =
+      parseSemanticTokenSource(`types { Scalar = Int\n Indirect = Scalar\n Missing = Unknown }
+namespace app {
+  model Int { id String }
+  model Owner { scalar Scalar\n indirect Indirect\n missing Missing }
+}`);
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line >= 5 && ['Scalar', 'Indirect', 'Missing'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Scalar', tokenType: 'type', modifiers: ['defaultLibrary'] },
+      { text: 'Indirect', tokenType: 'type', modifiers: [] },
+      { text: 'Missing', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('does not infer unbound expressions or missing qualified members from spelling', () => {
+    const source = parseSemanticTokenSource(`model Invoice { id Int }
+namespace app { model Other { id Int } }
+model Owner { missing app.Invoice }
+policy Probe { target = Invoice\n value = Int }`);
+    expect(
+      collectDetails(source)
+        .filter(
+          ({ line, text }) =>
+            (line === 2 && text === 'Invoice') || (line >= 3 && ['Invoice', 'Int'].includes(text)),
+        )
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Invoice', tokenType: 'type', modifiers: [] },
+      { text: 'Int', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('classifies a qualifier from its binder resolution', () => {
+    const source = `namespace pgvector { model Vector { id Int } }
+model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.Vector\n remote other:pgvector.Vector }`;
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
+    const typeConstructor = {
+      kind: 'typeConstructor',
+      output: { codecId: 'fixture/scalar' },
+    } as const;
+    const binder = testBinder({
+      sources,
+      symbolTable,
+      authoringContributions: {
+        type: {
+          pgvector: { Vector: typeConstructor },
+          postgis: { Geometry: typeConstructor },
+        },
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: { model: {}, field: {} },
+        dataTypes: {},
+      },
+    });
+    const details = collectDetails({
+      binder,
+      document,
+      sourceFile: sources.sourceFileFor(document.syntax),
+      symbolTable,
+      scalarTypes,
+    });
+
+    expect(
+      details
+        .filter(({ line }) => line > 0)
+        .filter(({ text }) => ['pgvector', 'Vector', 'postgis', 'Geometry', 'Doc'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'Doc', tokenType: 'class', modifiers: ['declaration'] },
+      { text: 'pgvector', tokenType: 'namespace', modifiers: [] },
+      { text: 'Vector', tokenType: 'class', modifiers: [] },
+      { text: 'postgis', tokenType: 'namespace', modifiers: [] },
+      { text: 'Geometry', tokenType: 'type', modifiers: ['defaultLibrary'] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+      { text: 'Vector', tokenType: 'type', modifiers: [] },
+    ]);
+  });
+
+  it('classifies the qualifier of a qualified entity reference as a namespace', () => {
+    const source = parseSemanticTokenSource(
+      `namespace auth { model User { id Int } }
+model Top { id Int }
+policy Probe { on = auth.User\n other = Top.User }`,
+      {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: () =>
+            structBlock({
+              parameters: {
+                on: { type: entityRef({ kind: 'model' }), documentation: '' },
+                other: { type: entityRef({ kind: 'model' }), documentation: '' },
+              },
+            }),
+        },
+      },
+    );
+    expect(
+      collectDetails(source)
+        .filter(({ line, text }) => line >= 2 && ['auth', 'Top'].includes(text))
+        .map(({ text, tokenType, modifiers }) => ({ text, tokenType, modifiers })),
+    ).toEqual([
+      { text: 'auth', tokenType: 'namespace', modifiers: [] },
+      { text: 'Top', tokenType: 'property', modifiers: [] },
+    ]);
+  });
+
   it('keeps the semantic token legend stable', () => {
     expect(semanticTokenTypes).toEqual([
       'keyword',
@@ -294,6 +519,83 @@ describe('semantic token substrate', () => {
     ).toBeUndefined();
   });
 
+  it('classifies a sql literal as a keyword tag and a string per line of its literal', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model Post {',
+        '  id Int',
+        '  @@check(expression: sql`',
+        '    id > 0',
+        '    AND id < 10',
+        '  `, name: "post_id_range")',
+        '}',
+      ].join('\n'),
+    );
+
+    const details = collectDetails(source).filter((token) => token.line >= 2 && token.line <= 5);
+
+    expect(details.map(({ text, tokenType }) => ({ text, tokenType }))).toEqual([
+      { text: '@@check', tokenType: 'decorator' },
+      { text: 'expression', tokenType: 'property' },
+      { text: 'sql', tokenType: 'keyword' },
+      { text: '`', tokenType: 'string' },
+      { text: '    id > 0', tokenType: 'string' },
+      { text: '    AND id < 10', tokenType: 'string' },
+      { text: '  `', tokenType: 'string' },
+      { text: 'name', tokenType: 'property' },
+      { text: '"post_id_range"', tokenType: 'string' },
+    ]);
+  });
+
+  it('classifies the namespace of a namespaced tag', () => {
+    const source = parseSemanticTokenSource(
+      ['model Post {', '  id Int @default(ext.money`1`)', '}'].join('\n'),
+    );
+
+    const details = collectDetails(source).filter((token) => token.line === 1);
+
+    expect(details.map(({ text, tokenType }) => ({ text, tokenType }))).toEqual([
+      { text: 'id', tokenType: 'property' },
+      { text: 'Int', tokenType: 'type' },
+      { text: '@default', tokenType: 'decorator' },
+      { text: 'ext', tokenType: 'namespace' },
+      { text: 'money', tokenType: 'keyword' },
+      { text: '`1`', tokenType: 'string' },
+    ]);
+  });
+
+  it('classifies each segment of a dotted index path as a property', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model Post {',
+        '  title   String',
+        '  address Address',
+        '  @@index([title, address.city])',
+        '  @@index([address.city(sort: Asc)])',
+        '  @@unique([address.geo.lat(sort: Desc)])',
+        '}',
+      ].join('\n'),
+    );
+
+    const details = collectDetails(source);
+
+    expect(
+      details
+        .filter(
+          (token) => token.line >= 3 && ['address', 'city', 'geo', 'lat'].includes(token.text),
+        )
+        .map((token) => `${token.line}:${token.text}:${token.tokenType}`),
+    ).toEqual([
+      '3:address:property',
+      '3:city:property',
+      '4:address:property',
+      '4:city:property',
+      '5:address:property',
+      '5:geo:property',
+      '5:lat:property',
+    ]);
+  });
+
   it('preserves source order when block attributes precede fields', () => {
     const source = parseSemanticTokenSource(
       ['model User {', '  @@map("users")', '  id Int @id', '}'].join('\n'),
@@ -431,5 +733,196 @@ describe('semantic token substrate', () => {
     expect(findToken(details, { text: '@id', tokenType: 'decorator' })).toBeDefined();
     expect(findToken(details, { text: '"anonymous"', tokenType: 'string' })).toBeDefined();
     expect(findToken(details, { text: 'true', tokenType: 'keyword' })).toBeDefined();
+  });
+
+  it('leaves the tokens of the rest of a document unchanged around a mixin and an inclusion', () => {
+    const lines = [
+      'model User {',
+      '  id Int @id',
+      '  +auth.Timestamps',
+      '  name String @default("anonymous")',
+      '}',
+      'model mixin Timestamps {',
+      '  createdAt DateTime',
+      '}',
+    ];
+    const withMixins = collectDetails(parseSemanticTokenSource(lines.join('\n')));
+    const withoutMixins = collectDetails(
+      parseSemanticTokenSource([lines[0], lines[1], '', lines[3], lines[4]].join('\n')),
+    );
+
+    expect(withMixins.filter((token) => token.line < 5 && token.line !== 2)).toEqual(withoutMixins);
+  });
+
+  it('tokenises a model body with an inclusion that has a namespace qualifier, in source order', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model User {',
+        '  id Int @id',
+        '  +auth.Timestamps',
+        '}',
+        'namespace auth {',
+        '  model mixin Timestamps {',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(collectDetails(source).filter((token) => token.line < 4)).toEqual([
+      { text: 'model', tokenType: 'keyword', modifiers: [], line: 0, character: 0 },
+      { text: 'User', tokenType: 'class', modifiers: ['declaration'], line: 0, character: 6 },
+      { text: 'id', tokenType: 'property', modifiers: ['declaration'], line: 1, character: 2 },
+      { text: 'Int', tokenType: 'type', modifiers: ['defaultLibrary'], line: 1, character: 5 },
+      { text: '@id', tokenType: 'decorator', modifiers: [], line: 1, character: 9 },
+      { text: '+auth', tokenType: 'namespace', modifiers: [], line: 2, character: 2 },
+      { text: 'Timestamps', tokenType: 'type', modifiers: [], line: 2, character: 8 },
+    ]);
+  });
+
+  it('tokenises an inclusion without a qualifier as one type token that starts at the plus', () => {
+    const source = parseSemanticTokenSource(
+      ['model mixin Timestamps {', '}', 'model User {', '  +Timestamps', '  id Int', '}'].join(
+        '\n',
+      ),
+    );
+
+    expect(collectDetails(source).filter((token) => token.line === 3)).toEqual([
+      { text: '+Timestamps', tokenType: 'type', modifiers: [], line: 3, character: 2 },
+    ]);
+  });
+
+  it('tokenises an enum mixin: the header, then each member', () => {
+    const source = parseSemanticTokenSource(
+      ['enum mixin BaseRoles {', '  ADMIN', '  USER = "user"', '}'].join('\n'),
+    );
+
+    expect(collectDetails(source)).toEqual([
+      { text: 'enum', tokenType: 'keyword', modifiers: [], line: 0, character: 0 },
+      { text: 'mixin', tokenType: 'keyword', modifiers: [], line: 0, character: 5 },
+      { text: 'BaseRoles', tokenType: 'type', modifiers: ['declaration'], line: 0, character: 11 },
+      { text: 'ADMIN', tokenType: 'property', modifiers: [], line: 1, character: 2 },
+      { text: 'USER', tokenType: 'property', modifiers: [], line: 2, character: 2 },
+      { text: '"user"', tokenType: 'string', modifiers: [], line: 2, character: 9 },
+    ]);
+  });
+
+  it.each([
+    [
+      'a model mixin like a model body',
+      'model mixin Stamped {',
+      'model Stamped {',
+      [
+        '  createdAt DateTime @default(now())',
+        '  owner User @relation(fields: [ownerId], references: [id])',
+        '  ownerId Int',
+        '',
+        '  @@index([createdAt])',
+      ],
+    ],
+    [
+      'a type mixin like a composite type body',
+      'type mixin Geo {',
+      'type Geo {',
+      ['  lat Float', '  label String?'],
+    ],
+    [
+      'an enum mixin like an enum body',
+      'enum mixin Roles {',
+      'enum Roles {',
+      ['  ADMIN', '  USER = "user"', '  @@type("pg/text@1")'],
+    ],
+    [
+      'a key = value mixin like a generic block body',
+      'policy mixin Owner {',
+      'policy Owner {',
+      ['  roles = [authenticated]', '  using = "true"', '  @@map("owner")'],
+    ],
+  ])('tokenises the body of %s', (_name, mixinHeader, blockHeader, body) => {
+    const rest = ['}', 'model User {', '  id Int @id', '}'];
+    const bodyTokens = (header: string) =>
+      collectDetails(parseSemanticTokenSource([header, ...body, ...rest].join('\n'))).filter(
+        (token) => token.line > 0,
+      );
+
+    expect(bodyTokens(mixinHeader)).toEqual(bodyTokens(blockHeader));
+    expect(bodyTokens(mixinHeader).some((token) => token.line <= body.length)).toBe(true);
+  });
+
+  it('tokenises inclusions in a composite type, an enum, a key = value block and a mixin body, between their members', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'namespace shared {',
+        '  type mixin Geo {',
+        '  }',
+        '}',
+        'type Address {',
+        '  street String',
+        '  +shared.Geo',
+        '}',
+        'enum Role {',
+        '  +BaseRoles',
+        '  GUEST',
+        '}',
+        'policy P {',
+        '  k = 1',
+        '  +shared.Owner',
+        '}',
+        'model mixin Audited {',
+        '  +Timestamps',
+        '  actor String',
+        '}',
+      ].join('\n'),
+    );
+    const onLines = (...lines: number[]) =>
+      collectDetails(source)
+        .filter((token) => lines.includes(token.line))
+        .map((token) => [token.text, token.tokenType, token.modifiers.join(',')]);
+
+    expect(onLines(5, 6)).toEqual([
+      ['street', 'property', 'declaration'],
+      ['String', 'type', 'defaultLibrary'],
+      ['+shared', 'namespace', ''],
+      ['Geo', 'type', ''],
+    ]);
+    expect(onLines(9, 10)).toEqual([
+      ['+BaseRoles', 'type', ''],
+      ['GUEST', 'property', ''],
+    ]);
+    expect(onLines(13, 14)).toEqual([
+      ['k', 'property', ''],
+      ['1', 'number', ''],
+      ['+shared', 'namespace', ''],
+      ['Owner', 'type', ''],
+    ]);
+    expect(onLines(17, 18)).toEqual([
+      ['+Timestamps', 'type', ''],
+      ['actor', 'property', 'declaration'],
+      ['String', 'type', 'defaultLibrary'],
+    ]);
+  });
+
+  it('gives a qualifier that is not a namespace no token, and the name a type token', () => {
+    const source = parseSemanticTokenSource(['model User {', '  +nowhere.Thing', '}'].join('\n'));
+
+    expect(collectDetails(source).filter((token) => token.line === 1)).toEqual([
+      { text: 'Thing', tokenType: 'type', modifiers: [], line: 1, character: 11 },
+    ]);
+  });
+
+  it('builds tokens for a mixin with no name and for an inclusion with no name', () => {
+    const source = parseSemanticTokenSource(
+      ['type mixin {', '  lat Int', '}', 'model User {', '  +', '  id Int', '}'].join('\n'),
+    );
+
+    expect(collectDetails(source).map((token) => [token.text, token.tokenType])).toEqual([
+      ['type', 'keyword'],
+      ['mixin', 'keyword'],
+      ['lat', 'property'],
+      ['Int', 'type'],
+      ['model', 'keyword'],
+      ['User', 'class'],
+      ['id', 'property'],
+      ['Int', 'type'],
+    ]);
   });
 });

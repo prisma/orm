@@ -1,0 +1,37 @@
+import { describe, expect, it } from 'vitest';
+import { ColumnRef, LiteralExpr } from '../src/ast/types';
+import type { ScopeField } from '../src/expression';
+import { ExpressionImpl } from '../src/expression-impl';
+
+describe('ExpressionImpl', () => {
+  it('wraps an AST node with field metadata', () => {
+    const col = ColumnRef.of('users', 'id');
+    const scopeField: ScopeField = { codecId: 'pg/int4@1', nullable: false };
+    const expr = new ExpressionImpl(col, scopeField);
+
+    expect(expr).toBeInstanceOf(ExpressionImpl);
+    expect(expr.buildAst()).toBe(col);
+    expect(expr.returnType).toEqual(scopeField);
+  });
+
+  it('keeps codec metadata only on returnType', () => {
+    const scopeField = {
+      codecId: 'pgvector/vector@1',
+      nullable: false,
+      codec: { codecId: 'pgvector/vector@1', typeParams: { length: 1536 } },
+    };
+    const expr = new ExpressionImpl(ColumnRef.of('posts', 'embedding'), scopeField);
+
+    expect(expr.returnType).toBe(scopeField);
+    expect(expr).not.toHaveProperty('codec');
+  });
+
+  it('uses the third argument only for projection rendering', () => {
+    const ast = LiteralExpr.of(42);
+    const projectionAst = LiteralExpr.of('42');
+    const expr = new ExpressionImpl(ast, { codecId: 'pg/int8@1', nullable: false }, projectionAst);
+
+    expect(expr.buildAst()).toBe(ast);
+    expect(expr.buildProjectionAst()).toBe(projectionAst);
+  });
+});

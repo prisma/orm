@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import { describe, expectTypeOf, it } from 'vitest';
 import { bool } from '../src/attribute-spec/combinators/bool';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
@@ -16,7 +17,7 @@ import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import type { interpretExtensionBlock } from '../src/block-spec/interpret';
 import type { BlockSpecContext, BlockSpecFactory, InferBlock } from '../src/block-spec/types';
 import type { ResolvedEntityReference } from '../src/entity-reference';
-import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
+import type { BlockSymbol, ModelSymbol, SymbolTable } from '../src/symbol-table';
 
 function policySpec() {
   return structBlock({
@@ -155,7 +156,10 @@ describe('PslBlockSpecDescriptor', () => {
     const withContext = {
       ...descriptor,
       spec: (ctx: BlockSpecContext) => {
-        expectTypeOf(ctx.block).toEqualTypeOf<BlockSymbol>();
+        expectTypeOf(ctx).toEqualTypeOf<{
+          readonly symbols: SymbolTable;
+          readonly dataTypes: DataTypeSupport;
+        }>();
         return policySpec();
       },
     } satisfies PslBlockSpecDescriptor;

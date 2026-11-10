@@ -66,8 +66,7 @@ withTempDir(({ createTempDir }) => {
 
           const output = stripAnsi(run.stderr);
           expect(output).toContain('Database signed');
-          expect(output).toMatch(/from:\s+none/);
-          expect(output).toMatch(/to:\s+\S/);
+          expect(output).toMatch(/app: signed \S+ \(no marker before\)/);
         });
       },
       timeouts.spinUpPpgDev,
@@ -138,15 +137,18 @@ withTempDir(({ createTempDir }) => {
           expect(run.exitCode).toBe(0);
 
           expect(run.presented?.data).toMatchObject({
-            summary: expect.any(String),
-            contract: {
-              storageHash: expect.any(String),
-              profileHash: expect.any(String),
-            },
-            marker: {
-              created: true,
-              updated: false,
-            },
+            ok: true,
+            summary: 'Database signed',
+            spaces: [
+              {
+                space: 'app',
+                status: 'created',
+                contract: {
+                  storageHash: expect.any(String),
+                  profileHash: expect.any(String),
+                },
+              },
+            ],
           });
         });
       },
@@ -259,7 +261,7 @@ withTempDir(({ createTempDir }) => {
           const contractJson = JSON.parse(await readFile(contractPath, 'utf-8'));
           contractJson.storage.namespaces.public.entries.table.user.columns.email = {
             codecId: 'pg/text@1',
-            nativeType: 'text',
+            dataType: 'pg/text',
             nullable: false,
           };
           await writeFile(contractPath, JSON.stringify(contractJson, null, 2), 'utf-8');
@@ -298,7 +300,7 @@ withTempDir(({ createTempDir }) => {
           const contractJson = JSON.parse(await readFile(contractPath, 'utf-8'));
           contractJson.storage.namespaces.public.entries.table.user.columns.email = {
             codecId: 'pg/text@1',
-            nativeType: 'text',
+            dataType: 'pg/text',
             nullable: false,
           };
           await writeFile(contractPath, JSON.stringify(contractJson, null, 2), 'utf-8');
@@ -309,7 +311,7 @@ withTempDir(({ createTempDir }) => {
           expect(run.presented?.data).toMatchObject({
             ok: false,
             summary: expect.stringContaining('does not satisfy contract'),
-            schema: expect.anything(),
+            spaces: [{ space: 'app', status: 'failed', schema: expect.anything() }],
           });
         });
       },

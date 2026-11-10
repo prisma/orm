@@ -7,6 +7,7 @@ import {
   field,
   model,
   rel,
+  sql,
 } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
@@ -28,8 +29,8 @@ const Account = model('Account', {
 }).sql({
   table: 'account',
   checks: [
-    check({ expression: 'length(email) > 0', name: 'account_email_not_blank' }),
-    check({ expression: 'id > 0', map: 'account_id_positive' }),
+    check({ expression: sql`length(email) > 0`, name: 'account_email_not_blank' }),
+    check({ expression: sql`id > 0`, map: 'account_id_positive' }),
   ],
 });
 

@@ -105,6 +105,64 @@ describe('init scaffold', () => {
     );
 
     it(
+      'keeps the module type of an existing project that declares dependencies, and says why',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', dependencies: { express: '^5.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).not.toHaveProperty('type');
+        expect(run.presented?.data).toMatchObject({
+          warnings: expect.arrayContaining([
+            expect.stringMatching(
+              /^package\.json declares no "type".*MODULE_TYPELESS_PACKAGE_JSON warning/,
+            ),
+          ]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a TypeScript project that declares only devDependencies',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', devDependencies: { typescript: '^5.9.0', tsx: '^4.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a manifest that declares no dependencies yet',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app' }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'leaves a deno project without a package.json',
       async () => {
         writeFileSync(join(projectDir, 'deno.json'), '{}\n', 'utf-8');
@@ -146,6 +204,29 @@ describe('init scaffold', () => {
         expect(readFileSync(join(projectDir, 'README.md'), 'utf-8')).toBe('# mine\n');
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('README.md already exists')]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
+  describe('an absolute schema path', () => {
+    it(
+      'writes the schema at that path and lists it relative to the working directory',
+      async () => {
+        const schemaPath = join(projectDir, 'db/contract.prisma');
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL, '--schema-path', schemaPath), {
+          cwd: projectDir,
+        });
+
+        expect(run.exitCode).toBe(0);
+        expect(existsSync(schemaPath)).toBe(true);
+        expect(run.presented?.data).toMatchObject({
+          filesWritten: expect.arrayContaining(['db/contract.prisma']),
+        });
+        expect(run.presented?.data).not.toMatchObject({
+          filesWritten: expect.arrayContaining([schemaPath]),
         });
       },
       timeouts.coldTransformImport,
@@ -219,7 +300,9 @@ describe('init scaffold', () => {
         // write fail: `writeFileSync` raises EISDIR whatever the permissions.
         mkdirSync(join(projectDir, '.env.example'), { recursive: true });
 
-        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(...SKIP_ALL), '--json'], {
+          cwd: projectDir,
+        });
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -253,7 +336,7 @@ describe('init scaffold', () => {
         );
         installFakeProjectLocalCli(projectDir);
 
-        const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
@@ -302,9 +385,12 @@ describe('init scaffold', () => {
     it(
       'errors under --strict-probe when the probe cannot run',
       async () => {
-        const run = await harness().run(scaffoldArgv('--probe-db', '--strict-probe', ...SKIP_ALL), {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          [...scaffoldArgv('--probe-db', '--strict-probe', ...SKIP_ALL), '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({

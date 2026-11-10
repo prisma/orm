@@ -1,0 +1,52 @@
+export {
+  type ColumnDefaultCheckBuilder,
+  type ColumnExistsCheckBuilder,
+  type ConstraintExistsCheckBuilder,
+  columnDefaultAst,
+  columnDefaultSequenceAst,
+  columnExistsAst,
+  columnNullabilityAst,
+  columnTypeAst,
+  constraintExistsAst,
+  type ExtensionExistsCheckBuilder,
+  extensionExistsAst,
+  extensionInSchemaAst,
+  type IndexExistsCheckBuilder,
+  indexExistsAst,
+  noNullValuesAst,
+  type RlsEnabledCheckBuilder,
+  type RlsPolicyExistsCheckBuilder,
+  rlsEnabledAst,
+  rlsPolicyExistsAst,
+  sequenceNameAvailableAst,
+  type TableExistsCheckBuilder,
+  type TablePrimaryKeyCheckBuilder,
+  tableExistsAst,
+  tableIsEmptyAst,
+  tablePrimaryKeyAst,
+  toRegclass,
+} from '../contract-free/checks';
+export {
+  int4,
+  int8,
+  jsonb,
+  pgTable,
+  text,
+  textArray,
+  timestamptz,
+  timestamptzJsDate,
+} from '../contract-free/columns';
+export {
+  buildControlTableBootstrapQueries,
+  buildSignMarkerBootstrapQueries,
+} from '../contract-free/control-bootstrap';
+export {
+  addColumnAction,
+  addConstraintAction,
+  alterColumnTypeAction,
+  alterTable,
+  createSchema,
+  createTable,
+  dropDefaultAction,
+} from '../contract-free/ddl';
+export { PostgresTableSource } from '../core/ast/table-source';

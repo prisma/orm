@@ -1,0 +1,126 @@
+{
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "posts": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "embedding": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/vector@1",
+                  "typeParams": {
+                    "length": 3
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "body": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "embedding": {
+                  "field": "embedding"
+                },
+                "body": {
+                  "field": "body"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "47d3955f42e2ab3fc2f8d01a7338dcb13c3947df5cc77255fd44c884172083e7",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "posts": {
+              "kind": "mongo-collection",
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    },
+                    "embedding": {
+                      "bsonType": "array"
+                    },
+                    "body": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "_id",
+                    "embedding",
+                    "title"
+                  ]
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

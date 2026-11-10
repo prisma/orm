@@ -16,9 +16,9 @@ The headline query ranks authors by post count, attaches the most recent post da
 `Post` declares two MongoDB indexes through PSL:
 
 - `@@index([authorId])` — supports the `authorId` lookup join key
-- `@@index([createdAt(sort: Desc)])` — supports time-ordered reads
+- `@@index([sort(createdAt, Desc)])` — supports time-ordered reads
 
-> Note on syntax: the per-field form `[createdAt(sort: Desc)]` is the supported PSL surface for sort direction; the alternate `[createdAt], { sort: -1 }` shorthand is not parsed.
+> Note on syntax: the function form `[sort(createdAt, Desc)]` is the supported PSL surface for sort direction; the alternate `[createdAt], { sort: -1 }` shorthand is not parsed.
 
 `Article` does **not** carry `@@unique([summary])` — summaries are descriptive prose, not identity.
 
@@ -81,11 +81,14 @@ Each link in the chain produces a precise downstream row type:
 
 ```ts
 import mongo from '@prisma/orm-mongo/runtime';
+import { contractFromJson } from '@prisma/orm-mongo/static';
 import contractJson from './contract.json' with { type: 'json' };
 import type { Contract } from './contract';
 
+export const contract = contractFromJson<Contract>(contractJson);
+
 export function createClient({ url, dbName }: { url: string; dbName?: string }) {
-  return mongo<Contract>({ contractJson, url, dbName });
+  return mongo({ contract, url, dbName });
 }
 ```
 

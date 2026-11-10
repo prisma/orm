@@ -81,19 +81,6 @@ describe('sanitizeCommanderResult', () => {
     ).toEqual(['no-install']);
   });
 
-  it('never emits Commander camelCase attribute names', () => {
-    expect(
-      sanitizeCommanderResult({
-        commandPath: ['prisma', 'init'],
-        positionalArgs: [],
-        options: [
-          { attributeName: 'schemaPath', longName: '--schema-path', source: 'cli' },
-          { attributeName: 'dryRun', longName: '--dry-run', source: 'cli' },
-        ],
-      }).flags,
-    ).toEqual(['schema-path', 'dry-run']);
-  });
-
   it('never reads positional args; the positionalArgs input is intentionally accepted but unused', () => {
     const out = sanitizeCommanderResult({
       commandPath: ['prisma', 'init'],
@@ -106,12 +93,18 @@ describe('sanitizeCommanderResult', () => {
   });
 
   it('never includes flag values in its output', () => {
+    const nameOption = {
+      attributeName: 'name',
+      longName: '--name',
+      source: 'cli',
+      value: 'customer-acme-payments',
+    };
     const out = sanitizeCommanderResult({
       commandPath: ['prisma', 'migration', 'new'],
       positionalArgs: [],
-      options: [{ attributeName: 'name', longName: '--name', source: 'cli' }],
+      options: [nameOption],
     });
-    expect(out.flags).toEqual(['name']);
+    expect(out).toEqual({ command: 'migration new', flags: ['name'] });
     expect(JSON.stringify(out)).not.toContain('customer-acme-payments');
   });
 

@@ -1,0 +1,107 @@
+# ADR 257 — Scalar types are named after the target on every surface
+
+Status: **Accepted**
+
+**Amended 2026-10-30 (TML-3714):** the TypeScript builder's helper for a type is `type.<Name>()`, the PSL name, on every target, not `field.<token>()`. MongoDB's TypeScript builder used to hard-code one `field.<token>()` helper per type; it now builds `type.*` from the constructors the family, target and extension packs contribute, as the SQL builder does (ADR 241), and a field is `field.scalar(type.Int32())`. The MongoDB target, not its adapter, contributes those constructors. The old helpers were removed before the release candidate, with no deprecated alias, as the PostgreSQL date and time renames were: reading one, such as `field.objectId`, throws `CONTRACT.FIELD_HELPER_UNKNOWN` naming the `type.*` call to write, and an upgrade script rewrites them. The deprecated PSL names (`Int`, `Float`, `Boolean`, `DateTime`) stay PSL-only and get no `type.*` helper.
+
+**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, keeps its name until it is renamed under the alias rule.
+
+**Amended by [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-02):** the PSL name is the database type, plus a suffix naming the application value where the database type has several codecs, such as `Int8BigInt` and `NumericString`. The codec id is a frozen identifier and need not match the PSL name: `Int8BigInt` is `pg/int8@1`, `NumericBigInt` is `pg/unboundedint@1`. A column helper is named after the explicit type it gives, such as `int8BigIntColumn`. The token rule below holds where the names already agree.
+
+## Decision
+
+A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `type.<Name>()` with the PSL name. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
+
+Two types are named after an encoding rather than a single stored type: `Json`, the JSON-representable subset of the target's values, and, on MongoDB, `Bson`, any BSON value.
+
+When two types store the same thing but give the application different values, the second token adds the application type as a suffix. `mongo/int64Number@1` (`Int64Number`, `type.Int64Number()`) stores a BSON `long` and reads it as a `number` in the safe-integer range, next to `mongo/int64@1`, which reads the same `long` as a `bigint`. PostgreSQL's `pg/int8number@1` and SQLite's `sqlite/bigintnumber@1` follow the same rule. The suffix names the application type because it is the only difference: the stored type is already in the first half of the token.
+
+## The decision in code
+
+The MongoDB target's scalar type constructors name each type after the BSON type it stores, and points it at a codec whose id carries the same token:
+
+```ts
+// packages/3-targets/mongo/1-target/src/core/authoring.ts
+export const mongoScalarAuthoringTypes = {
+  Int32: {
+    kind: 'typeConstructor',
+    documentation: 'A signed 32-bit integer, stored as BSON int.',
+    output: { codecId: MONGO_INT32_CODEC_ID },
+  },
+  // …
+  Json: {
+    kind: 'typeConstructor',
+    documentation:
+      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
+    output: { codecId: MONGO_JSON_CODEC_ID },
+  },
+  Bson: {
+    kind: 'typeConstructor',
+    documentation:
+      'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
+    output: { codecId: MONGO_BSON_CODEC_ID },
+  },
+  Int: {
+    kind: 'typeConstructor',
+    documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
+    output: { codecId: MONGO_INT32_CODEC_ID },
+    deprecated: { replacement: 'Int32' },
+  },
+  // …
+};
+```
+
+`MONGO_INT32_CODEC_ID` is `mongo/int32@1`, so the PSL name `Int32`, the TypeScript helper `type.Int32()` and the codec id all carry the token `int32`. The same holds for `bson`:
+
+```ts
+const contract = defineContract({}, ({ field, model, type }) => ({
+  models: {
+    Event: model('Event', {
+      collection: 'events',
+      fields: {
+        _id: field.scalar(type.ObjectId()),
+        payload: field.scalar(type.Json()),
+        raw: field.scalar(type.Bson()),
+      },
+    }),
+  },
+}));
+```
+
+## Why
+
+A name is the one piece of a type a user reads every time they write a schema, so it must not lie. `Int` meant a 4-byte integer on PostgreSQL, a 32-bit BSON `int` on MongoDB and a 64-bit `INTEGER` on SQLite; a user moving between targets, or reading a schema without knowing its target, could not tell which. Naming each type after what the target stores means no name is shared by types of different width, and a name is always correct for the target it is written against.
+
+The target owns its codecs, so it owns their names. A codec id already names the stored type (`mongo/int32@1`, `pg/int8@1`, `sqlite/blob@1`), which makes it the natural source of the token: the PSL name and the TypeScript helper follow the codec id, never the reverse. A codec id is recorded in every emitted `contract.json`, feeds the storage and execution hashes, and appears in signed database markers and migration snapshots, so renaming one would re-hash every contract that uses it. Surface names can change freely; codec ids do not.
+
+Symmetry across targets is symmetry of rule and grammar, not of spelling. Bare PascalCase scalar names, namespaced type aliases (`temporal.CreatedAt`; amended 2026-10-22, field presets such as `temporal.createdAt()` were removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)), the shared attribute set and `type.<Name>()` are the same everywhere; the tokens are each target's own. A reader moving between targets uses one table that maps concepts across targets, not a shared spelling that hides the differences.
+
+## `Json` and `Bson`
+
+`Json` means a JSON value, no more. On MongoDB its data type `mongo/json`, which the codec `mongo/json@1` represents, declares the JSON-representable BSON types (`object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`), so its collection validator lists them. Encode accepts exactly a plain JSON value and refuses anything else at any depth; decode accepts a stored value made only of those BSON types, with a `long` in the safe-integer range read as a `number`, and refuses the rest. Both name the value's path inside the field:
+
+```text
+mongo/json@1 wire value contains a non-JSON BSON date at events.0.at
+```
+
+`Bson` (`mongo/bson@1`) is any BSON value, the only MongoDB type whose validator does not constrain the field. Its application type `BsonValue` is structural (a `_bsontype` tag plus methods), because values come from the driver's own copy of the `bson` library. Its JSON form is canonical Extended JSON v2. The split is the same decision seen from both sides: a field typed `Json` holds what JSON can represent and is validated as such, and a field that must hold dates, identifiers or 64-bit integers inside it is typed `Bson`.
+
+On PostgreSQL and SQLite, `Json` columns store JSON text, so what is stored is always JSON, but their codecs do not yet refuse a non-JSON value on write: they pass it to `JSON.stringify`, which stores a `Date` as text, drops `undefined` members and stores `null` for `NaN`. Moving MongoDB's plain-JSON check into the framework so that those codecs refuse such values too is planned and has not shipped; until it does, the rule that `Json` holds a JSON value is enforced on write on MongoDB only. No `Bson` counterpart exists on either target.
+
+## Renaming a surface name
+
+A renamed PSL name stays available as a deprecated alias of the new one for one release line, then is removed. The one exception is the PostgreSQL date and time renames of ADR 279, made before the release candidate, which removed the old names at once. The alias resolves to the same codec, so the contract does not change. A type constructor marks itself with `deprecated: { replacement }` on its `AuthoringTypeConstructorDescriptor`, and the PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type's span wherever the deprecated name is written: bare or with arguments, as the type of a field, of a value object member, or of a `types {}` alias. The warning goes through the contract source's warning channel: a `ContractSourceDiagnostic` with `severity: 'warning'`, delivered to `ContractSourceContext.reportWarning`. `contract emit` prints it and still emits; the language server shows it as a warning and lists the deprecated names last in completion, struck through. The SQL family's interpreter follows this rule. MongoDB's interpreter warns only on a bare name written as a field's type; TML-3790 brings it in line.
+
+A codec id is never renamed under this decision. If one ever has to change, the reserved mechanism is: the codec registry registers the same codec under both ids, the emitter always writes the new id, the contract validator accepts both, `CodecTypes` carries both keys mapped to the same type, and an upgrade instruction tells users to re-emit and re-sign; after one release line the old id is removed with an error naming the new one.
+
+## Consequences
+
+- Every target follows the same rule and the same deprecation path for a renamed PSL name, apart from the pre-release exception above. The current per-target names and the cross-target concept table are listed in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
+- Readers of Prisma 6 and Prisma 7 schemas map the old names to codec ids through their target bindings and are unaffected by PSL names.
+- An extension that contributes a codec names its PSL type and TypeScript helper after the codec id's token, and declares every BSON type its codec stores in the `bsonTypes` of the codec's data type; the MongoDB validator derivation reads the whole list.
+
+## Alternatives considered
+
+**Keep the Prisma 6 and Prisma 7 names on every target.** The spelling is symmetric and familiar, and nothing needs renaming. Rejected: the shared names are wrong about storage. The same `Int` is three different widths, and `DateTime` is a timezone-aware instant on one target and a text column on another, so the name cannot be trusted without knowing the target.
+
+**Adopt MongoDB's query-language aliases (`int`, `long`, `decimal`, `binData`) and rename the codec ids to match.** Every surface would share one vocabulary with the database's own operators. Rejected: renaming codec ids changes every emitted contract and every hash derived from it, re-signs every database marker, and invalidates every migration snapshot, for no change in behaviour. Taking the token from the existing codec id gives the same honesty with none of that churn.

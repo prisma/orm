@@ -1,8 +1,7 @@
 import type { Shape } from '@prisma/orm-postgres/family-contract/types';
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
 import type { Models } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type UserId = Models.public_User['id'];
 
@@ -19,10 +18,9 @@ export type UserProfile = Shape<
 
 export async function ormClientGetUserProfile(
   userId: string,
-  runtime: Runtime,
+  orm: DemoOrm,
 ): Promise<UserProfile | null> {
-  const db = createOrmClient(runtime);
-  const user = await db.User.where({ id: toUserId(userId) })
+  const user = await orm.User.where({ id: toUserId(userId) })
     .include('posts', (posts) =>
       posts
         .orderBy((post) => post.createdAt.asc())

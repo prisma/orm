@@ -59,6 +59,8 @@ A User model with a referenced relation (Post) and an owned model (Address). Add
 }
 ```
 
+> Every model's `storage` now also records each field's stored name in `fields`, embedded models included (see [ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md)). This example predates that and leaves `fields` out.
+
 **SQL contract (same domain, different storage):**
 
 ```json
@@ -170,7 +172,7 @@ This is a domain-level fact: "Address is a component of User." It means:
 - Address is not an ORM entry point — it doesn't appear in `roots`.
 - Address's lifecycle is bound to User's. Deleting a User deletes its Addresses.
 
-The pattern mirrors `base` for polymorphism: just as `Bug` says `"base": "Task"` to declare it specializes Task, `Address` says `"owner": "User"` to declare it belongs to User.
+The pattern mirrors `base` for polymorphism: just as `Bug` says `"base": { "model": "Task", "namespace": "public" }` to declare it specializes Task, `Address` says `"owner": "User"` to declare it belongs to User.
 
 ### `strategy` is removed from relations
 
@@ -215,7 +217,7 @@ This solves the open question from ADR 174 about where embedded data physically 
 |---|---|---|
 | Present in `roots` | "I am an ORM entry point" | `"roots": { "users": "User" }` |
 | `owner` | "I belong to this model's aggregate" | `"owner": "User"` |
-| `base` | "I specialize this model" | `"base": "Task"` |
+| `base` | "I specialize this model" | `"base": { "model": "Task", "namespace": "public" }` |
 
 All three are domain facts, stated on the model itself, self-describing.
 

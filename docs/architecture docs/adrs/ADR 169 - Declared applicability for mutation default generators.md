@@ -1,5 +1,7 @@
 # ADR 169 — Declared applicability for mutation default generators
 
+**Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md):** applicability is still keyed by codec id, but it is declared on a binding of a generator function, not on the generator descriptor; `applicableCodecIds` is removed. A client generator is written `@onCreate(uuid(7))`, not `@default(uuid(7))`, and a default function lowers to a database default only.
+
 ## Context
 
 Prisma Next supports **execution-time mutation defaults** via `execution.mutations.defaults` (ADR 158). These defaults reference generators by stable ids (for example `cuid2`, `uuidv4`), and the execution plane fills in omitted values during mutations.
@@ -71,11 +73,11 @@ A mutation default descriptor declares:
 
 This is the shared layer. It lives in SQL core, not in any authoring surface package.
 
-Note: mutation default descriptors configure **defaults only** — they don't set the column type themselves. In PSL, the column type is declared separately (e.g. `id String @default(uuid())`). The TS authoring surface's `t.generated('id', uuidv4())` helper bundles type + default together as a convenience, but the underlying descriptor still describes a default, not a column type. For the broader concept of helpers that configure column type + default + constraints in one declaration, see ADR 170 (type constructors and field presets).
+Note: mutation default descriptors configure **defaults only** — they don't set the column type themselves. In PSL, the column type is declared separately (e.g. `id String @onCreate(uuid())`). (Amended 2026-10-22: `field.generated(...)` was removed by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md); a TypeScript field writes `.onCreate(gen.uuid())`.) The TS authoring surface's `t.generated('id', uuidv4())` helper bundled type + default together as a convenience, but the underlying descriptor still describes a default, not a column type. For the broader concept of helpers that configure column type + default + constraints in one declaration, see ADR 170 (type constructors and field presets).
 
 Each authoring surface projects the registry differently:
 
-- **PSL** parses `@default(uuid(7))` as a text function call, resolves the name against the registry, parses raw string arguments into validated parameters, and delegates to the descriptor's spec production.
+- **PSL** parses `@onCreate(uuid(7))` as a text function call, resolves the name against the registry, parses raw string arguments into validated parameters, and delegates to the descriptor's spec production.
 - **TS authoring (future)** would expose composed builder methods (e.g. `col.uuid({ version: 7 })` or `.default((d) => d.uuid(7))`) where the available methods are derived from the registry's descriptors. Arguments are already typed — no text parsing needed.
 
 Both surfaces produce the same contract output: `{ kind: 'generator', id: 'uuidv7' }`.

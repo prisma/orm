@@ -1,0 +1,10 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id      Int                      @id
+  area    Unsupported("circle")    @default("<(0,0),1>")
+  counter Unsupported("integer")   @default(autoincrement())
+  seenAt  Unsupported("timestamp") @default(now())
+}

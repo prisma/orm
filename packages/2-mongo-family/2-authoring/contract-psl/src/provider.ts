@@ -1,30 +1,46 @@
 import { readFile } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { buildSymbolTable, isPrismaNextSchema, mapPslDiagnostics } from '@internal/psl-parser';
+import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
+import {
+  buildSymbolTable,
+  createBinder,
+  isPrismaNextSchema,
+  mapPslDiagnostics,
+} from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 
 import { interpretPslDocumentToMongoContract } from './interpreter';
 
 export interface MongoContractOptions {
+  /** The target and extension packs of the stack, which the contract records. */
+  readonly target: TargetPackRef<'mongo', string>;
+  readonly extensionPacks?: Readonly<Record<string, ExtensionPackRef<string, string>>>;
   readonly output?: string;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
 }
 
-function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyMap<string, string> {
-  return new Map(
-    [...collectScalarTypeConstructors(namespace)].map(([name, output]) => [name, output.codecId]),
-  );
+function hasTarget(options: MongoContractOptions | undefined): boolean {
+  return options?.target !== undefined;
 }
 
-export function mongoContract(schemaPath: string, options?: MongoContractOptions): ContractConfig {
+export function mongoContract(schemaPath: string, options: MongoContractOptions): ContractConfig {
+  if (!hasTarget(options)) {
+    throw structuredError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `mongoContract("${schemaPath}") needs the MongoDB target pack, which the contract records.`,
+      {
+        fix: "Pass { target: mongoTargetPack }, with mongoTargetPack imported from '@prisma/orm-mongo/target/pack', or name the schema in defineConfig({ contract }) from '@prisma/orm-mongo/config', which passes it for you.",
+        meta: { schemaPath, reason: 'target-pack-missing' },
+      },
+    );
+  }
   const source: PslInterpretCapable = {
     format: 'psl',
     inputs: [schemaPath],
@@ -33,16 +49,16 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         documents: input.documents,
         symbolTable: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
+        target: options.target,
+        ...ifDefined('extensionPacks', options.extensionPacks),
         seedDiagnostics: [],
-        scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
-        controlMutationDefaults: {
-          ...context.controlMutationDefaults,
-          dataTypeEntries: context.authoringContributions.dataTypes,
-        },
+        defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
+        generatorFunctions: context.generatorFunctions,
+        dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
-        composedExtensions: context.composedExtensions,
-        ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),
+        ...ifDefined('enumInferenceCodecs', options.enumInferenceCodecs),
         ...ifDefined('reportWarning', context.reportWarning),
       });
     },
@@ -105,30 +121,39 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       const [firstSources, ...restSources] = parsed.map(({ sources }) => sources);
       assertDefined(firstSources, 'mongoContract requires at least one parsed schema file');
       const sources = firstSources.merge(...restSources);
-      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-        documents,
-        sources,
-      });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
       const seedDiagnostics = [
         ...readDiagnostics,
         ...mapPslDiagnostics(
-          [...parsed.flatMap(({ diagnostics }) => diagnostics), ...symbolTableDiagnostics],
+          parsed.flatMap(({ diagnostics }) => diagnostics),
           sources,
         ),
       ];
 
+      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+        documents,
+        sources,
+        defaultNamespaceId: context.defaultNamespaceId,
+      });
+      const { binder, diagnostics: binderDiagnostics } = createBinder({
+        symbolTable,
+        sources,
+        context,
+      });
       return withSeedDiagnostics(
-        this.interpret({ documents, sources, symbolTable }, context),
-        seedDiagnostics,
+        this.interpret({ documents, sources, symbolTable, binder }, context),
+        [
+          ...seedDiagnostics,
+          ...mapPslDiagnostics([...symbolTableDiagnostics, ...binderDiagnostics], sources),
+        ],
       );
     },
   };
 
   return {
     source,
-    ...ifDefined('output', options?.output),
+    ...ifDefined('output', options.output),
   };
 }

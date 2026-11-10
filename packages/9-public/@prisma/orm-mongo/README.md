@@ -2,9 +2,8 @@
 
 The one package a MongoDB application installs. It wires the framework, the Mongo family, and the Mongo target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-mongo": "0.16.0", "mongodb": "^7.0.0" } }
+```sh
+pnpm add @prisma/orm-mongo mongodb
 ```
 
 ```
@@ -40,6 +39,22 @@ Generated contract files import their types from the facade, so an application n
 | `/adapter`, `/adapter/*` | `@prisma/orm-target-mongo/adapter` |
 
 These forward; they do not copy. `@prisma/orm-mongo/contract/types` and `@prisma/orm-framework/contract/types` are the same module, so shared registries and `instanceof` checks hold across the boundary.
+
+## Prepared statements
+
+`db.prepare(declaration, callback)` builds a query once and runs it many times with different values. Run the handle against `await db.runtime()`:
+
+```ts
+const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.query
+    .from('users')
+    .match((f) => f.email.eq(p.email))
+    .build(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com' }).toArray();
+```
+
+The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`.
 
 ## The CLI
 

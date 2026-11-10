@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * Team task board: every user alongside their `tasks`, included in one read.
@@ -12,9 +11,8 @@ import { createOrmClient } from './client';
  * rows carry `priority` / `targetRelease`, all decoded from the joined variant
  * tables (`bug`, `feature`) in a single read.
  */
-export async function ormClientGetUserTaskBoard(limit: number, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.newestFirst()
+export async function ormClientGetUserTaskBoard(limit: number, orm: DemoOrm) {
+  return orm.User.newestFirst()
     .select('id', 'displayName', 'kind')
     .include('tasks', (tasks) => tasks.orderBy((task) => task.createdAt.asc()))
     .limit(limit)

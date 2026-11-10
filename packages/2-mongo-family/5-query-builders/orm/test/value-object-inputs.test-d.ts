@@ -50,36 +50,39 @@ type VOContract = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly name: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly contactInfo: {
                   readonly nullable: true;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'ContactInfo' };
+                  readonly many: false;
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'ContactInfo';
+                  };
                 };
                 readonly tags: {
                   readonly nullable: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'users' };
-            };
-          };
-          readonly valueObjects: {
-            readonly ContactInfo: {
-              readonly fields: {
-                readonly phone: {
-                  readonly nullable: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly website: {
-                  readonly nullable: true;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              readonly storage: {
+                readonly collection: 'users';
+                readonly fields: {
+                  readonly _id: { readonly field: '_id' };
+                  readonly name: { readonly field: 'name' };
+                  readonly contactInfo: { readonly field: 'contactInfo' };
+                  readonly tags: { readonly field: 'tags' };
                 };
               };
             };
@@ -93,7 +96,25 @@ type VOContract = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly users: MongoCollection } };
+          readonly entries: {
+            readonly collection: { readonly users: MongoCollection };
+            readonly valueObject: {
+              readonly ContactInfo: {
+                readonly fields: {
+                  readonly phone: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly website: {
+                    readonly nullable: true;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -115,7 +136,16 @@ test('DefaultModelRow handles scalar array fields', () => {
 
 test('CreateInput accepts inline value object structure', () => {
   type Input = CreateInput<VOContract, 'User'>;
-  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null>();
+  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null | undefined>();
+});
+
+test('CreateInput lets a nullable field be left out', () => {
+  type Input = CreateInput<VOContract, 'User'>;
+  const input: Input = { name: 'Alice', tags: [] };
+  expectTypeOf(input).toExtend<Input>();
+  // @ts-expect-error a non-nullable field stays required
+  const missingName: Input = { tags: [] };
+  void missingName;
 });
 
 test('CreateInput accepts null for nullable value object field', () => {
@@ -199,36 +229,39 @@ type VOContractWithFieldTypes = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly name: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly contactInfo: {
                   readonly nullable: true;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'ContactInfo' };
+                  readonly many: false;
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'ContactInfo';
+                  };
                 };
                 readonly tags: {
                   readonly nullable: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                  readonly many: true;
+                  readonly many: { readonly elementNullable: false };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'users' };
-            };
-          };
-          readonly valueObjects: {
-            readonly ContactInfo: {
-              readonly fields: {
-                readonly phone: {
-                  readonly nullable: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly website: {
-                  readonly nullable: true;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              readonly storage: {
+                readonly collection: 'users';
+                readonly fields: {
+                  readonly _id: { readonly field: '_id' };
+                  readonly name: { readonly field: 'name' };
+                  readonly contactInfo: { readonly field: 'contactInfo' };
+                  readonly tags: { readonly field: 'tags' };
                 };
               };
             };
@@ -242,7 +275,25 @@ type VOContractWithFieldTypes = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly users: MongoCollection } };
+          readonly entries: {
+            readonly collection: { readonly users: MongoCollection };
+            readonly valueObject: {
+              readonly ContactInfo: {
+                readonly fields: {
+                  readonly phone: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly website: {
+                    readonly nullable: true;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -267,7 +318,7 @@ test('DefaultModelRow resolves via InferModelRow from the precomputed field outp
 test('CreateInput resolves via FieldInputTypes when present', () => {
   type Input = CreateInput<VOContractWithFieldTypes, 'User'>;
   expectTypeOf<Input['name']>().toEqualTypeOf<string>();
-  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null>();
+  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null | undefined>();
 });
 
 // --- Contracts with embedded relations, references, and variants + FieldOutputTypes ---
@@ -329,18 +380,22 @@ type ExtContract = MongoContractWithTypeMaps<
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly title: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly type: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
                 readonly assigneeId: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
               };
@@ -361,63 +416,92 @@ type ExtContract = MongoContractWithTypeMaps<
               };
               readonly storage: {
                 readonly collection: 'tasks';
+                readonly fields: {
+                  readonly _id: { readonly field: '_id' };
+                  readonly title: { readonly field: 'title' };
+                  readonly type: { readonly field: 'type' };
+                  readonly assigneeId: { readonly field: 'assigneeId' };
+                };
                 readonly relations: { readonly comments: { readonly field: 'comments' } };
               };
               readonly discriminator: { readonly field: 'type' };
               readonly variants: {
-                readonly Bug: { readonly value: 'bug' };
-                readonly Feature: { readonly value: 'feature' };
+                readonly bug: CrossRefFor<'Bug'>;
+                readonly feature: CrossRefFor<'Feature'>;
               };
             };
             readonly Bug: {
               readonly fields: {
                 readonly severity: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'tasks' };
+              readonly storage: {
+                readonly collection: 'tasks';
+                readonly fields: { readonly severity: { readonly field: 'severity' } };
+              };
               readonly base: CrossRefFor<'Task'>;
             };
             readonly Feature: {
               readonly fields: {
                 readonly priority: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'tasks' };
+              readonly storage: {
+                readonly collection: 'tasks';
+                readonly fields: { readonly priority: { readonly field: 'priority' } };
+              };
               readonly base: CrossRefFor<'Task'>;
             };
             readonly User: {
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly name: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'users' };
+              readonly storage: {
+                readonly collection: 'users';
+                readonly fields: {
+                  readonly _id: { readonly field: '_id' };
+                  readonly name: { readonly field: 'name' };
+                };
+              };
             };
             readonly Comment: {
               readonly fields: {
                 readonly _id: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 };
                 readonly text: {
                   readonly nullable: false;
+                  readonly many: false;
                   readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
                 };
               };
               readonly relations: Record<string, never>;
-              readonly storage: Record<string, never>;
+              readonly storage: {
+                readonly fields: {
+                  readonly _id: { readonly field: '_id' };
+                  readonly text: { readonly field: 'text' };
+                };
+              };
               readonly owner: 'Task';
             };
           };
@@ -457,7 +541,7 @@ test('IncludedRow resolves included reference relations when FieldOutputTypes is
 });
 
 test('VariantCreateInput resolves when FieldInputTypes is present', () => {
-  type BugInput = VariantCreateInput<ExtContract, 'Task', 'Bug'>;
+  type BugInput = VariantCreateInput<ExtContract, 'Task', 'bug'>;
   expectTypeOf<BugInput>().toHaveProperty('title');
   expectTypeOf<BugInput>().toHaveProperty('severity');
 });

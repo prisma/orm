@@ -1,0 +1,61 @@
+{
+  "name": "@internal/driver-mongo",
+  "private": true,
+  "version": "8.0.0-rc.23",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "MongoDB driver for Prisma 8",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/errors": "workspace:8.0.0-rc.23",
+    "@internal/framework-components": "workspace:8.0.0-rc.23",
+    "@internal/mongo-lowering": "workspace:8.0.0-rc.23",
+    "@internal/mongo-wire": "workspace:8.0.0-rc.23",
+    "@internal/utils": "workspace:8.0.0-rc.23"
+  },
+  "devDependencies": {
+    "mongodb": "catalog:",
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
+    "@repo/tsdown": "workspace:8.0.0-rc.23",
+    "mongodb-memory-server": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "mongodb": "^7.0.0",
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-targets/mongo/3-driver"
+  }
+}

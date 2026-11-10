@@ -48,8 +48,33 @@ describe('mapIntegrityViolations', () => {
       'migrations-postgres',
     );
     expect(error?.why).toContain('migrations-postgres/');
-    expect(error?.fix).toContain('migrations-postgres/<space>');
+    expect(error?.fix).toBe(
+      'For a directory no extension declares, declare its extension in `extensions` or remove `migrations-postgres/<space>/`.',
+    );
     expect(error?.why).not.toContain('`migrations/`');
+  });
+
+  it('names the commands that write a declared pack space when its directory is missing', () => {
+    const error = mapIntegrityViolations(
+      [{ kind: 'declaredButUnmigrated', spaceId: 'pgvector' }],
+      'migrations',
+    );
+    expect(error?.fix).toBe(
+      'Run `prisma contract emit` or `prisma migration plan` to write the pinned files of each declared extension pack under `migrations/<space>/`.',
+    );
+  });
+
+  it('names both remedies when one space is orphaned and another is missing', () => {
+    const error = mapIntegrityViolations(
+      [
+        { kind: 'orphanSpaceDir', spaceId: 'old' },
+        { kind: 'declaredButUnmigrated', spaceId: 'pgvector' },
+      ],
+      'migrations',
+    );
+    expect(error?.fix).toBe(
+      'Run `prisma contract emit` or `prisma migration plan` to write the pinned files of each declared extension pack under `migrations/<space>/`. For a directory no extension declares, declare its extension in `extensions` or remove `migrations/<space>/`.',
+    );
   });
 
   it('interpolates the configured migrations dir into structural violation fix text', () => {

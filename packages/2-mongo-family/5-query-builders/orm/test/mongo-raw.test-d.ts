@@ -1,4 +1,12 @@
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoQueryPlan,
+  RawAggregateCommand,
+  RawDeleteManyCommand,
+  RawDeleteOneCommand,
+  RawInsertOneCommand,
+  RawUpdateManyCommand,
+  RawUpdateOneCommand,
+} from '@internal/mongo-query-ast/execution';
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import type { MongoRawClient } from '../src/mongo-raw';
@@ -25,4 +33,17 @@ test('aggregate build returns MongoQueryPlan', () => {
   type AggFn = Col['aggregate'];
   type BuildFn = ReturnType<AggFn>['build'];
   expectTypeOf<ReturnType<BuildFn>>().toExtend<MongoQueryPlan>();
+});
+
+test('each build carries its raw command type', () => {
+  type Col = RawMongoCollection;
+  type CommandOf<B extends { build(): { readonly command: unknown } }> = ReturnType<
+    B['build']
+  >['command'];
+  expectTypeOf<CommandOf<ReturnType<Col['aggregate']>>>().toEqualTypeOf<RawAggregateCommand>();
+  expectTypeOf<CommandOf<ReturnType<Col['insertOne']>>>().toEqualTypeOf<RawInsertOneCommand>();
+  expectTypeOf<CommandOf<ReturnType<Col['updateOne']>>>().toEqualTypeOf<RawUpdateOneCommand>();
+  expectTypeOf<CommandOf<ReturnType<Col['updateMany']>>>().toEqualTypeOf<RawUpdateManyCommand>();
+  expectTypeOf<CommandOf<ReturnType<Col['deleteOne']>>>().toEqualTypeOf<RawDeleteOneCommand>();
+  expectTypeOf<CommandOf<ReturnType<Col['deleteMany']>>>().toEqualTypeOf<RawDeleteManyCommand>();
 });

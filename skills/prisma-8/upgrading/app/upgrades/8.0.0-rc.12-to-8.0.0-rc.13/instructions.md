@@ -39,8 +39,9 @@ changes:
       The Mongo codec subpaths moved from the adapter to the target:
       `adapter/codec-types`, `adapter/codecs`, `adapter/codec-ids` and `adapter/data-types` under
       `@prisma/orm-mongo` and `@prisma/orm-target-mongo` are now `target/...`. Emitted
-      `contract.d.ts` files, including migration snapshots, import `adapter/codec-types` and no
-      longer compile until rewritten or re-emitted.
+      `contract.d.ts` files, including migration snapshots, import `adapter/codec-types` until
+      rewritten or re-emitted. Under `skipLibCheck: true` that import fails silently and the
+      contract's field types turn wrong where they are used, instead of failing to compile.
     detection:
       glob: "**/*.{ts,mts,cts,md}"
       matches:
@@ -78,23 +79,18 @@ changes:
       Four Mongo PSL scalar names are deprecated in favour of the name of the BSON type they store:
       `Int` → `Int32`, `Float` → `Double`, `Boolean` → `Bool`, `DateTime` → `Date`. The old names
       are still accepted, with a `PSL_DEPRECATED_SCALAR_NAME` warning, and will be removed in a later
-      release; rename them now. Codec ids, `contract.json` and every hash are unchanged.
+      release; rename them now. Codec ids, `contract.json` and every hash are unchanged. Rename only
+      in the Prisma 8 contract source and its `migrations/app/*/contract.prisma` copies, never in a
+      Prisma 6 `schema.prisma`.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
-  - id: mongo-json-field-semantics
-    summary: |
-      A Mongo `Json` field now admits only JSON values. Its collection validator lists the
-      JSON-representable BSON types, which changes the validator and `storageHash` of every Mongo
-      contract with a `Json` field, and a document whose `Json` field holds a `Date`, `ObjectId`,
-      `Decimal128`, `Binary`, or another non-JSON BSON value at any depth fails to decode.
+        - '(?<![\s\S])(?![\s\S]*\bprovider\s*=\s*"mongodb")[\s\S]*?(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
   - id: mongo-variant-field-codecs
     summary: |
       Through `.variant(...)`, a field declared only on the variant model is now written and read
       through its codec, as base-model fields always were. An `ObjectId` field there is stored as
-      an `ObjectId` and read back as a hex string; an `Int64`, `Decimal128` or `Binary` field reads
-      back as its application type; `Json` and `Bson` fields refuse values outside their type.
+      an `ObjectId` and read back as a hex string, and a where filter on it encodes a hex string.
   - id: contract-artifacts-restamp
     summary: |
       The emitted `contract.json` / `contract.d.ts` embed the toolchain version, which moves
@@ -236,6 +232,8 @@ The Mongo target package owns the codecs now. Rewrite each specifier, in every f
 
 The exported names are unchanged. For the application's own `contract.d.ts`, running `prisma contract emit` produces the same result as the rewrite. Snapshot `contract.d.ts` files under `migrations/snapshots/` are not re-emitted, so rewrite them. The contract JSON and every hash stay the same.
 
+Do not rely on `tsc` to find the `contract.d.ts` files. They are declaration files, and a project with `skipLibCheck: true` (the `tsconfig.json` that `prisma orm init` writes sets it) gets no error for their stale import. Instead the contract's field types stop resolving to the codec types, so type errors appear where the contract is used, such as a seed script or a query, rather than at the import, and some fields are no longer type-checked. Rewrite or re-emit every file the detection finds, whether or not `tsc` complains.
+
 ## `create-mongo-runner-deps-removed`
 
 ```ts
@@ -280,7 +278,9 @@ Code that goes through the CLI or `defineConfig` already has the adapter on the 
 
 `Int`, `Float`, `Boolean` and `DateTime` are deprecated in Mongo schemas. They are still accepted, and they produce the same contract as the new names, but `prisma contract emit` and the language server report a `PSL_DEPRECATED_SCALAR_NAME` warning for each use, and a later release removes them. Rename them now.
 
-Apply this only in a schema whose `prisma.config.ts` uses `@prisma/orm-mongo`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release.
+Apply this only to the Prisma 8 Mongo contract source, the `.prisma` file that `prisma.config.ts` passes to `defineConfig` from `@prisma/orm-mongo/config`, and to its copies under `migrations/app/<migration>/contract.prisma`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release; leave them alone.
+
+Never rename in a Prisma 6 `schema.prisma`, such as one kept beside the Prisma 8 contract in a project that still runs Prisma 6: Prisma 6 has no `Int32`, `Double`, `Bool` or `Date`, and would reject the schema. The detection skips a file that declares `provider = "mongodb"`, which every Prisma 6 MongoDB schema does, but a multi-file Prisma 6 schema declares it in one file only, so also skip the other `.prisma` files of a Prisma 6 schema directory.
 
 In each field whose type is one of the deprecated names, replace the type name, keeping any `[]` and `?`:
 
@@ -317,40 +317,14 @@ This includes the `contract.prisma` copies under `migrations/app/<migration>/`. 
 
 Docs: list only `Int32`, `Double`, `Bool`, `Date`; the old names must not appear in the scalar tables.
 
-## `mongo-json-field-semantics`
-
-This change has no detection pattern: which `Json` fields hold non-JSON values depends on the data, which a search of the source cannot see.
-
-A Mongo `Json` field (`field.json()` in TypeScript) means a JSON value, no more. Its validator admits BSON `object`, `array`, `string`, `double`, `int`, `long`, `bool` and `null`. Reading a document fails with `RUNTIME.DECODE_FAILED` when the field holds a `Date`, `ObjectId`, `Decimal128`, `Binary`, regular expression, timestamp, or a 64-bit integer outside the safe-integer range, at any depth; the message names the path inside the field. Writing such a value fails with `RUNTIME.ENCODE_FAILED`.
-
-To find the affected fields, query each collection with a `Json` field for documents whose field holds a non-JSON value at its top level or as a direct element of an array: a BSON type outside the JSON types, a `long` outside the safe-integer range, or a `NaN` or infinite `double`:
-
-```js
-db.<collection>.find({
-  $or: [
-    { <field>: { $exists: true, $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } },
-    { <field>: { $elemMatch: { $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } } },
-    { <field>: { $type: 'long', $gt: 9007199254740991 } },
-    { <field>: { $type: 'long', $lt: -9007199254740991 } },
-    { <field>: { $in: [NaN, Infinity, -Infinity] } },
-  ],
-})
-```
-
-The first clause checks the field's own value, and the second checks each direct element when the value is an array. The last three clauses match at both levels. A non-JSON value nested deeper, inside an object or an array of objects, is not visible to this query; reading every document through the ORM finds it, because the read fails with the path of the first such value.
-
-1. For each Mongo `Json` field whose documents hold such values, change its type to `Bson` in PSL (`field.bson()` in TypeScript), which admits any BSON value. A project whose contract source is a Prisma 6 schema (`prisma6Schema`) cannot declare `Bson`: keep its `Json` fields JSON-only, or move the contract source to a Prisma 8 schema and change the type there.
-2. Run `prisma contract emit`. Every Mongo contract written in Prisma 8 PSL with a `Json` field changes: its validator lists the JSON types and its `storageHash` moves, whether or not step 1 changed anything. A contract built with the TypeScript builder or read from a Prisma 6 schema has no validator, so it does not change; the codec's checks on read and write still apply to it.
-3. If the contract changed in step 2, run `prisma db update` so each collection's validator matches the contract. It reports the validator change as destructive and asks for confirmation: type the database name, or pass `--confirm <database>` when nobody is there to ask. A project that deploys with migrations runs `prisma migration plan` instead and applies the new migration the way it applies any other.
-
 ## `mongo-variant-field-codecs`
 
-This change has no detection pattern: it applies to every model with `@@base` whose own fields are written or read through `.variant(...)`, and the effect depends on the field types.
+This change has no detection pattern: it applies to every model with `@@base` whose own `ObjectId` fields are written or read through `.variant(...)`.
 
-Before, a field declared only on a variant model (`model Photo { ownerId ObjectId  @@base(Asset, "photo") }`) was passed to the driver as the application wrote it and returned as the driver read it. An `ObjectId` field written as a hex string was refused by the collection validator when the contract was written in Prisma 8 PSL; a contract built with the TypeScript builder or read from a Prisma 6 schema has no validator, so there the hex string was stored as a string. A where filter on such a field passed its value unencoded, so a hex string matched nothing where an `ObjectId` was stored; it is now encoded and matches. A stored `ObjectId`, `Long`, `Decimal128` or `Binary` came back as the driver's class instead of the application type.
+Before, a field declared only on a variant model (`model Photo { ownerId ObjectId  @@base(Asset, "photo") }`) was passed to the driver as the application wrote it and returned as the driver read it. An `ObjectId` field written as a hex string was refused by the collection validator when the contract was written in Prisma 8 PSL; a contract built with the TypeScript builder has no validator, so there the hex string was stored as a string. A stored `ObjectId` came back as the driver's `ObjectId` class instead of a hex string. A where filter on such a field passed its value unencoded, so a hex string matched nothing where an `ObjectId` was stored; it is now encoded and matches.
 
-1. Remove any workaround that converted such values by hand, for example passing `new ObjectId(hex)` for a variant `ObjectId` field or calling `.toHexString()` on what a read returned; pass and expect the application types listed in the scalar types reference instead.
-2. Documents written before this change by a TypeScript-builder or Prisma 6 contract may hold a variant `ObjectId` field as a string; a filter with a hex string now looks for an `ObjectId` and does not match them. Convert the ones that are 24-character hex strings with `db.<collection>.updateMany({ <field>: { $type: 'string', $regex: /^[0-9a-fA-F]{24}$/ } }, [{ $set: { <field>: { $toObjectId: '$<field>' } } }])`. The regex matters: without it, one string that is not an `ObjectId` in hex makes `$toObjectId` fail the whole command. Other strings, `ObjectId` values and documents without the field are left as they are.
+1. Remove any workaround that converted such values by hand, for example passing `new ObjectId(hex)` for a variant `ObjectId` field or calling `.toHexString()` on what a read returned; pass and expect hex strings, as for any other `ObjectId` field.
+2. Documents written before this change through a TypeScript-builder contract may hold a variant `ObjectId` field as a string; a filter with a hex string now looks for an `ObjectId` and does not match them. Convert the ones that are 24-character hex strings with `db.<collection>.updateMany({ <field>: { $type: 'string', $regex: /^[0-9a-fA-F]{24}$/ } }, [{ $set: { <field>: { $toObjectId: '$<field>' } } }])`. The regex matters: without it, one string that is not an `ObjectId` in hex makes `$toObjectId` fail the whole command. Other strings, `ObjectId` values and documents without the field are left as they are.
 3. A read through the base collection (without `.variant(...)`) still returns variant-only fields as the driver read them.
 
 ## `contract-artifacts-restamp`

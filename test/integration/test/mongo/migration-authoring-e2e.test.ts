@@ -97,7 +97,7 @@ describe('Migration authoring round-trip (factory → serialize → deserialize 
         frameworkComponents: [],
         strictVerification: false,
       });
-      if (!result.ok) throw new Error(`Runner failed: ${result.failure.summary}`);
+      if (!result.ok) throw new Error(`Runner failed: ${result.failure.message}`);
       return result.value;
     } finally {
       await controlDriver.close();

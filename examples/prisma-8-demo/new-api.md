@@ -11,22 +11,28 @@ class PostCollection extends Collection<Contract, "Post"> {
 
 // ...
 
-const db = orm({
+const db = postgres({
   contract,
-  runtime,
+  url,
   collections: {
     Post: PostCollection,
     // Use default collections for the rest of the model
   }
 });
+const orm = db.orm.public;
 
-const posts = await db.Post.popular().all().toArray()
+const posts = await orm.Post.popular().all().toArray()
+
+// A transaction's ORM has the same classes
+const locked = await db.transaction(async (tx) =>
+  tx.orm.public.Post.popular().forUpdate().all()
+)
 ```
 
 ## Filter parent records by child records
 
 ```typescript
-const users = await db
+const users = await orm
   .User
   .where((u) => u.posts.some((p) => p.popular()))
   .all()
@@ -36,7 +42,7 @@ const users = await db
 ## Selecting related records
 
 ```typescript
-db
+orm
   .User
   .where(conditions)
   .include('posts', (p) =>
@@ -50,7 +56,7 @@ db
 We're not awaiting `first()`, instead using `.comments` to drop to a `comments` collection attached to the parent `post` record.
 
 ```typescript
- db
+ orm
   .Post
   .where({ id: postId })
   .first()

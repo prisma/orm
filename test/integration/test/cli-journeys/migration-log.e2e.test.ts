@@ -114,7 +114,8 @@ withTempDir(({ createTempDir }) => {
           error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
         });
         expect(envelope?.nextActions.length).toBeGreaterThan(0);
-        expect(envelope).not.toHaveProperty('fix');
+        expect(envelope?.ok).toBe(false);
+        expect(envelope).not.toHaveProperty('error.fix');
       },
       timeouts.typeScriptCompilation,
     );

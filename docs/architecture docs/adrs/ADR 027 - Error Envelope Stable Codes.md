@@ -112,7 +112,6 @@ NAMESPACE.SUBCODE where NAMESPACE ∈ { PLAN, RUNTIME, ADAPTER, BUDGET, LINT, MI
 #### MIGRATION
 - **MIGRATION.PRECHECK_FAILED**: preconditions not met
 - **MIGRATION.POSTCHECK_FAILED**: postconditions not satisfied
-- **MIGRATION.IDEMPOTENT_ALREADY_APPLIED**: safe no-op replay
 - **MIGRATION.CONFLICT**: state differs in conflicting ways
 - **MIGRATION.NON_TRANSACTIONAL_STEP**: requires compensation plan
 - **MIGRATION.DIR_EXISTS**: migration directory already exists on disk

@@ -20,22 +20,22 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import { createControlClient } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
-import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
+import {
+  cacheAnnotation,
+  createCacheMiddleware,
+  createInMemoryCacheStore,
+} from '@internal/middleware-cache';
+import { contractFromJson } from '@internal/postgres/static';
 import type { SqlMiddleware } from '@internal/sql-runtime';
-import postgres from '@internal/target-postgres/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import supabasePack from '../src/exports/pack';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { supabase } from '../src/exports/runtime';
 import type { Contract } from './fixtures/example-app/contract';
 import contractJson from './fixtures/example-app/contract.json' with { type: 'json' };
 import { createDb, fixtureJwt } from './fixtures/example-app/db';
+import { runDbInit } from './fixtures/example-app/db-init';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
 async function signJwt(
@@ -55,40 +55,11 @@ function recordingMiddleware(): { middleware: SqlMiddleware; sqls: string[] } {
   const middleware: SqlMiddleware = {
     name: 'rls-recorder',
     familyId: 'sql',
-    async beforeQuery(plan) {
+    async beforeEncode(plan) {
       sqls.push(plan.sql);
     },
   };
   return { middleware, sqls };
-}
-
-async function runDbInit(connectionString: string, migrationsDir: string): Promise<void> {
-  const space = supabasePack.contractSpace;
-  if (!space) throw new Error('supabasePack must declare a contractSpace');
-
-  await emitContractSpaceArtifacts(migrationsDir, 'supabase', {
-    contract: space.contractJson,
-    contractDts: '// supabase extension contract space\n',
-    headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
-  });
-
-  const client = createControlClient({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
-    extensions: [supabasePack],
-  });
-
-  try {
-    await client.connect(connectionString);
-    const result = await client.dbInit({ contract: contractJson, mode: 'apply', migrationsDir });
-    if (!result.ok) {
-      throw new Error(`dbInit apply failed: ${result.failure.summary}`);
-    }
-  } finally {
-    await client.close();
-  }
 }
 
 async function applyGrantsFixture(connectionString: string): Promise<void> {
@@ -370,7 +341,11 @@ describe('RLS — role-bound Supabase runtime acceptance', () => {
       const jwksUrl = `http://127.0.0.1:${port}/auth/v1/.well-known/jwks.json`;
 
       try {
-        const db = await supabase<Contract>({ contractJson, url: connectionString, jwksUrl });
+        const db = await supabase({
+          contract: contractFromJson<Contract>(contractJson),
+          url: connectionString,
+          jwksUrl,
+        });
         try {
           const jwtA = await new SignJWT({ sub: userAId, role: 'authenticated' })
             .setProtectedHeader({ alg: 'ES256', kid })
@@ -391,6 +366,59 @@ describe('RLS — role-bound Supabase runtime acceptance', () => {
         await new Promise<void>((resolve, reject) =>
           jwksServer.close((err) => (err ? reject(err) : resolve())),
         );
+      }
+    },
+    timeouts.spinUpPpgDev * 4,
+  );
+  it(
+    'an annotated ORM read on a role session is neither served from nor stored in the cache',
+    async () => {
+      const { connectionString } = database;
+      await withClient(connectionString, async (pg) => {
+        await setUpSupabaseMockSchema(pg);
+      });
+      await runDbInit(connectionString, migrationsDir);
+      await applyGrantsFixture(connectionString);
+
+      const userAId = crypto.randomUUID();
+      const userBId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await withClient(connectionString, async (pg) => {
+        await pg.query(
+          'INSERT INTO auth.users (id, email, created_at, updated_at) VALUES ($1, $2, $3, $3), ($4, $5, $3, $3)',
+          [userAId, 'user-a@example.com', now, userBId, 'user-b@example.com'],
+        );
+        await pg.query(
+          'INSERT INTO public.profile (id, username, "userId") VALUES ($1, $2, $3), ($4, $5, $6)',
+          [crypto.randomUUID(), 'alice', userAId, crypto.randomUUID(), 'bob', userBId],
+        );
+      });
+
+      const inner = createInMemoryCacheStore();
+      const store = {
+        get: vi.fn(inner.get),
+        set: vi.fn(inner.set),
+        unset: vi.fn(inner.unset),
+      };
+      const cache = createCacheMiddleware({ store });
+      const db = await createDb(connectionString, { middleware: [cache] });
+      try {
+        const usernamesOf = async (sub: string) => {
+          const roleDb = await db.asUser(await signJwt({ sub, role: 'authenticated' }));
+          const rows = await roleDb.orm.public.Profile.select('username').all((meta) =>
+            meta.annotate(cacheAnnotation({ key: 'profiles' })),
+          );
+          return rows.map((row) => row.username);
+        };
+
+        expect({
+          userA: await usernamesOf(userAId),
+          userB: await usernamesOf(userBId),
+          storeGets: store.get.mock.calls.length,
+          storeSets: store.set.mock.calls.length,
+        }).toEqual({ userA: ['alice'], userB: ['bob'], storeGets: 0, storeSets: 0 });
+      } finally {
+        await db.close();
       }
     },
     timeouts.spinUpPpgDev * 4,

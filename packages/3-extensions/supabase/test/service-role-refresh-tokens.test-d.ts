@@ -18,7 +18,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 import { expectTypeOf, test } from 'vitest';
 import supabasePack from '../src/exports/pack';
 
-const pgUuid = { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
+const pgUuid = { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false } as const;
 
 const Item = model('Item', {
   fields: {

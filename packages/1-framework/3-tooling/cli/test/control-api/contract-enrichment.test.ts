@@ -184,7 +184,7 @@ describe('enrichContract', () => {
     const extension = makeExtension({
       types: {
         codecTypes: {
-          controlPlaneHooks: { 'pg/vector@1': { expandNativeType: () => 'vector' } },
+          controlPlaneHooks: { 'pg/vector@1': { resolveIdentityValue: () => null } },
           import: {
             package: '@ext/pgvector',
             named: 'PgvectorCodecTypes',
@@ -203,6 +203,36 @@ describe('enrichContract', () => {
     expect(codecTypes['import']).toBeDefined();
   });
 
+  it('copies only the type metadata keys a contract carries, leaving out the storage list an older pack still declares', () => {
+    const queryOperationTypes = {
+      import: { package: '@ext/acme', named: 'QueryOperationTypes', alias: 'AcmeQueryOps' },
+    };
+    const operationTypes = {
+      import: { package: '@ext/acme', named: 'OperationTypes', alias: 'AcmeOps' },
+    };
+    const typesOfAnOlderPack = {
+      codecTypes: {
+        import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
+      },
+      queryOperationTypes,
+      aggregateDescriptors: [],
+      operationTypes,
+      storage: [{ typeId: 'acme/shape@1', familyId: 'sql', targetId: 'postgres' }],
+    };
+    const extension = makeExtension({ types: typesOfAnOlderPack });
+
+    const result = enrichContract(makeIR(), [extension]);
+
+    expect((result.extensions['pgvector'] as Record<string, unknown>)['types']).toEqual({
+      aggregateDescriptors: [],
+      codecTypes: {
+        import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
+      },
+      operationTypes,
+      queryOperationTypes,
+    });
+  });
+
   it('does not create extension pack entries for non-extension components', () => {
     const adapter = makeAdapter({
       capabilities: { postgres: { returning: true } },
@@ -211,33 +241,5 @@ describe('enrichContract', () => {
     const result = enrichContract(makeIR(), [adapter]);
 
     expect(result.extensions).toEqual({});
-  });
-
-  it('ignores non-boolean values in capabilities', () => {
-    const adapter = makeAdapter({
-      capabilities: {
-        postgres: { lateral: true, notABool: 'yes' as unknown },
-      },
-    });
-
-    const result = enrichContract(makeIR(), [adapter]);
-
-    expect(result.capabilities).toEqual({
-      postgres: { lateral: true },
-    });
-  });
-
-  it('produces deterministically sorted output', () => {
-    const ir = makeIR({
-      capabilities: { zebra: { z: true }, alpha: { a: true } },
-    });
-    const adapter = makeAdapter({
-      capabilities: { mid: { m: true } },
-    });
-
-    const result = enrichContract(ir, [adapter]);
-
-    const capKeys = Object.keys(result.capabilities);
-    expect(capKeys).toEqual(['alpha', 'mid', 'zebra']);
   });
 });

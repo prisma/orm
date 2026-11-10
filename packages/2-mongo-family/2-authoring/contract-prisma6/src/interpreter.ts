@@ -2,42 +2,41 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
-  type ContractEnum,
   type ContractField,
   type ContractReferenceRelation,
-  type ContractValueObject,
-  type CrossReference,
   crossRef,
-  type ExecutionMutationDefault,
   type ExecutionMutationDefaultPhases,
-  type JsonValue,
+  type ExecutionMutationDefaultValue,
   type ValueSetRef,
 } from '@internal/contract/types';
 import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import {
   type AuthoringEntityContext,
+  type DataTypeSupport,
+  type EnumBlockSite,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
   type ParsedPslExtensionBlock,
+  type WrittenValue,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import {
-  buildMongoStorage,
-  encodeMongoValueSets,
-  type MongoCollectionInput,
-  MongoIndex,
-  type MongoIndexKeyDirection,
-} from '@internal/mongo-contract';
 import {
   type MongoBackRelationCandidate,
   type MongoForeignKeyRelation,
   pairMongoBackRelations,
 } from '@internal/mongo-contract-psl';
+import {
+  buildMongoContractFromDefinition,
+  type FieldNode,
+  type IndexNode,
+  type ModelNode,
+  type RelationNode,
+  type ValueObjectNode,
+} from '@internal/mongo-contract-ts/contract-builder';
 import {
   type BlockSymbol,
   buildSymbolTable,
@@ -50,19 +49,21 @@ import {
   type PslSpan,
   type ResolvedAttribute,
   readResolvedAttribute,
-  readResolvedAttributes,
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type {
   DocumentAst,
   KeyValuePairAst,
+  MixinInclusionAst,
   PslSources,
   SourceFile,
 } from '@internal/psl-parser/syntax';
 import {
   ArrayLiteralAst,
+  dottedPathsIn,
   FunctionCallAst,
   IdentifierAst,
+  printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
@@ -73,10 +74,18 @@ import { basename } from 'pathe';
 import { prisma6Diagnostic } from './diagnostics';
 import {
   type IndexAttribute,
-  type IndexField,
+  type IndexDirection,
   parseFieldUnique,
   parseIndexAttribute,
+  prisma6IndexName,
+  prisma6IndexNameProblem,
 } from './indexes';
+import {
+  fieldSiteKey,
+  type IndexSite,
+  type Prisma6Sites,
+  refusalDiagnostic,
+} from './refusal-diagnostics';
 import type { Prisma6TargetBinding } from './target-binding';
 
 export interface Prisma6Document {
@@ -90,8 +99,11 @@ export interface InterpretPrisma6DocumentsInput {
   readonly documents: readonly Prisma6Document[];
   readonly seedDiagnostics: readonly ContractSourceDiagnostic[];
   readonly binding: Prisma6TargetBinding;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
+  readonly dataTypes: DataTypeSupport;
+  readonly defaultNamespaceId: string;
 }
 
 const SUMMARY = 'Prisma 6 MongoDB schema interpretation failed';
@@ -104,24 +116,17 @@ interface Located<T> {
 
 type Diagnostics = ContractSourceDiagnostic[];
 
-interface EnumBuild {
-  readonly codecId: string;
-  readonly members: readonly { readonly name: string; readonly value: unknown }[];
-}
-
 interface ModelBuild {
   readonly located: Located<ModelSymbol>;
   readonly collection: string;
-  /** Prisma 6 field name to stored field name, for every field that is not a relation field. */
+  /** Prisma 6 field name to stored name, for every field that is not a relation field. */
   readonly storedNames: Map<string, string>;
   readonly ignoredFields: Set<string>;
   readonly rejectedFields: Set<string>;
   readonly fields: Record<string, ContractField>;
   readonly relations: Record<string, ContractReferenceRelation>;
-  readonly executionDefaults: {
-    readonly field: string;
-    readonly phases: ExecutionMutationDefaultPhases;
-  }[];
+  /** The generators `@default(now())` and `@updatedAt` resolve to, by field name. */
+  readonly generatedValues: Map<string, ExecutionMutationDefaultPhases>;
   readonly uniqueFields: IndexAttribute[];
   readonly modelIndexes: IndexAttribute[];
   readonly relationFields: {
@@ -189,6 +194,10 @@ function unknownAttribute(
   );
 }
 
+interface InclusionHolderAst {
+  inclusions(): Iterable<MixinInclusionAst>;
+}
+
 export function interpretPrisma6Documents(
   input: InterpretPrisma6DocumentsInput,
 ): Result<Contract, ContractSourceDiagnostics> {
@@ -219,6 +228,7 @@ export function interpretPrisma6Documents(
     const { symbolTable, diagnostics: tableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
+      defaultNamespaceId: input.defaultNamespaceId,
     });
     for (const diagnostic of tableDiagnostics) {
       diagnostics.push({
@@ -236,12 +246,29 @@ export function interpretPrisma6Documents(
         span,
       });
     };
-    for (const block of Object.values(symbolTable.topLevel.blocks)) {
+    const unsupportedInclusions = (
+      code: string,
+      holders: Readonly<Record<string, { readonly node: InclusionHolderAst }>>,
+    ): void => {
+      for (const holder of Object.values(holders)) {
+        for (const inclusion of holder.node.inclusions()) {
+          diagnostics.push({
+            code,
+            message: `Unsupported mixin inclusion "${printSyntax(inclusion.syntax).trim()}"`,
+            sourceId,
+            span: nodePslSpan(inclusion.syntax, sources),
+          });
+        }
+      }
+    };
+    for (const block of Object.values(symbolTable.defaultNamespace.blocks)) {
       switch (block.keyword) {
         case 'datasource':
           datasources.push({ symbol: block, sourceId, sources });
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'generator':
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'enum':
           if (claimName('enum', block.name, sourceId, block.span)) {
@@ -252,7 +279,7 @@ export function interpretPrisma6Documents(
           diagnostics.push(
             prisma6Diagnostic(
               'PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED',
-              `View "${block.name}" is not supported; Prisma 8 has no views on MongoDB. Remove the view from the schema this contract source reads.`,
+              `View "${block.name}" is not supported; Prisma 8 has no views on MongoDB. Remove the view from the schema this contract source reads. The Prisma 6 client then loses the view's model too.`,
               sourceId,
               keywordPslSpan(block.node.syntax, block.keyword, sources),
             ),
@@ -262,18 +289,27 @@ export function interpretPrisma6Documents(
           unsupported(block.keyword, keywordPslSpan(block.node.syntax, block.keyword, sources));
       }
     }
-    for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    for (const namespace of Object.values(symbolTable.namespaces)) {
       for (const { span } of namespace.declarations) unsupported('namespace', span);
     }
-    for (const namedType of Object.values(symbolTable.topLevel.namedTypes)) {
+    for (const namedType of Object.values(symbolTable.namedTypes)) {
       unsupported('types', namedType.span);
     }
-    for (const symbol of Object.values(symbolTable.topLevel.compositeTypes)) {
+    for (const mixin of Object.values(symbolTable.defaultNamespace.mixins)) {
+      unsupported(`${mixin.keyword} mixin`, mixin.span);
+    }
+    unsupportedInclusions('PSL_INVALID_MODEL_MEMBER', symbolTable.defaultNamespace.models);
+    unsupportedInclusions('PSL_INVALID_MODEL_MEMBER', symbolTable.defaultNamespace.compositeTypes);
+    unsupportedInclusions(
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+      symbolTable.defaultNamespace.blocks,
+    );
+    for (const symbol of Object.values(symbolTable.defaultNamespace.compositeTypes)) {
       if (claimName('type', symbol.name, sourceId, symbol.span)) {
         compositeTypes.push({ symbol, sourceId, sources });
       }
     }
-    for (const symbol of Object.values(symbolTable.topLevel.models)) {
+    for (const symbol of Object.values(symbolTable.defaultNamespace.models)) {
       if (!claimName('model', symbol.name, sourceId, symbol.span)) continue;
       if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) {
         ignoredModels.add(symbol.name);
@@ -283,27 +319,46 @@ export function interpretPrisma6Documents(
     }
   }
 
-  checkDatasource(
+  const providerMismatch = checkDatasource(
     datasources,
     input.documents[0]?.sourceId ?? 'schema.prisma',
     binding,
-    diagnostics,
   );
+  if (providerMismatch !== undefined) {
+    return notOk({
+      summary: SUMMARY,
+      diagnostics: inSourceOrder([...input.seedDiagnostics, providerMismatch], input.documents),
+    });
+  }
 
-  const enums = new Map<string, EnumBuild>();
+  const enums = new Map<string, EnumTypeHandle>();
+  const enumSites = new Map<string, EnumBlockSite>();
   for (const located of enumBlocks) {
-    const built = buildEnum(located, input, diagnostics);
-    if (built !== undefined) enums.set(located.symbol.name, built);
+    const read = buildEnum(located, input, diagnostics);
+    if (read === undefined) continue;
+    enums.set(located.symbol.name, read.handle);
+    enumSites.set(located.symbol.name, read.site);
   }
 
   const modelNames = new Set([...models.map((m) => m.symbol.name), ...ignoredModels]);
   const compositeTypeNames = new Set(compositeTypes.map((c) => c.symbol.name));
-  const typeContext: TypeContext = { binding, enums, compositeTypeNames, diagnostics };
+  const enumNames = new Set(enumBlocks.map((located) => located.symbol.name));
+  const typeContext: TypeContext = {
+    binding,
+    generatorFunctions: input.generatorFunctions,
+    enums,
+    enumNames,
+    compositeTypeNames,
+    diagnostics,
+    namespaceId: input.defaultNamespaceId,
+  };
 
-  const valueObjects: Record<string, ContractValueObject> = {};
-  for (const located of compositeTypes) {
-    valueObjects[located.symbol.name] = { fields: readCompositeFields(located, typeContext) };
-  }
+  const valueObjects: ValueObjectNode[] = compositeTypes.map((located) => ({
+    name: located.symbol.name,
+    fields: Object.entries(readCompositeFields(located, typeContext)).map(([fieldName, field]) =>
+      fieldNodeOf(fieldName, field),
+    ),
+  }));
 
   const builds = new Map<string, ModelBuild>();
   for (const located of models) {
@@ -319,12 +374,14 @@ export function interpretPrisma6Documents(
       builds,
       { foreignKeys, invalidFkPairings, backRelations },
       diagnostics,
+      input.defaultNamespaceId,
     );
   }
   const paired = pairMongoBackRelations({
     foreignKeys,
     candidates: backRelations,
     invalidFkPairings,
+    namespaceId: input.defaultNamespaceId,
   });
   diagnostics.push(...mapPslDiagnostics(paired.diagnostics, mergedSources(input.documents)));
   for (const { modelName, fieldName, relation } of paired.relations) {
@@ -332,70 +389,158 @@ export function interpretPrisma6Documents(
     if (build !== undefined) build.relations[fieldName] = relation;
   }
 
-  const collections: Record<string, { indexes: MongoIndex[] }> = {};
-  const roots: Record<string, CrossReference> = {};
-  const executionDefaults: ExecutionMutationDefault[] = [];
+  const modelNodes: ModelNode[] = [];
+  const sites: Prisma6Sites = { fields: new Map(), indexes: new Map(), enums: enumSites };
   for (const [modelName, build] of builds) {
+    const { sourceId } = build.located;
     const indexes = buildIndexes(build, diagnostics);
-    const existing = collections[build.collection];
-    collections[build.collection] = { indexes: [...(existing?.indexes ?? []), ...indexes] };
-    roots[build.collection] = crossRef(modelName, UNBOUND_NAMESPACE_ID);
-    for (const { field, phases } of build.executionDefaults) {
-      executionDefaults.push({
-        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: build.collection, field },
-        ...phases,
+    sites.indexes.set(modelName, indexes);
+    for (const fieldName of Object.keys(build.fields)) {
+      const symbol = build.located.symbol.fields[fieldName];
+      if (symbol === undefined) continue;
+      sites.fields.set(fieldSiteKey(modelName, fieldName), {
+        sourceId,
+        span: symbol.span,
+        storedName: build.storedNames.get(fieldName) ?? fieldName,
       });
     }
+    modelNodes.push({
+      modelName,
+      collection: build.collection,
+      fields: Object.entries(build.fields).map(([fieldName, field]) => ({
+        ...fieldNodeOf(fieldName, field),
+        ...storedNameOf(fieldName, build.storedNames),
+        ...ifDefined('generatedValues', build.generatedValues.get(fieldName)),
+      })),
+      relations: Object.entries(build.relations).map(([fieldName, relation]) =>
+        relationNodeOf(fieldName, relation),
+      ),
+      indexes: indexes.map(({ index }) => index),
+    });
     if (!build.hasId) {
       diagnostics.push({
         code: 'PSL_MISSING_ID_FIELD',
         message: `Model "${modelName}" has no field with @id attribute. Every model must have exactly one @id field.`,
-        sourceId: build.located.sourceId,
+        sourceId,
         span: build.located.symbol.span,
       });
     }
   }
 
-  if (diagnostics.length > 0) {
-    return notOk({ summary: SUMMARY, diagnostics });
-  }
-
-  return ok(
-    assembleContract({
-      binding,
-      builds,
-      collections,
-      roots,
+  const built = buildMongoContractFromDefinition(
+    {
+      target: binding.target,
+      models: modelNodes,
       valueObjects,
-      enums,
-      executionDefaults,
-      codecLookup: input.codecLookup,
-    }),
+      enums: Object.fromEntries(enums),
+      writesCollectionValidators: false,
+      warnings: undefined,
+    },
+    input.codecLookup,
+    input.dataTypes,
   );
+  if (!built.ok) {
+    const fallbackSourceId = input.documents[0]?.sourceId ?? 'schema.prisma';
+    for (const refusal of built.failure.refusals) {
+      diagnostics.push(refusalDiagnostic(refusal, sites, fallbackSourceId));
+    }
+  }
+  if (!built.ok || diagnostics.length > 0) {
+    return notOk({ summary: SUMMARY, diagnostics: inSourceOrder(diagnostics, input.documents) });
+  }
+  return ok(built.value.contract);
 }
 
+function fieldNodeOf(fieldName: string, field: ContractField): FieldNode {
+  return {
+    fieldName,
+    type: field.type,
+    nullable: field.nullable,
+    many: field.many ?? false,
+    ...ifDefined(
+      'enumName',
+      field.valueSet?.entityKind === 'enum' ? field.valueSet.entityName : undefined,
+    ),
+  };
+}
+
+function storedNameOf(
+  fieldName: string,
+  storedNames: ReadonlyMap<string, string>,
+): { readonly storedName?: string } {
+  const storedName = storedNames.get(fieldName);
+  return storedName === undefined || storedName === fieldName ? {} : { storedName };
+}
+
+function relationNodeOf(fieldName: string, relation: ContractReferenceRelation): RelationNode {
+  if (relation.cardinality === 'N:M') {
+    throw new InternalError(
+      'A Prisma 6 MongoDB relation is one-to-one, one-to-many or many-to-one.',
+    );
+  }
+  return {
+    relationName: fieldName,
+    toModel: relation.to.model,
+    cardinality: relation.cardinality,
+    on: relation.on,
+    nullable: 'nullable' in relation ? relation.nullable : undefined,
+  };
+}
+
+/**
+ * Diagnostics by file, in the order the schema files were read, then by position; one with no position comes first in its file.
+ */
+function inSourceOrder(
+  diagnostics: readonly ContractSourceDiagnostic[],
+  documents: readonly Prisma6Document[],
+): ContractSourceDiagnostic[] {
+  const fileOrder = new Map(documents.map((document, index) => [document.sourceId, index]));
+  const fileRank = (diagnostic: ContractSourceDiagnostic) =>
+    fileOrder.get(diagnostic.sourceId) ?? documents.length;
+  const offset = (diagnostic: ContractSourceDiagnostic) => diagnostic.span?.start.offset ?? -1;
+  return [...diagnostics].sort((a, b) => fileRank(a) - fileRank(b) || offset(a) - offset(b));
+}
+
+/** Prisma 6 accepts no dotted path in a datasource or generator block, though the parser reads one as a value. */
+function reportDottedBlockValues(
+  block: BlockSymbol,
+  sourceId: string,
+  sources: PslSources,
+  diagnostics: Diagnostics,
+): void {
+  for (const entry of block.entries) {
+    const value = entry.value();
+    if (value === undefined) continue;
+    for (const path of dottedPathsIn(value)) {
+      diagnostics.push({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: `${block.keyword} "${block.name}": the value of "${entry.key()?.name() ?? ''}" holds the dotted path ${path.path().join('.')}, which Prisma 6 does not accept in a ${block.keyword} block.`,
+        sourceId,
+        span: nodePslSpan(path.syntax, sources),
+      });
+    }
+  }
+}
+
+/** The provider-mismatch diagnostic, or `undefined` when the schema names a provider the target reads. */
 function checkDatasource(
   datasources: readonly Located<BlockSymbol>[],
   fallbackSourceId: string,
   binding: Prisma6TargetBinding,
-  diagnostics: Diagnostics,
-): void {
+): ContractSourceDiagnostic | undefined {
   const [datasource] = datasources;
   const [namedProvider] = binding.providers;
   if (datasource === undefined) {
-    diagnostics.push(
-      prisma6Diagnostic(
-        'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
-        `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
-        fallbackSourceId,
-        undefined,
-      ),
+    return prisma6Diagnostic(
+      'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
+      `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
+      fallbackSourceId,
+      undefined,
     );
-    return;
   }
   const block = datasource.symbol;
   let parameter: KeyValuePairAst | undefined;
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     if (entry.key()?.name() === 'provider') {
       parameter = entry;
       break;
@@ -403,27 +548,30 @@ function checkDatasource(
   }
   const expression = parameter?.value();
   const provider = expression instanceof StringLiteralExprAst ? expression.value() : undefined;
-  if (provider === undefined || !binding.providers.includes(provider)) {
-    diagnostics.push(
-      prisma6Diagnostic(
-        'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
-        provider === undefined
-          ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`
-          : `The datasource provider is "${provider}"; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`,
-        datasource.sourceId,
-        parameter === undefined ? block.span : nodePslSpan(parameter.syntax, datasource.sources),
-      ),
-    );
-  }
+  if (provider !== undefined && binding.providers.includes(provider)) return undefined;
+  return prisma6Diagnostic(
+    'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
+    provider === undefined
+      ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`
+      : `The datasource provider is "${provider}"; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`,
+    datasource.sourceId,
+    parameter === undefined ? block.span : nodePslSpan(parameter.syntax, datasource.sources),
+  );
+}
+
+interface ReadEnum {
+  readonly handle: EnumTypeHandle;
+  /** Where the enum and its members are written, for a refusal of a member. */
+  readonly site: EnumBlockSite;
 }
 
 function buildEnum(
   located: Located<BlockSymbol>,
   input: InterpretPrisma6DocumentsInput,
   diagnostics: Diagnostics,
-): EnumBuild | undefined {
+): ReadEnum | undefined {
   const { symbol: block, sourceId, sources } = located;
-  for (const attribute of readResolvedAttributes(block.node.attributes(), sources)) {
+  for (const attribute of block.attributes) {
     if (attribute.name === 'map') continue;
     if (attribute.name === 'schema') {
       diagnostics.push(schemaUnsupported(`Enum "${block.name}"`, attribute, sourceId));
@@ -432,8 +580,9 @@ function buildEnum(
     diagnostics.push(unknownAttribute(`Enum "${block.name}"`, attribute, '@@', sourceId));
   }
   const values: Record<string, string> = Object.create(null);
+  const writtenValues: Record<string, WrittenValue> = Object.create(null);
   const parameterSpans: Record<string, PslSpan> = Object.create(null);
-  for (const entry of block.node.entries()) {
+  for (const entry of block.entries) {
     const name = entry.key()?.name();
     if (name === undefined) continue;
     let value = name;
@@ -450,6 +599,7 @@ function buildEnum(
       }
     }
     values[name] = value;
+    writtenValues[name] = { kind: 'string', text: value };
     parameterSpans[name] = nodePslSpan(entry.syntax, sources);
   }
   const descriptor = input.authoringContributions.entityTypes['enum'];
@@ -466,6 +616,7 @@ function buildEnum(
     family: input.binding.target.familyId,
     target: input.binding.target.targetId,
     codecLookup: input.codecLookup,
+    dataTypes: input.dataTypes,
     sourceId,
     enumInferenceCodecs: {
       text: input.binding.scalarCodecIds.String,
@@ -490,6 +641,7 @@ function buildEnum(
         keyword: 'enum',
         name: block.name,
         values,
+        writtenValues,
         parameterSpans,
         attributes: {},
         span: block.span,
@@ -499,8 +651,14 @@ function buildEnum(
   );
   if (handle === undefined || handle === null) return undefined;
   return {
-    codecId: handle.codecId,
-    members: handle.enumMembers.map((member) => ({ name: member.name, value: member.value })),
+    handle,
+    site: {
+      enumName: block.name,
+      codecId: handle.codecId,
+      sourceId,
+      span: block.span,
+      memberSpans: parameterSpans,
+    },
   };
 }
 
@@ -519,9 +677,13 @@ function schemaUnsupported(
 
 interface TypeContext {
   readonly binding: Prisma6TargetBinding;
-  readonly enums: ReadonlyMap<string, EnumBuild>;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
+  readonly enums: ReadonlyMap<string, EnumTypeHandle>;
+  /** Every declared enum, including one that was refused and so is not in `enums`. */
+  readonly enumNames: ReadonlySet<string>;
   readonly compositeTypeNames: ReadonlySet<string>;
   readonly diagnostics: Diagnostics;
+  readonly namespaceId: string;
 }
 
 interface FieldOwner {
@@ -534,6 +696,79 @@ function unsupportedTypeMessage(label: string, typeName: string, owner: FieldOwn
   const base = `${label} has type "${typeName}(...)", which has no Prisma 8 codec, so ${ownerLabel} cannot use this contract source while it has the field. Prisma 6 rejects @ignore on an Unsupported field. Removing the field from the schema leaves its stored values in the documents, but the Prisma 6 client no longer reads or writes them.`;
   if (owner.kind === 'type') return base;
   return `${base} Adding @@ignore to model "${owner.name}" keeps the model out of the contract, but the model disappears from the Prisma 6 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 6 client as well.`;
+}
+
+/** The native types Prisma 6 accepts on each MongoDB scalar, checked with Prisma 6.19. */
+const PRISMA6_NATIVE_TYPES: Readonly<Record<string, readonly string[]>> = {
+  String: ['db.String', 'db.ObjectId'],
+  Boolean: ['db.Bool'],
+  Int: ['db.Int', 'db.Long'],
+  BigInt: ['db.Long'],
+  Float: ['db.Double'],
+  DateTime: ['db.Date', 'db.Timestamp'],
+  Bytes: ['db.BinData', 'db.ObjectId'],
+  Json: ['db.Json'],
+};
+
+/** The BSON type Prisma 6 stores for each native type. */
+const PRISMA6_NATIVE_TYPE_BSON: Readonly<Record<string, string>> = {
+  'db.String': 'string',
+  'db.ObjectId': 'objectId',
+  'db.Bool': 'bool',
+  'db.Int': 'int',
+  'db.Long': 'long',
+  'db.Double': 'double',
+  'db.Date': 'date',
+  'db.Timestamp': 'timestamp',
+  'db.BinData': 'binData',
+  'db.Json': 'object',
+};
+
+/** The BSON type Prisma 6 stores for each MongoDB scalar that has no native type. `Int` is a long. */
+const PRISMA6_SCALAR_BSON: Readonly<Record<string, string>> = {
+  String: 'string',
+  Boolean: 'bool',
+  Int: 'long',
+  BigInt: 'long',
+  Float: 'double',
+  DateTime: 'date',
+  Bytes: 'binData',
+  Json: 'object',
+};
+
+function withArticle(typeName: string): string {
+  return `${/^[AEIOU]/.test(typeName) ? 'an' : 'a'} ${typeName}`;
+}
+
+function acceptedByPrisma6(nativeType: string, typeName: string): boolean {
+  const accepted = Object.hasOwn(PRISMA6_NATIVE_TYPES, typeName)
+    ? PRISMA6_NATIVE_TYPES[typeName]
+    : undefined;
+  return accepted?.includes(nativeType) === true;
+}
+
+/** Why the reader refuses a native type, and what removing it does to the Prisma 6 app. */
+function nativeTypeRefusal(label: string, nativeType: string, typeName: string): string {
+  const refused = `${label}: native type "@${nativeType}" is not supported`;
+  if (!acceptedByPrisma6(nativeType, typeName)) {
+    return `${refused}, and Prisma 6 does not accept it on ${withArticle(typeName)} field either. Remove it.`;
+  }
+  const declared = PRISMA6_NATIVE_TYPE_BSON[nativeType];
+  const plain = PRISMA6_SCALAR_BSON[typeName];
+  return `${refused}: Prisma 6 stores it as a BSON ${declared}, and Prisma 8 has no codec for that BSON type. Remove it; this also changes the Prisma 6 app: its client then stores new ${typeName} values as BSON ${plain} instead of ${declared}. Documents already stored keep their ${declared} values, so rewrite them as ${plain}s before Prisma 8 reads them.`;
+}
+
+function nativeTypeCodecId(
+  binding: Prisma6TargetBinding,
+  typeName: string,
+  nativeType: string,
+): string | undefined {
+  const forType = Object.hasOwn(binding.nativeTypeCodecIds, typeName)
+    ? binding.nativeTypeCodecIds[typeName]
+    : undefined;
+  return forType !== undefined && Object.hasOwn(forType, nativeType)
+    ? forType[nativeType]
+    : undefined;
 }
 
 /** The field's contract type, or `undefined` after reporting why it has none. */
@@ -561,20 +796,24 @@ function resolveFieldType(
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED',
-        attribute.name === 'db.ObjectId'
-          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String.`
-          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type.`,
+        nativeTypeRefusal(label, attribute.name, field.typeName),
         sourceId,
         attribute.span,
       ),
     );
     return undefined;
   };
-  const many = field.list ? { many: true as const } : {};
+  const many = { many: field.list ? { elementNullable: false } : (false as const) };
   if (ctx.compositeTypeNames.has(field.typeName)) {
     if (nativeType !== undefined) return nativeTypeUnsupported(nativeType);
     return {
-      type: { kind: 'valueObject', name: field.typeName },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: ctx.namespaceId,
+        entityKind: 'valueObject',
+        entityName: field.typeName,
+      },
       nullable: field.optional,
       ...many,
     };
@@ -585,7 +824,7 @@ function resolveFieldType(
     const valueSet: ValueSetRef = {
       plane: 'domain',
       entityKind: 'enum',
-      namespaceId: UNBOUND_NAMESPACE_ID,
+      namespaceId: ctx.namespaceId,
       entityName: field.typeName,
     };
     return {
@@ -594,6 +833,9 @@ function resolveFieldType(
       valueSet,
       ...many,
     };
+  }
+  if (ctx.enumNames.has(field.typeName)) {
+    return nativeType === undefined ? undefined : nativeTypeUnsupported(nativeType);
   }
   const scalarCodecId = Object.hasOwn(binding.scalarCodecIds, field.typeName)
     ? binding.scalarCodecIds[field.typeName]
@@ -611,10 +853,9 @@ function resolveFieldType(
   }
   let codecId = scalarCodecId;
   if (nativeType !== undefined) {
-    if (nativeType.name !== 'db.ObjectId' || field.typeName !== 'String') {
-      return nativeTypeUnsupported(nativeType);
-    }
-    codecId = binding.objectIdCodecId;
+    const nativeCodecId = nativeTypeCodecId(binding, field.typeName, nativeType.name);
+    if (nativeCodecId === undefined) return nativeTypeUnsupported(nativeType);
+    codecId = nativeCodecId;
   }
   return { type: { kind: 'scalar', codecId }, nullable: field.optional, ...many };
 }
@@ -640,14 +881,22 @@ function readCompositeFields(
         ctx.diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED',
-            `${label}: @map on a field of a composite type is not supported yet. The stored field keeps the name "${stringArgument(attribute) ?? field.name}", so removing @map renames it in storage; keep the schema as it is until Prisma 8 supports it.`,
+            `${label}: @map on a field of a composite type is not supported: Prisma 8 stores each field of a value object under its own name. Rename the field to "${stringArgument(attribute) ?? field.name}", the name it is stored under, and remove @map.`,
             sourceId,
             attribute.span,
           ),
         );
         rejected = true;
       } else if (attribute.name === 'default') {
-        ctx.diagnostics.push(defaultUnsupported(label, attribute, sourceId));
+        ctx.diagnostics.push(
+          defaultUnsupported(
+            label,
+            attribute,
+            { kind: 'type', name: symbol.name },
+            field,
+            sourceId,
+          ),
+        );
         rejected = true;
       } else {
         ctx.diagnostics.push(unknownAttribute(label, attribute, '@', sourceId));
@@ -667,14 +916,28 @@ function readCompositeFields(
   return fields;
 }
 
+/** What the Prisma 6 app loses when the Prisma 6 client stops filling a default. */
+function defaultRemovalConsequence(owner: FieldOwner, field: FieldSymbol): string {
+  if (field.optional || field.list) {
+    return owner.kind === 'model'
+      ? `a Prisma 6 create call that leaves "${field.name}" out no longer gets the default value`
+      : `a "${owner.name}" value written without "${field.name}" no longer gets the default value`;
+  }
+  return owner.kind === 'model'
+    ? `every Prisma 6 create call must then pass "${field.name}"`
+    : `every "${owner.name}" value the Prisma 6 app writes must then include "${field.name}"`;
+}
+
 function defaultUnsupported(
   label: string,
   attribute: ResolvedAttribute,
+  owner: FieldOwner,
+  field: FieldSymbol,
   sourceId: string,
 ): ContractSourceDiagnostic {
   return prisma6Diagnostic(
     'PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED',
-    `${label}: ${attributeText(attribute)} is not supported. MongoDB has no stored defaults, and Prisma 8 fills only \`now()\` on DateTime fields. Remove the default and set the value when you create documents.`,
+    `${label}: ${attributeText(attribute)} is not supported. MongoDB has no stored defaults, and Prisma 8 fills only \`now()\` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: ${defaultRemovalConsequence(owner, field)}. Set the value in the application code that creates documents, then remove the default.`,
     sourceId,
     attribute.span,
   );
@@ -698,13 +961,25 @@ function readModel(
     rejectedFields: new Set(),
     fields: {},
     relations: {},
-    executionDefaults: [],
+    generatedValues: new Map(),
     uniqueFields: [],
     modelIndexes: [],
     relationFields: [],
     hasId: false,
   };
-  const indexContext = { owner: modelLabel, prefix: '@@' as const, sourceId, sources, diagnostics };
+  const compositeFields = new Set(
+    Object.values(symbol.fields)
+      .filter((field) => ctx.compositeTypeNames.has(field.typeName))
+      .map((field) => field.name),
+  );
+  const indexContext = {
+    owner: modelLabel,
+    prefix: '@@' as const,
+    sourceId,
+    sources,
+    diagnostics,
+    compositeFields,
+  };
   for (const attribute of symbol.attributes) {
     switch (attribute.name) {
       case 'map':
@@ -765,7 +1040,7 @@ function readModelField(
         ignoredFieldReferenced(
           symbol.name,
           [field.name],
-          `@unique on field "${symbol.name}.${field.name}"`,
+          { kind: 'index', text: `@unique on field "${symbol.name}.${field.name}"` },
           sourceId,
           unique.span,
         ),
@@ -813,6 +1088,7 @@ function readModelField(
           sourceId,
           sources,
           diagnostics,
+          compositeFields: new Set(),
         });
         if (parsed !== undefined) build.uniqueFields.push(parsed);
         break;
@@ -828,13 +1104,8 @@ function readModelField(
   build.storedNames.set(field.name, storedName);
   if (field.malformedType) return;
 
-  const resolved = resolveFieldType(
-    field,
-    { kind: 'model', name: symbol.name },
-    nativeType,
-    sourceId,
-    ctx,
-  );
+  const owner: FieldOwner = { kind: 'model', name: symbol.name };
+  const resolved = resolveFieldType(field, owner, nativeType, sourceId, ctx);
   if (resolved === undefined) return;
   const codecId = resolved.type.kind === 'scalar' ? resolved.type.codecId : undefined;
 
@@ -849,7 +1120,7 @@ function readModelField(
       diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_ID_NOT_OBJECTID',
-          `${label} is the model's @id, but it is not a required ObjectId stored as "_id". Prisma 8 identifies a MongoDB document by an ObjectId "_id"; declare the id as \`${field.name} String @id @default(auto()) @map("_id") @db.ObjectId\`.`,
+          `${label} is the model's @id, but it is not a required ObjectId stored as "_id". Prisma 8 identifies a MongoDB document by an ObjectId "_id"; declare the id as \`${field.name} String @id @default(auto()) @map("_id") @db.ObjectId\`. If stored documents have "_id" values that are not ObjectIds, this model cannot use this contract source until they are rewritten with ObjectId "_id" values, along with every field that refers to them.`,
           sourceId,
           idAttribute.span,
         ),
@@ -857,10 +1128,10 @@ function readModelField(
       return;
     }
     if (defaultAttribute !== undefined && defaultKind(defaultAttribute) !== 'auto') {
-      diagnostics.push(defaultUnsupported(label, defaultAttribute, sourceId));
+      diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
       return;
     }
-    build.fields[storedName] = resolved;
+    build.fields[field.name] = resolved;
     return;
   }
 
@@ -869,7 +1140,7 @@ function readModelField(
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is only supported on a DateTime field. Remove @updatedAt and set the value when you write documents.`,
+        `${label}: @updatedAt is only supported on a DateTime field. Removing it also stops the Prisma 6 client from setting the field on every update. Set the value in application code when you write documents, then remove @updatedAt.`,
         sourceId,
         updatedAt.span,
       ),
@@ -878,30 +1149,53 @@ function readModelField(
   }
   const defaultIsNow = defaultAttribute !== undefined && defaultKind(defaultAttribute) === 'now';
   if (defaultAttribute !== undefined && (!defaultIsNow || !isDateTime)) {
-    diagnostics.push(defaultUnsupported(label, defaultAttribute, sourceId));
+    diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
     return;
   }
-  const generator = { kind: 'generator' as const, id: binding.timestampGeneratorId };
+  const generator =
+    updatedAt !== undefined || defaultIsNow
+      ? dateTimeNowGenerator(ctx.generatorFunctions, binding.scalarCodecIds.DateTime)
+      : undefined;
   const phases: ExecutionMutationDefaultPhases | undefined =
-    updatedAt !== undefined
-      ? { onCreate: generator, onUpdate: generator }
-      : defaultIsNow
-        ? { onCreate: generator }
-        : undefined;
+    generator === undefined
+      ? undefined
+      : updatedAt !== undefined
+        ? { onCreate: generator, onUpdate: generator }
+        : defaultIsNow
+          ? { onCreate: generator }
+          : undefined;
   if (phases !== undefined && field.optional) {
     const written = updatedAt ?? defaultAttribute;
+    const generator = written === undefined ? 'the generator' : attributeText(written);
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
-        `${label} is optional and its value comes from ${written === undefined ? 'a generator' : attributeText(written)}, which Prisma 8 cannot express on an optional field yet. Make the field required, or remove ${written === undefined ? 'the generator' : attributeText(written)} and set the value when you write documents.`,
+        `${label} is optional and its value comes from ${generator}, which Prisma 8 cannot express on an optional field yet. Either fix also changes the Prisma 6 app: a required field makes the Prisma 6 client fail on a stored document that lacks it, and without ${generator} the Prisma 6 client no longer fills it. Make the field required once every stored document has a value, or set the value in application code and remove ${generator}.`,
         sourceId,
         written?.span ?? field.span,
       ),
     );
     return;
   }
-  build.fields[storedName] = resolved;
-  if (phases !== undefined) build.executionDefaults.push({ field: storedName, phases });
+  build.fields[field.name] = resolved;
+  if (phases !== undefined) build.generatedValues.set(field.name, phases);
+}
+
+/** The generator `now()` resolves to on the DateTime codec, which `@default(now())` and `@updatedAt` write. */
+function dateTimeNowGenerator(
+  generatorFunctions: GeneratorFunctionRegistry,
+  codecId: string,
+): ExecutionMutationDefaultValue {
+  const now = generatorFunctions.resolve(
+    { name: 'now', args: {} },
+    { codecId, typeParams: undefined, length: undefined },
+  );
+  if (!now.ok) {
+    throw new InternalError(
+      `The stack binds no "now" generator function to codec "${codecId}", which the DateTime scalar maps to.`,
+    );
+  }
+  return now.generator;
 }
 
 interface RelationArguments {
@@ -925,23 +1219,64 @@ function identifierList(
   return names;
 }
 
+/** The relation a `@relation` attribute sits on: the model that holds the key, the model it refers to, and whether the relation is optional. */
+interface RelationSides {
+  readonly model: string;
+  readonly target: string;
+  readonly optional: boolean;
+}
+
+/**
+ * What removing `onDelete` or `onUpdate` does to the Prisma 6 app. The Prisma 6 client emulates referential actions on MongoDB with these defaults: `onDelete` is `Restrict` on a required relation (a delete fails with P2014) and `SetNull` on an optional one, and `onUpdate` is `Cascade`.
+ */
+function referentialActionRemoval(
+  key: 'onDelete' | 'onUpdate',
+  declared: string,
+  sides: RelationSides,
+): string {
+  const fallback =
+    key === 'onUpdate'
+      ? {
+          action: 'Cascade',
+          when: 'its default',
+          effect: `changing the field a ${sides.model} refers to in a ${sides.target} updates the key in its ${sides.model} documents`,
+        }
+      : sides.optional
+        ? {
+            action: 'SetNull',
+            when: 'its default for an optional relation',
+            effect: `deleting a ${sides.target} sets the key to null in its ${sides.model} documents`,
+          }
+        : {
+            action: 'Restrict',
+            when: 'its default for a required relation',
+            effect: `deleting a ${sides.target} that still has ${sides.model} documents fails with P2014`,
+          };
+  if (declared === fallback.action) {
+    return `Removing "${key}: ${declared}" leaves the Prisma 6 app as it is: ${declared} is already what the Prisma 6 client does for this relation.`;
+  }
+  return `The Prisma 6 client emulates referential actions, so removing "${key}: ${declared}" also changes the Prisma 6 app: its client then applies ${fallback.action}, ${fallback.when}, so ${fallback.effect}.`;
+}
+
 function readRelationArguments(
   attribute: ResolvedAttribute,
   label: string,
+  sides: RelationSides,
   sourceId: string,
   diagnostics: Diagnostics,
 ): RelationArguments | undefined {
   let name: string | undefined;
   let fields: readonly string[] | undefined;
   let references: readonly string[] | undefined;
-  const invalid = (what: string, span: PslSpan): undefined => {
+  let rejected = false;
+  const invalid = (what: string, span: PslSpan): void => {
+    rejected = true;
     diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${label}: @relation ${what}.`,
       sourceId,
       span,
     });
-    return undefined;
   };
   for (const arg of attribute.args) {
     const key = arg.kind === 'positional' ? 'name' : arg.name;
@@ -952,52 +1287,61 @@ function readRelationArguments(
           expression === undefined
             ? undefined
             : StringLiteralExprAst.cast(expression.syntax)?.value();
-        if (name === undefined) return invalid('name must be a string', arg.span);
+        if (name === undefined) invalid('name must be a string', arg.span);
         break;
       }
       case 'fields':
         fields = identifierList(arg);
-        if (fields === undefined) return invalid('fields must be a list of field names', arg.span);
+        if (fields === undefined) invalid('fields must be a list of field names', arg.span);
         break;
       case 'references':
         references = identifierList(arg);
-        if (references === undefined) {
-          return invalid('references must be a list of field names', arg.span);
-        }
+        if (references === undefined) invalid('references must be a list of field names', arg.span);
         break;
       case 'onDelete':
       case 'onUpdate':
       case 'map':
+        rejected = true;
         diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED',
             key === 'map'
-              ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map".`
-              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove "${key}" and handle related documents in application code.`,
+              ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map"; the Prisma 6 app has no foreign key on MongoDB either, so nothing changes there.`
+              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. ${referentialActionRemoval(key, arg.value, sides)} Handle related documents in application code, then remove "${key}".`,
             sourceId,
             arg.span,
           ),
         );
-        return undefined;
+        break;
       default:
-        return invalid(`argument "${key ?? ''}" is not supported`, arg.span);
+        invalid(`argument "${key ?? ''}" is not supported`, arg.span);
     }
   }
-  return { name, fields, references };
+  return rejected ? undefined : { name, fields, references };
+}
+
+/** What uses an ignored field: an index (or `@unique`) Prisma 6 `db push` maintains, or a relation field of the Prisma 6 client. */
+interface IgnoredFieldUse {
+  readonly kind: 'index' | 'relation';
+  readonly text: string;
 }
 
 function ignoredFieldReferenced(
   modelName: string,
   fieldNames: readonly string[],
-  usedBy: string,
+  usedBy: IgnoredFieldUse,
   sourceId: string,
   span: PslSpan,
 ): ContractSourceDiagnostic {
   const one = fieldNames.length === 1;
   const fields = fieldNames.map((name) => `"${modelName}.${name}"`).join(', ');
+  const removal =
+    usedBy.kind === 'index'
+      ? 'which makes Prisma 6 `db push` drop the index'
+      : 'which removes that relation from the Prisma 6 client';
   return prisma6Diagnostic(
     'PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED',
-    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${usedBy} uses ${one ? 'it' : 'them'}. Remove @ignore from ${fields}, or remove ${usedBy}.`,
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${usedBy.text} uses ${one ? 'it' : 'them'}. Remove @ignore from ${fields}, which adds ${one ? 'it' : 'them'} to the Prisma 6 client, or remove ${usedBy.text}, ${removal}.`,
     sourceId,
     span,
   );
@@ -1012,6 +1356,7 @@ function readRelationFields(
     readonly backRelations: MongoBackRelationCandidate[];
   },
   diagnostics: Diagnostics,
+  namespaceId: string,
 ): void {
   const { symbol, sourceId, sources } = build.located;
   for (const { field, relation } of build.relationFields) {
@@ -1025,7 +1370,13 @@ function readRelationFields(
     const args =
       relation === undefined
         ? undefined
-        : readRelationArguments(relation, label, sourceId, diagnostics);
+        : readRelationArguments(
+            relation,
+            label,
+            { model: symbol.name, target: field.typeName, optional: field.optional },
+            sourceId,
+            diagnostics,
+          );
     if (relation !== undefined && args === undefined) {
       reject();
       continue;
@@ -1048,7 +1399,7 @@ function readRelationFields(
       diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED',
-          `${label} is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field.`,
+          `${label} is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field. The Prisma 6 client then loses the relation fields too, so Prisma 6 code that reads or writes the relation through them (\`include\`, \`connect\`) has to use the key list instead.`,
           sourceId,
           relation?.span ?? field.span,
         ),
@@ -1064,7 +1415,7 @@ function readRelationFields(
         ignoredFieldReferenced(
           symbol.name,
           ignoredLocal,
-          `relation field "${symbol.name}.${field.name}"`,
+          { kind: 'relation', text: `relation field "${symbol.name}.${field.name}"` },
           sourceId,
           relation?.span ?? field.span,
         ),
@@ -1078,11 +1429,18 @@ function readRelationFields(
         ignoredFieldReferenced(
           target.located.symbol.name,
           ignoredTarget,
-          `relation field "${symbol.name}.${field.name}"`,
+          { kind: 'relation', text: `relation field "${symbol.name}.${field.name}"` },
           sourceId,
           relation?.span ?? field.span,
         ),
       );
+      reject();
+      continue;
+    }
+    if (
+      localNames.some((name) => build.rejectedFields.has(name)) ||
+      targetNames.some((name) => target.rejectedFields.has(name))
+    ) {
       reject();
       continue;
     }
@@ -1120,40 +1478,65 @@ function readRelationFields(
       reject();
       continue;
     }
-    const local = localFields.filter((name): name is string => name !== undefined);
-    const referenced = targetFields.filter((name): name is string => name !== undefined);
     build.relations[field.name] = {
-      to: crossRef(field.typeName, UNBOUND_NAMESPACE_ID),
+      to: crossRef(field.typeName, namespaceId),
       cardinality: 'N:1',
       nullable: field.optional,
-      on: { localFields: local, targetFields: referenced },
+      on: { localFields: localNames, targetFields: targetNames },
     };
     out.foreignKeys.push({
       declaringModel: symbol.name,
       targetModel: field.typeName,
       ...ifDefined('relationName', args?.name),
-      localFields: local,
-      targetFields: referenced,
+      localFields: localNames,
+      targetFields: targetNames,
     });
   }
 }
 
-function buildIndexes(build: ModelBuild, diagnostics: Diagnostics): MongoIndex[] {
+/**
+ * The indexes of one model that Prisma 6 refuses with "Index already exists in the model.": each index whose fields, in order, have the same names and the same written sort as another index of the model, whatever the kind of either index. An unwritten sort differs from `sort: Asc`.
+ */
+function clashingIndexes(
+  attributes: readonly IndexAttribute[],
+): ReadonlyMap<IndexAttribute, readonly IndexAttribute[]> {
+  const writtenKey = (attribute: IndexAttribute) =>
+    JSON.stringify(attribute.fields.map((field) => [field.name, field.direction ?? null]));
+  const clashes = new Map<IndexAttribute, readonly IndexAttribute[]>();
+  for (const attribute of attributes) {
+    const others = attributes.filter(
+      (other) => other !== attribute && writtenKey(other) === writtenKey(attribute),
+    );
+    if (others.length > 0) clashes.set(attribute, others);
+  }
+  return clashes;
+}
+
+/** A model's indexes as the builder takes them, with where each is written. */
+function buildIndexes(
+  build: ModelBuild,
+  diagnostics: Diagnostics,
+): (IndexSite & { readonly index: IndexNode })[] {
   const { symbol, sourceId } = build.located;
-  const indexes: MongoIndex[] = [];
+  const indexes: (IndexSite & { readonly index: IndexNode })[] = [];
   let textIndexes = 0;
-  const keyFor = (
-    field: IndexField,
-    text: boolean,
-  ): { readonly field: string; readonly direction: MongoIndexKeyDirection } => ({
-    field: build.storedNames.get(field.name) ?? field.name,
-    direction: field.direction ?? (text ? 'text' : 1),
-  });
-  for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
+  const attributes = [...build.uniqueFields, ...build.modelIndexes];
+  const clashing = clashingIndexes(attributes);
+  const nameOf = (attribute: IndexAttribute) =>
+    attribute.map ??
+    prisma6IndexName(
+      build.collection,
+      attribute.fields.map((field) => build.storedNames.get(field.name) ?? field.name),
+      attribute.kind === 'unique',
+    );
+  for (const attribute of attributes) {
     const names = attribute.fields.map((field) => field.name);
-    const usedBy = build.uniqueFields.includes(attribute)
-      ? `@unique on field "${symbol.name}.${attribute.fields[0]?.name ?? ''}"`
-      : `@@${attribute.kind} on model "${symbol.name}"`;
+    const usedBy: IgnoredFieldUse = {
+      kind: 'index',
+      text: build.uniqueFields.includes(attribute)
+        ? `@unique on field "${symbol.name}.${attribute.fields[0]?.name ?? ''}"`
+        : `@@${attribute.kind} on model "${symbol.name}"`,
+    };
     const ignored = names.filter((name) => build.ignoredFields.has(name));
     if (ignored.length > 0) {
       diagnostics.push(
@@ -1172,104 +1555,94 @@ function buildIndexes(build: ModelBuild, diagnostics: Diagnostics): MongoIndex[]
       });
       continue;
     }
-    if (attribute.kind === 'fulltext') {
+    const clashesWith = clashing.get(attribute);
+    if (clashesWith !== undefined) {
+      const others = clashesWith.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          `${indexLabel(build, attribute)} has the same fields, with the same sort, as ${others}. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const name = nameOf(attribute);
+    const nameProblem = attribute.map === undefined ? undefined : prisma6IndexNameProblem(name);
+    if (nameProblem !== undefined) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_INVALID',
+          `${indexLabel(build, attribute)}: Prisma 6 refuses this name: "${nameProblem}" Give the index another name with \`map\`.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const sameName = attributes.filter((other) => other !== attribute && nameOf(other) === name);
+    if (sameName.length > 0) {
+      const others = sameName.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE',
+          `${indexLabel(build, attribute)} is named "${name}", as is ${others}. Prisma 6 refuses this: "The given constraint name \`${name}\` has to be unique in the following namespace: on model \`${symbol.name}\` for indexes and unique constraints. Please provide a different name using the \`map\` argument."`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const text = attribute.kind === 'fulltext';
+    if (text) {
       textIndexes++;
       if (textIndexes > 1) {
-        diagnostics.push(
-          prisma6Diagnostic(
-            'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
-            `Model "${symbol.name}" has more than one @@fulltext; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.`,
-            sourceId,
-            attribute.span,
-          ),
-        );
+        diagnostics.push(textIndexLimitDiagnostic(symbol.name, sourceId, attribute.span));
         continue;
       }
     }
-    indexes.push(
-      new MongoIndex({
-        keys: attribute.fields.map((field) => keyFor(field, attribute.kind === 'fulltext')),
-        ...(attribute.kind === 'unique' ? { unique: true } : {}),
-      }),
-    );
+    const keys = attribute.fields.map((field) => [
+      field.name,
+      field.direction ?? (text ? 'text' : 1),
+    ]);
+    const index: IndexNode = {
+      fields: Object.fromEntries(keys),
+      options: { name, ...(attribute.kind === 'unique' ? { unique: true } : {}) },
+    };
+    indexes.push({ index, sourceId, span: attribute.span, label: indexLabel(build, attribute) });
   }
   return indexes;
 }
 
-function assembleContract(input: {
-  readonly binding: Prisma6TargetBinding;
-  readonly builds: ReadonlyMap<string, ModelBuild>;
-  readonly collections: Readonly<Record<string, { readonly indexes: readonly MongoIndex[] }>>;
-  readonly roots: Record<string, CrossReference>;
-  readonly valueObjects: Record<string, ContractValueObject>;
-  readonly enums: ReadonlyMap<string, EnumBuild>;
-  readonly executionDefaults: readonly ExecutionMutationDefault[];
-  readonly codecLookup: CodecLookup;
-}): Contract {
-  const target = input.binding.target.targetId;
-  const targetFamily = input.binding.target.familyId;
-
-  const builtEnums: Record<string, ContractEnum> = {};
-  for (const [enumName, built] of input.enums) {
-    builtEnums[enumName] = {
-      codecId: built.codecId,
-      members: built.members.map((member) => ({
-        name: member.name,
-        value: blindCast<JsonValue, 'factory-validated enum members are JsonValue-compatible'>(
-          member.value,
-        ),
-      })),
-    };
+function sortOf(direction: IndexDirection | undefined): string {
+  if (direction === undefined) {
+    return '';
   }
+  return `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
+}
 
-  const collections: Record<string, MongoCollectionInput> = {};
-  for (const [name, collection] of Object.entries(input.collections)) {
-    collections[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
+function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
+  const model = build.located.symbol.name;
+  if (build.uniqueFields.includes(attribute)) {
+    const [field] = attribute.fields;
+    return `@unique${sortOf(field?.direction)} on field "${model}.${field?.name ?? ''}"`;
   }
-  const storage: Contract['storage'] = buildMongoStorage({
-    collections,
-    valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
-  });
+  const fields = attribute.fields.map(({ name, direction }) => `${name}${sortOf(direction)}`);
+  return `@@${attribute.kind}([${fields.join(', ')}]) on model "${model}"`;
+}
 
-  const models: Record<string, unknown> = {};
-  for (const [modelName, build] of input.builds) {
-    models[modelName] = {
-      fields: build.fields,
-      relations: build.relations,
-      storage: { collection: build.collection },
-    };
-  }
-  const capabilities: Record<string, Record<string, boolean>> = {};
-  const execution = buildExecutionSection({
-    target,
-    targetFamily,
-    defaults: input.executionDefaults,
-  });
-  return {
-    targetFamily,
-    target,
-    roots: input.roots,
-    domain: {
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: {
-          models: blindCast<
-            Contract['domain']['namespaces'][string]['models'],
-            'Mongo model entries built above'
-          >(models),
-          ...(Object.keys(input.valueObjects).length > 0
-            ? { valueObjects: input.valueObjects }
-            : {}),
-          ...(Object.keys(builtEnums).length > 0 ? { enum: builtEnums } : {}),
-        },
-      },
-    },
-    storage,
-    extensions: {},
-    capabilities,
-    profileHash: computeProfileHash({ target, targetFamily, capabilities }),
-    meta: {},
-    ...(execution !== undefined ? { execution } : {}),
-  };
+function textIndexLimitDiagnostic(
+  modelName: string,
+  sourceId: string,
+  span: PslSpan,
+): ContractSourceDiagnostic {
+  return prisma6Diagnostic(
+    'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
+    `Model "${modelName}" has more than one @@fulltext; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.`,
+    sourceId,
+    span,
+  );
 }
 
 function mergedSources(documents: readonly Prisma6Document[]): PslSources {

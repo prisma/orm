@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "event": {
+      "model": "Event",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Event": {
+            "fields": {
+              "a": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "b": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "c": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "clock": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "day": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "history": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "localAt": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "zoned": {
+                "many": false,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "a": {
+                  "column": "a"
+                },
+                "b": {
+                  "column": "b"
+                },
+                "c": {
+                  "column": "c"
+                },
+                "clock": {
+                  "column": "clock"
+                },
+                "day": {
+                  "column": "day"
+                },
+                "history": {
+                  "column": "history"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "localAt": {
+                  "column": "localAt"
+                },
+                "zoned": {
+                  "column": "zoned"
+                }
+              },
+              "namespaceId": "public",
+              "table": "event"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "event": {
+              "checks": [
+                {
+                  "expression": "array_position(\"history\", NULL) IS NULL",
+                  "name": "event_history_elem_not_null_98e8e785",
+                  "prefix": "event_history_elem_not_null"
+                }
+              ],
+              "columns": {
+                "a": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00Z"
+                  },
+                  "nullable": false
+                },
+                "b": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00.000Z"
+                  },
+                  "nullable": false
+                },
+                "c": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T01:00:00+01:00"
+                  },
+                  "nullable": false
+                },
+                "clock": {
+                  "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34"
+                  },
+                  "nullable": false
+                },
+                "day": {
+                  "codecId": "pg/date-temporal@1",
+                  "dataType": "pg/date",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01"
+                  },
+                  "nullable": false
+                },
+                "history": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "2024-01-01T00:00:00.000Z",
+                      "2024-06-30 12:34:56+00"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "localAt": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01 12:34:56.500"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "zoned": {
+                  "codecId": "pg/timetz@1",
+                  "dataType": "pg/timetz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:56+02"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "080b654fe1c516bd040a7462037708c03b72c206288fbe0913f2bcabf77c6898"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

@@ -1,5 +1,7 @@
 # ADR 140 — Package Layering & Target-Family Namespacing
 
+> **Directory layout amended by [ADR 278](./ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md):** a database's target, adapter, driver and facade now live together in `packages/3-targets/<db>/`, and the SQL family folder is `packages/2-sql-family/`. The domains, layers, planes and naming rules below are unchanged.
+
 > **Partially superseded by [ADR 204](./ADR%20204%20-%20Single-tier%20runtime.md):** the "Runtime Separation" portion of this ADR — which introduced a two-tier runtime model with a target-agnostic `runtime-executor` package and family runtimes composing it — has been collapsed into a single tier. `RuntimeCore` now lives in `@internal/framework-components` (exposed via the `/runtime` subpath) and is extended directly by family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`). The package-layering, plane-boundary, domain/family-namespacing, and naming guidance in the rest of this ADR is unchanged.
 
 ## Context

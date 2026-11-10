@@ -7,20 +7,23 @@ export interface ArgumentSignature {
   readonly named?: Readonly<Record<string, Param<unknown, never>>>;
 }
 
-type Grammar = ArgumentSignature | ArgType<unknown, never>;
+export type ArgumentGrammar = ArgumentSignature | ArgType<unknown, never>;
 
 export function resolveGrammar(
-  signature: ArgumentSignature,
+  root: ArgumentGrammar,
   path: readonly AttributeArgumentPathStep[],
-): readonly Grammar[] {
-  let grammars: readonly Grammar[] = [signature];
+): readonly ArgumentGrammar[] {
+  let grammars: readonly ArgumentGrammar[] = [root];
   for (const step of path) {
     grammars = grammars.flatMap((grammar) => advanceGrammar(grammar, step));
   }
   return grammars;
 }
 
-function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): readonly Grammar[] {
+function advanceGrammar(
+  grammar: ArgumentGrammar,
+  step: AttributeArgumentPathStep,
+): readonly ArgumentGrammar[] {
   const type = 'kind' in grammar ? grammar : undefined;
   if (type?.kind === 'oneOf') {
     return type.alternatives.flatMap((alternative) => advanceGrammar(alternative, step));

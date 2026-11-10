@@ -12,4 +12,17 @@ model Post {
   stamp     Int      @default(now())
   other     String   @default(auto()) @db.ObjectId
   legacy    String   @default(dbgenerated("legacy()"))
+  published Boolean  @default(false)
+  role      Role     @default(USER)
+  nickname  String?  @default("anon")
+  address   Address
+}
+
+type Address {
+  city String @default("unknown")
+}
+
+enum Role {
+  USER
+  ADMIN
 }

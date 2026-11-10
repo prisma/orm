@@ -15,7 +15,11 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { type TargetId, targetPackageName } from '../commands/init/templates/code-templates';
+import {
+  type TargetId,
+  targetPackageName,
+  targetPeerPackages,
+} from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
@@ -87,7 +91,14 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'for a fully scriptable run (CI, AI coding agents, automation).\n' +
         '\n' +
         'In a Prisma 7 project, pass --from-prisma7-schema (or answer yes when asked)\n' +
-        'to use the existing schema.prisma as the contract source.',
+        'to use the existing schema.prisma as the contract source.\n' +
+        '\n' +
+        // biome-ignore lint/plugin/no-family-vocabulary: names the database on purpose — user-facing help for the one database whose schemas only Prisma 6 wrote
+        'In a Prisma 6 MongoDB project, init changes nothing: it prints how to install\n' +
+        'Prisma 8 beside Prisma 6 and read schema.prisma through prisma6Schema in\n' +
+        'prisma.config.ts, keeping the Prisma 6 CLI as an alias with its own config.\n' +
+        'Passing --target and --authoring sets up a starter in the same project instead,\n' +
+        'which breaks the Prisma 6 CLI.',
       examples: [
         'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
@@ -156,6 +167,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             importFromProject: injected.importFromProject,
           }),
           warn,
+          packageManager,
         });
       } catch (error) {
         if (!(error instanceof Prisma7CheckInstallFailed)) {
@@ -219,6 +231,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       const deps = [
         targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
         'dotenv',
+        ...targetPeerPackages(inputs.target),
         ...(moveClient ? ['@prisma/client@7'] : []),
       ];
       const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));

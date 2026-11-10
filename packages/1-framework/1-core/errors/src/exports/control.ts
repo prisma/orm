@@ -1,4 +1,4 @@
-export type { CliErrorConflict, CliErrorEnvelope } from '../control';
+export type { CheckedMigrationConfig, CliErrorConflict, CliErrorEnvelope } from '../control';
 export {
   CliStructuredError,
   errorConfigEvaluationFailed,
@@ -15,6 +15,7 @@ export {
   errorFileNotFound,
   errorInvalidOutputFormat,
   errorJsonFormatNotSupported,
+  errorMigrationCliConfigNotFound,
   errorMigrationCliInvalidConfigArg,
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,

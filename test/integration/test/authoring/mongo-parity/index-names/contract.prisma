@@ -1,0 +1,12 @@
+// use prisma-8
+
+model User {
+  id    ObjectId @id @map("_id")
+  email String   @unique(map: "User_email_key")
+  name  String
+
+  @@index([email], map: "User_email_idx")
+  @@index([email], sparse: true, map: "email_sparse")
+  @@index([name])
+  @@map("users")
+}

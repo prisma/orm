@@ -1,0 +1,646 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "favorites": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_Favorites",
+                  "namespaceId": "public",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              },
+              "followers": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_Follows",
+                  "namespaceId": "public",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              },
+              "following": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_Follows",
+                  "namespaceId": "public",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "fans": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_Favorites",
+                  "namespaceId": "public",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              },
+              "tags": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Tag"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_PostToTag",
+                  "namespaceId": "public",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Tag": {
+            "storage": {
+              "table": "Tag",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_PostToTag",
+                  "namespaceId": "public",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Favorites": {
+            "storage": {
+              "table": "_Favorites",
+              "namespaceId": "public",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "post": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "user": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          },
+          "Follows": {
+            "storage": {
+              "table": "_Follows",
+              "namespaceId": "public",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "user": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "userUser": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          },
+          "PostToTag": {
+            "storage": {
+              "table": "_PostToTag",
+              "namespaceId": "public",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "post": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "tag": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Tag"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    },
+    "Tag": {
+      "namespace": "public",
+      "model": "Tag"
+    },
+    "_Favorites": {
+      "namespace": "public",
+      "model": "Favorites"
+    },
+    "_Follows": {
+      "namespace": "public",
+      "model": "Follows"
+    },
+    "_PostToTag": {
+      "namespace": "public",
+      "model": "PostToTag"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "a8f0d262a8c45693ffd04a5cc4f96389585810938724c7f4b29cec8d5d4191d0",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Tag": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_Favorites": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_Favorites_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_Favorites",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_Favorites",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_Favorites_B_index"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"],
+                "name": "_Favorites_AB_pkey"
+              }
+            },
+            "_Follows": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_Follows_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_Follows",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_Follows",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_Follows_B_index"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"],
+                "name": "_Follows_AB_pkey"
+              }
+            },
+            "_PostToTag": {
+              "columns": {
+                "A": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "B": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_PostToTag_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "primaryKey": true
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Tag",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "index": {
+                    "name": "_PostToTag_B_index"
+                  }
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"],
+                "name": "_PostToTag_AB_pkey"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

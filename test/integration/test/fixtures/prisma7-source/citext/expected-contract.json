@@ -1,0 +1,463 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Account": {
+            "storage": {
+              "table": "Account",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "email": {
+                  "column": "email"
+                },
+                "nickname": {
+                  "column": "nickname"
+                },
+                "region": {
+                  "column": "region"
+                },
+                "aliases": {
+                  "column": "aliases"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "email": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "nickname": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": true,
+                "many": false
+              },
+              "region": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "aliases": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": true,
+                "many": {
+                  "elementNullable": true
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["email"],
+                  "targetFields": ["authorEmail"]
+                }
+              }
+            }
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorEmail": {
+                  "column": "authorEmail"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorEmail": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Account"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorEmail"],
+                  "targetFields": ["email"]
+                }
+              }
+            }
+          },
+          "Review": {
+            "storage": {
+              "table": "Review",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorEmail": {
+                  "column": "authorEmail"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorEmail": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "CitextDefaults": {
+            "storage": {
+              "table": "CitextDefaults",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "literal": {
+                  "column": "literal"
+                },
+                "expr": {
+                  "column": "expr"
+                },
+                "none": {
+                  "column": "none"
+                },
+                "list": {
+                  "column": "list"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "literal": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "expr": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "none": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "list": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/citext@1"
+                },
+                "nullable": true,
+                "many": {
+                  "elementNullable": true
+                }
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Account": {
+      "namespace": "public",
+      "model": "Account"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    },
+    "Review": {
+      "namespace": "public",
+      "model": "Review"
+    },
+    "CitextDefaults": {
+      "namespace": "public",
+      "model": "CitextDefaults"
+    }
+  },
+  "extensions": {
+    "citext": {
+      "kind": "extension",
+      "id": "citext",
+      "familyId": "sql",
+      "targetId": "postgres",
+      "version": "0.0.1"
+    }
+  },
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "f36abd00211bcf348d542e77a491165ae38ae5f87419dabd2c066146a2d7485c",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Account": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "email": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "nickname": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": true,
+                  "many": false
+                },
+                "region": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "aliases": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": true
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Account_email_key",
+                  "unique": true,
+                  "columns": ["email"]
+                },
+                {
+                  "name": "Account_region_idx",
+                  "unique": false,
+                  "columns": ["region"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "authorEmail": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorEmail"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Account",
+                    "columns": ["email"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Review": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "authorEmail": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Review",
+                    "columns": ["authorEmail"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Account",
+                    "columns": ["email"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "CitextDefaults": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "literal": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "usd"
+                  }
+                },
+                "expr": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'a'::citext"
+                  }
+                },
+                "none": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "list": {
+                  "dataType": "citext/citext",
+                  "codecId": "pg/citext@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": true
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": ["a", "B"]
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
