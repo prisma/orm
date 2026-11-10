@@ -1,6 +1,6 @@
 ## Dispatch plan
 
-Slice spec: `projects/nested-mutations/slices/write-builders/spec.md`. Four dispatches, sequential. Tests first in each. Tests assert effects and printed graphs, never SQL.
+Slice spec: `projects/nested-mutations/slices/write-builders/spec.md`. Five dispatches, sequential. Tests first in each. Tests assert effects and printed graphs, never SQL.
 
 ### Dispatch 1: graph operations for rules
 
@@ -16,15 +16,22 @@ Slice spec: `projects/nested-mutations/slices/write-builders/spec.md`. Four disp
 - **Hands to:** One insert node for every database.
 - **Focus:** A count call's insert is not refused; `upsert()` reads back by the create's conflict values.
 
-### Dispatch 3: builders always add read-backs
+### Dispatch 3: `Update` without `RETURNING` and the fold rule
 
-- **Outcome:** Every write builder adds its read-back; no builder takes `returns` or reads `returning`; `readsBack`, `Translation.readsBack`, `addReadBack`, `addFindOfWrittenRows`, `addWithIncludes` collapse into the builders; `create()` has one path; nested child `connect`/`disconnect` and junction `disconnect` use the update and delete builders; one identity check. Printed graphs of every write method with and without `returning`.
+- **Outcome:** An `Update` without `RETURNING` gives the keys of the rows its `FilterData` edges gave it, with the new values of the key columns it sets, and refuses in its check when it is read from and sets a key by an expression; `FilterData`'s `changed` values go. The fold rule, with `returning`, merges a condition-only `Find` that filters an `Update` by key in the same state into the `Update`'s `WHERE`. `updateFirstGraph` and `updateAllGraph` build `Find` → `Update` → read-back from the `Update` on every database. Unit tests for the fold rule and `Update` without `RETURNING`; printed graphs of `update()` and `updateAll()` with and without `returning`.
 - **Builds on:** Dispatches 1 and 2.
+- **Hands to:** Update builders without branches on `returning`.
+- **Focus:** `updateAll()` stays one statement with `RETURNING`; nested `update()` child operations read from the node `add` returned for the update.
+
+### Dispatch 4: delete and the rest of the builders
+
+- **Outcome:** Delete as decided by the spec's open question 1; every write builder adds its read-back; no builder takes `returns` or reads `returning`; `readsBack`, `Translation.readsBack`, `addReadBack`, `addFindOfWrittenRows`, `addWithIncludes` collapse into the builders; `create()` has one path; nested child `connect`/`disconnect` and junction `disconnect` use the update and delete builders; one identity check.
+- **Builds on:** Dispatch 3.
 - **Hands to:** The builders later slices use.
 - **Focus:** Results unchanged for callers; count calls return the count.
 
-### Dispatch 4: clean-up and the slice gates
+### Dispatch 5: clean-up and the slice gates
 
 - **Outcome:** Dead helpers removed, docs that describe the read-back updated, every gate passes: package tests and typecheck, lint, `lint:deps`, ratchets, integration on Postgres, SQLite and MySQL, `test:packages`.
-- **Builds on:** Dispatch 3.
+- **Builds on:** Dispatch 4.
 - **Hands to:** The slice ready for its PR.

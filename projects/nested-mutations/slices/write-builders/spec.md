@@ -27,13 +27,14 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the sl
 
 | Part | Added |
 | --- | --- |
-| Builders | One per kind of statement for a model: insert rows, update rows, delete rows, find rows. A nested call is the top-level call plus edges from the parent (`PayloadData` for values, `FilterData` to limit to the parent's rows). Every write builder adds a read-back of the rows it writes: an insert is followed by a `FindByKeys` of the inserted rows by their identity; an update is preceded by a `Find` of the rows it will change and followed by a `Find` of them by key, with the new values of any key column it sets; a delete is preceded by a `Find` of the rows it deletes. Builders take no `returns` argument and do not read the `returning` capability. |
+| Builders | One per kind of statement for a model: insert rows, update rows, delete rows, find rows. A nested call is the top-level call plus edges from the parent (`PayloadData` for values, `FilterData` to limit to the parent's rows). Every write builder adds a read-back of the rows it writes: an insert is followed by a `FindByKeys` of the inserted rows by their identity; an update is filtered by a `Find` of the rows it will change, by key, and followed by a `Find` that reads the keys of the updated rows from the `Update` (decided 2026-11-10); a delete is preceded by a `Find` of the rows it deletes (see open question 1). Builders take no `returns` argument and do not read the `returning` capability. |
 | `create()` | One path: always the relation translation, which with no relation operations is one insert and its read-back. `createGraph` and the branch on relation operations in `create()` go. |
 | Adding a node with its inputs | `graph.add(node, inputs)` adds a node together with the edges it reads, and returns the id of the node that stands for it once the rules have run, which is the write's id when a rule collapsed the node into the write. The `addFilterDataEdge`/`addPayloadDataEdge`/`addRowsEdge`/`addRequiresEdge` methods stay for edges added to a node that already exists. |
-| Peephole rules | Run by the graph as each node is added (decided 2026-11-10). A rule sees the node with all its inputs, including its state edges in the `state` slot. State edges are inputs like any other edge: the caller of `add` passes them in `inputs.state`, from the current `State` of each table the node reads, which the graph gives; the graph does not add state inputs by itself (decided 2026-11-10). The graph still adds the `State` nodes a write produces. One rule per pattern: a read-back `Find`/`FindByKeys` whose only data input is a write it reads back by key, without includes, whose state edge for the table comes from the `State` that write produced, on a contract with `returning`, is not added; the write gets its columns in `RETURNING` and the add returns the write's id. Order between nodes is read from state edges only. A read-back with includes is added as it is, since includes are not part of `RETURNING`. |
+| Peephole rules | Run by the graph as each node is added (decided 2026-11-10). A rule sees the node with all its inputs, including its state edges in the `state` slot. State edges are inputs like any other edge: the caller of `add` passes them in `inputs.state`, from the current `State` of each table the node reads, which the graph gives; the graph does not add state inputs by itself (decided 2026-11-10). The graph still adds the `State` nodes a write produces. Two rules, both only on a contract with `returning`. **Read-back:** a read-back `Find`/`FindByKeys` whose only data input is a write it reads back by key, without includes, whose state edge for the table comes from the `State` that write produced, on a contract with `returning`, is not added; the write gets its columns in `RETURNING` and the add returns the write's id. Order between nodes is read from state edges only. A read-back with includes is added as it is, since includes are not part of `RETURNING`. **Fold:** an `Update` added with a `FilterData` edge of key columns from a `Find` of the same table that has only a condition (no limit, offset, order, joins or includes), whose state edge for the table comes from the same `State` as the `Update`'s, and with no condition or other `FilterData` input of its own, takes the `Find`'s condition as its `WHERE` instead of the edge; nothing then reads the `Find`, and the removal step drops it (decided 2026-11-10). Without `returning` no rule runs. |
 | Moving readers | A graph operation that points every edge from one node at another, for a rule that replaces a node other nodes already read. |
 | Removing unread `Find` nodes | Design record D7a: after the graph is built and before it runs, a `Find` or `FindByKeys` that is not the result and that no node reads is removed, and the step repeats until none is left. A count call's read-back is never read, so it is removed with the `Find` before it that only it read. |
 | `Insert` without `RETURNING` | `Insert` and `InsertChunked` run without `RETURNING` on a database that lacks it, and give the columns other nodes read from them from their own values: the key values in their rows, those the `PayloadData` edges give, and, for a one-row insert, the value the database generated for an auto-increment key, decoded from the `insertId` the driver reports (decided 2026-11-10). A node nobody reads from returns the affected count. `InsertReportingKeys` is removed. |
+| `Update` without `RETURNING` | An `Update` on a database without `RETURNING` gives the columns other nodes read from it from its inputs: the key values of the rows its `FilterData` edges gave it, with the new value of any key column it sets. `FilterData`'s `changed` values go, since the read-back reads the new keys from the `Update`. An `Update` that is read from and sets a key column by an expression refuses in its check (decided 2026-11-10). |
 | Checking a node before anything runs | Before it runs the first node, the runner asks every node whether it can run; an `Insert` without `RETURNING` that is read from refuses when its rows cannot give the columns read from it, with `writtenKeys`' errors. The check runs after unread `Find` nodes are removed, so a count call's insert is never refused. `Run` carries the execution context, which an `Insert` needs for the capability, the auto-increment columns and the key's codec. |
 | Read-back without an order | The read-back has no `ORDER BY`: no order is promised for the rows a write returns (decided 2026-11-09). `FindByKeys` keeps its 500-key chunks and its check that it found a row for every key. |
 | One identity check | `requireIdentityColumns` and `readBackIdentity` become one check with one error. |
@@ -41,7 +42,7 @@ The design is in [`../../mutation-graph.md`](../../mutation-graph.md) and the sl
 Rules for the translation, unchanged from `graph-nested` except where a part above says otherwise:
 
 - Nested child `connect`/`disconnect` and junction `disconnect` use the update and delete builders.
-- The parent's write in `update()` reads back the updated row whenever a later node or the result reads it; on a database with `RETURNING` the rule collapses that read-back into the `Update`, as on `graph-nested`.
+- The parent's write in `update()` reads back the updated row from the `Update` whenever a later node or the result reads it; on a database with `RETURNING` the read-back rule collapses it into the `Update`, as on `graph-nested`. In `update()` the `Find` has `LIMIT 1`, so the fold rule leaves it.
 
 ## Coherence rationale
 
@@ -51,7 +52,7 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 
 **In:** the parts above; unit tests for the add-with-inputs operation, each rule, moving readers, the removal step, the node check and `Insert` without `RETURNING`; printed graphs of every write method on a contract with and without `returning`.
 
-**Out:** new behaviour for callers beyond the decided changes listed here; any rule other than the read-back collapse; arrays of operations and `updateAll`/`deleteAll` in relation callbacks (slice `filtered-many-writes`).
+**Out:** new behaviour for callers beyond the decided changes listed here; rules other than the read-back and fold rules; arrays of operations and `updateAll`/`deleteAll` in relation callbacks (slice `filtered-many-writes`).
 
 ## Pre-investigated edge cases
 
@@ -61,6 +62,8 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 | `createAndCount()`, `updateAndCount()`, `deleteAndCount()` | Return the count as on main; their read-backs are removed before the graph runs. |
 | `createAndCount()` of several rows with a generated key, without `RETURNING` | Allowed, as on main (its error text tells callers to use it): its read-back is removed, so nothing reads from the insert and the check does not refuse it. |
 | `update()` whose parent write reads back into child operations, without `RETURNING` | Children read the keys from the read-back, as on `graph-nested`. |
+| `updateAll()` with `RETURNING` | One statement, as on main: the fold rule merges the `Find` into the `Update` and the read-back rule merges the read-back into it. |
+| `update()` that sets a key column, without `RETURNING` | The read-back finds the row by its new key. |
 | `upsert()` without `RETURNING` | Reads its row back by the create's values for the conflict columns, with main's refusals. |
 
 ## Slice-specific done conditions
@@ -71,7 +74,7 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 
 ## Open questions
 
-None.
+1. **Delete.** A deleted row can only be read before the delete, so its read-back is the `Find` before the `Delete`, which no rule merges into the `Delete`. To be decided before dispatch 4.
 
 ## References
 
