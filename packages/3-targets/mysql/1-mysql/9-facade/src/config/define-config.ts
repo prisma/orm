@@ -1,5 +1,9 @@
 import mysqlAdapter from '@internal/adapter-mysql/control';
-import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
+import type {
+  ContractConfig,
+  FormatterConfig,
+  PrismaNextConfig,
+} from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -28,6 +32,7 @@ export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly migrations?: {
     readonly dir?: string;
   };
+  readonly formatter?: FormatterConfig;
 }
 
 /** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The control target carries the facade module its `migration.ts` files import from. */
@@ -60,6 +65,7 @@ function buildConfig<TargetId extends string>(
     contract,
     ...ifDefined('db', options.db),
     ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }
 
