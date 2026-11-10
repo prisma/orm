@@ -1,13 +1,16 @@
 import type {
   AnyMongoTypeMaps,
+  ExtractMongoCodecTypes,
   ExtractMongoTypeMaps,
   InferModelRow,
+  MongoCodecInput,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoModelsMap,
   OwnStoredNameOf,
 } from '@internal/mongo-contract';
 import type { MongoAggAccumulator, MongoAggExpr } from '@internal/mongo-query-ast/execution';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 import type { ModelArrayField, ModelOriginBrand, ModelOriginBranded } from './resolve-path';
 
 export interface DocField {
@@ -34,6 +37,15 @@ export type LiteralValue<F extends DocField> = F extends StringField
         : unknown;
 
 export type DocShape = Record<string, DocField>;
+
+type NumericInputCodecId<CT> = {
+  [K in keyof CT & string]: [MongoCodecInput<CT, K>] extends [number] ? K : never;
+}[keyof CT & string];
+
+/** A `limit` or `skip` count: a number, or a non-nullable placeholder whose codec takes a number. */
+export type PagingCount<TContract> =
+  | number
+  | MongoPreparedParamRef<NumericInputCodecId<ExtractMongoCodecTypes<TContract>>, false>;
 
 type ExtractCodecId<F> = F extends { type: { kind: 'scalar'; codecId: infer C } }
   ? C

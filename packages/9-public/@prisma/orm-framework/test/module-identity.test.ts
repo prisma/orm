@@ -41,6 +41,7 @@ const witness = {
     '@prisma/orm-postgres/contract/contract-validation-error',
     '@prisma/orm-sqlite/contract/contract-validation-error',
     '@prisma/orm-mysql/contract/contract-validation-error',
+    '@prisma/orm-mariadb/contract/contract-validation-error',
     '@prisma/orm-mongo/contract/contract-validation-error',
   ],
 } as const;
@@ -53,10 +54,12 @@ const shells: ShellName[] = [
   '@prisma/orm-target-postgres',
   '@prisma/orm-target-sqlite',
   '@prisma/orm-target-mysql',
+  '@prisma/orm-target-mariadb',
   '@prisma/orm-target-mongo',
   '@prisma/orm-postgres',
   '@prisma/orm-sqlite',
   '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
 ];
 
