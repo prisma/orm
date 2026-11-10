@@ -133,7 +133,13 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
   });
 
   describe('the early document check', () => {
-    const validatorOnly: MongoCollectionInput = { validator: declared.validator };
+    const validatorOnly: MongoCollectionInput = {
+      validator: {
+        jsonSchema: { bsonType: 'object', properties: { email: { bsonType: 'string' } } },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      },
+    };
     const codeIndex = new MongoSchemaIndex({
       name: 'code_1',
       keys: [{ field: 'code', direction: 1 }],
