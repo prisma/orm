@@ -95,7 +95,7 @@ export function deleteAllGraph(
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph(context.contract);
-  const del = { where: whereOf(collection), filters: [], junction: undefined };
+  const del = { where: whereOf(collection), filters: [] };
   if (state.includes.length === 0 && !readsBack(collection, returns)) {
     graph.setResult(addDeleteRows(graph, context.contract, state.tables, del));
     return graph;
@@ -176,7 +176,6 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   const deleted = addDeleteRows(graph, context.contract, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
-    junction: undefined,
   });
   graph.setResult(readsRowsFirst ? find : deleted);
   return graph;

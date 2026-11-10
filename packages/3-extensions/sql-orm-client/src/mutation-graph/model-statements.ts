@@ -113,16 +113,15 @@ export function addUpdateRows(
 export interface DeleteRows {
   readonly where: AnyExpression | undefined;
   readonly filters: readonly KeySource[];
-  readonly junction: JunctionWrite | undefined;
 }
 
 export function addDeleteRows(
   graph: Graph,
   contract: Contract<SqlStorage>,
   tables: CollectionTables,
-  { where, filters, junction }: DeleteRows,
+  { where, filters }: DeleteRows,
 ): NodeId<{ requires: Requires[] }> {
-  const deleted = graph.add(new Delete(deleteAst(contract, tables, where), junction));
+  const deleted = graph.add(new Delete(deleteAst(contract, tables, where)));
   for (const { from, columns } of filters) {
     graph.addFilterDataEdge(from, deleted, columns);
   }

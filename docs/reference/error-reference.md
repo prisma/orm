@@ -1139,7 +1139,7 @@ A valid ORM method was called in a configuration that does not support it: mutat
 
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, or conflicting values for a junction column. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, or a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 

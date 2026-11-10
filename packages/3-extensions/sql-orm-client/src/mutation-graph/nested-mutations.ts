@@ -385,7 +385,6 @@ function addJunctionOwned(
         { from: parent, columns: fromParent },
         { from: target, columns: fromTarget },
       ],
-      junction: { relation: relation.relationName, junction: through.table },
     });
   }
 }
