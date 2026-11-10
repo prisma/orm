@@ -38,7 +38,7 @@ This package should not depend on target adapters or drivers directly; execution
 
 `connection()` and `transaction()` are SQL-specific orchestration capabilities and are intentionally absent from the cross-family `RuntimeExecutor` contract. Runtimes that don't expose them are still used for single-statement execution.
 
-`orm({ context, runtime, implicitTransactionOptions })` optionally configures isolation for transactions the ORM opens itself. The configuration is retained across namespace collections, activity rebinding, nested mutations and multi-statement graphs, including the connection fallback. Omission leaves database/session defaults unchanged. An existing transaction remains authoritative: the ORM neither starts another transaction nor resets its isolation. The MySQL facade supplies ReadCommitted here independently of its callback transaction defaults; drivers receive only the resolved isolation level. See [transaction isolation](../../../docs/reference/transaction-isolation.md).
+`orm({ context, runtime, implicitTransactionOptions })` optionally configures isolation for transactions the ORM opens itself. The configuration is retained across namespace collections, activity rebinding, nested mutations and multi-statement graphs. Omission leaves database/session defaults unchanged. An existing transaction remains authoritative: the ORM neither starts another transaction nor resets its isolation. The MySQL facade supplies ReadCommitted here independently of its callback transaction defaults; drivers receive only the resolved isolation level. See [transaction isolation](../../../docs/reference/transaction-isolation.md).
 
 ## Architecture
 
