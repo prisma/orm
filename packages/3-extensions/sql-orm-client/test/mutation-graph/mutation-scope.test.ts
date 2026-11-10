@@ -42,28 +42,26 @@ describe('withMutationScope', () => {
     expect(rollback).toHaveBeenCalledTimes(1);
   });
 
-  it('runs in a transaction that has no commit or rollback hook', async () => {
+  it('runs in a transaction of a connection it opened, then releases the connection', async () => {
     const runtime = createMockRuntime();
+    const commit = vi.fn(async () => undefined);
+    const release = vi.fn(async () => undefined);
     const transaction = {
       query: runtime.query.bind(runtime),
       execute: runtime.execute.bind(runtime),
+      commit,
+      rollback: vi.fn(async () => undefined),
     };
-    const scoped = Object.assign(runtime, { transaction: async () => transaction });
-
-    expect(await withMutationScope(scoped, async (scope) => scope === transaction)).toBe(true);
-  });
-
-  it('releases a connection it opened when the runtime has no transaction of its own', async () => {
-    const runtime = createMockRuntime();
-    const release = vi.fn(async () => undefined);
     const connection = {
       query: runtime.query.bind(runtime),
       execute: runtime.execute.bind(runtime),
+      transaction: async () => transaction,
       release,
     };
     const scoped = Object.assign(runtime, { connection: async () => connection });
 
-    expect(await withMutationScope(scoped, async (scope) => scope === connection)).toBe(true);
+    expect(await withMutationScope(scoped, async (scope) => scope === transaction)).toBe(true);
+    expect(commit).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
 

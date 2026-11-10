@@ -18,12 +18,9 @@ export async function withMutationScope<T>(
   if (typeof runtime.connection === 'function') {
     const connection = await runtime.connection();
     try {
-      if (typeof connection.transaction === 'function') {
-        return await runInTransaction(await connection.transaction(), run);
-      }
-      return await run(connection);
+      return await runInTransaction(await connection.transaction(), run);
     } finally {
-      await connection.release?.();
+      await connection.release();
     }
   }
 
@@ -37,20 +34,16 @@ async function runInTransaction<T>(
 ): Promise<T> {
   try {
     const result = await run(transaction);
-    if (typeof transaction.commit === 'function') {
-      await transaction.commit();
-    }
+    await transaction.commit();
     return result;
   } catch (error) {
-    if (typeof transaction.rollback === 'function') {
-      try {
-        await transaction.rollback();
-      } catch (rollbackError) {
-        // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
-        const settlement = settlementOf(transaction);
-        if (settlement?.rolledBack !== true) throw rollbackError;
-        settlement.logDroppedError(rollbackError);
-      }
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
+      const settlement = settlementOf(transaction);
+      if (settlement?.rolledBack !== true) throw rollbackError;
+      settlement.logDroppedError(rollbackError);
     }
     throw error;
   }
