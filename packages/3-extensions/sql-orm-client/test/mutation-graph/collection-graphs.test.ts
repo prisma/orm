@@ -6,6 +6,8 @@ import {
   updateAllGraph,
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
+import type { Graph } from '../../src/mutation-graph/graph';
+import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import type { CollectionState } from '../../src/types';
 import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
@@ -33,11 +35,25 @@ const tableWithNoIdentity = createStatementTables({
 });
 const targetWithIncludes = targetOf(users.include('posts').state);
 
+function printAsRun(graph: Graph): string {
+  removeUnreadFinds(graph);
+  return printGraph(graph);
+}
+
 describe('updateAllGraph', () => {
-  it('builds one Update as the result, returning nothing yet', () => {
+  it('builds one Update that returns the selected columns as the result, once the Find it folded is removed', () => {
     const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
+      ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
+    );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('builds one Update with the caller filter for a count', () => {
+    const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'count');
+
+    expect(printAsRun(graph)).toBe(
       ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual([]);
@@ -46,7 +62,7 @@ describe('updateAllGraph', () => {
   it('adds a Find that reads the written rows with their includes, as the result', () => {
     const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' }, 'rows');
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
       [
         "n1 Update users set email = 'ada@example.com' where name = 'Ada'",
         'n2 Find users <- FilterData n1 (id->id)',
@@ -126,7 +142,7 @@ describe('updateFirstGraph', () => {
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id']);
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('adds a Find that reads the updated row with its includes, as the result', () => {

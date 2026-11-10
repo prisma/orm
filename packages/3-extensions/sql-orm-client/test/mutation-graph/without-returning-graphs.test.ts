@@ -136,23 +136,23 @@ describe('write graphs on a contract without capability "returning"', () => {
     );
   });
 
-  it('updateFirstGraph updates the found row, then reads it back by its key, with a key it sets', () => {
+  it('updateFirstGraph updates the found row, then reads it back by the key the Update gives, which it may set', () => {
     expect(printGraph(updateFirstGraph(target, { id: 5, name: 'Ada L.' }))).toBe(
       [
         "n1 Find users where name = 'Ada' limit 1",
         "n2 Update users set id = 5, name = 'Ada L.' <- FilterData n1 (id->id)",
-        'n3 Find users <- FilterData n1 (id->id) with {"id":5}',
+        'n3 Find users <- FilterData n2 (id->id)',
         'result: n3',
       ].join('\n'),
     );
   });
 
-  it('updateAllGraph finds the keys, updates with the caller filter, then reads the rows back', () => {
+  it('updateAllGraph finds the keys, updates the rows with them, then reads the rows back by the keys the Update gives', () => {
     expect(printGraph(updateAllGraph(target, { name: 'Pioneer' }, 'rows'))).toBe(
       [
         "n1 Find users where name = 'Ada'",
-        "n2 Update users set name = 'Pioneer' where name = 'Ada'",
-        'n3 Find users <- FilterData n1 (id->id)',
+        "n2 Update users set name = 'Pioneer' <- FilterData n1 (id->id)",
+        'n3 Find users <- FilterData n2 (id->id)',
         'result: n3',
       ].join('\n'),
     );

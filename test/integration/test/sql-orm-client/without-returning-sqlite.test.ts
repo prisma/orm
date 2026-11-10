@@ -322,8 +322,8 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ]);
       expect(statements).toEqual([
         'BEGIN',
-        'SELECT "users"."id" AS "id" FROM "users" WHERE "users"."id" <= ?1 ORDER BY "users"."id" ASC',
-        'UPDATE "users" SET "name" = ?1 WHERE "users"."id" <= ?2',
+        'SELECT "users"."id" AS "id" FROM "users" WHERE "users"."id" <= ?1',
+        'UPDATE "users" SET "name" = ?1 WHERE "users"."id" IN (?2, ?3)',
         'SELECT "users"."email" AS "email", "users"."id" AS "id", "users"."name" AS "name" FROM "users" WHERE "users"."id" IN (?1, ?2)',
       ]);
       expect(await db.User.where({ name: 'Pioneer' }).updateAndCount({ name: 'P' })).toBe(2);

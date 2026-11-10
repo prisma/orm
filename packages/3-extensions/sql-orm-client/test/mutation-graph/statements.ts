@@ -42,6 +42,8 @@ const tablesOf = { users: usersTables, posts: postsTables };
 
 export const insertOwner = { operation: 'create', modelName: 'User' };
 
+export const updateOwner = { operation: 'updateAll', modelName: 'User' };
+
 export const contextWithoutReturning = {
   ...getTestContext(),
   contract: withoutCapabilityKeys(baseContract, ['returning']),
@@ -74,7 +76,10 @@ export function updateUsers(
   returning: readonly string[] = [],
 ): Update {
   const ast = updateAst(contract, usersTables, set, where);
-  return new Update(ast.withReturning(projectTableColumns(contract, usersTables.root, returning)));
+  return new Update(
+    ast.withReturning(projectTableColumns(contract, usersTables.root, returning)),
+    updateOwner,
+  );
 }
 
 export function updatePosts(
@@ -83,7 +88,10 @@ export function updatePosts(
   returning: readonly string[] = [],
 ): Update {
   const ast = updateAst(contract, postsTables, set, where);
-  return new Update(ast.withReturning(projectTableColumns(contract, postsTables.root, returning)));
+  return new Update(ast.withReturning(projectTableColumns(contract, postsTables.root, returning)), {
+    operation: 'updateAll',
+    modelName: 'Post',
+  });
 }
 
 export function deleteUsers(where?: AnyExpression, returning: readonly string[] = []): Delete {

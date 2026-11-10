@@ -82,7 +82,7 @@ describe('nested write graphs on a contract without capability "returning"', () 
     );
   });
 
-  it('updates the parent, reads it back by its key, then runs the child operations', () => {
+  it('updates the parent, runs the child operations with the keys the Update gives, then reads the parent back by its key', () => {
     const parsed = parseMutationInput(withoutReturning, 'public', 'User', {
       posts: (posts: Mutator) => posts.connect({ id: 10 }),
     } as never);
@@ -93,9 +93,9 @@ describe('nested write graphs on a contract without capability "returning"', () 
       [
         'n1 Find users where id = 1 limit 1',
         "n2 Update users set name = 'Ada' <- FilterData n1 (id->id)",
-        'n3 Find users <- FilterData n1 (id->id)',
-        'n4 Update posts set nothing where id = 10 <- PayloadData n3 (id->user_id)',
-        'result: n3',
+        'n3 Update posts set nothing where id = 10 <- PayloadData n2 (id->user_id)',
+        'n4 Find users <- FilterData n2 (id->id)',
+        'result: n4',
       ].join('\n'),
     );
   });

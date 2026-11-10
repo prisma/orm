@@ -195,19 +195,19 @@ describe('Graph', () => {
       ]);
     });
 
-    it('keeps the new values a FilterData edge gives and moves Requires edges', () => {
+    it('moves FilterData and Requires edges', () => {
       const graph = newGraph();
       const first = graph.add(findUsers());
       const second = graph.add(findUsers());
       const update = graph.add(updateUsers({ name: 'Ada' }), {
-        filter: [new FilterData(first, sameId, { id: 2 })],
+        filter: [new FilterData(first, sameId)],
         requires: [new Requires(first)],
       });
 
       graph.moveReaders(first, second);
 
       expect(graph.inputsOf(update)).toEqual({
-        filter: [new FilterData(second, sameId, { id: 2 })],
+        filter: [new FilterData(second, sameId)],
         payload: [],
         state: [],
         requires: [new Requires(second)],

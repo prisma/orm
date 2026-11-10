@@ -1,10 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
-import { blindCast } from '@internal/utils/casts';
-import { resolveUniqueKeyColumnSets } from '../collection-contract';
 import { Delete } from './delete';
-import type { ColumnMapping, Edge, NodeId } from './edge';
+import type { Edge, NodeId } from './edge';
 import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
@@ -13,8 +11,8 @@ import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
 import type { Node } from './node';
 import { Rows } from './rows';
+import { conditionOnlyReadOf, readsByKey, sameTable, stateEdgeOf } from './rule-patterns';
 import type { Rule } from './rules';
-import { StateEdge } from './state';
 import { Update } from './update';
 
 type Write = Insert | InsertChunked | Update | Delete;
@@ -50,12 +48,7 @@ function readsStateWrittenBy(
   table: TableSource,
   write: NodeId,
 ): boolean {
-  const read = state.find(
-    (edge): edge is StateEdge =>
-      edge instanceof StateEdge &&
-      edge.table.tableName === table.name &&
-      edge.table.namespaceId === table.namespaceId,
-  );
+  const read = stateEdgeOf(state, table);
   return (
     read !== undefined &&
     [graph.inputsOf(read.from)['write'] ?? []].flat().some((edge) => edge.from === write)
@@ -63,24 +56,7 @@ function readsStateWrittenBy(
 }
 
 function plainReadOf(ast: SelectAst): TableSource | undefined {
-  const { from } = ast;
-  const clauses = [
-    ast.joins,
-    ast.where,
-    ast.orderBy,
-    ast.distinct,
-    ast.distinctOn,
-    ast.groupBy,
-    ast.having,
-    ast.limit,
-    ast.offset,
-    ast.locking,
-  ];
-  return from?.kind === 'table-source' &&
-    clauses.every((clause) => clause === undefined) &&
-    ast.projection.every((item) => item.expr.kind === 'column-ref')
-    ? from
-    : undefined;
+  return ast.where === undefined ? conditionOnlyReadOf(ast) : undefined;
 }
 
 function isWriteTo(node: Node | undefined, table: TableSource): node is Write {
@@ -92,36 +68,8 @@ function isWriteTo(node: Node | undefined, table: TableSource): node is Write {
     node.statements.every(
       (ast) =>
         ast.kind !== 'select' &&
-        ast.table.name === table.name &&
-        ast.table.namespaceId === table.namespaceId &&
+        sameTable(ast.table, table) &&
         !(ast.kind === 'insert' && ast.onConflict?.action.kind === 'do-nothing'),
     )
-  );
-}
-
-function readsByKey(
-  contract: Contract<SqlStorage>,
-  table: TableSource,
-  columns: readonly ColumnMapping[],
-): boolean {
-  const read = new Set(
-    columns.flatMap(([source, target]) =>
-      source.alias === target.alias &&
-      source.expr.kind === 'column-ref' &&
-      target.expr.kind === 'column-ref' &&
-      source.expr.column === target.expr.column
-        ? [target.expr.column]
-        : [],
-    ),
-  );
-  if (read.size !== columns.length) {
-    return false;
-  }
-  const namespaceId = blindCast<
-    string,
-    'The ORM builds every table source with tableSourceForContract, which sets the namespace'
-  >(table.namespaceId);
-  return resolveUniqueKeyColumnSets(contract, namespaceId, table.name).some((key) =>
-    key.every((column) => read.has(column)),
   );
 }

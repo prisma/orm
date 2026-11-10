@@ -8,7 +8,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
-import { type ColumnMapping, DataEdge, type Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
 import { FilterData } from './filter-data';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
 import { PayloadData } from './payload-data';
@@ -88,9 +88,8 @@ export class Graph {
     from: NodeId,
     to: NodeId<{ filter: FilterData[] }>,
     columns: readonly ColumnMapping[],
-    changed: Readonly<StorageRow> = {},
   ): void {
-    this.#addEdge(to, 'filter', new FilterData(from, columns, changed));
+    this.#addEdge(to, 'filter', new FilterData(from, columns));
   }
 
   addPayloadDataEdge(

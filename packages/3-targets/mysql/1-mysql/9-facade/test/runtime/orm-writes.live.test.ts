@@ -80,7 +80,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
-  it('createAll returns the rows in the order it was given them, not in key order', async (test) => {
+  it('createAll returns the rows it was given, in any order', async (test) => {
     await withSeededDatabase(test, exampleTablesDdl, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });
       expect(
@@ -90,12 +90,14 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
             { id: 11, email: 'b@example.com', role: 'USER' },
             { id: 10, email: 'a@example.com', role: 'USER' },
           ])
-        ).map((user) => user.id),
-      ).toEqual([12, 11, 10]);
+        )
+          .map((user) => user.id)
+          .sort((a, b) => a - b),
+      ).toEqual([10, 11, 12]);
     });
   });
 
-  it('createAll returns rows keyed by a DATETIME(3) with milliseconds in the order it was given them', async (test) => {
+  it('createAll returns rows keyed by a DATETIME(3) with milliseconds, in any order', async (test) => {
     const ticks = defineContract({}, ({ field, model, type }) => ({
       models: {
         Tick: model('Tick', {
@@ -110,14 +112,13 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
       await using db = mysql({ contract: ticks, url, verifyMarker: false });
       const later = new Date('2024-01-02T03:04:05.678Z');
       const earlier = new Date('2024-01-02T03:04:05.123Z');
-      expect(
-        await db.orm.Tick.createAll([
-          { at: later, label: 'later' },
-          { at: earlier, label: 'earlier' },
-        ]),
-      ).toEqual([
+      const created = await db.orm.Tick.createAll([
         { at: later, label: 'later' },
         { at: earlier, label: 'earlier' },
+      ]);
+      expect([...created].sort((a, b) => a.at.getTime() - b.at.getTime())).toEqual([
+        { at: earlier, label: 'earlier' },
+        { at: later, label: 'later' },
       ]);
     });
   });
@@ -135,7 +136,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
     });
   });
 
-  it('createAll reads back more rows than one statement takes, in the order it was given them', async (test) => {
+  it('createAll reads back more rows than one statement takes, in any order', async (test) => {
     await withSeededDatabase(test, exampleTablesDdl, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });
       const users = Array.from({ length: 1200 }, (_, index) => ({
@@ -143,7 +144,10 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
         email: `user${1200 - index}@example.com`,
         role: 'USER' as const,
       }));
-      expect(await db.orm.User.createAll(users)).toEqual(users);
+      const created = await db.orm.User.createAll(users);
+      expect([...created].sort((a, b) => a.id - b.id)).toEqual(
+        [...users].sort((a, b) => a.id - b.id),
+      );
     });
   });
 

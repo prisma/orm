@@ -96,6 +96,7 @@ export interface UpdateRows {
   readonly where: AnyExpression | undefined;
   readonly filters: readonly KeySource[];
   readonly payloads: readonly KeySource[];
+  readonly owner: WrittenRowOwner;
 }
 
 export function addUpdateRows(
@@ -103,9 +104,9 @@ export function addUpdateRows(
   contract: Contract<SqlStorage>,
   tables: CollectionTables,
   values: Readonly<Record<string, unknown>>,
-  { where, filters, payloads }: UpdateRows,
+  { where, filters, payloads, owner }: UpdateRows,
 ): NodeId {
-  const updated = new Update(updateAst(contract, tables, values, where));
+  const updated = new Update(updateAst(contract, tables, values, where), owner);
   return graph.add(updated, {
     filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
     payload: payloads.map(({ from, columns }) => new PayloadData(from, columns)),

@@ -24,6 +24,7 @@ import {
   insertInto,
   insertOwner,
   newGraph,
+  newGraphWithoutReturning,
   recordingRun,
   updateUsers,
 } from './statements';
@@ -71,7 +72,7 @@ describe('table state in the graph', () => {
   });
 
   it('adds a new State of the table a write changes, which later readers read', () => {
-    const graph = newGraph();
+    const graph = newGraphWithoutReturning();
     const find = addWithState(graph, findUsers());
     addFiltered(graph, updateUsers({ name: 'Ada' }), [find, sameId]);
     addWithState(graph, findUsers());
@@ -137,7 +138,7 @@ describe('table state in the graph', () => {
   });
 
   it('prints the graph without state by default', () => {
-    const graph = newGraph();
+    const graph = newGraphWithoutReturning();
     const find = addWithState(graph, findUsers());
     graph.setResult(addFiltered(graph, updateUsers({ name: 'Ada' }), [find, sameId]));
 

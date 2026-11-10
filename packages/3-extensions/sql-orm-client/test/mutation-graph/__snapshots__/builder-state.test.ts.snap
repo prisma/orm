@@ -72,11 +72,12 @@ result: n3"
 
 exports[`state edges of the graphs builders build, with returning > updateAllGraph 1`] = `
 "n1 State users
-n2 Update users set name = 'Grace' where name = 'Ada' <- state n1
-n3 State users <- state n2
-n4 State posts
-n5 Find users <- FilterData n2 (id->id), state n3, state n4
-result: n5"
+n2 Find users where name = 'Ada' <- state n1
+n3 Update users set name = 'Grace' where name = 'Ada' <- state n1
+n4 State users <- state n3
+n5 State posts
+n6 Find users <- FilterData n3 (id->id), state n4, state n5
+result: n6"
 `;
 
 exports[`state edges of the graphs builders build, with returning > updateAllGraph 2`] = `
@@ -172,10 +173,10 @@ result: n3"
 exports[`state edges of the graphs builders build, without returning > updateAllGraph 1`] = `
 "n1 State users
 n2 Find users where name = 'Ada' <- state n1
-n3 Update users set name = 'Grace' where name = 'Ada' <- state n1
+n3 Update users set name = 'Grace' <- FilterData n2 (id->id), state n1
 n4 State users <- state n3
 n5 State posts
-n6 Find users <- FilterData n2 (id->id), state n4, state n5
+n6 Find users <- FilterData n3 (id->id), state n4, state n5
 result: n6"
 `;
 
@@ -193,18 +194,17 @@ n3 Find users where id = 2 limit 1 <- state n1, Requires n2
 n4 Assert <- Rows n3, Requires n2
 n5 Update users set name = 'Grace' <- FilterData n2 (id->id), PayloadData n3 (id->invited_by_id), state n1
 n6 State users <- state n5
-n7 Find users <- FilterData n2 (id->id), state n6
-n8 State posts
-n9 Insert posts <- PayloadData n7 (id->user_id), state n8
-n10 State posts <- state n9
-n11 State tags
-n12 Find tags where id = 5 limit 1 <- state n11, Requires n2
-n13 Assert <- Rows n12, Requires n2
-n14 State user_tags
-n15 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n7 (id->user_id), PayloadData n12 (id->tag_id), state n14
-n16 State user_tags <- state n15
-n17 Find users <- FilterData n7 (id->id), state n6, state n10
-result: n17"
+n7 State posts
+n8 Insert posts <- PayloadData n5 (id->user_id), state n7
+n9 State posts <- state n8
+n10 State tags
+n11 Find tags where id = 5 limit 1 <- state n10, Requires n2
+n12 Assert <- Rows n11, Requires n2
+n13 State user_tags
+n14 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n5 (id->user_id), PayloadData n11 (id->tag_id), state n13
+n15 State user_tags <- state n14
+n16 Find users <- FilterData n5 (id->id), state n6, state n9
+result: n16"
 `;
 
 exports[`state edges of the graphs builders build, without returning > upsertGraph 1`] = `

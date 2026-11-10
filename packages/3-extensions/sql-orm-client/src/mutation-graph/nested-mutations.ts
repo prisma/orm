@@ -289,6 +289,7 @@ function addChildOwned(
           where: requiredCriterion(context, related, name, 'connect', criterion),
           filters: [],
           payloads: [{ from: parent, columns: fromParent }],
+          owner: { operation: 'update', modelName: related.modelName },
         },
       );
     }
@@ -307,6 +308,7 @@ function addChildOwned(
       where,
       filters: [{ from: parent, columns: fromParent }],
       payloads: [],
+      owner: { operation: 'update', modelName: related.modelName },
     });
   }
 }

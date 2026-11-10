@@ -28,9 +28,9 @@ import { variantReturning } from '../query-plan-source';
 import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
-import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
+import { type WrittenRowOwner, writtenKeys } from '../written-keys';
 import { CrossJoin } from './cross-join';
-import type { ColumnMapping, NodeId, StorageRow } from './edge';
+import type { ColumnMapping, NodeId } from './edge';
 import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
@@ -72,20 +72,28 @@ export function updateAllGraph(
     return graph;
   }
 
-  requireIdentityColumnsForIncludes(collection);
-  const update = { where: whereOf(collection), filters: [], payloads: [] };
-  if (readsBack(collection, returns)) {
-    const { namespaceId, tableName } = state.tables.root.storage;
-    readBackIdentity(context.contract, namespaceId, tableName, collection.modelName, 'updateAll()');
-    const found = addFind(graph, selectIdentityAst(collection, state));
-    addUpdateRows(graph, context.contract, state.tables, set, update);
+  const owner = { operation: 'updateAll', modelName: collection.modelName };
+  if (returns === 'count') {
     graph.setResult(
-      addReadBack(graph, collection, found, keyOverrides(collection, set), state.includes),
+      addUpdateRows(graph, context.contract, state.tables, set, {
+        where: whereOf(collection),
+        filters: [],
+        payloads: [],
+        owner,
+      }),
     );
     return graph;
   }
-  const updated = addUpdateRows(graph, context.contract, state.tables, set, update);
-  graph.setResult(addWithIncludes(graph, collection, updated));
+  requireIdentityColumnsForIncludes(collection);
+  requireIdentityColumns(collection);
+  const found = addFind(graph, selectIdentityAst(collection, { ...state, orderBy: undefined }));
+  const updated = addUpdateRows(graph, context.contract, state.tables, set, {
+    where: undefined,
+    filters: [{ from: found, columns: sameRowColumns(collection) }],
+    payloads: [],
+    owner,
+  });
+  graph.setResult(addReadBack(graph, collection, updated, state.includes));
   return graph;
 }
 
@@ -147,20 +155,10 @@ export function updateFirstGraph(
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     payloads: before.keys,
+    owner: { operation: 'update', modelName: collection.modelName },
   });
-  if (!t.readsBack) {
-    addAfterWrite(t, model, updated, relationMutations);
-    graph.setResult(addWithIncludes(graph, collection, updated));
-    return graph;
-  }
-  const changed = keyOverrides(collection, values);
-  if (relationMutations.length === 0) {
-    graph.setResult(addReadBack(graph, collection, find, changed, state.includes));
-    return graph;
-  }
-  const updatedRow = addReadBack(graph, collection, find, changed, []);
-  addAfterWrite(t, model, updatedRow, relationMutations);
-  graph.setResult(addWithIncludes(graph, collection, updatedRow));
+  addAfterWrite(t, model, updated, relationMutations);
+  graph.setResult(addReadBack(graph, collection, updated, state.includes));
   return graph;
 }
 
@@ -404,16 +402,14 @@ function readsBack(collection: DescribeCollectionRowsOptions, returns: CallRetur
   return returns === 'rows' && !hasContractCapability(collection.context.contract, 'returning');
 }
 
-/** A read of the rows a write changed, by the keys `keysFrom` found, with the new values of any key column the write set. */
 function addReadBack(
   graph: Graph,
   collection: DescribeCollectionRowsOptions,
-  keysFrom: NodeId,
-  changed: Readonly<StorageRow>,
+  written: NodeId,
   includes: CollectionState['includes'],
 ): NodeId {
   return addFind(graph, readBackAst(collection, includes), [
-    new FilterData(keysFrom, sameColumns(identityProjection(collection)), changed),
+    new FilterData(written, sameRowColumns(collection)),
   ]);
 }
 
@@ -440,17 +436,6 @@ function addFind(graph: Graph, ast: SelectAst, filter: FilterData[] = []): NodeI
 function identityProjection(collection: DescribeCollectionRowsOptions): readonly ProjectionItem[] {
   const { context, state } = collection;
   return projectTableColumns(context.contract, state.tables.root, identityColumnsOf(collection));
-}
-
-function keyOverrides(
-  collection: DescribeCollectionRowsOptions,
-  set: Readonly<Record<string, unknown>>,
-): StorageRow {
-  return Object.fromEntries(
-    identityColumnsOf(collection)
-      .filter((column) => Object.hasOwn(set, column))
-      .map((column) => [column, set[column]]),
-  );
 }
 
 function refuseSkipWithReadBack(
