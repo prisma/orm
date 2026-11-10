@@ -37,18 +37,29 @@ describe('defineConfig for MariaDB', () => {
   });
 
   it.each([
+    ['a glob', './prisma/**', './prisma/contract.json'],
+    ['a folder', './prisma', './prisma.json'],
+  ])('builds %s contract path through the Prisma schema provider', (_kind, contract, output) => {
+    const config = defineConfig({ contract });
+    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+      output,
+      inputs: [contract],
+    });
+  });
+
+  it.each([
     './prisma/contract.ts',
     './prisma/contract.mts',
     './prisma/contract.cts',
-    './prisma/contract.json',
-  ])('refuses %s, since only a .prisma contract is built for MariaDB', (contract) => {
+    './prisma/contract.tsx',
+  ])('refuses the TypeScript contract %s', (contract) => {
     expect(() => defineConfig({ contract })).toThrow(
       expect.objectContaining({
         name: 'StructuredError',
         code: 'CONFIG.VALIDATION_FAILED',
-        message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is not a .prisma schema.`,
-        why: 'This defineConfig builds the contract from a PSL schema, and a PSL schema is a file ending in .prisma.',
-        fix: 'Point `contract` at a .prisma schema.',
+        message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is a TypeScript contract.`,
+        why: 'Target "mariadb" builds contracts from Prisma schemas and does not support TypeScript contracts.',
+        fix: 'Point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
         meta: { contract },
       }),
     );

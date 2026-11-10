@@ -16,7 +16,7 @@ import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { prismaContractRequired } from '../errors';
+import { typescriptContractUnsupported } from '../errors';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -37,6 +37,8 @@ export interface MysqlConfigComponents<TargetId extends string> {
   readonly adapter: PrismaNextConfig<'sql', TargetId>['adapter'];
   readonly driver: NonNullable<PrismaNextConfig<'sql', TargetId>['driver']>;
 }
+
+const typescriptExtensions: ReadonlySet<string> = new Set(['.ts', '.mts', '.cts', '.tsx']);
 
 function contractOutput(options: Pick<MysqlConfigOptions, 'contract' | 'output'>): string {
   return options.output !== undefined
@@ -62,14 +64,14 @@ function buildConfig<TargetId extends string>(
 }
 
 /**
- * The `defineConfig` of MySQL, or of a target that extends it, built from that target's components. The contract must be a `.prisma` schema; an `enum` block of text members is typed as a native MySQL enum, and one of integer members as `int`.
+ * The `defineConfig` of MySQL, or of a target that extends it, built from that target's components. The contract is a Prisma schema: a `.prisma` file, a folder of them, or a glob; a TypeScript contract is refused. An `enum` block of text members is typed as a native MySQL enum, and one of integer members as `int`.
  */
 export function createMysqlDefineConfig<TargetId extends string>(
   components: MysqlConfigComponents<TargetId>,
 ): (options: MysqlConfigOptions<TargetId>) => PrismaNextConfig<'sql', TargetId> {
   return (options) => {
-    if (extname(options.contract) !== '.prisma') {
-      throw prismaContractRequired(components.pack.targetId, options.contract);
+    if (typescriptExtensions.has(extname(options.contract))) {
+      throw typescriptContractUnsupported(components.pack.targetId, options.contract);
     }
     return buildConfig(
       components,
@@ -93,7 +95,7 @@ const mysqlComponents: MysqlConfigComponents<'mysql'> = {
 
 const mysqlPslDefineConfig = createMysqlDefineConfig(mysqlComponents);
 
-/** The `prisma.config.ts` of a MySQL project, whose contract is a `.prisma` schema or a TypeScript contract. */
+/** The `prisma.config.ts` of a MySQL project, whose contract is a Prisma schema or a TypeScript contract. */
 export function defineConfig(options: MysqlConfigOptions): PrismaNextConfig<'sql', 'mysql'> {
   if (extname(options.contract) === '.ts') {
     return buildConfig(

@@ -40,4 +40,15 @@ describe('defineConfig for MySQL', () => {
       inputs: ['./prisma/contract.ts'],
     });
   });
+
+  it.each([
+    ['a glob', './prisma/**', './prisma/contract.json'],
+    ['a folder', './prisma', './prisma.json'],
+  ])('builds %s contract path through the Prisma schema provider', (_kind, contract, output) => {
+    const config = defineConfig({ contract });
+    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+      output,
+      inputs: [contract],
+    });
+  });
 });

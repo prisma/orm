@@ -7,7 +7,7 @@ import mariadbPackRef from '@internal/target-mariadb/pack';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 
-/** The `prisma.config.ts` of a MariaDB project, whose contract is a `.prisma` schema. */
+/** The `prisma.config.ts` of a MariaDB project, whose contract is a Prisma schema: a `.prisma` file, a folder of them, or a glob. */
 export const defineConfig: (options: MariadbConfigOptions) => PrismaNextConfig<'sql', 'mariadb'> =
   createMysqlDefineConfig({
     pack: mariadbPackRef,
