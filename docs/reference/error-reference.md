@@ -1713,7 +1713,7 @@ The migration name given to `migration new`/`migration plan --name` contains no 
 
 ### MIGRATION.INVALID_OPERATION_ENTRY
 
-An operation returned by an authored migration class failed schema validation during emit: each entry of `operations` must carry `id`, `label`, and an `operationClass` of `additive`, `widening`, `destructive`, or `data`. Also raised when deserializing a persisted Mongo migration plan hits a malformed or unknown entry (filter, pipeline stage, DML/DDL/inspection command). A MongoDB `renameField` whose new name is its old name raises it when the operation is built, with `context: 'renameField'`, `collection`, `field` and `reason`. Payload: `index`, `reason` (emit validation) or `context`, `kind` (plan deserialization).
+An operation returned by an authored migration class failed schema validation during emit: each entry of `operations` must carry `id`, `label`, and an `operationClass` of `additive`, `widening`, `destructive`, or `data`. Also raised when deserializing a persisted Mongo migration plan hits a malformed or unknown entry (filter, pipeline stage, DML/DDL/inspection command). A MongoDB `renameField` whose new name is its old name raises it when the operation is built, with `context: 'renameField'`, `collection`, `field` and `reason`. Reading a MongoDB `ops.json` raises it for a `checkDocuments` operation with no check: `Operation collection.users.checkDocuments checks the documents of collection users, but has no check.`, with the fix to run that migration's `migration.ts` with `node` again. Payload: `index`, `reason` (emit validation) or `context`, `kind` (plan deserialization).
 
 ### MIGRATION.INVALID_REF_FILE
 
