@@ -45,6 +45,8 @@ The numbered prefixes serve two purposes:
 1. **Visual hierarchy**: Makes domain/layer relationships clear at a glance
 2. **Dependency direction**: Lower numbers can be imported by higher numbers, never the reverse
 
+The direction rule exists to prevent cycles between packages. It adapts Clean Architecture's rule that dependencies point one way: if a package imports only from lower-numbered folders, no chain of imports can lead back to where it started. Numbers compare only between folders in the same parent.
+
 Planes are a conceptual grouping recorded in `architecture.config.json` but do not appear as intermediate subdirectories.
 
 ## Domain and Layer Structure
