@@ -427,7 +427,7 @@ function migrateFailedTypeChangeAdvice(
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
   return [
     editFileAction(
-      `${changeText} ${file} changes field "${change.field}" with the database's cast, which met a value it cannot cast: replace that cast with a conversion of your own there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      `${changeText} ${file} changes field "${change.field}" with the database's cast, which met a value it cannot cast: replace that cast with a data transform that converts the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
     ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
