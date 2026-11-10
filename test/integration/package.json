@@ -71,6 +71,7 @@
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.23",
     "@internal/sqlite": "workspace:8.0.0-rc.23",
     "@internal/target-mongo": "workspace:8.0.0-rc.23",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.23",
     "@internal/target-mysql": "workspace:8.0.0-rc.23",
     "@internal/target-postgres": "workspace:8.0.0-rc.23",
     "@internal/target-sqlite": "workspace:8.0.0-rc.23",
