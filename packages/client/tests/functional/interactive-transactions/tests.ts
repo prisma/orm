@@ -2,7 +2,6 @@ import { copycat } from '@snaplet/copycat'
 
 import { AdapterProviders, Providers } from '../_utils/providers'
 import { NewPrismaClient } from '../_utils/types'
-import { MAX_BIND_VALUES_BY_PROVIDER } from '../chunking-query/_utils'
 import testMatrix from './_matrix'
 // @ts-ignore
 import type { Prisma as PrismaNamespace, PrismaClient } from './generated/prisma/client'
@@ -894,46 +893,41 @@ testMatrix.setupTestSuite(
     })
 
     testIf(provider !== Providers.MONGODB && clientEngineExecutor !== 'remote')(
-      'rollback stops the remaining statements of a createMany that is still running',
+      'rollback rejects the statements an update with a nested create has not sent yet',
       async () => {
+        await prisma.user.create({ data: { id: '1', email: 'user_1@website.com' } })
+
         const client = newPrismaClient({ log: [{ emit: 'event', level: 'query' }] })
-        let markFirstInsertSeen!: () => void
-        const firstInsertSeen = new Promise<void>((resolve) => {
-          markFirstInsertSeen = resolve
+        let markUpdateSeen!: () => void
+        const updateSeen = new Promise<void>((resolve) => {
+          markUpdateSeen = resolve
         })
         client.$on('query', ({ query }) => {
-          if (/^\s*INSERT\b/i.test(query)) markFirstInsertSeen()
+          if (/^\s*UPDATE\b/i.test(query)) markUpdateSeen()
         })
-
-        // On SQLite, better-sqlite3 runs each statement synchronously, so the rollback races the
-        // remaining statements on promise callbacks alone and needs many of them to lose that race.
-        const statements = provider === Providers.SQLITE ? 20 : 3
-        const rowsPerStatement = Math.floor(MAX_BIND_VALUES_BY_PROVIDER[provider] / 4)
-        const data = Array.from({ length: (statements - 1) * rowsPerStatement + 1 }, (_, i) => ({
-          id: `${i}`,
-          email: `user_${i}@website.com`,
-          name: `user ${i}`,
-          val: i,
-        }))
-        let createMany!: Promise<unknown>
+        let update!: Promise<unknown>
 
         const result = client.$transaction(
           async (tx) => {
-            createMany = tx.user.createMany({ data })
+            update = tx.user.update({
+              where: { id: '1' },
+              data: { name: 'renamed', posts: { create: { title: 'late post', published: true } } },
+            })
             await Promise.all([
-              createMany,
-              firstInsertSeen.then(() => {
-                throw new Error('rolled back after the first INSERT')
+              update,
+              updateSeen.then(() => {
+                throw new Error('rolled back after the UPDATE')
               }),
             ])
           },
           { timeout: 30_000, maxWait: 10_000 },
         )
 
-        await expect(result).rejects.toThrow('rolled back after the first INSERT')
-        const [createManyOutcome] = await Promise.allSettled([createMany])
-        expect(await client.user.count()).toBe(0)
-        expect(createManyOutcome).toMatchObject({ status: 'rejected', reason: { code: 'P2028' } })
+        await expect(result).rejects.toThrow('rolled back after the UPDATE')
+        const [updateOutcome] = await Promise.allSettled([update])
+        expect(updateOutcome).toMatchObject({ status: 'rejected', reason: { code: 'P2028' } })
+        expect(await client.user.findUnique({ where: { id: '1' }, select: { name: true } })).toEqual({ name: null })
+        expect(await client.post.count({ where: { title: 'late post' } })).toBe(0)
       },
     )
 
