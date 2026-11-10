@@ -134,6 +134,12 @@ async function startTransaction(transactionManager: TransactionManager, options:
   return id
 }
 
+const INSERT_QUERY: SqlQuery = { sql: 'INSERT INTO "User" ("id") VALUES (1)', args: [], argTypes: [] }
+
+function sentStatements(driverAdapter: MockDriverAdapter): string[] {
+  return driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)
+}
+
 test('transaction executes normally', async () => {
   const driverAdapter = new MockDriverAdapter()
   const transactionManager = new TransactionManager({
@@ -893,6 +899,67 @@ test('transaction times out during execution', async () => {
 
   await expect(transactionManager.commitTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
   await expect(transactionManager.rollbackTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+})
+
+test('a statement sent while a timed-out transaction is rolling back is refused', async () => {
+  // A query keeps the transaction it was given while it runs. When the timeout fires in the
+  // middle of a multi-statement query, its next statement must not reach the connection: the
+  // ROLLBACK is already on its way and the connection is released right after, so the statement
+  // would run outside the transaction and commit on its own.
+  const driverAdapter = new MockDriverAdapter()
+  let finishRollback!: () => void
+  driverAdapter.executeRawMock = vi.fn().mockImplementation(async ({ sql }: SqlQuery) => {
+    if (sql === 'ROLLBACK') {
+      await new Promise<void>((resolve) => {
+        finishRollback = resolve
+      })
+    }
+    return 1
+  })
+
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  const id = await startTransaction(transactionManager)
+  const transaction = await transactionManager.getTransaction({ id }, 'query')
+
+  await expect(transaction.executeRaw(INSERT_QUERY)).resolves.toBe(1)
+
+  await vi.advanceTimersByTimeAsync(TRANSACTION_EXECUTION_TIMEOUT)
+  expect(sentStatements(driverAdapter)).toEqual([INSERT_QUERY.sql, 'ROLLBACK'])
+
+  await expect(transaction.executeRaw(INSERT_QUERY)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+  await expect(transaction.queryRaw(INSERT_QUERY)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+
+  finishRollback()
+  await vi.waitFor(() => expect(driverAdapter.rollbackMock).toHaveBeenCalledOnce())
+
+  expect(sentStatements(driverAdapter)).toEqual([INSERT_QUERY.sql, 'ROLLBACK'])
+})
+
+test('a statement sent on a closed transaction is refused', async () => {
+  const driverAdapter = new MockDriverAdapter()
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  const committedId = await startTransaction(transactionManager)
+  const committed = await transactionManager.getTransaction({ id: committedId }, 'query')
+  await transactionManager.commitTransaction(committedId)
+
+  const rolledBackId = await startTransaction(transactionManager)
+  const rolledBack = await transactionManager.getTransaction({ id: rolledBackId }, 'query')
+  await transactionManager.rollbackTransaction(rolledBackId)
+
+  await expect(committed.executeRaw(INSERT_QUERY)).rejects.toBeInstanceOf(TransactionClosedError)
+  await expect(rolledBack.executeRaw(INSERT_QUERY)).rejects.toBeInstanceOf(TransactionRolledBackError)
+
+  expect(sentStatements(driverAdapter)).toEqual(['COMMIT', 'ROLLBACK'])
 })
 
 test('execution timeout does not produce an unhandled rejection when rollback fails on a dead connection', async () => {
