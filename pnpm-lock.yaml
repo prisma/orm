@@ -4457,6 +4457,9 @@ importers:
         specifier: workspace:8.0.0-rc.23
         version: link:../../../../1-framework/1-core/framework-components
     devDependencies:
+      '@internal/sql-contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/contract
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../../../test/utils

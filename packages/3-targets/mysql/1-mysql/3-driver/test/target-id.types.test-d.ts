@@ -1,5 +1,6 @@
 import type { ControlDriverDescriptor } from '@internal/framework-components/control';
 import type { RuntimeDriverDescriptor } from '@internal/framework-components/execution';
+import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type { Connection } from 'mariadb';
 import { expectTypeOf, test } from 'vitest';
 import mysqlControlDriver, {
@@ -17,7 +18,7 @@ import mysqlRuntimeDriver, {
 
 test('the driver descriptors carry the target id they are built for, and MySQL by default', () => {
   expectTypeOf(createMysqlControlDriverDescriptor('mariadb')).toEqualTypeOf<
-    ControlDriverDescriptor<'sql', 'mariadb', MysqlControlDriver<'mariadb'>>
+    ControlDriverDescriptor<'sql', 'mariadb', SqlControlDriverInstance<'mariadb'>>
   >();
   expectTypeOf(createMysqlRuntimeDriverDescriptor('mariadb')).toEqualTypeOf<
     RuntimeDriverDescriptor<
@@ -39,10 +40,13 @@ test('the driver descriptors carry the target id they are built for, and MySQL b
 
 declare const connection: Connection;
 
-test('a driver is built only with the target id it carries', () => {
-  // @ts-expect-error the control driver needs its target id
-  new MysqlControlDriver(connection);
+test('MysqlControlDriver is built from a connection alone and carries the MySQL target id', () => {
+  expectTypeOf(new MysqlControlDriver(connection).targetId).toEqualTypeOf<'mysql'>();
+  // @ts-expect-error MysqlControlDriver is fixed to MySQL and takes no target id
+  new MysqlControlDriver(connection, 'mariadb');
+});
+
+test('the runtime driver is built only with the target id it carries', () => {
   // @ts-expect-error the runtime driver needs its target id
   new MysqlDriver({});
-  expectTypeOf(new MysqlControlDriver(connection, 'mariadb').targetId).toEqualTypeOf<'mariadb'>();
 });

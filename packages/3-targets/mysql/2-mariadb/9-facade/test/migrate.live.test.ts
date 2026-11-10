@@ -1,7 +1,6 @@
 import mariadbAdapter from '@internal/adapter-mariadb/control';
 import type { Contract } from '@internal/contract/types';
 import mariadbDriver from '@internal/driver-mariadb/control';
-import type { MysqlControlDriver } from '@internal/driver-mysql/control';
 import sql, { type SqlControlFamilyInstance } from '@internal/family-sql/control';
 import {
   createControlStack,
@@ -10,7 +9,7 @@ import {
   type MigrationRunnerResult,
 } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import mariadb from '@internal/target-mariadb/control';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
@@ -31,7 +30,7 @@ const EVERY_CLASS: MigrationOperationPolicy = {
 
 async function withDriver<T>(
   url: string,
-  fn: (driver: MysqlControlDriver<'mariadb'>, family: SqlControlFamilyInstance) => Promise<T>,
+  fn: (driver: SqlControlDriverInstance<'mariadb'>, family: SqlControlFamilyInstance) => Promise<T>,
 ): Promise<T> {
   const driver = await mariadbDriver.create(url, {
     sessionSettings: mariadb.sessionSettings ?? {},
@@ -44,7 +43,7 @@ async function withDriver<T>(
 }
 
 async function plan(
-  driver: MysqlControlDriver<'mariadb'>,
+  driver: SqlControlDriverInstance<'mariadb'>,
   family: SqlControlFamilyInstance,
   contract: Contract<SqlStorage>,
 ): Promise<MigrationPlan> {
@@ -65,7 +64,7 @@ async function plan(
 
 function apply(
   family: SqlControlFamilyInstance,
-  driver: MysqlControlDriver<'mariadb'>,
+  driver: SqlControlDriverInstance<'mariadb'>,
   migration: MigrationPlan,
   contract: Contract<SqlStorage>,
 ): Promise<MigrationRunnerResult> {
@@ -94,7 +93,7 @@ function apply(
 
 async function markerHashes(
   family: SqlControlFamilyInstance,
-  driver: MysqlControlDriver<'mariadb'>,
+  driver: SqlControlDriverInstance<'mariadb'>,
 ) {
   const markers = await family.readAllMarkers({ driver });
   return Object.fromEntries([...markers].map(([space, marker]) => [space, marker.storageHash]));

@@ -1,8 +1,8 @@
 import mariadbAdapter from '@internal/adapter-mariadb/control';
 import mariadbDriver from '@internal/driver-mariadb/control';
-import type { MysqlControlDriver } from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import mariadb from '@internal/target-mariadb/control';
 import { timeouts } from '@repo/test-utils';
@@ -14,7 +14,7 @@ const SERVER = 'MARIADB_URL';
 const frameworkComponents = [mariadb, mariadbAdapter];
 
 async function introspect(
-  driver: MysqlControlDriver<'mariadb'>,
+  driver: SqlControlDriverInstance<'mariadb'>,
   contract?: unknown,
 ): Promise<SqlSchemaIR> {
   const adapter = mariadbAdapter.create(
@@ -31,7 +31,7 @@ async function introspect(
 async function withTables<T>(
   url: string,
   ddl: readonly string[],
-  fn: (driver: MysqlControlDriver<'mariadb'>) => Promise<T>,
+  fn: (driver: SqlControlDriverInstance<'mariadb'>) => Promise<T>,
 ): Promise<T> {
   const driver = await mariadbDriver.create(url, {
     sessionSettings: mariadb.sessionSettings ?? {},

@@ -1,8 +1,8 @@
 import mariadbDriver from '@internal/driver-mariadb/control';
-import type { MysqlControlDriver } from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { createControlStack } from '@internal/framework-components/control';
+import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import mariadbTarget from '@internal/target-mariadb/control';
 import { acquireMarkerLock, releaseMarkerLock } from '@internal/target-mysql/marker-lock';
@@ -24,13 +24,13 @@ function createAdapter(): SqlControlAdapter<'mariadb'> {
   );
 }
 
-function connect(url: string): Promise<MysqlControlDriver<'mariadb'>> {
+function connect(url: string): Promise<SqlControlDriverInstance<'mariadb'>> {
   return mariadbDriver.create(url, { sessionSettings: mariadbTarget.sessionSettings ?? {} });
 }
 
 async function bootstrap(
   adapter: SqlControlAdapter<'mariadb'>,
-  driver: MysqlControlDriver<'mariadb'>,
+  driver: SqlControlDriverInstance<'mariadb'>,
 ): Promise<void> {
   for (const node of adapter.bootstrapControlTableQueries()) {
     await driver.query((await adapter.lowerToExecuteRequest(node)).sql);
