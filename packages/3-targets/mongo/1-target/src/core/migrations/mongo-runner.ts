@@ -337,7 +337,21 @@ function backfillAdvice(
   requires: readonly string[],
   rewriteCollection: RewriteCollection,
 ): readonly string[] {
-  const accepted = requires.flatMap((stored) => {
+  const accepted = backfillStatements(contract, collection, requires, rewriteCollection);
+  if (accepted.length === 0) return [];
+  return [
+    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${accepted.map(({ statement }) => `--backfill ${statement}`).join(' ')}.`,
+  ];
+}
+
+/** The `--backfill` statement of each of `fields` the planner would accept it for, with the field's stored name. */
+function backfillStatements(
+  contract: MongoContract,
+  collection: string,
+  fields: readonly string[],
+  rewriteCollection: RewriteCollection,
+): readonly { readonly stored: string; readonly statement: string }[] {
+  return fields.flatMap((stored) => {
     if (unrewritableFieldNameReason(stored) !== undefined) return [];
     const field = fieldStoredAt(contract, collection, stored);
     if (field.kind !== 'field') return [];
@@ -357,10 +371,6 @@ function backfillAdvice(
       ? [{ stored, statement: fieldStatementText(contract, field) }]
       : [];
   });
-  if (accepted.length === 0) return [];
-  return [
-    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${accepted.map(({ statement }) => `--backfill ${statement}`).join(' ')}.`,
-  ];
 }
 
 /** How to change documents by hand while the old validator, which may reject their new shape, is in place. */
@@ -542,10 +552,21 @@ function rewriteErrorFix(mongoCode: number, reason: string): string | undefined 
  * The failure when MongoDB cannot build a unique index because two documents hold the same value
  * of its keys, as documents without the field all hold `null`. The build changes nothing.
  */
+/** The fields of a duplicate key MongoDB reports, when every one of them is `null` or missing. */
+function nullKeyFields(error: object): readonly string[] {
+  const keyValue: unknown = Reflect.get(error, 'keyValue');
+  if (typeof keyValue !== 'object' || keyValue === null) return [];
+  const entries = Object.entries(keyValue);
+  return entries.length > 0 && entries.every(([, value]) => value === null)
+    ? entries.map(([field]) => field)
+    : [];
+}
+
 function indexBuildFailure(
   op: MongoMigrationPlanOperation,
   command: AnyMongoDdlCommand,
   error: unknown,
+  backfill: (fields: readonly string[]) => readonly string[],
 ): MongoMigrationRunnerResult | undefined {
   if (!(command instanceof CreateIndexCommand) || typeof error !== 'object' || error === null) {
     return undefined;
@@ -554,11 +575,24 @@ function indexBuildFailure(
   const reason = mongoErrorText(error);
   const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
   const index = command.name ?? defaultMongoIndexName(command.keys);
+  const lacking = nullKeyFields(error);
+  const statements = backfill(lacking);
+  const why = [
+    lacking.length === 0
+      ? 'A document without the field counts as holding null.'
+      : `The documents that collide lack ${quotedList(lacking)} or hold null in ${lacking.length === 1 ? 'it' : 'them'}, and a document without the field counts as holding null.`,
+    'Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped.',
+    ...(statements.length === 0
+      ? []
+      : [
+          `Under migration plan, ${statements.join(' ')} writes a slot to give each document its own value.`,
+        ]),
+  ].join(' ');
   return runnerFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the unique index ${index} cannot be built, because two documents in collection ${command.collection} hold the same value${duplicate === undefined ? '' : ` ${duplicate}`}`,
     {
-      why: 'A document without the field counts as holding null. Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped.',
+      why,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_DUPLICATE_KEY,
@@ -762,7 +796,12 @@ export class MongoMigrationRunner {
           try {
             await executeDdl(step.command);
           } catch (error) {
-            const failure = indexBuildFailure(operation, step.command, error);
+            const failure = indexBuildFailure(operation, step.command, error, (fields) =>
+              backfillStatements(options.destinationContract, step.command.collection, fields, {
+                timeSeries: false,
+                validator: undefined,
+              }).map(({ statement }) => `--backfill ${statement}`),
+            );
             if (failure === undefined) throw error;
             return failure;
           }

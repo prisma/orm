@@ -56,7 +56,7 @@ describe('MongoMigrationRunner, a new unique field on a collection with document
         code: 'MIGRATION.EXECUTION_FAILED',
         message:
           'Operation index.users.create(code_1) failed: the unique index code_1 cannot be built, because two documents in collection users hold the same value { code: null }',
-        why: 'A document without the field counts as holding null. Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+        why: 'The documents that collide lack "code" or hold null in it, and a document without the field counts as holding null. Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped. Under migration plan, --backfill User.code writes a slot to give each document its own value. The failed apply changed nothing.',
       });
     },
     timeouts.spinUpMongoMemoryServer,
