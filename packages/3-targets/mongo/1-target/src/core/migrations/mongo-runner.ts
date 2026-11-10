@@ -321,9 +321,9 @@ function backfillAdvice(
   return [`To give ${quotedList(requires)} values you choose, plan the change with ${plan}.`];
 }
 
-/** How to change documents by hand while the old validator, which rejects their new shape, is in place. */
+/** How to change documents by hand while the old validator, which may reject their new shape, is in place. */
 function byHandAdvice(collection: string): string {
-  return `The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
+  return `The old validator may reject a document changed to the new shape, so the update that fixes one can skip document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
 }
 
 /**

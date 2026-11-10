@@ -61,7 +61,7 @@ const schemaWithPlan = {
 };
 
 const BY_HAND =
-  'The old validator rejects a document changed to the new shape unless the update skips document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: "users", updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).';
+  'The old validator may reject a document changed to the new shape, so the update that fixes one can skip document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: "users", updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).';
 const CHECK_DOCUMENTS_FALSE =
   'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.';
 const NO_VALIDATOR_BY_HAND =
@@ -258,7 +258,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
   );
 
   it(
-    'names --backfill for a field the collection validator did not require, and says the old validator rejects a fix by hand',
+    'names --backfill for a field the collection validator did not require, and says the old validator may reject a fix by hand',
     async () => {
       const nameOnly = { ...schemaWithPlan, required: ['_id', 'name'] };
       await db.createCollection('users', { validator: { $jsonSchema: nameOnly } });
