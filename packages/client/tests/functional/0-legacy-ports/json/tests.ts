@@ -110,11 +110,8 @@ testMatrix.setupTestSuite(
         if (suiteConfig.provider === Providers.MYSQL) {
           result = await prisma.resource.findMany({
             where: {
-              requiredJson: {
-                // @ts-test-if: provider === Providers.MYSQL
-                path: '$.foo',
-                gt: 'a',
-              },
+              // @ts-test-if: provider === Providers.MYSQL
+              requiredJson: { path: '$.foo', gt: 'a' },
             },
           })
         }
@@ -122,11 +119,8 @@ testMatrix.setupTestSuite(
         if (suiteConfig.provider === Providers.POSTGRESQL) {
           result = await prisma.resource.findMany({
             where: {
-              requiredJson: {
-                // @ts-test-if: provider === Providers.POSTGRESQL
-                path: ['foo'],
-                gt: 'a',
-              },
+              // @ts-test-if: provider === Providers.POSTGRESQL
+              requiredJson: { path: ['foo'], gt: 'a' },
             },
           })
         }
