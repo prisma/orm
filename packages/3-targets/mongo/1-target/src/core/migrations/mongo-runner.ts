@@ -808,11 +808,14 @@ export class MongoMigrationRunner {
           try {
             await executeDdl(step.command);
           } catch (error) {
+            const inPlace = await this.collectionInPlace(step.command.collection);
             const failure = indexBuildFailure(operation, step.command, error, (fields) =>
-              backfillStatements(options.destinationContract, step.command.collection, fields, {
-                timeSeries: false,
-                validator: undefined,
-              }).map(({ statement }) => `--backfill ${statement}`),
+              backfillStatements(
+                options.destinationContract,
+                step.command.collection,
+                fields,
+                inPlace.rewrite,
+              ).map(({ statement }) => `--backfill ${statement}`),
             );
             if (failure === undefined) throw error;
             return failure;
@@ -1062,14 +1065,8 @@ export class MongoMigrationRunner {
     if (documents === 0) return undefined;
     const documentId = mongoshValue(counted?.['documentId']);
     const query = `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(failing)})`;
-    const [current] = (
-      await this.deps.inspectionExecutor.listCollections(new ListCollectionsCommand())
-    ).filter((info) => info['name'] === collection);
-    const options: unknown = current?.['options'];
-    const validatorBefore: unknown =
-      typeof options === 'object' && options !== null
-        ? Reflect.get(options, 'validator')
-        : undefined;
+    const inPlace = await this.collectionInPlace(collection);
+    const validatorBefore = inPlace.validator;
     const touched = fieldsTouched(
       Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
       Reflect.get(validator, '$jsonSchema'),
@@ -1119,13 +1116,7 @@ export class MongoMigrationRunner {
                 failing,
                 touched.requires,
               ),
-              {
-                timeSeries:
-                  typeof options === 'object' &&
-                  options !== null &&
-                  Reflect.get(options, 'timeseries') !== undefined,
-                validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
-              },
+              inPlace.rewrite,
             ),
             byHandAdvice(collection),
           ]
@@ -1231,6 +1222,28 @@ export class MongoMigrationRunner {
       }),
     );
     return [...problemsAgainst(fields, shape, path), ...nested.flat()];
+  }
+
+  /**
+   * The collection as the database has it now: its validator, and what a rewrite's refusals read of
+   * it, whether it is a time-series collection and its validator's `$jsonSchema`.
+   */
+  private async collectionInPlace(
+    collection: string,
+  ): Promise<{ readonly validator: unknown; readonly rewrite: RewriteCollection }> {
+    const [current] = (
+      await this.deps.inspectionExecutor.listCollections(new ListCollectionsCommand())
+    ).filter((info) => info['name'] === collection);
+    const options: unknown = current?.['options'];
+    const readable = typeof options === 'object' && options !== null;
+    const validator: unknown = readable ? Reflect.get(options, 'validator') : undefined;
+    return {
+      validator,
+      rewrite: {
+        timeSeries: readable && Reflect.get(options, 'timeseries') !== undefined,
+        validator: Reflect.get(validator ?? {}, '$jsonSchema'),
+      },
+    };
   }
 
   /** Each of `fields` that a document matching `failing` lacks or holds as `null`. */
