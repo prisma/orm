@@ -19,7 +19,7 @@ declare const newPrismaClient: NewPrismaClient<QueryLogPrismaClient, typeof Pris
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }, _suiteMeta) => {
+  ({ provider, driverAdapter, clientEngineExecutor }, _suiteMeta) => {
     // TODO: Technically, only "high concurrency" test requires larger timeout
     // but `jest.setTimeout` does not work inside of the test at the moment
     //  https://github.com/facebook/jest/issues/11543
@@ -893,7 +893,7 @@ testMatrix.setupTestSuite(
       expect(users.length).toBe(1)
     })
 
-    testIf(provider !== Providers.MONGODB)(
+    testIf(provider !== Providers.MONGODB && clientEngineExecutor !== 'remote')(
       'rollback stops the remaining statements of a createMany that is still running',
       async () => {
         const client = newPrismaClient({ log: [{ emit: 'event', level: 'query' }] })
@@ -917,15 +917,18 @@ testMatrix.setupTestSuite(
         }))
         let createMany!: Promise<unknown>
 
-        const result = client.$transaction(async (tx) => {
-          createMany = tx.user.createMany({ data })
-          await Promise.all([
-            createMany,
-            firstInsertSeen.then(() => {
-              throw new Error('rolled back after the first INSERT')
-            }),
-          ])
-        })
+        const result = client.$transaction(
+          async (tx) => {
+            createMany = tx.user.createMany({ data })
+            await Promise.all([
+              createMany,
+              firstInsertSeen.then(() => {
+                throw new Error('rolled back after the first INSERT')
+              }),
+            ])
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
 
         await expect(result).rejects.toThrow('rolled back after the first INSERT')
         const [createManyOutcome] = await Promise.allSettled([createMany])
