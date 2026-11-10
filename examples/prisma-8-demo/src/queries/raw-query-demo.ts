@@ -142,3 +142,42 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
 
   return (runtime ?? db).query(plan);
 }
+
+/**
+ * An `INSERT … SELECT` whose SELECT is a typed builder query.
+ *
+ * Interpolating a builder query splices its SQL and its parameters into the
+ * raw template at that point, in template order, with no parentheses added, so
+ * it can stand where SQL expects a bare SELECT. Here it copies one author's
+ * posts to another, prefixing each title.
+ */
+export async function rawQueryCopyPosts(
+  fromEmail: string,
+  toEmail: string,
+  titlePrefix = 'Copy of ',
+  runtime?: Runtime,
+) {
+  const copies = post
+    .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+    .select((f, fns) => ({
+      id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
+      title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
+      body: f.post.body,
+      userId: fns.raw`(SELECT id FROM "user" WHERE email = ${toEmail})`.returns('pg/uuid@1'),
+    }))
+    .where((f, fns) => fns.eq(f.user.email, fromEmail));
+
+  const plan = db.raw.sql`
+    INSERT INTO "post" (id, title, body, "userId")
+    ${copies}
+    RETURNING id, title, "userId"
+  `
+    .returnsRow({
+      id: post.columns.id,
+      title: post.columns.title,
+      userId: post.columns.userId,
+    })
+    .build();
+
+  return (runtime ?? db).query(plan);
+}
