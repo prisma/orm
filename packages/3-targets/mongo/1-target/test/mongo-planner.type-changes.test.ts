@@ -263,6 +263,43 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it('refuses a type change of a field whose stored name MongoDB reads as a path, naming the field', () => {
+      const zip = (seed: string, type: FieldTypeSpec) =>
+        contract(
+          seed,
+          {
+            User: {
+              collection: 'users',
+              fields: ['_id', 'zip'],
+              types: { _id: OBJECT_ID, zip: type },
+              storedAs: { zip: 'addr.zip' },
+            },
+          },
+          { users: { jsonSchema: closedSchema({ 'addr.zip': schemaOf(type) }) } },
+        );
+
+      expect(
+        refusal(
+          plan({
+            from: zip('from', STRING),
+            to: zip('to', INT),
+            schema: [
+              schemaCollection('users', {
+                jsonSchema: closedSchema({ 'addr.zip': schemaOf(STRING) }),
+              }),
+            ],
+          }),
+        ),
+      ).toEqual([
+        {
+          kind: 'typeChangeRefused',
+          summary:
+            'Cannot change the type of field "User.zip" in collection "users": its stored name "addr.zip" cannot be rewritten: MongoDB reads a name containing "." as a path into embedded documents',
+          why: 'A cast or a conversion would have to rewrite the field. Keep its type, or store it under a name without "." that does not start with "$", then run this command again.',
+        },
+      ]);
+    });
+
     it('refuses a cast in a time-series collection', () => {
       expect(
         refusal(

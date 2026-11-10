@@ -48,8 +48,8 @@ export interface TypeChange {
   readonly from: FieldShape;
   readonly to: FieldShape;
   readonly filter: Document | undefined;
-  /** The cast, when `$convert` has one for every old type; `undefined` when only a conversion can change the values. */
-  readonly cast: CastFieldCall | undefined;
+  /** The cast's types, when every old type casts to the new one keeping what the values mean; `undefined` when only a conversion can change the values. */
+  readonly cast: Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined;
 }
 
 function withoutNull(types: readonly string[]): readonly string[] {
@@ -114,19 +114,19 @@ function castOptions(
 }
 
 function typeChange(input: Omit<TypeChange, 'cast'>): TypeChange {
-  const options = castOptions(input.from, input.to);
-  return {
-    ...input,
-    cast:
-      options === undefined
-        ? undefined
-        : new CastFieldCall({
-            collection: input.collection,
-            field: input.field,
-            ...options,
-            ...(input.filter === undefined ? {} : { filter: input.filter }),
-          }),
-  };
+  return { ...input, cast: castOptions(input.from, input.to) };
+}
+
+/** The `castField` call that carries out a type change, when it has a cast. */
+export function castFieldCallOf(change: TypeChange): CastFieldCall | undefined {
+  return change.cast === undefined
+    ? undefined
+    : new CastFieldCall({
+        collection: change.collection,
+        field: change.field,
+        ...change.cast,
+        ...(change.filter === undefined ? {} : { filter: change.filter }),
+      });
 }
 
 /**
@@ -158,7 +158,6 @@ export function planFieldTypeChanges(
         const to = fieldShapeOf(destinationModel.fields[destinationField], lookups);
         const storedName = ownStoredNameOf(destinationModel, destinationField);
         if (from === undefined || to === undefined || takesEveryValue(from, to)) return [];
-        if (unrewritableFieldNameReason(storedName) !== undefined) return [];
         return [
           typeChange({
             subject: { kind: 'field', ...origin, field },
@@ -193,11 +192,7 @@ export function planValidatorTypeChanges(input: {
       const matched = before.find(({ key }) => key === after.key);
       if (matched === undefined) return [];
       return Object.keys(after.properties)
-        .filter(
-          (field) =>
-            Object.hasOwn(matched.properties, field) &&
-            unrewritableFieldNameReason(field) === undefined,
-        )
+        .filter((field) => Object.hasOwn(matched.properties, field))
         .flatMap((field) => {
           const from = propertyShapeOf(matched.properties[field]);
           const to = propertyShapeOf(after.properties[field]);
@@ -260,6 +255,24 @@ function fieldText(change: TypeChange, contract: ContractWithDomain): string {
       ? change.subject.name
       : change.field
     : fieldStatementText(contract, change.destination);
+}
+
+/** A type change of a field whose stored name MongoDB reads as a path or an operator: neither a cast nor a conversion can rewrite it. */
+export function unrewritableTypeChangeRefusals(
+  changes: readonly TypeChange[],
+  contract: ContractWithDomain,
+): readonly MigrationPlannerConflict[] {
+  return changes.flatMap((change) => {
+    const reason = unrewritableFieldNameReason(change.field);
+    if (reason === undefined) return [];
+    return [
+      {
+        kind: 'typeChangeRefused',
+        summary: `Cannot change the type of field "${fieldText(change, contract)}" in collection "${change.collection}": its stored name ${JSON.stringify(change.field)} cannot be rewritten: ${reason}`,
+        why: 'A cast or a conversion would have to rewrite the field. Keep its type, or store it under a name without "." that does not start with "$", then run this command again.',
+      },
+    ];
+  });
 }
 
 /** A type change with no cast that keeps what the values mean: only a conversion the user writes keeps the field. */

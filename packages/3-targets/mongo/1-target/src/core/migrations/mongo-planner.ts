@@ -38,6 +38,7 @@ import type {
 import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { unrewritableFieldNameReason } from './migration-factories';
 import {
   backfillTransform,
   convertTransform,
@@ -64,11 +65,13 @@ import {
   type StatementCalls,
 } from './mongo-statement-planning';
 import {
+  castFieldCallOf,
   noCastRefusals,
   planFieldTypeChanges,
   planValidatorTypeChanges,
   type TypeChange,
   typeChangeConverted,
+  unrewritableTypeChangeRefusals,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
 import type { OpFactoryCall } from './op-factory-call';
@@ -747,7 +750,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       return [];
     });
     const unconverted = typeChanges.filter((change) => !converted.includes(change));
-    const casts = unconverted.flatMap((change) => (change.cast === undefined ? [] : [change]));
+    const rewritable = unconverted.filter(
+      (change) => unrewritableFieldNameReason(change.field) === undefined,
+    );
+    const casts = rewritable.flatMap((change) => {
+      const call = castFieldCallOf(change);
+      return call === undefined ? [] : [{ ...change, call }];
+    });
     const fills = planFieldFills({
       match,
       contract,
@@ -792,12 +801,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...transforms.flatMap(({ outcome }) =>
         outcome.kind === 'refused' ? [outcome.conflict] : [],
       ),
-      ...noCastRefusals(unconverted, contract),
+      ...unrewritableTypeChangeRefusals(unconverted, contract),
+      ...noCastRefusals(rewritable, contract),
       ...timeSeriesRefusals(rewrites, schema),
       ...sharedCollectionRefusals(rewrites, contract, schema),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
-    const castCalls = casts.flatMap((change) => (change.cast === undefined ? [] : [change.cast]));
+    const castCalls = casts.map(({ call }) => call);
     const callOf = new Map<ResolvedMigrationStatement, OpFactoryCall | undefined>([
       ...renames.map((statement, index) => [statement, callOfStatement[index]] as const),
       ...transforms.map(({ statement, outcome }) =>
@@ -839,15 +849,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         loss: 'drop' as const,
         label: removal.call.label,
       })),
-      ...casts.flatMap(({ cast, subject }): MigrationDataLoss[] =>
-        cast === undefined || cast.operationClass !== 'destructive'
+      ...casts.flatMap(({ call, subject }): MigrationDataLoss[] =>
+        call.operationClass !== 'destructive'
           ? []
           : [
               {
-                operationIndex: calls.indexOf(cast),
+                operationIndex: calls.indexOf(call),
                 subject,
                 loss: 'typeChange',
-                label: cast.label,
+                label: call.label,
               },
             ],
       ),
