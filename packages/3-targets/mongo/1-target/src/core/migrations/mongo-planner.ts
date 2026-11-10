@@ -494,8 +494,10 @@ function documentChecksOf(
  * the new validator once the fields the plan rewrites in it are left out. The checks only read
  * documents, and run after the collection renames and creates but before the index drops, rewrites
  * and index creates of any collection. So a check that fails stops the apply before it changes any
- * index or document: an index drop or a rewrite would otherwise stay applied while the validator
- * change fails, and a unique index build could fail on documents that lack the field.
+ * index, document or validator: an index drop, a rewrite or an earlier validator change would
+ * otherwise stay applied while a validator change fails, and a unique index build could fail on
+ * documents that lack the field. A plan whose only such change is one validator change needs no
+ * early check, since that change's own check stops it first.
  */
 function documentChecksFor(
   validatorOps: readonly OpFactoryCall[],
@@ -591,7 +593,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const allCalls = [
       ...(options.statementCalls?.collectionRenames ?? []),
       ...collCreates,
-      ...(drops.length + rewrites.length + creates.length === 0
+      ...(drops.length + rewrites.length + creates.length + validatorOps.length <= 1
         ? []
         : documentChecksFor(validatorOps, options.statementCalls?.documentChecks ?? new Map())),
       ...drops,

@@ -171,7 +171,23 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
       ).toEqual(['collection.users.checkDocuments', 'dropIndex users', 'collMod users']);
     });
 
-    it('plans no check when the validator changes are the only operations', () => {
+    it('checks every collection when the plan changes two validators and nothing else', () => {
+      expect(
+        plannedCommands(
+          contractOf({ accounts: validatorOnly, users: validatorOnly }),
+          new MongoSchemaIR([liveCollection('accounts'), liveCollection('users')], {
+            fromDatabase: false,
+          }),
+        ),
+      ).toEqual([
+        'collection.accounts.checkDocuments',
+        'collection.users.checkDocuments',
+        'collMod accounts',
+        'collMod users',
+      ]);
+    });
+
+    it('plans no check when one validator change is the only operation', () => {
       expect(
         plannedCommands(
           contractOf({ users: validatorOnly }),

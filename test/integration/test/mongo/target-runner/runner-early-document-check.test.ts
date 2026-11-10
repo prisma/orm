@@ -367,3 +367,73 @@ describe('MongoMigrationRunner, an early check before an index drop', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, early checks for validator changes alone', () => {
+  it(
+    'stops at the users check before the accounts validator changes',
+    async () => {
+      await live.createClosed('accounts', ['email'], [], [{ email: 'a@example.com' }]);
+      await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
+      const accountsValidator = async () =>
+        (await live.db().listCollections({ name: 'accounts' }).toArray())[0]?.['options']?.[
+          'validator'
+        ];
+      const before = await accountsValidator();
+      const nonEmptyEmail = () => {
+        const schema = closedSchema(['email']);
+        return new MongoCollection({
+          validator: {
+            jsonSchema: {
+              ...schema,
+              properties: { ...schema.properties, email: { bsonType: 'string', minLength: 1 } },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          },
+        });
+      };
+      const from = contract(
+        'from',
+        {
+          Account: { collection: 'accounts', fields: ['_id', 'email'] },
+          User: { collection: 'users', fields: ['_id', 'email'] },
+        },
+        { accounts: closedCollection(['email']), users: closedCollection(['email']) },
+      );
+      const to = contract(
+        'to',
+        {
+          Account: { collection: 'accounts', fields: ['_id', 'email'] },
+          User: {
+            collection: 'users',
+            fields: ['_id', 'email', 'born'],
+            codecs: { _id: 'mongo/objectId@1', born: 'mongo/date@1' },
+          },
+        },
+        { accounts: nonEmptyEmail(), users: withBorn(['email', 'born']) },
+      );
+
+      const { planned, result } = await live.planAndRun(from, to, [], [mongoTargetDescriptor]);
+
+      expect({
+        operations:
+          planned.kind === 'success'
+            ? planned.plan.operations.map((operation) => Reflect.get(operation, 'id'))
+            : planned,
+        failedAt: result.ok ? result : result.failure.meta['operationId'],
+        accountsValidatorUnchanged:
+          JSON.stringify(await accountsValidator()) === JSON.stringify(before),
+      }).toEqual({
+        operations: [
+          'collection.accounts.checkDocuments',
+          'collection.users.checkDocuments',
+          'validator.accounts.update',
+          'validator.users.update',
+        ],
+        failedAt: 'collection.users.checkDocuments',
+        accountsValidatorUnchanged: true,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
