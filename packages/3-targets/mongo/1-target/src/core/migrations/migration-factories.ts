@@ -1,5 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import { documentsFitValidator } from '@internal/family-mongo/control';
+import {
+  documentsFitValidator,
+  RAW_PLAN_META,
+  relaxedDocumentsCheck,
+} from '@internal/family-mongo/control';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
@@ -154,8 +158,6 @@ export interface FieldRewriteOptions {
   readonly filter?: Document;
 }
 
-const REWRITE_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
-
 function documentsHolding(fields: readonly string[], filter: Document | undefined): Document {
   const conditions: Document[] = [
     ...(filter === undefined ? [] : [filter]),
@@ -197,7 +199,7 @@ function assertRewritableField(collectionName: string, field: string): void {
 }
 
 function rewritePlan(collectionName: string, command: RawAggregateCommand | RawUpdateManyCommand) {
-  return { collection: collectionName, command, meta: { ...REWRITE_PLAN_META } };
+  return { collection: collectionName, command, meta: { ...RAW_PLAN_META } };
 }
 
 function noDocumentHolds(
@@ -827,6 +829,8 @@ export function setValidation(
 
 export interface CheckDocumentsOptions {
   readonly collection: string;
+  /** The `$jsonSchema` of the validator the collection's validator change sets; `migration.ts` passes both the same value. */
+  readonly validator: Readonly<Record<string, unknown>>;
   /** The stored names whose values the plan's rewrites change on the collection, removed ones included. */
   readonly rewrittenFields: readonly string[];
   /** Each field the plan renames on the collection: its old stored name, with its new one. */
@@ -834,27 +838,25 @@ export interface CheckDocumentsOptions {
 }
 
 /**
- * Checks, before the plan rewrites a collection's documents, that each fits the validator the
- * collection's validator change later in the same migration sets, once the fields the plan rewrites
- * are left out of it. A document that does not fit fails for a reason no rewrite of the plan fixes,
- * so the apply stops before any rewrite runs. The operation names the fields; when the migration
- * emits its operations, `resolveDocumentChecks` writes its check against the validator of that
- * validator change, so `migration.ts` holds the validator once.
+ * Checks, before the plan rewrites a collection's documents, that each fits `validator`, the
+ * validator the collection's validator change later in the same migration sets, once the fields the
+ * plan rewrites are left out of it. A document that does not fit fails for a reason no rewrite of
+ * the plan fixes, so the apply stops before any rewrite runs. `migration.ts` passes the check and the
+ * validator change one shared value, so an edit of it applies to both.
  */
 export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
   const { collection } = options;
+  const fields = {
+    collection,
+    rewrittenFields: options.rewrittenFields,
+    renamedFields: options.renamedFields ?? {},
+  };
   return {
     id: `collection.${collection}.checkDocuments`,
     label: `Check that the documents in ${collection} can fit the new validator`,
     operationClass: 'widening',
-    meta: {
-      checkDocuments: {
-        collection,
-        rewrittenFields: options.rewrittenFields,
-        renamedFields: options.renamedFields ?? {},
-      },
-    },
-    precheck: [],
+    meta: { checkDocuments: fields },
+    precheck: [relaxedDocumentsCheck(fields, options.validator)],
     execute: [],
     postcheck: [],
   };

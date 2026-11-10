@@ -1,5 +1,5 @@
 import { asNamespaceId, type ContractMarkerRecord } from '@internal/contract/types';
-import { fieldRewriteOf } from '@internal/family-mongo/control';
+import { fieldRewriteOf, validatorCheckedBy } from '@internal/family-mongo/control';
 import type {
   MarkerOperations,
   MongoRunnerDependencies,
@@ -346,21 +346,6 @@ function backfillAdvice(
 /** How to change documents by hand while the old validator, which may reject their new shape, is in place. */
 function byHandAdvice(collection: string): string {
   return `The old validator may reject a document changed to the new shape, so the update that fixes one can skip document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
-}
-
-/**
- * The validator a `checkDocuments` operation's check matches against: the one its own aggregate
- * excludes with `$nor`.
- */
-function validatorCheckedBy(source: MongoQueryPlan): Readonly<Record<string, unknown>> | undefined {
-  if (!(source.command instanceof RawAggregateCommand)) return undefined;
-  const match: unknown = Reflect.get(source.command.pipeline[0] ?? {}, '$match');
-  const nor: unknown =
-    typeof match === 'object' && match !== null ? Reflect.get(match, '$nor') : undefined;
-  const [validator]: readonly unknown[] = Array.isArray(nor) ? nor : [];
-  return typeof validator === 'object' && validator !== null && !Array.isArray(validator)
-    ? { ...validator }
-    : undefined;
 }
 
 function bsonTypeOf(value: object): unknown {

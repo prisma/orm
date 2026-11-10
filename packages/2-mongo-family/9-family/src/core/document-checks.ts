@@ -1,16 +1,13 @@
 import type {
-  AnyMongoMigrationOperation,
   MongoCheckDocumentsMeta,
   MongoMigrationCheck,
-  MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
-import { CollModCommand, isMongoDmlOperation } from '@internal/mongo-query-ast/control';
 import { MongoExistsExpr, RawAggregateCommand } from '@internal/mongo-query-ast/execution';
-import { structuredError } from '@internal/utils/structured-error';
 
 type Document = Readonly<Record<string, unknown>>;
 
-const READ_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
+/** The plan meta of the raw queries a migration's operations run and check with. */
+export const RAW_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
 
 function isDocument(value: unknown): value is Document {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,7 +29,7 @@ export function documentsFitValidator(
         { $match: { $nor: [validator] } },
         { $limit: 1 },
       ]),
-      meta: { ...READ_PLAN_META },
+      meta: { ...RAW_PLAN_META },
     },
     filter: MongoExistsExpr.exists('_id'),
     expect: 'notExists',
@@ -81,6 +78,18 @@ function relaxedSchema(schema: Document, fields: MongoCheckDocumentsMeta): Recor
   return relaxed;
 }
 
+/**
+ * The validator a check `documentsFitValidator` wrote matches against: the one its aggregate excludes
+ * with `$nor`.
+ */
+export function validatorCheckedBy(source: MongoMigrationCheck['source']): Document | undefined {
+  if (!('command' in source) || !(source.command instanceof RawAggregateCommand)) return undefined;
+  const match: unknown = source.command.pipeline[0]?.['$match'];
+  const nor: unknown = isDocument(match) ? match['$nor'] : undefined;
+  const [validator]: readonly unknown[] = Array.isArray(nor) ? nor : [];
+  return isDocument(validator) ? validator : undefined;
+}
+
 /** The check a `checkDocuments` operation runs: `jsonSchema` with the operation's fields left out. */
 export function relaxedDocumentsCheck(
   fields: MongoCheckDocumentsMeta,
@@ -88,53 +97,5 @@ export function relaxedDocumentsCheck(
 ): MongoMigrationCheck {
   return documentsFitValidator(fields.collection, {
     $jsonSchema: relaxedSchema(jsonSchema, fields),
-  });
-}
-
-function validatorJsonSchemaSetBy(
-  operation: MongoMigrationPlanOperation,
-  collection: string,
-): Document | undefined {
-  const command = operation.execute.find(
-    (step) => step.command instanceof CollModCommand && step.command.collection === collection,
-  )?.command;
-  const jsonSchema: unknown =
-    command instanceof CollModCommand ? command.validator?.['$jsonSchema'] : undefined;
-  return isDocument(jsonSchema) ? jsonSchema : undefined;
-}
-
-/**
- * The operations of one migration, each `checkDocuments` operation given its check: against the
- * validator the first validator change of its collection after it in the same migration sets. So
- * `migration.ts` holds the validator once, and `ops.json` holds the check itself. A
- * `checkDocuments` with no such validator change after it is refused.
- */
-export function resolveDocumentChecks<
-  Operation extends AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>,
->(operations: readonly Operation[]): readonly (Operation | MongoMigrationPlanOperation)[] {
-  return operations.map((operation, index) => {
-    if (operation instanceof Promise) return operation;
-    const fields = operation.meta?.checkDocuments;
-    if (fields === undefined || isMongoDmlOperation(operation)) return operation;
-    const jsonSchema = operations
-      .slice(index + 1)
-      .flatMap((later) =>
-        later instanceof Promise || isMongoDmlOperation(later)
-          ? []
-          : [validatorJsonSchemaSetBy(later, fields.collection)],
-      )
-      .find((found) => found !== undefined);
-    if (jsonSchema === undefined) {
-      throw structuredError(
-        'MIGRATION.INVALID_OPERATION_ENTRY',
-        `checkDocuments on collection ${fields.collection} has no validator change of that collection after it in the same migration.`,
-        {
-          why: 'The check reads the validator it checks the documents against from the first validator change of its collection after it in the same migration.ts.',
-          fix: `Remove the checkDocuments(...) call, or restore the validator change of collection ${fields.collection} after it in migration.ts, then run the file with node.`,
-          meta: { operationId: operation.id, collection: fields.collection },
-        },
-      );
-    }
-    return { ...operation, precheck: [relaxedDocumentsCheck(fields, jsonSchema)] };
   });
 }

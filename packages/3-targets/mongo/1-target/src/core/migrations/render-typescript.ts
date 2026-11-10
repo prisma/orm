@@ -7,8 +7,14 @@ import {
   resolveRequirementSpecifiers,
 } from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
-import { type ImportRequirement, renderImports } from '@internal/ts-render';
-import { type OpFactoryCall, TARGET_MIGRATION_MODULE } from './op-factory-call';
+import { canonicalize } from '@internal/mongo-contract';
+import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
+import {
+  CheckDocumentsCall,
+  CollModCall,
+  type OpFactoryCall,
+  TARGET_MIGRATION_MODULE,
+} from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
@@ -70,7 +76,15 @@ export function renderCallsToTypeScript(
   meta: RenderMigrationMeta,
 ): string {
   const imports = buildImports(calls, meta);
-  const operationsBody = calls.map((c) => c.renderTypeScript()).join(',\n');
+  const validators = sharedValidators(calls);
+  const validatorNames = new Map(validators.map(({ collection, name }) => [collection, name]));
+  const operationsBody = calls
+    .map((call) =>
+      call instanceof CollModCall || call instanceof CheckDocumentsCall
+        ? call.renderTypeScript(validatorNames)
+        : call.renderTypeScript(),
+    )
+    .join(',\n');
   const hasStart = meta.from !== null;
   const startField = hasStart ? ['  override readonly startContractJson = startContract;'] : [];
 
@@ -78,6 +92,7 @@ export function renderCallsToTypeScript(
     shebangLineFor(detectScaffoldRuntime()),
     imports,
     '',
+    ...validators.flatMap(({ name, value }) => [`const ${name} = ${jsonToTsSource(value)};`, '']),
     `class M extends Migration<${hasStart ? 'Start' : 'never'}, End> {`,
     ...startField,
     '  override readonly endContractJson = endContract;',
@@ -93,6 +108,40 @@ export function renderCallsToTypeScript(
     'MigrationCLI.run(import.meta.url, M);',
     '',
   ].join('\n');
+}
+
+/** A name for a `const` that holds a collection's validator, usable as a TypeScript identifier. */
+function validatorConstName(collection: string, taken: ReadonlySet<string>): string {
+  const stem = collection.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(?=[0-9])/, '_');
+  const name = `${stem}Validator`;
+  if (!taken.has(name)) return name;
+  for (let suffix = 2; ; suffix++) {
+    if (!taken.has(`${name}${suffix}`)) return `${name}${suffix}`;
+  }
+}
+
+/**
+ * The validators a `checkDocuments` call and the validator change of its collection both use: the
+ * file declares each once, as a `const` the two calls refer to, so an edit applies to both.
+ */
+function sharedValidators(
+  calls: ReadonlyArray<OpFactoryCall>,
+): readonly { readonly collection: string; readonly name: string; readonly value: unknown }[] {
+  const taken = new Set<string>();
+  return calls.flatMap((call) => {
+    if (!(call instanceof CheckDocumentsCall)) return [];
+    const shared = calls.some(
+      (other) =>
+        other instanceof CollModCall &&
+        other.collection === call.collection &&
+        canonicalize(other.options.validator?.['$jsonSchema']) ===
+          canonicalize(call.options.validator),
+    );
+    if (!shared) return [];
+    const name = validatorConstName(call.collection, taken);
+    taken.add(name);
+    return [{ collection: call.collection, name, value: call.options.validator }];
+  });
 }
 
 function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigrationMeta): string {

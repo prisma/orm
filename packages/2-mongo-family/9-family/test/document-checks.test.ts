@@ -1,8 +1,10 @@
-import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
-import { CollModCommand } from '@internal/mongo-query-ast/control';
 import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
-import { relaxedDocumentsCheck, resolveDocumentChecks } from '../src/core/document-checks';
+import {
+  documentsFitValidator,
+  relaxedDocumentsCheck,
+  validatorCheckedBy,
+} from '../src/core/document-checks';
 
 function matchedValidator(check: ReturnType<typeof relaxedDocumentsCheck>): unknown {
   const command = 'command' in check.source ? check.source.command : undefined;
@@ -120,54 +122,17 @@ describe('relaxedDocumentsCheck with a renamed field', () => {
   });
 });
 
-describe('resolveDocumentChecks', () => {
-  const check: MongoMigrationPlanOperation = {
-    id: 'collection.users.checkDocuments',
-    label: 'Check that the documents in users can fit the new validator',
-    operationClass: 'widening',
-    meta: { checkDocuments: { collection: 'users', rewrittenFields: ['plan'], renamedFields: {} } },
-    precheck: [],
-    execute: [],
-    postcheck: [],
-  };
-  const validatorChange = (collection: string): MongoMigrationPlanOperation => ({
-    id: `validator.${collection}.update`,
-    label: `Update validator on ${collection}`,
-    operationClass: 'widening',
-    precheck: [],
-    execute: [
-      {
-        description: `modify ${collection}`,
-        command: new CollModCommand(collection, {
-          validator: { $jsonSchema: { bsonType: 'object', required: ['_id', 'plan'] } },
-        }),
-      },
-    ],
-    postcheck: [],
-  });
+describe('validatorCheckedBy', () => {
+  it('reads back the validator documentsFitValidator wrote, and nothing from another source', () => {
+    const validator = { $jsonSchema: { required: ['_id', 'plan'] } };
 
-  it('writes the check against the validator change of its collection, skipping other collections and operations still pending', () => {
-    const pending = Promise.resolve(validatorChange('users'));
-    const [resolved, ...rest] = resolveDocumentChecks([
-      check,
-      pending,
-      validatorChange('orders'),
-      validatorChange('users'),
-    ]);
-
-    expect({
-      precheck: resolved instanceof Promise ? undefined : resolved?.precheck.length,
-      rest: rest.length,
-      pendingKept: rest[0] === pending,
-    }).toEqual({ precheck: 1, rest: 3, pendingKept: true });
-  });
-
-  it('refuses a check with no validator change of its collection after it, saying what to do', () => {
-    expect(() => resolveDocumentChecks([validatorChange('users'), check])).toThrow(
-      expect.objectContaining({
-        code: 'MIGRATION.INVALID_OPERATION_ENTRY',
-        fix: 'Remove the checkDocuments(...) call, or restore the validator change of collection users after it in migration.ts, then run the file with node.',
+    expect([
+      validatorCheckedBy(documentsFitValidator('users', validator).source),
+      validatorCheckedBy({
+        collection: 'users',
+        command: new RawAggregateCommand('users', [{ $limit: 1 }]),
+        meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
       }),
-    );
+    ]).toEqual([validator, undefined]);
   });
 });

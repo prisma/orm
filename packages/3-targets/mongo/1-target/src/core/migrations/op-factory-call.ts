@@ -39,7 +39,12 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import type { Document } from '@internal/mongo-value';
-import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  TsExpression,
+  tsObjectSource,
+} from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type CastFieldOptions,
@@ -74,6 +79,14 @@ export interface CollModMeta {
  * once over the whole assembled import list.
  */
 export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
+
+/** For each collection whose validator `migration.ts` declares once, the name of its `const`. */
+export type ValidatorNames = ReadonlyMap<string, string>;
+
+/** The source of `value`, or the name of the `const` that holds the collection's validator. */
+function validatorSource(collection: string, value: unknown, names: ValidatorNames): string {
+  return names.get(collection) ?? jsonToTsSource(value);
+}
 
 abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -418,8 +431,17 @@ export class CheckDocumentsCall extends OpFactoryCallNode {
     return checkDocuments(this.options);
   }
 
-  renderTypeScript(): string {
-    return `checkDocuments(${jsonToTsSource(this.options)})`;
+  renderTypeScript(validatorNames: ValidatorNames = new Map()): string {
+    const entries = Object.entries(this.options).map(
+      ([key, value]) =>
+        [
+          key,
+          key === 'validator'
+            ? validatorSource(this.collection, value, validatorNames)
+            : jsonToTsSource(value),
+        ] as const,
+    );
+    return `checkDocuments(${tsObjectSource(entries)})`;
   }
 }
 
@@ -445,10 +467,27 @@ export class CollModCall extends OpFactoryCallNode {
     return collMod(this.collection, this.options, this.meta);
   }
 
-  renderTypeScript(): string {
+  renderTypeScript(validatorNames: ValidatorNames = new Map()): string {
+    const options = tsObjectSource(
+      Object.entries(this.options)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [
+          key,
+          key === 'validator' && typeof value === 'object' && value !== null
+            ? tsObjectSource(
+                Object.entries(value).map(([validatorKey, validatorValue]) => [
+                  validatorKey,
+                  validatorKey === '$jsonSchema'
+                    ? validatorSource(this.collection, validatorValue, validatorNames)
+                    : jsonToTsSource(validatorValue),
+                ]),
+              )
+            : jsonToTsSource(value),
+        ]),
+    );
     return this.meta
-      ? `collMod(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.options)}, ${jsonToTsSource(this.meta)})`
-      : `collMod(${jsonToTsSource(this.collection)}, ${jsonToTsSource(this.options)})`;
+      ? `collMod(${jsonToTsSource(this.collection)}, ${options}, ${jsonToTsSource(this.meta)})`
+      : `collMod(${jsonToTsSource(this.collection)}, ${options})`;
   }
 }
 
