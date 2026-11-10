@@ -7,9 +7,14 @@ import testMatrix from './_matrix'
 // @ts-ignore
 import type { Prisma as PrismaNamespace, PrismaClient } from './generated/prisma/client'
 
+// @only-ts-generator
+type QueryLogPrismaClient = PrismaClient<'query'>
+// @only-js-generator
+type QueryLogPrismaClient = PrismaClient<{ log: [{ emit: 'event'; level: 'query' }] }>
+
 declare let prisma: PrismaClient
 declare let Prisma: typeof PrismaNamespace
-declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient>
+declare const newPrismaClient: NewPrismaClient<QueryLogPrismaClient, typeof PrismaClient>
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -888,12 +893,23 @@ testMatrix.setupTestSuite(
       expect(users.length).toBe(1)
     })
 
-    // Regression test for https://github.com/prisma/prisma/issues/29952.
     testIf(provider !== Providers.MONGODB)(
       'rollback stops the remaining statements of a createMany that is still running',
       async () => {
+        const client = newPrismaClient({ log: [{ emit: 'event', level: 'query' }] })
+        let markFirstInsertSeen!: () => void
+        const firstInsertSeen = new Promise<void>((resolve) => {
+          markFirstInsertSeen = resolve
+        })
+        client.$on('query', ({ query }) => {
+          if (/^\s*INSERT\b/i.test(query)) markFirstInsertSeen()
+        })
+
+        // On SQLite, better-sqlite3 runs each statement synchronously, so the rollback races the
+        // remaining statements on promise callbacks alone and needs many of them to lose that race.
+        const statements = provider === Providers.SQLITE ? 20 : 3
         const rowsPerStatement = Math.floor(MAX_BIND_VALUES_BY_PROVIDER[provider] / 4)
-        const data = Array.from({ length: 3 * rowsPerStatement + 1 }, (_, i) => ({
+        const data = Array.from({ length: (statements - 1) * rowsPerStatement + 1 }, (_, i) => ({
           id: `${i}`,
           email: `user_${i}@website.com`,
           name: `user ${i}`,
@@ -901,18 +917,19 @@ testMatrix.setupTestSuite(
         }))
         let createMany!: Promise<unknown>
 
-        const result = prisma.$transaction(async (tx) => {
+        const result = client.$transaction(async (tx) => {
           createMany = tx.user.createMany({ data })
           await Promise.all([
             createMany,
-            // A missing row fails the query without aborting the database transaction, as a constraint error would on PostgreSQL.
-            tx.user.findUniqueOrThrow({ where: { id: 'missing' } }),
+            firstInsertSeen.then(() => {
+              throw new Error('rolled back after the first INSERT')
+            }),
           ])
         })
 
-        await expect(result).rejects.toMatchObject({ code: 'P2025' })
+        await expect(result).rejects.toThrow('rolled back after the first INSERT')
         const [createManyOutcome] = await Promise.allSettled([createMany])
-        expect(await prisma.user.count()).toBe(0)
+        expect(await client.user.count()).toBe(0)
         expect(createManyOutcome).toMatchObject({ status: 'rejected', reason: { code: 'P2028' } })
       },
     )
