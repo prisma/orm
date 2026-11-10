@@ -9,7 +9,7 @@ describeTemporalFallbackEntries({
   publishedPackages: ['@prisma/orm-target-mysql', '@prisma/orm-mysql'],
   internalTarget: {
     name: '@internal/target-mysql',
-    dir: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-target'),
+    dir: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-mysql/1-target'),
     minimumEntries: 15,
   },
   expectedApplicationEntries: [

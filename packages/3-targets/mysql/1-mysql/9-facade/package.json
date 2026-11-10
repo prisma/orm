@@ -8,7 +8,7 @@
   "description": "MySQL configuration, contract builder and control client for Prisma 8",
   "scripts": {
     "build": "tsdown",
-    "emit": "node ../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",
+    "emit": "node ../../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
@@ -78,6 +78,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-targets/mysql/9-facade"
+    "directory": "packages/3-targets/mysql/1-mysql/9-facade"
   }
 }

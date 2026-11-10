@@ -19,12 +19,12 @@ Contribute an independent fragment on the PR that changes Prisma 8. Release prep
 
 ## Detection signals and routing
 
-Use this skill when a framework change makes tests red in `examples/`, `packages/3-extensions/` or a target facade (`packages/3-targets/*/9-facade/`) and you fix them by updating the example or extension code rather than reverting the framework change. Those edits are the same translation downstream consumers need.
+Use this skill when a framework change makes tests red in `examples/`, `packages/3-extensions/` or a target facade (`packages/3-targets/*/9-facade/` or `packages/3-targets/*/*/9-facade/`) and you fix them by updating the example or extension code rather than reverting the framework change. Those edits are the same translation downstream consumers need.
 
 | Directory changed by the PR | Fragment audience | Consumers |
 | --- | --- | --- |
 | `examples/` | `app` | Public package API, contract files, on-disk migrations |
-| `packages/3-extensions/` and `packages/3-targets/*/9-facade/` | `extension` | Framework SPI and extension authors |
+| `packages/3-extensions/`, `packages/3-targets/*/9-facade/` and `packages/3-targets/*/*/9-facade/` | `extension` | Framework SPI and extension authors |
 | Both | Both, independently | Both audiences |
 
 Changes in these directories require a declaration, subject to existing coverage-check exclusions. Generated artefacts are not generally exempt: contract format changes require a codemod or re-emission instructions. Genuinely consumer-invisible changes still get an explicit `changes: []` declaration, with no prose.
@@ -35,7 +35,7 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 
 ## Authoring workflow
 
-1. **Identify affected audiences.** Inspect `git diff <base>..<head> -- examples/ packages/3-extensions/ 'packages/3-targets/*/9-facade/'`. If none of these directories has relevant changes, the coverage check does not require a declaration.
+1. **Identify affected audiences.** Inspect `git diff <base>..<head> -- examples/ packages/3-extensions/ 'packages/3-targets/*/9-facade/' 'packages/3-targets/*/*/9-facade/'`. If none of these directories has relevant changes, the coverage check does not require a declaration.
 2. **Choose a descriptive pending name.** Add `upgrade-instructions/pending/<descriptive-name>/<audience>/instructions.md` for each affected audience. Avoid collisions with pending work; no random suffix, global registry, historical-name reservation, or shared index is required. Never append to another PR's fragment. A release landing during your PR does not change this unversioned destination.
 3. **Write the instructions.** Retain the existing YAML frontmatter `changes[]` and Markdown prose format. Each change has a kebab-case `id` unique within the guide, a one-line `summary`, optional `detection` (glob and content predicate), and an optional `script` path relative to `instructions.md`. Prose-only transformations omit `script`; the consumer's agent follows the body.
 
@@ -109,7 +109,7 @@ Use a disposable checkout for the restoration steps so unrelated working changes
 
 ### Extension entry (against `packages/3-extensions/`)
 
-The target facades, every folder matching `packages/3-targets/*/9-facade/`, are extension code too; the check covers a new database's facade without any change to the script. When the PR changes one, add its folder to every path in the commands below.
+The target facades, every folder matching `packages/3-targets/*/9-facade/` or `packages/3-targets/*/*/9-facade/`, are extension code too; the check covers a new database's facade without any change to the script. When the PR changes one, add its folder to every path in the commands below.
 
 1. Check out `<head>`, which has the framework change applied.
 2. Revert `packages/3-extensions/` to its pre-PR state (`git restore --source=<base> -- packages/3-extensions/`).

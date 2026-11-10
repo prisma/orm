@@ -35,7 +35,7 @@
 
 ### 2a — MySQL target: codecs, driver, emit, introspection
 
-- Target, adapter, driver and facade in `packages/3-targets/mysql/`.
+- Target, adapter, driver and facade in `packages/3-targets/mysql/1-mysql/`.
 - The spec's contract emits; a MySQL database introspects into the family schema IR.
 - Namespace refusal reads the target's `supportsNamespaces` (coupling row 9).
 - MySQL 8.4 and MariaDB 10.11 service containers in CI and `docker-compose.yaml` (approved by Will, 2026-10-22).
@@ -74,7 +74,7 @@
 
 ### 6a — MariaDB control plane
 
-- `packages/3-targets/mariadb/{1-target,2-adapter,9-facade}` extend MySQL; MySQL takes the target id and the differing parts as parameters.
+- `packages/3-targets/mysql/2-mariadb/{1-target,2-adapter,9-facade}` extend MySQL; MySQL takes the target id and the differing parts as parameters.
 - MariaDB's session setting, introspection, column defaults and marker upsert.
 - Public `@prisma/orm-mariadb` and `@prisma/orm-target-mariadb`; `examples/prisma-8-demo-mariadb` migrates, verifies and signs against MariaDB 10.11 in CI.
 - MariaDB reports `returning: false`; splitting it by statement kind is filed.

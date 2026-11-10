@@ -81,4 +81,4 @@ MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 1
 
 ## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06)
 
-`mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.
+`mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.

@@ -1,5 +1,5 @@
 {
-  "name": "@internal/driver-mariadb",
+  "name": "@internal/target-mariadb",
   "private": true,
   "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
@@ -15,19 +15,24 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/driver-mysql": "workspace:8.0.0-rc.22",
-    "@internal/framework-components": "workspace:8.0.0-rc.22"
+    "@internal/contract": "workspace:8.0.0-rc.22",
+    "@internal/family-sql": "workspace:8.0.0-rc.22",
+    "@internal/sql-contract": "workspace:8.0.0-rc.22",
+    "@internal/target-mysql": "workspace:8.0.0-rc.22"
   },
   "devDependencies": {
+    "@internal/framework-components": "workspace:8.0.0-rc.22",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.22",
     "@repo/test-utils": "workspace:8.0.0-rc.22",
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@repo/tsdown": "workspace:8.0.0-rc.22",
-    "mariadb": "3.5.4",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -41,7 +46,8 @@
   ],
   "exports": {
     "./control": "./dist/control.mjs",
-    "./runtime": "./dist/runtime.mjs",
+    "./migration": "./dist/migration.mjs",
+    "./pack": "./dist/pack.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -50,6 +56,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-targets/mariadb/3-driver"
+    "directory": "packages/3-targets/mysql/2-mariadb/1-target"
   }
 }

@@ -61,6 +61,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-targets/mysql/2-adapter"
+    "directory": "packages/3-targets/mysql/1-mysql/2-adapter"
   }
 }

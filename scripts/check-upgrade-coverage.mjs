@@ -58,7 +58,11 @@ const COVERED_DIRECTORIES = [
   { audience: 'app', directories: ['examples/'] },
   {
     audience: 'extension',
-    directories: ['packages/3-extensions/', 'packages/3-targets/*/9-facade/'],
+    directories: [
+      'packages/3-extensions/',
+      'packages/3-targets/*/9-facade/',
+      'packages/3-targets/*/*/9-facade/',
+    ],
   },
 ];
 function directoryPattern(directory) {

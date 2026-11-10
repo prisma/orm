@@ -10,7 +10,7 @@ MariaDB control adapter for Prisma 8.
 
 ## Purpose
 
-Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../mysql/2-adapter/README.md)) for the `mariadb` target, with a catalog reader that converts what MariaDB 10.11 reports into what MySQL 8.4 reports, so MySQL's introspection, default reader and schema verifier read it unchanged.
+Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../1-mysql/2-adapter/README.md)) for the `mariadb` target, with a catalog reader that converts what MariaDB 10.11 reports into what MySQL 8.4 reports, so MySQL's introspection, default reader and schema verifier read it unchanged.
 
 ## Responsibilities
 

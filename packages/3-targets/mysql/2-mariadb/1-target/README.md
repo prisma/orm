@@ -10,7 +10,7 @@ MariaDB target pack for Prisma 8.
 
 ## Purpose
 
-Declares MariaDB to the SQL family as a target that extends MySQL ([`@internal/target-mysql`](../../mysql/1-target/README.md)): MariaDB reuses MySQL's data types, codecs, PSL authoring, planner, runner, schema verifier and contract serializer under its own target id, `mariadb`.
+Declares MariaDB to the SQL family as a target that extends MySQL ([`@internal/target-mysql`](../../1-mysql/1-target/README.md)): MariaDB reuses MySQL's data types, codecs, PSL authoring, planner, runner, schema verifier and contract serializer under its own target id, `mariadb`.
 
 ## Responsibilities
 

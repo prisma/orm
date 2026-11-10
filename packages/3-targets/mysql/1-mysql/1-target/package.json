@@ -1,39 +1,38 @@
 {
-  "name": "@internal/mariadb",
+  "name": "@internal/target-mysql",
   "private": true,
   "version": "8.0.0-rc.22",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "MariaDB configuration, control client and migration classes for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.no-temporal-global.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/adapter-mariadb": "workspace:8.0.0-rc.22",
     "@internal/cli": "workspace:8.0.0-rc.22",
-    "@internal/config": "workspace:8.0.0-rc.22",
-    "@internal/driver-mariadb": "workspace:8.0.0-rc.22",
-    "@internal/family-sql": "workspace:8.0.0-rc.22",
-    "@internal/mysql": "workspace:8.0.0-rc.22",
-    "@internal/target-mariadb": "workspace:8.0.0-rc.22",
-    "@internal/target-mysql": "workspace:8.0.0-rc.22",
-    "@internal/utils": "workspace:8.0.0-rc.22",
-    "pathe": "^2.0.3"
-  },
-  "devDependencies": {
     "@internal/contract": "workspace:8.0.0-rc.22",
-    "@internal/driver-mysql": "workspace:8.0.0-rc.22",
+    "@internal/errors": "workspace:8.0.0-rc.22",
+    "@internal/family-sql": "workspace:8.0.0-rc.22",
     "@internal/framework-components": "workspace:8.0.0-rc.22",
     "@internal/migration-tools": "workspace:8.0.0-rc.22",
     "@internal/sql-contract": "workspace:8.0.0-rc.22",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.22",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.22",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.22",
+    "@internal/ts-render": "workspace:8.0.0-rc.22",
+    "@internal/type-implementations": "workspace:8.0.0-rc.22",
+    "@internal/utils": "workspace:8.0.0-rc.22",
+    "@standard-schema/spec": "1.1.0",
+    "arktype": "^2.2.2",
+    "temporal-spec": "1.0.1"
+  },
+  "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.22",
     "@repo/tsconfig": "workspace:8.0.0-rc.22",
     "@repo/tsdown": "workspace:8.0.0-rc.22",
@@ -56,9 +55,23 @@
     "src"
   ],
   "exports": {
-    "./config": "./dist/config.mjs",
+    "./codec-descriptor": "./dist/codec-descriptor.mjs",
+    "./codec-ids": "./dist/codec-ids.mjs",
+    "./codec-types": "./dist/codec-types.mjs",
+    "./codecs": "./dist/codecs.mjs",
+    "./contract-free": "./dist/contract-free.mjs",
     "./control": "./dist/control.mjs",
+    "./control-tables": "./dist/control-tables.mjs",
+    "./data-types": "./dist/data-types.mjs",
+    "./ddl": "./dist/ddl.mjs",
+    "./default-normalizer": "./dist/default-normalizer.mjs",
+    "./errors": "./dist/errors.mjs",
+    "./marker-lock": "./dist/marker-lock.mjs",
     "./migration": "./dist/migration.mjs",
+    "./pack": "./dist/pack.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./sql-utils": "./dist/sql-utils.mjs",
+    "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -67,6 +80,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/3-targets/mariadb/9-facade"
+    "directory": "packages/3-targets/mysql/1-mysql/1-target"
   }
 }
