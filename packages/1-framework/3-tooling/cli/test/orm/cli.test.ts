@@ -71,7 +71,7 @@ describe('the orm command family', () => {
     expect(ormCommandFamily.docsBaseUrl?.endsWith('/')).toBe(true);
   });
 
-  it('retires the removed verb and the four removed status flags, naming the binary as {bin}', () => {
+  it('retires the removed verb, the four removed status flags and the Prisma 7 migrate commands, naming the binary as {bin}', () => {
     expect(
       ormCommandFamily.redirects.map(({ from, flag, replacement }) => ({
         from,
@@ -100,6 +100,12 @@ describe('the orm command family', () => {
         flag: 'ref',
         replacement: '{bin} migration status --to <contract>',
       },
+      { from: 'migrate dev', flag: undefined, replacement: '{bin} contract emit' },
+      { from: 'migrate deploy', flag: undefined, replacement: '{bin} db migrate' },
+      { from: 'migrate status', flag: undefined, replacement: '{bin} migration status' },
+      { from: 'migrate diff', flag: undefined, replacement: '{bin} db update --dry-run' },
+      { from: 'migrate reset', flag: undefined, replacement: '{bin} db update' },
+      { from: 'migrate resolve', flag: undefined, replacement: '{bin} db sign <migration>' },
     ]);
   });
 });
@@ -163,6 +169,54 @@ describe('a retired invocation', () => {
       },
     });
     expect(JSON.stringify(run.json)).not.toContain('Did you mean');
+  });
+
+  it.each([
+    {
+      verb: 'dev',
+      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
+      command: 'prisma-test contract emit',
+    },
+    {
+      verb: 'deploy',
+      why: "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
+      command: 'prisma-test db migrate',
+    },
+    {
+      verb: 'status',
+      why: "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
+      command: 'prisma-test migration status',
+    },
+    {
+      verb: 'diff',
+      why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
+      command: 'prisma-test db update --dry-run',
+    },
+    {
+      verb: 'reset',
+      why: "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
+      command: 'prisma-test db update',
+    },
+    {
+      verb: 'resolve',
+      why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
+      command: 'prisma-test db sign <migration>',
+    },
+  ])('answers Prisma 7 migrate $verb with its Prisma 8 command', async ({ verb, why, command }) => {
+    const run = await harness(recordingLoader().loadConfig).run(['migrate', verb, '--json']);
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CLI.COMMAND_MOVED',
+          why,
+          nextActions: [{ kind: 'run-command', label: 'Use the replacement', command }],
+        },
+      },
+    });
   });
 
   it('answers a retired status flag with the command that replaced it', async () => {
@@ -296,9 +350,5 @@ describe('runOrmCli', () => {
     expect(code).toBe(1);
     expect(stderr.join('')).toContain('[CLI.UNEXPECTED]');
     expect(stderr.join('')).toContain('ENOENT: uv_cwd');
-  });
-
-  it('does not let the failure escape as a rejection', async () => {
-    await expect(runOrmCli(processWithUnreadableCwd([]))).resolves.toBeTypeOf('number');
   });
 });

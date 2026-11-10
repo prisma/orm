@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { fixturesDir, loadPrisma6Schema, serializeMongoContract } from './support';
 
 const CASES: readonly string[] = [
+  'block-dotted-value',
   'composite-id',
   'composite-index-path',
-  'composite-index-path-parse-error',
   'composite-map-unsupported',
   'composite-types',
   'default-unsupported',
@@ -17,7 +17,10 @@ const CASES: readonly string[] = [
   'id-not-objectid',
   'ignore',
   'ignored-field-referenced',
+  'index-already-exists',
   'index-argument-unsupported',
+  'index-name-duplicate',
+  'index-name-invalid',
   'indexes',
   'list-relation-unsupported',
   'lists',
@@ -25,6 +28,7 @@ const CASES: readonly string[] = [
   'multi-file',
   'naming',
   'native-type-unsupported',
+  'native-types',
   'optional-generated-field',
   'provider-mismatch',
   'provider-missing',

@@ -1,45 +1,62 @@
 import {
   crossRef,
   domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model, rel, valueObject } from '../src/contract-builder';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
-const mongoFamilyPack = {
-  kind: 'family',
-  id: 'mongo',
-  familyId: 'mongo',
-  version: '0.0.1',
-} as const satisfies FamilyPackRef<'mongo'>;
-
-const mongoTargetPack = {
-  kind: 'target',
-  id: 'mongo',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  defaultNamespaceId: '__unbound__',
-} as const satisfies TargetPackRef<'mongo', 'mongo'>;
+function strictValidator(jsonSchema: Record<string, unknown>) {
+  return {
+    kind: 'mongo-validator',
+    validationLevel: 'strict',
+    validationAction: 'error',
+    jsonSchema,
+  };
+}
 
 describe('mongo contract builder', () => {
+  it('authors scalar-list element nullability through many options', () => {
+    const Lists = model('Lists', {
+      collection: 'lists',
+      fields: {
+        _id: field.scalar(type.ObjectId()),
+        strict: field.scalar(type.String()).many(),
+        explicitlyStrict: field.scalar(type.String()).many({ elementsNullable: false }),
+        nullableElements: field.scalar(type.String()).many({ elementsNullable: true }),
+        fullyNullable: field.scalar(type.String()).optional().many({ elementsNullable: true }),
+      },
+    });
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { Lists },
+    });
+    expect(domainModelsAtDefaultNamespace(contract.domain)['Lists']?.fields).toMatchObject({
+      strict: { nullable: false, many: { elementNullable: false } },
+      explicitlyStrict: { nullable: false, many: { elementNullable: false } },
+      nullableElements: { nullable: false, many: { elementNullable: true } },
+      fullyNullable: { nullable: true, many: { elementNullable: true } },
+    });
+  });
+
   it('builds a canonical contract for referenced models', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
     });
 
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        authorId: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        authorId: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
       relations: {
         author: rel.belongsTo(User, {
@@ -64,17 +81,54 @@ describe('mongo contract builder', () => {
       posts: crossRef('Post'),
     });
     expect(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries['collection']).toEqual({
-      users: { kind: 'mongo-collection' },
-      posts: { kind: 'mongo-collection' },
+      users: {
+        kind: 'mongo-collection',
+        validator: strictValidator({
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'email'],
+          properties: { _id: { bsonType: 'objectId' }, email: { bsonType: 'string' } },
+        }),
+      },
+      posts: {
+        kind: 'mongo-collection',
+        validator: strictValidator({
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'authorId', 'title'],
+          properties: {
+            _id: { bsonType: 'objectId' },
+            authorId: { bsonType: 'objectId' },
+            title: { bsonType: 'string' },
+          },
+        }),
+      },
     });
     expect(domainModelsAtDefaultNamespace(contract.domain)['Post']).toEqual({
       storage: {
         collection: 'posts',
+        fields: {
+          _id: { field: '_id' },
+          authorId: { field: 'authorId' },
+          title: { field: 'title' },
+        },
       },
       fields: {
-        _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        authorId: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        authorId: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        title: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
       },
       relations: {
         author: {
@@ -95,17 +149,17 @@ describe('mongo contract builder', () => {
   describe('to-one relation nullability', () => {
     const User = model('User', {
       collection: 'users',
-      fields: { _id: field.objectId() },
+      fields: { _id: field.scalar(type.ObjectId()) },
     });
 
-    type ObjectIdField = ReturnType<typeof field.objectId>;
+    type ObjectIdField = ReturnType<typeof field.scalar<ReturnType<typeof type.ObjectId>>>;
     function postWith(
       authorId: ObjectIdField | ReturnType<ObjectIdField['optional']>,
       options: object,
     ) {
       const Post = model('Post', {
         collection: 'posts',
-        fields: { _id: field.objectId(), authorId },
+        fields: { _id: field.scalar(type.ObjectId()), authorId },
         relations: {
           author: rel.belongsTo(User, { from: 'authorId', to: User.ref('_id'), ...options }),
         },
@@ -122,29 +176,33 @@ describe('mongo contract builder', () => {
     }
 
     it('belongsTo derives nullable from the local fields when no flag is given', () => {
-      expect(authorRelation(postWith(field.objectId(), {}))).toMatchObject({ nullable: false });
-      expect(authorRelation(postWith(field.objectId().optional(), {}))).toMatchObject({
+      expect(authorRelation(postWith(field.scalar(type.ObjectId()), {}))).toMatchObject({
+        nullable: false,
+      });
+      expect(authorRelation(postWith(field.scalar(type.ObjectId()).optional(), {}))).toMatchObject({
         nullable: true,
       });
     });
 
     it('belongsTo records an explicit optional flag that agrees with the local fields', () => {
       expect(
-        authorRelation(postWith(field.objectId().optional(), { optional: true })),
+        authorRelation(postWith(field.scalar(type.ObjectId()).optional(), { optional: true })),
       ).toMatchObject({ nullable: true });
-      expect(authorRelation(postWith(field.objectId(), { optional: false }))).toMatchObject({
+      expect(
+        authorRelation(postWith(field.scalar(type.ObjectId()), { optional: false })),
+      ).toMatchObject({
         nullable: false,
       });
     });
 
     it('rejects an optional flag that contradicts the local fields', () => {
-      expect(() => postWith(field.objectId(), { optional: true })).toThrow(
+      expect(() => postWith(field.scalar(type.ObjectId()), { optional: true })).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.RELATION_INVALID',
           message: expect.stringContaining('Relation "Post.author" is optional'),
         }),
       );
-      expect(() => postWith(field.objectId().optional(), { optional: false })).toThrow(
+      expect(() => postWith(field.scalar(type.ObjectId()).optional(), { optional: false })).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.RELATION_INVALID',
           message: expect.stringContaining('Relation "Post.author" is required'),
@@ -153,7 +211,7 @@ describe('mongo contract builder', () => {
     });
 
     it('rejects a local field the model does not declare', () => {
-      expect(() => postWith(field.objectId(), { from: 'missingId' })).toThrow(
+      expect(() => postWith(field.scalar(type.ObjectId()), { from: 'missingId' })).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.RELATION_INVALID',
           message:
@@ -171,11 +229,11 @@ describe('mongo contract builder', () => {
     it('hasOne reference is always nullable; embeds and hasMany carry no flag', () => {
       const Profile = model('Profile', {
         collection: 'profiles',
-        fields: { _id: field.objectId(), userId: field.objectId() },
+        fields: { _id: field.scalar(type.ObjectId()), userId: field.scalar(type.ObjectId()) },
       });
       const Owner = model('Owner', {
         collection: 'owners',
-        fields: { _id: field.objectId() },
+        fields: { _id: field.scalar(type.ObjectId()) },
         relations: {
           profile: rel.hasOne(Profile, { from: '_id', to: Profile.ref('userId') }),
           profiles: rel.hasMany(Profile, { from: '_id', to: Profile.ref('userId') }),
@@ -183,7 +241,10 @@ describe('mongo contract builder', () => {
           addresses: rel.hasMany('Address'),
         },
       });
-      const Address = model('Address', { owner: Owner, fields: { street: field.string() } });
+      const Address = model('Address', {
+        owner: Owner,
+        fields: { street: field.scalar(type.String()) },
+      });
       const contract = defineContract({
         family: mongoFamilyPack,
         target: mongoTargetPack,
@@ -200,7 +261,7 @@ describe('mongo contract builder', () => {
     it('hasOne does not accept an optional flag', () => {
       const Profile = model('Profile', {
         collection: 'profiles',
-        fields: { _id: field.objectId(), userId: field.objectId() },
+        fields: { _id: field.scalar(type.ObjectId()), userId: field.scalar(type.ObjectId()) },
       });
       const relation = rel.hasOne(Profile, {
         from: '_id',
@@ -215,8 +276,8 @@ describe('mongo contract builder', () => {
   it('supports owned models, polymorphism, and value objects', () => {
     const Address = valueObject('Address', {
       fields: {
-        street: field.string(),
-        zip: field.string().optional(),
+        street: field.scalar(type.String()),
+        zip: field.scalar(type.String()).optional(),
       },
     });
 
@@ -226,9 +287,9 @@ describe('mongo contract builder', () => {
         comments: { field: 'comments' },
       },
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
         metadata: field.valueObject(Address).optional(),
       },
       relations: {
@@ -246,15 +307,15 @@ describe('mongo contract builder', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
     });
 
     const Comment = model('Comment', {
       owner: Task,
       fields: {
-        _id: field.objectId(),
-        text: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        text: field.scalar(type.String()),
       },
     });
 
@@ -268,28 +329,90 @@ describe('mongo contract builder', () => {
     expect(contract.roots).toEqual({
       tasks: crossRef('Task'),
     });
+    const taskProperties = {
+      _id: { bsonType: 'objectId' },
+      type: { bsonType: 'string' },
+      title: { bsonType: 'string' },
+      metadata: {
+        oneOf: [
+          { bsonType: 'null' },
+          {
+            bsonType: 'object',
+            additionalProperties: false,
+            required: ['street'],
+            properties: { street: { bsonType: 'string' }, zip: { bsonType: ['null', 'string'] } },
+          },
+        ],
+      },
+      comments: {
+        bsonType: 'array',
+        items: {
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'text'],
+          properties: { _id: { bsonType: 'objectId' }, text: { bsonType: 'string' } },
+        },
+      },
+    };
     expect(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries['collection']).toEqual({
-      tasks: { kind: 'mongo-collection' },
+      tasks: {
+        kind: 'mongo-collection',
+        validator: strictValidator({
+          bsonType: 'object',
+          required: ['_id', 'title', 'type'],
+          properties: taskProperties,
+          oneOf: [
+            {
+              additionalProperties: false,
+              required: ['severity', 'type'],
+              properties: {
+                ...taskProperties,
+                type: { enum: ['bug'] },
+                severity: { bsonType: 'string' },
+              },
+            },
+          ],
+        }),
+      },
     });
-    expect(domainValueObjectsAtDefaultNamespace(contract.domain)).toEqual({
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          Object.fromEntries(
+            valueObjectsWithCoordinates(contract.storage).map(({ coordinate, valueObject }) => [
+              coordinate.entityName,
+              valueObject,
+            ]),
+          ),
+        ),
+      ),
+    ).toEqual({
       Address: {
         fields: {
-          street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+          street: {
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            nullable: false,
+            many: false,
+          },
+          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true, many: false },
         },
       },
     });
     const models = domainModelsAtDefaultNamespace(contract.domain);
     expect(models['Task']!.storage).toEqual({
       collection: 'tasks',
+      fields: {
+        _id: { field: '_id' },
+        metadata: { field: 'metadata' },
+        title: { field: 'title' },
+        type: { field: 'type' },
+      },
       relations: {
         comments: { field: 'comments' },
       },
     });
     expect(models['Task']!.discriminator).toEqual({ field: 'type' });
-    expect(models['Task']!.variants).toEqual({
-      Bug: { value: 'bug' },
-    });
+    expect(models['Task']!.variants).toEqual({ bug: crossRef('Bug') });
     expect(models['Bug']!.base).toEqual(crossRef('Task'));
     expect(models['Comment']!.owner).toBe('Task');
   });
@@ -298,10 +421,10 @@ describe('mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
-        createdAt: field.date(),
-        location: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
+        createdAt: field.scalar(type.Date()),
+        location: field.scalar(type.String()),
       },
       indexes: [
         index({ email: 1 }, { unique: true }),
@@ -320,14 +443,35 @@ describe('mongo contract builder', () => {
       users: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'email_1',
+            keys: [{ field: 'email', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'createdAt_1',
             keys: [{ field: 'createdAt', direction: 1 }],
             expireAfterSeconds: 3600,
           },
-          { kind: 'mongo-index', keys: [{ field: 'location', direction: '2dsphere' }] },
+          {
+            kind: 'mongo-index',
+            name: 'location_2dsphere',
+            keys: [{ field: 'location', direction: '2dsphere' }],
+          },
         ],
+        validator: strictValidator({
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'createdAt', 'email', 'location'],
+          properties: {
+            _id: { bsonType: 'objectId' },
+            email: { bsonType: 'string' },
+            createdAt: { bsonType: 'date' },
+            location: { bsonType: 'string' },
+          },
+        }),
       },
     });
   });
@@ -336,8 +480,8 @@ describe('mongo contract builder', () => {
     const Metric = model('Metric', {
       collection: 'metrics',
       fields: {
-        _id: field.objectId(),
-        value: field.double(),
+        _id: field.scalar(type.ObjectId()),
+        value: field.scalar(type.Double()),
       },
     });
 
@@ -350,19 +494,21 @@ describe('mongo contract builder', () => {
     expect(domainModelsAtDefaultNamespace(contract.domain)['Metric']?.fields['value']).toEqual({
       type: { kind: 'scalar', codecId: 'mongo/double@1' },
       nullable: false,
+      many: false,
     });
   });
 
-  it('supports the int64, decimal128, binary, json and bson scalar helpers', () => {
+  it('supports the int64, int64Number, decimal128, binary, json and bson scalar helpers', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        views: field.int64(),
-        price: field.decimal128(),
-        thumbnail: field.binary(),
-        meta: field.json(),
-        raw: field.bson(),
+        _id: field.scalar(type.ObjectId()),
+        views: field.scalar(type.Int64()),
+        hits: field.scalar(type.Int64Number()),
+        price: field.scalar(type.Decimal128()),
+        thumbnail: field.scalar(type.Binary()),
+        meta: field.scalar(type.Json()),
+        raw: field.scalar(type.Bson()),
       },
     });
 
@@ -375,16 +521,30 @@ describe('mongo contract builder', () => {
     const fields = domainModelsAtDefaultNamespace(contract.domain)['Post']?.fields;
     expect({
       views: fields?.['views'],
+      hits: fields?.['hits'],
       price: fields?.['price'],
       thumbnail: fields?.['thumbnail'],
       meta: fields?.['meta'],
       raw: fields?.['raw'],
     }).toEqual({
-      views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
-      price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' }, nullable: false },
-      thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' }, nullable: false },
-      meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
-      raw: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
+      views: { many: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
+      hits: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/int64Number@1' },
+        nullable: false,
+      },
+      price: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+        nullable: false,
+      },
+      thumbnail: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+        nullable: false,
+      },
+      meta: { many: false, type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
+      raw: { many: false, type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
     });
   });
 
@@ -392,9 +552,9 @@ describe('mongo contract builder', () => {
     const TaskBase = model('TaskBase', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
       indexes: [index({ title: 1 }, { unique: true })],
       discriminator: {
@@ -409,7 +569,7 @@ describe('mongo contract builder', () => {
       collection: 'tasks',
       base: TaskBase,
       fields: {
-        expiresAt: field.date(),
+        expiresAt: field.scalar(type.Date()),
       },
       indexes: [index({ expiresAt: 1 }, { expireAfterSeconds: 3600 })],
     });
@@ -420,65 +580,96 @@ describe('mongo contract builder', () => {
       models: { TaskBase, TaskDerived },
     });
 
+    const taskBaseProperties = {
+      _id: { bsonType: 'objectId' },
+      type: { bsonType: 'string' },
+      title: { bsonType: 'string' },
+    };
     expect(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries['collection']).toEqual({
       tasks: {
         kind: 'mongo-collection',
         indexes: [
-          { kind: 'mongo-index', keys: [{ field: 'title', direction: 1 }], unique: true },
           {
             kind: 'mongo-index',
+            name: 'title_1',
+            keys: [{ field: 'title', direction: 1 }],
+            unique: true,
+          },
+          {
+            kind: 'mongo-index',
+            name: 'expiresAt_1',
             keys: [{ field: 'expiresAt', direction: 1 }],
             expireAfterSeconds: 3600,
             partialFilterExpression: { type: 'derived' },
           },
         ],
+        validator: strictValidator({
+          bsonType: 'object',
+          required: ['_id', 'title', 'type'],
+          properties: taskBaseProperties,
+          oneOf: [
+            {
+              additionalProperties: false,
+              required: ['expiresAt', 'type'],
+              properties: {
+                ...taskBaseProperties,
+                type: { enum: ['derived'] },
+                expiresAt: { bsonType: 'date' },
+              },
+            },
+          ],
+        }),
       },
     });
   });
 
-  it('rejects duplicate indexes across models sharing the same collection', () => {
+  it('merges a plain index into the unique index another model in the collection declares on the same field', () => {
     const TaskBase = model('TaskBase', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
-      indexes: [index({ title: 1 }, { unique: true })],
+      indexes: [index({ title: 1 })],
     });
 
     const TaskAlt = model('TaskAlt', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
       indexes: [index({ title: 1 }, { unique: true })],
     });
 
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(
-      'Collection "tasks" defines duplicate index {"fields":{"title":1},"options":{"unique":true}}. First declared on model "TaskBase" and duplicated on model "TaskAlt".',
-    );
-    expect(() =>
-      defineContract({
-        family: mongoFamilyPack,
-        target: mongoTargetPack,
-        models: { TaskBase, TaskAlt },
-      }),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.NAME_DUPLICATE' }));
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { TaskBase, TaskAlt },
+    });
+
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['tasks'],
+        ),
+      )['indexes'],
+    ).toEqual([
+      {
+        kind: 'mongo-index',
+        name: 'title_1',
+        keys: [{ field: 'title', direction: 1 }],
+        unique: true,
+      },
+    ]);
   });
 
   it('rejects indexes on models without collections', () => {
     const Comment = model('Comment', {
       fields: {
-        _id: field.objectId(),
-        text: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        text: field.scalar(type.String()),
       },
       indexes: [index({ text: 'text' })],
     });
@@ -503,8 +694,8 @@ describe('mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ nonexistent: 1 })],
     });
@@ -536,13 +727,13 @@ describe('mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
       },
     });
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
       },
     });
 
@@ -575,12 +766,39 @@ describe('mongo contract builder', () => {
     expect(run).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
   });
 
+  it('rejects a pack that registers one path as both an entity and a type alias', () => {
+    const familyPackWithAmbiguousPath = {
+      ...mongoFamilyPack,
+      authoring: {
+        type: {
+          custom: { Thing: { kind: 'typeAlias', output: { type: { codecId: 'mongo/string@1' } } } },
+        },
+        entityTypes: {
+          custom: {
+            Thing: { kind: 'entity', discriminator: 'thing', output: { factory: () => ({}) } },
+          },
+        },
+      },
+    } as unknown as typeof mongoFamilyPack;
+
+    expect(() =>
+      defineContract({ family: familyPackWithAmbiguousPath, target: mongoTargetPack }, () => ({
+        models: {},
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message: expect.stringContaining('Ambiguous authoring registry path "custom.Thing"'),
+      }),
+    );
+  });
+
   it('throws once and names the missing field when a multi-key index mixes valid and invalid fields', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ email: 1, nonexistent: 1 })],
     });
@@ -606,8 +824,8 @@ describe('mongo contract builder', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       collectionOptions: {
         collation: { locale: 'en', strength: 2 },
@@ -632,6 +850,12 @@ describe('mongo contract builder', () => {
             enabled: true,
           },
         },
+        validator: strictValidator({
+          bsonType: 'object',
+          additionalProperties: false,
+          required: ['_id', 'email'],
+          properties: { _id: { bsonType: 'objectId' }, email: { bsonType: 'string' } },
+        }),
       },
     });
   });
@@ -639,8 +863,8 @@ describe('mongo contract builder', () => {
   it('rejects collection options on models without collections', () => {
     const Comment = model('Comment', {
       fields: {
-        _id: field.objectId(),
-        text: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        text: field.scalar(type.String()),
       },
       collectionOptions: {
         collation: { locale: 'en' },
@@ -660,8 +884,8 @@ describe('mongo contract builder', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
       collectionOptions: {
         collation: { locale: 'en' },
@@ -670,8 +894,8 @@ describe('mongo contract builder', () => {
     const Bug = model('Bug', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        severity: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        severity: field.scalar(type.String()),
       },
       collectionOptions: {
         changeStreamPreAndPostImages: { enabled: true },
@@ -692,14 +916,14 @@ describe('mongo contract builder', () => {
   it('keeps the callback authoring form equivalent to the object literal form', () => {
     const Address = valueObject('Address', {
       fields: {
-        street: field.string(),
+        street: field.scalar(type.String()),
       },
     });
 
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         address: field.valueObject(Address).optional(),
       },
     });
@@ -707,8 +931,8 @@ describe('mongo contract builder', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        authorId: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
+        authorId: field.scalar(type.ObjectId()),
       },
       relations: {
         author: rel.belongsTo(User, {
@@ -730,17 +954,17 @@ describe('mongo contract builder', () => {
         family: mongoFamilyPack,
         target: mongoTargetPack,
       },
-      ({ field, model, rel, valueObject }) => {
+      ({ field, model, rel, valueObject, type }) => {
         const Address = valueObject('Address', {
           fields: {
-            street: field.string(),
+            street: field.scalar(type.String()),
           },
         });
 
         const User = model('User', {
           collection: 'users',
           fields: {
-            _id: field.objectId(),
+            _id: field.scalar(type.ObjectId()),
             address: field.valueObject(Address).optional(),
           },
         });
@@ -748,8 +972,8 @@ describe('mongo contract builder', () => {
         const Post = model('Post', {
           collection: 'posts',
           fields: {
-            _id: field.objectId(),
-            authorId: field.objectId(),
+            _id: field.scalar(type.ObjectId()),
+            authorId: field.scalar(type.ObjectId()),
           },
           relations: {
             author: rel.belongsTo(User, {

@@ -1,10 +1,4 @@
 import type {
-  AuthoringContributions,
-  AuthoringTypeConstructorDescriptor,
-} from '@internal/framework-components/authoring';
-import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type {
-  ArgType,
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
@@ -13,22 +7,20 @@ import type {
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
-  FuncCallSig,
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
-  PslDiagnostic,
+  ResolvedAttribute,
   SymbolTable,
-  TypedFuncCall,
 } from '@internal/psl-parser';
 import {
   bool,
-  createBinder,
   diagnosticSource,
   entityRef,
   fieldAttribute,
   fieldRef,
   funcCall,
+  generatorAttributeSpec,
   identifier,
   int,
   interpretAttribute,
@@ -42,28 +34,9 @@ import {
   record,
   referencedFieldRef,
   str,
+  writtenScalar,
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, PslSources } from '@internal/psl-parser/syntax';
-
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
 
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
@@ -96,51 +69,39 @@ function buildFieldAttributeCtx(input: {
 }
 
 const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
-  [
-    'updatedAt',
-    'To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
-  ],
+  ['updatedAt', 'Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.'],
 ]);
 
-function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsupportedAttribute {
+const DEFAULT_NOW_HINT = 'Use @onCreate(now()) instead; MongoDB has no database defaults.';
+
+/** The hint for an attribute MongoDB PSL does not lower, naming what to write instead. */
+export function unloweredAttributeHint(attribute: ResolvedAttribute): string | undefined {
+  if (attribute.name === 'default' && attribute.args[0]?.value.replace(/\s/g, '') === 'now()') {
+    return DEFAULT_NOW_HINT;
+  }
+  return UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
+}
+
+export function describeUnsupportedMongoAttribute(
+  sources: PslSources,
+): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     if (level === 'model') {
       return {
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        message: `${owner.kind === 'mixin' ? 'Mixin' : 'Model'} "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
         ...diagnosticSource(sources, owner.node.syntax).at(attribute.span),
       };
     }
     if (field === undefined) return undefined;
     const base = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
-    const hint = UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
+    const hint = unloweredAttributeHint(attribute);
     return {
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message: hint === undefined ? base : `${base}. ${hint}`,
       ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
     };
   };
-}
-
-export function createMongoBinder(input: {
-  readonly symbolTable: SymbolTable;
-  readonly sources: PslSources;
-  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly authoringContributions?: AuthoringContributions | undefined;
-}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
-  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
-  for (const [name, codecId] of input.scalarTypeCodecIds) {
-    scalars[name] = { kind: 'typeConstructor', output: { codecId } };
-  }
-  return createBinder({
-    sources: input.sources,
-    symbolTable: input.symbolTable,
-    typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
-    attributeSpecs: mongoAttributeSpecs,
-    controlMutationDefaults: input.controlMutationDefaults,
-    describeUnsupportedAttribute: describeUnsupportedMongoAttribute(input.sources),
-  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
@@ -214,10 +175,18 @@ export const mapFieldSpec = fieldAttribute('map', {
   positional: [{ key: 'name', type: str(), documentation: 'The key stored in MongoDB documents.' }],
 });
 export const idFieldSpec = fieldAttribute('id', {
-  documentation: 'Identifies the document’s primary-key field.',
+  documentation:
+    'Marks the field stored as `_id`, the document’s id. The field must be stored as `_id`: name it `_id` or add `@map("_id")`. A model may leave `@id` out; its documents still get an ObjectId `_id`.',
 });
+const indexMapArg = {
+  type: optional(str()),
+  documentation:
+    'The name MongoDB stores the index under. Without it, the index is named after its keys and directions, such as `email_1`.',
+};
+
 export const uniqueFieldSpec = fieldAttribute('unique', {
   documentation: 'Requires values in this field to be unique across the collection.',
+  named: { map: indexMapArg },
 });
 
 export const relationFieldSpec = fieldAttribute('relation', {
@@ -265,48 +234,45 @@ export function baseModelSpec() {
       },
       {
         key: 'value',
-        type: str(),
-        documentation: 'The discriminator value identifying this variant.',
+        type: writtenScalar(str()),
+        documentation:
+          "The discriminator value identifying this variant, a value of the discriminator field's type.",
       },
     ],
   });
 }
 
-const sortSig = {
-  documentation: 'Selects an index field with an explicit sort direction.',
-  named: {
-    sort: {
-      type: oneOf(
-        identifier('Asc', { documentation: 'Sort ascending.' }),
-        identifier('Desc', { documentation: 'Sort descending.' }),
-      ),
-      documentation: 'The index order for this field: `Asc` or `Desc`.',
-    },
-  },
-} satisfies FuncCallSig;
-
-function indexFieldElement(
-  fieldNames: readonly string[],
-): ArgType<string | TypedFuncCall, ModelAttributeCtx> {
-  const arms: readonly [
-    ArgType<string | TypedFuncCall, ModelAttributeCtx>,
-    ...ArgType<string | TypedFuncCall, ModelAttributeCtx>[],
-  ] = [
-    fieldRef(),
-    funcCall('wildcard', {
-      documentation: 'Indexes document fields using a MongoDB wildcard index.',
-      positional: [
-        {
-          key: 'scope',
-          type: optional(identifier()),
-          documentation: 'The field path to index recursively. Omit to index all document fields.',
-        },
-      ],
-    }),
-    ...fieldNames.map((name) => funcCall(name, sortSig)),
-  ];
-  return oneOf(...arms);
-}
+const indexFieldElement = oneOf(
+  fieldRef(),
+  funcCall('wildcard', {
+    documentation: 'Indexes document fields using a MongoDB wildcard index.',
+    positional: [
+      {
+        key: 'scope',
+        type: optional(identifier()),
+        documentation: 'The field path to index recursively. Omit to index all document fields.',
+      },
+    ],
+  }),
+  funcCall('sort', {
+    documentation: 'Selects an index field with an explicit sort direction.',
+    positional: [
+      {
+        key: 'field',
+        type: fieldRef(),
+        documentation: 'The model field to index.',
+      },
+      {
+        key: 'direction',
+        type: oneOf(
+          identifier('Asc', { documentation: 'Sort ascending.' }),
+          identifier('Desc', { documentation: 'Sort descending.' }),
+        ),
+        documentation: 'The index order for this field: `Asc` or `Desc`.',
+      },
+    ],
+  }),
+);
 
 const collationNamedArgs = {
   collationLocale: {
@@ -350,10 +316,7 @@ const collationNamedArgs = {
   },
 };
 
-function buildIndexModelSpec(
-  name: 'index' | 'unique',
-  fieldElement: ArgType<string | TypedFuncCall, ModelAttributeCtx>,
-) {
+function buildIndexModelSpec(name: 'index' | 'unique') {
   return modelAttribute(name, {
     documentation:
       name === 'unique'
@@ -362,7 +325,7 @@ function buildIndexModelSpec(
     positional: [
       {
         key: 'fields',
-        type: list(fieldElement, { allowEmpty: false }),
+        type: list(indexFieldElement, { allowEmpty: false }),
         documentation:
           name === 'unique'
             ? 'The nonempty list of indexed fields, optionally with sort directions. Wildcard scopes are not supported.'
@@ -370,6 +333,7 @@ function buildIndexModelSpec(
       },
     ],
     named: {
+      map: indexMapArg,
       type: {
         type: optional(
           oneOf(num(1), num(-1), str('text'), str('2dsphere'), str('2d'), str('hashed')),
@@ -410,18 +374,19 @@ function buildIndexModelSpec(
   });
 }
 
-function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall, ModelAttributeCtx>) {
+function buildTextIndexModelSpec() {
   return modelAttribute('textIndex', {
     documentation:
       'Declares a MongoDB text index with optional field weights and language settings.',
     positional: [
       {
         key: 'fields',
-        type: list(fieldElement, { allowEmpty: false }),
+        type: list(indexFieldElement, { allowEmpty: false }),
         documentation: 'The nonempty list of fields whose text is indexed.',
       },
     ],
     named: {
+      map: indexMapArg,
       filter: {
         type: optional(json()),
         documentation: 'A JSON partial-filter expression limiting which documents are indexed.',
@@ -443,12 +408,6 @@ function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall, M
   });
 }
 
-function modelFieldElement(
-  ctx: AttributeSpecContext,
-): ArgType<string | TypedFuncCall, ModelAttributeCtx> {
-  return indexFieldElement(Object.keys(ctx.model.fields));
-}
-
 function staticModelSpec<Spec>(spec: Spec): (ctx: AttributeSpecContext) => Spec {
   return () => spec;
 }
@@ -462,14 +421,16 @@ export const mongoAttributeSpecs = {
     map: staticModelSpec(mapModelSpec),
     discriminator: staticModelSpec(discriminatorModelSpec),
     base: baseModelSpec,
-    index: (ctx) => buildIndexModelSpec('index', modelFieldElement(ctx)),
-    unique: (ctx) => buildIndexModelSpec('unique', modelFieldElement(ctx)),
-    textIndex: (ctx) => buildTextIndexModelSpec(modelFieldElement(ctx)),
+    index: staticModelSpec(buildIndexModelSpec('index')),
+    unique: staticModelSpec(buildIndexModelSpec('unique')),
+    textIndex: staticModelSpec(buildTextIndexModelSpec()),
   },
   field: {
     id: staticFieldSpec(idFieldSpec),
     unique: staticFieldSpec(uniqueFieldSpec),
     map: staticFieldSpec(mapFieldSpec),
     relation: staticFieldSpec(relationFieldSpec),
+    onCreate: generatorAttributeSpec('onCreate'),
+    onUpdate: generatorAttributeSpec('onUpdate'),
   },
 } as const satisfies AttributeSpecNamespace;

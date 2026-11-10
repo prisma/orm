@@ -1,6 +1,6 @@
 {
-  "targetFamily": "mongo",
   "target": "mongo",
+  "targetFamily": "mongo",
   "roots": {
     "Post": {
       "namespace": "__unbound__",
@@ -13,12 +13,13 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "tags": {
                 "type": {
@@ -26,15 +27,19 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "scores": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "mongo/int32@1"
+                  "codecId": "mongo/int64Number@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "refs": {
                 "type": {
@@ -42,7 +47,9 @@
                   "codecId": "mongo/objectId@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "roles": {
                 "type": {
@@ -50,38 +57,52 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
+                "many": {
+                  "elementNullable": false
+                },
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",
                   "namespaceId": "__unbound__",
                   "entityName": "Role"
-                },
-                "many": true
+                }
               },
               "address": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "Address"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {},
             "storage": {
-              "collection": "Post"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "street": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
                 },
-                "nullable": false
+                "tags": {
+                  "field": "tags"
+                },
+                "scores": {
+                  "field": "scores"
+                },
+                "refs": {
+                  "field": "refs"
+                },
+                "roles": {
+                  "field": "roles"
+                },
+                "address": {
+                  "field": "address"
+                }
               }
             }
           }
@@ -104,12 +125,12 @@
       }
     }
   },
-  "extensions": {},
   "capabilities": {},
+  "extensions": {},
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "3da02d07cd29acc61bc54a1929d31fe70720137e369c44564b6ca3e8f3e46546",
+    "storageHash": "e6d057cae9c68e89ed7207907298557efb1fdf16c57f31373bd9cffaec8b65be",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -124,6 +145,20 @@
             "Role": {
               "kind": "valueSet",
               "values": ["USER", "ADMIN"]
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
             }
           }
         }

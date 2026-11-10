@@ -1,7 +1,7 @@
 import type { CoreSchemaView } from '@internal/framework-components/control';
 import { SchemaTreeNode } from '@internal/framework-components/control';
+import { validatorRootShapesOf } from '@internal/mongo-contract';
 import type { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 
 export function mongoSchemaToView(schema: MongoSchemaIR): CoreSchemaView {
@@ -13,16 +13,10 @@ export function mongoSchemaToView(schema: MongoSchemaIR): CoreSchemaView {
     root: new SchemaTreeNode({
       kind: 'root',
       id: 'mongo-schema',
-      label: 'database',
+      labelParts: [{ text: 'database', role: 'title' }],
       ...ifDefined('children', collectionNodes.length > 0 ? collectionNodes : undefined),
     }),
   };
-}
-
-function bsonTypeLabel(bsonType: unknown): string {
-  if (bsonType === undefined) return 'any';
-  if (Array.isArray(bsonType)) return bsonType.join(' | ');
-  return String(bsonType);
 }
 
 function collectionToSchemaNode(name: string, collection: MongoSchemaCollection): SchemaTreeNode {
@@ -41,14 +35,22 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
     if (index.sparse) options.push('sparse');
     if (index.expireAfterSeconds != null) options.push(`ttl: ${index.expireAfterSeconds}s`);
     if (index.partialFilterExpression) options.push('partial');
-    const optsSuffix = options.length > 0 ? ` (${options.join(', ')})` : '';
 
     children.push(
       new SchemaTreeNode({
         kind: 'index',
-        id: `index-${name}-${index.keys.map((k) => `${k.field}_${k.direction}`).join('_')}`,
-        label: `${prefix} (${keysSummary})${optsSuffix}`,
+        id: `index-${name}-${index.name}`,
+        labelParts: [
+          { text: prefix, role: 'keyword' },
+          { text: ' (' },
+          { text: keysSummary, role: 'name' },
+          { text: ')' },
+          ...(options.length > 0
+            ? [{ text: ' ' }, { text: `(${options.join(', ')})`, role: 'detail' as const }]
+            : []),
+        ],
         meta: {
+          name: index.name,
           keys: index.keys,
           unique: index.unique,
           ...ifDefined('sparse', index.sparse || undefined),
@@ -61,35 +63,47 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
 
   if (collection.validator) {
     const validatorChildren: SchemaTreeNode[] = [];
-    const jsonSchema = blindCast<
-      {
-        readonly properties?: Readonly<Record<string, { readonly bsonType?: unknown }>>;
-        readonly required?: readonly string[];
-      },
-      'a collection validator is a $jsonSchema object'
-    >(collection.validator.jsonSchema);
-    const properties = jsonSchema.properties;
-    const required = new Set(jsonSchema.required ?? []);
-
-    if (properties) {
-      for (const [propName, propDef] of Object.entries(properties)) {
-        const bsonType = bsonTypeLabel(propDef.bsonType);
-        const suffix = required.has(propName) ? ' (required)' : '';
-        validatorChildren.push(
-          new SchemaTreeNode({
-            kind: 'field',
-            id: `field-${name}-${propName}`,
-            label: `${propName}: ${bsonType}${suffix}`,
-          }),
-        );
+    const roots = validatorRootShapesOf(collection.validator.jsonSchema);
+    const fields = new Map<string, Set<string>>();
+    for (const root of roots) {
+      for (const [propName, propDef] of Object.entries(root.properties)) {
+        const types = fields.get(propName) ?? new Set<string>();
+        for (const type of bsonTypesOf(propDef)) types.add(type);
+        fields.set(propName, types);
       }
+    }
+
+    for (const [propName, types] of fields) {
+      const bsonType = types.has('any') ? 'any' : [...types].join(' | ');
+      const required = roots.every(
+        (root) => !Object.hasOwn(root.properties, propName) || root.required.includes(propName),
+      );
+      validatorChildren.push(
+        new SchemaTreeNode({
+          kind: 'field',
+          id: `field-${name}-${propName}`,
+          labelParts: [
+            { text: propName, role: 'name' },
+            { text: ': ' },
+            { text: bsonType },
+            ...(required ? [{ text: ' ' }, { text: '(required)', role: 'detail' as const }] : []),
+          ],
+        }),
+      );
     }
 
     children.push(
       new SchemaTreeNode({
         kind: 'field',
         id: `validator-${name}`,
-        label: `validator (level: ${collection.validator.validationLevel}, action: ${collection.validator.validationAction})`,
+        labelParts: [
+          { text: 'validator', role: 'keyword' },
+          { text: ' ' },
+          {
+            text: `(level: ${collection.validator.validationLevel}, action: ${collection.validator.validationAction})`,
+            role: 'detail',
+          },
+        ],
         meta: {
           validationLevel: collection.validator.validationLevel,
           validationAction: collection.validator.validationAction,
@@ -114,7 +128,11 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
         new SchemaTreeNode({
           kind: 'field',
           id: `options-${name}`,
-          label: `options (${optLabels.join(', ')})`,
+          labelParts: [
+            { text: 'options', role: 'keyword' },
+            { text: ' ' },
+            { text: `(${optLabels.join(', ')})`, role: 'detail' },
+          ],
           meta: {
             ...ifDefined('capped', opts.capped ?? undefined),
             ...ifDefined('timeseries', opts.timeseries ?? undefined),
@@ -133,7 +151,17 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
   return new SchemaTreeNode({
     kind: 'collection',
     id: `collection-${name}`,
-    label: `collection ${name}`,
+    labelParts: [
+      { text: 'collection', role: 'keyword' },
+      { text: ' ' },
+      { text: name, role: 'name' },
+    ],
     ...ifDefined('children', children.length > 0 ? children : undefined),
   });
+}
+
+function bsonTypesOf(propDef: unknown): readonly string[] {
+  if (typeof propDef !== 'object' || propDef === null || !('bsonType' in propDef)) return ['any'];
+  const { bsonType } = propDef;
+  return Array.isArray(bsonType) ? bsonType.map(String) : [String(bsonType)];
 }

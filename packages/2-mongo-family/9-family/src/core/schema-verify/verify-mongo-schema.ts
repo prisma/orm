@@ -1,12 +1,15 @@
-import { type ControlPolicy, effectiveControlPolicy } from '@internal/contract/types';
+import type { ControlPolicy } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   OperationContext,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { VERIFY_CODE_SCHEMA_FAILURE } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { MongoCollection, MongoContract } from '@internal/mongo-contract';
+import {
+  collectionControlPoliciesOf,
+  collectionControlPolicyOf,
+  type MongoContract,
+} from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { ifDefined } from '@internal/utils/defined';
 import { contractToMongoSchemaIR } from '../contract-to-schema';
@@ -75,9 +78,6 @@ export function verifyMongoSchema(options: VerifyMongoSchemaOptions): VerifyData
 function resolveMongoCollectionControlPolicy(
   contract: MongoContract,
 ): (collectionName: string) => ControlPolicy {
-  const namespace = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
-  const collections: Record<string, MongoCollection> = namespace?.entries.collection ?? {};
-  const defaultControlPolicy = contract.defaultControlPolicy;
-  return (collectionName: string) =>
-    effectiveControlPolicy(collections[collectionName]?.control, defaultControlPolicy);
+  const policies = collectionControlPoliciesOf(contract);
+  return (collectionName: string) => collectionControlPolicyOf(collectionName, policies);
 }

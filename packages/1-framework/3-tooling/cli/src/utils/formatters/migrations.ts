@@ -1,7 +1,11 @@
 import type {
   MigrationPlannerConflict,
+  MigrationSubjectJson,
   OperationPreview,
 } from '@internal/framework-components/control';
+import type { ChangedStorageEntity } from '../../control-api/operations/changed-storage-entities';
+import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
+import type { TemporaryValueReport } from '../../control-api/statements/temporary-values';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 
 /**
@@ -44,6 +48,26 @@ export function previewBlockHeader(preview: OperationPreview): string {
 /**
  * Shared CLI output type for migration commands (db init, db update).
  */
+/** An operation of a plan, by its position in `plan.operations`, and its subject. */
+export interface PlannedSubjectJson {
+  readonly operationIndex: number;
+  readonly subject: MigrationSubjectJson;
+  /** The subject as the apply's question writes it, and as `--delete` or `--allow` takes it. */
+  readonly text: string;
+  /** Whether a `--delete` or `--allow` the dry run was given answers this question. */
+  readonly answered: boolean;
+  /** The statement that answers it, when one does, such as `{ verb: 'delete', text: 'billing' }`. */
+  readonly answeredBy?: { readonly verb: 'delete' | 'allow'; readonly text: string };
+  /** The subject's namespace when the destination removed it: `--delete` of it answers the question. */
+  readonly removedNamespace?: string;
+}
+
+/** A namespace the plan removes, as a dry run lists it, with the `--delete` given for it, if any. */
+export interface RemovedNamespaceJson {
+  readonly namespaceId: string;
+  readonly answeredBy?: { readonly verb: 'delete'; readonly text: string };
+}
+
 export interface MigrationCommandResult {
   readonly ok: true;
   readonly mode: 'plan' | 'apply';
@@ -81,6 +105,20 @@ export interface MigrationCommandResult {
    * into a single ambiguous list. See {@link PerSpaceExecutionEntry}.
    */
   readonly perSpace?: ReadonlyArray<PerSpaceExecutionEntry>;
+  /** `db update` only: the storage entities that changed, when it signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
+  /** `db update` only: the statements the plan applied, in order; empty when none were given. */
+  readonly appliedStatements?: readonly AppliedStatementReport[];
+  /** `db update` only: the new required fields whose existing rows get a temporary value. */
+  readonly temporaryValues?: readonly TemporaryValueReport[];
+  /** `db update --dry-run` only: the operations an apply would ask about because they lose data. */
+  readonly dataLoss?: readonly PlannedSubjectJson[];
+  /** `db update --dry-run` only: the operations an apply would ask about because they change access. */
+  readonly accessChanges?: readonly PlannedSubjectJson[];
+  /** `db update --dry-run` only: the namespaces the plan removes, each answered by a `--delete` of it. */
+  readonly removedNamespaces?: readonly RemovedNamespaceJson[];
+  /** `db update --dry-run` only: the namespaces the destination adds, which a rename of a removed one may name. */
+  readonly addedNamespaces?: readonly string[];
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef?: { readonly name: string; readonly hash: string } | null;
   readonly summary: string;

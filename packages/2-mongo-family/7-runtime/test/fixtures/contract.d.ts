@@ -6,26 +6,31 @@ import type {
 } from '@internal/mongo-contract';
 
 type UserModel = {
-  readonly storage: { readonly collection: 'users' };
+  readonly storage: { readonly collection: 'users'; readonly fields: { readonly _id: { readonly field: '_id' }; readonly name: { readonly field: 'name' }; readonly email: { readonly field: 'email' }; readonly bio: { readonly field: 'bio' }; readonly createdAt: { readonly field: 'createdAt' } } };
   readonly fields: {
     readonly _id: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly name: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly email: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly bio: {
       readonly nullable: true;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly createdAt: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
   };
@@ -42,42 +47,51 @@ type UserModel = {
 };
 
 type PostModel = {
-  readonly storage: { readonly collection: 'posts' };
+  readonly storage: { readonly collection: 'posts'; readonly fields: { readonly _id: { readonly field: '_id' }; readonly title: { readonly field: 'title' }; readonly slug: { readonly field: 'slug' }; readonly content: { readonly field: 'content' }; readonly status: { readonly field: 'status' }; readonly authorId: { readonly field: 'authorId' }; readonly viewCount: { readonly field: 'viewCount' }; readonly publishedAt: { readonly field: 'publishedAt' }; readonly updatedAt: { readonly field: 'updatedAt' } } };
   readonly fields: {
     readonly _id: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly title: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly slug: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly content: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly status: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
     };
     readonly authorId: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
     };
     readonly viewCount: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
     };
     readonly publishedAt: {
       readonly nullable: true;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
     readonly updatedAt: {
       readonly nullable: false;
+      readonly many: false;
       readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
     };
   };

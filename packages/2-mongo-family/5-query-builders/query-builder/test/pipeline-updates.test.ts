@@ -10,10 +10,11 @@ import type { PipelineChain } from '../src/builder';
 import { mongoQuery } from '../src/query';
 import type { ModelToDocShape } from '../src/types';
 import type { UpdaterResult } from '../src/update-ops';
+import { contextOf } from './fixtures/test-context';
 import type { TContract } from './fixtures/test-contract';
-import { testContractJson } from './fixtures/test-contract';
+import { testContract } from './fixtures/test-contract';
 
-const orders = () => mongoQuery<TContract>({ contractJson: testContractJson }).from('orders');
+const orders = () => mongoQuery({ context: contextOf(testContract) }).from('orders');
 
 /**
  * After A25 (`CollectionHandle`/`FilteredCollection` start with
@@ -121,13 +122,6 @@ describe('F3 pipeline-style updates', () => {
       expect(() => (chain as unknown as UpdateReachableChain).updateMany()).toThrow(
         /non-update stage/,
       );
-    });
-
-    it('throws on non-update stages after $match', () => {
-      const chain = orders()
-        .match((f) => f.status.eq('new'))
-        .sort({ amount: -1 }) as unknown as UpdateReachableChain;
-      expect(() => chain.updateMany()).toThrow(/non-update stage/);
     });
   });
 

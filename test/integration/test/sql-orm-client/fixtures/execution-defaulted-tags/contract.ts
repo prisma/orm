@@ -1,6 +1,5 @@
 import { charColumn, int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
 
 // A pure-junction M:N (User.tags through user_tags) whose junction payload column
 // `created_at` carries an execution-time onCreate default (uuidv4) instead of a
@@ -12,7 +11,7 @@ import { defineContract, field, model, rel } from '@internal/postgres/contract-b
 
 const Tag = model('Tag', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     name: field.column(textColumn).unique(),
   },
 }).sql({ table: 'tags' });
@@ -21,7 +20,7 @@ const UserTag = model('UserTag', {
   fields: {
     userId: field.column(int4Column).column('user_id'),
     tagId: field.column(charColumn(36)).column('tag_id'),
-    created_at: field.generated(uuidv4()),
+    created_at: field.column(type.Char(36)).onCreate(gen.uuid()),
   },
 })
   .attributes(({ fields, constraints }) => ({

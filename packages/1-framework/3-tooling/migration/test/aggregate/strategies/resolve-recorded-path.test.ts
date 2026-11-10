@@ -20,6 +20,34 @@ function makeSpace(
 }
 
 describe('resolveRecordedPath', () => {
+  it('names each destructive operation of the path by its storage name and label, says nothing of how it loses data, and widens no access', () => {
+    const headHash = 'cipher-head';
+    const pkg = createAttestedPackage('20260101T0000_init', { from: null, to: headHash }, [
+      { id: 'table.events', label: 'Create table events', operationClass: 'additive' },
+      { id: 'table.legacy', label: 'Drop table legacy', operationClass: 'destructive' },
+      { id: 'rls.events', label: 'Disable RLS on events', operationClass: 'widening' },
+    ]);
+
+    const outcome = resolveRecordedPath({
+      aggregateTargetId: 'postgres',
+      space: makeSpace([pkg], headHash),
+      currentMarker: null,
+      storageNameOf: (operation) => `storage of ${operation.id}`,
+    });
+
+    expect(outcome.kind === 'ok' && outcome.result).toMatchObject({
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'storage', name: 'storage of table.legacy' },
+          label: 'Drop table legacy',
+        },
+      ],
+      accessChanges: [],
+    });
+    expect(outcome.kind === 'ok' && outcome.result.dataLoss[0]).not.toHaveProperty('loss');
+  });
+
   it('walks the shortest path from the live marker to the on-disk head ref', () => {
     const headHash = 'cipher-head';
     const pkg = createAttestedPackage('20260101T0000_init', { from: null, to: headHash });
@@ -28,6 +56,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([pkg], headHash),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -55,6 +84,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([baseline, delta], headHash),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -74,6 +104,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([pkg], headHash),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -93,6 +124,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([pkg], headHash),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('unreachable');
@@ -108,6 +140,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space,
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('unsatisfiable');
@@ -124,6 +157,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       refName: 'prod',
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -139,6 +173,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([pkg], headHash),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -154,6 +189,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([pkg], headHash),
       currentMarker: { storageHash: headHash, invariants: [] },
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');
@@ -170,6 +206,7 @@ describe('resolveRecordedPath', () => {
       aggregateTargetId: 'postgres',
       space: makeSpace([], EMPTY_CONTRACT_HASH),
       currentMarker: null,
+      storageNameOf: (operation) => operation.id,
     });
 
     expect(outcome.kind).toBe('ok');

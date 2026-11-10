@@ -1,3 +1,4 @@
+import type { SessionSettings } from '../shared/framework-components';
 import type {
   RuntimeAdapterDescriptor,
   RuntimeDriverDescriptor,
@@ -29,7 +30,7 @@ export interface ExecutionStack<
 > {
   readonly target: RuntimeTargetDescriptor<TFamilyId, TTargetId>;
   readonly adapter: RuntimeAdapterDescriptor<TFamilyId, TTargetId, TAdapterInstance>;
-  readonly driver:
+  readonly driver?:
     | RuntimeDriverDescriptor<TFamilyId, TTargetId, unknown, TDriverInstance>
     | undefined;
   readonly extensions: readonly RuntimeExtensionDescriptor<
@@ -105,9 +106,28 @@ export function createExecutionStack<
   return {
     target: input.target,
     adapter: input.adapter,
-    driver: input.driver,
+    driver: withSessionSettings<
+      TFamilyId,
+      TTargetId,
+      TDriverInstance,
+      TDriverDescriptor | undefined
+    >(input.driver, input.target.sessionSettings),
     extensions: input.extensions ?? [],
   };
+}
+
+/** The driver descriptor, creating each driver with the session settings the target declares. */
+function withSessionSettings<
+  TFamilyId extends string,
+  TTargetId extends string,
+  TDriverInstance extends RuntimeDriverInstance<TFamilyId, TTargetId>,
+  TDriverDescriptor extends
+    | RuntimeDriverDescriptor<TFamilyId, TTargetId, unknown, TDriverInstance>
+    | undefined,
+>(driver: TDriverDescriptor, sessionSettings: SessionSettings | undefined): TDriverDescriptor {
+  if (driver === undefined || sessionSettings === undefined) return driver;
+  const create = driver.create.bind(driver);
+  return { ...driver, create: (options?: unknown) => create(options, sessionSettings) };
 }
 
 export function instantiateExecutionStack<

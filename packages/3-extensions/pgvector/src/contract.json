@@ -13,6 +13,19 @@
   },
   "storage": {
     "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "extension": {
+            "vector": {
+              "kind": "extension",
+              "name": "vector"
+            }
+          },
+          "table": {}
+        },
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
+      },
       "public": {
         "entries": {
           "table": {}
@@ -21,18 +34,20 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3d2c56a2944685bd21b05bc8a8d73164397df51c014201902932fbe7e80ff1b8",
+    "storageHash": "e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15",
     "types": {
       "vector": {
         "codecId": "pg/vector@1",
-        "kind": "codec-instance",
-        "nativeType": "vector"
+        "dataType": "pgvector/vector",
+        "kind": "codec-instance"
       }
     }
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -43,9 +58,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

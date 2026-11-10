@@ -8,9 +8,13 @@ model Post {
   title   String
   address Address
 
+  @@index([title, address.city])
   @@index([title, address.city(sort: Asc)])
-  @@unique([address.city(sort: Desc)])
-  @@fulltext([address.street(sort: Desc)])
+  @@unique([address.geo.lat])
+  @@unique([address.geo.lat(sort: Desc)])
+  @@fulltext([address.street])
+  @@index([title.first])
+  @@index([missing.city(sort: Asc)])
 }
 
 type Address {

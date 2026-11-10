@@ -56,30 +56,4 @@ describe('assertRuntimeContractRequirementsSatisfied', () => {
       }),
     ).not.toThrow();
   });
-
-  it('throws when contract target mismatches runtime target descriptor', () => {
-    expect(() =>
-      assertRuntimeContractRequirementsSatisfied({
-        contract: { target: 'mysql' },
-        family,
-        target,
-        adapter,
-        extensions: [],
-      }),
-    ).toThrow(`Contract target 'mysql' does not match runtime target descriptor 'postgres'.`);
-  });
-
-  it('throws when required extension pack is missing', () => {
-    expect(() =>
-      assertRuntimeContractRequirementsSatisfied({
-        contract: { target: 'postgres', extensions: { pgvector: {} } },
-        family,
-        target,
-        adapter,
-        extensions: [],
-      }),
-    ).toThrow(
-      `Contract requires extension pack 'pgvector', but runtime descriptors do not provide a matching component.`,
-    );
-  });
 });

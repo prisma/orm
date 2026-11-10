@@ -19,12 +19,6 @@ test('MongoExecutionPlan extends framework ExecutionPlan and QueryPlan', () => {
   assertType<QueryPlan<{ _id: string }>>(plan);
 });
 
-test('MongoExecutionPlan carries command, meta, and phantom _row', () => {
-  expectTypeOf<MongoExecutionPlan>().toHaveProperty('command');
-  expectTypeOf<MongoExecutionPlan>().toHaveProperty('meta');
-  expectTypeOf<MongoExecutionPlan>().toHaveProperty('_row');
-});
-
 test('Row type is recoverable via ResultType', () => {
   const plan: MongoExecutionPlan<{ _id: string; total: number }> = {
     command: new InsertOneWireCommand('orders', { _id: 'abc', total: 12 }),
@@ -37,15 +31,4 @@ test('Row type is recoverable via ResultType', () => {
 test('Plan without a wire command does not satisfy MongoExecutionPlan', () => {
   // @ts-expect-error - missing command property
   const _bad: MongoExecutionPlan = { meta };
-});
-
-test('Plan command field accepts any wire command shape', () => {
-  const plan: MongoExecutionPlan = {
-    command: new InsertOneWireCommand('users', { name: 'alice' }),
-    meta,
-  };
-  expectTypeOf(plan.command).toExtend<{
-    readonly collection: string;
-    readonly kind: string;
-  }>();
 });

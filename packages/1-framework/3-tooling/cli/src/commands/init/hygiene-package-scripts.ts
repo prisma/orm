@@ -140,7 +140,13 @@ export interface EsmModuleTypeResult {
  *   and surface a structured warning. The user explicitly opted out of
  *   ESM and we don't silently overwrite that.
  */
-export function ensureEsmModuleType(existing: string): EsmModuleTypeResult {
+export function ensureEsmModuleType(
+  existing: string,
+  options: {
+    /** An app that already declares runtime dependencies: its `type` is left alone, since changing it changes how the app's own files load. */
+    readonly existingProject: boolean;
+  } = { existingProject: false },
+): EsmModuleTypeResult {
   const parsed = blindCast<
     Record<string, unknown>,
     'JSON.parse returns `unknown`; package.json is a JSON object so its top level is a string-keyed record'
@@ -149,6 +155,14 @@ export function ensureEsmModuleType(existing: string): EsmModuleTypeResult {
 
   if (currentType === 'module') {
     return { content: null, warning: null };
+  }
+
+  if (options.existingProject && currentType === undefined) {
+    return {
+      content: null,
+      warning:
+        'package.json declares no "type", so Node loads the project\'s .js files as CommonJS. init leaves that alone, because setting it would change how the project\'s own files load. The scaffolded db.ts is an ES module (it imports the contract with `with { type: \'json\' }`): Node still loads it, and CommonJS code can require it, but Node prints a MODULE_TYPELESS_PACKAGE_JSON warning and reparses the file as an ES module; a TypeScript runner such as tsx loads it without the warning. Set "type": "module" in package.json when the project is ready for it, and the warning goes away.',
+    };
   }
 
   if (typeof currentType === 'string' && currentType !== 'module') {

@@ -63,7 +63,7 @@ describe('PSL scalar-list Mongo parity', () => {
   );
 
   it(
-    'both SQL and Mongo generate ReadonlyArray<string> for the list field',
+    'both SQL and Mongo emit the list field as a list of their string codec',
     async () => {
       const sqlResult = await authorSqlContractFromPsl(SQL_LIST_SCHEMA);
       const mongoResult = await authorMongoContractFromPsl(MONGO_LIST_SCHEMA);
@@ -89,15 +89,47 @@ describe('PSL scalar-list Mongo parity', () => {
         },
       );
 
-      // Both families render the list field as a `ReadonlyArray<...>` domain
-      // type over their string element codec's output type — the observable
-      // generated-type parity (the element codec id differs by family).
+      // Both families name the field type through the shared FieldTypesFromDomain generic, whose
+      // list rule is type-tested in packages/1-framework/0-foundation/contract/test/field-value-types.types.test-d.ts.
+      expect(sqlEmitted.contractDts).toContain("tags: FieldOutputTypes['public']['Note']['tags']");
       expect(sqlEmitted.contractDts).toContain(
-        "readonly tags: ReadonlyArray<CodecTypes['pg/text@1']['output']>",
+        'export type FieldOutputTypes = FieldTypesFromDomain<',
       );
+      expect(sqlResult.contract.domain).toMatchObject({
+        namespaces: {
+          public: {
+            models: {
+              Note: {
+                fields: {
+                  tags: {
+                    type: { kind: 'scalar', codecId: 'pg/text@1' },
+                    many: { elementNullable: false },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
       expect(mongoEmitted.contractDts).toContain(
-        "readonly tags: ReadonlyArray<CodecTypes['mongo/string@1']['output']>",
+        'export type FieldOutputTypes = FieldTypesFromDomain<',
       );
+      expect(mongoResult.contract.domain).toMatchObject({
+        namespaces: {
+          __unbound__: {
+            models: {
+              Note: {
+                fields: {
+                  tags: {
+                    type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                    many: { elementNullable: false },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
     },
     timeouts.typeScriptCompilation,
   );

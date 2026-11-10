@@ -1,0 +1,31 @@
+// use prisma-8
+
+enum Role {
+  @@type("mongo/string@1")
+  Member = "member"
+  Editor = "editor"
+}
+
+enum Level {
+  @@type("mongo/int32@1")
+  Low  = 1
+  High = 10
+}
+
+type Badge {
+  label String
+  level Level
+}
+
+model User {
+  id       ObjectId  @id @map("_id")
+  role     Role
+  levels   Level[]
+  roles    Role[]?
+  tags     String[]
+  aliases  String[]?
+  badge    Badge
+  badges   Badge[]
+
+  @@map("users")
+}

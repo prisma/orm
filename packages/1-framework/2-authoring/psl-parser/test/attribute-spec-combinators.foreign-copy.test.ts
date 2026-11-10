@@ -19,6 +19,7 @@ import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
+import { binderContext } from './support';
 
 class ForeignCopyOfAnAstNode {
   readonly syntax: SyntaxNode;
@@ -32,9 +33,9 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
   const node = selfModel.fields['id']?.node.attributes()[Symbol.iterator]().next().value;
   const value = node?.argList()?.args()[Symbol.iterator]().next().value?.value();
@@ -42,12 +43,7 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { binder } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
@@ -89,13 +85,17 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   it('fieldRef dispatches on the syntax kind of a node from another module copy', () => {
     const { arg, ctx } = foreignArg('id');
 
-    expect(() => fieldRef().parse(arg, ctx)).toThrow(/same snapshot/i);
+    const result = fieldRef().parse(arg, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('entityRef rejects a node from another module copy', () => {
     const { arg, ctx } = foreignArg('M');
 
-    expect(() => entityRef({ kind: 'model' }).parse(arg, ctx)).toThrow(/same snapshot/i);
+    const result = entityRef({ kind: 'model' }).parse(arg, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('funcCall accepts a node from another module copy', () => {

@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.body\" has type Unsupported(...), which takes no native type, but has attribute \"@db.Text\". Prisma 7 refuses this schema too: \"Attribute not known\". Remove \"@db.Text\"."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_FIELD_INVALID",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.seenAt\" has type \"Unsupported\", but @updatedAt is only allowed on a DateTime field. Prisma 7 refuses this schema too: \"Fields that are marked with @updatedAt must be of type DateTime.\" Remove @updatedAt, or change the field's type to DateTime."
+  }
+]

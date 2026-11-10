@@ -1,24 +1,64 @@
 import { introspectSchema, MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import type { JsonValue } from '@internal/contract/types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import {
+  type AuthoringTypeConstructorDescriptor,
+  assembleDataTypeSupport,
+} from '@internal/framework-components/authoring';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+  type DataTypeValue,
+} from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type { MigrationPlan } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { MongoContract } from '@internal/mongo-contract';
-import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
+import {
+  describeUnsupportedMongoAttribute,
+  interpretPslDocumentToMongoContract,
+  mongoAttributeSpecs,
+} from '@internal/mongo-contract-psl';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
+  mongoTargetDescriptor,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient, MongoServerError } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
+
+const { support: mongoDataTypeSupport } = assembleDataTypeSupport(
+  [mongoTargetDescriptor],
+  (codecId) => mongoDescriptorById(codecId)?.dataType,
+);
+
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => type.valueFrom(v as JsonValue, {}),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
 
 let replSet: MongoMemoryReplSet;
 let client: MongoClient;
@@ -55,32 +95,17 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['Double', 'mongo/double@1'],
 ]);
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
+const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.values());
 
 // Without a codec lookup the emitter cannot resolve field BSON types, so the
 // derived validator carries empty `properties`. Closed-by-default schemas then
 // reject every real field, so the validator must be derived with the lookup
 // the production emission path also supplies.
-const mongoCodecLookup: CodecLookup = {
+const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
+    return mongoCodecIds.has(id) ? identityCodec(id) : undefined;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
 };
 
@@ -113,23 +138,46 @@ const polymorphicSchema = `
 `;
 
 function makeContractFromPsl(): MongoContract {
-  const { document, sources } = parse(polymorphicSchema, 'polymorphic-schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: {},
-  });
-  const result = interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
+        name,
+        { kind: 'typeConstructor' as const, output: { codecId } },
+      ]),
+    );
+  const bound = bindPslSchema(polymorphicSchema, {
+    sourceId: 'polymorphic-schema.prisma',
+    context: {
+      composedExtensions: [],
+      defaultNamespaceId: '__unbound__',
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        type: scalarTypeConstructors,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: mongoDataTypeSupport.entries,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: mongoCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: mongoDataTypeSupport,
+      resolvedInputs: [],
+      capabilities: {},
     },
-    codecLookup: mongoCodecLookup,
   });
+  const result = withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+    }),
+    bound.seedDiagnostics,
+  );
   if (!result.ok) {
     throw new Error(
       `PSL interpretation failed: ${JSON.stringify(result.failure.diagnostics, null, 2)}`,
@@ -145,7 +193,7 @@ function makeContractFromPsl(): MongoContract {
 
 function planForContract(
   contract: MongoContract,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
 ): MigrationPlan {
   const planner = new MongoMigrationPlanner();
   const result = planner.plan({
@@ -153,6 +201,8 @@ function planForContract(
     schema: origin,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });

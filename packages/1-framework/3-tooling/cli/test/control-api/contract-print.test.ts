@@ -69,7 +69,7 @@ describe('executeContractPrint', () => {
 
     await expect(executeContractEmit({ config, cwd: dir })).rejects.toBe(malformed);
     await expect(
-      executeContractPrint({ config, contractConfig, description: 'printed' }),
+      executeContractPrint({ config, contractConfig, description: 'printed', cwd: dir }),
     ).rejects.toBe(malformed);
     expect(familyInstance.buildPslContract).not.toHaveBeenCalled();
   });

@@ -1,0 +1,4 @@
+//use prisma-8
+model B {
+  id String @id @onCreate(ulid())
+}

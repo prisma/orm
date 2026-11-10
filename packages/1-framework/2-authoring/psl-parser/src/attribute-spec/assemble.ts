@@ -1,3 +1,4 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
 import type {
   AuthoringModelAttributeDescriptor,
   AuthoringModelAttributeDescriptorNamespace,
@@ -6,6 +7,8 @@ import { isAuthoringModelAttributeDescriptor } from '@internal/framework-compone
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DescribeUnresolvedType, DescribeUnsupportedAttribute } from '../binder';
+import type { PslSources } from '../source-file';
 import type { FieldAttributeSpecFactory, ModelAttributeSpecFactory } from './spec-context';
 
 export interface AssembledAttributeSpecs {
@@ -51,4 +54,36 @@ export function assembleAttributeSpecs(
       field: Object.freeze({ ...contributions.attributeSpecs.field }),
     }),
   );
+}
+
+export type DescribeUnsupportedAttributeFactory = (
+  sources: PslSources,
+) => DescribeUnsupportedAttribute;
+
+export function resolveDescribeUnsupportedAttribute(
+  pslDiagnostics: ContractSourceContext['pslDiagnostics'],
+): DescribeUnsupportedAttributeFactory | undefined {
+  if (pslDiagnostics?.describeUnsupportedAttribute === undefined) {
+    return undefined;
+  }
+  return blindCast<
+    DescribeUnsupportedAttributeFactory,
+    'framework core cannot name DescribeUnsupportedAttribute, so the contributed factory transits the family descriptor erased as unknown; this is the single point that restores the factory type the contribution surface documents'
+  >(pslDiagnostics.describeUnsupportedAttribute);
+}
+
+export type DescribeUnresolvedTypeFactory = (
+  contributions: AssembledAuthoringContributions,
+) => DescribeUnresolvedType;
+
+export function resolveDescribeUnresolvedType(
+  pslDiagnostics: ContractSourceContext['pslDiagnostics'],
+): DescribeUnresolvedTypeFactory | undefined {
+  if (pslDiagnostics?.describeUnresolvedType === undefined) {
+    return undefined;
+  }
+  return blindCast<
+    DescribeUnresolvedTypeFactory,
+    'framework core cannot name DescribeUnresolvedType, so the contributed factory transits the family descriptor erased as unknown; this is the single point that restores the factory type the contribution surface documents'
+  >(pslDiagnostics.describeUnresolvedType);
 }

@@ -1,0 +1,11 @@
+// use prisma-8
+
+model Event {
+  id        Int      @id
+  at        DateTime
+  maybe     DateTime?
+  createdAt DateTime @default(now())
+  updatedAt temporal.UpdatedAt
+
+  @@map("event")
+}

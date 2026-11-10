@@ -33,7 +33,7 @@ model User {
 }
 
 model Post {
-  id       String  @id @default(cuid(2))
+  id       String  @id @onCreate(cuid(2))
   title    String  @unique
   author   User    @relation(fields: [authorId], references: [id])
   authorId String

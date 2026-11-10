@@ -1,0 +1,15 @@
+// use prisma-8
+
+model User {
+  id     ObjectId @id @map("_id")
+  seenAt Date     @onCreate(now())
+
+  @@map("people")
+}
+
+model Admin {
+  id     ObjectId @id @map("_id")
+  seenAt Date     @onUpdate(now())
+
+  @@map("people")
+}

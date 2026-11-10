@@ -1,240 +1,285 @@
 import { blindCast } from '@internal/utils/casts';
-import { AsyncIterableResult } from './async-iterable-result';
-import type { ExecutionPlan } from './query-plan';
+import { brandedAnnotations } from '../annotations';
+import {
+  type ActivityChildSlot,
+  type ActivityParent,
+  type ActivityRecord,
+  createActivityRecord,
+  endActivity,
+} from './activity-lifecycle';
+import type { ExecutionPlan, QueryPlan } from './query-plan';
+import { checkAborted, raceAgainstAbort } from './race-against-abort';
 import type {
-  AfterQueryResult,
+  ActivityContext,
+  ActivityContextFields,
+  ParamRefMutator,
   RuntimeMiddleware,
-  RuntimeMiddlewareContext,
   RuntimeStatementStats,
+  StatementActivity,
+  StatementEnded,
 } from './runtime-middleware';
 
-/**
- * Drives a single query execution of `runDriver()` through the middleware
- * lifecycle's `interceptQuery` + row-source + termination phases.
- *
- * Lifecycle, in order:
- *  1. For each middleware in registration order: `interceptQuery(exec, ctx)`.
- *     The first non-`undefined` result wins; subsequent middleware's
- *     `interceptQuery` does not fire. On a hit, the runtime emits a
- *     `middleware.interceptQuery` debug event naming the winning middleware,
- *     switches the row source to the intercepted rows, and proceeds with
- *     `source: 'middleware'`. On all-passthrough (every `interceptQuery`
- *     returns `undefined` or is omitted), `source: 'driver'` is used and the
- *     row source is `runDriver()`.
- *  2. Iterate the row source. On the driver path, for each row, for each
- *     middleware in registration order: `onRow(row, exec, ctx)`; then yield
- *     the row. On the intercepted hit path, `onRow` is skipped — intercepted
- *     rows did not originate from a driver row stream — but rows are still
- *     yielded to the consumer in order.
- *  3. On successful completion: for each middleware in registration order:
- *     `afterQuery(exec, { rowCount, latencyMs, completed: true, source },
- *     ctx)`.
- *  4. On any error thrown during steps 1–2: for each middleware in
- *     registration order: `afterQuery(exec, { rowCount, latencyMs,
- *     completed: false, source }, ctx)`. Errors thrown by `afterQuery`
- *     during the error path are swallowed so they do not mask the original
- *     error. The original error is then rethrown.
- *
- * `beforeQuery` is **not** fired here — see
- * {@link runBeforeQueryChain} in `before-execute-chain.ts`. Family runtimes
- * call that helper between the AST → plan lowering step and the parameter
- * encode step so middleware that mutates ParamRef values can have its
- * mutations visible to encode. `runQueryWithMiddleware` operates on the
- * fully-encoded plan; interceptors therefore observe a fully-mutated,
- * encoded plan.
- *
- * The `source` field on `AfterQueryResult` lets observers (telemetry, lints,
- * budgets) distinguish driver-served from middleware-served executions
- * without needing their own out-of-band signal.
- *
- * This helper is the single canonical implementation of the
- * intercept-and-row-source loop; family runtimes should not reimplement it.
- */
-export function runQueryWithMiddleware<TExec extends ExecutionPlan, Row>(
-  exec: TExec,
-  middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
-  ctx: RuntimeMiddlewareContext,
-  runDriver: () => AsyncIterable<Row>,
-): AsyncIterableResult<Row> {
-  const iterator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const startedAt = Date.now();
-    let rowCount = 0;
-    let completed = false;
-    let source: 'driver' | 'middleware' = 'driver';
-    // Deferred so a winning interceptor can skip `runDriver()` entirely.
-    // For factories that lazily produce async generators this is a no-op,
-    // but factories that do eager work (e.g. acquiring a connection,
-    // sending a query) must not run on the intercepted hit path.
-    let rowSource: AsyncIterable<Row> | Iterable<Row> | undefined;
+/** How a family runtime starts one statement activity. */
+export interface StatementOptions<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+> {
+  readonly middleware: ReadonlyArray<RuntimeMiddleware<TExec, TMutator>>;
+  /** The plan the caller sent. */
+  readonly plan: QueryPlan;
+  readonly context: ActivityContextFields<TContext>;
+  /** The open activity the statement runs beneath, such as the transaction it was sent on. */
+  readonly parent: ActivityParent | undefined;
+}
 
-    try {
-      for (const mw of middleware) {
-        if (!mw.interceptQuery) continue;
-        // Mark the lifecycle as middleware-driven *before* awaiting the
-        // hook. If `interceptQuery` throws, the catch block reports the
-        // failure as `source: 'middleware'` — the failure originated in the
-        // intercept chain, not in the driver. If `interceptQuery` returns
-        // `undefined` (passthrough), we revert to `'driver'` and continue.
-        source = 'middleware';
-        const result = await mw.interceptQuery(exec, ctx);
-        if (result === undefined) {
-          source = 'driver';
-          continue;
-        }
-        ctx.log.debug?.({ event: 'middleware.interceptQuery', middleware: mw.name });
-        // The intercepted rows are typed as `Record<string, unknown>` at
-        // the SPI level; the consumer's `Row` type parameter is enforced by
-        // the caller (via the plan's phantom `_row`) the same way driver
-        // rows are. The narrow cast bridges the SPI shape to the
-        // caller-supplied Row.
-        rowSource = blindCast<
-          AsyncIterable<Row> | Iterable<Row>,
-          'intercepted rows are supplied as the runtime operation row type'
-        >(result.rows);
-        break;
-      }
-
-      if (source === 'driver') rowSource = runDriver();
-
-      // `rowSource` is always assigned by this point: either the intercepted
-      // rows (on a hit) or `runDriver()` (on the driver path).
-      for await (const row of rowSource as AsyncIterable<Row> | Iterable<Row>) {
-        if (source === 'driver') {
-          for (const mw of middleware) {
-            if (mw.onRow) {
-              await mw.onRow(row as Record<string, unknown>, exec, ctx);
-            }
-          }
-        }
-        rowCount++;
-        yield row;
-      }
-
-      completed = true;
-    } catch (error) {
-      await notifyQueryCompletion(
-        middleware,
-        exec,
-        ctx,
-        { rowCount, latencyMs: Date.now() - startedAt, completed, source },
-        true,
-      );
-      throw error;
-    }
-
-    await notifyQueryCompletion(
-      middleware,
-      exec,
-      ctx,
-      { rowCount, latencyMs: Date.now() - startedAt, completed, source },
-      false,
-    );
-  };
-
-  return new AsyncIterableResult(iterator());
+/** One running statement activity, handed to the family's statement body. */
+export interface StatementActivityRun<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+> {
+  readonly activity: StatementActivity;
+  readonly ctx: TContext;
+  /** Runs every `beforeEncode` hook in registration order, raced against `ctx.signal`. */
+  beforeEncode(draft: TExec, params?: TMutator): Promise<void>;
+  /** Runs `intercept.onQuery`, then the intercepted rows or `runDriver()` with `onRow` for each driver row. `runDriver` is called only when no handler supplied rows. */
+  runQuery<Row>(exec: TExec, runDriver: () => AsyncIterable<Row>): AsyncIterable<Row>;
+  /** Runs `intercept.onExecute`, then `runDriver()` when no handler supplied statistics. */
+  runExecute(
+    exec: TExec,
+    runDriver: () => Promise<RuntimeStatementStats>,
+  ): Promise<RuntimeStatementStats>;
 }
 
 /**
- * Drives a single execute operation through the middleware
- * `interceptExecute` + statistics + termination phases.
- *
- * Lifecycle, in order:
- *  1. For each middleware in registration order: `interceptExecute(exec, ctx)`.
- *     The first non-`undefined` result wins; subsequent middleware's
- *     `interceptExecute` does not fire. On a hit, the runtime emits a
- *     `middleware.interceptExecute` debug event naming the winning middleware,
- *     uses the returned `stats`, and proceeds with `source: 'middleware'`.
- *     On all-passthrough (every `interceptExecute` returns `undefined` or is
- *     omitted), `source: 'driver'` is used and `runDriver()` supplies the
- *     statistics.
- *  2. Execute operations return eager statistics. There is no row stream and
- *     `onRow` does not fire.
- *  3. On successful completion: for each middleware in registration order:
- *     `afterExecute(exec, { stats, latencyMs, completed: true, source }, ctx)`.
- *  4. On any error thrown during steps 1–2: for each middleware in
- *     registration order: `afterExecute(exec, { latencyMs, completed: false,
- *     source }, ctx)`. Errors thrown by `afterExecute` during the error path
- *     are swallowed so they do not mask the original error. The original
- *     error is then rethrown.
- *
- * `beforeExecute` is **not** fired here — see
- * {@link runBeforeExecuteChain} in `before-execute-chain.ts`. Family runtimes
- * call that helper between the AST → plan lowering step and the parameter
- * encode step so middleware that mutates ParamRef values can have its
- * mutations visible to encode. `runExecuteWithMiddleware` operates on the
- * fully-encoded plan; interceptors therefore observe a fully-mutated,
- * encoded plan.
- *
- * The `source` field on `AfterExecuteResult` lets observers (telemetry, lints,
- * budgets) distinguish driver-served from middleware-served executions
- * without needing their own out-of-band signal.
+ * Runs one `query()` statement as an activity. The activity starts on the first `next()`: `activityStarted`, then `body`'s rows, then `activityEnded` and, unless a transaction holds it, `activityFinalized`. Each fires exactly once, whether the body succeeds, throws (`failed`) or the caller stops reading (`stopped`). When the parent no longer accepts work, the first `next()` rejects and no hook runs.
  */
-export async function runExecuteWithMiddleware<TExec extends ExecutionPlan>(
-  exec: TExec,
-  middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
-  ctx: RuntimeMiddlewareContext,
-  runDriver: () => Promise<RuntimeStatementStats>,
-): Promise<RuntimeStatementStats> {
-  const startedAt = Date.now();
-  let source: 'driver' | 'middleware' = 'driver';
-  let stats: RuntimeStatementStats | undefined;
+export function streamStatement<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+  Row,
+>(
+  options: StatementOptions<TExec, TMutator, TContext>,
+  body: (statement: StatementActivityRun<TExec, TMutator, TContext>) => AsyncIterable<Row>,
+): AsyncIterable<Row> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<Row, void, undefined> {
+      let thrownByCaller: { readonly error: unknown } | undefined;
+      const generator = streamStatementRows(
+        options,
+        body,
+        (error) => thrownByCaller !== undefined && thrownByCaller.error === error,
+      );
+      return {
+        next: () => generator.next(),
+        return: () => generator.return(undefined),
+        throw: (error: unknown) => {
+          thrownByCaller = { error };
+          return generator.throw(error);
+        },
+      };
+    },
+  };
+}
 
+async function* streamStatementRows<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+  Row,
+>(
+  options: StatementOptions<TExec, TMutator, TContext>,
+  body: (statement: StatementActivityRun<TExec, TMutator, TContext>) => AsyncIterable<Row>,
+  isThrownByCaller: (error: unknown) => boolean,
+): AsyncGenerator<Row, void, unknown> {
+  const statement = new StatementActivityRunImpl(options, 'rows');
+  statement.attach();
+  let outcome: StatementEnded['outcome'] = 'stopped';
   try {
-    for (const mw of middleware) {
-      if (!mw.interceptExecute) continue;
-      source = 'middleware';
-      const result = await mw.interceptExecute(exec, ctx);
+    await statement.start();
+    yield* body(statement);
+    outcome = 'succeeded';
+  } catch (error) {
+    if (!isThrownByCaller(error)) outcome = 'failed';
+    throw error;
+  } finally {
+    await statement.end(outcome);
+  }
+}
+
+/**
+ * Runs one `execute()` statement as an activity: `activityStarted`, then `body`, then `activityEnded` and, unless a transaction holds it, `activityFinalized`, each exactly once. When the parent no longer accepts work, it rejects and no hook runs.
+ */
+export async function executeStatement<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+>(
+  options: StatementOptions<TExec, TMutator, TContext>,
+  body: (
+    statement: StatementActivityRun<TExec, TMutator, TContext>,
+  ) => Promise<RuntimeStatementStats>,
+): Promise<RuntimeStatementStats> {
+  const statement = new StatementActivityRunImpl(options, 'stats');
+  statement.attach();
+  let outcome: StatementEnded['outcome'] = 'failed';
+  try {
+    await statement.start();
+    const stats = await body(statement);
+    outcome = 'succeeded';
+    return stats;
+  } finally {
+    await statement.end(outcome);
+  }
+}
+
+class StatementActivityRunImpl<
+  TExec extends ExecutionPlan,
+  TMutator extends ParamRefMutator,
+  TContext extends ActivityContext,
+> implements StatementActivityRun<TExec, TMutator, TContext>
+{
+  readonly activity: StatementActivity;
+  readonly ctx: TContext;
+  readonly #middleware: ReadonlyArray<RuntimeMiddleware<TExec, TMutator>>;
+  readonly #parent: ActivityParent | undefined;
+  readonly #record: ActivityRecord<TContext>;
+  #slot: ActivityChildSlot | undefined;
+  #runStartedAt: number | undefined;
+  #source: 'driver' | 'middleware' = 'driver';
+  #rowCount = 0;
+  #stats: RuntimeStatementStats | undefined;
+
+  constructor(options: StatementOptions<TExec, TMutator, TContext>, returns: 'rows' | 'stats') {
+    const { plan } = options;
+    let annotations: StatementActivity['annotations'] | undefined;
+    this.activity = {
+      id: crypto.randomUUID(),
+      kind: 'statement',
+      returns,
+      plan,
+      get annotations() {
+        annotations ??= brandedAnnotations(plan.meta.annotations);
+        return annotations;
+      },
+    };
+    this.#middleware = options.middleware;
+    this.#parent = options.parent;
+    this.#record = createActivityRecord<TContext>(
+      options.middleware,
+      this.activity,
+      options.context,
+      options.parent,
+    );
+    this.ctx = this.#record.ctx;
+  }
+
+  /** Adopts the statement into its parent; throws when the parent no longer accepts work. */
+  attach(): void {
+    this.#slot = this.#parent?.adopt(this.#record);
+  }
+
+  start(): Promise<void> {
+    return this.#record.started();
+  }
+
+  end(outcome: StatementEnded['outcome']): Promise<void> {
+    if (outcome === 'failed') this.#slot?.statementFailed();
+    return endActivity(
+      this.#record,
+      this.#endedResult(outcome),
+      { outcome: outcome === 'succeeded' ? 'committed' : 'unknown' },
+      this.#slot,
+      this.#record.finalize,
+    );
+  }
+
+  async beforeEncode(draft: TExec, params?: TMutator): Promise<void> {
+    for (const mw of this.#middleware) {
+      if (!mw.beforeEncode) continue;
+      checkAborted(this.ctx, 'beforeEncode');
+      const work = mw.beforeEncode(draft, this.ctx, params);
+      if (work !== undefined) {
+        await raceAgainstAbort(Promise.resolve(work), this.ctx.signal, 'beforeEncode');
+      }
+    }
+  }
+
+  async *runQuery<Row>(exec: TExec, runDriver: () => AsyncIterable<Row>): AsyncGenerator<Row> {
+    this.#runStartedAt = Date.now();
+    let rows: AsyncIterable<Row> | Iterable<Row> | undefined;
+    for (const mw of this.#middleware) {
+      const intercept = mw.intercept;
+      if (intercept?.onQuery === undefined) continue;
+      this.#source = 'middleware';
+      const result = await intercept.onQuery(exec, this.ctx);
       if (result === undefined) {
-        source = 'driver';
+        this.#source = 'driver';
         continue;
       }
-      ctx.log.debug?.({ event: 'middleware.interceptExecute', middleware: mw.name });
-      stats = result.stats;
+      this.ctx.log.debug?.({ event: 'middleware.intercept.onQuery', middleware: mw.name });
+      rows = blindCast<
+        AsyncIterable<Row> | Iterable<Row>,
+        'the caller types rows through the plan; intercepted rows are the same opaque records'
+      >(result.rows);
       break;
     }
 
-    if (stats === undefined) {
-      stats = await runDriver();
-    }
-  } catch (error) {
-    const latencyMs = Date.now() - startedAt;
-    for (const mw of middleware) {
-      if (!mw.afterExecute) continue;
-      try {
-        await mw.afterExecute(exec, { latencyMs, completed: false, source }, ctx);
-      } catch {
-        // Preserve the operation error when completion observers also fail.
+    if (rows === undefined) {
+      for await (const row of runDriver()) {
+        for (const mw of this.#middleware) {
+          if (mw.onRow) {
+            await mw.onRow(
+              blindCast<Record<string, unknown>, 'driver rows are opaque records'>(row),
+              exec,
+              this.ctx,
+            );
+          }
+        }
+        this.#rowCount++;
+        yield row;
       }
+      return;
     }
-    throw error;
+
+    for await (const row of rows) {
+      this.#rowCount++;
+      yield row;
+    }
   }
 
-  const latencyMs = Date.now() - startedAt;
-  for (const mw of middleware) {
-    if (mw.afterExecute) {
-      await mw.afterExecute(exec, { stats, latencyMs, completed: true, source }, ctx);
-    }
-  }
-  return stats;
-}
-
-async function notifyQueryCompletion<TExec extends ExecutionPlan>(
-  middleware: ReadonlyArray<RuntimeMiddleware<TExec>>,
-  exec: TExec,
-  ctx: RuntimeMiddlewareContext,
-  result: AfterQueryResult,
-  swallowErrors: boolean,
-): Promise<void> {
-  for (const mw of middleware) {
-    if (!mw.afterQuery) continue;
-    if (swallowErrors) {
-      try {
-        await mw.afterQuery(exec, result, ctx);
-      } catch {
-        // Preserve the operation error when completion observers also fail.
+  async runExecute(
+    exec: TExec,
+    runDriver: () => Promise<RuntimeStatementStats>,
+  ): Promise<RuntimeStatementStats> {
+    this.#runStartedAt = Date.now();
+    for (const mw of this.#middleware) {
+      const intercept = mw.intercept;
+      if (intercept?.onExecute === undefined) continue;
+      this.#source = 'middleware';
+      const result = await intercept.onExecute(exec, this.ctx);
+      if (result === undefined) {
+        this.#source = 'driver';
+        continue;
       }
-    } else {
-      await mw.afterQuery(exec, result, ctx);
+      this.ctx.log.debug?.({ event: 'middleware.intercept.onExecute', middleware: mw.name });
+      this.#stats = result.stats;
+      return result.stats;
     }
+    this.#stats = await runDriver();
+    return this.#stats;
+  }
+
+  #endedResult(outcome: StatementEnded['outcome']): StatementEnded {
+    const latencyMs = this.#runStartedAt === undefined ? 0 : Date.now() - this.#runStartedAt;
+    const base = { kind: 'statement', outcome, latencyMs, source: this.#source } as const;
+    if (this.activity.returns === 'rows') {
+      return { ...base, returns: 'rows', rowCount: this.#rowCount };
+    }
+    return outcome === 'succeeded' && this.#stats !== undefined
+      ? { ...base, returns: 'stats', stats: this.#stats }
+      : { ...base, returns: 'stats' };
   }
 }

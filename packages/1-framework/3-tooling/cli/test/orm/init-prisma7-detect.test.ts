@@ -121,6 +121,7 @@ describe('detectPrisma7Project', () => {
           kind: 'datasource',
           path: 'db/schema.prisma',
           provider: 'mongodb',
+          urlEnv: 'DATABASE_URL',
         });
         expect(detection.schemaPathSource).toBe('config');
       },
@@ -191,6 +192,7 @@ describe('detectPrisma7Project', () => {
         kind: 'datasource',
         path: 'prisma/schema.prisma',
         provider: undefined,
+        urlEnv: 'DATABASE_URL',
       });
     });
 

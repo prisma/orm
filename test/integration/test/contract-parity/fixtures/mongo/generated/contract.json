@@ -1,0 +1,859 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "posts": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "users": {
+      "model": "User",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "enum": {
+          "Role": {
+            "codecId": "mongo/string@1",
+            "members": [
+              {
+                "name": "Reader",
+                "value": "reader"
+              },
+              {
+                "name": "Editor",
+                "value": "editor"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Article": {
+            "base": {
+              "model": "Post",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "body": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts",
+              "fields": {
+                "body": {
+                  "field": "body"
+                }
+              }
+            }
+          },
+          "Link": {
+            "base": {
+              "model": "Post",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "url": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts",
+              "fields": {
+                "url": {
+                  "field": "url"
+                }
+              }
+            }
+          },
+          "Post": {
+            "discriminator": {
+              "field": "kind"
+            },
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "_id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "collection": "posts",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "authorId": {
+                  "field": "authorId"
+                },
+                "kind": {
+                  "field": "kind"
+                },
+                "title": {
+                  "field": "title"
+                }
+              }
+            },
+            "variants": {
+              "article": {
+                "model": "Article",
+                "namespace": "__unbound__"
+              },
+              "link": {
+                "model": "Link",
+                "namespace": "__unbound__"
+              }
+            }
+          },
+          "User": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "active": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "age": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "avatar": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "balance": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "embedding": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/vector@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 3
+                  }
+                }
+              },
+              "home": {
+                "nullable": true,
+                "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
+                  "kind": "valueObject",
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "joinedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "nickname": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "nicknames": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "pastHomes": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
+                  "kind": "valueObject",
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "pastRoles": {
+                "many": {
+                  "elementNullable": true
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Role",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              },
+              "raw": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/bson@1",
+                  "kind": "scalar"
+                }
+              },
+              "rawEmbedding": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/vector@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Role",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              },
+              "score": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "scores": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "settings": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "visits": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "users",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "active": {
+                  "field": "active"
+                },
+                "age": {
+                  "field": "age"
+                },
+                "avatar": {
+                  "field": "avatar"
+                },
+                "balance": {
+                  "field": "balance"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "embedding": {
+                  "field": "embedding"
+                },
+                "home": {
+                  "field": "home"
+                },
+                "joinedAt": {
+                  "field": "joinedAt"
+                },
+                "nickname": {
+                  "field": "nickname"
+                },
+                "nicknames": {
+                  "field": "nicknames"
+                },
+                "pastHomes": {
+                  "field": "pastHomes"
+                },
+                "pastRoles": {
+                  "field": "pastRoles"
+                },
+                "raw": {
+                  "field": "raw"
+                },
+                "rawEmbedding": {
+                  "field": "rawEmbedding"
+                },
+                "role": {
+                  "field": "role"
+                },
+                "score": {
+                  "field": "score"
+                },
+                "scores": {
+                  "field": "scores"
+                },
+                "settings": {
+                  "field": "settings"
+                },
+                "visits": {
+                  "field": "visits"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "posts": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "authorId": {
+                          "bsonType": "objectId"
+                        },
+                        "body": {
+                          "bsonType": "string"
+                        },
+                        "kind": {
+                          "enum": [
+                            "article"
+                          ]
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": [
+                        "body",
+                        "kind"
+                      ]
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "authorId": {
+                          "bsonType": "objectId"
+                        },
+                        "kind": {
+                          "enum": [
+                            "link"
+                          ]
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "url": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "url"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "authorId": {
+                      "bsonType": "objectId"
+                    },
+                    "kind": {
+                      "bsonType": "string"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "authorId",
+                    "kind",
+                    "title"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "users": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "email"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "email_1",
+                  "unique": true
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "active": {
+                      "bsonType": "bool"
+                    },
+                    "age": {
+                      "bsonType": "int"
+                    },
+                    "avatar": {
+                      "bsonType": [
+                        "null",
+                        "binData"
+                      ]
+                    },
+                    "balance": {
+                      "bsonType": "decimal"
+                    },
+                    "email": {
+                      "bsonType": "string"
+                    },
+                    "embedding": {
+                      "bsonType": "array"
+                    },
+                    "home": {
+                      "oneOf": [
+                        {
+                          "bsonType": "null"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "bsonType": "object",
+                          "properties": {
+                            "kind": {
+                              "bsonType": [
+                                "null",
+                                "string"
+                              ],
+                              "enum": [
+                                "reader",
+                                "editor",
+                                null
+                              ]
+                            },
+                            "location": {
+                              "oneOf": [
+                                {
+                                  "bsonType": "null"
+                                },
+                                {
+                                  "additionalProperties": false,
+                                  "bsonType": "object",
+                                  "properties": {
+                                    "lat": {
+                                      "bsonType": "double"
+                                    },
+                                    "lng": {
+                                      "bsonType": "double"
+                                    }
+                                  },
+                                  "required": [
+                                    "lat",
+                                    "lng"
+                                  ]
+                                }
+                              ]
+                            },
+                            "street": {
+                              "bsonType": "string"
+                            },
+                            "tags": {
+                              "bsonType": "array",
+                              "items": {
+                                "bsonType": "string"
+                              }
+                            },
+                            "zip": {
+                              "bsonType": [
+                                "null",
+                                "string"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "street",
+                            "tags"
+                          ]
+                        }
+                      ]
+                    },
+                    "joinedAt": {
+                      "bsonType": "date"
+                    },
+                    "nickname": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "nicknames": {
+                      "bsonType": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "pastHomes": {
+                      "bsonType": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "kind": {
+                            "bsonType": [
+                              "null",
+                              "string"
+                            ],
+                            "enum": [
+                              "reader",
+                              "editor",
+                              null
+                            ]
+                          },
+                          "location": {
+                            "oneOf": [
+                              {
+                                "bsonType": "null"
+                              },
+                              {
+                                "additionalProperties": false,
+                                "bsonType": "object",
+                                "properties": {
+                                  "lat": {
+                                    "bsonType": "double"
+                                  },
+                                  "lng": {
+                                    "bsonType": "double"
+                                  }
+                                },
+                                "required": [
+                                  "lat",
+                                  "lng"
+                                ]
+                              }
+                            ]
+                          },
+                          "street": {
+                            "bsonType": "string"
+                          },
+                          "tags": {
+                            "bsonType": "array",
+                            "items": {
+                              "bsonType": "string"
+                            }
+                          },
+                          "zip": {
+                            "bsonType": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "street",
+                          "tags"
+                        ]
+                      }
+                    },
+                    "pastRoles": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": [
+                          "null",
+                          "string"
+                        ],
+                        "enum": [
+                          "reader",
+                          "editor",
+                          null
+                        ]
+                      }
+                    },
+                    "raw": {},
+                    "rawEmbedding": {
+                      "bsonType": "array"
+                    },
+                    "role": {
+                      "bsonType": "string",
+                      "enum": [
+                        "reader",
+                        "editor"
+                      ]
+                    },
+                    "score": {
+                      "bsonType": "double"
+                    },
+                    "scores": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "double"
+                      }
+                    },
+                    "settings": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "visits": {
+                      "bsonType": "long"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "active",
+                    "age",
+                    "balance",
+                    "email",
+                    "embedding",
+                    "joinedAt",
+                    "pastHomes",
+                    "pastRoles",
+                    "rawEmbedding",
+                    "role",
+                    "score",
+                    "scores",
+                    "settings",
+                    "visits"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "kind": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "location": {
+                  "nullable": true,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Point",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "tags": {
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Point": {
+              "fields": {
+                "lat": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                },
+                "lng": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/double@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "reader",
+                "editor"
+              ]
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "d21d62bad0c6f37a80ff22bff4936a8336d4a20cb2361cec4342553b0fbd8af0"
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

@@ -7,11 +7,12 @@
  * `.json` file is left untouched so historical storage hashes stay stable —
  * only the `.d.ts` is rewritten.
  *
- * Purely path-generic: it writes `<arg with .json replaced by .d.ts>`
- * beside each argument, whether the argument is a migrations-root-wide store
- * entry (`migrations/snapshots/<hex>/contract.json`) or a test fixture. The
- * script does not resolve the store itself and overwrites the `.d.ts`
- * unconditionally, whereas the store's writer is write-if-absent for the pair.
+ * It writes `<arg with .json replaced by .d.ts>` beside each argument,
+ * whether the argument is a migrations-root-wide store entry
+ * (`migrations/snapshots/<hex>/contract.json`) or a test fixture. A store
+ * entry gets the declarations in the store's single-line form. The script
+ * overwrites the `.d.ts` unconditionally, whereas the store's writer is
+ * write-if-absent for the pair.
  *
  * Needs a prior `pnpm build`: it imports the packages' `dist` output.
  *
@@ -39,13 +40,16 @@ const { mongoFamilyDescriptor } = await importFromRepo(
   'packages/2-mongo-family/9-family/dist/control.mjs',
 );
 const { mongoTargetDescriptor } = await importFromRepo(
-  'packages/3-mongo-target/1-mongo-target/dist/control.mjs',
+  'packages/3-targets/mongo/1-target/dist/control.mjs',
 );
 const { default: mongoAdapter } = await importFromRepo(
-  'packages/3-mongo-target/2-mongo-adapter/dist/control.mjs',
+  'packages/3-targets/mongo/2-adapter/dist/control.mjs',
 );
 const { default: mongoDriver } = await importFromRepo(
-  'packages/3-mongo-target/3-mongo-driver/dist/control.mjs',
+  'packages/3-targets/mongo/3-driver/dist/control.mjs',
+);
+const { contractSnapshotFiles } = await importFromRepo(
+  'packages/1-framework/3-tooling/migration/dist/exports/contract-snapshot-store.mjs',
 );
 
 const args = process.argv.slice(2);
@@ -82,6 +86,14 @@ for (const jsonPath of args) {
   );
 
   const dtsPath = jsonPath.replace(/\.json$/, '.d.ts');
-  writeFileSync(dtsPath, contractDts);
+  const isStoreEntry = /\/migrations\/snapshots\/[0-9a-f]{64}\/contract\.json$/.test(
+    resolve(jsonPath),
+  );
+  writeFileSync(
+    dtsPath,
+    isStoreEntry
+      ? contractSnapshotFiles({ contractJson: json, contractDts }).contractDts
+      : contractDts,
+  );
   console.error(`regenerated ${dtsPath}`);
 }

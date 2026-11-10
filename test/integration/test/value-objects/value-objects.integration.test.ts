@@ -3,20 +3,35 @@ import {
   type ContractField,
   type ContractValueObject,
   domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
   UNBOUND_DOMAIN_NAMESPACE_ID,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
-import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import {
+  describeUnsupportedMongoAttribute,
+  interpretPslDocumentToMongoContract,
+  mongoAttributeSpecs,
+} from '@internal/mongo-contract-psl';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import {
+  describeUnsupportedSqlAttribute,
+  sqlAttributeSpecs,
+} from '@internal/sql-contract-psl/attribute-specs';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { describeWithMongoDB } from '../mongo/setup';
+import { describeWithMongoDB, executionContextFor } from '../mongo/setup';
 
 const mongoPsl = `
 model User {
@@ -60,12 +75,12 @@ const postgresTarget = {
 };
 
 const postgresScalarTypeDescriptors = new Map([
-  ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-  ['Boolean', { codecId: 'pg/bool@1', nativeType: 'bool' }],
-  ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
-  ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
-]) as ReadonlyMap<string, { codecId: string; nativeType: string }>;
+  ['String', { codecId: 'pg/text@1' }],
+  ['Int', { codecId: 'pg/int4@1' }],
+  ['Boolean', { codecId: 'pg/bool@1' }],
+  ['Json', { codecId: 'pg/json@1' }],
+  ['Jsonb', { codecId: 'pg/jsonb@1' }],
+]) as ReadonlyMap<string, { codecId: string }>;
 
 function interpretMongoPsl(schema: string) {
   const mongoScalarTypeDescriptors = new Map([
@@ -76,57 +91,101 @@ function interpretMongoPsl(schema: string) {
     ['ObjectId', 'mongo/objectId@1'],
     ['Double', 'mongo/double@1'],
   ]);
-  const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: {},
-  });
-  return interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
+  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+    Object.fromEntries(
+      [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
+        name,
+        { kind: 'typeConstructor' as const, output: { codecId } },
+      ]),
+    );
+  const bound = bindPslSchema(schema, {
+    sourceId: 'mongo-value-objects.prisma',
+    context: {
+      composedExtensions: [],
+      defaultNamespaceId: '__unbound__',
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        type: scalarTypeConstructors,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: {},
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: mongoDescriptorById },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: {
+        entries: {},
+        lookup: createDataTypeLookup(mongoDataTypes),
+        dataTypeOfCodec: () => undefined,
+      },
+      resolvedInputs: [],
+      capabilities: {},
     },
   });
+  return withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
-const postgresScalarAuthoringTypes = Object.fromEntries(
-  [...postgresScalarTypeDescriptors].map(([name, { codecId, nativeType }]) => [
+const scalarTypeNamespace = Object.fromEntries(
+  [...postgresScalarTypeDescriptors].map(([name, { codecId }]) => [
     name,
     {
       kind: 'typeConstructor' as const,
-      output: { codecId, nativeType },
+      output: { codecId },
     },
   ]),
 );
 
 function interpretSqlPsl(schema: string) {
-  const { document, sources } = parse(schema, 'sql-value-objects.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: {},
-  });
-  return interpretPslDocumentToSqlContract({
-    documents: [document],
-    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
-    symbolTable,
-    sources,
-    target: postgresTarget,
-    scalarColumnDescriptors: postgresScalarTypeDescriptors,
-    // Mirrors the real postgres adapter declaration.
-    authoringContributions: {
-      type: postgresScalarAuthoringTypes,
-      valueObjectStorageType: 'Jsonb',
+  const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+  const bound = bindPslSchema(schema, {
+    sourceId: 'sql-value-objects.prisma',
+    context: {
+      composedExtensions: [],
+      defaultNamespaceId: 'public',
+      composedExtensionContracts: new Map(),
+      // Mirrors the real postgres adapter declaration.
+      authoringContributions: {
+        type: scalarTypeNamespace,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: sqlAttributeSpecs,
+        dataTypes: {},
+        valueObjectStorageType: 'Jsonb',
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
+      codecLookup: createPostgresBuiltinCodecLookup(),
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: { entries: {}, lookup: postgresDataTypeLookup, dataTypeOfCodec: () => undefined },
+      resolvedInputs: [],
+      capabilities: { sql: { scalarList: true } },
     },
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    capabilities: { sql: { scalarList: true } },
   });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresTarget,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 function modelsAtDefaultNamespace(contract: Contract) {
@@ -134,7 +193,22 @@ function modelsAtDefaultNamespace(contract: Contract) {
 }
 
 function valueObjectsAtDefaultNamespace(contract: Contract) {
-  return domainValueObjectsAtDefaultNamespace(contract.domain);
+  return Object.fromEntries(
+    valueObjectsWithCoordinates(contract.storage).map(({ coordinate, valueObject }) => [
+      coordinate.entityName,
+      valueObject,
+    ]),
+  );
+}
+
+function valueObjectRef(namespaceId: string, entityName: string) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  };
 }
 
 describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
@@ -145,15 +219,17 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const contract = result.value;
     const unboundDomain = contract.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]!;
-    expect(unboundDomain.valueObjects).toBeDefined();
-    expect(unboundDomain.valueObjects!['Address']).toBeDefined();
+    expect(valueObjectsAtDefaultNamespace(contract)['Address']).toBeDefined();
 
     const userFields = unboundDomain.models['User']!.fields as Record<string, ContractField>;
     expect(userFields['homeAddress']!.type.kind).toBe('valueObject');
 
-    const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
+    const validated = {
+      contract: new MongoContractSerializer().deserializeContract(contract),
+    };
 
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -184,7 +260,8 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -223,7 +300,8 @@ type Address {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<
@@ -243,10 +321,8 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const contract = result.value;
     const publicDomain = contract.domain.namespaces['public']!;
-    expect(publicDomain.valueObjects).toBeDefined();
-    expect(publicDomain.valueObjects!['Address']).toBeDefined();
-
-    const addressVo = publicDomain.valueObjects!['Address'] as ContractValueObject;
+    const addressVo = valueObjectsAtDefaultNamespace(contract)['Address'] as ContractValueObject;
+    expect(addressVo).toBeDefined();
     const voFields = addressVo.fields;
     expect(voFields['street']).toBeDefined();
     expect(voFields['city']).toBeDefined();
@@ -254,19 +330,19 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const userFields = publicDomain.models['User']!.fields as Record<string, ContractField>;
     const homeAddressField = userFields['homeAddress']!;
-    expect(homeAddressField.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(homeAddressField.type).toEqual(valueObjectRef('public', 'Address'));
     expect(homeAddressField.nullable).toBe(false);
 
     const storage = contract.storage as unknown as {
       namespaces: Record<
         string,
-        { entries: { table: Record<string, { columns: Record<string, { nativeType: string }> }> } }
+        { entries: { table: Record<string, { columns: Record<string, { dataType: string }> }> } }
       >;
     };
     const userTable = storage.namespaces['public']!.entries.table['User'];
     expect(userTable).toBeDefined();
     expect(userTable!.columns['homeAddress']).toBeDefined();
-    expect(userTable!.columns['homeAddress']!.nativeType).toBe('jsonb');
+    expect(userTable!.columns['homeAddress']!.dataType).toBe('pg/jsonb');
   });
 });
 
@@ -324,8 +400,8 @@ type Metadata {
       ContractField
     >;
 
-    expect(mongoItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
-    expect(sqlItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
+    expect(mongoItemFields['meta']!.type).toEqual(valueObjectRef('__unbound__', 'Metadata'));
+    expect(sqlItemFields['meta']!.type).toEqual(valueObjectRef('public', 'Metadata'));
   });
 
   it('nested value objects produce consistent definitions across families', () => {
@@ -375,7 +451,7 @@ type Address {
     const sqlShipping = valueObjectsAtDefaultNamespace(sqlResult.value)!['ShippingInfo']!
       .fields as Record<string, ContractField>;
 
-    expect(mongoShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
-    expect(sqlShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(mongoShipping['address']!.type).toEqual(valueObjectRef('__unbound__', 'Address'));
+    expect(sqlShipping['address']!.type).toEqual(valueObjectRef('public', 'Address'));
   });
 });

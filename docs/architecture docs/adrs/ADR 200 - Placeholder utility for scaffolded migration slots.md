@@ -1,5 +1,7 @@
 # ADR 200 — `placeholder(slot)` for unfilled scaffolded migration slots
 
+> **Update — 2026-10:** a placeholder is no longer limited to data transforms. `--convert` puts one in the conversion slot of a type change. See § Where slots are placed and rendered.
+
 ## At a glance
 
 When `migration plan` detects a data transform, the scaffolder writes a `migration.ts` file. Most of the file is auto-derived, but two slots — `check.source` and `run` — require hand-authored queries that only the migration author knows. The scaffolder emits them like this:
@@ -36,15 +38,15 @@ export function placeholder(slot: string): never {
 }
 ```
 
-The slot string follows the convention `{migrationName}:{slot}` — for example, `backfill-product-status:check.source`. This makes the error message self-locating: the author knows both which migration and which field to edit.
+The slot string names what the author must write. A slot the planner places for a statement is named by the field as a statement names it, then the slot: `User.age:convert` for a `--convert` conversion, and `User.name:check` and `User.name:run` for a `--backfill` step. The part after the colon names the statement and what the author writes, not a database's syntax, so a conversion slot is `:convert` both in a Postgres `using` and in a SQLite copy expression. A slot in a hand-written or older scaffold follows `{migrationName}:{slot}`, for example `backfill-product-status:check.source`. Either way the error message is self-locating: the author knows which field or migration, and which slot, to edit.
 
 ### Why `never`
 
 The return type `never` is assignable to every type in TypeScript. A scaffolded `() => placeholder('...')` satisfies any `() => T` signature — `() => MongoQueryPlan`, `() => AggregationPipeline`, whatever the slot expects — without the slot's type needing to include a sentinel union arm. No `| TodoMarker` leaking into public API signatures. The scaffold compiles cleanly, the user's editor is happy, and `tsc` passes.
 
-### Where it's produced
+### Where slots are placed and rendered
 
-Only by the scaffolder — each target's `renderTypeScript` implementation. The planner produces a target-internal plan; it does not render TypeScript and has no concept of placeholders. The only operation kind with user-authored holes is `dataTransform`; every other kind (createCollection, createIndex, etc.) is fully specified by the differ.
+The planner decides where a slot goes; the scaffolder (each target's `renderTypeScript` implementation) renders it as a `placeholder(...)` call. Because `placeholder()` is typed `never`, it can stand in any slot of any operation the scaffolder renders. A `dataTransform` carries its `check` and `run` slots; when the user passes `--convert`, the Postgres `alterColumnType` call carries its `using` conversion and the SQLite `recreateTable` call the copied column's expression. Filling a slot is not trusted blindly: Postgres refuses a converted value its new type cannot hold, and the SQLite rebuild checks after its copy that every value took the new type, so a wrong or deleted conversion fails the apply naming the field. Every other planned operation is fully specified by the differ.
 
 ### Error integration
 

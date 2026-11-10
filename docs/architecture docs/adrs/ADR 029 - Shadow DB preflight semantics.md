@@ -102,7 +102,7 @@ Both modes share the same job envelope, diagnostics schema, and exit codes, enab
 - Resolve path by reconstructing graph from migration files per ADR 028 and optional graph.index.json per ADR 039
 - If fromHash cannot be derived, emit CONTRACT.MARKER_MISSING and refuse shadow mode unless policy allows reset to zero
 - Apply migrations with advisory locks, respecting per-op transactional boundaries and compensation plans per ADR 037
-- Idempotency classification per ADR 038 determines whether a repeated migration is safe no-op or a conflict
+- The runner decides whether a repeated operation is already applied from its postchecks, per [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md)
 
 ### Canonical JSON consumption
 - Preflight jobs must consume canonical JSON; if TS is provided, a trusted emitter step produces JSON inside the job sandbox

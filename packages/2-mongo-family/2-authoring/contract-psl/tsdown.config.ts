@@ -22,6 +22,7 @@ export default defineConfig({
   entry: {
     index: 'src/exports/index.ts',
     'exports/provider': 'src/exports/provider.ts',
+    'exports/test': 'src/exports/test.ts',
   },
   exports: {
     enabled: 'local-only',

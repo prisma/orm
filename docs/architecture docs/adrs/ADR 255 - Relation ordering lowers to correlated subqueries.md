@@ -26,7 +26,7 @@ SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT COUNT(*) AS "
 
 SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."tags" INNER JOIN "public"."user_tags" ON "user_tags"."tag_id" = "tags"."id" WHERE "user_tags"."user_id" = "users"."id") ASC
 
-SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "users"."invited_by_id") DESC NULLS LAST
+SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "users_2"."name" AS "name" FROM "public"."users" AS "users_2" WHERE "users_2"."id" = "users"."invited_by_id") DESC NULLS LAST
 ```
 
 ## Decision
@@ -50,7 +50,7 @@ An included relation's `count()` (`include('posts', (p) => p.count())`) is the n
 - The main query gains no join. Its rows never multiply, so `limit`, `offset` and includes behave exactly as for a column order.
 - Where a plan wraps the base table in a derived table that exposes only a projection (the `distinct()` wrap under `aggregate()` and `groupBy().aggregate()`, and the include dedup wraps), each expression order is projected inside the wrap as a hidden `__order_N` column and the outer order reads that column.
 - The subquery runs per outer row inside the database. The client issues one statement.
-- Inside an include, a relation order goes through the same table remapper as a child filter: outer references move to the child alias, and the inner table keeps its own name or alias.
+- Inside an include, a relation order is built against the child's own table alias, as a child filter is, and the related table inside the subquery gets its own alias from the same scope.
 - Keyset pagination over a relation order, a count, an extension-operation result such as a vector distance, or a `nulls` order is not supported; `cursor()` throws for each. Supporting it needs cursor values for computed expressions and null-aware comparisons.
 
 ## Alternatives considered

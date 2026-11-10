@@ -42,7 +42,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ id: 
           </div>
           <AddToCartButton
             product={{
-              _id: product._id,
+              id: product.id,
               name: product.name,
               brand: product.brand,
               price: {

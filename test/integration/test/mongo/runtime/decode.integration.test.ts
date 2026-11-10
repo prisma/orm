@@ -1,5 +1,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
+import mongoStatic from '@internal/mongo/static';
 import { mongoCodec } from '@internal/mongo-codec';
 import type { MongoResultShape } from '@internal/mongo-query-ast/execution';
 import {
@@ -8,15 +10,17 @@ import {
   MongoMatchStage,
   RawAggregateCommand,
 } from '@internal/mongo-query-ast/execution';
-import { mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
+import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   decodeFixtureContractJson,
   type TDecodeFixtureContract,
 } from './fixtures/decode-fixture-contract';
 import { withMongod } from './setup';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   it('typed read returns decoded _id, dates, and vector array', async () => {
@@ -34,8 +38,8 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       });
 
       // User-facing path: build the plan through the query-builder so the Row type is contract-derived (no explicit annotation on execute).
-      const plan = mongoQuery<TDecodeFixtureContract>({ contractJson: contract })
-        .from('users')
+      const plan = mongoStatic({ contract })
+        .query.from('users')
         .match((f) =>
           f['_id']!.eq(MongoParamRef.of(insert.insertedId, { codecId: 'mongo/objectId@1' })),
         )
@@ -59,10 +63,12 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       // query-builder.
       const failing = mongoCodec({
         typeId: 'test/throws-on-decode@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('decode explosion');
         },
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       ctx.codecs.register(failing);
 
@@ -103,7 +109,10 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
 
   it('names the collection and field when a Decimal128 field holds a double', async () => {
     await withMongod(async (ctx) => {
-      await ctx.client.db(ctx.dbName).collection('posts').insertOne({ price: 19.99 });
+      await ctx.client
+        .db(ctx.dbName)
+        .collection('posts')
+        .insertOne({ _id: new ObjectId('65f0000000000000000000b2'), price: 19.99 });
       const shape: MongoResultShape = {
         kind: 'document',
         fields: {
@@ -128,12 +137,13 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       expect({ code: err.code, message: err.message, details: err.details }).toEqual({
         code: 'RUNTIME.DECODE_FAILED',
         message:
-          "Failed to decode field price in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
+          "Failed to decode field price of the document with _id 65f0000000000000000000b2 in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
         details: {
           codecId: 'mongo/decimal128@1',
           received: 'number',
           collection: 'posts',
           path: 'price',
+          documentId: '65f0000000000000000000b2',
           codec: 'mongo/decimal128@1',
           wirePreview: '19.99',
         },

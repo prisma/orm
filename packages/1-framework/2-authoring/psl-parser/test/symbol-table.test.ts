@@ -1,41 +1,50 @@
-import type {
-  AuthoringPslBlockDescriptor,
-  AuthoringPslBlockDescriptorNamespace,
-} from '@internal/framework-components/authoring';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
+import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { str } from '../src/attribute-spec/combinators/str';
-import { validateExtensionBlockFromSymbol } from '../src/extension-block';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
+import { mapBlock, structBlock } from '../src/block-spec/constructors';
+import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
+import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
+  KeyValuePairAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
 } from '../src/syntax/ast/declarations';
-
-const emptyCodecLookup: CodecLookup = {
-  get: (): Codec | undefined => undefined,
-  targetTypesFor: () => undefined,
-  renderOutputTypeFor: () => undefined,
-};
+import { printSyntax } from '../src/syntax/ast-helpers';
+import { ownEntry, supportBinder } from './support';
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
   const { document, sources } = parse(source, 'test.psl');
-  return buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
+  const result = buildSymbolTable({ documents: [document], sources, defaultNamespaceId: 'public' });
+  const blocks = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors,
+    binder: supportBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      pslBlockDescriptors,
+    }),
+    dataTypes: EMPTY_DATA_TYPES,
+  });
+  return { ...result, blocks };
 }
 
-describe('buildSymbolTable() — AC1 fault tolerance', () => {
+describe('buildSymbolTable() — fault tolerance', () => {
   it('returns the symbol table under its explicit name without a table alias', () => {
     const result = build('model User { id Int }');
 
-    expect(Object.keys(result).sort()).toEqual(['diagnostics', 'symbolTable']);
-    expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['User']);
+    expect(Object.keys(result).sort()).toEqual(['blocks', 'diagnostics', 'symbolTable']);
+    expect(Object.keys(result.symbolTable.defaultNamespace.models)).toEqual(['User']);
   });
 
   it('never throws on malformed input and returns its own duplicate diagnostics', () => {
@@ -57,8 +66,8 @@ describe('buildSymbolTable() — AC1 fault tolerance', () => {
 
     expect(result.diagnostics.every((d) => d.code === 'PSL_DUPLICATE_DECLARATION')).toBe(true);
     expect(result.diagnostics).toHaveLength(1);
-    expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['User', 'Dangling']);
-    expect(result.symbolTable.topLevel.namedTypes['Email']?.kind).toBe('namedType');
+    expect(Object.keys(result.symbolTable.defaultNamespace.models)).toEqual(['User', 'Dangling']);
+    expect(result.symbolTable.namedTypes['Email']?.kind).toBe('namedType');
   });
 });
 
@@ -81,19 +90,21 @@ describe('buildSymbolTable() — AC2 top-level kinds', () => {
     ].join('\n');
 
     const result = build(source);
-    const { topLevel } = result.symbolTable;
+    const { defaultNamespace, namedTypes } = result.symbolTable;
 
-    expect(topLevel.models['User']?.kind).toBe('model');
-    expect(topLevel.models['User']?.node).toBeInstanceOf(ModelDeclarationAst);
-    expect(topLevel.compositeTypes['Address']?.kind).toBe('compositeType');
-    expect(topLevel.compositeTypes['Address']?.node).toBeInstanceOf(CompositeTypeDeclarationAst);
-    expect(topLevel.blocks['Strict']?.kind).toBe('block');
-    expect(topLevel.blocks['Strict']?.keyword).toBe('policy');
-    expect(topLevel.blocks['Strict']?.node).toBeInstanceOf(GenericBlockDeclarationAst);
+    expect(defaultNamespace.models['User']?.kind).toBe('model');
+    expect(defaultNamespace.models['User']?.node).toBeInstanceOf(ModelDeclarationAst);
+    expect(defaultNamespace.compositeTypes['Address']?.kind).toBe('compositeType');
+    expect(defaultNamespace.compositeTypes['Address']?.node).toBeInstanceOf(
+      CompositeTypeDeclarationAst,
+    );
+    expect(defaultNamespace.blocks['Strict']?.kind).toBe('block');
+    expect(defaultNamespace.blocks['Strict']?.keyword).toBe('policy');
+    expect(defaultNamespace.blocks['Strict']?.node).toBeInstanceOf(GenericBlockDeclarationAst);
 
-    expect(topLevel.namedTypes['Email']?.kind).toBe('namedType');
-    expect(topLevel.namedTypes['Email']?.node).toBeInstanceOf(NamedTypeDeclarationAst);
-    expect(topLevel.namedTypes['UserId']?.kind).toBe('namedType');
+    expect(namedTypes['Email']?.kind).toBe('namedType');
+    expect(namedTypes['Email']?.node).toBeInstanceOf(NamedTypeDeclarationAst);
+    expect(namedTypes['UserId']?.kind).toBe('namedType');
     expect(result.diagnostics).toEqual([]);
   });
 });
@@ -103,14 +114,12 @@ describe('buildSymbolTable() — AC3 namespace nesting', () => {
     const source = ['namespace Foo {', '  model A {', '    id Int', '  }', '}'].join('\n');
 
     const result = build(source);
-    const { topLevel } = result.symbolTable;
+    const { defaultNamespace, namespaces } = result.symbolTable;
 
-    expect(topLevel.namespaces['Foo']?.kind).toBe('namespace');
-    expect(topLevel.namespaces['Foo']?.declarations[0]?.node).toBeInstanceOf(
-      NamespaceDeclarationAst,
-    );
-    expect(topLevel.namespaces['Foo']?.models['A']?.kind).toBe('model');
-    expect(topLevel.models['A']).toBeUndefined();
+    expect(namespaces['Foo']?.kind).toBe('namespace');
+    expect(namespaces['Foo']?.declarations[0]?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(namespaces['Foo']?.models['A']?.kind).toBe('model');
+    expect(defaultNamespace.models['A']).toBeUndefined();
   });
 });
 
@@ -130,7 +139,7 @@ namespace auth {
   model Session { id Int }
 }`);
     expect(result.diagnostics).toEqual([]);
-    const { blog, auth } = result.symbolTable.topLevel.namespaces;
+    const { blog, auth } = result.symbolTable.namespaces;
     expect(Object.keys(blog?.models ?? {})).toEqual(['Post']);
     expect(Object.keys(blog?.compositeTypes ?? {})).toEqual(['Address']);
     expect(Object.keys(blog?.blocks ?? {})).toEqual(['ReadPosts']);
@@ -155,7 +164,7 @@ namespace blog {
       },
     ]);
     expect(
-      Object.keys(result.symbolTable.topLevel.namespaces['blog']?.models['Post']?.fields ?? {}),
+      Object.keys(result.symbolTable.namespaces['blog']?.models['Post']?.fields ?? {}),
     ).toEqual(['id']);
   });
 
@@ -172,15 +181,45 @@ namespace blog {
         message: 'Duplicate declaration of "Post"',
       }),
     ]);
-    expect(result.symbolTable.topLevel.namespaces['blog']?.models['Post']?.kind).toBe('model');
-    expect(result.symbolTable.topLevel.namespaces['blog']?.compositeTypes).toEqual({});
+    expect(result.symbolTable.namespaces['blog']?.models['Post']?.kind).toBe('model');
+    expect(result.symbolTable.namespaces['blog']?.compositeTypes).toEqual({});
+  });
+
+  it('merges the bindings of several types blocks', () => {
+    const result = build(`types {
+  Email = String
+}
+model User { id Int }
+types {
+  Slug = String
+}`);
+    expect(result.diagnostics).toEqual([]);
+    expect(Object.keys(result.symbolTable.namedTypes)).toEqual(['Email', 'Slug']);
+  });
+
+  it('keeps the first binding and diagnoses a name repeated in a later types block', () => {
+    const result = build(`types {
+  Email = String
+}
+types {
+  Email = Int
+}`);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "Email"',
+        filename: 'test.psl',
+        range: { start: { line: 4, character: 2 }, end: { line: 4, character: 7 } },
+      },
+    ]);
+    expect(result.symbolTable.namedTypes['Email']?.baseType).toBe('String');
   });
 
   it('retains every authored namespace node and span, including empty blocks', () => {
     const result = build(`namespace blog {}
 namespace auth {}
 namespace blog {}`);
-    const declarations = result.symbolTable.topLevel.namespaces['blog']?.declarations;
+    const declarations = result.symbolTable.namespaces['blog']?.declarations;
     expect(declarations).toHaveLength(2);
     expect(declarations?.[0]?.node).toBeInstanceOf(NamespaceDeclarationAst);
     expect(declarations?.[1]?.node).toBeInstanceOf(NamespaceDeclarationAst);
@@ -210,9 +249,9 @@ namespace blocks {
   policy __proto__ {}
 }`);
     expect(result.diagnostics).toEqual([]);
-    const namespaces = result.symbolTable.topLevel.namespaces;
-    expect(Object.keys(namespaces)).toEqual(['__proto__', 'types', 'blocks']);
-    const prototypeNamedNamespace = Object.values(namespaces)[0];
+    const namespaces = result.symbolTable.namespaces;
+    expect(Object.keys(namespaces)).toEqual(['public', '__proto__', 'types', 'blocks']);
+    const prototypeNamedNamespace = Object.values(namespaces)[1];
     expect(Object.keys(prototypeNamedNamespace?.models ?? {})).toEqual([
       '__proto__',
       'constructor',
@@ -238,21 +277,21 @@ policy hasOwnProperty {}
 namespace propertyIsEnumerable {
   model toString { id Int }
 }`);
-    const { topLevel } = result.symbolTable;
-    const namespace = topLevel.namespaces['propertyIsEnumerable'];
+    const { defaultNamespace, namespaces, namedTypes } = result.symbolTable;
+    const namespace = namespaces['propertyIsEnumerable'];
 
     expect(
       [
-        topLevel.models,
-        topLevel.compositeTypes,
-        topLevel.namedTypes,
-        topLevel.blocks,
-        topLevel.namespaces,
+        defaultNamespace.models,
+        defaultNamespace.compositeTypes,
+        namedTypes,
+        defaultNamespace.blocks,
+        namespaces,
         namespace?.models,
         namespace?.compositeTypes,
         namespace?.blocks,
-        topLevel.models['constructor']?.fields,
-        topLevel.compositeTypes['valueOf']?.fields,
+        defaultNamespace.models['constructor']?.fields,
+        defaultNamespace.compositeTypes['valueOf']?.fields,
         namespace?.models['toString']?.fields,
       ].map((record) => Object.getPrototypeOf(record)),
     ).toEqual(Array(11).fill(null));
@@ -265,18 +304,18 @@ namespace propertyIsEnumerable {
 namespace valueOf {
   model toString { id Int }
 }`);
-    const { topLevel } = result.symbolTable;
+    const { defaultNamespace, namespaces, namedTypes } = result.symbolTable;
 
-    expect(topLevel.models['constructor']?.name).toBe('constructor');
-    expect(topLevel.models['toString']).toBeUndefined();
-    expect(topLevel.compositeTypes['constructor']).toBeUndefined();
-    expect(topLevel.namedTypes['toString']).toBeUndefined();
-    expect(topLevel.blocks['valueOf']).toBeUndefined();
-    expect(topLevel.namespaces['constructor']).toBeUndefined();
-    expect(topLevel.models['constructor']?.fields['toString']?.name).toBe('toString');
-    expect(topLevel.models['constructor']?.fields['valueOf']).toBeUndefined();
-    expect(topLevel.namespaces['valueOf']?.models['toString']?.name).toBe('toString');
-    expect(topLevel.namespaces['valueOf']?.models['constructor']).toBeUndefined();
+    expect(defaultNamespace.models['constructor']?.name).toBe('constructor');
+    expect(defaultNamespace.models['toString']).toBeUndefined();
+    expect(defaultNamespace.compositeTypes['constructor']).toBeUndefined();
+    expect(namedTypes['toString']).toBeUndefined();
+    expect(defaultNamespace.blocks['valueOf']).toBeUndefined();
+    expect(namespaces['constructor']).toBeUndefined();
+    expect(defaultNamespace.models['constructor']?.fields['toString']?.name).toBe('toString');
+    expect(defaultNamespace.models['constructor']?.fields['valueOf']).toBeUndefined();
+    expect(namespaces['valueOf']?.models['toString']?.name).toBe('toString');
+    expect(namespaces['valueOf']?.models['constructor']).toBeUndefined();
   });
 
   it('preserves collisions between namespaces and other top-level declarations', () => {
@@ -288,8 +327,8 @@ model Second {}`);
       'Duplicate declaration of "First"',
       'Duplicate declaration of "Second"',
     ]);
-    expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['First']);
-    expect(Object.keys(result.symbolTable.topLevel.namespaces)).toEqual(['Second']);
+    expect(Object.keys(result.symbolTable.defaultNamespace.models)).toEqual(['First']);
+    expect(Object.keys(result.symbolTable.namespaces)).toEqual(['public', 'Second']);
   });
 });
 
@@ -298,7 +337,7 @@ describe('buildSymbolTable() — AC4 field nesting', () => {
     const source = ['model User {', '  id Int', '  email String', '}'].join('\n');
 
     const result = build(source);
-    const fields = result.symbolTable.topLevel.models['User']?.fields ?? {};
+    const fields = result.symbolTable.defaultNamespace.models['User']?.fields ?? {};
 
     expect(Object.keys(fields)).toEqual(['id', 'email']);
     expect(fields['email']?.kind).toBe('field');
@@ -314,7 +353,7 @@ describe('buildSymbolTable() — AC5 duplicate detection', () => {
     const result = build(source);
 
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_DUPLICATE_DECLARATION']);
-    const first = result.symbolTable.topLevel.models['User'];
+    const first = result.symbolTable.defaultNamespace.models['User'];
     expect(Object.keys(first?.fields ?? {})).toEqual(['id']);
   });
 
@@ -333,7 +372,7 @@ describe('buildSymbolTable() — AC5 duplicate detection', () => {
     const result = build(source);
 
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_DUPLICATE_DECLARATION']);
-    const nested = result.symbolTable.topLevel.namespaces['Foo']?.models['User'];
+    const nested = result.symbolTable.namespaces['Foo']?.models['User'];
     expect(Object.keys(nested?.fields ?? {})).toEqual(['id']);
   });
 
@@ -345,8 +384,8 @@ describe('buildSymbolTable() — AC5 duplicate detection', () => {
     const result = build(source);
 
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_DUPLICATE_DECLARATION']);
-    expect(result.symbolTable.topLevel.models['User']?.kind).toBe('model');
-    expect(result.symbolTable.topLevel.compositeTypes['User']).toBeUndefined();
+    expect(result.symbolTable.defaultNamespace.models['User']?.kind).toBe('model');
+    expect(result.symbolTable.defaultNamespace.compositeTypes['User']).toBeUndefined();
   });
 
   it('anchors the duplicate diagnostic on the later declaration name span', () => {
@@ -369,10 +408,12 @@ describe('buildSymbolTable() — AC5 duplicate detection', () => {
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_DUPLICATE_DECLARATION']);
     expect(result.diagnostics[0]?.range.start.line).toBe(2);
     expect(result.diagnostics[0]?.range.start.character).toBe(2);
-    expect(Object.keys(result.symbolTable.topLevel.models['User']?.fields ?? {})).toEqual([
+    expect(Object.keys(result.symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
       'email',
     ]);
-    expect(result.symbolTable.topLevel.models['User']?.fields['email']?.typeName).toBe('String');
+    expect(result.symbolTable.defaultNamespace.models['User']?.fields['email']?.typeName).toBe(
+      'String',
+    );
   });
 
   it('keeps the first composite field and flags the later duplicate field', () => {
@@ -382,11 +423,11 @@ describe('buildSymbolTable() — AC5 duplicate detection', () => {
 
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_DUPLICATE_DECLARATION']);
     expect(
-      Object.keys(result.symbolTable.topLevel.compositeTypes['Address']?.fields ?? {}),
+      Object.keys(result.symbolTable.defaultNamespace.compositeTypes['Address']?.fields ?? {}),
     ).toEqual(['street']);
-    expect(result.symbolTable.topLevel.compositeTypes['Address']?.fields['street']?.typeName).toBe(
-      'String',
-    );
+    expect(
+      result.symbolTable.defaultNamespace.compositeTypes['Address']?.fields['street']?.typeName,
+    ).toBe('String');
   });
 });
 
@@ -396,8 +437,8 @@ describe('buildSymbolTable() — pre-investigated edge cases', () => {
 
     const result = build(source);
 
-    expect(result.symbolTable.topLevel.namedTypes['Embedding']?.kind).toBe('namedType');
-    expect(result.symbolTable.topLevel.namedTypes['Embedding']?.isConstructor).toBe(true);
+    expect(result.symbolTable.namedTypes['Embedding']?.kind).toBe('namedType');
+    expect(result.symbolTable.namedTypes['Embedding']?.isConstructor).toBe(true);
   });
 
   it('skips a nameless recovered declaration without diagnostic or throw', () => {
@@ -406,14 +447,14 @@ describe('buildSymbolTable() — pre-investigated edge cases', () => {
     const result = build(source);
 
     expect(result.diagnostics).toEqual([]);
-    expect(Object.keys(result.symbolTable.topLevel.models)).toEqual([]);
+    expect(Object.keys(result.symbolTable.defaultNamespace.models)).toEqual([]);
   });
 });
 
 describe('buildSymbolTable() — resolved field shape', () => {
   it('splits a bare type onto typeName with no qualifiers', () => {
     const result = build(['model User {', '  name String', '}'].join('\n'));
-    const field = result.symbolTable.topLevel.models['User']?.fields['name'];
+    const field = result.symbolTable.defaultNamespace.models['User']?.fields['name'];
 
     expect(field?.typeName).toBe('String');
     expect(field?.typeNamespaceId).toBeUndefined();
@@ -425,7 +466,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
 
   it('splits a dot-qualified type onto typeName + typeNamespaceId', () => {
     const result = build(['model Profile {', '  user auth.User', '}'].join('\n'));
-    const field = result.symbolTable.topLevel.models['Profile']?.fields['user'];
+    const field = result.symbolTable.defaultNamespace.models['Profile']?.fields['user'];
 
     expect(field?.typeName).toBe('User');
     expect(field?.typeNamespaceId).toBe('auth');
@@ -434,7 +475,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
 
   it('splits a colon-qualified type onto typeName + typeNamespaceId + typeContractSpaceId', () => {
     const result = build(['model Profile {', '  user supabase:auth.User', '}'].join('\n'));
-    const field = result.symbolTable.topLevel.models['Profile']?.fields['user'];
+    const field = result.symbolTable.defaultNamespace.models['Profile']?.fields['user'];
 
     expect(field?.typeName).toBe('User');
     expect(field?.typeNamespaceId).toBe('auth');
@@ -443,7 +484,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
 
   it('flags an over-qualified type with PSL_INVALID_QUALIFIED_TYPE and malformedType', () => {
     const result = build(['model Profile {', '  user a.b.c', '}'].join('\n'));
-    const field = result.symbolTable.topLevel.models['Profile']?.fields['user'];
+    const field = result.symbolTable.defaultNamespace.models['Profile']?.fields['user'];
 
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_QUALIFIED_TYPE');
     expect(field?.malformedType).toBe(true);
@@ -452,17 +493,52 @@ describe('buildSymbolTable() — resolved field shape', () => {
 
   it('derives optional and list modifiers', () => {
     const result = build(['model User {', '  nickname String?', '  tags String[]', '}'].join('\n'));
-    const fields = result.symbolTable.topLevel.models['User']?.fields ?? {};
+    const fields = result.symbolTable.defaultNamespace.models['User']?.fields ?? {};
 
     expect(fields['nickname']?.optional).toBe(true);
     expect(fields['nickname']?.list).toBe(false);
+    expect(fields['nickname']?.elementOptional).toBe(false);
     expect(fields['tags']?.optional).toBe(false);
     expect(fields['tags']?.list).toBe(true);
+    expect(fields['tags']?.elementOptional).toBe(false);
+  });
+
+  it('splits the list and element nullability axes across all four spellings', () => {
+    const result = build(
+      [
+        'model User {',
+        '  plain String',
+        '  fieldOptional String?',
+        '  list String[]',
+        '  elementOptional String?[]',
+        '  listOptional String[]?',
+        '  bothOptional String?[]?',
+        '}',
+      ].join('\n'),
+    );
+    const fields = result.symbolTable.defaultNamespace.models['User']?.fields ?? {};
+
+    expect(result.diagnostics).toHaveLength(0);
+    const axes = (name: string) => ({
+      optional: fields[name]?.optional,
+      list: fields[name]?.list,
+      elementOptional: fields[name]?.elementOptional,
+    });
+    expect(axes('plain')).toEqual({ optional: false, list: false, elementOptional: false });
+    expect(axes('fieldOptional')).toEqual({ optional: true, list: false, elementOptional: false });
+    expect(axes('list')).toEqual({ optional: false, list: true, elementOptional: false });
+    expect(axes('elementOptional')).toEqual({
+      optional: false,
+      list: true,
+      elementOptional: true,
+    });
+    expect(axes('listOptional')).toEqual({ optional: true, list: true, elementOptional: false });
+    expect(axes('bothOptional')).toEqual({ optional: true, list: true, elementOptional: true });
   });
 
   it('resolves a constructor field type onto typeConstructor', () => {
     const result = build(['model Doc {', '  embedding Vector(1536)', '}'].join('\n'));
-    const field = result.symbolTable.topLevel.models['Doc']?.fields['embedding'];
+    const field = result.symbolTable.defaultNamespace.models['Doc']?.fields['embedding'];
 
     expect(field?.typeConstructor?.path).toEqual(['Vector']);
     expect(field?.typeConstructor?.args.map((a) => a.value)).toEqual(['1536']);
@@ -477,8 +553,8 @@ describe('buildSymbolTable() — resolved field shape', () => {
         '}',
       ].join('\n'),
     );
-    const id = result.symbolTable.topLevel.models['User']?.fields['id'];
-    const name = result.symbolTable.topLevel.models['User']?.fields['name'];
+    const id = result.symbolTable.defaultNamespace.models['User']?.fields['id'];
+    const name = result.symbolTable.defaultNamespace.models['User']?.fields['name'];
 
     expect(id?.attributes.map((a) => a.name)).toEqual(['id', 'extension.VarChar']);
     const extensionAttr = id?.attributes.find((a) => a.name === 'extension.VarChar');
@@ -489,19 +565,41 @@ describe('buildSymbolTable() — resolved field shape', () => {
     expect(mapAttr?.args[0]?.value).toBe('"full_name"');
   });
 
+  it('carries the declaration node each resolved attribute was read from', () => {
+    const result = build(
+      ['model User {', '  id Int @id @map("pk")', '  @@index([id])', '}'].join('\n'),
+    );
+    const model = result.symbolTable.defaultNamespace.models['User'];
+    const field = model?.fields['id'];
+    if (!model || !field) throw new Error('missing model or field');
+
+    expect(field.attributes.map((attribute) => attribute.node)).toEqual([
+      ...field.node.attributes(),
+    ]);
+    expect(model.attributes.map((attribute) => attribute.node)).toEqual([
+      ...model.node.attributes(),
+    ]);
+
+    const mapAttribute = field.attributes.find((attribute) => attribute.name === 'map');
+    const mapNode = [...field.node.attributes()].find(
+      (attribute) => attribute.name()?.isSimpleName('map') === true,
+    );
+    expect(mapAttribute?.node.syntax).toBe(mapNode?.syntax);
+  });
+
   it('renders function-call, array-literal, and object-literal arg values verbatim', () => {
     const result = build(
       [
         'model M {',
-        '  id String @default(uuid(7))',
+        '  id String @onCreate(uuid(7))',
         '  @@index([firstName, lastName])',
         '  @@index([title], options: { tokenizer: "ngram" })',
         '}',
       ].join('\n'),
     );
-    const model = result.symbolTable.topLevel.models['M'];
+    const model = result.symbolTable.defaultNamespace.models['M'];
 
-    const fnArg = model?.fields['id']?.attributes.find((a) => a.name === 'default')?.args[0];
+    const fnArg = model?.fields['id']?.attributes.find((a) => a.name === 'onCreate')?.args[0];
     expect(fnArg?.value).toBe('uuid(7)');
 
     const arrayArg = model?.attributes[0]?.args[0];
@@ -524,7 +622,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
         '}',
       ].join('\n'),
     );
-    const author = result.symbolTable.topLevel.models['Post']?.fields['author'];
+    const author = result.symbolTable.defaultNamespace.models['Post']?.fields['author'];
     const relation = author?.attributes.find((a) => a.name === 'relation');
 
     expect(relation?.args).toEqual([
@@ -545,7 +643,7 @@ describe('buildSymbolTable() — resolved declaration spans', () => {
     );
     const sourceFile = sources.sourceFileFor(document.syntax);
 
-    const model = result.symbolTable.topLevel.models['User'];
+    const model = result.symbolTable.defaultNamespace.models['User'];
     const expectedModelStart = sourceFile.offsetAt({ line: 0, character: 0 });
     expect(model?.span.start.offset).toBe(expectedModelStart);
     expect(model?.span.start.line).toBe(1); // 1-based PslSpan
@@ -555,7 +653,7 @@ describe('buildSymbolTable() — resolved declaration spans', () => {
     expect(field?.span.start.line).toBe(2);
     expect(field?.span.start.column).toBe(3);
 
-    const composite = result.symbolTable.topLevel.compositeTypes['Address'];
+    const composite = result.symbolTable.defaultNamespace.compositeTypes['Address'];
     expect(composite?.span.start.line).toBe(4);
     expect(composite?.span.start.column).toBe(1);
   });
@@ -576,11 +674,11 @@ describe('buildSymbolTable() — resolved model/composite attributes', () => {
       ].join('\n'),
     );
 
-    const model = result.symbolTable.topLevel.models['User'];
+    const model = result.symbolTable.defaultNamespace.models['User'];
     expect(model?.attributes.map((a) => a.name)).toEqual(['map']);
     expect(model?.attributes[0]?.args[0]?.value).toBe('"users"');
 
-    const composite = result.symbolTable.topLevel.compositeTypes['Address'];
+    const composite = result.symbolTable.defaultNamespace.compositeTypes['Address'];
     expect(composite?.attributes.map((a) => a.name)).toEqual(['map']);
     expect(composite?.attributes[0]?.args[0]?.value).toBe('"addr"');
   });
@@ -589,7 +687,7 @@ describe('buildSymbolTable() — resolved model/composite attributes', () => {
 describe('buildSymbolTable() — resolved named-type binding shape', () => {
   it('resolves a scalar-backed binding with baseType and isConstructor=false', () => {
     const result = build(['types {', '  Email = String', '}'].join('\n'));
-    const scalar = result.symbolTable.topLevel.namedTypes['Email'];
+    const scalar = result.symbolTable.namedTypes['Email'];
 
     expect(scalar?.isConstructor).toBe(false);
     expect(scalar?.baseType).toBe('String');
@@ -600,7 +698,7 @@ describe('buildSymbolTable() — resolved named-type binding shape', () => {
     const result = build(
       ['model User {', '  id Int', '}', 'types {', '  UserId = User', '}'].join('\n'),
     );
-    const alias = result.symbolTable.topLevel.namedTypes['UserId'];
+    const alias = result.symbolTable.namedTypes['UserId'];
 
     expect(alias?.isConstructor).toBe(false);
     expect(alias?.baseType).toBe('User');
@@ -608,7 +706,7 @@ describe('buildSymbolTable() — resolved named-type binding shape', () => {
 
   it('resolves a constructor binding with isConstructor=true and no baseType', () => {
     const result = build(['types {', '  Embedding = Vector(1536)', '}'].join('\n'));
-    const alias = result.symbolTable.topLevel.namedTypes['Embedding'];
+    const alias = result.symbolTable.namedTypes['Embedding'];
 
     expect(alias?.isConstructor).toBe(true);
     expect(alias?.baseType).toBeUndefined();
@@ -617,15 +715,18 @@ describe('buildSymbolTable() — resolved named-type binding shape', () => {
   });
 });
 
-describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
+describe('buildSymbolTable() — collected blocks and their envelopes', () => {
   const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
     enum: {
       kind: 'pslBlock',
       keyword: 'enum',
       discriminator: 'enum',
       name: { required: true },
-      parameters: {},
-      variadicParameters: true,
+      spec: () =>
+        mapBlock({
+          value: { type: jsonValue(), documentation: 'The explicit member value.' },
+          allowBare: true,
+        }),
     },
   };
 
@@ -635,28 +736,31 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
       keyword: 'policy_select',
       discriminator: 'fixture-policy-select',
       name: { required: true },
-      parameters: {
-        target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
-        as: { kind: 'option', values: ['permissive', 'restrictive'] },
-        using: { kind: 'value', codecId: 'fixture/text@1', required: true },
-      },
+      spec: () =>
+        structBlock({
+          parameters: {
+            using: { type: str(), documentation: 'The row predicate.' },
+          },
+        }),
     },
   };
 
-  it('resolves an enum block with the descriptor discriminator and bare/value members', () => {
+  it('publishes an enum envelope carrying the descriptor discriminator and decoded values', () => {
     const result = build(
       ['enum Role {', '  Admin', '  User = "u"', '}'].join('\n'),
       ENUM_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+    const symbol = result.symbolTable.defaultNamespace.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
 
-    expect(block?.kind).toBe('enum');
-    expect(block?.name).toBe('Role');
-    expect(block?.parameters['Admin']).toMatchObject({ kind: 'bare' });
-    expect(block?.parameters['User']).toMatchObject({ kind: 'value', raw: '"u"' });
+    expect(envelope?.kind).toBe('enum');
+    expect(envelope?.name).toBe('Role');
+    expect(envelope !== undefined && Object.hasOwn(envelope.values, 'Admin')).toBe(true);
+    expect(envelope?.values['Admin']).toBeUndefined();
+    expect(envelope?.values['User']).toBe('u');
   });
 
-  it('resolves a descriptor-typed block classifying ref/option/value params', () => {
+  it('keeps a failing block as a symbol with untouched syntax, never as text', () => {
     const result = build(
       [
         'model Post {',
@@ -670,161 +774,82 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
       ].join('\n'),
       POLICY_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.blocks['ReadPosts']?.block;
+    const symbol = result.symbolTable.defaultNamespace.blocks['ReadPosts'];
 
-    expect(block?.kind).toBe('fixture-policy-select');
-    expect(block?.name).toBe('ReadPosts');
-    expect(block?.parameters['target']).toMatchObject({ kind: 'ref', identifier: 'Post' });
-    expect(block?.parameters['as']).toMatchObject({ kind: 'option', token: 'permissive' });
-    expect(block?.parameters['using']).toMatchObject({ kind: 'value', raw: '"true"' });
+    expect(result.blocks.diagnostics.map((d) => d.code)).toContain(
+      'PSL_EXTENSION_UNKNOWN_PARAMETER',
+    );
+    expect(
+      symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol),
+    ).toBeUndefined();
+    expect(symbol?.keyword).toBe('policy_select');
+    expect(symbol?.name).toBe('ReadPosts');
+    expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
+      'target',
+      'as',
+      'using',
+    ]);
   });
 
-  it('resolves an unknown-keyword block descriptor-free (kind = keyword, value/bare members)', () => {
+  it('collects an unknown-keyword block as a symbol only — no envelope, no conversion', () => {
     const result = build(['mystery Thing {', '  on = read', '  flag', '}'].join('\n'));
-    const block = result.symbolTable.topLevel.blocks['Thing']?.block;
+    const symbol = result.symbolTable.defaultNamespace.blocks['Thing'];
 
-    expect(block?.kind).toBe('mystery');
-    expect(block?.name).toBe('Thing');
-    expect(block?.parameters['on']).toMatchObject({ kind: 'value', raw: 'read' });
-    expect(block?.parameters['flag']).toMatchObject({ kind: 'bare' });
+    expect(symbol?.keyword).toBe('mystery');
+    expect(symbol?.name).toBe('Thing');
+    expect(result.blocks.parsedBlocks.size).toBe(0);
+    const entries = [...(symbol?.node.entries() ?? [])];
+    expect(entries.map((entry) => entry.key()?.name())).toEqual(['on', 'flag']);
+    expect(entries[0]?.value()).toBeDefined();
+    expect(entries[1]?.value()).toBeUndefined();
   });
 
-  it('flags a duplicate block member with PSL_EXTENSION_DUPLICATE_PARAMETER (first-wins)', () => {
+  it('flags a duplicate block member with PSL_EXTENSION_DUPLICATE_PARAMETER and publishes no envelope', () => {
     const result = build(['enum Role {', '  Admin', '  Admin', '}'].join('\n'), ENUM_DESCRIPTORS);
-    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+    const symbol = result.symbolTable.defaultNamespace.blocks['Role'];
 
-    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_DUPLICATE_PARAMETER');
-    expect(Object.keys(block?.parameters ?? {})).toEqual(['Admin']);
+    expect(result.blocks.diagnostics.map((d) => d.code)).toContain(
+      'PSL_EXTENSION_DUPLICATE_PARAMETER',
+    );
+    expect(
+      symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol),
+    ).toBeUndefined();
+    expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
+      'Admin',
+      'Admin',
+    ]);
   });
 
-  it('resolves namespace-nested blocks too', () => {
+  it('keeps prototype-named members as own envelope values', () => {
+    const result = build(
+      ['enum Role {', '  __proto__ = "evil"', '  constructor', '}'].join('\n'),
+      ENUM_DESCRIPTORS,
+    );
+    const symbol = result.symbolTable.defaultNamespace.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
+
+    expect(result.blocks.diagnostics).toEqual([]);
+    expect(envelope).toBeDefined();
+    if (envelope === undefined) return;
+    expect(Object.getPrototypeOf(envelope.values)).toBeNull();
+    expect(Object.hasOwn(envelope.values, '__proto__')).toBe(true);
+    expect(ownEntry(envelope.values, '__proto__')).toBe('evil');
+    expect(Object.hasOwn(envelope.values, 'constructor')).toBe(true);
+    expect(envelope.values['constructor']).toBeUndefined();
+    expect(Object.keys(envelope.values)).toEqual(['__proto__', 'constructor']);
+  });
+
+  it('publishes envelopes for namespace-nested blocks too', () => {
     const result = build(
       ['namespace ns {', '  enum Role {', '    Admin', '  }', '}'].join('\n'),
       ENUM_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.namespaces['ns']?.blocks['Role']?.block;
+    const symbol = result.symbolTable.namespaces['ns']?.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
 
-    expect(block?.kind).toBe('enum');
-    expect(block?.parameters['Admin']).toMatchObject({ kind: 'bare' });
-  });
-
-  it('reports non-array values for list parameters instead of accepting an empty list', () => {
-    const result = build(['policy_select ReadPosts {', '  targets = Post', '}'].join('\n'), {
-      policy_select: {
-        kind: 'pslBlock',
-        keyword: 'policy_select',
-        discriminator: 'fixture-policy-select',
-        name: { required: true },
-        parameters: {
-          targets: {
-            kind: 'list',
-            of: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-            required: true,
-          },
-        },
-      },
-    });
-    const block = result.symbolTable.topLevel.blocks['ReadPosts']?.block;
-
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
-    );
-    expect(block?.parameters['targets']).toMatchObject({ kind: 'value', raw: 'Post' });
-  });
-
-  it('validates same-namespace refs against the block owner namespace', () => {
-    const { document, sources } = parse(
-      [
-        'model Post {',
-        '  id Int',
-        '}',
-        'namespace blog {',
-        '  model Article {',
-        '    id Int',
-        '  }',
-        '  policy_select ReadArticles {',
-        '    target = Article',
-        '  }',
-        '}',
-      ].join('\n'),
-      'test.psl',
-    );
-    const policySelectDescriptor: AuthoringPslBlockDescriptor = {
-      kind: 'pslBlock',
-      keyword: 'policy_select',
-      discriminator: 'fixture-policy-select',
-      name: { required: true },
-      parameters: {
-        target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
-      },
-    };
-    const descriptors: AuthoringPslBlockDescriptorNamespace = {
-      policy_select: policySelectDescriptor,
-    };
-    const result = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors: descriptors,
-    });
-    const block = result.symbolTable.topLevel.namespaces['blog']?.blocks['ReadArticles'];
-
-    expect(block).toBeDefined();
-    if (block === undefined) return;
-    expect(
-      validateExtensionBlockFromSymbol({
-        block,
-        descriptor: policySelectDescriptor,
-        symbolTable: result.symbolTable,
-        sources,
-        codecLookup: emptyCodecLookup,
-      }),
-    ).toEqual([]);
-  });
-
-  it('validates same-space refs against models from every namespace', () => {
-    const { document, sources } = parse(
-      [
-        'namespace blog {',
-        '  model Article {',
-        '    id Int',
-        '  }',
-        '}',
-        'policy_anywhere ReadArticles {',
-        '  target = Article',
-        '}',
-      ].join('\n'),
-      'test.psl',
-    );
-    const policyAnywhereDescriptor: AuthoringPslBlockDescriptor = {
-      kind: 'pslBlock',
-      keyword: 'policy_anywhere',
-      discriminator: 'fixture-policy-anywhere',
-      name: { required: true },
-      parameters: {
-        target: { kind: 'ref', refKind: 'model', scope: 'same-space', required: true },
-      },
-    };
-    const descriptors: AuthoringPslBlockDescriptorNamespace = {
-      policy_anywhere: policyAnywhereDescriptor,
-    };
-    const result = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors: descriptors,
-    });
-    const block = result.symbolTable.topLevel.blocks['ReadArticles'];
-
-    expect(block).toBeDefined();
-    if (block === undefined) return;
-    expect(
-      validateExtensionBlockFromSymbol({
-        block,
-        descriptor: policyAnywhereDescriptor,
-        symbolTable: result.symbolTable,
-        sources,
-        codecLookup: emptyCodecLookup,
-      }),
-    ).toEqual([]);
+    expect(envelope?.kind).toBe('enum');
+    expect(envelope !== undefined && Object.hasOwn(envelope.values, 'Admin')).toBe(true);
+    expect(envelope?.values['Admin']).toBeUndefined();
   });
 });
 
@@ -838,14 +863,14 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
       keyword: 'shape_circle',
       discriminator: 'shape',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
     },
     shape_square: {
       kind: 'pslBlock',
       keyword: 'shape_square',
       discriminator: 'shape',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
     },
   };
 
@@ -855,16 +880,18 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
       SHAPE_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([]);
-    const round = result.symbolTable.topLevel.blocks['Round'];
-    const boxy = result.symbolTable.topLevel.blocks['Boxy'];
+    expect(result.blocks.diagnostics).toEqual([]);
+    const round = result.symbolTable.defaultNamespace.blocks['Round'];
+    const boxy = result.symbolTable.defaultNamespace.blocks['Boxy'];
 
     expect(round?.keyword).toBe('shape_circle');
     expect(boxy?.keyword).toBe('shape_square');
-    expect(round?.block.kind).toBe('shape');
-    expect(boxy?.block.kind).toBe('shape');
-    expect(round?.block.keyword).toBe('shape_circle');
-    expect(boxy?.block.keyword).toBe('shape_square');
+    const roundEnvelope = round === undefined ? undefined : result.blocks.parsedBlocks.get(round);
+    const boxyEnvelope = boxy === undefined ? undefined : result.blocks.parsedBlocks.get(boxy);
+    expect(roundEnvelope?.kind).toBe('shape');
+    expect(boxyEnvelope?.kind).toBe('shape');
+    expect(roundEnvelope?.keyword).toBe('shape_circle');
+    expect(boxyEnvelope?.keyword).toBe('shape_square');
   });
 });
 
@@ -881,8 +908,11 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      parameters: {},
-      variadicParameters: true,
+      spec: () =>
+        mapBlock({
+          value: { type: jsonValue(), documentation: 'A widget property.' },
+          allowBare: true,
+        }),
       attributes: { map: () => mapSpec },
     },
   };
@@ -892,32 +922,23 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
     },
   };
 
-  it('attaches the parsed arguments and the attribute span as plain data', () => {
+  it('accepts a declared attribute without diagnostics', () => {
     const result = build(
       ['widget Gear {', '  teeth = 12', '  @@map("gear_wheel")', '}'].join('\n'),
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({
-      map: {
-        args: { name: 'gear_wheel' },
-        span: {
-          start: { offset: 29, line: 3, column: 3 },
-          end: { offset: 48, line: 3, column: 22 },
-        },
-      },
-    });
+    expect(result.blocks.diagnostics).toEqual([]);
   });
 
   it('diagnoses an attribute the descriptor does not declare, anchored on the attribute', () => {
     const result = build(['widget Gear {', '  @@schema("x")', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
@@ -925,13 +946,12 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
         range: { start: { line: 1, character: 2 }, end: { line: 1, character: 15 } },
       },
     ]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({});
   });
 
   it('treats every attribute as unknown when the descriptor declares none', () => {
     const result = build(['widget Gear {', '  @@map("x")', '}'].join('\n'), BARE_DESCRIPTORS);
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+    expect(result.blocks.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
     ]);
   });
@@ -942,22 +962,19 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
         message: 'Duplicate attribute "@@map" in "widget" block "Gear"; first occurrence wins',
         range: { start: { line: 2, character: 2 }, end: { line: 2, character: 17 } },
       }),
     ]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes['map']?.args).toEqual({
-      name: 'first',
-    });
   });
 
   it('surfaces a kit binding failure as a symbol-table diagnostic and omits the attribute', () => {
     const result = build(['widget Gear {', '  @@map()', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
@@ -965,7 +982,6 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
         range: { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } },
       },
     ]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({});
   });
 
   it('diagnoses a duplicate whose first occurrence failed to bind', () => {
@@ -974,7 +990,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
@@ -988,7 +1004,6 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
         range: { start: { line: 2, character: 2 }, end: { line: 2, character: 17 } },
       },
     ]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({});
   });
 
   it('reports an undeclared attribute on every occurrence', () => {
@@ -997,17 +1012,16 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+    expect(result.blocks.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
     ]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({});
   });
 
   it('carries a refine diagnostic code contributed by the spec', () => {
     const result = build(['widget Gear {', '  @@map("")', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_FIXTURE_EMPTY_MAP', message: 'empty' }),
     ]);
   });
@@ -1015,7 +1029,76 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
   it('parses nothing for a block whose keyword has no descriptor', () => {
     const result = build(['gizmo Gear {', '  @@map("x")', '}'].join('\n'), {});
 
-    expect(result.diagnostics).toEqual([]);
-    expect(result.symbolTable.topLevel.blocks['Gear']?.block.attributes).toEqual({});
+    expect(result.blocks.diagnostics).toEqual([]);
+  });
+});
+
+describe('buildSymbolTable() — block members', () => {
+  it('lists block entries in source order', () => {
+    const result = build(
+      ['policy Strict {', '  zeta = 1', '  alpha = 2', '  mid = 3', '}'].join('\n'),
+    );
+    const block = result.symbolTable.defaultNamespace.blocks['Strict'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['zeta', 'alpha', 'mid']);
+    expect(block?.entries.every((entry) => entry instanceof KeyValuePairAst)).toBe(true);
+  });
+
+  it('keeps both entries when a block repeats a key', () => {
+    const result = build(['hooks Lifecycle {', '  on = "a"', '  on = "b"', '}'].join('\n'));
+    const block = result.symbolTable.defaultNamespace.blocks['Lifecycle'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['on', 'on']);
+    expect(
+      block?.entries.map((entry) => {
+        const value = entry.value();
+        return value === undefined ? undefined : printSyntax(value.syntax).trim();
+      }),
+    ).toEqual(['"a"', '"b"']);
+  });
+
+  it('keeps the @ attributes of enum members', () => {
+    const result = build(['enum Role {', '  Admin @map("admin")', '  User', '}'].join('\n'));
+    const block = result.symbolTable.defaultNamespace.blocks['Role'];
+
+    expect(
+      block?.entries.map((entry) =>
+        Array.from(entry.attributes(), (attribute) => attribute.name()?.path().join('.')),
+      ),
+    ).toEqual([['map'], []]);
+  });
+
+  it('resolves block @@ attributes in source order', () => {
+    const result = build(
+      ['widget Gear {', '  size = 1', '  @@map("gears")', '  @@vendor.tag(a: 1)', '}'].join('\n'),
+    );
+    const block = result.symbolTable.defaultNamespace.blocks['Gear'];
+
+    expect(block?.attributes.map((attribute) => attribute.name)).toEqual(['map', 'vendor.tag']);
+    expect(block?.attributes[0]?.args.map((arg) => arg.value)).toEqual(['"gears"']);
+    expect(block?.attributes[1]?.args.map((arg) => arg.name)).toEqual(['a']);
+    expect(
+      block?.attributes.every((attribute) => attribute.node instanceof ModelAttributeAst),
+    ).toBe(true);
+  });
+
+  it('lists the members of a block declared in a namespace', () => {
+    const result = build(
+      ['namespace auth {', '  policy Strict {', '    level = 1', '    @@map("p")', '  }', '}'].join(
+        '\n',
+      ),
+    );
+    const block = result.symbolTable.namespaces['auth']?.blocks['Strict'];
+
+    expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['level']);
+    expect(block?.attributes.map((attribute) => attribute.name)).toEqual(['map']);
+  });
+
+  it('has no entries and no attributes for an empty block', () => {
+    const result = build('policy Empty {}');
+    const block = result.symbolTable.defaultNamespace.blocks['Empty'];
+
+    expect(block?.entries).toEqual([]);
+    expect(block?.attributes).toEqual([]);
   });
 });

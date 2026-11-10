@@ -1,9 +1,11 @@
 export type { ImportRequirement } from '@internal/ts-render';
+export { expectAbsent, expectPresent } from '../control/check-expectation';
 export type { ContractSerializer } from '../control/contract-serializer';
 export {
   CONTRACT_SNAPSHOTS_DIRNAME,
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
+  isStorageHashHex,
   storageHashHex,
 } from '../control/contract-snapshot-layout';
 export type {
@@ -27,6 +29,7 @@ export {
 } from '../control/control-capabilities';
 export type {
   ControlAdapterDescriptor,
+  ControlDriverConnectOptions,
   ControlDriverDescriptor,
   ControlExtensionDescriptor,
   ControlFamilyDescriptor,
@@ -40,6 +43,12 @@ export type {
   ControlTargetInstance,
 } from '../control/control-instances';
 export type {
+  BlockingObject,
+  CheckExpectation,
+  FailedCast,
+  FailedCheck,
+  FailedConversion,
+  FailedTypeChange,
   MigrationMetadata,
   MigrationOperationClass,
   MigrationOperationPolicy,
@@ -54,15 +63,26 @@ export type {
   MigrationRunner,
   MigrationRunnerExecutionChecks,
   MigrationRunnerFailure,
+  MigrationRunnerFailureMeta,
   MigrationRunnerPerSpaceOptions,
   MigrationRunnerPerSpaceSuccessValue,
   MigrationRunnerResult,
   MigrationRunnerSuccessValue,
   MigrationScaffoldContext,
   OpFactoryCall,
+  PlanOrigin,
+  RowsFailingCheck,
+  RowsHoldingValue,
+  RowsWithoutValue,
   SchemaEntityCoordinate,
   SchemaOwnership,
   TargetMigrationsCapability,
+} from '../control/control-migration-types';
+export {
+  migrationRunnerFailure,
+  planOriginOf,
+  withDatabaseUnchanged,
+  withFailingSpace,
 } from '../control/control-migration-types';
 export type {
   OperationPreview,
@@ -71,12 +91,17 @@ export type {
 export type {
   EmitContractResult,
   IntrospectSchemaResult,
+  MarkerHashes,
   OperationContext,
-  SignDatabaseResult,
+  SpaceMarkerConflict,
+  SpaceSignature,
+  SpaceSigned,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '../control/control-operation-results';
 export {
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_SCHEMA_FAILURE,
@@ -84,6 +109,8 @@ export {
 } from '../control/control-operation-results';
 export type {
   CoreSchemaView,
+  SchemaLabelPart,
+  SchemaLabelPartRole,
   SchemaTreeNodeOptions,
   SchemaTreeVisitor,
   SchemaViewNodeKind,
@@ -99,26 +126,81 @@ export type {
   AssembledAuthoringContributions,
   ControlStack,
   CreateControlStackInput,
-  DataTypeInvariantInput,
+  HelperCodecInvariantInput,
 } from '../control/control-stack';
 export {
   assembleAuthoringContributions,
-  assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
-  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
-  enforceDataTypeInvariants,
+  enforceHelperCodecInvariants,
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,
+  extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export type {
+  AppliedMigrationStatement,
+  EnumValueCoordinate,
+  EnumValueCoordinateJson,
+  FieldCoordinate,
+  FieldCoordinateJson,
+  KeepDataEdit,
+  MigrationAccessChange,
+  MigrationDataLoss,
+  MigrationDataLossKind,
+  MigrationOperationSubject,
+  MigrationPlanNamespaces,
+  MigrationPlanSubjects,
+  MigrationStatementJson,
+  MigrationSubject,
+  MigrationSubjectJson,
+  MigrationTemporaryValue,
+  ModelCoordinate,
+  ModelCoordinateJson,
+  ResolvedEnumValueRenameStatement,
+  ResolvedFieldBackfillStatement,
+  ResolvedFieldConvertStatement,
+  ResolvedFieldRenameStatement,
+  ResolvedMigrationStatement,
+  ResolvedModelRenameStatement,
+  ResolvedNamespaceRenameStatement,
+  ResolvedRenameStatement,
+  ResolvedValueObjectFieldBackfillStatement,
+  ResolvedValueObjectFieldRenameStatement,
+  ResolvedVariantConvertStatement,
+  ValueObjectFieldCoordinate,
+  ValueObjectFieldCoordinateJson,
+} from '../control/migration-statements';
+export {
+  describeMigrationStatement,
+  enumValueCoordinateFromJson,
+  enumValueCoordinateJson,
+  enumValueStatementText,
+  fieldStatementText,
+  isRenameStatement,
+  migrationStatementJson,
+  migrationSubjectJson,
+  migrationSubjectKey,
+  modelDisplayName,
+  modelStatementText,
+  valueObjectFieldStatementText,
+} from '../control/migration-statements';
 export { orderIssuesByDependencies } from '../control/order-issues-by-dependencies';
+export {
+  failedPostcheckWhy,
+  failedPrecheckWhy,
+  issueLabel,
+  schemaCheckWhy,
+  schemaIssuesWhy,
+} from '../control/runner-failure-why';
 export type {
   DiffableNode,
   ExpectationFailureReason,
+  MismatchCause,
+  MismatchExplanation,
   SchemaDiffIssue,
   SchemaNodeRef,
 } from '../control/schema-diff';
@@ -135,7 +217,7 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
-  ControlDefaultRegistries,
+  AssembledControlMutationDefaults,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
@@ -145,15 +227,12 @@ export type {
   MutationDefaultGeneratorDescriptor,
   SourceDiagnostic,
   SourceSpan,
-  TaggedLiteralValue,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
-export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
-  canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
 } from '../shared/tagged-literal';
-export { timestampNowControlDescriptor } from '../shared/temporal-presets';
+export { timestampNowControlDescriptor } from '../shared/temporal-type-aliases';

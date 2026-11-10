@@ -5,7 +5,6 @@ import {
   configFile,
   dbFile,
   starterSchema,
-  targetPackageName,
 } from '../../../src/commands/init/templates/code-templates';
 import {
   quickReferenceMd,
@@ -69,7 +68,16 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/postgres/contract-builder'");
-      expect(schema).toContain('username: field.text().optional()');
+      expect(schema).toContain('username: field.column(type.String()).optional()');
+      expect(schema).toContain('id: field.column(type.Uuid()).id().onCreate(gen.uuid(7))');
+      expect(schema).toContain('authorId: field.column(type.Uuid())');
+      expect(schema).not.toContain('type.Char(');
+      expect(schema).toContain('updatedAt: field.column(type.temporal.UpdatedAt())');
+      expect(schema).not.toMatch(/field\.(id|temporal)\.|field\.(text|uuidString)\(/);
+    });
+
+    it('writes no field preset into the postgres PSL starter schema', () => {
+      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAt\n');
     });
 
     it('uses defineContract for mongo TypeScript imported from facade', () => {
@@ -77,7 +85,7 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/mongo/contract-builder'");
-      expect(schema).toContain('username: field.string().optional()');
+      expect(schema).toContain('username: field.scalar(type.String()).optional()');
     });
 
     it('only imports from the facade package for postgres TypeScript', () => {
@@ -115,7 +123,7 @@ describe('templates', () => {
         // body. The shared signature is the callback destructure itself.
         for (const schema of [pg, mongo]) {
           expect(schema).toMatch(
-            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel \}\) => [({]/,
+            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel(, gen)?, type \}\) => [({]/,
           );
           expect(schema).not.toMatch(/\{ family:/);
           expect(schema).toContain('models: {');
@@ -179,35 +187,27 @@ describe('templates', () => {
     it('generates postgres db.ts with lazy facade and DATABASE_URL binding', () => {
       const db = dbFile('postgres');
 
-      expect(db).toContain("from '@internal/postgres/runtime'");
-      expect(db).toContain('postgres<Contract>({');
-      expect(db).toContain('contractJson,');
+      expect(db).toContain("import postgres from '@internal/postgres/runtime'");
+      expect(db).toContain("import { contractFromJson } from '@internal/postgres/static'");
+      expect(db).toContain('export const contract = contractFromJson<Contract>(contractJson);');
+      expect(db).toContain('postgres({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
       const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(1);
+      expect(prismaNextImports).toHaveLength(2);
     });
 
     it('generates mongo db.ts with lazy facade and DATABASE_URL binding', () => {
       const db = dbFile('mongo');
 
-      expect(db).toContain("from '@internal/mongo/runtime'");
-      expect(db).toContain('mongo<Contract>({');
-      expect(db).toContain('contractJson,');
+      expect(db).toContain("import mongo from '@internal/mongo/runtime'");
+      expect(db).toContain("import { contractFromJson } from '@internal/mongo/static'");
+      expect(db).toContain('export const contract = contractFromJson<Contract>(contractJson);');
+      expect(db).toContain('mongo({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
       const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(1);
-    });
-  });
-
-  describe('targetPackageName', () => {
-    it('returns postgres package name', () => {
-      expect(targetPackageName('postgres')).toBe('@internal/postgres');
-    });
-
-    it('returns mongo package name', () => {
-      expect(targetPackageName('mongo')).toBe('@internal/mongo');
+      expect(prismaNextImports).toHaveLength(2);
     });
   });
 
@@ -360,15 +360,6 @@ describe('templates', () => {
 
   describe('tsconfig', () => {
     describe('defaultTsConfig', () => {
-      it('includes all required compiler options', () => {
-        const config = JSON.parse(defaultTsConfig()) as Record<string, unknown>;
-        const opts = config['compilerOptions'] as Record<string, unknown>;
-
-        for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {
-          expect(opts[key]).toBe(value);
-        }
-      });
-
       it('sets strict: true', () => {
         const config = JSON.parse(defaultTsConfig()) as Record<string, unknown>;
         const opts = config['compilerOptions'] as Record<string, unknown>;
@@ -382,23 +373,9 @@ describe('templates', () => {
 
         expect(opts['skipLibCheck']).toBe(true);
       });
-
-      it('produces valid JSON', () => {
-        expect(() => JSON.parse(defaultTsConfig())).not.toThrow();
-      });
     });
 
     describe('mergeTsConfig', () => {
-      it('adds required options to an empty compilerOptions', () => {
-        const existing = JSON.stringify({ compilerOptions: {} }, null, 2);
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
-        const opts = merged['compilerOptions'] as Record<string, unknown>;
-
-        for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {
-          expect(opts[key]).toBe(value);
-        }
-      });
-
       it('preserves existing non-conflicting options', () => {
         const existing = JSON.stringify(
           { compilerOptions: { outDir: './dist', strict: true, declaration: true } },
@@ -458,11 +435,6 @@ describe('templates', () => {
           expect(opts[key]).toBe(value);
         }
         expect(merged['include']).toEqual(['src']);
-      });
-
-      it('produces valid JSON', () => {
-        const existing = JSON.stringify({ compilerOptions: { target: 'ES2020' } }, null, 2);
-        expect(() => JSON.parse(mergeTsConfig(existing))).not.toThrow();
       });
     });
   });

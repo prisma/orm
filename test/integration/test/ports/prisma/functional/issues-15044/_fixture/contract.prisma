@@ -25,21 +25,21 @@
 //   }
 
 model User {
-  id         String       @id @default(cuid(2))
+  id         String       @id @onCreate(cuid(2))
   name       String
   walletLink WalletLink[]
   @@map("user")
 }
 
 model Wallet {
-  id         String       @id @default(cuid(2))
+  id         String       @id @onCreate(cuid(2))
   name       String
   walletLink WalletLink[]
   @@map("wallet")
 }
 
 model WalletLink {
-  id       String @id @default(cuid(2))
+  id       String @id @onCreate(cuid(2))
   name     String
   wallet   Wallet @relation(fields: [walletId], references: [id])
   user     User   @relation(fields: [userId], references: [id])

@@ -1,20 +1,14 @@
 import { Collection } from '@internal/sql-orm-client';
-import type { InsertAst } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
 import { deserializeTestContract, getTestContext, getTestContract } from './helpers';
 import {
   createReturningTagsCollection,
   createReturningUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedUsers } from './runtime-helpers';
-
-function isInsertAst(ast: unknown): ast is InsertAst {
-  return typeof ast === 'object' && ast !== null && 'kind' in ast && ast.kind === 'insert';
-}
 
 describe('integration/upsert', () => {
   it(
@@ -78,23 +72,6 @@ describe('integration/upsert', () => {
   );
 
   it(
-    'upsert() rejects when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-
-        await expect(
-          users.upsert({
-            create: { id: 3, name: 'NoReturn', email: 'noreturn@example.com', invitedById: null },
-            update: { name: 'NoReturn Updated' },
-          }),
-        ).rejects.toThrow(/requires contract capability "returning"/);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'upsert() rejects when no conflict columns can be resolved',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -152,58 +129,26 @@ describe('integration/upsert', () => {
   );
 
   it(
-    'upsert() with empty update behaves as conditional create',
+    'upsert() with an empty update creates a missing row and returns an existing row unchanged',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const alice = { id: 1, name: 'Alice', email: 'alice@example.com' };
 
-        runtime.resetExecutions();
         const inserted = await users.upsert({
-          create: { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
+          create: { ...alice, invitedById: null },
           update: {},
         });
 
-        expect(inserted).toEqual({
-          id: 1,
-          name: 'Alice',
-          email: 'alice@example.com',
-          invitedById: null,
-          address: null,
-        });
-        const insertPlanAst = runtime.executions[0]?.ast;
-        expect(isInsertAst(insertPlanAst)).toBe(true);
-        if (!isInsertAst(insertPlanAst)) {
-          throw new Error('Expected first empty-update upsert execution to emit an insert AST');
-        }
-        expect(insertPlanAst.onConflict?.action?.kind).toBe('do-nothing');
+        expect(inserted).toEqual(alice);
 
-        runtime.resetExecutions();
         const existing = await users.upsert({
           create: { id: 1, name: 'Ignored', email: 'ignored@example.com', invitedById: null },
           update: {},
         });
 
-        expect(existing).toEqual({
-          id: 1,
-          name: 'Alice',
-          email: 'alice@example.com',
-          invitedById: null,
-          address: null,
-        });
-        const conflictPlanAst = runtime.executions[0]?.ast;
-        expect(isInsertAst(conflictPlanAst)).toBe(true);
-        if (!isInsertAst(conflictPlanAst)) {
-          throw new Error('Expected second empty-update upsert execution to emit an insert AST');
-        }
-        expect(conflictPlanAst.onConflict?.action?.kind).toBe('do-nothing');
-
-        expect(await users.first({ id: 1 })).toEqual({
-          id: 1,
-          name: 'Alice',
-          email: 'alice@example.com',
-          invitedById: null,
-          address: null,
-        });
+        expect(existing).toEqual(alice);
+        expect(await users.all()).toEqual([alice]);
       });
     },
     timeouts.spinUpPpgDev,

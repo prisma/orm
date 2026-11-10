@@ -1,5 +1,6 @@
 # ADR 096 — TS-authored contract parity & purity rules
 
+**Amended by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md):** the rule that the runtime accepts `{ contract }` or `{ contractJson }` is superseded. A client takes only `{ contract }`; emitted JSON becomes that value through `contractFromJson<Contract>(json)`.
 
 ## Context
 

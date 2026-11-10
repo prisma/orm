@@ -6,7 +6,7 @@ import { createConnection, createServerProcess, forward } from 'vscode-ws-jsonrp
 import { WebSocketServer } from 'ws';
 
 export interface BridgeOptions {
-  /** Absolute path to the built CLI entry (`dist/bin.mjs`) to spawn. */
+  /** Absolute path to the `prisma` bin to spawn. */
   readonly cliEntry: string;
   /** WebSocket path the client connects to (e.g. `/psl`). */
   readonly path: string;

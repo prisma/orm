@@ -6,6 +6,8 @@ Status: **Accepted**
 
 Prisma 8 reads the schema file of an earlier Prisma version directly as a contract source. A project that still runs Prisma 7 points Prisma 8 at the `schema.prisma` it already has, and `prisma contract emit` produces the contract from it. The file is not converted, and nothing is inferred from the database.
 
+**What such a source is for.** It interprets the earlier version's schema as the Prisma 8 contract of the database that version built from it. So `prisma db sign` accepts that database as it is, with zero findings and without changing it. That is the source's whole purpose, and every rule below serves it. Nothing between the source and the emitted contract may change what the source describes. That includes the family's contract builder (ADR 306). A builder step that tidies a contract for another source, such as merging a redundant index or deriving an index for a foreign key, must leave this source's description alone, even when the database holds something redundant or pointless.
+
 Prisma 8 describes a database with a contract, and every command reads that contract. Prisma 7 describes a database with `schema.prisma`, and its migrations keep that file current. A project moving from Prisma 7 to Prisma 8 runs both for a while: Prisma 7 still owns the database and its migrations, and Prisma 8 adopts the database as it is. During that time the Prisma 7 schema is the only description of the database that stays correct, so it is the one Prisma 8 reads.
 
 ## The decision in a config file
@@ -58,7 +60,7 @@ There is no third outcome. Each construct in the schema is either lowered to a c
 
 Two rules follow, and they are what separate this reader from a compatibility layer:
 
-- **Prisma 8's own checks are not loosened to admit a construct.** Where Prisma 8's schema language cannot express a shape, for example a generated value on an optional field, the reader reports an error rather than relaxing the parser or interpreter that refuses it.
+- **Prisma 8's own checks are not loosened to admit a construct.** Where Prisma 8's schema language cannot express a shape, for example a column type with no Prisma 8 codec such as `@db.Citext`, the reader reports an error rather than relaxing the parser or interpreter that refuses it.
 - **A construct Prisma 8 cannot express is a reason to build the feature.** Each refusal records a gap in Prisma 8's own authoring surface, to be designed on its own terms. It is not a defect of the reader.
 
 The set of refusals is therefore a standing list of Prisma 8 features to build, each with a real user behind it.
@@ -78,7 +80,21 @@ Fidelity is defined by the comparison `db verify` makes against the database the
 | check constraints, by name | |
 | native enums, by type name and ordered member list | |
 
-That table decides several lowering rules on its own. Index names are reproduced exactly, because they are compared. Primary key and foreign key names are left to Prisma 8, because they are not. Referential actions are always written out, and enum member order is preserved. The measure of the reader is a real database, built by the earlier version's own migrations, that verifies with zero findings.
+That table decides several lowering rules on its own. Index names are reproduced exactly, because they are compared. Referential actions are always written out, and enum member order is preserved. The measure of the reader is a real database, built by the earlier version's own migrations, that verifies with zero findings.
+
+`db verify` is not the only consumer of the contract, though. The migration planner drops and renames primary keys and foreign keys by name, so a name verify ignores still has to be the one the database holds, or a later migration fails. The reader therefore works out the name the earlier version gave each primary key and foreign key, and compares it with the name Prisma 8 derives for an unnamed one, which the target supplies through its binding. It states the name in the contract only where the two differ: a `map` that is not the derived name, an implicit junction's primary key (`_PostToTag_AB_pkey` where Prisma 8 derives `_PostToTag_pkey`), and a foreign key name the earlier version cut to 63 bytes. Names that agree stay unnamed, so `contract print` writes no `map` for them:
+
+```prisma
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], map: "post_written_by")
+}
+```
+
+Here the foreign key is stated as `post_written_by` and the primary key stays unnamed, because the earlier version's `Post_pkey` is also the name Prisma 8 derives.
+
+One consequence is a compatibility commitment. Whether a name is stated, and so the storage hash of a contract the reader produces, depends on Prisma 8's naming rule. Changing how Prisma 8 derives a primary key or foreign key name changes the storage hash of every affected contract from an earlier version's schema, and needs an upgrade instruction telling those users to re-sign or plan a migration.
 
 Every lowering rule is checked against SQL that the earlier version's own toolchain generated, not against its documentation. The proof schemas in the repository carry that SQL beside them.
 
@@ -86,7 +102,7 @@ Every lowering rule is checked against SQL that the earlier version's own toolch
 
 ```mermaid
 flowchart LR
-  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>one grammar for every PSL document"]
+  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>shared by every PSL source"]
   parser --> interpreter["@internal/sql-contract-prisma7<br/>rules of the Prisma 7 language for the SQL family"]
   binding["@internal/target-postgres<br/>prisma7PostgresBinding: what Postgres creates"] --> interpreter
   interpreter --> contract["Contract"]
@@ -94,11 +110,11 @@ flowchart LR
   facade -. wires .-> binding
 ```
 
-**The parser is shared, and it has one grammar.** `@internal/psl-parser` parses every PSL document the same way, whichever Prisma version wrote it. The two constructs the earlier language needs, attributes on enum members and field lines inside a `view` block, parse in every document. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
+**The parser is shared.** `@internal/psl-parser` parses every PSL document, whichever Prisma version wrote it. The earlier language needs two constructs that Prisma 8 does not use: attributes on enum members, and field lines inside a `view` block. Attributes on enum members parse in every document, because they only extend the syntax of one entry. Field lines inside a `view` block are different: reading a `view` body as model fields replaces the grammar of the whole block, and Prisma 8 does not intend to keep that grammar, since a pack may claim the `view` keyword and Prisma 8 views may get a syntax of their own. So field lines parse only in the `prisma-7` grammar. The parser names the grammar versions it accepts after the Prisma version whose grammar they are: `prisma-8`, the default, and `prisma-7`. A PSL contract source declares its grammar in `parserOptions`, and the Prisma 7 and Prisma 6 sources declare `prisma-7`, since Prisma 6 schemas use the same grammar. Every tool that parses a source's files passes the source's options to the parser: the source's own `load`, `contract format`, and the language server. In the `prisma-8` grammar, a `view` body parses as `key = value` entries. A field line with an attribute is then a parse error, and a field line without one reads as two bare entries, which `contract format` and the editor write on separate lines. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
 
 **Rules of the language live in the family authoring package.** `@internal/sql-contract-prisma7` holds everything that is true of the Prisma 7 language for the SQL family: blocks and attributes, relation pairing, junction tables, defaults, and the diagnostics. It knows nothing about a particular database and depends on no Prisma 7 package.
 
-**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, the native enum entity kind, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, and how a literal default is read for a column whose codec does not take the written value. The Postgres target exports one instance.
+**Facts about the database come from the target through one binding.** `Prisma7TargetBinding` is the complete list of what a target must answer: the target pack and namespace factory, the datasource providers it accepts, the type map of what the earlier version creates for each scalar and native-type attribute, with the extension that provides a native type such as `Citext`, the native enum entity kind, the extension entity kind and, for each extension a pack declares, that pack's id and published import path, which both a datasource `extensions` entry and a native type the extension provides are read through, the index types, the identifier byte limit, the junction relation field names, the "now" generator for each column codec, how a literal default is read for a column whose codec does not take the written value, and the SQL expression of a default whose value the column's type holds but its codec cannot hold exactly. The Postgres target exports one instance.
 
 **The facade publishes one function** that wires the two together:
 
@@ -115,7 +131,7 @@ A second family or target adds a package and a binding. Neither adds a branch to
 Each facade publishes one function, named after the Prisma version whose schema it reads, and no aliases:
 
 - `prisma7Schema(path)` on `@prisma/orm-postgres/config` reads a Prisma 7 PostgreSQL schema.
-- A MongoDB reader will be `prisma6Schema(path)` on `@prisma/orm-mongo/config`, because Prisma 6 is the last version with a MongoDB connector.
+- The MongoDB reader is `prisma6Schema(path)` on `@prisma/orm-mongo/config`, because Prisma 6 is the last version with a MongoDB connector.
 - `prisma7Contract(path, { binding })` is the family-level factory the facades wrap. The facade name says `Schema` because the user points it at a schema file; the family name says `Contract` because it returns a `ContractConfig`.
 
 The version in the name tells the user which schema language is accepted, which differs by family. A second name for the same function would put two spellings into guides and examples for one thing.
@@ -145,4 +161,10 @@ For as long as the Prisma version it reads is supported. The repository's [READM
 
 **Relax the Prisma 8 checks that refuse the shapes Prisma 8 cannot express.** This would make the reader the reason Prisma 8's own language accepts something it was designed to refuse, and would hide the missing feature instead of recording it.
 
-**Build the missing Prisma 8 features as part of the reader.** Views, opaque column types, and generated values on optional fields are each their own piece of work with their own design. Bundling them into the reader would tie a transition tool to features it does not need.
+**A behaviour flag, or letting each tool detect the version.** A flag such as `viewBodyAsModelFields` has no meaning on its own: it exists only because the Prisma 7 grammar reads `view` bodies that way, and no Prisma 8 source would set it. Naming the grammar says why, and absorbs any further Prisma 7 grammar difference without a second flag. The framework vocabulary rule forbids names of Prisma versions before 8, but the parser is the authority on its own grammar, so the rule records that exception for the grammar names. Detecting the version from the file, for example from a missing `// use prisma-8` line, would make every tool repeat a guess that can be wrong. A parse function on the source, instead of options, is more than the problem needs, and the config loader cannot check a function. The source declares its grammar instead.
+
+**Build the missing Prisma 8 features as part of the reader.** Views and column types with no Prisma 8 codec, such as `Unsupported("tsvector")`, or `@db.Money` before it gained one, are each their own piece of work with their own design. Bundling them into the reader would tie a transition tool to features it does not need. `Unsupported("...")` is now read, as a raw column with no field, because ADR 273 gave Prisma 8 a data type for such columns.
+
+## Amendment (October 9, 2026) — the earlier version's migration ledger is not described
+
+The earlier version records its applied migrations in `_prisma_migrations`, a table in the application's own schema. That table is the earlier tool's bookkeeping, not part of the schema, and the reader does not describe it. The Postgres adapter's introspection leaves it out of an application schema unless a contract declares a table of that name. So `db verify` never compares it and `contract infer` never prints it, just as the earlier version's own `db pull` never introspects it.

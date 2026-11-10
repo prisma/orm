@@ -1,0 +1,111 @@
+{
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "users": {
+      "namespace": "__unbound__",
+      "model": "User"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "User": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "name": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "tags": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "users",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "tags": {
+                  "field": "tags"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "7ae33060a0974af2a7c8dc8999b03f71ba183e24ae312c75f124af9dd81aa8f6",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "users": {
+              "kind": "mongo-collection",
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    },
+                    "tags": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "_id",
+                    "name",
+                    "tags"
+                  ]
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

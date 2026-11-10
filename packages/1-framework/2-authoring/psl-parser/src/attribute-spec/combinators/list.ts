@@ -1,6 +1,7 @@
 import { and, notOk, ok, okVoid, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import { ArrayLiteralAst, type ExpressionAst } from '../../syntax/ast/expressions';
+import { groupedTypeLabel } from '../type-label';
 import type { ArgType, AttributeCtx, ListArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
@@ -19,7 +20,7 @@ export function list<T, Ctx extends AttributeCtx>(
   const unique = opts?.unique ?? false;
   return {
     kind: 'list',
-    label: opts?.label ?? (of.label.includes(' | ') ? `(${of.label})[]` : `${of.label}[]`),
+    label: opts?.label ?? `${groupedTypeLabel(of)}[]`,
     of,
     allowEmpty,
     unique,

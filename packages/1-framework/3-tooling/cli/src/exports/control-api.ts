@@ -11,7 +11,10 @@
 // Re-export core control plane types for consumer convenience
 export type {
   ControlStack,
-  SignDatabaseResult,
+  MigrationOperationSubject,
+  MigrationPlanSubjects,
+  MigrationSubject,
+  ResolvedMigrationStatement,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -22,7 +25,7 @@ export { createControlClient } from '../control-api/client';
 export { enrichContract } from '../control-api/contract-enrichment';
 // Client-free operations backing the migration/db command surface
 // (TML-3173, consolidate-clis slice 1b).
-export { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
+export { errorFromCaught } from '../control-api/operations/caught-errors';
 export { mapContractAtError } from '../control-api/operations/contract-at-errors';
 export { executeContractEmit } from '../control-api/operations/contract-emit';
 export {
@@ -53,6 +56,13 @@ export {
 // flow against a loaded contract-space aggregate.
 export { type ExecuteDbInitOptions, executeDbInit } from '../control-api/operations/db-init';
 export {
+  type DbSignSpaceFailure,
+  type DbSignSpaceOutcome,
+  type ExecuteDbSignOptions,
+  type ExecuteDbSignResult,
+  executeDbSign,
+} from '../control-api/operations/db-sign';
+export {
   type ExecuteDbUpdateOptions,
   executeDbUpdate,
 } from '../control-api/operations/db-update';
@@ -61,10 +71,7 @@ export {
   type ExecuteDbVerifyResult,
   executeDbVerify,
 } from '../control-api/operations/db-verify';
-export {
-  hasMigrationPath,
-  refuseMarkerOutsideGraph,
-} from '../control-api/operations/graph-queries';
+export { hasMigrationPath } from '../control-api/operations/graph-queries';
 export {
   refuseMissingInvariantPath,
   refuseUnknownInvariants,
@@ -103,7 +110,6 @@ export {
 export {
   appliedHashesFromLedger,
   deriveStatusEdgeAnnotations,
-  originHashForStatus,
   statusForMigrationHash,
 } from '../control-api/operations/migration-status-overlay';
 export {
@@ -136,21 +142,33 @@ export type {
   RenderContractDtsResult,
   RenderContractDtsSuccess,
 } from '../control-api/render-contract-dts';
+export type {
+  AnswerPlanQuestions,
+  PlanAnswer,
+  PlanQuestion,
+  PlanQuestionVerb,
+} from '../control-api/statements/plan-questions';
+export type { AppliedStatementReport } from '../control-api/statements/report-applied-statements';
+export {
+  type ResolveStatementsInput,
+  resolveStatements,
+  type StatementOrigin,
+} from '../control-api/statements/resolve-statements';
+export type { StatementText, StatementVerb } from '../control-api/statements/statement-text';
 // CLI-specific types
 export type {
+  AskedDataLoss,
+  AskedSubject,
   ContractEmitOptions,
   ContractEmitResult,
   ControlActionName,
   ControlClient,
   ControlClientOptions,
   ControlProgressEvent,
-  DbInitFailure,
-  DbInitFailureCode,
   DbInitOptions,
   DbInitResult,
   DbInitSuccess,
-  DbUpdateFailure,
-  DbUpdateFailureCode,
+  DbSignOptions,
   DbUpdateOptions,
   DbUpdateResult,
   DbUpdateSuccess,
@@ -163,8 +181,8 @@ export type {
   IntrospectOptions,
   OnControlProgress,
   SchemaVerifyOptions,
-  SignOptions,
   VerifyOptions,
 } from '../control-api/types';
 // Lifecycle helpers for hosts that publish to many output paths
 export { disposeEmitQueue } from '../utils/emit-queue';
+export type { CliInvocation } from '../utils/printed-command';

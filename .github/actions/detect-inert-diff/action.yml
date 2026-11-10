@@ -4,7 +4,9 @@ description: >
   affect build/test/fixture results (docs, markdown, rules, contributor
   skill sources under skills-contrib, transient project artefacts). The
   user-facing skills/ tree is NOT inert — `prisma init` installs it
-  and an integration test covers it. Fail-safe: a diff is inert only if
+  and an integration test covers it. Nothing under packages/ is inert,
+  READMEs included: they ship to npm, and integration tests run the
+  config blocks in some of them. Fail-safe: a diff is inert only if
   *every* changed file matches the allow-list below; any unrecognized path
   yields inert=false. Works from a shallow checkout by fetching the exact
   base and head commits when absent. Handles pull_request and merge_group;
@@ -47,6 +49,7 @@ runs:
           [ -z "$f" ] && continue
           case "$f" in
             skills/*) inert=false; break ;;   # user-facing skills are installed + integration-tested
+            packages/*) inert=false; break ;; # package READMEs ship and are run by integration tests
             *.md) ;;             # any markdown, anywhere
             docs/*) ;;           # documentation tree
             projects/*) ;;       # transient project artefacts (never imported)

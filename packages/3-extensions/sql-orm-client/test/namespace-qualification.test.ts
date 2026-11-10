@@ -6,11 +6,14 @@ import { SqlStorage, type SqlStorageInput, StorageTable } from '@internal/sql-co
 import type { TableSource } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { PostgresSchema } from '../../../3-targets/3-targets/postgres/src/core/postgres-schema';
-import { SqliteDatabase } from '../../../3-targets/3-targets/sqlite/src/core/sqlite-unbound-database';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
-import { compileDeleteCount, compileInsertReturning, compileSelect } from '../src/query-plan';
-import { emptyState } from '../src/types';
+import { PostgresSchema } from '../../../3-targets/postgres/1-target/src/core/postgres-schema';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
+import { SqliteDatabase } from '../../../3-targets/sqlite/1-target/src/core/sqlite-unbound-database';
+import type { CollectionTables } from '../src/collection-tables';
+import { deleteAst, insertAst, returningProjection } from '../src/mutation-statements';
+import { compileSelect } from '../src/query-plan';
+import { deriveParamsFromAst } from '../src/query-plan-meta';
+import { emptyTableState, tablesForTable } from './helpers';
 
 const PUBLIC_NAMESPACE_ID = 'public';
 
@@ -24,8 +27,8 @@ const userModel = {
 
 const usersTableInput = {
   columns: {
-    id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-    email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+    id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+    email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
   },
   uniques: [],
   indexes: [],
@@ -57,6 +60,15 @@ const publicPostgresContract = {
   }),
 } as unknown as PostgresContract;
 
+function insertUsers(users: CollectionTables) {
+  return insertAst(
+    publicPostgresContract,
+    users.root,
+    [{ id: 1, email: 'a@example.com' }],
+    undefined,
+  ).withReturning(returningProjection(publicPostgresContract, 'User', users.root, ['id', 'email']));
+}
+
 describe('ORM namespace qualification', () => {
   it('throws on an absent namespace rather than silently picking a present one', () => {
     const contract = {
@@ -71,38 +83,30 @@ describe('ORM namespace qualification', () => {
       },
     } as Contract<SqlStorageType>;
 
-    expect(() => compileSelect(contract, 'missing', 'users', emptyState(), 'User')).toThrow(
-      /namespace "missing" is not present/,
-    );
+    expect(() =>
+      compileSelect(contract, 'User', emptyTableState(contract, 'users', 'missing')),
+    ).toThrow(/namespace "missing" is not present/);
   });
 
   it('stamps public on TableSource for select, insert, and delete plans', () => {
     const selectPlan = compileSelect(
       publicPostgresContract,
-      'public',
-      'users',
-      emptyState(),
       'User',
+      emptyTableState(publicPostgresContract, 'users'),
     );
     expect((selectPlan.ast as { from: TableSource }).from.namespaceId).toBe('public');
 
-    const insertPlan = compileInsertReturning(
-      publicPostgresContract,
-      'public',
-      'users',
-      [{ id: 1, email: 'a@example.com' }],
-      ['id', 'email'],
-    );
-    expect((insertPlan.ast as { table: TableSource }).table.namespaceId).toBe('public');
+    const users = tablesForTable(publicPostgresContract, 'users', 'public');
+    const insert = insertUsers(users);
+    expect(insert.table.namespaceId).toBe('public');
 
-    const deletePlan = compileDeleteCount(publicPostgresContract, 'public', 'users', []);
-    expect((deletePlan.ast as { table: TableSource }).table.namespaceId).toBe('public');
+    expect(deleteAst(publicPostgresContract, users, undefined).table.namespaceId).toBe('public');
   });
 
   it('renders schema-qualified SQL for Postgres via the adapter lower path', () => {
     const adapter = createPostgresAdapter();
-    const selectPlan = compileSelect(publicPostgresContract, 'public', 'users', {
-      ...emptyState(),
+    const selectPlan = compileSelect(publicPostgresContract, 'User', {
+      ...emptyTableState(publicPostgresContract, 'users'),
       selectedFields: ['id', 'email'],
     });
     const selectSql = adapter.lower(selectPlan.ast, {
@@ -111,16 +115,10 @@ describe('ORM namespace qualification', () => {
     }).sql;
     expect(selectSql).toContain('FROM "public"."users"');
 
-    const insertPlan = compileInsertReturning(
-      publicPostgresContract,
-      'public',
-      'users',
-      [{ id: 1, email: 'a@example.com' }],
-      ['id', 'email'],
-    );
-    const insertSql = adapter.lower(insertPlan.ast, {
+    const insert = insertUsers(tablesForTable(publicPostgresContract, 'users', 'public'));
+    const insertSql = adapter.lower(insert, {
       contract: publicPostgresContract,
-      params: insertPlan.params,
+      params: deriveParamsFromAst(insert).params,
     }).sql;
     expect(insertSql).toContain('INSERT INTO "public"."users"');
   });
@@ -143,8 +141,12 @@ describe('ORM namespace qualification', () => {
               table: {
                 users: new StorageTable({
                   columns: {
-                    id: { codecId: 'sqlite/integer@1', nativeType: 'integer', nullable: false },
-                    email: { codecId: 'sqlite/text@1', nativeType: 'text', nullable: false },
+                    id: {
+                      codecId: 'sqlite/integer@1',
+                      dataType: 'sqlite/integer',
+                      nullable: false,
+                    },
+                    email: { codecId: 'sqlite/text@1', dataType: 'sqlite/text', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -161,8 +163,8 @@ describe('ORM namespace qualification', () => {
       }),
     } as unknown as Contract<SqlStorageType>;
 
-    const selectPlan = compileSelect(sqliteContract, UNBOUND_NAMESPACE_ID, 'users', {
-      ...emptyState(),
+    const selectPlan = compileSelect(sqliteContract, 'User', {
+      ...emptyTableState(sqliteContract, 'users', UNBOUND_NAMESPACE_ID),
       selectedFields: ['id'],
     });
     expect((selectPlan.ast as { from: TableSource }).from.namespaceId).toBe(UNBOUND_NAMESPACE_ID);

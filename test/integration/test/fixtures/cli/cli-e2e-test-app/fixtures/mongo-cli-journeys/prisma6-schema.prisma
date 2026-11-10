@@ -8,12 +8,16 @@ model User {
   email  String @unique
   legacy String @ignore
   posts  Post[]
+
+  @@index([email(sort: Asc)])
 }
 
 model Post {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   title     String
   views     BigInt
+  likes     Int
+  rank      Int      @db.Int
   meta      Json
   authorId  String   @db.ObjectId
   author    User     @relation(fields: [authorId], references: [id])

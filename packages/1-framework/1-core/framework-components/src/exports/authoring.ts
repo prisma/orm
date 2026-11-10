@@ -1,28 +1,93 @@
 export type {
+  AuthoringTypeChoiceArgument,
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceOption,
+  AuthoringTypeChoicePassedArgument,
+  AuthoringTypeChoiceRow,
+  ResolvedAuthoringTypeChoice,
+} from '../shared/authoring-type-choice';
+export {
+  assertTypeChoicesValid,
+  collectScalarTypeConstructors,
+  getAuthoringTypeChoice,
+  instantiateAuthoringTypeCall,
+  isAuthoringTypeChoiceOption,
+  resolveAuthoringTypeChoice,
+  typeChoiceArgumentsFromObject,
+  typeChoiceCombinationText,
+  typeConstructorLookup,
+  unknownTypeChoiceArgumentMessage,
+} from '../shared/authoring-type-choice';
+export type {
+  AuthoringTypeChoiceCall,
+  AuthoringTypeChoiceCallArgument,
+} from '../shared/authoring-type-choice-call';
+export { findAuthoringTypeChoiceCall } from '../shared/authoring-type-choice-call';
+export type {
   AuthoringTypeConstructorCall,
   AuthoringTypeConstructorOutput,
 } from '../shared/authoring-type-constructor-call';
-export { findAuthoringTypeConstructorCall } from '../shared/authoring-type-constructor-call';
 export {
-  checkUncomposedNamespace,
-  getAuthoringFieldPreset,
-} from '../shared/field-preset-resolution';
+  authoringTypeConstructorArguments,
+  authoringTypeConstructors,
+  findAuthoringTypeConstructorCall,
+} from '../shared/authoring-type-constructor-call';
+export {
+  type TypedLiteralOptions,
+  writeDataTypeValue,
+  writeTypedLiteral,
+  writtenTypeArguments,
+  writtenTypeConstructorCall,
+} from '../shared/data-type-literal';
+export type {
+  AssembledDataTypeSupport,
+  DataTypeComponent,
+} from '../shared/data-type-support';
+export {
+  assembleAuthoringDataTypes,
+  assembleDataTypeSupport,
+} from '../shared/data-type-support';
+export type {
+  DiscriminatorDecision,
+  DiscriminatorField,
+  DiscriminatorFieldRefusal,
+  DiscriminatorRefusal,
+  DiscriminatorVariantRefusal,
+} from '../shared/discriminator-rule';
+export {
+  applyDiscriminatorRule,
+  describeDiscriminatorRefusal,
+} from '../shared/discriminator-rule';
+export {
+  type EnumBlockDiagnostic,
+  type EnumBlockMember,
+  type EnumBlockSite,
+  enumMemberProblemDiagnostic,
+  readEnumBlockMembers,
+} from '../shared/enum-block-members';
+export {
+  type DecodedEnum,
+  type EncodedEnumMember,
+  type EnumMemberProblem,
+  encodeEnumMembers,
+} from '../shared/enum-members';
+export {
+  type DuplicateStoredValue,
+  duplicateStoredMembers,
+  type StoredEnumMember,
+} from '../shared/enum-stored-members';
 export type {
   AuthoringArgRef,
   AuthoringArgumentDescriptor,
   AuthoringAttributeSpecContributions,
-  AuthoringColumnDefaultTemplate,
   AuthoringContributions,
-  AuthoringDataTypeEntry,
+  AuthoringDescriptorKinds,
   AuthoringDiagnosticSink,
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeFactoryOutput,
   AuthoringEntityTypeNamespace,
   AuthoringEntityTypeTemplateOutput,
-  AuthoringFieldNamespace,
-  AuthoringFieldPresetDescriptor,
-  AuthoringFieldPresetOutput,
   AuthoringModelAttributeContext,
   AuthoringModelAttributeDescriptor,
   AuthoringModelAttributeDescriptorNamespace,
@@ -31,64 +96,93 @@ export type {
   AuthoringModelAttributeLoweringOutput,
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
-  AuthoringSelectRef,
   AuthoringStorageTypeTemplate,
   AuthoringTemplateValue,
+  AuthoringTypeAliasDescriptor,
+  AuthoringTypeAliasOutput,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeConstructorEntityRef,
   AuthoringTypeNamespace,
+  AuthoringTypeNamespaceMember,
+  AuthoringTypeParamsIssue,
   AuthoringWarning,
   AuthoringWarningSink,
   DataTypeAuthoringEntry,
-  DataTypeLoweringAuthoringEntry,
   DataTypeWrittenForm,
   ScalarTypeConstructorOutput,
 } from '../shared/framework-authoring';
 export {
+  AUTHORING_TYPE_DESCRIPTOR_KINDS,
+  assertNoAuthoringFieldNamespace,
   assertNoCrossRegistryCollisions,
   assertResolvableTypeConstructorTemplates,
+  assertTypeAliasesValid,
   classifyEnumMemberType,
-  collectScalarTypeConstructors,
   flushAuthoringWarnings,
-  hasRegisteredFieldNamespace,
+  getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
-  instantiateAuthoringFieldPreset,
+  instantiateAuthoringTypeAlias,
   instantiateAuthoringTypeConstructor,
+  instantiateAuthoringTypeConstructorFromValues,
   isAuthoringArgRef,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
+  isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
-  isDataTypeLoweringEntry,
-  isLoweringEntryKey,
-  loweringEntryKey,
+  isAuthoringTypeDescriptor,
   mergeAuthoringNamespaces,
   resolveAuthoringTemplateValue,
   resolveEnumCodecId,
+  resolveTypeAliasGenerators,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeChoiceParams,
+  validateAuthoringTypeParams,
 } from '../shared/framework-authoring';
-export type { AuthoringOption } from '../shared/option-descriptor';
 export type {
-  PslBlockParam,
-  PslBlockParamList,
-  PslBlockParamOption,
-  PslBlockParamRef,
-  PslBlockParamValue,
+  ParsedPslExtensionBlock,
   PslExtensionBlock,
-  PslExtensionBlockParamList,
-  PslExtensionBlockParamOption,
-  PslExtensionBlockParamRef,
-  PslExtensionBlockParamScalarValue,
-  PslExtensionBlockParamValue,
   PslExtensionBlockParsedAttribute,
+  PslExtensionBlockPrintEntry,
 } from '../shared/psl-extension-block';
-export type { PresetStorageTemplate } from '../shared/temporal-presets';
+export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
-  TEMPORAL_ON_CREATE_ARG,
-  TEMPORAL_ON_UPDATE_ARG,
+  canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
+  printedTaggedLiteralReadsBack,
+  printTaggedLiteral,
+  resolveTemplateTagEscapes,
+  tsTaggedTemplateSource,
+} from '../shared/tagged-literal';
+export {
   TIMESTAMP_NOW_GENERATOR_ID,
-  temporalAuthoringPresets,
-  temporalCodecPreset,
-  temporalPhaseTemplate,
-} from '../shared/temporal-presets';
+  temporalTypeAliases,
+} from '../shared/temporal-type-aliases';
+export type {
+  CastRefusal,
+  DataTypeSupport,
+  ReadRefusal,
+  RefusalDescription,
+  RefusalGuidance,
+  WrittenForm,
+  WrittenScalar,
+  WrittenValue,
+} from '../shared/written-value';
+export {
+  admittedForms,
+  admittedTags,
+  castTypedValue,
+  describeAdmittedForms,
+  describeExpected,
+  describeRefusal,
+  describeRefusedValueType,
+  entryForPlain,
+  entryForTag,
+  exactRewrite,
+  knownTags,
+  readWrittenValue,
+  readWrittenValueAs,
+  readWrittenValueIntoCodec,
+  tagForm,
+} from '../shared/written-value';

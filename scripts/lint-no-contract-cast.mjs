@@ -44,10 +44,10 @@ const ALLOWLISTED_PATH_FRAGMENTS = [
   '/test/',
   '/tests/',
   // serializer implementation files (the seam itself)
-  'packages/2-sql/9-family/src/core/ir/sql-contract-serializer-base.ts',
-  'packages/2-sql/9-family/src/core/ir/sql-contract-serializer.ts',
-  'packages/2-sql/9-family/src/core/control-instance.ts',
-  'packages/3-targets/3-targets/postgres/src/core/postgres-contract-serializer.ts',
+  'packages/2-sql-family/9-family/src/core/ir/sql-contract-serializer-base.ts',
+  'packages/2-sql-family/9-family/src/core/ir/sql-contract-serializer.ts',
+  'packages/2-sql-family/9-family/src/core/control-instance.ts',
+  'packages/3-targets/postgres/1-target/src/core/postgres-contract-serializer.ts',
   'packages/2-mongo-family/9-family/src/core/ir/mongo-contract-serializer.ts',
 ];
 

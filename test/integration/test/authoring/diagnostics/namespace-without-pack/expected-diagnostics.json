@@ -1,8 +1,8 @@
 {
-  "failureSummary": "PSL to SQL contract interpretation failed",
+  "failureSummary": "Schema has 1 error",
   "diagnostics": [
     {
-      "code": "PSL_EXTENSION_NAMESPACE_NOT_COMPOSED",
+      "code": "PSL_UNRESOLVED_REFERENCE",
       "sourceId": "./schema.prisma",
       "startLine": 5
     }

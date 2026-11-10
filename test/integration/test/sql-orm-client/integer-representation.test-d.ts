@@ -1,6 +1,6 @@
 /**
  * Type-tests over the emitted integer-representation fixtures: a
- * `BigIntNumber` column reads as `number` and an `UnboundedInt` column as
+ * `Int8Number` column reads as `number` and a `NumericBigInt` column as
  * `bigint` through the ORM result surface, and aggregate result types resolve
  * per the contracts' emitted `aggregateTypes` rows — including the `min`/`max`
  * self rows, whose resolved output is the input codec itself.
@@ -21,7 +21,7 @@ declare const meters: Collection<PgContract, 'Meter'>;
 declare const sqliteMeters: Collection<SqliteContract, 'Meter'>;
 
 describe('column output types', () => {
-  test('BigIntNumber reads as number and UnboundedInt as bigint on PostgreSQL', () => {
+  test('Int8Number reads as number and NumericBigInt as bigint on PostgreSQL', () => {
     const rows = meters.select('id', 'peak', 'lifetime').all();
     type Row = Awaited<typeof rows>[number];
     expectTypeOf<Row['peak']>().toEqualTypeOf<number>();
@@ -41,7 +41,7 @@ describe('column output types', () => {
     expectTypeOf<SqliteFieldOutputTypes['__unbound__']['Meter']['peak']>().toEqualTypeOf<number>();
   });
 
-  test('an included BigIntNumber column reads as number', () => {
+  test('an included Int8Number column reads as number', () => {
     const rows = meters
       .select('id')
       .include('samples', (sample) => sample.select('id', 'reading'))
@@ -114,7 +114,7 @@ describe('aggregate result types resolve per the emitted rows', () => {
     }>();
   });
 
-  test('an include reducer over a BigIntNumber column reads the declared result', () => {
+  test('an include reducer over an Int8Number column reads the declared result', () => {
     const rows = meters
       .select('id')
       .include('samples', (sample) => sample.sum('reading'))

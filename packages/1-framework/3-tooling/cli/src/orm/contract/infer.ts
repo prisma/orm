@@ -7,16 +7,16 @@ import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import { createControlClient as createDefaultControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { ControlClient, ControlClientOptions } from '../../control-api/types';
 import {
-  CliStructuredError,
   errorDatabaseConnectionRequired,
   errorDriverRequired,
   errorRuntime,
-  errorUnexpected,
 } from '../../utils/cli-errors';
-import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -38,7 +38,7 @@ function inferPresentations(inputs: {
 }): Presentations {
   const { document, database } = inputs;
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.psl.path]),
     next: () => [],
     human: (): readonly Block[] => [
       ...(database === undefined
@@ -135,7 +135,7 @@ export function createContractInferCommand({
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });
-        const pslContractAst = client.inferPslContract(schema);
+        const pslContractAst = await client.inferPslContract(schema);
         if (pslContractAst === undefined) {
           return notOk(
             normalizeError(
@@ -157,18 +157,15 @@ export function createContractInferCommand({
             'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during contract infer: ${safeMessage}`,
-            }),
+            errorFromCaught(
+              error,
+              (message) => `Unexpected error during contract infer: ${message}`,
+              {
+                connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+              },
+            ),
           ),
         );
       } finally {

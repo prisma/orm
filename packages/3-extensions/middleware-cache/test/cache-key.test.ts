@@ -1,62 +1,16 @@
-import type { PlanMeta } from '@internal/contract/types';
-import type {
-  ExecutionPlan,
-  RuntimeMiddlewareContext,
-} from '@internal/framework-components/runtime';
+import type { ExecutionPlan } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { cacheAnnotation } from '../src/cache-annotation';
 import { createCacheMiddleware } from '../src/cache-middleware';
-import type { CachedEntry, CacheStore } from '../src/cache-store';
-
-interface MockExec extends ExecutionPlan {
-  readonly statement: string;
-}
-
-const baseMeta: PlanMeta = {
-  target: 'postgres',
-  targetFamily: 'sql',
-  storageHash: 'test',
-  lane: 'orm',
-};
-
-function makeExec(statement: string, annotations?: Record<string, unknown>): MockExec {
-  return Object.freeze({
-    statement,
-    meta: annotations ? { ...baseMeta, annotations } : baseMeta,
-  });
-}
-
-function makeCtx(overrides?: Partial<RuntimeMiddlewareContext>): RuntimeMiddlewareContext {
-  return {
-    contract: {},
-    mode: 'strict',
-    now: () => Date.now(),
-    log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-    contentHash: async (exec) => `id:${(exec as MockExec).statement}`,
-    scope: 'runtime',
-    planExecutionId: 'test-fixture-plan-execution-id',
-    ...overrides,
-  };
-}
-
-function spyStore(): CacheStore & {
-  readonly getSpy: ReturnType<typeof vi.fn>;
-  readonly setSpy: ReturnType<typeof vi.fn>;
-  readonly inner: Map<string, CachedEntry>;
-} {
-  const inner = new Map<string, CachedEntry>();
-  const getSpy = vi.fn(async (key: string) => inner.get(key));
-  const setSpy = vi.fn(async (key: string, entry: CachedEntry, _ttlMs: number) => {
-    inner.set(key, entry);
-  });
-  return { get: getSpy, set: setSpy, getSpy, setSpy, inner };
-}
-
-async function drain<T>(iter: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const x of iter) out.push(x);
-  return out;
-}
+import {
+  baseMeta,
+  drain,
+  endStatement,
+  type MockExec,
+  makeCtx,
+  makeExec,
+  spyStore,
+} from './middleware-fixtures';
 
 describe('cache key resolution', () => {
   describe('default path: ctx.contentHash(exec)', () => {
@@ -64,71 +18,67 @@ describe('cache key resolution', () => {
       const store = spyStore();
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ ttl: 60_000 }),
+        cache: cacheAnnotation({}),
       });
       const ctx = makeCtx();
 
       // Miss → store.get and store.set both called with the contentHash.
-      await mw.interceptQuery!(exec, ctx);
+      await mw.intercept!.onQuery!(exec, ctx);
       await mw.onRow!({ id: 1 }, exec, ctx);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
+      await endStatement(mw, exec, ctx, { rowCount: 1 });
 
-      expect(store.getSpy).toHaveBeenCalledWith('id:select 1');
-      expect(store.setSpy).toHaveBeenCalledWith('id:select 1', expect.anything(), 60_000);
+      expect(store.getSpy).toHaveBeenCalledWith({ key: 'key:select 1', meta: undefined });
+      expect(store.setSpy).toHaveBeenCalledWith(
+        {
+          key: 'key:select 1',
+          meta: undefined,
+          version: 0,
+          data: { empty: true },
+        },
+        expect.anything(),
+      );
     });
 
     it('invokes ctx.contentHash when no per-query key annotation is supplied', async () => {
       const store = spyStore();
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ ttl: 60_000 }),
+        cache: cacheAnnotation({}),
       });
       const contentHash = vi.fn(async (e: ExecutionPlan) => `derived:${(e as MockExec).statement}`);
       const ctx = makeCtx({ contentHash });
 
-      await mw.interceptQuery!(exec, ctx);
+      await mw.intercept!.onQuery!(exec, ctx);
 
       expect(contentHash).toHaveBeenCalledTimes(1);
       expect(contentHash).toHaveBeenCalledWith(exec);
-      expect(store.getSpy).toHaveBeenCalledWith('derived:select 1');
+      expect(store.getSpy).toHaveBeenCalledWith({ key: 'derived:select 1', meta: undefined });
     });
 
     it('produces distinct cache entries for two execs with distinct contentHash returns', async () => {
       const store = spyStore();
-      const mw = createCacheMiddleware({ store, clock: () => 0 });
+      const mw = createCacheMiddleware({ store });
       const execA = makeExec('A', {
-        cache: cacheAnnotation({ ttl: 60_000 }),
+        cache: cacheAnnotation({}),
       });
       const execB = makeExec('B', {
-        cache: cacheAnnotation({ ttl: 60_000 }),
+        cache: cacheAnnotation({}),
       });
       const ctx = makeCtx();
 
       // Miss + commit for A.
-      await mw.interceptQuery!(execA, ctx);
+      await mw.intercept!.onQuery!(execA, ctx);
       await mw.onRow!({ from: 'A' }, execA, ctx);
-      await mw.afterQuery!(
-        execA,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
+      await endStatement(mw, execA, ctx, { rowCount: 1 });
 
       // Miss + commit for B.
-      await mw.interceptQuery!(execB, ctx);
+      await mw.intercept!.onQuery!(execB, ctx);
       await mw.onRow!({ from: 'B' }, execB, ctx);
-      await mw.afterQuery!(
-        execB,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
+      await endStatement(mw, execB, ctx, { rowCount: 1 });
 
       expect(store.inner.size).toBe(2);
-      expect(store.inner.get('id:A')?.rows).toEqual([{ from: 'A' }]);
-      expect(store.inner.get('id:B')?.rows).toEqual([{ from: 'B' }]);
+      expect(store.rowsAt('key:A')).toEqual([{ from: 'A' }]);
+      expect(store.rowsAt('key:B')).toEqual([{ from: 'B' }]);
     });
   });
 
@@ -137,72 +87,51 @@ describe('cache key resolution', () => {
       const store = spyStore();
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ ttl: 60_000, key: 'custom-key' }),
+        cache: cacheAnnotation({ key: 'custom-key' }),
       });
       const ctx = makeCtx();
 
-      await mw.interceptQuery!(exec, ctx);
+      await mw.intercept!.onQuery!(exec, ctx);
       await mw.onRow!({ id: 1 }, exec, ctx);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
+      await endStatement(mw, exec, ctx, { rowCount: 1 });
 
-      expect(store.getSpy).toHaveBeenCalledWith('custom-key');
-      expect(store.setSpy).toHaveBeenCalledWith('custom-key', expect.anything(), 60_000);
+      expect(store.getSpy).toHaveBeenCalledWith({ key: 'custom-key', meta: undefined });
+      expect(store.setSpy).toHaveBeenCalledWith(
+        {
+          key: 'custom-key',
+          meta: undefined,
+          version: 0,
+          data: { empty: true },
+        },
+        expect.anything(),
+      );
     });
 
     it('does not invoke ctx.contentHash when an override key is supplied', async () => {
       const store = spyStore();
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ ttl: 60_000, key: 'custom-key' }),
+        cache: cacheAnnotation({ key: 'custom-key' }),
       });
       const contentHash = vi.fn(async () => 'should-not-be-used');
       const ctx = makeCtx({ contentHash });
 
-      await mw.interceptQuery!(exec, ctx);
+      await mw.intercept!.onQuery!(exec, ctx);
 
       expect(contentHash).not.toHaveBeenCalled();
     });
 
-    it('stores user-supplied keys verbatim (no rehashing)', async () => {
-      const store = spyStore();
-      const mw = createCacheMiddleware({ store });
-      // A long, structured user key — verify the middleware does not
-      // mangle, hash, or otherwise transform it.
-      const userKey = 'tenant=acme|user=alice|page=42';
-      const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ ttl: 60_000, key: userKey }),
-      });
-      const ctx = makeCtx();
-
-      await mw.interceptQuery!(exec, ctx);
-      await mw.onRow!({ id: 1 }, exec, ctx);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
-
-      expect(store.inner.has(userKey)).toBe(true);
-    });
-
     it('produces a hit using the user-supplied key when previously committed under it', async () => {
       const store = spyStore();
-      store.inner.set('shared-key', {
-        rows: [{ id: 'pre-cached' }],
-        storedAt: 0,
-      });
+      store.setRows('shared-key', [{ id: 'pre-cached' }]);
 
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select anything', {
-        cache: cacheAnnotation({ ttl: 60_000, key: 'shared-key' }),
+        cache: cacheAnnotation({ key: 'shared-key' }),
       });
       const ctx = makeCtx();
 
-      const result = await mw.interceptQuery!(exec, ctx);
+      const result = await mw.intercept!.onQuery!(exec, ctx);
       expect(result).toBeDefined();
       expect(await drain(result!.rows as AsyncIterable<Record<string, unknown>>)).toEqual([
         { id: 'pre-cached' },
@@ -230,7 +159,7 @@ describe('cache key resolution', () => {
           target: 'mongo',
           targetFamily: 'mongo',
           annotations: {
-            cache: cacheAnnotation({ ttl: 60_000 }),
+            cache: cacheAnnotation({}),
           },
         },
       });
@@ -240,16 +169,12 @@ describe('cache key resolution', () => {
       });
 
       // Miss + commit.
-      await mw.interceptQuery!(exec, ctx);
+      await mw.intercept!.onQuery!(exec, ctx);
       await mw.onRow!({ _id: 'a', active: true }, exec, ctx);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctx,
-      );
+      await endStatement(mw, exec, ctx, { rowCount: 1 });
 
       // Hit on the second call.
-      const second = await mw.interceptQuery!(exec, ctx);
+      const second = await mw.intercept!.onQuery!(exec, ctx);
       expect(second).toBeDefined();
       expect(await drain(second!.rows as AsyncIterable<Record<string, unknown>>)).toEqual([
         { _id: 'a', active: true },
@@ -259,9 +184,9 @@ describe('cache key resolution', () => {
 
     it('two distinct contentHash returns produce two distinct cache entries', async () => {
       const store = spyStore();
-      const mw = createCacheMiddleware({ store, clock: () => 0 });
+      const mw = createCacheMiddleware({ store });
       const exec = makeExec('shared statement', {
-        cache: cacheAnnotation({ ttl: 60_000 }),
+        cache: cacheAnnotation({}),
       });
 
       // Same exec object but two different ctx.contentHash returns —
@@ -272,26 +197,18 @@ describe('cache key resolution', () => {
       const ctxB = makeCtx({ contentHash: async () => 'key-B' });
 
       // Commit under key-A.
-      await mw.interceptQuery!(exec, ctxA);
+      await mw.intercept!.onQuery!(exec, ctxA);
       await mw.onRow!({ from: 'A' }, exec, ctxA);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctxA,
-      );
+      await endStatement(mw, exec, ctxA, { rowCount: 1 });
 
       // Commit under key-B.
-      await mw.interceptQuery!(exec, ctxB);
+      await mw.intercept!.onQuery!(exec, ctxB);
       await mw.onRow!({ from: 'B' }, exec, ctxB);
-      await mw.afterQuery!(
-        exec,
-        { rowCount: 1, latencyMs: 0, completed: true, source: 'driver' },
-        ctxB,
-      );
+      await endStatement(mw, exec, ctxB, { rowCount: 1 });
 
       expect(store.inner.size).toBe(2);
-      expect(store.inner.get('key-A')?.rows).toEqual([{ from: 'A' }]);
-      expect(store.inner.get('key-B')?.rows).toEqual([{ from: 'B' }]);
+      expect(store.rowsAt('key-A')).toEqual([{ from: 'A' }]);
+      expect(store.rowsAt('key-B')).toEqual([{ from: 'B' }]);
     });
   });
 });

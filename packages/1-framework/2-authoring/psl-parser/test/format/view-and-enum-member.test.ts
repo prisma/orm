@@ -1,16 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import { format } from '../../src/exports/format';
 
-describe('format given a view block', () => {
+const prisma7 = { grammar: 'prisma-7' } as const;
+
+describe('format given a view block, in the prisma-7 grammar', () => {
   it('aligns field lines and their attributes like a model body', () => {
     expect(
-      format('view ActiveUsers {\n  id Int @unique\n  email   String @map("user_email")\n}\n'),
+      format(
+        'view ActiveUsers {\n  id Int @unique\n  email   String @map("user_email")\n}\n',
+        undefined,
+        prisma7,
+      ),
     ).toBe('view ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n');
   });
 
+  it('aligns field lines that carry no attributes', () => {
+    expect(format('view ActiveUsers {\nid Int\nemail   String\n}\n', undefined, prisma7)).toBe(
+      'view ActiveUsers {\n  id    Int\n  email String\n}\n',
+    );
+  });
+
   it('separates block attributes from the fields with a blank line', () => {
-    expect(format('view ActiveUsers {\n  id Int\n  @@map("active_users")\n}\n')).toBe(
-      'view ActiveUsers {\n  id Int\n\n  @@map("active_users")\n}\n',
+    expect(
+      format('view ActiveUsers {\n  id Int\n  @@map("active_users")\n}\n', undefined, prisma7),
+    ).toBe('view ActiveUsers {\n  id Int\n\n  @@map("active_users")\n}\n');
+  });
+});
+
+describe('format given a view block, by default', () => {
+  it('refuses a field attribute in the view, as in any block the parser does not know', () => {
+    expect(() => format('view ActiveUsers {\n  id Int @unique\n}\n')).toThrow(
+      expect.objectContaining({ code: 'PSL.PARSE_FAILED' }),
+    );
+  });
+
+  it('writes each word of a plain field line as its own entry, as in any block the parser does not know', () => {
+    expect(format('view ActiveUsers {\nid Int\nemail   String\n}\n')).toBe(
+      'view ActiveUsers {\n  id\n  Int\n  email\n  String\n}\n',
     );
   });
 });

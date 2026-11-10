@@ -71,7 +71,7 @@ Rows sort by `appliedAt` ascending, with `space` then `migrationName` breaking t
 
 `log` reads `migrationName` straight from the ledger row, never from disk, so a migration package deleted after it was applied still shows in the history under its original name.
 
-Timestamps follow one rule: machine output is timezone-stable, human output is local. `--json` always emits ISO-8601 UTC (`2026-06-02T14:37:31.000Z`). Human/TTY output renders in the local timezone with offset (`2026-06-02 16:37:31 +02:00`); `--utc` switches the human output to UTC. A non-TTY invocation auto-switches to `--json`, so a piped `log` is UTC by construction.
+Timestamps follow one rule: machine output is timezone-stable, human output is local. `--json` always emits ISO-8601 UTC (`2026-06-02T14:37:31.000Z`). Human/TTY output renders in the local timezone with offset (`2026-06-02 16:37:31 +02:00`); `--utc` switches the human output to UTC. A piped `log` prints data lines whose applied-at field is the same ISO-8601 UTC timestamp, so a script reads UTC whether or not it passes `--json`.
 
 ### Cross-target parity
 

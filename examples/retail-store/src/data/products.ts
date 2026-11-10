@@ -5,6 +5,12 @@ import type { Db } from '../db';
 
 type Product = FieldOutputTypes['__unbound__']['Product'];
 
+type StoredProduct = Omit<Product, 'id'> & { readonly _id: Product['id'] };
+
+function productOf({ _id, ...product }: StoredProduct): Product {
+  return { ...product, id: _id };
+}
+
 export function findProducts(db: Db) {
   return db.orm.products.all();
 }
@@ -15,11 +21,11 @@ export async function findProductsPaginated(
   take: number,
 ): Promise<Product[]> {
   const plan = db.query.from('products').sort({ _id: 1 }).skip(skip).limit(take).build();
-  return (await db.runtime()).query(plan);
+  return (await (await db.runtime()).query(plan)).map(productOf);
 }
 
 export function findProductById(db: Db, id: string) {
-  return db.orm.products.where({ _id: id }).first();
+  return db.orm.products.where({ id }).first();
 }
 
 function escapeRegex(str: string) {
@@ -34,12 +40,12 @@ export async function searchProducts(db: Db, query: string): Promise<Product[]> 
     MongoFieldFilter.of('articleType', '$regex', regex),
   ]);
   const plan = db.query.from('products').match(filter).build();
-  return (await db.runtime()).query(plan);
+  return (await (await db.runtime()).query(plan)).map(productOf);
 }
 
 export async function getRandomProducts(db: Db, count: number): Promise<Product[]> {
   const plan = db.query.from('products').sample(count).build();
-  return (await db.runtime()).query(plan);
+  return (await (await db.runtime()).query(plan)).map(productOf);
 }
 
 /**
@@ -62,5 +68,5 @@ export async function findSimilarProducts(
       limit,
     })
     .build();
-  return (await db.runtime()).query(plan);
+  return (await (await db.runtime()).query(plan)).map(productOf);
 }

@@ -1,0 +1,198 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "NativeTypes": {
+            "storage": {
+              "table": "NativeTypes",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "char": {
+                  "column": "char"
+                },
+                "varChar": {
+                  "column": "varChar"
+                },
+                "decimal": {
+                  "column": "decimal"
+                },
+                "timestamp": {
+                  "column": "timestamp"
+                },
+                "timestamptz": {
+                  "column": "timestamptz"
+                },
+                "time": {
+                  "column": "time"
+                },
+                "timetz": {
+                  "column": "timetz"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "char": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "sql/char@1",
+                  "typeParams": {
+                    "length": 1
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "varChar": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "sql/varchar@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "decimal": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "timestamp": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "timestamptz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "time": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "timetz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "NativeTypes": {
+      "namespace": "public",
+      "model": "NativeTypes"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "eae4cf8beefa2f644b3e2d462b69e8447946c347f1aa21fda6587cd3b829dbba",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "NativeTypes": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "char": {
+                  "dataType": "pg/char",
+                  "codecId": "sql/char@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "length": 1
+                  }
+                },
+                "varChar": {
+                  "dataType": "pg/varchar",
+                  "codecId": "sql/varchar@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "decimal": {
+                  "dataType": "pg/numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "timestamp": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-date@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "timestamptz": {
+                  "dataType": "pg/timestamptz",
+                  "codecId": "pg/timestamptz-date@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "time": {
+                  "dataType": "pg/time",
+                  "codecId": "pg/time-string@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "timetz": {
+                  "dataType": "pg/timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

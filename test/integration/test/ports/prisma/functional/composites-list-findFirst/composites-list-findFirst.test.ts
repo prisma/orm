@@ -28,7 +28,7 @@ describe('ports/prisma/functional/composites/list/findFirst', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create({
-          _id: id,
+          id,
           country: 'France',
           contents: [
             {
@@ -38,10 +38,10 @@ describe('ports/prisma/functional/composites/list/findFirst', () => {
           ],
         });
 
-        const comment = await db.comment_required_list.where({ _id: id }).first();
+        const comment = await db.comment_required_list.where({ id }).first();
 
         expect(comment).toEqual({
-          _id: id,
+          id,
           country: 'France',
           contents: [
             {
