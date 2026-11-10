@@ -494,21 +494,27 @@ function callCollection(call: OpFactoryCall): string | undefined {
 }
 
 /**
- * The rewrites and index creates, each collection's first one preceded by a check that its
+ * The rewrites and index creates, preceded by a check for each collection they touch that its
  * documents can fit the validator the plan sets on it, once the fields the rewrites change are left
- * out. Without it a rewrite could leave documents that neither the old validator nor the new one
- * accepts, and a unique index build could fail on documents that lack the field.
+ * out. Every check runs before the first rewrite or index create of any collection, so a check that
+ * fails on one collection stops the apply before anything changes: a rewrite could otherwise leave
+ * documents that neither the old validator nor the new one accepts, and a unique index build could
+ * fail on documents that lack the field.
  */
 function withDocumentChecks(
   calls: readonly OpFactoryCall[],
   documentChecks: ReadonlyMap<string, DocumentCheckFields>,
   validatorOps: readonly OpFactoryCall[],
 ): readonly OpFactoryCall[] {
-  const checked = new Set<string>();
-  return calls.flatMap((call): OpFactoryCall[] => {
-    const collection = callCollection(call);
-    if (collection === undefined || checked.has(collection)) return [call];
-    checked.add(collection);
+  const collections = [
+    ...new Set(
+      calls.flatMap((call) => {
+        const collection = callCollection(call);
+        return collection === undefined ? [] : [collection];
+      }),
+    ),
+  ];
+  const checks = collections.flatMap((collection): OpFactoryCall[] => {
     const validatorOp = validatorOps.find(
       (op): op is CollModCall =>
         op instanceof CollModCall &&
@@ -516,7 +522,7 @@ function withDocumentChecks(
         op.meta?.checkDocuments === true,
     );
     const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
-    if (!isDocument(validator)) return [call];
+    if (!isDocument(validator)) return [];
     const fields = documentChecks.get(collection);
     return [
       new CheckDocumentsCall({
@@ -527,9 +533,9 @@ function withDocumentChecks(
           ? {}
           : { renamedFields: fields.renamedFields }),
       }),
-      call,
     ];
   });
+  return [...checks, ...calls];
 }
 
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {

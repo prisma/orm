@@ -180,3 +180,79 @@ describe('MongoMigrationRunner, a new unique field on a collection with document
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, early checks on two collections', () => {
+  it(
+    'stops at the users check before the accounts fill, so accounts documents still accept updates',
+    async () => {
+      await live.createClosed('accounts', ['email'], [], [{ email: 'a@example.com' }]);
+      await live.createClosed('users', ['email'], [], [{ email: 'u@example.com' }]);
+      const withBorn = (fields: readonly string[]) => {
+        const schema = closedSchema(fields);
+        return new MongoCollection({
+          validator: {
+            jsonSchema: {
+              ...schema,
+              properties: { ...schema.properties, born: { bsonType: 'date' } },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          },
+        });
+      };
+      const from = contract(
+        'from',
+        {
+          Account: { collection: 'accounts', fields: ['_id', 'email'] },
+          User: { collection: 'users', fields: ['_id', 'email'] },
+        },
+        { accounts: closedCollection(['email']), users: closedCollection(['email']) },
+      );
+      const to = contract(
+        'to',
+        {
+          Account: {
+            collection: 'accounts',
+            fields: ['_id', 'email', 'plan'],
+            codecs: { _id: 'mongo/objectId@1' },
+          },
+          User: {
+            collection: 'users',
+            fields: ['_id', 'email', 'plan', 'born'],
+            codecs: { _id: 'mongo/objectId@1', born: 'mongo/date@1' },
+          },
+        },
+        {
+          accounts: closedCollection(['email', 'plan']),
+          users: withBorn(['email', 'plan', 'born']),
+        },
+      );
+
+      const { planned, result } = await live.planAndRun(from, to, [], [mongoTargetDescriptor]);
+
+      const accounts = live.db().collection('accounts');
+      expect({
+        operations:
+          planned.kind === 'success'
+            ? planned.plan.operations.map((operation) => Reflect.get(operation, 'id'))
+            : planned,
+        failedAt: result.ok ? result : result.failure.meta['operationId'],
+        accounts: await live.documents('accounts'),
+        update: (await accounts.updateMany({}, { $set: { email: 'b@example.com' } })).modifiedCount,
+      }).toEqual({
+        operations: [
+          'collection.accounts.checkDocuments',
+          'collection.users.checkDocuments',
+          'field.accounts.plan.fill',
+          'field.users.plan.fill',
+          'validator.accounts.update',
+          'validator.users.update',
+        ],
+        failedAt: 'collection.users.checkDocuments',
+        accounts: [{ email: 'a@example.com' }],
+        update: 1,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
