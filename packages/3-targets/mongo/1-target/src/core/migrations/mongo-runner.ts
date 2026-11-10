@@ -567,29 +567,43 @@ function rewriteFailure(
   error: unknown,
   position: { readonly operationIndex: number; readonly contract: MongoContract },
 ): MongoMigrationRunnerResult | undefined {
-  const rewrite = fieldRewriteOf(op);
-  if (rewrite === undefined || typeof error !== 'object' || error === null) return undefined;
+  if (typeof error !== 'object' || error === null) return undefined;
   const mongoCode: unknown = Reflect.get(error, 'code');
   if (typeof mongoCode !== 'number') return undefined;
   const codeName: unknown = Reflect.get(error, 'codeName');
+  const mongoError = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
   const reason = mongoErrorText(error);
-  const cast = op.operationClass === 'data' ? undefined : castFieldOf(op);
-  if (mongoCode === MONGO_CONVERSION_FAILURE && op.operationClass === 'data') {
-    return runnerFailure(
-      'MIGRATION.EXECUTION_FAILED',
-      `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
-      {
-        why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
-        meta: { operationId: op.id, mongoCode },
-      },
-    );
+  if (op.operationClass === 'data') {
+    return mongoCode === MONGO_CONVERSION_FAILURE
+      ? runnerFailure(
+          'MIGRATION.EXECUTION_FAILED',
+          `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
+          {
+            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
+            meta: { operationId: op.id, mongoCode },
+          },
+        )
+      : runnerFailure(
+          'MIGRATION.EXECUTION_FAILED',
+          `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
+          {
+            why: "Documents the update changed before the error stay changed. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again.",
+            meta: {
+              operationId: op.id,
+              mongoCode,
+              ...(typeof codeName === 'string' ? { codeName } : {}),
+            },
+          },
+        );
   }
+  const rewrite = fieldRewriteOf(op);
+  if (rewrite === undefined) return undefined;
+  const cast = castFieldOf(op);
   if (mongoCode !== MONGO_CONVERSION_FAILURE || cast === undefined) {
-    const named = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
     const fix = rewriteErrorFix(mongoCode, reason);
     return runnerFailure(
       'MIGRATION.EXECUTION_FAILED',
-      `Operation ${op.id} failed: MongoDB error ${named}: ${reason}`,
+      `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
       {
         why: [
           'Documents the rewrite changed before the error stay changed.',

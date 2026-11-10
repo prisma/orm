@@ -447,3 +447,38 @@ describe('MongoMigrationRunner, a unique index build that meets a duplicate valu
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a data transform whose update MongoDB refuses for another reason', () => {
+  it(
+    "points to the user's update, not the planner's advice, for a duplicate key",
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').createIndex({ code: 1 }, { unique: true, sparse: true });
+      await db.collection('users').insertMany([{ name: 'Ada' }, { name: 'Bo' }]);
+      const missing = { $expr: { $in: [{ $type: '$code' }, ['missing', 'null']] } };
+
+      const result = await run(
+        [
+          dataTransform('User.code', {
+            check: { source: () => rawAggregate('users', [{ $match: missing }, { $limit: 1 }]) },
+            run: () =>
+              rawUpdateMany('users', missing, [{ $set: { code: 'same' } }], {
+                bypassDocumentValidation: true,
+              }),
+          }),
+        ],
+        usersContract({ name: { bsonType: 'string' }, code: { bsonType: 'string' } }),
+      );
+
+      if (result.ok) throw new Error('Expected the data transform to fail on a duplicate key');
+      expect({
+        message: result.failure.message.split(': ')[0],
+        why: result.failure.why,
+      }).toEqual({
+        message: 'Operation data_transform.User.code failed',
+        why: "Documents the update changed before the error stay changed. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again. The operations that ran before the failure stay applied.",
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

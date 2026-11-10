@@ -992,13 +992,23 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     );
   });
 
-  it('lets any other failure of a data transform through unchanged', async () => {
+  it("names any other failure of a data transform's update, with the user's update as the place to fix it", async () => {
     const harness = makeHarness();
     harness.driver.failUpdateManyWith(unauthorized());
 
-    await expect(
-      execute(harness, [dataTransform('backfill-status', { run: () => makeRunPlan() })]),
-    ).rejects.toBeInstanceOf(MongoServerError);
+    const result = await execute(harness, [
+      dataTransform('backfill-status', { run: () => makeRunPlan() }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      why: expect.stringContaining("change the update in the migration's migration.ts"),
+      meta: {
+        operationId: 'data_transform.backfill-status',
+        mongoCode: 13,
+        codeName: 'Unauthorized',
+      },
+    });
   });
 });
 

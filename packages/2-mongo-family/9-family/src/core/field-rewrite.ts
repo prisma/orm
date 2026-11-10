@@ -32,8 +32,9 @@ function rewrittenField(update: RawUpdateManyCommand['update']): string | undefi
 }
 
 /**
- * The planner's field rewrite an operation is, if it is one: a single `updateMany` that skips
- * validation and renames, unsets or casts one field.
+ * The field rewrite an operation's run has the shape of, if it has one: a single `updateMany` that
+ * skips validation and renames, unsets or sets one field. A data transform the user filled can have
+ * this shape too, so a caller tells the two apart by the operation's class.
  */
 export function fieldRewriteOf(operation: MigrationPlanOperation): FieldRewrite | undefined {
   const run: unknown = Reflect.get(operation, 'run');
