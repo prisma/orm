@@ -4,12 +4,26 @@ import type {
   ValidAnnotations,
 } from '@internal/framework-components/runtime';
 import type { StorageTable } from '@internal/sql-contract/types';
+import type { DeleteAst, InsertAst, UpdateAst } from '@internal/sql-relational-core/ast';
+import type { RowReturningStatementMarker } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExpressionBuilder, WithFields } from '../expression';
 import type { ResolveRow } from '../resolve';
 import type { EmptyRow, GatedMethod, QueryContext, Scope, ScopeField } from '../scope';
 
 export type ReturningCapability = { sql: { returning: true } };
+
+/**
+ * The row type a mutation builder publishes under
+ * `RowReturningStatementMarker`: its returned row once `.returning()` names a
+ * column, and a marker no row type matches before that, so only a
+ * row-returning mutation is a raw template interpolation.
+ */
+export type ReturnedRow<RowType extends Record<string, ScopeField>> = [keyof RowType] extends [
+  never,
+]
+  ? 'no RETURNING clause'
+  : RowType;
 
 export type ColumnValues<
   Table extends StorageTable,
@@ -48,6 +62,8 @@ export interface InsertQuery<
       ...columns: Columns
     ) => InsertQuery<QC, AvailableScope, WithFields<EmptyRow, AvailableScope['topLevel'], Columns>>
   >;
+  readonly [RowReturningStatementMarker]?: ReturnedRow<RowType>;
+  buildAst(): InsertAst;
   build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>;
 }
 
@@ -71,6 +87,8 @@ export interface UpdateQuery<
       ...columns: Columns
     ) => UpdateQuery<QC, AvailableScope, WithFields<EmptyRow, AvailableScope['topLevel'], Columns>>
   >;
+  readonly [RowReturningStatementMarker]?: ReturnedRow<RowType>;
+  buildAst(): UpdateAst;
   build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>;
 }
 
@@ -94,5 +112,7 @@ export interface DeleteQuery<
       ...columns: Columns
     ) => DeleteQuery<QC, AvailableScope, WithFields<EmptyRow, AvailableScope['topLevel'], Columns>>
   >;
+  readonly [RowReturningStatementMarker]?: ReturnedRow<RowType>;
+  buildAst(): DeleteAst;
   build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>;
 }
