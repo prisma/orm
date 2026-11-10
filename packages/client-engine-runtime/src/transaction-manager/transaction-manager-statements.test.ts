@@ -36,7 +36,7 @@ function setup(options: { usePhantomQuery?: boolean } = {}) {
 }
 
 function sentSql(driverAdapter: MockDriverAdapter): string[] {
-  return driverAdapter.executeRawMock.mock.calls.map(([query]: [SqlQuery]) => query.sql)
+  return driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)
 }
 
 /**
@@ -45,7 +45,7 @@ function sentSql(driverAdapter: MockDriverAdapter): string[] {
  */
 function holdInserts(driverAdapter: MockDriverAdapter) {
   const insert = deferred<number>()
-  driverAdapter.executeRawMock.mockImplementation((query: SqlQuery) =>
+  driverAdapter.executeRawMock.mockImplementation((query) =>
     query.sql === INSERT.sql ? insert.promise : Promise.resolve(1),
   )
   return insert

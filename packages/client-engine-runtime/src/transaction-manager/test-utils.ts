@@ -1,5 +1,5 @@
 import type { SqlDriverAdapter, SqlQuery, SqlResultSet, Transaction } from '@prisma/driver-adapter-utils'
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 
 import { Options } from './transaction'
 import { TransactionManager } from './transaction-manager'
@@ -23,10 +23,10 @@ export class MockDriverAdapter implements SqlDriverAdapter {
   private readonly rollbackToSavepoint: Transaction['rollbackToSavepoint']
   private readonly releaseSavepoint: Transaction['releaseSavepoint']
 
-  executeRawMock = vi.fn().mockResolvedValue(1)
-  queryRawMock = vi.fn().mockResolvedValue(EMPTY_RESULT_SET)
-  commitMock = vi.fn().mockResolvedValue(undefined)
-  rollbackMock = vi.fn().mockResolvedValue(undefined)
+  executeRawMock: Mock<(query: SqlQuery) => Promise<number>> = vi.fn().mockResolvedValue(1)
+  queryRawMock: Mock<(query: SqlQuery) => Promise<SqlResultSet>> = vi.fn().mockResolvedValue(EMPTY_RESULT_SET)
+  commitMock: Mock<() => Promise<void>> = vi.fn().mockResolvedValue(undefined)
+  rollbackMock: Mock<() => Promise<void>> = vi.fn().mockResolvedValue(undefined)
 
   constructor(
     options: {

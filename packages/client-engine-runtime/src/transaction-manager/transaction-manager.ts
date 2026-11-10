@@ -23,16 +23,33 @@ import {
 const MAX_CLOSED_TRANSACTIONS = 100
 
 /**
- * How long {@link TransactionManager.cancelAllTransactions} waits for an aborted start to roll
- * back before letting the caller carry on and dispose the driver adapter.
+ * How long a rollback waits on the driver before going ahead anyway: for statements still
+ * running in the transaction, and, in {@link TransactionManager.cancelAllTransactions}, for an
+ * aborted start to roll back before the caller disposes the driver adapter.
  *
- * The rollback cannot happen until the driver settles the `startTransaction` promise it is
- * still holding, and a driver stuck on a dead connection may never do so. Waiting is worth a
- * moment — it is what lets the transaction be closed cleanly — but not at the cost of hanging
- * disconnect forever. This is deliberately not derived from `maxWait`: that is the caller's
- * patience for opening a transaction, not a bound on how long shutdown may stall.
+ * A driver stuck on a dead connection may never settle what it is holding. Waiting is worth a
+ * moment — it is what lets the transaction be closed cleanly — but not at the cost of never
+ * rolling back or hanging disconnect forever. This is deliberately not derived from `maxWait`:
+ * that is the caller's patience for opening a transaction, not a bound on how long a rollback
+ * may stall.
  */
-const CANCEL_ROLLBACK_GRACE_MS = 2_000
+const ROLLBACK_GRACE_MS = 2_000
+
+type ClosingReason = 'committed' | 'rolled_back' | 'timed_out'
+
+/**
+ * One level of a transaction: the outermost transaction, or a nested transaction on top of it.
+ * Handles from {@link TransactionManager.getTransaction} belong to the scope that was innermost
+ * when they were issued.
+ */
+type Scope = {
+  closingReason?: ClosingReason
+  runningStatements: Set<Promise<void>>
+}
+
+function createScope(): Scope {
+  return { closingReason: undefined, runningStatements: new Set() }
+}
 
 type TransactionWrapper = {
   id: string
@@ -44,11 +61,12 @@ type TransactionWrapper = {
   depth: number
   savepoints: string[]
   savepointCounter: number
+  scopes: Scope[]
 } & TransactionState
 
 type TransactionState =
-  | { status: 'waiting' | 'running' | 'committed' | 'rolled_back' | 'timed_out' }
-  | { status: 'closing'; closing: Promise<void>; reason: 'committed' | 'rolled_back' | 'timed_out' }
+  | { status: 'waiting' | 'running' | ClosingReason }
+  | { status: 'closing'; closing: Promise<void>; reason: ClosingReason }
 
 /**
  * A transaction whose `startTransaction` call has not returned yet. Such a transaction is not
@@ -169,6 +187,7 @@ export class TransactionManager {
           existing.savepoints.pop()
           throw e
         }
+        existing.scopes.push(createScope())
 
         return { id: existing.id }
       })
@@ -197,6 +216,7 @@ export class TransactionManager {
         depth: 1,
         savepoints: [],
         savepointCounter: 0,
+        scopes: [createScope()],
       }
 
       // An abort that arrived while the id was being generated would be missed by the listener
@@ -311,10 +331,12 @@ export class TransactionManager {
             )
           }
           try {
+            await this.#closeScopes([innermostScope(txw)], 'committed')
             await this.#releaseSavepoint(txw.transaction, savepointName)
           } finally {
             // Keep internal state consistent even if releasing the savepoint fails.
             txw.savepoints.pop()
+            txw.scopes.pop()
             txw.depth -= 1
           }
           return
@@ -337,11 +359,14 @@ export class TransactionManager {
           }
 
           try {
-            await this.#requiredRollbackToSavepoint(txw.transaction)(savepointName)
+            const rollbackToSavepoint = this.#requiredRollbackToSavepoint(txw.transaction)
+            await this.#closeScopes([innermostScope(txw)], 'rolled_back')
+            await rollbackToSavepoint(savepointName)
             await this.#releaseSavepoint(txw.transaction, savepointName)
           } finally {
             // Keep internal state consistent even if rollback/release fails.
             txw.savepoints.pop()
+            txw.scopes.pop()
             txw.depth -= 1
           }
           return
@@ -351,15 +376,68 @@ export class TransactionManager {
     })
   }
 
-  async getTransaction(txInfo: TransactionInfo, operation: string): Promise<Transaction> {
-    let tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
-    if (tx.status === 'closing') {
-      await tx.closing
-      // Fetch again to ensure proper error propagation after it's been closed.
-      tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
-    }
+  /**
+   * Returns a handle for running statements in the transaction. The handle rejects every
+   * statement issued after the transaction, or the nested transaction that is innermost now,
+   * has started to close.
+   */
+  getTransaction(txInfo: TransactionInfo, operation: string): Promise<SqlQueryable> {
+    return new Promise((resolve) => resolve(this.#issueHandle(txInfo, operation)))
+  }
+
+  #issueHandle(txInfo: TransactionInfo, operation: string): SqlQueryable {
+    const tx = this.#getActiveOrClosingTransaction(txInfo.id, operation)
+    if (tx.status === 'closing') throw closedTransactionError(tx, tx.reason, operation)
     if (!tx.transaction) throw new TransactionNotFoundError()
-    return tx.transaction
+    return this.#guardedQueryable(tx, tx.transaction, innermostScope(tx), operation)
+  }
+
+  #guardedQueryable(tx: TransactionWrapper, transaction: Transaction, scope: Scope, operation: string): SqlQueryable {
+    return {
+      provider: transaction.provider,
+      adapterName: transaction.adapterName,
+      queryRaw: (query) => this.#runStatement(tx, scope, operation, () => transaction.queryRaw(query)),
+      executeRaw: (query) => this.#runStatement(tx, scope, operation, () => transaction.executeRaw(query)),
+    }
+  }
+
+  async #runStatement<T>(
+    tx: TransactionWrapper,
+    scope: Scope,
+    operation: string,
+    execute: () => Promise<T>,
+  ): Promise<T> {
+    if (scope.closingReason !== undefined) {
+      throw closedTransactionError(tx, scope.closingReason, operation)
+    }
+
+    let markSettled!: () => void
+    const settled = new Promise<void>((resolve) => {
+      markSettled = resolve
+    })
+    scope.runningStatements.add(settled)
+    try {
+      return await execute()
+    } finally {
+      scope.runningStatements.delete(settled)
+      markSettled()
+    }
+  }
+
+  /**
+   * Stops `scopes` from accepting statements, then waits for the ones already running. A commit
+   * waits for as long as they take; a rollback waits at most {@link ROLLBACK_GRACE_MS}.
+   */
+  async #closeScopes(scopes: Scope[], reason: ClosingReason): Promise<void> {
+    for (const scope of scopes) {
+      scope.closingReason ??= reason
+    }
+
+    const running = scopes.flatMap((scope) => [...scope.runningStatements])
+    if (running.length === 0) return
+
+    const allSettled = Promise.all(running).then(() => {})
+    await (reason === 'committed' ? allSettled : settleWithin(allSettled, ROLLBACK_GRACE_MS))
   }
 
   #getActiveOrClosingTransaction(transactionId: string, operation: string): TransactionWrapper {
@@ -374,15 +452,8 @@ export class TransactionManager {
           case 'waiting':
           case 'running':
             throw new TransactionInternalConsistencyError('Active transaction found in closed transactions list.')
-          case 'committed':
-            throw new TransactionClosedError(operation)
-          case 'rolled_back':
-            throw new TransactionRolledBackError(operation)
-          case 'timed_out':
-            throw new TransactionExecutionTimeoutError(operation, {
-              timeout: closedTransaction.timeout!,
-              timeTaken: Date.now() - closedTransaction.startedAt,
-            })
+          default:
+            throw closedTransactionError(closedTransaction, closedTransaction.status, operation)
         }
       } else {
         debug(`Transaction not found.`, transactionId)
@@ -417,7 +488,7 @@ export class TransactionManager {
           }
         }),
       ),
-      ...starting.map(({ settled }) => settleWithin(settled, CANCEL_ROLLBACK_GRACE_MS)),
+      ...starting.map(({ settled }) => settleWithin(settled, ROLLBACK_GRACE_MS)),
     ])
   }
 
@@ -526,10 +597,11 @@ export class TransactionManager {
     }
   }
 
-  async #closeTransaction(tx: TransactionWrapper, status: 'committed' | 'rolled_back' | 'timed_out'): Promise<void> {
-    const createClosingPromise = async () => {
+  async #closeTransaction(tx: TransactionWrapper, status: ClosingReason): Promise<void> {
+    const createClosingPromise = async (scopesClosed: Promise<void>) => {
       debug('Closing transaction.', { transactionId: tx.id, status })
       try {
+        await scopesClosed
         if (tx.transaction && status === 'committed') {
           if (tx.transaction.options.usePhantomQuery) {
             await this.#withQuerySpanAndEvent(PHANTOM_COMMIT_QUERY(), tx.transaction, () => tx.transaction!.commit())
@@ -576,10 +648,11 @@ export class TransactionManager {
       // Fetch again to ensure proper error propagation after it's been closed.
       this.#getActiveOrClosingTransaction(tx.id, status === 'committed' ? 'commit' : 'rollback')
     } else {
+      const scopesClosed = this.#closeScopes(tx.scopes, status)
       await Object.assign(tx, {
         status: 'closing',
         reason: status,
-        closing: createClosingPromise(),
+        closing: createClosingPromise(scopesClosed),
       }).closing
     }
   }
@@ -607,6 +680,30 @@ export class TransactionManager {
       tracingHelper: this.tracingHelper,
       onQuery: this.#onQuery,
     })
+  }
+}
+
+function innermostScope(tx: TransactionWrapper): Scope {
+  return tx.scopes[tx.scopes.length - 1]
+}
+
+function closedTransactionError(
+  tx: TransactionWrapper,
+  reason: ClosingReason,
+  operation: string,
+): TransactionManagerError {
+  switch (reason) {
+    case 'committed':
+      return new TransactionClosedError(operation)
+    case 'rolled_back':
+      return new TransactionRolledBackError(operation)
+    case 'timed_out':
+      return new TransactionExecutionTimeoutError(operation, {
+        timeout: tx.timeout!,
+        timeTaken: Date.now() - tx.startedAt,
+      })
+    default:
+      return assertNever(reason, 'Unknown closing reason.')
   }
 }
 
