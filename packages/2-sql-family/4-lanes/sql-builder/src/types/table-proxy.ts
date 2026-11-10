@@ -144,7 +144,7 @@ export type WhereFilter<
   NsId extends keyof C['storage']['namespaces'] & string,
   Name extends TableNamesInNamespace<C, NsId>,
 > = ExpressionBuilder<
-  DefaultScope<Name, NamespaceTable<C, NsId, Name>>,
+  DefaultScope<Name, NamespaceTable<C, NsId, Name>, ResolvedColumnTypes<C, NsId, Name>>,
   ContractToQC<C, NsId, Name>
 >;
 
@@ -153,9 +153,16 @@ export interface TableProxy<
   NsId extends string,
   Name extends string,
   Alias extends string = Name,
-  AvailableScope extends Scope = DefaultScope<Name, NamespaceTable<C, NsId, Name>>,
+  AvailableScope extends Scope = DefaultScope<
+    Name,
+    NamespaceTable<C, NsId, Name>,
+    ResolvedColumnTypes<C, NsId, Name>
+  >,
   QC extends QueryContext = ContractToQC<C, NsId, Name>,
-> extends JoinSource<StorageTableToScopeTable<NamespaceTable<C, NsId, Name>>, Alias>,
+> extends JoinSource<
+      StorageTableToScopeTable<NamespaceTable<C, NsId, Name>, ResolvedColumnTypes<C, NsId, Name>>,
+      Alias
+    >,
     WithSelect<QC, AvailableScope, EmptyRow>,
     WithJoin<QC, AvailableScope, C['capabilities']> {
   /** The table's columns, for naming in a raw statement's row spec. */

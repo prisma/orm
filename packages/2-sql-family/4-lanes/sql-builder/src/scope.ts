@@ -21,6 +21,9 @@ export type GatedMethod<Capabilities, Required, Method> = Capabilities extends R
 
 export declare const JoinOuterScope: unique symbol;
 
+/** Contract-resolved output carried by a field, independent of its projection alias. */
+export declare const fieldOutput: unique symbol;
+
 export type Expand<T> = { [K in keyof T]: T[K] } & unknown;
 export type EmptyRow = Record<never, ScopeField>;
 
@@ -41,15 +44,27 @@ export type JoinSource<Row extends ScopeTable, Alias extends string> = {
   buildAst(): AnyFromSource;
 };
 
-export type DefaultScope<Name extends string, Table extends StorageTable> = {
-  topLevel: StorageTableToScopeTable<Table>;
+export type DefaultScope<
+  Name extends string,
+  Table extends StorageTable,
+  Outputs extends Record<string, unknown> = Record<string, never>,
+> = {
+  topLevel: StorageTableToScopeTable<Table, Outputs>;
   namespaces: {
-    [K in Name]: StorageTableToScopeTable<Table>;
+    [K in Name]: StorageTableToScopeTable<Table, Outputs>;
   };
 };
 
-export type StorageTableToScopeTable<T extends StorageTable> = {
-  [K in keyof T['columns']]: StorageColumnScopeField<T['columns'][K]>;
+export type StorageTableToScopeTable<
+  T extends StorageTable,
+  Outputs extends Record<string, unknown> = Record<string, never>,
+> = {
+  [K in keyof T['columns']]: StorageColumnScopeField<T['columns'][K]> &
+    (string extends keyof Outputs
+      ? Record<never, never>
+      : K extends keyof Outputs
+        ? { readonly [fieldOutput]?: { readonly output: Outputs[K] } }
+        : Record<never, never>);
 };
 
 export type MergeScopes<A extends Scope, B extends Scope> = {
@@ -65,7 +80,12 @@ export type RebindScope<S extends Scope, OldKey extends string, NewKey extends s
 };
 
 export type NullableScopeTable<S extends ScopeTable> = {
-  [K in keyof S]: { codecId: S[K]['codecId']; nullable: true };
+  [K in keyof S]: {
+    codecId: S[K]['codecId'];
+    nullable: true;
+  } & (typeof fieldOutput extends keyof S[K]
+    ? Pick<S[K], typeof fieldOutput & keyof S[K]>
+    : Record<never, never>);
 };
 
 export type NullableScope<S extends Scope> = {

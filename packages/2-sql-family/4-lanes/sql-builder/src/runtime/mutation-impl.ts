@@ -259,7 +259,7 @@ export class InsertQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes']>> {
     if (this.#rows.length === 0) {
       throw structuredError(
         'ORM.MUTATION_DATA_MISSING',
@@ -291,11 +291,7 @@ export class InsertQueryImpl<
       );
     }
 
-    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
-      this.ctx,
-      this.#annotations,
-    );
+    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes']>>(ast, this.ctx, this.#annotations);
   }
 }
 
@@ -402,7 +398,7 @@ export class UpdateQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes']>> {
     let ast = UpdateAst.table(this.#tableSource)
       .withSet(this.#setExpressions)
       .withWhere(combineWhereExprs(this.#whereExprs));
@@ -418,11 +414,7 @@ export class UpdateQueryImpl<
       );
     }
 
-    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
-      this.ctx,
-      this.#annotations,
-    );
+    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes']>>(ast, this.ctx, this.#annotations);
   }
 }
 
@@ -519,7 +511,7 @@ export class DeleteQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes']>> {
     const whereExpr = combineWhereExprs(
       this.#whereCallbacks.map((cb) =>
         evaluateWhere(cb, this.#scope, this.ctx.queryOperationTypes, this.ctx.rawCodecInferer),
@@ -539,10 +531,6 @@ export class DeleteQueryImpl<
       );
     }
 
-    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
-      this.ctx,
-      this.#annotations,
-    );
+    return buildQueryPlan<ResolveRow<RowType, QC['codecTypes']>>(ast, this.ctx, this.#annotations);
   }
 }
