@@ -893,7 +893,7 @@ testMatrix.setupTestSuite(
     })
 
     testIf(provider !== Providers.MONGODB && clientEngineExecutor !== 'remote')(
-      'rollback rejects the statements an update with a nested create has not sent yet',
+      'rollback rejects the statements an update with nested writes has not sent yet',
       async () => {
         await prisma.user.create({ data: { id: '1', email: 'user_1@website.com' } })
 
@@ -911,7 +911,13 @@ testMatrix.setupTestSuite(
           async (tx) => {
             update = tx.user.update({
               where: { id: '1' },
-              data: { name: 'renamed', posts: { create: { title: 'late post', published: true } } },
+              data: {
+                name: 'renamed',
+                posts: {
+                  create: { title: 'late post', published: true },
+                  updateMany: { where: { title: 'late post' }, data: { content: 'late content' } },
+                },
+              },
             })
             await Promise.all([
               update,
