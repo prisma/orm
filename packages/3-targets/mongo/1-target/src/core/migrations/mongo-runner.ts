@@ -569,7 +569,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
           {
-            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
+            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
             meta: { operationId: op.id, mongoCode },
           },
         )
@@ -577,7 +577,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
           {
-            why: "Documents the update changed before the error stay changed. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again.",
+            why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again.",
             meta: {
               operationId: op.id,
               mongoCode,
