@@ -81,6 +81,17 @@ function backfillFlags(reports: readonly RowsWithoutValueReport[]): readonly str
 }
 
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
+/** The way out of a cast that met a value it cannot cast without changing the migration: change that value, then `rerun`. */
+function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): RunnerAdvice {
+  return change.by === 'cast' && change.reason === 'value'
+    ? [
+        chooseAction(
+          `Change the value the failure names so the database's cast accepts it, then re-run ${rerun}`,
+        ),
+      ]
+    : [];
+}
+
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
   databaseStorageHash: string | undefined,
@@ -92,6 +103,10 @@ export function dbUpdateFailedTypeChangeAdvice(
   return [
     chooseAction(
       `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    ),
+    ...changeValueAdvice(
+      change,
+      quoted(cliCommand(invocation, 'db update', invocation.rerunArgs ?? [])),
     ),
   ];
 }
@@ -406,6 +421,7 @@ function migrateFailedTypeChangeAdvice(
       chooseAction(
         `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
       ),
+      ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     ];
   }
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
@@ -413,6 +429,7 @@ function migrateFailedTypeChangeAdvice(
     editFileAction(
       `${changeText} ${file} changes field "${change.field}" with the database's cast, which met a value it cannot cast: replace that cast with a conversion of your own there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
+    ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
   ];
 }
