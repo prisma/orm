@@ -461,6 +461,45 @@ describe('transaction connection management', () => {
     expect(conn.release).toHaveBeenCalledTimes(1)
   })
 
+  test.each([
+    ['commit', 'COMMIT'],
+    ['rollback', 'ROLLBACK'],
+  ] as const)('a failing %s surfaces the error and releases the connection once', async (close, sql) => {
+    const conn = makePoolConn()
+    const tx = await startTransactionOn(conn)
+    const lostConnection = Object.assign(new Error('Lost connection'), {
+      errno: 2013,
+      sqlMessage: 'Lost connection to server during query',
+      sqlState: 'HY000',
+    })
+    conn.query.mockImplementation(({ sql: sent }: { sql: string }) =>
+      sent === sql ? Promise.reject(lostConnection) : Promise.resolve([]),
+    )
+
+    await expect(tx[close]()).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: { originalCode: '2013', originalMessage: 'Lost connection to server during query' },
+    })
+    conn.query.mockClear()
+    await tx.commit()
+    await tx.rollback()
+
+    expect(conn.query).not.toHaveBeenCalled()
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
+  test('the connection is released even when removing the error listener throws', async () => {
+    const conn = makePoolConn()
+    const tx = await startTransactionOn(conn)
+    vi.spyOn(conn, 'off').mockImplementationOnce(() => {
+      throw new Error('off failed')
+    })
+
+    await expect(tx.commit()).rejects.toThrow('off failed')
+
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
   test('statements and savepoint calls after close are rejected without reaching the driver', async () => {
     const conn = makePoolConn()
     const tx = await startTransactionOn(conn)

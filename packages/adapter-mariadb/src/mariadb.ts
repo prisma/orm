@@ -142,8 +142,11 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
     } catch (err) {
       this.onError(err)
     } finally {
-      this.cleanup?.()
-      await releaseConnection(this.client)
+      try {
+        this.cleanup?.()
+      } finally {
+        await releaseConnection(this.client)
+      }
     }
   }
 
