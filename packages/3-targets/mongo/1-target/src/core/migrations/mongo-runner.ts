@@ -644,28 +644,60 @@ function rewriteFailure(
   );
 }
 
+/**
+ * The failure, saying which collections a rewrite of this apply changed while their validator change
+ * has not run: their documents may no longer fit the validator still in place.
+ */
+function withRewrittenBeforeValidator(
+  failure: MongoMigrationRunnerFailure,
+  collections: ReadonlySet<string>,
+): MongoMigrationRunnerFailure {
+  if (collections.size === 0) return failure;
+  const named = [...collections].map((collection) => `collection ${collection}`).join(', ');
+  const sentence = `Documents this apply already rewrote in ${named} may no longer fit the collection's current validator, so updates to them fail until the migration finishes.`;
+  const why =
+    failure.why === undefined ? sentence : `${failure.why.replace(/\.?$/, '.')} ${sentence}`;
+  const attributed = migrationRunnerFailure(failure.code, failure.message, {
+    why,
+    meta: failure.meta,
+    ...ifDefined('cause', failure.cause),
+  });
+  if (failure.stack !== undefined) attributed.stack = failure.stack;
+  return attributed;
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
-    const result = await this.apply(options, () => {
-      changedDatabase = true;
-    });
+    const rewrittenBeforeValidator = new Set<string>();
+    const result = await this.apply(
+      options,
+      () => {
+        changedDatabase = true;
+      },
+      rewrittenBeforeValidator,
+    );
     return result.ok
       ? ok({ ...result.value, changedDatabase })
       : notOk(
           withDatabaseUnchanged(
-            result.failure,
+            withRewrittenBeforeValidator(result.failure, rewrittenBeforeValidator),
             options.databaseChangedBefore !== true && !changedDatabase,
           ),
         );
   }
 
-  /** Applies the plan, calling `wrote` after each command that changes the database. */
+  /**
+   * Applies the plan, calling `wrote` after each command that changes the database, and keeping in
+   * `rewrittenBeforeValidator` each collection a rewrite changed whose validator change has not run
+   * since.
+   */
   private async apply(
     options: MongoMigrationRunnerExecuteOptions,
     wrote: () => void,
+    rewrittenBeforeValidator: Set<string>,
   ): Promise<Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>> {
     const { inspectionExecutor, adapter, driver, executeDdl, markerOps } = this.deps;
     const operations = deserializeMongoOps(
@@ -719,6 +751,7 @@ export class MongoMigrationRunner {
             const collection = operation.run[0]?.collection;
             if (collection !== undefined) {
               rewritesRan.set(collection, [...ranOn(collection), operation.label]);
+              rewrittenBeforeValidator.add(collection);
             }
           }
           continue;
@@ -787,6 +820,8 @@ export class MongoMigrationRunner {
         }
 
         operationsExecuted += 1;
+        const validated = validatorSetBy(operation)?.collection;
+        if (validated !== undefined) rewrittenBeforeValidator.delete(validated);
       } finally {
         options.callbacks?.onOperationComplete?.(operation);
       }

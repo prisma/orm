@@ -42,4 +42,36 @@ describe('MongoMigrationRunner, the check before a collection rewrites', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'says the rewritten documents may not fit the current validator when the apply stops before the validator change',
+    async () => {
+      const before = { email: { bsonType: 'string' } };
+      await live.db().createCollection('users', {
+        validator: { $jsonSchema: usersSchema(before) },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+      await live.db().collection('users').insertOne({ email: 'ada@example.com' });
+      const after = { email: { bsonType: 'string' }, plan: { bsonType: 'string' } };
+
+      const result = await live.run(
+        [
+          checkDocuments({
+            collection: 'users',
+            validator: usersSchema(after),
+            rewrittenFields: ['plan'],
+          }),
+          fillField({ collection: 'users', field: 'plan', value: { $literal: '' } }),
+        ],
+        usersContract(after),
+      );
+
+      if (result.ok) throw new Error('Expected the apply to fail after the fill');
+      expect(result.failure.why).toContain(
+        "Documents this apply already rewrote in collection users may no longer fit the collection's current validator, so updates to them fail until the migration finishes.",
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
