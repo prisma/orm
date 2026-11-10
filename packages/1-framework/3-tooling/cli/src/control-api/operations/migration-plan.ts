@@ -51,6 +51,7 @@ import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { migrationPlanKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import { planningRefusedError } from '../../utils/planning-refused-error';
 import { type CliInvocation, selfEmitCommand } from '../../utils/printed-command';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
@@ -131,6 +132,8 @@ type PlannerSuccess = {
   readonly temporaryValues: readonly TemporaryValueReport[];
   /** The namespaces the plan removes and adds, when the planner reports them. */
   readonly namespaces?: MigrationPlanNamespaces;
+  /** What the planner flagged without refusing to plan it, as the CLI prints it. */
+  readonly plannerWarnings: readonly string[];
 };
 
 function placeholderSummary(
@@ -275,6 +278,7 @@ async function runPlannerLeg(
     ),
     temporaryValues: reportTemporaryValues(plannerResult.temporaryValues, contract),
     ...ifDefined('namespaces', plannerResult.namespaces),
+    plannerWarnings: (plannerResult.warnings ?? []).map(plannerWarningText),
   });
 }
 
@@ -898,6 +902,7 @@ async function executeMigrationPlanCommandInner(
       const deltaLeg =
         plannedDelta === undefined ? undefined : (answered.value.delta ?? plannedDelta.value);
       const deletes = answered.value.deletes;
+      warnings.push(...baselineLeg.value.plannerWarnings, ...(deltaLeg?.plannerWarnings ?? []));
 
       await writePlannedMigrationPackage(
         baselinePackageDir,
@@ -1082,6 +1087,7 @@ async function executeMigrationPlanCommandInner(
     }
     const deltaLeg = answered.value.delta ?? plannedDelta.value;
     const deletes = answered.value.deletes;
+    warnings.push(...deltaLeg.plannerWarnings);
 
     if (
       !deltaLeg.hasPlaceholders &&

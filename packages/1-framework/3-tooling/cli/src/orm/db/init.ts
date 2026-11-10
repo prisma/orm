@@ -190,7 +190,6 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
-          plannerWarnings.reportCollected();
           return notOk(normalizeError(result.failure));
         }
 

@@ -1,7 +1,7 @@
 /**
  * Field type changes and new required fields on MongoDB collections that hold documents, through `migration plan` then `db migrate` and through `db update`.
  *
- * C1 converts `String` to `Int` with `--convert` and a filled update. C2 answers the same change with `--delete`, which casts the values. C3 does that for an optional field holding `null` or nothing. C4 casts `Int` to `Float` and to `Int64` with nothing asked. C5 changes `Int` to `Json` and `String` to `Bson`, which needs only the validator change. B1 adds a required field, filled with a temporary value. B2 fills a new required field with `--backfill`. B3 makes an optional field required with `--backfill`. B4 makes an optional field required without it, so the document check stops the apply. W1 gives a field an enum, which plans no rewrite and warns. Every journey that applies ends with an empty further plan and a clean `db verify --schema-only`.
+ * C1 converts `String` to `Int` with `--convert` and a filled update. C2 answers the same change with `--delete`, which casts the values. C3 does that for an optional field holding `null` or nothing. C4 casts `Int` to `Float` and to `Int64` with nothing asked. C5 changes `Int` to `Json` and `String` to `Bson`, which needs only the validator change. B1 adds a required field, filled with a temporary value. B2 fills a new required field with `--backfill`. B3 makes an optional field required with `--backfill`. B4 makes an optional field required without it, so the document check stops the apply. W1 gives a field an enum, which plans no rewrite and warns, through both commands. Every journey that applies ends with an empty further plan and a clean `db verify --schema-only`.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -401,6 +401,28 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
       summary:
         'Operation validator.users.update stopped: 1 document in collection users does not fit the new validator',
       touched: 'This validator change makes "plan" required',
+    });
+  });
+
+  it('W1: a field that gains an enum is not rewritten, and migration plan prints the warning with its why', async () => {
+    const result = await throughMigrationPlan(
+      'mongo_w1_plan',
+      {
+        before: '  status String',
+        after: '  status Status',
+        documents: [{ email: 'a@example.com', status: 'active' }],
+      },
+      'W1',
+    );
+
+    expect({
+      documents: result.documents,
+      warnings: Reflect.get(result.planned, 'warnings'),
+    }).toEqual({
+      documents: [{ email: 'a@example.com', status: 'active' }],
+      warnings: [
+        'Field "User.status" gains enum "Status". This change is not a statement, so the plan does not rewrite the documents. Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply. With db update, plan the change with migration plan instead.',
+      ],
     });
   });
 

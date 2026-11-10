@@ -411,7 +411,7 @@ function migrateFailedTypeChangeAdvice(
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
   return [
     editFileAction(
-      `${changeText} ${file} has no conversion for field "${change.field}": write one there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      `${changeText} ${file} changes field "${change.field}" with the database's cast, which met a value it cannot cast: replace that cast with a conversion of your own there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
     replan('Delete', [convert], failedMigration, deleted),
   ];
@@ -584,7 +584,7 @@ export function migrateAdvice(
   }
   return [
     chooseAction(
-      `Fix the issue and re-run \`${cliCommand(invocation, 'db migrate', ['--to', '<contract>'])}\``,
+      `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
     ),
   ];
 }

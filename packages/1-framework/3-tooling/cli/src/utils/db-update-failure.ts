@@ -57,10 +57,6 @@ export function dbUpdateRunnerFailureError(
                       `Change the contract source to resolve the issues listed, re-run \`${cliCommand(invocation, 'contract emit')}\`, then re-run \`${update}\``,
                     ),
                   ]
-                : [
-                    chooseAction(
-                      `Inspect the reported conflict, reconcile schema drift if needed, then re-run \`${update}\``,
-                    ),
-                  ];
+                : [chooseAction(`Resolve the cause the failure names, then re-run \`${update}\``)];
   return runnerFailureError(failure, advice);
 }

@@ -164,7 +164,7 @@ function temporaryValueBlocks(result: MigrationPlanResult): readonly Block[] {
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows get ${value} in field "${field}". To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
+      text: `Field "${field}" gets the temporary value ${value} where existing data has none. To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
     }),
   );
 }

@@ -559,7 +559,7 @@ describe('db init', () => {
     });
   }
 
-  it('shows the planner`s warnings when the apply succeeds', async () => {
+  it('reports the planner`s warnings once when the apply succeeds', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init'], {
@@ -568,12 +568,20 @@ describe('db init', () => {
     });
     const blocks = run.presented?.presentation.human ?? [];
 
-    expect(run.exitCode).toBe(0);
-    expect(blocks).toContainEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
-    expect(blocks).toContainEqual({ kind: 'list', items: [WARNING.summary] });
+    expect({
+      exitCode: run.exitCode,
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      headers: blocks.filter(
+        (block) => block.kind === 'summary' && block.text === 'Planner warnings',
+      ),
+    }).toEqual({
+      exitCode: 0,
+      messages: [{ kind: 'message', severity: 'warn', text: WARNING.summary }],
+      headers: [],
+    });
   });
 
-  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
+  it('writes the planner`s warnings as warn frames and lists them in the --json result of a successful apply', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -584,7 +592,13 @@ describe('db init', () => {
       messages: frames.filter((frame) => frame['kind'] === 'message'),
       warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
         .warnings,
-    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+    }).toEqual({
+      exitCode: 0,
+      messages: [
+        expect.objectContaining({ kind: 'message', severity: 'warn', text: WARNING.summary }),
+      ],
+      warnings: [WARNING],
+    });
   });
 
   it('shows the planner`s warnings when the apply fails', async () => {
