@@ -15,10 +15,12 @@ changes:
 
 ## `mongo-validator-change-checks-documents`
 
-Every validator change a new plan writes is `collMod(..., { ..., checkDocuments: true })`. When the plan also rewrites the collection, `migration.ts` declares the new validator once, as a `const` such as `const usersValidator = { … }`, and both the `checkDocuments({ collection: 'users', validator: usersValidator, … })` call before the rewrites and the `collMod` after them use it (`$jsonSchema: usersValidator`), so editing the `const` changes both checks. When `db migrate` or `db update` stops with `MIGRATION.PRECHECK_FAILED` because documents do not fit:
+Every validator change a new plan writes is `collMod(..., { ..., checkDocuments: true })`: as its own precheck, after the plan's rewrites, it checks that every document fits the new validator. When `db migrate` or `db update` stops with `MIGRATION.PRECHECK_FAILED` because documents do not fit:
+
+Operations of the migration that ran before the validator change stay applied; a re-run skips them.
 
 1. Find them with the `mongosh` query the error prints, and change them so they fit the new validator. The old validator is still in place and may reject a document changed to the new shape, so an update that fixes one can skip document validation: write a `dataTransform` in `migration.ts`, or in `mongosh` run an update command with `bypassDocumentValidation: true`, such as `db.runCommand({ update: "users", updates: [{ q: { _id: … }, u: { $set: { … } } }], bypassDocumentValidation: true })`. Run the command again. For a field the change makes required, `migration plan --backfill Model.field` writes a step to fill it instead.
-2. Or, under `db migrate`, apply the validator over them as before: set `checkDocuments` to `false` on that `collMod` in the migration's `migration.ts`, remove the `checkDocuments(...)` call before the rewrites if the file has one, run the file with `node`, and run `db migrate` again. Those documents then fail their next update until they fit. `db update` writes no `migration.ts`, so there the documents must be fixed first.
+2. Or, under `db migrate`, apply the validator over them as before: set `checkDocuments` to `false` on that `collMod` in the migration's `migration.ts`, run the file with `node`, and run `db migrate` again. Those documents then fail their next update until they fit. `db update` writes no `migration.ts`, so there the documents must be fixed first.
 
 A database adopted from Prisma 6 has no validator, so its first plan adds one and checks every collection.
 
