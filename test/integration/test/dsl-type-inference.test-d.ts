@@ -4,7 +4,7 @@ import { defineContract, field, model, rel } from '@internal/postgres/contract-b
 import { sql } from '@internal/sql-builder/runtime';
 import { createStubAdapter, createTestContext } from '@internal/sql-runtime/test/utils';
 import { expectTypeOf, test } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 
 // ---------------------------------------------------------------------------
 // DSL literal type inference tests

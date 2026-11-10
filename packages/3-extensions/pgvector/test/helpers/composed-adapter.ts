@@ -4,22 +4,9 @@ import sqlFamilyDescriptor from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
-import type {
-  RuntimeExtensionDescriptor,
-  RuntimeTargetDescriptor,
-} from '@internal/framework-components/execution';
+import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import postgresTargetControlDescriptor from '@internal/target-postgres/control';
-
-const stubRuntimeTarget: RuntimeTargetDescriptor<'sql', 'postgres'> = {
-  kind: 'target',
-  id: 'postgres',
-  version: '0.0.1',
-  familyId: 'sql',
-  targetId: 'postgres',
-  create() {
-    return { familyId: 'sql', targetId: 'postgres' };
-  },
-};
+import postgresRuntimeTargetDescriptor from '@internal/target-postgres/runtime';
 
 /**
  * Build a stack-composed Postgres runtime adapter for tests that exercise
@@ -32,7 +19,7 @@ export function createComposedPostgresAdapter(options: {
   readonly extensions: readonly RuntimeExtensionDescriptor<'sql', 'postgres'>[];
 }) {
   return postgresRuntimeAdapterDescriptor.create({
-    target: stubRuntimeTarget,
+    target: postgresRuntimeTargetDescriptor,
     adapter: postgresRuntimeAdapterDescriptor,
     driver: undefined,
     extensions: options.extensions,

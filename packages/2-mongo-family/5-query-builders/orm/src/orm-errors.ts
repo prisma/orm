@@ -5,12 +5,14 @@ import {
 } from '@internal/utils/structured-error';
 
 type OrmSubcode =
+  | 'ARGUMENT_INVALID'
   | 'MODEL_UNKNOWN'
   | 'RELATION_UNKNOWN'
   | 'WHERE_MISSING'
   | 'OPERATION_UNSUPPORTED'
   | 'INCLUDE_UNSUPPORTED'
-  | 'FIELD_IMMUTABLE';
+  | 'FIELD_IMMUTABLE'
+  | 'FIELD_UNKNOWN';
 
 export type OrmCode = `ORM.${OrmSubcode}`;
 

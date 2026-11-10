@@ -1,5 +1,7 @@
 # ADR 024 — Telemetry schema & privacy
 
+> **Update — the hooks are removed.** The middleware hooks `beforeExecute` and `afterExecute` this ADR describes no longer exist, and `onError` is not part of the middleware interface: a failed statement ends with the `activityEnded` outcome `failed`. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced them with lifecycle events and interceptors on a tree of activities. `beforeCompile` remains.
+
 ## Context
 
 We need consistent, low-overhead telemetry to understand performance, safety, and usage across lanes and adapters. Telemetry must be privacy-preserving by default and configurable to meet stricter org policies. Agents and PPg benefit from structured signals like sqlFingerprint, budgets, and lint outcomes without exposing SQL text or PII.

@@ -39,7 +39,7 @@ describe.skipIf(SKIP)('paradedb BM25 integration', { timeout: timeouts.databaseO
     const { databaseUrl } = loadAppConfig();
     const runtime = await db.connect({ url: databaseUrl });
     try {
-      const rows = await ormClientBm25TopMatches('laptop', 5, runtime);
+      const rows = await ormClientBm25TopMatches('laptop', 5);
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.some((r) => r.description.toLowerCase().includes('laptop'))).toBe(true);
     } finally {

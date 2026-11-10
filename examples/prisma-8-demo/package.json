@@ -22,9 +22,9 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.12",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.12",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.12",
+    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.23",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.23",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.23",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "pg": "catalog:",
@@ -32,10 +32,11 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.9.0",
     "@prisma/dev": "catalog:",
-    "@repo/test-utils": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.23",
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "catalog:",
@@ -45,10 +46,11 @@
     "@vitejs/plugin-react-swc": "^4.3.2",
     "jsdom": "^29.0.2",
     "temporal-polyfill": "^1.0.4",
+    "temporal-spec": "1.0.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.12"
+  "version": "8.0.0-rc.23"
 }

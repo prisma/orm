@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { CachePayload } from '@prisma/orm-extension-middleware-cache';
+import type { CacheAnnotationOptions } from '@prisma/orm-extension-middleware-cache';
 import { cacheAnnotation } from '@prisma/orm-extension-middleware-cache';
 import type { MongoQueryPlan } from '@prisma/orm-mongo/query-ast/execution';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -22,14 +22,17 @@ const DB_NAME = 'cache_demo';
  * plans — the package depends only on `@internal/framework-components/runtime`
  * and is family-agnostic by construction.
  */
-function withCacheAnnotation<P extends MongoQueryPlan>(plan: P, payload: CachePayload): P {
+function withCacheAnnotation<P extends MongoQueryPlan>(
+  plan: P,
+  options: CacheAnnotationOptions,
+): P {
   return {
     ...plan,
     meta: {
       ...plan.meta,
       annotations: {
         ...plan.meta.annotations,
-        cache: cacheAnnotation(payload),
+        cache: cacheAnnotation(options),
       },
     },
   };
@@ -62,13 +65,14 @@ async function main() {
     await seed(orm);
     console.log('Seed complete.\n');
 
-    // Annotate the post-lowering plan with cacheAnnotation({ ttl }). The
+    // Annotate the post-lowering plan with cacheAnnotation({}). The
     // same query is executed twice; the second call should be served
-    // from the in-process LRU configured in `src/db.ts` and never reach
+    // from the in-process store configured in `src/db.ts` and never reach
     // the underlying driver.
-    const plan = withCacheAnnotation(query.from('posts').sort({ createdAt: -1 }).limit(5).build(), {
-      ttl: 60_000,
-    });
+    const plan = withCacheAnnotation(
+      query.from('posts').sort({ createdAt: -1 }).limit(5).build(),
+      {},
+    );
 
     console.log('Demonstrating opt-in caching with cacheAnnotation on a Mongo aggregation plan...');
     console.log('Running the same plan twice — second call should hit cache.\n');

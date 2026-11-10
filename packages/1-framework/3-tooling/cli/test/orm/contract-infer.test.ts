@@ -122,6 +122,20 @@ describe('contract infer', () => {
     });
   });
 
+  it('describes the written file as inferred from the database', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig(dir)).run(['contract', 'infer', '--json'], { cwd: dir });
+
+    expect(mocks.printPsl).toHaveBeenCalledWith(
+      { kind: 'psl-document' },
+      expect.objectContaining({
+        description:
+          'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+      }),
+    );
+  });
+
   it('writes the printed PSL beside the emitted contract', async () => {
     const dir = await projectDir();
 
@@ -222,7 +236,7 @@ describe('contract infer', () => {
         ],
       },
     ]);
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.presented?.presentation.stdout).toEqual(['generated/contract.prisma']);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
     expect(run.stdout).toBe('');
   });
@@ -240,7 +254,8 @@ describe('contract infer', () => {
     expect(run.exitCode).toBe(2);
     expect(envelope).toMatchObject({ ok: false, error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' } });
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('errors when the config declares no driver', async () => {

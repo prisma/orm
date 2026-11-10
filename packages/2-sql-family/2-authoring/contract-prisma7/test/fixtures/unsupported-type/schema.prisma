@@ -1,0 +1,33 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id       Int                      @id
+  title    String
+  search   Unsupported("tsvector")?
+  area     Unsupported("circle")    @default(dbgenerated("'<(0,0),1>'::circle"))
+  net      Unsupported("cidr")      @unique
+  tags     Unsupported("text")[]
+  labels   Unsupported("text[]")?   @default(dbgenerated())
+  location Unsupported("point")     @map("loc")
+
+  @@index([search], type: Gin)
+}
+
+model Host {
+  id      Int                   @id
+  address Unsupported("inet")
+  gateway Unsupported("inet")?
+  net     Unsupported("cidr")
+  network Network               @relation(fields: [net], references: [prefix]) @ignore
+
+  @@unique([address, gateway])
+  @@index([gateway])
+}
+
+model Network {
+  id     Int                 @id
+  prefix Unsupported("cidr") @unique
+  hosts  Host[]              @ignore
+}

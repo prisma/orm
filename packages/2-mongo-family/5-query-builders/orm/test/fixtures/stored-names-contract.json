@@ -1,0 +1,329 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "storageHash": "stored-names-hash",
+  "roots": {
+    "users": {
+      "model": "User",
+      "namespace": "__unbound__"
+    },
+    "posts": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "tasks": {
+      "model": "Task",
+      "namespace": "__unbound__"
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "entries": {
+          "collection": {
+            "users": {},
+            "posts": {},
+            "tasks": {}
+          },
+          "valueObject": {
+            "HomeAddress": {
+              "fields": {
+                "city": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "execution": {
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "users",
+            "field": "created_at"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        }
+      ]
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "User": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "displayName": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "email": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": true,
+                "many": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "home": {
+                "type": {
+                  "kind": "valueObject",
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "HomeAddress"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "model": "Post",
+                  "namespace": "__unbound__"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["authorId"]
+                }
+              },
+              "addresses": {
+                "to": {
+                  "model": "Address",
+                  "namespace": "__unbound__"
+                },
+                "cardinality": "1:N"
+              }
+            },
+            "storage": {
+              "collection": "users",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "displayName": {
+                  "field": "display_name"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "createdAt": {
+                  "field": "created_at"
+                },
+                "home": {
+                  "field": "home_address"
+                }
+              },
+              "relations": {
+                "addresses": {
+                  "field": "user_addresses"
+                }
+              }
+            }
+          },
+          "Address": {
+            "fields": {
+              "street": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "city": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "street": {
+                  "field": "street_name"
+                },
+                "city": {
+                  "field": "city"
+                }
+              }
+            },
+            "owner": "User"
+          },
+          "Post": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorId"],
+                  "targetFields": ["id"]
+                }
+              }
+            },
+            "storage": {
+              "collection": "posts",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "authorId": {
+                  "field": "author_id"
+                },
+                "title": {
+                  "field": "title"
+                }
+              }
+            }
+          },
+          "Task": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "kind": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "kind": {
+                  "field": "_kind"
+                },
+                "title": {
+                  "field": "task_title"
+                }
+              }
+            },
+            "discriminator": {
+              "field": "kind"
+            },
+            "variants": {
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
+              }
+            }
+          },
+          "Bug": {
+            "fields": {
+              "severity": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "severity": {
+                  "field": "bug_severity"
+                }
+              }
+            },
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            }
+          }
+        }
+      }
+    }
+  }
+}

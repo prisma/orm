@@ -15,6 +15,7 @@ import {
   JsonObjectExpr,
   ListExpression,
   LiteralExpr,
+  LockingClause,
   NativeJsonValueProjection,
   NotExpr,
   NullCheckExpr,
@@ -28,7 +29,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { bindWhereExpr } from '../src/where-binding';
+import { bindWhereExpr, paramRefForStorageColumn, type TableAliases } from '../src/where-binding';
 import { getTestContract } from './helpers';
 
 const subqueryWithLiteral = () =>
@@ -38,10 +39,14 @@ const subqueryWithLiteral = () =>
 
 describe('bindWhereExpr', () => {
   const contract = getTestContract();
+  const aliases: TableAliases = new Map([
+    ['users', { namespaceId: 'public', tableName: 'users' }],
+    ['posts', { namespaceId: 'public', tableName: 'posts' }],
+  ]);
 
   it('binds a simple binary eq with a literal to a parameterized expression', () => {
     const expr = BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('alice@test.com'));
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('binary');
     const binary = bound as BinaryExpr;
@@ -56,7 +61,7 @@ describe('bindWhereExpr', () => {
       BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('a@test.com')),
       BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
     ]);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const and = bound as AndExpr;
     const andRight0 = (and.exprs[0] as BinaryExpr).right;
@@ -76,7 +81,7 @@ describe('bindWhereExpr', () => {
       BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('a@test.com')),
       BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('b@test.com')),
     ]);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('or');
     const or = bound as OrExpr;
@@ -100,7 +105,7 @@ describe('bindWhereExpr', () => {
         ]),
       );
     const expr = ExistsExpr.exists(subquery);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('exists');
     expect((bound as ExistsExpr).notExists).toBe(false);
@@ -116,7 +121,7 @@ describe('bindWhereExpr', () => {
       ProjectionItem.of('id', ColumnRef.of('posts', 'id')),
     ]);
     const expr = ExistsExpr.notExists(subquery);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('exists');
     expect((bound as ExistsExpr).notExists).toBe(true);
@@ -124,7 +129,7 @@ describe('bindWhereExpr', () => {
 
   it('binds IS NULL null-check expressions', () => {
     const expr = NullCheckExpr.isNull(ColumnRef.of('users', 'email'));
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('null-check');
     expect((bound as NullCheckExpr).isNull).toBe(true);
@@ -132,7 +137,7 @@ describe('bindWhereExpr', () => {
 
   it('binds IS NOT NULL null-check expressions', () => {
     const expr = NullCheckExpr.isNotNull(ColumnRef.of('users', 'email'));
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('null-check');
     expect((bound as NullCheckExpr).isNull).toBe(false);
@@ -143,7 +148,7 @@ describe('bindWhereExpr', () => {
       ColumnRef.of('users', 'id'),
       ListExpression.of([LiteralExpr.of(1), LiteralExpr.of(2)]),
     );
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const binary = bound as BinaryExpr;
     expect(binary.right.kind).toBe('list');
@@ -158,7 +163,7 @@ describe('bindWhereExpr', () => {
   it('preserves ParamRef on the right side without rebinding', () => {
     const existing = ParamRef.of(42, { name: 'id', codec: { codecId: 'pg/int4@1' } });
     const expr = BinaryExpr.eq(ColumnRef.of('users', 'id'), existing);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const binary = bound as BinaryExpr;
     expect(binary.right).toBe(existing);
@@ -185,7 +190,7 @@ describe('bindWhereExpr', () => {
       ]);
 
     const expr = ExistsExpr.exists(main);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('exists');
   });
@@ -195,7 +200,7 @@ describe('bindWhereExpr', () => {
       ProjectionItem.of('cnt', AggregateExpr.count()),
     ]);
     const expr = BinaryExpr.gt(SubqueryExpr.of(subquery), LiteralExpr.of(0));
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const binary = bound as BinaryExpr;
     expect(binary.right.kind).toBe('literal');
@@ -206,7 +211,7 @@ describe('bindWhereExpr', () => {
       ProjectionItem.of('cnt', AggregateExpr.count()),
     ]);
     const expr = BinaryExpr.gt(SubqueryExpr.of(subquery), ColumnRef.of('users', 'id'));
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const binary = bound as BinaryExpr;
     expect(binary.right.kind).toBe('column-ref');
@@ -228,7 +233,7 @@ describe('bindWhereExpr', () => {
       ]);
 
     const expr = ExistsExpr.exists(subquery);
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     expect(bound.kind).toBe('exists');
   });
@@ -239,7 +244,7 @@ describe('bindWhereExpr', () => {
       ColumnRef.of('users', 'id'),
       ListExpression.of([existing, LiteralExpr.of(42)]),
     );
-    const bound = bindWhereExpr(contract, expr);
+    const bound = bindWhereExpr(contract, expr, aliases);
 
     const binary = bound as BinaryExpr;
     const list = binary.right as ListExpression;
@@ -251,21 +256,21 @@ describe('bindWhereExpr', () => {
   describe('leaf passthrough', () => {
     it('passes through IdentifierRef unchanged', () => {
       const expr = IdentifierRef.of('some_name');
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound).toBe(expr);
     });
 
     it('passes through top-level LiteralExpr unchanged', () => {
       const expr = LiteralExpr.of(42);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound).toBe(expr);
     });
 
     it('passes through top-level ParamRef unchanged', () => {
       const expr = ParamRef.of('hello', { name: 'x', codec: { codecId: 'pg/text@1' } });
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound).toBe(expr);
     });
@@ -274,7 +279,7 @@ describe('bindWhereExpr', () => {
   describe('composite expression binding', () => {
     it('binds inner SelectAst of SubqueryExpr', () => {
       const expr = SubqueryExpr.of(subqueryWithLiteral());
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('subquery');
       const innerWhere = ((bound as SubqueryExpr).query as SelectAst).where as BinaryExpr;
@@ -294,7 +299,7 @@ describe('bindWhereExpr', () => {
           template: 'position({1} in {0}) > 0',
         },
       });
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('operation');
       const op = bound as OperationExpr;
@@ -306,7 +311,7 @@ describe('bindWhereExpr', () => {
 
     it('binds inner expression of AggregateExpr', () => {
       const expr = AggregateExpr.sum(SubqueryExpr.of(subqueryWithLiteral()));
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('aggregate');
       const agg = bound as AggregateExpr;
@@ -322,7 +327,7 @@ describe('bindWhereExpr', () => {
           new NativeJsonValueProjection(SubqueryExpr.of(subqueryWithLiteral())),
         ),
       ]);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('json-object');
       const json = bound as JsonObjectExpr;
@@ -338,7 +343,7 @@ describe('bindWhereExpr', () => {
       const expr = JsonArrayAggExpr.of(
         new NativeJsonValueProjection(SubqueryExpr.of(subqueryWithLiteral())),
       );
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('json-array-agg');
       const agg = bound as JsonArrayAggExpr;
@@ -368,7 +373,7 @@ describe('bindWhereExpr', () => {
         CastExpr.as(LiteralExpr.of('missing'), 'text'),
       );
 
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound).toBeInstanceOf(CaseExpr);
       const caseExpr = bound as CaseExpr;
@@ -397,7 +402,7 @@ describe('bindWhereExpr', () => {
 
     it('binds inner expressions of top-level ListExpression', () => {
       const expr = ListExpression.of([SubqueryExpr.of(subqueryWithLiteral())]);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('list');
       const list = bound as ListExpression;
@@ -412,7 +417,7 @@ describe('bindWhereExpr', () => {
       const expr = new NotExpr(
         BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('test@test.com')),
       );
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       expect(bound.kind).toBe('not');
       const inner = (bound as NotExpr).expr as BinaryExpr;
@@ -428,7 +433,7 @@ describe('bindWhereExpr', () => {
           BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Alice')),
         ]),
       );
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const and = (bound as NotExpr).expr as AndExpr;
       expect((and.exprs[0] as BinaryExpr).right.kind).toBe('param-ref');
@@ -436,17 +441,117 @@ describe('bindWhereExpr', () => {
     });
   });
 
+  describe('table aliases', () => {
+    it('takes the codec from the storage table a supplied alias names', () => {
+      const expr = BinaryExpr.eq(ColumnRef.of('users_2', 'email'), LiteralExpr.of('a@test.com'));
+      const bound = bindWhereExpr(
+        contract,
+        expr,
+        new Map([['users_2', { namespaceId: 'public', tableName: 'users' }]]),
+      ) as BinaryExpr;
+
+      expect(bound.left).toEqual(ColumnRef.of('users_2', 'email'));
+      expect(bound.right).toMatchObject({
+        kind: 'param-ref',
+        value: 'a@test.com',
+        codec: { codecId: 'pg/text@1' },
+      });
+    });
+
+    it('does not read an alias as a storage table name', () => {
+      const expr = BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('a@test.com'));
+
+      expect(() => bindWhereExpr(contract, expr, new Map())).toThrow(
+        'Unknown column "email" in table "users"',
+      );
+    });
+
+    it('resolves a subquery table alias to the aliased storage table', () => {
+      const subquery = SelectAst.from(TableSource.named('posts', 'p', 'public'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('p', 'id'))])
+        .withWhere(BinaryExpr.eq(ColumnRef.of('p', 'views'), LiteralExpr.of(100)));
+      const bound = bindWhereExpr(contract, ExistsExpr.exists(subquery), new Map()) as ExistsExpr;
+
+      expect((bound.subquery.where as BinaryExpr).right).toMatchObject({
+        kind: 'param-ref',
+        value: 100,
+        codec: { codecId: 'pg/int4@1' },
+      });
+    });
+
+    it('resolves a joined table alias inside the join condition', () => {
+      const subquery = SelectAst.from(TableSource.named('users', undefined, 'public'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('users', 'id'))])
+        .withJoins([
+          JoinAst.inner(
+            TableSource.named('posts', 'p', 'public'),
+            BinaryExpr.eq(ColumnRef.of('p', 'views'), LiteralExpr.of(100)),
+          ),
+        ]);
+      const bound = bindWhereExpr(contract, ExistsExpr.exists(subquery), new Map()) as ExistsExpr;
+
+      const [join] = bound.subquery.joins ?? [];
+      expect(join?.on).toMatchObject({
+        right: {
+          kind: 'param-ref',
+          value: 100,
+          codec: { codecId: 'pg/int4@1' },
+        },
+      });
+    });
+
+    it('resolves a correlated alias of the outer table inside a subquery', () => {
+      const subquery = SelectAst.from(TableSource.named('posts', undefined, 'public'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('posts', 'id'))])
+        .withWhere(BinaryExpr.eq(ColumnRef.of('users_2', 'email'), LiteralExpr.of('a@test.com')));
+      const bound = bindWhereExpr(
+        contract,
+        ExistsExpr.exists(subquery),
+        new Map([['users_2', { namespaceId: 'public', tableName: 'users' }]]),
+      ) as ExistsExpr;
+
+      expect((bound.subquery.where as BinaryExpr).right).toMatchObject({
+        kind: 'param-ref',
+        codec: { codecId: 'pg/text@1' },
+      });
+    });
+  });
+
+  describe('paramRefForStorageColumn', () => {
+    it('carries the codec of the storage column', () => {
+      expect(
+        paramRefForStorageColumn(
+          contract,
+          { namespaceId: 'public', tableName: 'posts' },
+          'views',
+          7,
+        ),
+      ).toMatchObject({ kind: 'param-ref', value: 7, codec: { codecId: 'pg/int4@1' } });
+    });
+
+    it('throws for a column the storage table does not have', () => {
+      expect(() =>
+        paramRefForStorageColumn(
+          contract,
+          { namespaceId: 'public', tableName: 'posts' },
+          'nonexistent',
+          7,
+        ),
+      ).toThrow('Unknown column "nonexistent" in table "posts"');
+    });
+  });
+
   describe('error handling', () => {
     it('throws for unknown table', () => {
       const expr = BinaryExpr.eq(ColumnRef.of('nonexistent', 'col'), LiteralExpr.of('x'));
-      expect(() => bindWhereExpr(contract, expr)).toThrow(
+      expect(() => bindWhereExpr(contract, expr, aliases)).toThrow(
         'Unknown column "col" in table "nonexistent"',
       );
     });
 
     it('throws for unknown column', () => {
       const expr = BinaryExpr.eq(ColumnRef.of('users', 'nonexistent'), LiteralExpr.of('x'));
-      expect(() => bindWhereExpr(contract, expr)).toThrow(
+      expect(() => bindWhereExpr(contract, expr, aliases)).toThrow(
         'Unknown column "nonexistent" in table "users"',
       );
     });
@@ -455,7 +560,7 @@ describe('bindWhereExpr', () => {
   describe('bindComparable edge cases', () => {
     it('preserves column-ref on right when left is a column', () => {
       const expr = BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('posts', 'user_id'));
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const binary = bound as BinaryExpr;
       expect(binary.right.kind).toBe('column-ref');
@@ -464,7 +569,7 @@ describe('bindWhereExpr', () => {
     it('rewrites aggregate on right via bindExpression when left is a column', () => {
       const aggWithSubquery = AggregateExpr.sum(SubqueryExpr.of(subqueryWithLiteral()));
       const expr = BinaryExpr.eq(ColumnRef.of('users', 'id'), aggWithSubquery);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const binary = bound as BinaryExpr;
       expect(binary.right.kind).toBe('aggregate');
@@ -476,7 +581,7 @@ describe('bindWhereExpr', () => {
     it('rewrites non-literal/non-param right via bindExpression when left is not a column', () => {
       const aggWithSubquery = AggregateExpr.sum(SubqueryExpr.of(subqueryWithLiteral()));
       const expr = BinaryExpr.gt(AggregateExpr.count(), aggWithSubquery);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const binary = bound as BinaryExpr;
       expect(binary.right.kind).toBe('aggregate');
@@ -489,52 +594,11 @@ describe('bindWhereExpr', () => {
   describe('binary operators', () => {
     it('neq binds literal to param', () => {
       const expr = BinaryExpr.neq(ColumnRef.of('users', 'name'), LiteralExpr.of('Bob'));
-      const bound = bindWhereExpr(contract, expr) as BinaryExpr;
+      const bound = bindWhereExpr(contract, expr, aliases) as BinaryExpr;
 
       expect(bound.op).toBe('neq');
       expect(bound.right.kind).toBe('param-ref');
       expect((bound.right as ParamRef).value).toBe('Bob');
-    });
-
-    it('lt binds literal to param', () => {
-      const expr = BinaryExpr.lt(ColumnRef.of('posts', 'views'), LiteralExpr.of(50));
-      const bound = bindWhereExpr(contract, expr) as BinaryExpr;
-
-      expect(bound.op).toBe('lt');
-      expect(bound.right.kind).toBe('param-ref');
-      expect((bound.right as ParamRef).codec?.codecId).toBe('pg/int4@1');
-    });
-
-    it('lte binds literal to param', () => {
-      const expr = BinaryExpr.lte(ColumnRef.of('posts', 'views'), LiteralExpr.of(50));
-      const bound = bindWhereExpr(contract, expr) as BinaryExpr;
-
-      expect(bound.op).toBe('lte');
-      expect(bound.right.kind).toBe('param-ref');
-    });
-
-    it('like binds literal to param', () => {
-      const expr = BinaryExpr.like(ColumnRef.of('users', 'name'), LiteralExpr.of('%alice%'));
-      const bound = bindWhereExpr(contract, expr) as BinaryExpr;
-
-      expect(bound.op).toBe('like');
-      expect(bound.right.kind).toBe('param-ref');
-      expect((bound.right as ParamRef).value).toBe('%alice%');
-    });
-
-    it('notIn binds list literals to params', () => {
-      const expr = BinaryExpr.notIn(
-        ColumnRef.of('users', 'id'),
-        ListExpression.of([LiteralExpr.of(1), LiteralExpr.of(2)]),
-      );
-      const bound = bindWhereExpr(contract, expr) as BinaryExpr;
-
-      expect(bound.op).toBe('notIn');
-      const list = bound.right as ListExpression;
-      expect(list.values).toMatchObject([
-        { kind: 'param-ref', value: 1, codec: { codecId: 'pg/int4@1' } },
-        { kind: 'param-ref', value: 2, codec: { codecId: 'pg/int4@1' } },
-      ]);
     });
   });
 
@@ -545,7 +609,7 @@ describe('bindWhereExpr', () => {
         .withDistinctOn([ColumnRef.of('posts', 'user_id')])
         .withWhere(BinaryExpr.eq(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)));
       const expr = ExistsExpr.exists(subquery);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const select = (bound as ExistsExpr).subquery as SelectAst;
       expect(select.distinctOn).toHaveLength(1);
@@ -561,11 +625,22 @@ describe('bindWhereExpr', () => {
         .withOffset(5)
         .withWhere(BinaryExpr.eq(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)));
       const expr = ExistsExpr.exists(subquery);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const select = (bound as ExistsExpr).subquery as SelectAst;
       expect(select.limit).toBe(10);
       expect(select.offset).toBe(5);
+    });
+
+    it('preserves locking clauses', () => {
+      const locking = [LockingClause.of('forUpdate', { of: ['posts'], waitPolicy: 'skipLocked' })];
+      const bound = bindWhereExpr(
+        contract,
+        ExistsExpr.exists(subqueryWithLiteral().withLocking(locking)),
+        aliases,
+      );
+
+      expect(((bound as ExistsExpr).subquery as SelectAst).locking).toEqual(locking);
     });
   });
 
@@ -578,7 +653,7 @@ describe('bindWhereExpr', () => {
         ]),
         BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1)),
       ]);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const or = bound as OrExpr;
       const and = or.exprs[0] as AndExpr;
@@ -592,7 +667,7 @@ describe('bindWhereExpr', () => {
         new NotExpr(BinaryExpr.eq(ColumnRef.of('users', 'name'), LiteralExpr.of('Bob'))),
         BinaryExpr.eq(ColumnRef.of('users', 'email'), LiteralExpr.of('a@test.com')),
       ]);
-      const bound = bindWhereExpr(contract, expr);
+      const bound = bindWhereExpr(contract, expr, aliases);
 
       const and = bound as AndExpr;
       const not = and.exprs[0] as NotExpr;

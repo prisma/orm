@@ -1,31 +1,32 @@
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { FieldAttributeCtx } from '../src/exports';
-import { taggedLiteral } from '../src/exports';
+import { enumMemberValue, taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
-    pslBlockDescriptors: {},
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sources,
-    symbols: symbolTable,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    context: binderContext(),
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {
@@ -40,41 +41,43 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCt
 }
 
 describe('taggedLiteral', () => {
-  const type = taggedLiteral(['sql', 'pg.sql'], { documentation: 'Raw SQL, used verbatim.' });
+  const type = taggedLiteral(['json', 'postgis.geometry'], {
+    documentation: 'A JSON document or a geometry.',
+  });
 
   it('labels itself with the first tag', () => {
     expect(type.kind).toBe('taggedLiteral');
-    expect(type.label).toBe('sql`...`');
-    expect(type.tags).toEqual(['sql', 'pg.sql']);
-    expect(type.documentation).toBe('Raw SQL, used verbatim.');
+    expect(type.label).toBe('json`...`');
+    expect(type.tags).toEqual(['json', 'postgis.geometry']);
+    expect(type.documentation).toBe('A JSON document or a geometry.');
   });
 
   it('returns the tag, the canonicalized body, and the span of the whole literal', () => {
-    const { expr, ctx } = argOf('pg.sql`\n  now()\n`');
+    const { expr, ctx } = argOf('postgis.geometry`\n  POINT(0 0)\n`');
     const result = type.parse(expr, ctx);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toEqual({
-        tag: 'pg.sql',
-        canonicalization: { ok: true, body: 'now()' },
-        span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 20, line: 3, column: 2 } },
+        tag: 'postgis.geometry',
+        canonicalization: { ok: true, text: 'POINT(0 0)' },
+        span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 35, line: 3, column: 2 } },
       });
     }
   });
 
   it('accepts a double-quoted string', () => {
-    const { expr, ctx } = argOf('sql"now()"');
+    const { expr, ctx } = argOf('json"[1]"');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { tag: 'sql', canonicalization: { ok: true, body: 'now()' } },
+      value: { tag: 'json', canonicalization: { ok: true, text: '[1]' } },
     });
   });
 
-  it('accepts a tag it does not list, leaving the tag check to lowering', () => {
-    const { expr, ctx } = argOf('sqlite.sql`x`');
+  it('accepts a tag it does not list, leaving the tag check to its consumer', () => {
+    const { expr, ctx } = argOf('sql`x`');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { tag: 'sqlite.sql', canonicalization: { ok: true, body: 'x' } },
+      value: { tag: 'sql', canonicalization: { ok: true, text: 'x' } },
     });
   });
 
@@ -97,11 +100,11 @@ describe('taggedLiteral', () => {
     const { expr, ctx } = argOf('sql`a $' + '{x} b`');
     expect(type.parse(expr, ctx)).toMatchObject({
       ok: true,
-      value: { canonicalization: { ok: true, body: 'a $' + '{x} b' } },
+      value: { canonicalization: { ok: true, text: 'a $' + '{x} b' } },
     });
   });
 
-  it('returns a failed canonicalization for lowering to report', () => {
+  it('returns a failed canonicalization for its consumer to report', () => {
     const nul = argOf('sql`a\0b`');
     expect(type.parse(nul.expr, nul.ctx)).toMatchObject({
       ok: true,
@@ -111,6 +114,50 @@ describe('taggedLiteral', () => {
     expect(type.parse(large.expr, large.ctx)).toMatchObject({
       ok: true,
       value: { canonicalization: { ok: false, reason: 'too-large' } },
+    });
+  });
+});
+
+describe('enumMemberValue', () => {
+  it('yields a tagged member as its written value', () => {
+    const { expr, ctx } = argOf('date"2024-01-31"');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { kind: 'tag', tag: 'date', text: '2024-01-31' },
+    });
+  });
+
+  it('yields a list member as the list of its scalar values', () => {
+    const { expr, ctx } = argOf('[1, "a", true, date"2024-01-31"]');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: [1, 'a', true, { kind: 'tag', tag: 'date', text: '2024-01-31' }],
+    });
+  });
+
+  it('refuses a list inside a list member', () => {
+    const { expr, ctx } = argOf('[1, [2]]');
+    const result = enumMemberValue().parse(expr, ctx);
+    expect(result.ok ? [] : result.failure.map(({ code, message }) => ({ code, message }))).toEqual(
+      [
+        {
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: string | number | boolean | tag`...`',
+        },
+      ],
+    );
+  });
+
+  it('refuses a tagged member whose text cannot be canonicalized, with the tagged literal diagnostic', () => {
+    const { expr, ctx } = argOf('json`a\0b`');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: false,
+      failure: [
+        {
+          code: 'PSL_TAGGED_LITERAL_NUL',
+          message: 'Tagged literals must not contain NUL characters.',
+        },
+      ],
     });
   });
 });

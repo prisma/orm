@@ -6,7 +6,7 @@ import postgres from '@prisma/orm-postgres/runtime';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { ormClientAggregateUsers } from '../src/orm-client/aggregate-users';
-import { createOrmClient } from '../src/orm-client/client';
+import { collections } from '../src/orm-client/collections';
 import { ormClientCreateUser } from '../src/orm-client/create-user';
 import { ormClientCreateUserWithAddress } from '../src/orm-client/create-user-with-address';
 import { ormClientDeleteUser } from '../src/orm-client/delete-user';
@@ -14,11 +14,15 @@ import { ormClientFindSimilarPosts } from '../src/orm-client/find-similar-posts'
 import { ormClientFindUserByEmail } from '../src/orm-client/find-user-by-email';
 import { ormClientFindUserById } from '../src/orm-client/find-user-by-id';
 import { ormClientFindUserByIdCached } from '../src/orm-client/find-user-by-id-cached';
+import { ownedBy } from '../src/orm-client/fragments';
 import { ormClientGetAdminUsers } from '../src/orm-client/get-admin-users';
 import { ormClientGetDashboardUsers } from '../src/orm-client/get-dashboard-users';
 import { ormClientGetFeatureRoadmap } from '../src/orm-client/get-feature-roadmap';
+import { ormClientGetFilteredPosts } from '../src/orm-client/get-filtered-posts';
 import { ormClientGetLatestUserPerKind } from '../src/orm-client/get-latest-user-per-kind';
 import { ormClientGetPostFeed } from '../src/orm-client/get-post-feed';
+import { ormClientGetRecentPosts } from '../src/orm-client/get-recent-posts';
+import { ormClientGetRecentUsers } from '../src/orm-client/get-recent-users';
 import { ormClientGetUserBugTriage } from '../src/orm-client/get-user-bug-triage';
 import { ormClientGetUserInsights } from '../src/orm-client/get-user-insights';
 import { ormClientGetUserKindBreakdown } from '../src/orm-client/get-user-kind-breakdown';
@@ -28,41 +32,43 @@ import { ormClientGetUsers } from '../src/orm-client/get-users';
 import { ormClientGetUsersBackwardCursor } from '../src/orm-client/get-users-backward-cursor';
 import { ormClientGetUsersByIdCursor } from '../src/orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from '../src/orm-client/get-users-cached';
+import { ormClientSearchPosts } from '../src/orm-client/search-posts';
 import { ormClientSearchPostsByEmbedding } from '../src/orm-client/search-posts-by-embedding';
 import { ormClientSearchPostsByTitle } from '../src/orm-client/search-posts-by-title';
 import { ormClientUpdateUserEmail } from '../src/orm-client/update-user-email';
+import { ormClientUpdateUserEmailInvalidatingCache } from '../src/orm-client/update-user-email-invalidating-cache';
 import { ormClientUpsertUser } from '../src/orm-client/upsert-user';
-import type { Contract } from '../src/prisma/contract.d';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, type DemoOrm, db } from '../src/prisma/db';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 const Priority = db.enums.public.Priority;
 
-async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+async function getRuntime(connectionString: string): Promise<{ runtime: Runtime; orm: DemoOrm }> {
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
+    collections,
   });
-  return client.connect();
+  const runtime = await client.connect();
+  return { runtime, orm: client.orm.public };
 }
 
 async function getRuntimeWithMiddleware(
   connectionString: string,
   middleware: readonly SqlMiddleware[],
-): Promise<{ runtime: Runtime; driver: SqlDriver<unknown> }> {
-  const client = postgres<Contract>({
-    contractJson,
+): Promise<{ runtime: Runtime; orm: DemoOrm; driver: SqlDriver<unknown> }> {
+  const client = postgres({
+    contract,
     url: connectionString,
     middleware,
     extensions: db.stack.extensions,
+    collections,
   });
   const runtime = await client.connect();
   const driver = (runtime as unknown as { driver: SqlDriver<unknown> }).driver;
-  return { runtime, driver };
+  return { runtime, orm: client.orm.public, driver };
 }
 
 const seededUserIds = {
@@ -183,6 +189,16 @@ async function seedOrmClientData(runtime: Runtime): Promise<void> {
   }
 }
 
+const seededTag = { id: '30000000-0000-0000-0000-000000000001', label: 'orm' };
+
+async function tagAdminDeepDive(runtime: Runtime): Promise<void> {
+  const db = sql({ context, rawCodecInferer: { inferCodec: () => 'pg/text' } }).public;
+  await runtime.execute(db.tag.insert([seededTag]).build());
+  await runtime.execute(
+    db.post_tag.insert([{ postId: seededPostIds.adminDeepDive, tagId: seededTag.id }]).build(),
+  );
+}
+
 async function seedEmbeddingPosts(runtime: Runtime): Promise<void> {
   const db = sql({ context, rawCodecInferer: { inferCodec: () => 'pg/text' } }).public;
   const posts = [
@@ -229,11 +245,9 @@ async function seedEmbeddingPosts(runtime: Runtime): Promise<void> {
 // member users via the ORM client's variant scopes, which auto-inject the
 // discriminator and transactionally write the base + variant tables. The
 // other seeded users own no tasks, so their included `tasks` come back empty.
-// Ids are client-generated (`@default(uuid())`); the created rows are returned
+// Ids are client-generated (`@onCreate(uuid())`); the created rows are returned
 // so the assertions can key on the same ids.
-async function seedOrmClientTasks(runtime: Runtime): Promise<SeededTaskIds> {
-  const orm = createOrmClient(runtime);
-
+async function seedOrmClientTasks(orm: DemoOrm): Promise<SeededTaskIds> {
   const adminBug = await orm.Task.bugs().create({
     userId: seededUserIds.admin,
     title: 'Login crashes on Safari',
@@ -277,11 +291,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const users = await ormClientGetUsers(1, runtime);
+          const users = await ormClientGetUsers(1, orm);
 
           expect(users).toHaveLength(1);
           expect(users[0]).toMatchObject({
@@ -302,11 +316,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const users = await ormClientGetAdminUsers(10, runtime);
+          const users = await ormClientGetAdminUsers(10, orm);
 
           expect(users).toHaveLength(2);
           expect(users.every((user) => user.kind === 'admin')).toBe(true);
@@ -327,12 +341,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const user = await ormClientFindUserByEmail('member@example.com', runtime);
-          const missing = await ormClientFindUserByEmail('missing@example.com', runtime);
+          const user = await ormClientFindUserByEmail('member@example.com', orm);
+          const missing = await ormClientFindUserByEmail('missing@example.com', orm);
 
           expect(user).toMatchObject({
             email: 'member@example.com',
@@ -353,15 +367,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const user = await ormClientFindUserById(seededUserIds.admin, runtime);
-          const missing = await ormClientFindUserById(
-            '00000000-0000-0000-0000-000000000099',
-            runtime,
-          );
+          const user = await ormClientFindUserById(seededUserIds.admin, orm);
+          const missing = await ormClientFindUserById('00000000-0000-0000-0000-000000000099', orm);
 
           expect(user!.id).toBe(seededUserIds.admin);
           expect(missing).toBeNull();
@@ -378,7 +389,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           const created = await ormClientCreateUser(
@@ -389,12 +400,12 @@ describe('ORM client integration examples', () => {
               kind: 'user',
               createdAt: Temporal.Instant.from('2024-02-01T00:00:00.000Z'),
             },
-            runtime,
+            orm,
           );
           const updated = await ormClientUpdateUserEmail(
             '00000000-0000-0000-0000-000000000099',
             'updated@example.com',
-            runtime,
+            orm,
           );
 
           expect(created).toEqual({
@@ -420,7 +431,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           const address = {
@@ -438,7 +449,7 @@ describe('ORM client integration examples', () => {
               createdAt: Temporal.Instant.from('2024-02-01T00:00:00.000Z'),
               address,
             },
-            runtime,
+            orm,
           );
 
           expect(created).toMatchObject({
@@ -448,7 +459,7 @@ describe('ORM client integration examples', () => {
             address,
           });
 
-          const fetched = await ormClientGetUsers(10, runtime);
+          const fetched = await ormClientGetUsers(10, orm);
           const found = fetched.find((u) => u.id === '00000000-0000-0000-0000-000000000088');
           expect(found?.address).toEqual(address);
         } finally {
@@ -464,11 +475,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const aggregates = await ormClientAggregateUsers(runtime);
+          const aggregates = await ormClientAggregateUsers(orm);
 
           expect(aggregates).toEqual({
             totalUsers: 4,
@@ -487,14 +498,58 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const posts = await ormClientGetUserPosts(seededUserIds.admin, 10, runtime);
+          const posts = await ormClientGetUserPosts(seededUserIds.admin, 10, orm);
 
           expect(posts.map((post) => post.id)).toEqual([seededPostIds.newer, seededPostIds.older]);
           expect(posts.every((post) => post.userId === seededUserIds.admin)).toBe(true);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ownedBy filters any model with a userId with the plan of the same where written inline',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const plans: unknown[] = [];
+        const { runtime, orm } = await getRuntimeWithMiddleware(connectionString, [
+          {
+            name: 'plans',
+            familyId: 'sql',
+            async activityStarted(activity) {
+              if (activity.kind === 'statement') plans.push(activity.plan);
+            },
+          },
+        ]);
+
+        try {
+          await seedOrmClientData(runtime);
+          plans.length = 0;
+          const inline = await orm.Post.where((post) => post.userId.eq(seededUserIds.admin))
+            .select('id', 'userId')
+            .orderBy((post) => post.id.asc())
+            .all();
+          const scoped = await orm.Post.with(ownedBy(seededUserIds.admin))
+            .select('id', 'userId')
+            .orderBy((post) => post.id.asc())
+            .all();
+
+          expect(scoped).toEqual([
+            { id: seededPostIds.older, userId: seededUserIds.admin },
+            { id: seededPostIds.newer, userId: seededUserIds.admin },
+          ]);
+          expect(scoped).toEqual(inline);
+          const [inlinePlan, scopedPlan] = plans;
+          expect(scopedPlan).toBeDefined();
+          expect(scopedPlan).toEqual(inlinePlan);
         } finally {
           await runtime.close();
         }
@@ -508,11 +563,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const users = await ormClientGetDashboardUsers('example.com', 'post', 10, 1, runtime);
+          const users = await ormClientGetDashboardUsers('example.com', 'post', 10, 1, orm);
 
           expect(users.map((user) => user.id)).toEqual([
             seededUserIds.adminTwo,
@@ -536,11 +591,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const posts = await ormClientGetPostFeed('post', 3, runtime);
+          const posts = await ormClientGetPostFeed('post', 3, orm);
 
           expect(posts.map((post) => post.id)).toEqual([
             seededPostIds.adminZebra,
@@ -562,16 +617,196 @@ describe('ORM client integration examples', () => {
   );
 
   it(
+    'ormClientGetRecentPosts filters with a scope for any model, orders by a request field and shapes summaries',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const { runtime, orm } = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+          await tagAdminDeepDive(runtime);
+          const since = Temporal.Instant.from('2024-01-03T00:00:00.000Z');
+          const posts = await ormClientGetRecentPosts(since, 'title', 'asc', 10, orm);
+
+          expect(posts.map((post) => ({ ...post, createdAt: post.createdAt.toString() }))).toEqual([
+            {
+              id: seededPostIds.adminDeepDive,
+              title: 'Admin deep dive post',
+              createdAt: '2024-01-04T10:00:00Z',
+              tags: [seededTag],
+            },
+            {
+              id: seededPostIds.memberNote,
+              title: 'Other user note',
+              createdAt: '2024-01-03T10:00:00Z',
+              tags: [],
+            },
+            {
+              id: seededPostIds.adminZebra,
+              title: 'Zebra post note',
+              createdAt: '2024-01-05T10:00:00Z',
+              tags: [],
+            },
+          ]);
+
+          const newestFirst = await ormClientGetRecentPosts(since, 'createdAt', 'desc', 10, orm);
+          expect(newestFirst.map((post) => post.id)).toEqual([
+            seededPostIds.adminZebra,
+            seededPostIds.adminDeepDive,
+            seededPostIds.memberNote,
+          ]);
+
+          await expect(
+            ormClientGetRecentPosts(since, 'embedding', 'asc', 10, orm),
+          ).rejects.toMatchObject({
+            code: 'ORM.ARGUMENT_INVALID',
+            message: 'Cannot order Post by "embedding"',
+          });
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ormClientGetFilteredPosts applies each filter only when the input names it',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const { runtime, orm } = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+          await tagAdminDeepDive(runtime);
+          const listIds = async (input: Parameters<typeof ormClientGetFilteredPosts>[0]) =>
+            (await ormClientGetFilteredPosts(input, 10, orm)).map((post) => post.id);
+
+          const byAuthor = await ormClientGetFilteredPosts(
+            { userId: seededUserIds.adminTwo },
+            10,
+            orm,
+          );
+          expect(
+            byAuthor.map((post) => ({ ...post, createdAt: post.createdAt.toString() })),
+          ).toEqual([
+            {
+              id: seededPostIds.adminZebra,
+              title: 'Zebra post note',
+              createdAt: '2024-01-05T10:00:00Z',
+              tags: [],
+            },
+            {
+              id: seededPostIds.adminDeepDive,
+              title: 'Admin deep dive post',
+              createdAt: '2024-01-04T10:00:00Z',
+              tags: [seededTag],
+            },
+          ]);
+
+          expect(await listIds({})).toEqual([
+            seededPostIds.adminZebra,
+            seededPostIds.adminDeepDive,
+            seededPostIds.memberNote,
+            seededPostIds.newer,
+            seededPostIds.older,
+          ]);
+          expect(
+            await listIds({ before: Temporal.Instant.from('2024-01-03T00:00:00.000Z') }),
+          ).toEqual([seededPostIds.newer, seededPostIds.older]);
+          expect(
+            await listIds({
+              userId: seededUserIds.admin,
+              before: Temporal.Instant.from('2024-01-02T00:00:00.000Z'),
+            }),
+          ).toEqual([seededPostIds.older]);
+          expect(
+            await listIds({ before: Temporal.Instant.from('2024-01-02T10:00:00.000Z') }),
+          ).toEqual([seededPostIds.older]);
+          expect((await ormClientGetFilteredPosts({}, 2, orm)).map((post) => post.id)).toEqual([
+            seededPostIds.adminZebra,
+            seededPostIds.adminDeepDive,
+          ]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ormClientGetRecentUsers applies the same scope to users and their included posts',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const { runtime, orm } = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+          await tagAdminDeepDive(runtime);
+          const since = Temporal.Instant.from('2024-01-02T00:00:00.000Z');
+          const users = await ormClientGetRecentUsers(since, 10, orm);
+
+          expect(
+            users.map((user) => ({
+              ...user,
+              posts: user.posts.map((post) => ({ ...post, createdAt: post.createdAt.toString() })),
+            })),
+          ).toEqual([
+            {
+              id: seededUserIds.member,
+              email: 'member@example.com',
+              posts: [
+                {
+                  id: seededPostIds.memberNote,
+                  title: 'Other user note',
+                  createdAt: '2024-01-03T10:00:00Z',
+                  tags: [],
+                },
+              ],
+            },
+            {
+              id: seededUserIds.adminTwo,
+              email: 'admin2@example.org',
+              posts: [
+                {
+                  id: seededPostIds.adminDeepDive,
+                  title: 'Admin deep dive post',
+                  createdAt: '2024-01-04T10:00:00Z',
+                  tags: [seededTag],
+                },
+                {
+                  id: seededPostIds.adminZebra,
+                  title: 'Zebra post note',
+                  createdAt: '2024-01-05T10:00:00Z',
+                  tags: [],
+                },
+              ],
+            },
+            { id: seededUserIds.reader, email: 'reader@example.com', posts: [] },
+          ]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'ormClientGetUserTaskBoard includes the polymorphic tasks relation in its full default per-variant shape',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const taskIds = await seedOrmClientTasks(runtime);
-          const board = await ormClientGetUserTaskBoard(10, runtime);
+          const taskIds = await seedOrmClientTasks(orm);
+          const board = await ormClientGetUserTaskBoard(10, orm);
 
           // newestFirst() orders users by createdAt desc: reader, adminTwo,
           // member, admin. Only admin and member own tasks. The include takes
@@ -654,12 +889,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const taskIds = await seedOrmClientTasks(runtime);
-          const triage = await ormClientGetUserBugTriage('critical', 10, runtime);
+          const taskIds = await seedOrmClientTasks(orm);
+          const triage = await ormClientGetUserBugTriage('critical', 10, orm);
 
           // Users ordered by displayName asc; only admin owns a critical bug,
           // and only Bug variant rows survive the variant narrowing. The
@@ -700,12 +935,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const taskIds = await seedOrmClientTasks(runtime);
-          const roadmap = await ormClientGetFeatureRoadmap('v2.0', 10, runtime);
+          const taskIds = await seedOrmClientTasks(orm);
+          const roadmap = await ormClientGetFeatureRoadmap('v2.0', 10, orm);
 
           // Both admin and member have a Feature targeting v2.0; the
           // targetRelease filter reaches a column in the joined `feature`
@@ -763,12 +998,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const firstPage = await ormClientGetUsersByIdCursor(null, 2, runtime);
-          const secondPage = await ormClientGetUsersByIdCursor(seededUserIds.member, 2, runtime);
+          const firstPage = await ormClientGetUsersByIdCursor(null, 2, orm);
+          const secondPage = await ormClientGetUsersByIdCursor(seededUserIds.member, 2, orm);
 
           expect(firstPage.map((user) => user.id)).toEqual([
             seededUserIds.admin,
@@ -791,11 +1026,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const users = await ormClientGetLatestUserPerKind(runtime);
+          const users = await ormClientGetLatestUserPerKind(orm);
 
           expect(users).toHaveLength(2);
           expect(users.map((user) => user.id)).toEqual([
@@ -816,11 +1051,11 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const users = await ormClientGetUserInsights(4, runtime);
+          const users = await ormClientGetUserInsights(4, orm);
 
           expect(users.map((user) => user.id)).toEqual([
             seededUserIds.reader,
@@ -849,12 +1084,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const atLeastTwo = await ormClientGetUserKindBreakdown(2, runtime);
-          const atLeastThree = await ormClientGetUserKindBreakdown(3, runtime);
+          const atLeastTwo = await ormClientGetUserKindBreakdown(2, orm);
+          const atLeastThree = await ormClientGetUserKindBreakdown(3, orm);
 
           expect(atLeastTwo).toEqual([
             { kind: 'admin', totalUsers: 2 },
@@ -874,7 +1109,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
@@ -887,7 +1122,7 @@ describe('ORM client integration examples', () => {
               displayName: 'Admin Upserted',
               kind: 'admin',
             },
-            runtime,
+            orm,
           );
           const inserted = await ormClientUpsertUser(
             {
@@ -897,7 +1132,7 @@ describe('ORM client integration examples', () => {
               kind: 'user',
               createdAt: Temporal.Instant.from('2024-02-01T00:00:00.000Z'),
             },
-            runtime,
+            orm,
           );
 
           expect(updated).toMatchObject({
@@ -912,7 +1147,7 @@ describe('ORM client integration examples', () => {
           });
           expect(inserted.createdAt).toBeTruthy();
 
-          const insertedUser = await ormClientFindUserById(insertedId, runtime);
+          const insertedUser = await ormClientFindUserById(insertedId, orm);
           expect(insertedUser).toMatchObject({
             id: insertedId,
             email: 'inserted-upsert@example.com',
@@ -931,16 +1166,16 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
-          const before = await ormClientFindUserById(seededUserIds.reader, runtime);
+          const before = await ormClientFindUserById(seededUserIds.reader, orm);
           expect(before).not.toBeNull();
 
-          await ormClientDeleteUser(seededUserIds.reader, runtime);
+          await ormClientDeleteUser(seededUserIds.reader, orm);
 
-          const after = await ormClientFindUserById(seededUserIds.reader, runtime);
+          const after = await ormClientFindUserById(seededUserIds.reader, orm);
           expect(after).toBeNull();
         } finally {
           await runtime.close();
@@ -955,25 +1190,21 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
 
-          const page = await ormClientGetUsersBackwardCursor(seededUserIds.reader, 2, runtime);
+          const page = await ormClientGetUsersBackwardCursor(seededUserIds.reader, 2, orm);
           expect(page.map((user) => user.id)).toEqual([
             seededUserIds.adminTwo,
             seededUserIds.member,
           ]);
 
-          const partialPage = await ormClientGetUsersBackwardCursor(
-            seededUserIds.member,
-            10,
-            runtime,
-          );
+          const partialPage = await ormClientGetUsersBackwardCursor(seededUserIds.member, 10, orm);
           expect(partialPage.map((user) => user.id)).toEqual([seededUserIds.admin]);
 
-          const emptyPage = await ormClientGetUsersBackwardCursor(seededUserIds.admin, 2, runtime);
+          const emptyPage = await ormClientGetUsersBackwardCursor(seededUserIds.admin, 2, orm);
           expect(emptyPage).toHaveLength(0);
         } finally {
           await runtime.close();
@@ -988,12 +1219,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
           await seedEmbeddingPosts(runtime);
-          const results = await ormClientFindSimilarPosts(embeddingPostIds.reference, 10, runtime);
+          const results = await ormClientFindSimilarPosts(embeddingPostIds.reference, 10, orm);
 
           expect(results.map((r) => r.id)).toEqual([
             embeddingPostIds.similar1,
@@ -1016,7 +1247,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
@@ -1025,13 +1256,18 @@ describe('ORM client integration examples', () => {
             makeVector([1, 0, 0]),
             0.5,
             10,
-            runtime,
+            orm,
           );
 
           expect(results.map((r) => r.id)).toEqual([
             embeddingPostIds.reference,
             embeddingPostIds.similar1,
             embeddingPostIds.similar2,
+          ]);
+          expect(results.map((r) => Object.keys(r))).toEqual([
+            ['id', 'title', 'userId'],
+            ['id', 'title', 'userId'],
+            ['id', 'title', 'userId'],
           ]);
         } finally {
           await runtime.close();
@@ -1046,12 +1282,12 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const runtime = await getRuntime(connectionString);
+        const { runtime, orm } = await getRuntime(connectionString);
 
         try {
           await seedOrmClientData(runtime);
 
-          const zebra = await ormClientSearchPostsByTitle('zebra', 10, runtime);
+          const zebra = await ormClientSearchPostsByTitle('zebra', 10, orm);
           expect(zebra).toEqual([
             {
               id: seededPostIds.adminZebra,
@@ -1060,11 +1296,41 @@ describe('ORM client integration examples', () => {
             },
           ]);
 
-          const phrase = await ormClientSearchPostsByTitle('"deep dive"', 10, runtime);
+          const phrase = await ormClientSearchPostsByTitle('"deep dive"', 10, orm);
           expect(phrase.map((p) => p.id)).toEqual([seededPostIds.adminDeepDive]);
 
-          const excluded = await ormClientSearchPostsByTitle('note -zebra', 10, runtime);
+          const excluded = await ormClientSearchPostsByTitle('note -zebra', 10, orm);
           expect(excluded.map((p) => p.id)).toEqual([seededPostIds.memberNote]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ormClientSearchPosts searches the title and the body, title matches first',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const { runtime, orm } = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+          await orm.Post.where({ id: seededPostIds.memberNote }).update({
+            body: 'A zebra crossed the road',
+          });
+
+          const zebra = await ormClientSearchPosts('zebra', 10, orm);
+          expect(zebra).toEqual([
+            { id: seededPostIds.adminZebra, title: 'Zebra post note', body: null },
+            {
+              id: seededPostIds.memberNote,
+              title: 'Other user note',
+              body: 'A zebra crossed the road',
+            },
+          ]);
         } finally {
           await runtime.close();
         }
@@ -1080,7 +1346,7 @@ describe('ORM client integration examples', () => {
   // `src/orm-client/get-users-cached.ts` opt their reads into the
   // `@internal/middleware-cache` middleware via `cacheAnnotation(...)`.
   // The middleware short-circuits repeated executions of the same plan via
-  // its `interceptQuery` hook, so a cache hit means the SQL driver is *not*
+  // its `intercept.onQuery` handler, so a cache hit means the SQL driver is *not*
   // invoked again. We assert that contract by spying on `driver.query`.
   // ---------------------------------------------------------------------------
 
@@ -1089,8 +1355,8 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
-        const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
+        const cache = createCacheMiddleware();
+        const { runtime, orm, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
           await seedOrmClientData(runtime);
@@ -1098,12 +1364,12 @@ describe('ORM client integration examples', () => {
           // Spy *after* seeding so we don't count seed inserts.
           const driverQuerySpy = vi.spyOn(driver, 'query');
 
-          const first = await ormClientFindUserByIdCached(seededUserIds.admin, runtime);
+          const first = await ormClientFindUserByIdCached(seededUserIds.admin, orm);
           const driverCallsAfterFirst = driverQuerySpy.mock.calls.length;
           expect(driverCallsAfterFirst).toBeGreaterThan(0);
           expect(first).toMatchObject({ id: seededUserIds.admin, kind: 'admin' });
 
-          const second = await ormClientFindUserByIdCached(seededUserIds.admin, runtime);
+          const second = await ormClientFindUserByIdCached(seededUserIds.admin, orm);
           // Cache hit: driver was not invoked again.
           expect(driverQuerySpy.mock.calls.length).toBe(driverCallsAfterFirst);
           expect(second).toEqual(first);
@@ -1116,23 +1382,55 @@ describe('ORM client integration examples', () => {
   );
 
   it(
-    'ormClientFindUserByIdCached forceRefresh: true bypasses the cache (skip annotation)',
+    'ormClientUpdateUserEmailInvalidatingCache removes the cached lookup once the update commits',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
-        const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
+        const cache = createCacheMiddleware();
+        const { runtime, orm, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
+
+        try {
+          await seedOrmClientData(runtime);
+          await ormClientFindUserByIdCached(seededUserIds.admin, orm);
+
+          await ormClientUpdateUserEmailInvalidatingCache(
+            seededUserIds.admin,
+            'admin-renamed@example.com',
+            orm,
+          );
+          const driverQuerySpy = vi.spyOn(driver, 'query');
+          const after = await ormClientFindUserByIdCached(seededUserIds.admin, orm);
+
+          expect({
+            email: after?.email,
+            sentStatement: driverQuerySpy.mock.calls.length > 0,
+          }).toEqual({ email: 'admin-renamed@example.com', sentStatement: true });
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ormClientFindUserByIdCached forceRefresh: true bypasses the cache (bypass annotation)',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const cache = createCacheMiddleware();
+        const { runtime, orm, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
           await seedOrmClientData(runtime);
           const driverQuerySpy = vi.spyOn(driver, 'query');
 
           // Prime the cache.
-          await ormClientFindUserByIdCached(seededUserIds.admin, runtime);
+          await ormClientFindUserByIdCached(seededUserIds.admin, orm);
           const callsAfterFirst = driverQuerySpy.mock.calls.length;
 
-          // Same query but with skip — should hit the driver again.
-          await ormClientFindUserByIdCached(seededUserIds.admin, runtime, {
+          // Same query but bypassed — should hit the driver again.
+          await ormClientFindUserByIdCached(seededUserIds.admin, orm, {
             forceRefresh: true,
           });
           expect(driverQuerySpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
@@ -1149,25 +1447,25 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
-        const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
+        const cache = createCacheMiddleware();
+        const { runtime, orm, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
           await seedOrmClientData(runtime);
           const driverQuerySpy = vi.spyOn(driver, 'query');
 
-          const first = await ormClientGetUsersCached(2, runtime);
+          const first = await ormClientGetUsersCached(2, orm);
           const callsAfterFirst = driverQuerySpy.mock.calls.length;
           expect(first).toHaveLength(2);
 
-          const second = await ormClientGetUsersCached(2, runtime);
+          const second = await ormClientGetUsersCached(2, orm);
           // Same plan: cache hit, driver not invoked.
           expect(driverQuerySpy.mock.calls.length).toBe(callsAfterFirst);
           expect(second).toEqual(first);
 
           // Different plan (different limit → different params → different
           // identity key): cache miss, driver invoked.
-          await ormClientGetUsersCached(3, runtime);
+          await ormClientGetUsersCached(3, orm);
           expect(driverQuerySpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
         } finally {
           await runtime.close();
@@ -1182,15 +1480,15 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
-        const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
+        const cache = createCacheMiddleware();
+        const { runtime, orm, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
           await seedOrmClientData(runtime);
           const driverQuerySpy = vi.spyOn(driver, 'query');
 
           // Prime the cache under an explicit key.
-          const first = await ormClientGetUsersCached(2, runtime, { key: 'user-list:demo' });
+          const first = await ormClientGetUsersCached(2, orm, { key: 'user-list:demo' });
           const callsAfterFirst = driverQuerySpy.mock.calls.length;
           expect(first).toHaveLength(2);
 
@@ -1200,7 +1498,7 @@ describe('ORM client integration examples', () => {
           // rows even though the underlying SQL has changed. (Two-row
           // rows from the first call — the explicit key takes precedence
           // over the canonical identity key.)
-          const second = await ormClientGetUsersCached(5, runtime, { key: 'user-list:demo' });
+          const second = await ormClientGetUsersCached(5, orm, { key: 'user-list:demo' });
           expect(driverQuerySpy.mock.calls.length).toBe(callsAfterFirst);
           expect(second).toEqual(first);
         } finally {

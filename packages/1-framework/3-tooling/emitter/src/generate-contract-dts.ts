@@ -1,8 +1,8 @@
-import type {
-  Contract,
-  ContractEnum,
-  ContractModelBase,
-  ContractValueObject,
+import {
+  type Contract,
+  type ContractEnum,
+  type ContractModelBase,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import {
@@ -16,14 +16,16 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   deduplicateImports,
+  fieldTypesMapExpression,
   generateCodecTypeIntersection,
-  generateFieldTypesMapsByNamespace,
+  generateFieldTypeOverridesMap,
   generateHashTypeAliases,
   generateImportLines,
   generateModelsType,
   generateRootsType,
-  generateValueObjectsDescriptorType,
   generateValueObjectTypeAliases,
+  parameterizedOutputTypeFunctionsAlias,
+  renderValueLiteralType,
   serializeExecutionType,
   serializeObjectKey,
   serializeValue,
@@ -39,6 +41,25 @@ function generateEnumBlockType(enums: Record<string, ContractEnum>): string {
     );
     const membersType = `readonly [${memberTupleItems.join(', ')}]`;
     return `readonly ${serializeObjectKey(name)}: { readonly codecId: ${serializeValue(entry.codecId)}; readonly members: ${membersType} }`;
+  });
+  return `{ ${entries.join('; ')} }`;
+}
+
+/**
+ * Types each enum member as the value a query returns for it: the literal its codec renders for the stored form, or the codec's output type when the codec renders none.
+ */
+function generateEnumMemberTypesBlock(
+  enums: Record<string, ContractEnum>,
+  codecLookup: CodecLookup | undefined,
+): string {
+  const entries = Object.entries(enums).map(([name, entry]) => {
+    const memberTupleItems = entry.members.map((m) => {
+      const valueType =
+        renderValueLiteralType(m.value, entry.codecId, 'output', codecLookup) ??
+        `CodecTypes[${serializeValue(entry.codecId)}]["output"]`;
+      return `{ readonly name: ${serializeValue(m.name)}; readonly value: ${valueType} }`;
+    });
+    return `readonly ${serializeObjectKey(name)}: readonly [${memberTupleItems.join(', ')}]`;
   });
   return `{ ${entries.join('; ')} }`;
 }
@@ -60,8 +81,10 @@ export function generateContractDts(
   if (options?.queryOperationTypeImports) {
     allImports.push(...options.queryOperationTypeImports);
   }
+  if (options?.parameterizedOutputTypeImports) {
+    allImports.push(...options.parameterizedOutputTypeImports);
+  }
   const uniqueImports = deduplicateImports(allImports);
-  const importLines = generateImportLines(uniqueImports, resolveImportSpecifier);
 
   const familyImportLines = emitter.getFamilyImports(resolveImportSpecifier);
 
@@ -91,25 +114,17 @@ export function generateContractDts(
 
   const rootsType = generateRootsType(contract.roots);
 
-  // Flatten value objects across all namespaces — first-name-wins on collision.
-  const flatValueObjects: Record<string, ContractValueObject> = {};
-  for (const [, ns] of namespaceEntries) {
-    for (const [voName, vo] of Object.entries(
-      blindCast<
-        Record<string, ContractValueObject>,
-        'ns.valueObjects is a ContractValueObject record in the emitted IR (default to {} when absent)'
-      >(ns.valueObjects ?? {}),
-    )) {
-      if (!(voName in flatValueObjects)) {
-        flatValueObjects[voName] = vo;
-      }
-    }
+  const firstNamespaceOfValueObject = new Map<string, string>();
+  for (const {
+    coordinate: { namespaceId, entityName: name },
+  } of valueObjectsWithCoordinates(contract.storage)) {
+    if (!firstNamespaceOfValueObject.has(name)) firstNamespaceOfValueObject.set(name, namespaceId);
   }
-  const valueObjects = Object.keys(flatValueObjects).length > 0 ? flatValueObjects : undefined;
-  const valueObjectTypeAliases = generateValueObjectTypeAliases(valueObjects, codecLookup);
-  const valueObjectsDescriptor = generateValueObjectsDescriptorType(valueObjects);
+  const valueObjectNamespaces = [...firstNamespaceOfValueObject];
+  const hasValueObjects = valueObjectNamespaces.length > 0;
+  const valueObjectTypeAliases = generateValueObjectTypeAliases(valueObjectNamespaces);
 
-  // Per-namespace models, value objects, and enum types for the domain.namespaces section.
+  // Per-namespace models and enum types for the domain.namespaces section.
   const perNamespaceTypes: Array<
     readonly [string, string, string | undefined, string | undefined]
   > = namespaceEntries.map(([nsId, ns]) => {
@@ -117,33 +132,26 @@ export function generateContractDts(
     const nsModelsType = generateModelsType(nsModels, (name, model) =>
       emitter.generateModelStorageType(name, model),
     );
-    const nsValueObjects = blindCast<
-      Record<string, ContractValueObject> | undefined,
-      'ns.valueObjects is an optional ContractValueObject record in the emitted IR'
-    >(ns.valueObjects);
-    const nsValueObjectsDescriptor =
-      nsValueObjects !== undefined && Object.keys(nsValueObjects).length > 0
-        ? generateValueObjectsDescriptorType(nsValueObjects)
-        : undefined;
     const nsEnums = blindCast<
       Record<string, ContractEnum> | undefined,
       'ns.enum is an optional ContractEnum record in the emitted IR'
     >(ns.enum);
-    const nsEnumBlock =
-      nsEnums !== undefined && Object.keys(nsEnums).length > 0
-        ? generateEnumBlockType(nsEnums)
-        : undefined;
-    return [nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock] as const;
+    const hasEnums = nsEnums !== undefined && Object.keys(nsEnums).length > 0;
+    const nsEnumBlock = hasEnums ? generateEnumBlockType(nsEnums) : undefined;
+    const nsEnumMemberTypesBlock = hasEnums
+      ? generateEnumMemberTypesBlock(nsEnums, codecLookup)
+      : undefined;
+    return [nsId, nsModelsType, nsEnumBlock, nsEnumMemberTypesBlock] as const;
   });
 
   const domainNamespacesType = perNamespaceTypes
-    .map(([nsId, nsModelsType, nsValueObjectsDescriptor, nsEnumBlock]) => {
-      const voLine =
-        nsValueObjectsDescriptor !== undefined
-          ? `\n        readonly valueObjects: ${nsValueObjectsDescriptor};`
-          : '';
+    .map(([nsId, nsModelsType, nsEnumBlock, nsEnumMemberTypesBlock]) => {
       const enumLine = nsEnumBlock !== undefined ? `\n        readonly enum: ${nsEnumBlock};` : '';
-      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${voLine}${enumLine}\n      }`;
+      const enumMemberTypesLine =
+        nsEnumMemberTypesBlock !== undefined
+          ? `\n        readonly enumMemberTypes?: ${nsEnumMemberTypesBlock};`
+          : '';
+      return `      readonly ${serializeObjectKey(nsId)}: {\n        readonly models: ${nsModelsType};${enumLine}${enumMemberTypesLine}\n      }`;
     })
     .join(';\n');
 
@@ -152,58 +160,36 @@ export function generateContractDts(
       ? `\n  readonly execution: ${serializeExecutionType(contract.execution)};`
       : '';
 
-  const resolveFieldTypeParams = emitter.resolveFieldTypeParams
+  const resolveStorageValueSet = emitter.resolveStorageValueSet
     ? (modelName: string, fieldName: string, model: ContractModelBase) =>
-        emitter.resolveFieldTypeParams?.(modelName, fieldName, model, contract)
+        emitter.resolveStorageValueSet?.(modelName, fieldName, model, contract)
     : undefined;
 
-  const resolveFieldValueSet = emitter.resolveFieldValueSet
-    ? (modelName: string, fieldName: string, model: ContractModelBase) =>
-        emitter.resolveFieldValueSet?.(modelName, fieldName, model, contract)
-    : undefined;
-
-  const namespaceModelsForFieldTypes = namespaceEntries.map(
-    ([nsId, ns]) => [nsId, ns.models] as const,
-  );
-
-  const fieldTypesMaps = generateFieldTypesMapsByNamespace(
-    namespaceModelsForFieldTypes,
+  const fieldTypeOverrides = generateFieldTypeOverridesMap(
+    contract,
     codecLookup,
-    resolveFieldTypeParams,
-    resolveFieldValueSet,
+    resolveStorageValueSet,
   );
 
   const extraTypeExports = emitter.getStorageTypeExports?.(contract, codecLookup);
 
   const contractWrapper = emitter.getContractWrapper('ContractBase', 'TypeMaps');
 
-  const modelTypesBlock = generateModelTypesBlock(
-    contract,
-    { codecLookup, resolveFieldTypeParams, resolveFieldValueSet },
-    options?.supportsNamespaces ?? true,
+  const modelTypesBlock = generateModelTypesBlock(contract, options?.supportsNamespaces ?? true);
+
+  const parameterizedOutputTypesDeclaration = parameterizedOutputTypeFunctionsAlias(
+    options?.parameterizedOutputTypeImports ?? [],
   );
 
-  return `// ⚠️  GENERATED FILE - DO NOT EDIT
-// This file is automatically generated by 'prisma contract emit'.
-// To regenerate, run: prisma contract emit
-${importLines.join('\n')}
-
-${familyImportLines.join('\n')}
-import type {
-  Contract as ContractType,
-  ExecutionHashBase,
-  NamespaceId,
-  ProfileHashBase,
-  StorageHashBase,
-} from '${resolveImportSpecifier('@internal/contract/types')}';
-
-${hashAliases}
+  const body = `${hashAliases}
 
 export type CodecTypes = ${codecTypes};
 ${familyTypeAliases}
+${parameterizedOutputTypesDeclaration}
 ${valueObjectTypeAliases}
-export type FieldOutputTypes = ${fieldTypesMaps.output};
-export type FieldInputTypes = ${fieldTypesMaps.input};
+type FieldTypeOverrides = ${fieldTypeOverrides};
+export type FieldOutputTypes = ${fieldTypesMapExpression('output')};
+export type FieldInputTypes = ${fieldTypesMapExpression('input')};
 ${extraTypeExports ? `${extraTypeExports}\n` : ''}
 ${modelTypesBlock}
 
@@ -224,10 +210,37 @@ ${domainNamespacesType};
   readonly capabilities: ${serializeValue(contract.capabilities)};
   readonly extensions: ${serializeValue(contract.extensions)};${executionClause}
   readonly meta: ${serializeValue(contract.meta)};
-  ${valueObjects ? `readonly valueObjects: ${valueObjectsDescriptor};` : ''}
   readonly profileHash: ProfileHash;
 };
 
 ${contractWrapper}
 `;
+
+  const importLines = generateImportLines(
+    uniqueImports.filter((spec) => mentions(body, spec.alias)),
+    resolveImportSpecifier,
+  );
+
+  return `// ⚠️  GENERATED FILE - DO NOT EDIT
+// This file is automatically generated by 'prisma contract emit'.
+// To regenerate, run: prisma contract emit
+${importLines.join('\n')}
+
+${familyImportLines.join('\n')}
+import type {
+  Contract as ContractType,
+  ExecutionHashBase,
+  FieldTypesFromDomain,
+  NamespaceId,
+  ProfileHashBase,
+  StorageHashBase,${hasValueObjects ? '\n  ValueObjectTypesFromStorage,' : ''}
+} from '${resolveImportSpecifier('@internal/contract/types')}';
+
+${body}`;
+}
+
+/** Whether `text` uses `identifier` as a whole identifier, not as part of a longer one. */
+function mentions(text: string, identifier: string): boolean {
+  const escaped = identifier.replace(/[$]/g, '\\$');
+  return new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`).test(text);
 }

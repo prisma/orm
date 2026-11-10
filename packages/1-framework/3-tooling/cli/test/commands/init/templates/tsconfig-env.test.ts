@@ -218,8 +218,8 @@ describe('MIN_SERVER_VERSION mirrors target packages', () => {
   // depend on the test runner's `cwd`.
   const REPO_ROOT = join(import.meta.dirname, '../../../../../../../..');
   const TARGET_PACKAGE_JSONS = {
-    postgres: join(REPO_ROOT, 'packages/3-targets/3-targets/postgres/package.json'),
-    mongo: join(REPO_ROOT, 'packages/3-mongo-target/1-mongo-target/package.json'),
+    postgres: join(REPO_ROOT, 'packages/3-targets/postgres/1-target/package.json'),
+    mongo: join(REPO_ROOT, 'packages/3-targets/mongo/1-target/package.json'),
   } as const;
 
   function readMinServerVersion(packageJsonPath: string): string {

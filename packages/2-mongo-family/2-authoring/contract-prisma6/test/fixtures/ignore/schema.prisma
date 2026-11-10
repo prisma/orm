@@ -1,0 +1,19 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  title  String
+  legacy String @ignore
+  audit  Audit? @ignore
+}
+
+model Audit {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  postId String @db.ObjectId
+  post   Post   @relation(fields: [postId], references: [id])
+
+  @@ignore
+}

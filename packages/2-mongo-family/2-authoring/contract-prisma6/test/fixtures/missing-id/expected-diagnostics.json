@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL_MISSING_ID_FIELD",
+    "file": "schema.prisma",
+    "line": 6,
+    "message": "Model \"Post\" has no field with @id attribute. Every model must have exactly one @id field."
+  }
+]

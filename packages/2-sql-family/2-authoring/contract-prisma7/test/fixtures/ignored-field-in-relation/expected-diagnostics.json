@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Field \"Post.authorId\" is marked @ignore, but relation field \"Post.author\" joins on it, and Prisma 8 relations join on fields. Remove @ignore from \"Post.authorId\": Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again. Or mark relation field \"Post.author\" @ignore as well: Prisma 7's next migration is then empty, the relation field disappears from the Prisma 7 client, and Prisma 8 keeps its foreign key while leaving the relation out of the contract's models."
+  }
+]

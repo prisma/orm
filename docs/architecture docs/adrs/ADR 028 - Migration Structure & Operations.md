@@ -1,5 +1,7 @@
 # ADR 028 — Migration structure & operations
 
+> **Update — 2026-10:** edges do not carry the `hints` field shown below. A rename is stated on the command line as a statement, `--rename <old>:<new>`, and the planner turns it into rename operations in the edge's `ops`. See [Migration System § Statements](../subsystems/7.%20Migration%20System.md#statements).
+
 ## Context
 
 Prisma Next models migrations as edges between data contract hashes rather than ordered files on disk. The system needs a well-defined migration structure that supports graph reconstruction, deterministic pathfinding, and operational transformations like squashing. Teams want to squash old edges into a baseline to speed fresh environment bootstrap while guaranteeing production safety.

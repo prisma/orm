@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_COMPOSITE_ID_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Model \"Post\": @@id is not supported; a MongoDB document is identified by its \"_id\" field. Declare the id as `id String @id @default(auto()) @map(\"_id\") @db.ObjectId`."
+  }
+]

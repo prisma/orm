@@ -1,0 +1,309 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "tasks": {
+      "model": "Task",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Bug": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "severity": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "severity": {
+                  "field": "severity"
+                }
+              }
+            }
+          },
+          "Chore": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "dueOn": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "dueOn": {
+                  "field": "dueOn"
+                }
+              }
+            }
+          },
+          "Feature": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "priority": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "priority": {
+                  "field": "priority"
+                }
+              }
+            }
+          },
+          "Task": {
+            "discriminator": {
+              "field": "type"
+            },
+            "fields": {
+              "assignee": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "assignee": {
+                  "field": "assignee"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "type": {
+                  "field": "type"
+                }
+              }
+            },
+            "variants": {
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
+              },
+              "chore": {
+                "model": "Chore",
+                "namespace": "__unbound__"
+              },
+              "feature": {
+                "model": "Feature",
+                "namespace": "__unbound__"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "tasks": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "title"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "title_1"
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "severity"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "severity_1",
+                  "partialFilterExpression": {
+                    "type": "bug"
+                  }
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "priority"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "priority_1",
+                  "partialFilterExpression": {
+                    "type": "feature"
+                  }
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "assignee": {
+                          "bsonType": "string"
+                        },
+                        "severity": {
+                          "bsonType": "int"
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "type": {
+                          "enum": ["bug"]
+                        }
+                      },
+                      "required": ["severity", "type"]
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "assignee": {
+                          "bsonType": "string"
+                        },
+                        "priority": {
+                          "bsonType": "int"
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "type": {
+                          "enum": ["feature"]
+                        }
+                      },
+                      "required": ["priority", "type"]
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "assignee": {
+                          "bsonType": "string"
+                        },
+                        "dueOn": {
+                          "bsonType": "date"
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "type": {
+                          "enum": ["chore"]
+                        }
+                      },
+                      "required": ["dueOn", "type"]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "assignee": {
+                      "bsonType": "string"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    },
+                    "type": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": ["_id", "assignee", "title", "type"]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "1ca867843c1e7f1fda10fbab2c6fbfe8340ba6534fa4a58ed013c9057958c4a8"
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

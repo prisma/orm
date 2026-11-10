@@ -14,7 +14,6 @@ import type { MigrationEdge, MigrationGraph } from '@internal/migration-tools/gr
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { buildGrid } from '../../../src/utils/formatters/migration-graph-grid-layout';
-import { DEFAULT_COLS_PER_LANE } from '../../../src/utils/formatters/migration-graph-model';
 import { renderGrid } from '../../../src/utils/formatters/migration-graph-occlusion-render';
 import { buildMigrationGraphRows } from '../../../src/utils/formatters/migration-graph-rows';
 
@@ -72,10 +71,6 @@ function buildForkGrid(colsPerLane?: number) {
 // ---------------------------------------------------------------------------
 
 describe('migration-graph geometry', () => {
-  it('DEFAULT_COLS_PER_LANE equals 2', () => {
-    expect(DEFAULT_COLS_PER_LANE).toBe(2);
-  });
-
   it('grid width scales with colsPerLane — fork-2 has 2 forward lanes', () => {
     const grid2 = buildForkGrid(2);
     const grid3 = buildForkGrid(3);

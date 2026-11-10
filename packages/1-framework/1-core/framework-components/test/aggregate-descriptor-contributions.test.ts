@@ -26,7 +26,7 @@ const countRows: AggregateDescriptor = {
   input: { kind: 'none' },
   output: { kind: 'codec', codecId: 'lib/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
 const sumIntegers: AggregateDescriptor = {
@@ -148,7 +148,7 @@ describe('collectAggregateDescriptors', () => {
       collectAggregateDescriptors([
         contributor('target', [sumIntegers]),
         contributor('extension', [
-          { ...sumIntegers, nullable: false as const, emptyResultJson: '0' },
+          { ...sumIntegers, nullable: false as const, emptyResultWire: '0' },
         ]),
       ]),
     );
@@ -195,8 +195,8 @@ describe('collectAggregateDescriptors', () => {
       message:
         'Malformed aggregate descriptor contributed by "extension". ' +
         'A descriptor declares a non-empty `operation`, an `input` match of kind `none`/`any`/`codec`/`trait`, ' +
-        'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultJson`, ' +
-        "in the result codec's canonical JSON, where `nullable` is false; a `self` output needs an input to reuse.",
+        'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultWire`, ' +
+        'a wire value of the result codec, where `nullable` is false; a `self` output needs an input to reuse.',
       details: { contributedBy: 'extension', descriptor: malformed },
     });
   });
@@ -224,7 +224,7 @@ describe('collectAggregateDescriptors', () => {
 
     expect(error).toMatchObject({
       code: 'CONTRACT.AGGREGATE_DESCRIPTOR_INVALID',
-      message: expect.stringContaining('`emptyResultJson`'),
+      message: expect.stringContaining('`emptyResultWire`'),
     });
   });
 });

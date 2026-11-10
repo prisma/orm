@@ -3,43 +3,66 @@ import type {
   Codec as BaseCodec,
   CodecCallContext,
   CodecTrait,
+  DataType,
+  DataTypeParams,
+  DataTypeValue,
 } from '@internal/framework-components/codec';
+import { requireValueOf } from '@internal/framework-components/codec';
+import { blindCast } from '@internal/utils/casts';
 
 export type MongoCodecTrait = CodecTrait;
 
 /**
- * A codec for the Mongo target. Translates between an application value and the BSON-shaped wire form the Mongo driver exchanges, and between an application value and the JSON form stored in contract artifacts.
+ * A codec for the Mongo target. Converts a value of its data type to the application value, and the application value to and from the BSON-shaped wire form the Mongo driver exchanges.
  *
- * Same shape as the framework codec base — see `Codec` in `@internal/framework-components/codec` for the contract. Codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor}; Mongo's full migration to descriptor-side registration is tracked under TML-2324.
+ * Same shape as the framework codec base — see `Codec` in `@internal/framework-components/codec` for the contract — except that `fromWire` returns `TOutput`, which defaults to `TInput`, so a codec can read back a narrower type than it accepts on write. Codec-id-keyed static metadata (`traits`, `renderOutputType`) lives on the unified {@link import('@internal/framework-components/codec').CodecDescriptor}; Mongo's full migration to descriptor-side registration is tracked under TML-2324.
  */
 export interface MongoCodec<
   Id extends string = string,
   TTraits extends readonly MongoCodecTrait[] = readonly MongoCodecTrait[],
   TWire = unknown,
   TInput = unknown,
-> extends BaseCodec<Id, TTraits, TWire, TInput> {}
+  TOutput = TInput,
+> extends Omit<BaseCodec<Id, TTraits, TWire, TInput>, 'fromWire'> {
+  fromWire(wire: TWire, ctx: CodecCallContext): Promise<TOutput>;
+}
 
 /**
- * Conditional bundle for `encodeJson`/`decodeJson`: when `TInput` is structurally assignable to `JsonValue` the identity defaults are sound and both fields are optional; otherwise both fields are required so an author cannot silently produce a non-JSON-safe contract artifact.
+ * The author functions for a codec's values, as on every codec: `toDataTypeValue` returns a value of the codec's data type, built with `dataType.valueFrom(json, params)`, and `fromDataTypeValue` receives a value the data type has read. When `toDataTypeValue` is left out, the factory builds the value from the application value itself, which is sound whenever `TInput` is a JSON type; returning a value's JSON as the application value is sound only when `TInput` is exactly `JsonValue`. So both are optional for `JsonValue`, `fromDataTypeValue` is required for a narrower JSON type such as `string`, and both are required for a type that is not JSON.
  */
-type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
-  ? {
-      encodeJson?: (value: TInput) => JsonValue;
-      decodeJson?: (json: JsonValue) => TInput;
-    }
+type DataTypeValueConfig<TInput> = [TInput] extends [JsonValue]
+  ? [JsonValue] extends [TInput]
+    ? {
+        toDataTypeValue?(value: TInput): DataTypeValue;
+        fromDataTypeValue?(value: DataTypeValue): TInput;
+      }
+    : {
+        toDataTypeValue?(value: TInput): DataTypeValue;
+        fromDataTypeValue(value: DataTypeValue): TInput;
+      }
   : {
-      encodeJson: (value: TInput) => JsonValue;
-      decodeJson: (json: JsonValue) => TInput;
+      toDataTypeValue(value: TInput): DataTypeValue;
+      fromDataTypeValue(value: DataTypeValue): TInput;
     };
+
+interface MongoCodecConfig<Id extends string, TWire, TInput, TOutput> {
+  typeId: Id;
+  /** The data type whose values the codec converts. */
+  dataType: DataType;
+  /** The column's parameters of `dataType`; none when omitted. */
+  params?: DataTypeParams;
+  toWire: (value: TInput, ctx: CodecCallContext) => TWire | Promise<TWire>;
+  fromWire: (wire: TWire, ctx: CodecCallContext) => TOutput | Promise<TOutput>;
+}
 
 /**
  * Construct a Mongo codec from author functions.
  *
- * Author `encode` and `decode` as sync or async functions; the factory produces a {@link MongoCodec} whose query-time methods follow the boundary contract documented on the framework {@link BaseCodec}. Authors receive a second `ctx` options argument carrying the per-call context; ignore it if you don't need it.
+ * Author `toWire` and `fromWire` as sync or async functions; the factory produces a {@link MongoCodec} whose wire methods follow the boundary contract documented on the framework {@link BaseCodec}. Authors receive a second `ctx` options argument carrying the per-call context; ignore it if you don't need it.
  *
- * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` and `decodeJson` default to identity **only when `TInput` is assignable to `JsonValue`**; otherwise both are required so the contract artifact stays JSON-safe.
+ * Both wire functions are required so `TInput` and `TWire` are always covered by an explicit author function. The value functions follow {@link DataTypeValueConfig}.
  *
- * Codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on the unified `CodecDescriptor` rather than on the codec instance itself (TML-2357).
+ * Codec-id-keyed static metadata (`traits`, `renderOutputType`) lives on the unified `CodecDescriptor` rather than on the codec instance itself (TML-2357).
  */
 export function mongoCodec<
   Id extends string,
@@ -47,41 +70,77 @@ export function mongoCodec<
   TWire = unknown,
   TInput = unknown,
 >(
-  config: {
-    typeId: Id;
-    encode: (value: TInput, ctx: CodecCallContext) => TWire | Promise<TWire>;
-    decode: (wire: TWire, ctx: CodecCallContext) => TInput | Promise<TInput>;
-  } & JsonRoundTripConfig<TInput>,
-): MongoCodec<Id, TTraits, TWire, TInput> {
-  const identity = (v: unknown) => v;
+  config: MongoCodecConfig<Id, TWire, TInput, TInput> & DataTypeValueConfig<TInput>,
+): MongoCodec<Id, TTraits, TWire, TInput>;
+/**
+ * Construct a Mongo codec whose `fromWire` returns `TOutput`, a type narrower than the `TInput` its `toWire` takes. Pass all five type arguments.
+ */
+export function mongoCodec<
+  Id extends string,
+  const TTraits extends readonly MongoCodecTrait[],
+  TWire,
+  TInput,
+  TOutput extends TInput,
+>(
+  config: MongoCodecConfig<Id, TWire, TInput, TOutput> & DataTypeValueConfig<TInput>,
+): MongoCodec<Id, TTraits, TWire, TInput, TOutput>;
+export function mongoCodec<
+  Id extends string,
+  const TTraits extends readonly MongoCodecTrait[],
+  TWire,
+  TInput,
+  TOutput extends TInput,
+>(
+  config: MongoCodecConfig<Id, TWire, TInput, TOutput> & DataTypeValueConfig<TInput>,
+): MongoCodec<Id, TTraits, TWire, TInput, TOutput> {
   // The runtime allocates one `CodecCallContext` per `runtime.query()` or `runtime.execute()` call (no caller-supplied `signal` produces `{}` instead of `undefined`) and threads it as a non-optional reference to every codec call. The author surface keeps the second parameter optional so single-arg `(value) => …` authors continue to satisfy the signature via TypeScript's bivariance for trailing parameters.
-  const userEncode = config.encode;
-  const userDecode = config.decode;
-  const widenedConfig = config as {
-    encodeJson?: (value: TInput) => JsonValue;
-    decodeJson?: (json: JsonValue) => TInput;
-  };
+  const { dataType, toWire, fromWire } = config;
+  const params = config.params ?? {};
+  const values: {
+    toDataTypeValue?(value: TInput): DataTypeValue;
+    fromDataTypeValue?(value: DataTypeValue): TInput;
+  } = config;
+  const toValue =
+    values.toDataTypeValue ??
+    ((value: TInput) =>
+      dataType.valueFrom(
+        blindCast<
+          JsonValue,
+          'DataTypeValueConfig makes this optional only when TInput is a JSON type'
+        >(value),
+        params,
+      ));
+  const fromValue =
+    values.fromDataTypeValue ??
+    ((value: DataTypeValue) =>
+      blindCast<TInput, 'DataTypeValueConfig makes this optional only when TInput is JsonValue'>(
+        value.value,
+      ));
   return {
     id: config.typeId,
-    encode: (value, ctx) => {
+    dataType,
+    toWire: (value, ctx) => {
       try {
-        return Promise.resolve(userEncode(value, ctx));
+        return Promise.resolve(toWire(value, ctx));
       } catch (error) {
         return Promise.reject(error);
       }
     },
-    decode: (wire, ctx) => {
+    fromWire: (wire, ctx) => {
       try {
-        return Promise.resolve(userDecode(wire, ctx));
+        return Promise.resolve(fromWire(wire, ctx));
       } catch (error) {
         return Promise.reject(error);
       }
     },
-    encodeJson: (widenedConfig.encodeJson ?? identity) as (value: TInput) => JsonValue,
-    decodeJson: (widenedConfig.decodeJson ?? identity) as (json: JsonValue) => TInput,
+    toDataTypeValue: toValue,
+    fromDataTypeValue: (value) =>
+      fromValue(requireValueOf(dataType.id, value, `Codec ${config.typeId}`)),
   };
 }
 
-/** Extract the JS application type carried by a Mongo codec — used both as `encode` input and as `decode` output. */
+/** Extract the JS application type a Mongo codec's `toWire` takes. `fromWire` returns the same type unless the codec declares a separate `TOutput`. */
 export type MongoCodecInput<T> =
-  T extends MongoCodec<string, readonly MongoCodecTrait[], unknown, infer TInput> ? TInput : never;
+  T extends MongoCodec<string, readonly MongoCodecTrait[], unknown, infer TInput, unknown>
+    ? TInput
+    : never;

@@ -12,7 +12,7 @@ namespace public {
   policy_select tenant_read {
     target = User
     roles  = [app_user]
-    using  = "(tenant_id = 1)"
+    using  = sql`(tenant_id = 1)`
     @@map("Tenant members can read")
   }
 }

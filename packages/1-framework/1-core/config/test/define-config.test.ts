@@ -20,6 +20,7 @@ const mockHook = {
 
 function createSourceProvider(overrides: Record<string, unknown> = {}) {
   return {
+    format: 'typescript',
     load: async () => ok({ targetFamily: 'sql' } as Contract),
     ...overrides,
   };
@@ -40,6 +41,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
       kind: 'target',
       familyId: 'sql',
       targetId: 'postgres',
+      defaultNamespaceId: 'public',
       id: 'postgres',
       version: '0.0.1',
       manifest: {},

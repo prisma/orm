@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * What a bare aggregate answered with: either the total, or the structured
@@ -70,17 +69,15 @@ async function guarded(run: () => Promise<{ total: number | null }>): Promise<Gu
  * aggregate's answer.
  */
 export async function ormClientGetEngagementPrecision(
-  runtime: Runtime,
+  orm: DemoOrm,
 ): Promise<EngagementPrecisionReport> {
-  const db = createOrmClient(runtime);
-
-  const posts = await db.Post.aggregate((aggregate) => ({
+  const posts = await orm.Post.aggregate((aggregate) => ({
     count: aggregate.count(),
     countBigInt: aggregate.countBigInt(),
   }));
 
   // Views stay well inside the safe-integer range, so every operation answers.
-  const views = await db.Post.aggregate((aggregate) => ({
+  const views = await orm.Post.aggregate((aggregate) => ({
     sum: aggregate.sum('viewCount'),
     sumBigInt: aggregate.sumBigInt('viewCount'),
     avg: aggregate.avg('viewCount'),
@@ -88,16 +85,16 @@ export async function ormClientGetEngagementPrecision(
   }));
 
   const impressionSum = await guarded(() =>
-    db.Post.aggregate((aggregate) => ({ total: aggregate.sum('impressionCount') })),
+    orm.Post.aggregate((aggregate) => ({ total: aggregate.sum('impressionCount') })),
   );
-  const impressionSumBigInt = await db.Post.aggregate((aggregate) => ({
+  const impressionSumBigInt = await orm.Post.aggregate((aggregate) => ({
     total: aggregate.sumBigInt('impressionCount'),
   }));
 
-  // `reachScore` is `UnboundedInt`, so even the bare `sum` is a `bigint`: a
+  // `reachScore` is `BigInt(storage: numeric)`, so even the bare `sum` is a `bigint`: a
   // column whose author already chose an exact representation keeps it, and a
   // sum of integers is an integer.
-  const reach = await db.Post.aggregate((aggregate) => ({
+  const reach = await orm.Post.aggregate((aggregate) => ({
     sum: aggregate.sum('reachScore'),
     sumBigInt: aggregate.sumBigInt('reachScore'),
   }));

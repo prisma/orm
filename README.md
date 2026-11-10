@@ -16,9 +16,9 @@
 
 ---
 
-> **Using Prisma 7?** It remains fully supported. Its source lives on the [`v7` branch](https://github.com/prisma/orm/tree/v7) of this repository and its docs at [prisma.io/docs/orm/v7](https://www.prisma.io/docs/orm/v7).
+> **Using Prisma 7?** It is maintained for eighteen months after `8.0.0` final; [supported versions](./docs/oss/versioning.md#supported-versions) says what that covers. Its source lives on the [`v7` branch](https://github.com/prisma/orm/tree/v7) of this repository and its docs at [prisma.io/docs/orm/v7](https://www.prisma.io/docs/orm/v7).
 
-> **Prisma 8 is a release candidate.** `8.0.0` final is expected in the next four to eight weeks. Until then a release candidate may include breaking changes, and every release ships with an upgrade recipe that the `prisma-8` skill applies for you. The candidate is a complete implementation we stand behind: we treat bugs in it as urgent, and the risk you take on is a feature that is not built yet rather than churn. The [feature scoreboard](./scorecard.md) names every gap. New projects should start here. Existing Prisma 7 applications can migrate incrementally, and Prisma 7 stays on the [`v7` branch](https://github.com/prisma/orm/tree/v7) with bug fixes and security updates for eighteen months after `8.0.0` final. Star the repo, follow [@prisma on X](https://pris.ly/x), or read along on the [Prisma blog](https://www.prisma.io/blog).
+> **Prisma 8 is a release candidate.** `8.0.0` final is expected in the next four to eight weeks. Until then a release candidate may include breaking changes, and every release ships with an upgrade recipe that the `prisma-8` skill applies for you. The candidate is a complete implementation we stand behind: we treat bugs in it as urgent, and the risk you take on is a feature that is not built yet rather than churn. The [feature scoreboard](./scorecard.md) names every gap. New projects should start here. Existing Prisma 7 applications can migrate incrementally, and Prisma 7 stays maintained on the [`v7` branch](https://github.com/prisma/orm/tree/v7) for eighteen months after `8.0.0` final. Star the repo, follow [@prisma on X](https://pris.ly/x), or read along on the [Prisma blog](https://www.prisma.io/blog).
 
 **Prisma 8** is a TypeScript rewrite of Prisma ORM, designed to be **extensible**, **composable**, and **AI-agent friendly** by default. Read the [announcement](https://pris.ly/pn-announcement) or start with the [docs](https://www.prisma.io/docs/orm).
 
@@ -89,6 +89,7 @@ Extensions already shipping:
 - **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes (experimental).
 - **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients (experimental).
 - **[`@prisma/orm-extension-arktype-json`](https://www.npmjs.com/package/@prisma/orm-extension-arktype-json)**: JSON columns validated by an arktype schema.
+- **[`@prisma/orm-postgres-contrib`](https://www.npmjs.com/package/@prisma/orm-postgres-contrib)**: packs for the trusted PostgreSQL contrib modules, starting with `citext` case-insensitive text.
 - **[`@cipherstash/prisma-next`](https://pris.ly/cipherstash-p-blog)**: searchable encryption and data-level access control.
 
 See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extensions) for how to install and register one. Want to ship your own? The **[call for extension authors](https://pris.ly/pn-extension-authors)** walks through the SPI, the layers your extension can hook into, and how the team features new extensions.
@@ -103,7 +104,7 @@ MySQL follows after SQLite. See the [feature scoreboard](./scorecard.md) for wha
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, commands, DCO signoff, and PR expectations. For substantive changes, please open an issue first so we can give direction-fit feedback before you invest implementation time.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, commands, DCO signoff, and PR expectations. For substantive changes, please open an issue first so we can give direction-fit feedback before you invest implementation time. The [vision](./docs/design/00-purpose/vision.md) says where Prisma 8 is going, and the [steering list](./docs/architecture%20docs/ADR-INDEX.md#steering-list) names requests we have already answered, with what to use instead.
 
 Security issues: follow the Private Vulnerability Reporting flow in [SECURITY.md](./SECURITY.md). Please do not file them as public issues.
 

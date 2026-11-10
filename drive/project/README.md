@@ -30,10 +30,15 @@ A stacked PR is justified only when its base PR is independently valuable to mer
 - Linear Project status: update at slice-merge (`drive-deliver-workflow` does this implicitly via `drive-check-health`).
 - Wider-team comms: optional, operator-set. Use `drive-post-update` for the cadence the project needs.
 - Cross-team dependencies: surface in the project plan's `Dependencies` section; ping owners explicitly when a dependency is blocking.
+- Release dependencies: when users get a feature only through a package release, the plan's `Dependencies` section names that release (package, version, and whether it is published yet), so the plan says when users can use the feature, not only when it merges. (Added 2026-09-24, orm-init-prisma7-detection final retro: the Prisma 7 path of `orm init` merged while the published `@prisma/orm-postgres` still predated the Prisma 7 contract source it needs.)
 
 ## ADR cadence
 
 Projects that introduce durable architectural decisions (subsystems, patterns, conventions) write ADRs as part of close-out — `drive-close-project` migrates them into `docs/architecture docs/adrs/`. The mandatory-final retro is a natural surface for "did this project produce an ADR-worthy decision?"
+
+## Close-out runs the close-out procedure
+
+A project's `plan.md` close-out checklist is a reminder, not the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
 
 ## Close-out destinations
 

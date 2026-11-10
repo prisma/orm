@@ -1,0 +1,156 @@
+# @internal/family-sql
+
+SQL family descriptor for Prisma 8.
+
+## Purpose
+
+Provides the SQL family descriptor (`ControlFamilyDescriptor`) that includes:
+- The SQL target family hook (`sqlEmission`)
+- Factory method (`create()`) to create family instances
+
+## Responsibilities
+
+- **Family Descriptor Export**: Exports the SQL `ControlFamilyDescriptor` for use in CLI configuration files
+- **Family Instance Creation**: Creates `SqlFamilyInstance` objects that implement control-plane domain actions (`verify`, `schemaVerify`, `introspect`, `emitContract`, `deserializeContract`)
+- **Planner & Runner SPI**: Owns the `MigrationPlanner` / `MigrationRunner` interfaces plus the `SqlControlTargetDescriptor` helper so targets can expose planners and runners (e.g., Postgres init planner/runner)
+- **Family Hook Integration**: Integrates the SQL target family hook (`sqlEmission`) from `@internal/sql-contract-emitter`
+- **Control Plane Entry Point**: Serves as the control plane entry point for the SQL family, enabling the CLI to select the family hook and create family instances
+- **Contract-to-SchemaIR Conversion**: Converts `SqlStorage` from a contract into `SqlSchemaIR` for offline migration planning, enabling `migration plan` to work without a database connection
+- **Destructive Change Detection**: Compares two `SqlStorage` values and identifies destructive changes (dropped tables/columns) for migration policy enforcement
+- **Storage Type Control Hooks**: Extracts codec-owned control hooks for planning/verification/introspection of `storage.types` without adding enum-specific fields to shared IR
+- **Codec Ownership**: Enforces a single owner per `codecId` for parameterized renderers and control-plane hooks to prevent ambiguous conflicts during assembly
+- **Authoring Contribution Assembly**: Assembles authoring contributions (type constructors, type aliases) from composed components for PSL interpretation
+- **Raw columns**: Contributes the ``Raw(sql`...`)`` type constructor, for a column of a type no other column type covers, on every SQL target (ADR 273); each target contributes `sql.String` and `sql.Char`, built by `sqlTargetTypeConstructors({ sizeType })` from `@internal/family-sql/pack` with its size type, the data type of a length or a precision
+- **Generated id column aliases**: Contributes `sql.UuidString`, `sql.Ulid`, `sql.Nanoid`, `sql.Cuid2` and `sql.Ksuid` on every SQL target, type aliases for the fixed-length text column each generated id format is stored in, with no generator (ADR 310). They are defined in `@internal/sql-contract/generated-id-column-aliases`, where a target that also names them at the top level imports them
+- **Column Type Verification**: Compares each column by the data type it is stored as, its parameters in normal form, and whether it is a list. Introspection resolves the type the database reports to the data type that claims it; a type no data type in the stack claims is reported as a mismatch naming that type
+- **Schema Defaults Policy**: Ignores execution mutation defaults during schema verification since they are applied before DB writes
+- **Foreign Key Config Awareness**: Schema verification respects the contract's `foreignKeys` configuration — when `foreignKeys.constraints` is `false`, FK constraint checks are skipped during verification (see [ADR 161](../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md))
+- **Referential Action Verification**: When a contract FK specifies `onDelete` or `onUpdate`, the verifier compares them against the introspected schema and reports `foreign_key_mismatch` on mismatch (see [ADR 166](../../../docs/architecture%20docs/adrs/ADR%20166%20-%20Referential%20actions%20for%20foreign%20keys.md))
+
+## Usage
+
+```typescript
+import sql from '@internal/family-sql/control';
+import { createControlStack } from '@internal/framework-components/control';
+
+// sql is a ControlFamilyDescriptor with:
+// - kind: 'family'
+// - id: 'sql'
+// - familyId: 'sql'
+// - hook: TargetFamilyHook
+// - create: (stack) => SqlFamilyInstance
+
+// Build a control stack (assembles all contributions from components)
+const stack = createControlStack({
+  family: sql,
+  target: postgresTargetDescriptor,
+  adapter: postgresAdapterDescriptor,
+  driver: postgresDriverDescriptor,
+  extensions: [pgVectorExtensionDescriptor],
+});
+
+// Create a family instance for control-plane operations
+const familyInstance = sql.create(stack);
+
+// Use instance methods for domain actions
+const contract = familyInstance.deserializeContract(contractJson);
+const verifyResult = await familyInstance.verify({ driver, contract, ... });
+
+// Targets that implement SqlControlTargetDescriptor can build planners
+const planner = postgresTargetDescriptor.migrations.createPlanner(familyInstance);
+const planResult = planner.plan({
+  contract: sqlContract,
+  schema,
+  policy,
+  frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor, pgVectorExtensionDescriptor],
+});
+
+// Targets also provide runners for executing plans
+const runner = postgresTargetDescriptor.migrations.createRunner(familyInstance);
+const executeResult = await runner.execute({
+  plan: planResult.plan,
+  driver,
+  destinationContract: sqlContract,
+  frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor, pgVectorExtensionDescriptor],
+});
+
+// PSL contribution assembly (scalar type descriptors, mutation defaults, authoring
+// contributions, codec lookup) is handled at the framework level by createControlStack.
+// The CLI passes assembled contributions via ContractSourceContext when calling
+// contract source providers — no manual assembly needed in user configs.
+
+// executeResult is a Result<MigrationRunnerSuccessValue, MigrationRunnerFailure>
+if (executeResult.ok) {
+  console.log(`Executed ${executeResult.value.operationsExecuted} operations`);
+} else {
+  console.error(`Migration failed: ${executeResult.failure.code} - ${executeResult.failure.summary}`);
+}
+```
+
+## Architecture
+
+This package is the control plane entry point for the SQL family. It composes:
+- `@internal/sql-contract-emitter` - Provides the SQL family hook
+- `@internal/sql-operations` - SQL operation signature types
+- `@internal/sql-contract` - SQL contract types and validation
+
+The framework CLI uses this descriptor to:
+1. Create family instances for control-plane operations (via `create()`)
+
+Family instances implement domain actions:
+- **`deserializeContract(contractJson)`**: Validates the contract, hydrates it, and checks it against the stack: each column's codec represents its data type, and each value-object column uses the stack's value-object storage type. `verify()` and `schemaVerify()` read contract JSON the same way.
+- **`verify()`**: Verifies database marker against contract (compares target, storageHash, profileHash)
+- **`schemaVerify()`**: Verifies database schema against contract (compares contract requirements vs live schema)
+- **`introspect()`**: Introspects database schema and returns `SqlSchemaIR`
+- **`toSchemaView(schema)`**: Projects `SqlSchemaIR` into `CoreSchemaView` for human-readable display. Always displays native database types (e.g., `int4`, `text`) rather than mapped codec IDs (e.g., `pg/int4@1`) to reflect actual database state.
+- **`emitContract({ contract })`**: Emits contract JSON and DTS as strings. Handles stripping mappings and validation internally. Uses preassembled state (operation registry, type imports, extension IDs).
+
+- **`inferPslContract(schemaIR)`**: Infers a PSL contract AST from an introspected schema, for `contract infer`. Delegates to the target descriptor's optional `inferPslContract` hook; throws `CONTRACT.INFER_UNSUPPORTED` when the target has none.
+- **`buildPslContract(contract)`**: Builds the PSL document AST that reads back as the same contract, for `contract print`. Delegates to the target descriptor's optional `buildPslContract` hook, and passes it the stack's authoring contributions, codecs and data types (`SqlPslBuildContext`), the parts the PSL source reads the file back with. Returns the document with `sourceSettings`: the settings the config must set on the new PSL source because a PSL file cannot carry them. Today that is only the contract's `defaultControlPolicy`, present when the contract has one. Throws `CONTRACT.PRINT_UNSUPPORTED` when the target has no hook, or when the contract holds something PSL cannot express. `contract` must be one the target's contract serializer accepted.
+
+The descriptor is "pure data + factory" - it only provides the hook and factory method. All family-specific logic lives on the instance.
+
+## Package Structure
+
+- **`src/core/control-descriptor.ts`**: `SqlFamilyDescriptor` class implementing `ControlFamilyDescriptor` interface (pure data + factory)
+- **`src/core/control-instance.ts`**: `createSqlFamilyInstance` function that creates `SqlFamilyInstance` with domain action methods (`deserializeContract`, `verify`, `schemaVerify`, `introspect`, `toSchemaView`, `emitContract`). Contains `convertOperationManifest` function used internally by instance creation and test utilities in the same package.
+- **`src/core/assembly.ts`**: Assembly helpers for extracting type imports, collecting codec-owned storage type control hooks, and composing mutation-default registries with duplicate detection.
+- **`src/core/verify.ts`**: Verification helpers (`parseContractMarkerRow`, `collectSupportedCodecTypeIds`)
+- **`src/core/control-adapter.ts`**: SQL control adapter interface (`SqlControlAdapter`) for control-plane operations
+- **`src/core/migrations/`**: Migration IR helpers plus planner and runner SPI types (`MigrationPlanner`, `MigrationRunner`, `SqlControlTargetDescriptor`). Runners return `MigrationRunnerResult` which is a union of success/failure.
+- **`src/core/migrations/contract-to-schema-ir.ts`**: `contractToSchemaIR(contract, { annotationNamespace, ... })` converts a contract to `SqlSchemaIR` for offline migration planning (used by `migration plan` to synthesize the "from" schema without a database connection). The target passes `codecLookup` and `dataTypeLookup`, built by `sqlTypeLookupsOf(frameworkComponents)` in `sql-type-lookups.ts`; each column's type is written from the data type its codec's descriptor names. Each column carries its data type, and a default of a type that declares a canonical form compares through it, so two texts of one date or time value are equal. Also exports `detectDestructiveChanges(from, to)` which compares two `SqlStorage` values and returns a list of destructive changes (dropped tables, dropped columns) for migration policy enforcement.
+
+### Migration Runner Error Codes
+
+The runner returns structured errors with the following codes:
+
+- **`DESTINATION_CONTRACT_MISMATCH`**: Plan destination hash doesn't match provided contract hash
+- **`MARKER_ORIGIN_MISMATCH`**: Existing marker doesn't match plan's expected origin
+- **`POLICY_VIOLATION`**: Operation class is not allowed by the plan's policy
+- **`PRECHECK_FAILED`**: Operation precheck returned false
+- **`POSTCHECK_FAILED`**: Operation postcheck returned false after execution
+- **`SCHEMA_VERIFY_FAILED`**: Resulting schema doesn't satisfy the destination contract
+- **`EXECUTION_FAILED`**: SQL execution error during operation execution
+- **`src/exports/control.ts`**: Control plane entry point (exports `SqlFamilyDescriptor` instance)
+- **`src/exports/runtime.ts`**: Runtime plane entry point
+
+## Entrypoints
+
+- **`./control`**: Control plane entry point for CLI/config usage (exports `SqlFamilyDescriptor`)
+- **`./control-adapter`**: SQL control adapter interface (`SqlControlAdapter`, `SqlControlAdapterDescriptor`) for target-specific adapters
+- **`./psl-build`**: PSL building blocks both `contract infer` and `contract print` use, with no dialect knowledge: `mapDefault` (a stored default as the PSL attribute that reads back as it), `toEnumMemberName`, `inferredTypeConstructors` (the constructor marked `inferred` for each data type of a stack, with the other constructors of that data type), `fewestArgumentsCall` and `writtenTypeArguments` (the call infer and print write for a column's parameters), `writtenTypeChoiceCall` (the type choice call, written by name, that becomes a constructor call; ADR 279) and `sameInNormalForm` (the comparison infer uses for it), and `inferColumnTypes` (each introspected column's type, through the data type that claims its reported type, moving to another row of the same type choice when the target says the default-path codec cannot read the column default, failing with `CONTRACT.INFER_COLUMN_TYPE_UNCLAIMED` on every column none writes)
+- **`./psl-infer`**: Database-to-PSL inference utilities for `contract infer`: name transforms, relation inference, and the printer-config types
+- **`./runtime`**: Runtime plane identity exports only (family ID, types, descriptor identity). Does **not** export runtime creation helpers—use a target client such as `postgres()`, which builds its stack with `createSqlExecutionStack`, its context with `createExecutionContext` from `@internal/sql-runtime`, and its runtime from the stack's adapter and driver descriptors. See [ADR 152](../../../docs/architecture%20docs/adrs/ADR%20152%20-%20Execution%20Plane%20Descriptors%20and%20Instances.md).
+- **`./verify`**: Marker row parsing helper (`parseContractMarkerRow`). Marker reads are owned by each `SqlControlAdapter` (e.g. `PostgresControlAdapter.readMarker`) so dialect-specific SQL stays target-local.
+
+## How to debug `db init`
+
+- **CLI orchestration**: `packages/1-framework/3-tooling/cli/src/commands/db-init.ts`
+- **Planner/runner SPI types**: `packages/2-sql-family/3-tooling/family/src/core/migrations/types.ts`
+- **Pure schema verifier (used by planner + runner)**: `@internal/family-sql/schema-verify` (source: `packages/2-sql-family/3-tooling/family/src/core/schema-verify/`)
+- **Postgres implementation**:
+  - Planner: `packages/3-targets/postgres/1-target/src/core/migrations/planner.ts`
+  - Runner: `packages/3-targets/postgres/1-target/src/core/migrations/runner.ts`
+- **Tests**:
+  - CLI integration: `test/integration/test/cli.db-init.e2e.test.ts`
+  - Target unit/integration: `packages/3-targets/postgres/1-target/test/migrations/*`

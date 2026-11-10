@@ -1,5 +1,47 @@
-import type { Range, SourceFile } from '../src/source-file';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import { notOk, ok } from '@internal/utils/result';
+import { identifier } from '../src/attribute-spec/combinators/identifier';
+import { type AttributeSpecNamespace, EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
+import type { ArgType, AttributeCtx, BlockAttributeCtx } from '../src/attribute-spec/types';
+import {
+  type Binder,
+  type BinderContext,
+  createBinder,
+  type DescribeUnresolvedType,
+  type DescribeUnsupportedAttribute,
+} from '../src/binder';
+import { parse } from '../src/parse';
+import type { PslSources, Range, SourceFile } from '../src/source-file';
+import { buildSymbolTable, type SymbolTable } from '../src/symbol-table';
+import type { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
+
+export function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null', { documentation: 'A null value.' });
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
+
+export function rejectingNothing(): ArgType<never, AttributeCtx> {
+  return {
+    kind: 'rejecting',
+    label: 'nothing',
+    message: 'Rejects every value',
+    parse: () => notOk([]),
+  };
+}
 
 /**
  * The framework PSL built-in scalar names a typical target declares. `resolve`
@@ -17,6 +59,10 @@ export const frameworkScalarTypes: ReadonlySet<string> = new Set([
   'Json',
   'Bytes',
 ]);
+
+export function ownEntry(record: object, key: string): unknown {
+  return Object.getOwnPropertyDescriptor(record, key)?.value;
+}
 
 function escapeForDebug(text: string): string {
   return text
@@ -74,4 +120,83 @@ export function highlight(sourceFile: SourceFile, range: Range): string {
   // Trail with a newline too so the closing quote sits on its own line,
   // mirroring the opening quote (the underline line no longer ends in `~"`).
   return `\n${rendered.join('\n')}\n`;
+}
+
+export function binderContext(
+  input: {
+    readonly contributedTypes?: AuthoringTypeNamespace;
+    readonly attributeSpecs?: AttributeSpecNamespace;
+    readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+    readonly defaultFunctionRegistry?: ControlMutationDefaultRegistry;
+    readonly dataTypes?: DataTypeSupport;
+    readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute;
+    readonly describeUnresolvedType?: DescribeUnresolvedType;
+  } = {},
+): BinderContext {
+  const { describeUnsupportedAttribute, describeUnresolvedType } = input;
+  const dataTypes = input.dataTypes ?? EMPTY_DATA_TYPES;
+  return {
+    authoringContributions: {
+      type: input.contributedTypes ?? {},
+      entityTypes: {},
+      pslBlockDescriptors: input.pslBlockDescriptors ?? {},
+      modelAttributes: {},
+      attributeSpecs: input.attributeSpecs ?? { model: {}, field: {} },
+      dataTypes: dataTypes.entries,
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.defaultFunctionRegistry ?? new Map(),
+    },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    dataTypes,
+    pslDiagnostics: {
+      ...(describeUnsupportedAttribute === undefined
+        ? {}
+        : { describeUnsupportedAttribute: () => describeUnsupportedAttribute }),
+      ...(describeUnresolvedType === undefined
+        ? {}
+        : { describeUnresolvedType: () => describeUnresolvedType }),
+    },
+  };
+}
+
+export function supportBinder(input: {
+  readonly sources: PslSources;
+  readonly symbolTable: SymbolTable;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+}): Binder {
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    context: binderContext(
+      input.pslBlockDescriptors === undefined
+        ? {}
+        : { pslBlockDescriptors: input.pslBlockDescriptors },
+    ),
+  }).binder;
+}
+
+/** The single `@@` attribute of a `fixture` block, with the parse context its block gives it. */
+export function blockAttributeFixture(attributeSource: string): {
+  readonly node: ModelAttributeAst;
+  readonly ctx: BlockAttributeCtx;
+} {
+  const { document, sources } = parse(`fixture Probe {\n  ${attributeSource}\n}`, 'schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
+  const block = symbolTable.defaultNamespace.blocks['Probe'];
+  const node = block === undefined ? undefined : [...block.node.attributes()][0];
+  if (block === undefined || node === undefined) throw new Error('expected a block attribute');
+  return {
+    node,
+    ctx: {
+      sources,
+      symbols: symbolTable,
+      binder: supportBinder({ sources, symbolTable }),
+      selfBlock: block,
+    },
+  };
 }

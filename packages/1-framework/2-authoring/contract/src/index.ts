@@ -1,3 +1,10 @@
+export type {
+  ArgTypeFromDescriptor,
+  CanonicalArguments,
+  DataTypeArgumentTypes,
+  ResolveTemplateValue,
+  TupleFromArgumentDescriptors,
+} from './authoring-argument-types';
 export type { CapabilityMatrix } from './capability-registry';
 export { mergeCapabilityMatrices } from './capability-registry';
 export type {
@@ -11,6 +18,7 @@ export type {
 } from './composed-helpers-scaffolding';
 export { createEntityHelpersFromNamespace } from './composed-helpers-scaffolding';
 export type { ForeignKeyDefaultsState, IndexDef } from './descriptors';
+export { encodeEnumTypeMembers, enumMemberError } from './enum-members';
 export type {
   BoundEnumType,
   CodecInput,
@@ -25,6 +33,15 @@ export {
   isEnumTypeHandle,
   member,
 } from './enum-type';
+export { answerMissingPropertyReads } from './missing-property-reads';
+export {
+  assertSafeAuthoringHelperKey,
+  composePackAuthoringNamespace,
+} from './pack-authoring-namespaces';
+export type {
+  ExtractDataTypeArgumentTypesFromPack,
+  ExtractParameterizedOutputTypesFromPack,
+} from './pack-type-slots';
 export type {
   LocalFieldNullabilityLookup,
   ToOneRelationNullability,

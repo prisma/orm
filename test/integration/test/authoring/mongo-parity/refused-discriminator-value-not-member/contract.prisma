@@ -1,0 +1,20 @@
+// use prisma-8
+
+enum Kind {
+  @@type("mongo/string@1")
+  Bug = "bug"
+}
+
+model Task {
+  id   ObjectId @id @map("_id")
+  type Kind
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity Int32
+
+  @@base(Task, "other")
+}

@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { InternalError } from '@internal/utils/internal-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
 import type { CreateControlStackInput } from '../src/control/control-stack';
@@ -10,13 +11,12 @@ import {
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,
+  extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
-  validateScalarTypeCodecIds,
 } from '../src/control/control-stack';
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
-import type { CodecLookup } from '../src/shared/codec-types';
-import { dataTypeId } from '../src/shared/data-type';
+import { type DataTypeValue, dataType, dataTypeId } from '../src/shared/data-type';
 import type { ComponentDescriptor } from '../src/shared/framework-components';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
@@ -31,6 +31,27 @@ function createDescriptor<K extends string = 'target'>(
     version: '0.0.1',
     ...overrides,
   } as ComponentDescriptor<K>;
+}
+
+const stubDataType = dataType('demo/stub', { read: (json) => json });
+
+function registeredCodec(codecId: string): AnyCodecDescriptor {
+  return {
+    codecId,
+    dataType: stubDataType.id,
+    traits: [],
+    paramsSchema: undefined,
+    isParameterized: false,
+    factory: () => () =>
+      ({
+        id: codecId,
+        dataType: stubDataType,
+        toWire: async (v: unknown) => v,
+        fromWire: async (v: unknown) => v,
+        toDataTypeValue: (v: unknown) => stubDataType.valueFrom(v as JsonValue, {}),
+        fromDataTypeValue: (value: DataTypeValue) => value.value,
+      }) satisfies Codec,
+  };
 }
 
 // Tests only exercise metadata extraction; stub shapes satisfy the runtime paths
@@ -50,7 +71,7 @@ describe('extractCodecTypeImports', () => {
         types: {
           codecTypes: {
             import: {
-              package: '@internal/adapter-mongo/codec-types',
+              package: '@test/mongo/codec-types',
               named: 'CodecTypes',
               alias: 'MongoCodecTypes',
             },
@@ -60,7 +81,7 @@ describe('extractCodecTypeImports', () => {
     ]);
     expect(result).toEqual([
       {
-        package: '@internal/adapter-mongo/codec-types',
+        package: '@test/mongo/codec-types',
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
@@ -79,6 +100,24 @@ describe('extractCodecTypeImports', () => {
       }),
     ]);
     expect(result).toHaveLength(2);
+  });
+});
+
+describe('extractParameterizedOutputTypeImports', () => {
+  it('lists the type function each component declares', () => {
+    const typeFunction = { package: '@test/codec-types', named: 'Outputs', alias: 'O' };
+    const result = extractParameterizedOutputTypeImports([
+      createDescriptor(),
+      createDescriptor({
+        types: {
+          codecTypes: {
+            import: { package: '@test/codec-types', named: 'CodecTypes', alias: 'T' },
+            parameterizedOutputTypes: typeFunction,
+          },
+        },
+      }),
+    ]);
+    expect(result).toEqual([typeFunction]);
   });
 });
 
@@ -131,7 +170,6 @@ describe('assembleAuthoringContributions', () => {
     const result = assembleAuthoringContributions([createDescriptor()]);
     expect(result).toEqual({
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -140,53 +178,37 @@ describe('assembleAuthoringContributions', () => {
     });
   });
 
-  it('merges field namespaces from multiple descriptors', () => {
-    const result = assembleAuthoringContributions([
-      createDescriptor({
-        authoring: {
-          field: {
-            ns1: { kind: 'fieldPreset', output: { codecId: 'a@1', nativeType: 'text' } },
-          },
-        },
-      }),
-      createDescriptor({
-        id: 'other',
-        authoring: {
-          field: {
-            ns2: { kind: 'fieldPreset', output: { codecId: 'b@1', nativeType: 'int' } },
-          },
-        },
-      }),
-    ]);
-    expect(Object.keys(result.field)).toEqual(['ns1', 'ns2']);
-  });
-
-  it('throws on duplicate field preset paths', () => {
+  it('refuses a component that contributes authoring.field, naming typeAlias as the replacement', () => {
     expect(() =>
       assembleAuthoringContributions([
         createDescriptor({
+          id: 'legacy-pack',
           authoring: {
-            field: {
-              dup: { kind: 'fieldPreset', output: { codecId: 'a@1', nativeType: 'text' } },
-            },
-          },
-        }),
-        createDescriptor({
-          id: 'other',
-          authoring: {
-            field: {
-              dup: { kind: 'fieldPreset', output: { codecId: 'b@1', nativeType: 'int' } },
-            },
-          },
+            field: { createdAt: { kind: 'fieldPreset', output: { codecId: 'a@1' } } },
+          } as unknown as never,
         }),
       ]),
-    ).toThrow(/Duplicate authoring field helper "dup"/);
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message:
+          'Component "legacy-pack" contributes authoring.field, which Prisma 8 removed with field presets. Contribute a type alias (kind: \'typeAlias\') or a type constructor in authoring.type.',
+      }),
+    );
+  });
+
+  it('refuses an empty authoring.field', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({ id: 'legacy-pack', authoring: { field: {} } as unknown as never }),
+      ]),
+    ).toThrow(/Component "legacy-pack" contributes authoring\.field/);
   });
 
   it('lands top-level type constructors from a descriptor in the merged namespace', () => {
     const stringConstructor = {
       kind: 'typeConstructor',
-      output: { codecId: 'pg/text@1', nativeType: 'text' },
+      output: { codecId: 'pg/text@1' },
     } as const;
     const result = assembleAuthoringContributions([
       createDescriptor({
@@ -205,7 +227,7 @@ describe('assembleAuthoringContributions', () => {
           id: 'adapter-a',
           authoring: {
             type: {
-              String: { kind: 'typeConstructor', output: { codecId: 'a@1', nativeType: 'text' } },
+              String: { kind: 'typeConstructor', output: { codecId: 'a@1' } },
             },
           },
         }),
@@ -213,7 +235,7 @@ describe('assembleAuthoringContributions', () => {
           id: 'adapter-b',
           authoring: {
             type: {
-              String: { kind: 'typeConstructor', output: { codecId: 'b@1', nativeType: 'text' } },
+              String: { kind: 'typeConstructor', output: { codecId: 'b@1' } },
             },
           },
         }),
@@ -232,10 +254,9 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Sized: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
                 output: {
                   codecId: 'a/sized@1',
-                  nativeType: 'sized',
                   typeParams: { length: { kind: 'arg', index: 2 } },
                 },
               },
@@ -262,7 +283,6 @@ describe('assembleAuthoringContributions', () => {
                   kind: 'typeConstructor',
                   output: {
                     codecId: 'a/odd@1',
-                    nativeType: 'odd',
                     typeParams: { size: { kind: 'arg', index: 0 } },
                   },
                 },
@@ -278,51 +298,19 @@ describe('assembleAuthoringContributions', () => {
     );
   });
 
-  it('rejects a dangling arg-ref inside an arg-ref default', () => {
+  it('accepts a plain type constructor whose output names only its codec', () => {
     expect(() =>
       assembleAuthoringContributions([
         createDescriptor({
           id: 'adapter-a',
           authoring: {
             type: {
-              Sized: {
-                kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, optional: true }],
-                output: {
-                  codecId: 'a/sized@1',
-                  nativeType: 'sized',
-                  typeParams: {
-                    length: { kind: 'arg', index: 0, default: { kind: 'arg', index: 5 } },
-                  },
-                },
-              },
+              Plain: { kind: 'typeConstructor', output: { codecId: 'a/plain@1' } },
             },
           },
         }),
       ]),
-    ).toThrow(
-      'Invalid authoring type constructor "Sized" contributed by descriptor "adapter-a". ' +
-        'output.typeParams.length references argument 5, but the constructor declares 1 argument(s). ' +
-        'Declare the argument or correct the reference index.',
-    );
-  });
-
-  it('rejects a plain type constructor without an output template', () => {
-    expect(() =>
-      assembleAuthoringContributions([
-        createDescriptor({
-          id: 'adapter-a',
-          authoring: {
-            type: {
-              Odd: { kind: 'typeConstructor', output: { codecId: 'a/odd@1' } },
-            },
-          },
-        }),
-      ]),
-    ).toThrow(
-      'Invalid authoring type constructor "Odd" contributed by descriptor "adapter-a". ' +
-        'The output declares no storage type template and no entityRefArg; a plain constructor must declare one.',
-    );
+    ).not.toThrow();
   });
 
   it('accepts typeParams references to optional arguments without defaults (omitted-key semantics)', () => {
@@ -333,10 +321,9 @@ describe('assembleAuthoringContributions', () => {
           type: {
             VarCharish: {
               kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+              args: [{ kind: 'value', dataType: 'test/int', name: 'length', optional: true }],
               output: {
                 codecId: 'a/varcharish@1',
-                nativeType: 'character varying',
                 typeParams: { length: { kind: 'arg', index: 0 } },
               },
             },
@@ -371,7 +358,7 @@ describe('assembleAuthoringContributions', () => {
         id: 'adapter-a',
         authoring: {
           type: {
-            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1', nativeType: 'rich' } },
+            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1' } },
           },
           valueObjectStorageType: 'Rich',
         },
@@ -386,7 +373,7 @@ describe('assembleAuthoringContributions', () => {
       createDescriptor({
         authoring: {
           type: {
-            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1', nativeType: 'rich' } },
+            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1' } },
           },
         },
       }),
@@ -401,7 +388,7 @@ describe('assembleAuthoringContributions', () => {
         id: 'target-a',
         authoring: {
           type: {
-            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1', nativeType: 'rich' } },
+            Rich: { kind: 'typeConstructor', output: { codecId: 'a/rich@1' } },
           },
         },
       }),
@@ -422,7 +409,7 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Rich: {
                 kind: 'typeConstructor',
-                output: { codecId: 'a/rich@1', nativeType: 'rich' },
+                output: { codecId: 'a/rich@1' },
               },
             },
             valueObjectStorageType: 'Rich',
@@ -447,7 +434,7 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Rich: {
                 kind: 'typeConstructor',
-                output: { codecId: 'a/rich@1', nativeType: 'rich' },
+                output: { codecId: 'a/rich@1' },
               },
             },
             valueObjectStorageType: 'Missing',
@@ -468,8 +455,8 @@ describe('assembleAuthoringContributions', () => {
             type: {
               Sized: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
-                output: { codecId: 'a/sized@1', nativeType: 'sized' },
+                args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
+                output: { codecId: 'a/sized@1' },
               },
             },
             valueObjectStorageType: 'Sized',
@@ -490,7 +477,7 @@ describe('assembleAuthoringContributions', () => {
             sql: {
               String: {
                 kind: 'typeConstructor',
-                output: { codecId: 'sql/varchar@1', nativeType: 'character varying' },
+                output: { codecId: 'sql/varchar@1' },
               },
             },
           },
@@ -502,7 +489,7 @@ describe('assembleAuthoringContributions', () => {
           type: {
             String: {
               kind: 'typeConstructor',
-              output: { codecId: 'pg/text@1', nativeType: 'text' },
+              output: { codecId: 'pg/text@1' },
             },
           },
         },
@@ -516,57 +503,26 @@ describe('assembleAuthoringContributions', () => {
   });
 
   it('rejects malformed descriptor values during merge instead of recursing into primitives', () => {
-    // A descriptor missing `output` fails the canonical leaf guard but is a plain object, so the walker would historically recurse INTO it and, on the second registration of the same path, try to walk through the inner `'fieldPreset'` string of the `kind` property — either silently mangling state or infinite-looping. The walker now rejects the malformed value with a clear path-aware error.
     expect(() =>
       assembleAuthoringContributions([
         createDescriptor({
           authoring: {
-            field: {
-              malformed: { kind: 'fieldPreset' } as unknown as never,
+            entityTypes: {
+              malformed: { kind: 'entity' } as unknown as never,
             },
           },
         }),
         createDescriptor({
           id: 'other',
           authoring: {
-            field: {
-              malformed: { kind: 'fieldPreset' } as unknown as never,
+            entityTypes: {
+              malformed: { kind: 'entity' } as unknown as never,
             },
           },
         }),
       ]),
-    ).toThrow(/Invalid authoring field helper "malformed\.kind"/);
+    ).toThrow(/Invalid authoring entity helper "malformed\.kind"/);
   });
-
-  it('rejects field preset and type constructor path collisions', () => {
-    expect(() =>
-      assembleAuthoringContributions([
-        createDescriptor({
-          authoring: {
-            field: {
-              custom: {
-                Json: { kind: 'fieldPreset', output: { codecId: 'a@1', nativeType: 'json' } },
-              },
-            },
-          },
-        }),
-        createDescriptor({
-          id: 'other',
-          authoring: {
-            type: {
-              custom: {
-                Json: {
-                  kind: 'typeConstructor',
-                  output: { codecId: 'b@1', nativeType: 'jsonb' },
-                },
-              },
-            },
-          },
-        }),
-      ]),
-    ).toThrow(/Ambiguous authoring registry path "custom.Json"/);
-  });
-
   it('merges entityTypes namespaces from multiple descriptors', () => {
     const result = assembleAuthoringContributions([
       createDescriptor({
@@ -605,9 +561,29 @@ describe('assembleAuthoringContributions', () => {
       keyword,
       discriminator,
       name: { required: true },
-      parameters: {},
+      spec: () => ({}),
     };
   }
+
+  it('rejects a pslBlockDescriptors entry whose spec is not callable', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                spec: 'not-a-factory',
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
 
   it('merges pslBlockDescriptors namespaces from multiple descriptors', () => {
     const result = assembleAuthoringContributions([
@@ -956,16 +932,16 @@ describe('assembleAuthoringContributions', () => {
     // Pack B adds a second leaf under the same sub-namespace.
     // After merging, pack A's original object must not contain pack B's key.
     const packAAuthoring = {
-      field: {
+      type: {
         id: {
-          alpha: { kind: 'fieldPreset' as const, output: { codecId: 'a@1', nativeType: 'text' } },
+          alpha: { kind: 'typeConstructor' as const, output: { codecId: 'a@1' } },
         },
       },
     };
     const packBAuthoring = {
-      field: {
+      type: {
         id: {
-          beta: { kind: 'fieldPreset' as const, output: { codecId: 'b@1', nativeType: 'int4' } },
+          beta: { kind: 'typeConstructor' as const, output: { codecId: 'b@1' } },
         },
       },
     };
@@ -975,23 +951,23 @@ describe('assembleAuthoringContributions', () => {
       createDescriptor({ id: 'pack-b', authoring: packBAuthoring }),
     ]);
 
-    expect(Object.keys(result.field['id'] as object)).toEqual(['alpha', 'beta']);
+    expect(Object.keys(result.type['id'] as object)).toEqual(['alpha', 'beta']);
     // Pack A's original sub-namespace object must be untouched.
-    expect(packAAuthoring.field.id).not.toHaveProperty('beta');
+    expect(packAAuthoring.type.id).not.toHaveProperty('beta');
   });
 
   it('composing the same pack objects twice does not throw', () => {
     // Simulates two calls to assembleAuthoringContributions (or createControlStack) within the
     // same process using the same singleton pack descriptors. Without the shallow-copy fix,
     // the first call mutates the family pack's id sub-namespace, so the second call finds both
-    // leaves already present in the source object and throws "Duplicate authoring field helper".
+    // leaves already present in the source object and throws "Duplicate authoring type helper".
     const packADescriptor = createDescriptor({
       authoring: {
-        field: {
+        type: {
           id: {
             alpha: {
-              kind: 'fieldPreset' as const,
-              output: { codecId: 'a@1', nativeType: 'text' },
+              kind: 'typeConstructor' as const,
+              output: { codecId: 'a@1' },
             },
           },
         },
@@ -1000,11 +976,11 @@ describe('assembleAuthoringContributions', () => {
     const packBDescriptor = createDescriptor({
       id: 'pack-b',
       authoring: {
-        field: {
+        type: {
           id: {
             beta: {
-              kind: 'fieldPreset' as const,
-              output: { codecId: 'b@1', nativeType: 'int4' },
+              kind: 'typeConstructor' as const,
+              output: { codecId: 'b@1' },
             },
           },
         },
@@ -1012,7 +988,7 @@ describe('assembleAuthoringContributions', () => {
     });
 
     const first = assembleAuthoringContributions([packADescriptor, packBDescriptor]);
-    expect(Object.keys(first.field['id'] as object)).toEqual(['alpha', 'beta']);
+    expect(Object.keys(first.type['id'] as object)).toEqual(['alpha', 'beta']);
 
     // Second composition with the same singletons must not throw.
     expect(() => assembleAuthoringContributions([packADescriptor, packBDescriptor])).not.toThrow();
@@ -1023,11 +999,11 @@ describe('assembleAuthoringContributions', () => {
       assembleAuthoringContributions([
         createDescriptor({
           authoring: {
-            field: {
+            type: {
               id: {
                 shared: {
-                  kind: 'fieldPreset' as const,
-                  output: { codecId: 'a@1', nativeType: 'text' },
+                  kind: 'typeConstructor' as const,
+                  output: { codecId: 'a@1' },
                 },
               },
             },
@@ -1036,18 +1012,18 @@ describe('assembleAuthoringContributions', () => {
         createDescriptor({
           id: 'pack-b',
           authoring: {
-            field: {
+            type: {
               id: {
                 shared: {
-                  kind: 'fieldPreset' as const,
-                  output: { codecId: 'b@1', nativeType: 'int4' },
+                  kind: 'typeConstructor' as const,
+                  output: { codecId: 'b@1' },
                 },
               },
             },
           },
         }),
       ]),
-    ).toThrow(/Duplicate authoring field helper "id\.shared"/);
+    ).toThrow(/Duplicate authoring type helper "id\.shared"/);
   });
 
   it('preserves prototype-carrying objects in sub-namespaces through composition', () => {
@@ -1090,19 +1066,19 @@ describe('assembleAuthoringContributions', () => {
   });
 
   it('deep-copies nested plain-object sub-namespaces so composing the same pack twice does not throw or mutate', () => {
-    // depth-3: pack A owns field.a.b.alpha; pack B adds field.a.b.beta.
+    // depth-3: pack A owns type.a.b.alpha; pack B adds type.a.b.beta.
     // Before the deep-copy fix, shallow-copying `a` on first assignment left
     // `a.b` shared with pack A's original. On the second composition, pack B
     // recursing into `a.b` would find `beta` already present (mutated in by the
-    // first run) and throw "Duplicate authoring field helper".
+    // first run) and throw "Duplicate authoring type helper".
     const packADescriptor = createDescriptor({
       authoring: {
-        field: {
+        type: {
           a: {
             b: {
               alpha: {
-                kind: 'fieldPreset' as const,
-                output: { codecId: 'a@1', nativeType: 'text' },
+                kind: 'typeConstructor' as const,
+                output: { codecId: 'a@1' },
               },
             },
           },
@@ -1112,12 +1088,12 @@ describe('assembleAuthoringContributions', () => {
     const packBDescriptor = createDescriptor({
       id: 'pack-b',
       authoring: {
-        field: {
+        type: {
           a: {
             b: {
               beta: {
-                kind: 'fieldPreset' as const,
-                output: { codecId: 'b@1', nativeType: 'int4' },
+                kind: 'typeConstructor' as const,
+                output: { codecId: 'b@1' },
               },
             },
           },
@@ -1126,7 +1102,7 @@ describe('assembleAuthoringContributions', () => {
     });
 
     const first = assembleAuthoringContributions([packADescriptor, packBDescriptor]);
-    expect(Object.keys((first.field['a'] as Record<string, unknown>)['b'] as object)).toEqual([
+    expect(Object.keys((first.type['a'] as Record<string, unknown>)['b'] as object)).toEqual([
       'alpha',
       'beta',
     ]);
@@ -1134,7 +1110,7 @@ describe('assembleAuthoringContributions', () => {
     // Second composition with the same singletons must not throw.
     expect(() => assembleAuthoringContributions([packADescriptor, packBDescriptor])).not.toThrow();
     // Pack A's original nested object must be untouched.
-    expect(packADescriptor.authoring?.field?.['a']).not.toHaveProperty(['b', 'beta']);
+    expect(packADescriptor.authoring?.type?.['a']).not.toHaveProperty(['b', 'beta']);
   });
 });
 
@@ -1142,17 +1118,17 @@ describe('extractCodecLookup', () => {
   const stubCodec = (id: string) =>
     ({
       id,
-      encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    }) as unknown as Codec;
+      dataType: stubDataType,
+      toWire: async (v: unknown) => v,
+      fromWire: async (v: unknown) => v,
+      toDataTypeValue: (v: unknown) => stubDataType.valueFrom(v as JsonValue, {}),
+      fromDataTypeValue: (value: DataTypeValue) => value.value,
+    }) satisfies Codec;
 
   const stubDescriptor = (id: string): AnyCodecDescriptor => ({
     codecId: id,
     dataType: dataTypeId('demo/stub'),
     traits: [],
-    targetTypes: [],
     paramsSchema: {
       '~standard': {
         version: 1,
@@ -1226,6 +1202,29 @@ describe('extractCodecLookup', () => {
     expect(lookup.renderValueLiteralFor?.('unknown@1', 'val', 'output')).toBeUndefined();
   });
 
+  it('skips a parameterized codec whose factory needs its params, but not one that throws an internal error', () => {
+    const needsParams: AnyCodecDescriptor = {
+      ...stubDescriptor('needs@1'),
+      isParameterized: true,
+      factory: () => {
+        throw new Error('length is required');
+      },
+    };
+    const broken: AnyCodecDescriptor = {
+      ...stubDescriptor('broken@1'),
+      isParameterized: true,
+      factory: () => {
+        throw new InternalError('a codec broke an invariant');
+      },
+    };
+    const lookupOf = (descriptor: AnyCodecDescriptor) =>
+      extractCodecLookup([
+        { id: 'desc', types: { codecTypes: { codecDescriptors: [descriptor] } } },
+      ]);
+    expect(lookupOf(needsParams).get('needs@1')).toBeUndefined();
+    expect(() => lookupOf(broken)).toThrow(InternalError);
+  });
+
   it('renderValueLiteralFor returns undefined when the codec has no renderValueLiteral', () => {
     const lookup = extractCodecLookup([
       { id: 'desc', types: { codecTypes: { codecDescriptors: [stubDescriptor('a@1')] } } },
@@ -1259,7 +1258,7 @@ describe('assembleControlMutationDefaults', () => {
         id: 'desc-b',
         controlMutationDefaults: {
           defaultFunctionRegistry: new Map([['uuid', { lower: stubLower }]]),
-          generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['pg/text@1'] }],
+          generatorDescriptors: [{ id: 'uuidv4' }],
         },
       }),
     ]);
@@ -1290,25 +1289,31 @@ describe('assembleControlMutationDefaults', () => {
     ).toThrow(/Duplicate mutation default function "now".*"desc-b".*"desc-a"/);
   });
 
-  it('throws on duplicate generator id', () => {
+  it('refuses a generator id two components register', () => {
     expect(() =>
       assembleControlMutationDefaults([
         createDescriptor({
           id: 'desc-a',
           controlMutationDefaults: {
             defaultFunctionRegistry: new Map(),
-            generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['a@1'] }],
+            generatorDescriptors: [{ id: 'uuidv4' }],
           },
         }),
         createDescriptor({
           id: 'desc-b',
           controlMutationDefaults: {
             defaultFunctionRegistry: new Map(),
-            generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['b@1'] }],
+            generatorDescriptors: [{ id: 'uuidv4' }],
           },
         }),
       ]),
-    ).toThrow(/Duplicate mutation default generator id "uuidv4".*"desc-b".*"desc-a"/);
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        message:
+          'Generator "uuidv4" is registered by both "desc-a" and "desc-b". Register each generator once, in the component that defines it.',
+      }),
+    );
   });
 });
 
@@ -1329,9 +1334,11 @@ describe('createControlStack', () => {
         adapter: createDescriptor({
           kind: 'adapter',
           id: 'adapter',
+          dataTypes: [stubDataType],
           types: {
             codecTypes: {
               typeImports: [{ package: '@test/param', named: 'P', alias: 'TP' }],
+              codecDescriptors: [registeredCodec('a@1')],
             },
             queryOperationTypes: {
               import: { package: '@test/qops', named: 'Q', alias: 'TQ' },
@@ -1341,7 +1348,7 @@ describe('createControlStack', () => {
             type: {
               myType: {
                 kind: 'typeConstructor',
-                output: { codecId: 'a@1', nativeType: 'text' },
+                output: { codecId: 'a@1' },
               },
             },
           },
@@ -1381,7 +1388,7 @@ describe('createControlStack', () => {
           types: {
             codecTypes: {
               import: {
-                package: '@internal/adapter-mongo/codec-types',
+                package: '@test/mongo/codec-types',
                 named: 'CodecTypes',
                 alias: 'MongoCodecTypes',
               },
@@ -1407,7 +1414,6 @@ describe('createControlStack', () => {
     expect(state.extensionIds).toEqual(['fam', 'tgt']);
     expect(state.authoringContributions).toEqual({
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -1415,6 +1421,23 @@ describe('createControlStack', () => {
       attributeSpecs: { model: {}, field: {} },
     });
     expect(state.scalarTypes).toEqual([]);
+  });
+
+  it('refuses a type constructor naming a codec no component registers', () => {
+    expect(() =>
+      createControlStack(
+        stubInput({
+          family: createDescriptor({ kind: 'family', id: 'fam' }),
+          target: createDescriptor({
+            kind: 'target',
+            id: 'tgt',
+            authoring: {
+              type: { Gone: { kind: 'typeConstructor', output: { codecId: 'demo/gone@1' } } },
+            },
+          }),
+        }),
+      ),
+    ).toThrow(/Gone.*tgt.*demo\/gone@1/s);
   });
 
   it('derives scalarTypes from top-level zero-arg constructors in the assembled namespace', () => {
@@ -1428,14 +1451,32 @@ describe('createControlStack', () => {
               sql: {
                 String: {
                   kind: 'typeConstructor',
-                  args: [{ kind: 'number', name: 'length' }],
-                  output: { codecId: 'sql/varchar@1', nativeType: 'character varying' },
+                  args: [{ kind: 'value', dataType: stubDataType.id, name: 'length' }],
+                  output: { codecId: 'sql/varchar@1' },
                 },
               },
             },
           },
         }),
-        target: createDescriptor({ kind: 'target', id: 'tgt' }),
+        target: createDescriptor({
+          kind: 'target',
+          id: 'tgt',
+          dataTypes: [stubDataType],
+          authoring: {
+            dataTypes: {
+              [stubDataType.id]: {
+                written: { kind: 'tag', tag: 'stub', parse: (text: string) => text },
+                print: String,
+                documentation: 'A stub value.',
+              },
+            },
+          },
+          types: {
+            codecTypes: {
+              codecDescriptors: ['sql/varchar@1', 'pg/text@1', 'pg/int4@1'].map(registeredCodec),
+            },
+          },
+        }),
         adapter: createDescriptor({
           kind: 'adapter',
           id: 'adp',
@@ -1443,11 +1484,11 @@ describe('createControlStack', () => {
             type: {
               String: {
                 kind: 'typeConstructor',
-                output: { codecId: 'pg/text@1', nativeType: 'text' },
+                output: { codecId: 'pg/text@1' },
               },
               Int: {
                 kind: 'typeConstructor',
-                output: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                output: { codecId: 'pg/int4@1' },
               },
             },
           },
@@ -1455,68 +1496,6 @@ describe('createControlStack', () => {
       }),
     );
     expect(state.scalarTypes).toEqual(['String', 'Int']);
-  });
-});
-
-describe('validateScalarTypeCodecIds', () => {
-  it('returns errors naming type and codec for unregistered codec IDs on zero-arg constructors', () => {
-    const namespace = {
-      String: {
-        kind: 'typeConstructor' as const,
-        output: { codecId: 'missing/codec@1', nativeType: 'text' },
-      },
-    };
-    const lookup: CodecLookup = {
-      get: () => undefined,
-      targetTypesFor: () => undefined,
-      renderOutputTypeFor: () => undefined,
-    };
-    const errors = validateScalarTypeCodecIds(namespace, lookup);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(
-      /Scalar type "String" references codec "missing\/codec@1" which is not registered/,
-    );
-  });
-
-  it('returns empty array when all codec IDs are registered', () => {
-    const namespace = {
-      String: {
-        kind: 'typeConstructor' as const,
-        output: { codecId: 'test/text@1', nativeType: 'text' },
-      },
-    };
-    const lookup: CodecLookup = {
-      get: (id: string) =>
-        id === 'test/text@1'
-          ? {
-              id,
-              encode: async (v: unknown) => v,
-              decode: async (v: unknown) => v,
-              encodeJson: (v: unknown) => v as JsonValue,
-              decodeJson: (v: JsonValue) => v,
-            }
-          : undefined,
-      targetTypesFor: (id: string) => (id === 'test/text@1' ? ['text'] : undefined),
-      renderOutputTypeFor: () => undefined,
-    };
-    const errors = validateScalarTypeCodecIds(namespace, lookup);
-    expect(errors).toEqual([]);
-  });
-
-  it('ignores parameterized constructors — only top-level zero-arg scalars are checked', () => {
-    const namespace = {
-      Vector: {
-        kind: 'typeConstructor' as const,
-        args: [{ kind: 'number' as const, name: 'dimensions' }],
-        output: { codecId: 'missing/vector@1', nativeType: 'vector' },
-      },
-    };
-    const lookup: CodecLookup = {
-      get: () => undefined,
-      targetTypesFor: () => undefined,
-      renderOutputTypeFor: () => undefined,
-    };
-    expect(validateScalarTypeCodecIds(namespace, lookup)).toEqual([]);
   });
 });
 
@@ -1563,13 +1542,6 @@ describe('buildExtensionLoadOrder', () => {
     const order = buildExtensionLoadOrder([c, a, b]);
     expect(order.indexOf('a')).toBeLessThan(order.indexOf('c'));
     expect(order.indexOf('b')).toBeLessThan(order.indexOf('c'));
-  });
-
-  it('places a declared dependency before the pack that depends on it', () => {
-    const a = makeExtension('a');
-    const b = makeExtension('b', ['a']);
-    const order = buildExtensionLoadOrder([b, a]);
-    expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'));
   });
 
   it('throws when a declared dependency is absent from the provided set', () => {

@@ -40,44 +40,7 @@ describe('ports/prisma/functional/composites/list/createMany', () => {
   );
 
   it(
-    'set shorthand (same as set for ORM — no prisma set wrapper)',
-    () =>
-      withComposites(async ({ db }) => {
-        const count = await db.comment_required_list.createAndCount([
-          {
-            country: 'France',
-            contents: [
-              {
-                text: 'Hello World',
-                upvotes: [{ vote: true, userId: '10' }],
-              },
-            ],
-          },
-        ]);
-
-        expect(count).toBe(1);
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
     'set null',
-    () =>
-      withComposites(async ({ db }) => {
-        const promise = db.comment_required_list.createAndCount([
-          {
-            country: 'France',
-            // @ts-expect-error required `contents` list cannot be null
-            contents: null,
-          },
-        ]);
-        await expect(promise).rejects.toThrow();
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set null shorthand',
     () =>
       withComposites(async ({ db }) => {
         const promise = db.comment_required_list.createAndCount([

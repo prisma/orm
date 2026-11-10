@@ -1,0 +1,216 @@
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { describe, expect, it } from 'vitest';
+import { contributedTypeScope } from '../src/contributed-type-scope';
+import { parse } from '../src/parse';
+import {
+  contributedScope,
+  documentScope,
+  isNamespaceLike,
+  lookupMember,
+  memberEntries,
+  namespaceScope,
+} from '../src/scope';
+import { buildSymbolTable } from '../src/symbol-table';
+
+const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
+  String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+  pgvector: { Vector: { kind: 'typeConstructor', output: { codecId: 'fixture/vector@1' } } },
+};
+
+function scopesFor(schema: string) {
+  const { document, sources } = parse(schema, 'scope.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
+  const contributed = contributedScope(contributedTypeScope(TYPE_CONSTRUCTORS));
+  const top = documentScope(symbolTable, contributed);
+  return { symbolTable, contributed, top };
+}
+
+const SCHEMA = [
+  'model Shared {',
+  '  id Int',
+  '}',
+  'namespace app {',
+  '  model Item {',
+  '    id Int',
+  '  }',
+  '  model Shared {',
+  '    id Int',
+  '  }',
+  '}',
+  'namespace other {',
+  '  model Hidden {',
+  '    id Int',
+  '  }',
+  '}',
+].join('\n');
+
+describe('a scope searches itself, then delegates to its parent', () => {
+  it('answers from the namespace before the document', () => {
+    const { symbolTable, top } = scopesFor(SCHEMA);
+    const app = symbolTable.namespaces['app']!;
+    const scope = namespaceScope(app, top);
+
+    expect(scope.lookup('Shared')).toEqual({
+      kind: 'model',
+      symbol: app.models['Shared'],
+      namespace: app,
+    });
+  });
+
+  it('reaches the document scope for a name the namespace does not declare', () => {
+    const { symbolTable, top } = scopesFor(SCHEMA);
+    const app = symbolTable.namespaces['app']!;
+    const scope = namespaceScope(app, top);
+
+    expect(scope.lookup('Shared')?.kind).toBe('model');
+    expect(namespaceScope(symbolTable.namespaces['other']!, top).lookup('Shared')).toEqual({
+      kind: 'model',
+      symbol: symbolTable.defaultNamespace.models['Shared'],
+      namespace: symbolTable.defaultNamespace,
+    });
+  });
+
+  it('reaches the contributed root through the document scope', () => {
+    const { symbolTable, top } = scopesFor(SCHEMA);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
+
+    expect(scope.lookup('String')).toMatchObject({
+      kind: 'contributedType',
+      symbol: { name: 'String', path: ['String'] },
+    });
+  });
+
+  it('never reaches a sibling namespace', () => {
+    const { symbolTable, top } = scopesFor(SCHEMA);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
+
+    expect(scope.lookup('Hidden')).toBeUndefined();
+  });
+
+  it('stops at the contributed root, which has no parent', () => {
+    const { contributed } = scopesFor(SCHEMA);
+
+    expect(contributed.lookup('Nothing')).toBeUndefined();
+  });
+});
+
+describe('scope entries', () => {
+  it('enumerates every visible kind with lookup-identical resolutions', () => {
+    const { symbolTable, top, contributed } = scopesFor(
+      [
+        'model Shared {\n id String\n}',
+        'type Address {\n street String\n}',
+        'types {\n Alias = String\n}',
+        'enum Role {\n ADMIN\n}',
+        'namespace app {\n type Shared {\n value String\n}\n model String {\n id Alias\n}\n}',
+        'namespace other {\n model Hidden {\n id String\n}\n}',
+      ].join('\n'),
+    );
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
+    const entries = [...scope.entries()];
+    expect(
+      Object.fromEntries(entries.map(([name, resolution]) => [name, resolution.kind])),
+    ).toEqual({
+      Shared: 'compositeType',
+      String: 'model',
+      Address: 'compositeType',
+      Alias: 'namedType',
+      Role: 'block',
+      public: 'namespace',
+      app: 'namespace',
+      other: 'namespace',
+      pgvector: 'contributedNamespace',
+    });
+    expect(new Set(entries.map(([name]) => name)).size).toBe(entries.length);
+    for (const [name, resolution] of entries) expect(resolution).toEqual(scope.lookup(name));
+    expect(
+      entries.filter(([, resolution]) => resolution.kind === 'model').map(([name]) => name),
+    ).toEqual(['String']);
+    expect([...contributed.entries()].map(([name]) => name)).toEqual(['String', 'pgvector']);
+    for (const [name, resolution] of top.entries()) expect(resolution).toEqual(top.lookup(name));
+    expect([...documentScope(symbolTable, undefined).entries()].map(([name]) => name)).toEqual([
+      'Shared',
+      'Address',
+      'Alias',
+      'Role',
+      'public',
+      'app',
+      'other',
+    ]);
+  });
+
+  it('enumerates only qualified members, never lexical parents or siblings', () => {
+    const { top } = scopesFor(SCHEMA);
+    for (const [name, expected] of [
+      ['app', ['Item', 'Shared']],
+      ['pgvector', ['Vector']],
+    ] as const) {
+      const qualifier = top.lookup(name)!;
+      if (!isNamespaceLike(qualifier)) throw new Error('not a namespace');
+      const entries = [...memberEntries(qualifier)];
+      expect(entries.map(([member]) => member)).toEqual(expected);
+      for (const [member, resolution] of entries) {
+        expect(resolution).toEqual(lookupMember(qualifier, member));
+      }
+      expect(lookupMember(qualifier, 'String')).toBeUndefined();
+    }
+  });
+
+  it('does not mistake inherited record properties for visible symbols', () => {
+    const { symbolTable, top } = scopesFor('namespace app {\n type toString {\n id String\n}\n}');
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
+    expect(scope.lookup('toString')).toEqual(new Map(scope.entries()).get('toString'));
+    expect(scope.lookup('toString')?.kind).toBe('compositeType');
+    expect(scope.lookup('constructor')).toBeUndefined();
+    expect(top.lookup('toString')).toBeUndefined();
+    const qualifier = top.lookup('app')!;
+    if (!isNamespaceLike(qualifier)) throw new Error('not a namespace');
+    expect(lookupMember(qualifier, 'constructor')).toBeUndefined();
+  });
+});
+
+describe('a qualified reference is two steps', () => {
+  it('finds the qualifier then the member inside it', () => {
+    const { symbolTable, top } = scopesFor(SCHEMA);
+    const qualifier = top.lookup('app');
+
+    expect(qualifier).toEqual({
+      kind: 'namespace',
+      symbol: symbolTable.namespaces['app'],
+    });
+    if (qualifier === undefined || !isNamespaceLike(qualifier)) throw new Error('not a namespace');
+    expect(lookupMember(qualifier, 'Item')).toEqual({
+      kind: 'model',
+      symbol: symbolTable.namespaces['app']!.models['Item'],
+      namespace: symbolTable.namespaces['app'],
+    });
+    expect(lookupMember(qualifier, 'Missing')).toBeUndefined();
+  });
+
+  it('takes the same two steps through a contributed namespace', () => {
+    const { top } = scopesFor(SCHEMA);
+    const qualifier = top.lookup('pgvector');
+
+    expect(qualifier).toMatchObject({
+      kind: 'contributedNamespace',
+      symbol: { name: 'pgvector', path: ['pgvector'] },
+    });
+    if (qualifier === undefined || !isNamespaceLike(qualifier)) throw new Error('not a namespace');
+    expect(lookupMember(qualifier, 'Vector')).toMatchObject({
+      kind: 'contributedType',
+      symbol: { name: 'Vector', path: ['pgvector', 'Vector'] },
+    });
+  });
+
+  it('reports a qualifier that resolves to something else as not a namespace', () => {
+    const { top } = scopesFor(SCHEMA);
+    const qualifier = top.lookup('Shared');
+
+    expect(qualifier?.kind).toBe('model');
+    expect(qualifier === undefined ? undefined : isNamespaceLike(qualifier)).toBe(false);
+  });
+});

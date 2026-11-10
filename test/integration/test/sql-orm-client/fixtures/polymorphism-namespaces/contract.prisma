@@ -1,0 +1,100 @@
+// use prisma-8
+
+namespace a {
+  model Project {
+    id   Int    @id
+    name String
+
+    tasks Task[]
+
+    @@map("projects")
+  }
+
+  model Task {
+    id        Int    @id
+    title     String
+    type      String
+    projectId Int?   @map("project_id")
+
+    project Project? @relation(fields: [projectId], references: [id])
+
+    @@discriminator(type)
+    @@map("tasks")
+  }
+
+  model Bug {
+    severity String
+
+    @@base(Task, "bug")
+  }
+
+  model Feature {
+    priority Int
+
+    @@base(Task, "feature")
+    @@map("features")
+  }
+}
+
+namespace b {
+  model Owner {
+    id   Int    @id
+    name String
+
+    @@map("owners")
+  }
+
+  model Chore {
+    effort  Int
+    ownerId Int? @map("owner_id")
+
+    owner Owner? @relation(fields: [ownerId], references: [id])
+
+    @@base(a.Task, "chore")
+    @@map("tasks")
+  }
+
+  model Epic {
+    size Int
+
+    @@base(a.Task, "b-epic")
+    @@map("epics")
+  }
+
+  model Doc {
+    id   Int    @id
+    kind String
+
+    @@discriminator(kind)
+    @@map("docs")
+  }
+
+  model Memo {
+    body String
+
+    @@base(Doc, "memo")
+  }
+}
+
+namespace c {
+  model Epic {
+    size String
+
+    @@base(a.Task, "c-epic")
+    @@map("epics")
+  }
+
+  model Doc {
+    id   Int    @id
+    kind String
+
+    @@discriminator(kind)
+    @@map("docs")
+  }
+
+  model Note {
+    body String
+
+    @@base(Doc, "note")
+  }
+}

@@ -14,23 +14,14 @@ export { isRuntimeError, runtimeError } from '../shared/runtime-error';
  * - `'decode'` — abort fired during `decodeRow` / `decodeField`.
  * - `'stream'` — abort fired between rows or before any codec call
  *   (already-aborted at entry).
- * - `'beforeQuery'` / `'beforeExecute'` / `'afterQuery'` /
- *   `'afterExecute'` / `'onRow'` — abort fired on entry to or during
+ * - `'beforeEncode'` / `'onRow'` — abort fired on entry to or during
  *   the corresponding middleware phase
  *   (cooperative cancellation per the param-transform seam).
  */
 export const RUNTIME_ABORTED = 'RUNTIME.ABORTED' as const;
 
 /** Discriminator placed in `details.phase` of a `RUNTIME.ABORTED` envelope. */
-export type RuntimeAbortedPhase =
-  | 'encode'
-  | 'decode'
-  | 'stream'
-  | 'beforeQuery'
-  | 'beforeExecute'
-  | 'afterQuery'
-  | 'afterExecute'
-  | 'onRow';
+export type RuntimeAbortedPhase = 'encode' | 'decode' | 'stream' | 'beforeEncode' | 'onRow';
 
 /**
  * Construct a `RUNTIME.ABORTED` envelope. Phase distinguishes where the

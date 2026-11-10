@@ -7,10 +7,10 @@ Framework component types, authoring logic, control stack assembly, and emission
 ## What this package provides
 
 - **Component types** (`./components`): Base descriptor and instance interfaces for framework components (family, target, adapter, driver, extension), pack refs, and type renderer system
-- **Authoring types** (`./authoring`): Declarative authoring contribution types, template resolution, and validation for type constructors and field presets
-- **Codec base interface** (`./codec`): The cross-family `Codec` base type that SQL `Codec` and Mongo `MongoCodec` extend
+- **Authoring types** (`./authoring`): Declarative authoring contribution types, template resolution, and validation for type constructors, type aliases and type choices. A type choice (`kind: 'typeChoice'`) chooses a type constructor of its namespace from its option arguments, each of which (`kind: 'option'`) takes one of a list of bare names; the option kind exists only for type choice arguments: `resolveAuthoringTypeChoice` resolves a call, `typeChoiceArgumentsFromObject` reads the one object a TypeScript helper call writes into the choice's argument positions, `instantiateAuthoringTypeCall` instantiates a constructor or choice by name, and `assertTypeChoicesValid` refuses an unresolvable table at assembly (ADR 279). `findAuthoringTypeConstructorCall(namespace, output)` is the inverse of `instantiateAuthoringTypeConstructor`: the first call to a constructor in a namespace that produces a given codec, native type and type parameters. `assembleDataTypeSupport(components, dataTypeOfCodec)` builds the data types and authoring entries every contract source reads values with, refusing duplicates and value arguments whose data type is unregistered or unwritten; the control stack and the TypeScript builder both call it. `readWrittenValueIntoCodec` reads a written value, a list included, into a codec reference by the cast rule, which every family's enum members and `@@base` values go through; `applyDiscriminatorRule` decides whether a field can be a discriminator and which of its variants' values it accepts, and `describeDiscriminatorRefusal` words its refusals for PSL
+- **Codec base interface** (`./codec`): The cross-family `Codec` base type that SQL `Codec` and Mongo `MongoCodec` extend, plus the helpers targets declare data types and authoring entries with: shared casts, the number classifier, JSON text reading and printing, numeral text, and the date and time stored-form readers
 - **Control stack** (`./control`): Assembly functions that combine component descriptors into a unified `ControlStack` with derived state (codec imports, renderers, authoring contributions)
-- **Emission SPI** (`./emission`): Types for the emission pipeline — `TargetFamilyHook`, `ValidationContext`, `GenerateContractTypesOptions`, `TypeRenderEntry`, `TypeRenderer`, `ParameterizedCodecDescriptor`, and related types
+- **Emission SPI** (`./emission`): Types for the emission pipeline — `TargetFamilyHook`, `GenerateContractTypesOptions`, `TypeRenderEntry`, `TypeRenderer`, `ParameterizedCodecDescriptor`, and related types
 - **Execution types** (`./execution`): Execution-plane stack and instance interfaces
 - **Runtime SPI** (`./runtime`): Abstract `RuntimeCore<TPlan, TExec, TMiddleware>` base class, `RuntimeMiddleware` interface, and the canonical `runQueryWithMiddleware` and `runExecuteWithMiddleware` orchestrator helpers. Family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`) extend `RuntimeCore` directly per [ADR 204](../../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-tier%20runtime.md).
 
@@ -29,8 +29,8 @@ import { RuntimeCore, runQueryWithMiddleware, runExecuteWithMiddleware, type Run
 
 The base `Codec` interface lands on the seam between **query-time** methods (per-row, IO-relevant) and **build-time** methods (per-contract-load):
 
-- Query-time: `encode(value): Promise<TWire>` and `decode(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
-- Build-time: `encodeJson`, `decodeJson`, and the optional `renderOutputType` are **synchronous** so `family.deserializeContract` and client construction stay synchronous.
+- Query-time: `toWire(value): Promise<TWire>` and `fromWire(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
+- Build-time: `toDataTypeValue`, `fromDataTypeValue`, and the optional `renderOutputType` are **synchronous** so `family.deserializeContract` and client construction stay synchronous. `toDataTypeValue` and `fromDataTypeValue` convert between the application value and a `DataTypeValue` of the codec's data type, which reads and constructs every stored value ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#codecs)).
 
 There is no `runtime` / `kind` / equivalent async marker on the interface and no `TRuntime` generic. The runtime always awaits the query-time methods. See [ADR 204 — Single-Path Async Codec Runtime](../../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) for the full design.
 
@@ -47,8 +47,8 @@ export interface CodecCallContext {
 The internal `Codec` interface declares the parameter as required:
 
 ```ts
-encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+toWire(value: TInput, ctx: CodecCallContext): Promise<TWire>;
+fromWire(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
 ```
 
 Codec authors who write `(value) => …` continue to compile via TypeScript's bivariance for trailing parameters; nothing at the author surface changes.
@@ -57,12 +57,12 @@ Family layers extend the context where they have a per-call concept that doesn't
 
 ```ts
 // Sketch — codec authors extend `CodecImpl`; class methods receive `(value, ctx)`.
-async encode(v: string, ctx: CodecCallContext): Promise<EncryptedWire> {
+async toWire(v: string, ctx: CodecCallContext): Promise<EncryptedWire> {
   return kms.encrypt({ plaintext: v }, { signal: ctx.signal });
 }
 ```
 
-Aborts surface to the caller as `RUNTIME.ABORTED` with `details.phase ∈ { 'encode', 'decode', 'stream' }`. Codec bodies that ignore the signal complete in the background (cooperative cancellation). The `runtimeAborted(phase, cause?)` envelope helper and the `raceAgainstAbort(work, signal, phase)` race helper are exported from `@internal/framework-components/runtime`.
+Aborts surface to the caller as `RUNTIME.ABORTED` with `details.phase ∈ { 'encode', 'decode', 'stream' }`; `encode` is the phase of `toWire` and `decode` the phase of `fromWire`. Codec bodies that ignore the signal complete in the background (cooperative cancellation). The `runtimeAborted(phase, cause?)` envelope helper and the `raceAgainstAbort(work, signal, phase)` race helper are exported from `@internal/framework-components/runtime`.
 
 See [ADR 207 — Codec call context: per-query `AbortSignal` and column metadata](../../../../docs/architecture%20docs/adrs/ADR%20207%20-%20Codec%20call%20context%20per-query%20AbortSignal%20and%20column%20metadata.md) for the full design.
 
@@ -74,9 +74,9 @@ Codec metadata, parameterized-codec registration, and runtime materialization li
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
 ```
 
-- `CodecDescriptor<P = void>` carries `dataType`, `codecId`, `traits`, `targetTypes`, `meta`, `paramsSchema: StandardSchemaV1<P> | undefined`, optional `renderOutputType`, and a curried `factory: (P) => (CodecInstanceContext) => Codec`. `dataType` is the id of the data type the codec represents; assembly refuses a codec whose data type no component registers (see [ADR 254 — Data types and casts](../../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). A codec whose data type depends on the target that adapts it is declared as a `CodecDescriptorTemplate<P>`, the same shape without `dataType`, and the target supplies the id when it adapts the template. Non-parameterized codecs use `P = void`, set `paramsSchema` to `undefined`, and use a constant factory. Such a codec rejects any `typeParams`. Parameterized codecs use a non-empty `P` (e.g. `{ length: number }` for pgvector).
+- `CodecDescriptor<P = void>` carries `dataType`, `codecId`, `traits`, `meta`, `paramsSchema: StandardSchemaV1<P> | undefined`, `renderOutputType` (only for an output type no type can compute from the params, such as an arktype schema's text), and a curried `factory: (P) => (CodecInstanceContext) => Codec`. `dataType` is the id of the data type the codec represents; assembly refuses a codec whose data type no component registers (see [ADR 254 — Data types and casts](../../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). A codec whose data type depends on the target that adapts it is declared as a `CodecDescriptorTemplate<P>`, the same shape without `dataType`, and the target supplies the id when it adapts the template. Non-parameterized codecs use `P = void`, set `paramsSchema` to `undefined`, and use a constant factory. Such a codec rejects any `typeParams`. Parameterized codecs use a non-empty `P` (e.g. `{ length: number }` for pgvector).
 - `CodecInstanceContext` (family-agnostic, `{ name }` only) is supplied by the runtime when materializing a per-instance codec. Pack authors close over it inside the factory; they never construct it. This is the **per-materialization** context, sibling to the **per-call** `CodecCallContext` documented above. Family-specific extensions augment it — the SQL family ships `SqlCodecInstanceContext extends CodecInstanceContext` in `@internal/sql-relational-core/ast`, adding `usedAt: ReadonlyArray<{ table; column }>` for SQL-domain codecs that need column-set metadata.
-- Contributors expose their descriptors through `ComponentMetadata.types.codecTypes.codecDescriptors` and the unified `codecs: () => ReadonlyArray<CodecDescriptor>` slot. `extractCodecLookup` reads `targetTypes` / `meta` / `renderOutputType` directly off the descriptors — there is no parameterized vs. non-parameterized split and no synthesis bridge.
+- Contributors expose their descriptors through `ComponentMetadata.types.codecTypes.codecDescriptors` and the unified `codecs: () => ReadonlyArray<CodecDescriptor>` slot. `extractCodecLookup` reads `meta` / `renderOutputType` directly off the descriptors — there is no parameterized vs. non-parameterized split and no synthesis bridge.
 
 `paramsSchema` is typed as Standard Schema (`StandardSchemaV1<P>`), not arktype-specific. arktype `Type`s satisfy the shape via their `~standard` getter, so existing arktype-typed descriptors satisfy the new shape transparently while `framework-components` itself takes no dependency on arktype.
 

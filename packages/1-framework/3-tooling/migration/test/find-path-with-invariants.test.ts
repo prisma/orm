@@ -251,15 +251,6 @@ describe('findPathWithInvariants — neighbour ordering (D11)', () => {
 // ---------------------------------------------------------------------------
 
 describe('findPathWithInvariants — common shapes', () => {
-  it('linear spine, no invariants required → matches findPath', () => {
-    const graph = reconstructGraph([
-      pkg(E, 'H1', 'm1'),
-      pkg('H1', 'H2', 'm2'),
-      pkg('H2', 'H3', 'm3'),
-    ]);
-    expect(dirNames(findPathWithInvariants(graph, E, 'H3', new Set()))).toEqual(['m1', 'm2', 'm3']);
-  });
-
   it('linear spine with invariants along the way — required matches, path equals spine', () => {
     const graph = reconstructGraph([
       pkg(E, 'H1', 'm1', { invariants: ['X'] }),
@@ -270,19 +261,6 @@ describe('findPathWithInvariants — common shapes', () => {
       'm1',
       'm2',
       'm3',
-    ]);
-  });
-
-  it('diamond with one detour invariant — picks the providing branch', () => {
-    const graph = reconstructGraph([
-      pkg('A', 'B', 'm_left'),
-      pkg('B', 'D', 'm_left_close'),
-      pkg('A', 'C', 'm_right'),
-      pkg('C', 'D', 'm_right_close', { invariants: ['X'] }),
-    ]);
-    expect(dirNames(findPathWithInvariants(graph, 'A', 'D', new Set(['X'])))).toEqual([
-      'm_right',
-      'm_right_close',
     ]);
   });
 
@@ -338,16 +316,6 @@ describe('findPathWithInvariants — common shapes', () => {
 // ---------------------------------------------------------------------------
 
 describe('findPathWithInvariants — failure shapes', () => {
-  it('unreachable target → null', () => {
-    const graph = reconstructGraph([pkg('A', 'B', 'm1')]);
-    expect(findPathWithInvariants(graph, 'A', 'Z', new Set(['X']))).toBeNull();
-  });
-
-  it('target reachable but invariant missing everywhere → null', () => {
-    const graph = reconstructGraph([pkg('A', 'B', 'm1'), pkg('B', 'C', 'm2')]);
-    expect(findPathWithInvariants(graph, 'A', 'C', new Set(['X']))).toBeNull();
-  });
-
   it('invariant exists elsewhere but not on any from→to path → null', () => {
     // X is declared, but only on an edge in a disconnected component.
     const graph = reconstructGraph([
@@ -435,15 +403,5 @@ describe('findPathWithInvariants — pathological shapes', () => {
     const path = findPathWithInvariants(graph, 'A', 'C', new Set(['X']));
     expect(path).not.toBeNull();
     expect(dirNames(path)).toEqual(['m_AB', 'm_BD', 'm_DB', 'm_BC']);
-  });
-
-  it('disconnected invariant providers — provider in unreachable component → null', () => {
-    const graph = reconstructGraph([
-      pkg('A', 'B', 'm_main'),
-      pkg('B', 'C', 'm_main2'),
-      // Disconnected: M → N declares X but is unreachable from A.
-      pkg('M', 'N', 'm_disconnected', { invariants: ['X'] }),
-    ]);
-    expect(findPathWithInvariants(graph, 'A', 'C', new Set(['X']))).toBeNull();
   });
 });

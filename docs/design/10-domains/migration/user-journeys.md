@@ -44,7 +44,7 @@ contract emit
 db update               # off-graph reconciliation; rebuild from desired state
 ```
 
-`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration and does not walk the graph. It tears down and rebuilds the database to satisfy the current contract, and on the default dev URL it advances the `db` ref to record the contract the dev database now satisfies — the checkpoint `migration plan` chains from (see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for anything reaching production (no audit trail; destructive).
+`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration and does not walk the graph. It compares the live database with the contract and applies the difference, asking before any operation that would lose data, and on the default dev URL it advances the `db` ref to record the contract the dev database now satisfies — the checkpoint `migration plan` chains from (see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for a database that changes only through migrations, such as production (it leaves no migration behind).
 
 A rewind during iteration is also `db update --to <contract>` — same verb, parameterised by target.
 
@@ -88,7 +88,7 @@ migrate --to <ref>      # walk the graph from marker to the ref's contract,
 
 This is the dominant CD operation. The verb is dead-simple by design: the *only* question the verb answers is "what state should the DB be in?", and the answer is a ref name. The directional vocabulary (`--to`) is reserved for `migrate`; signing the marker is a static claim and uses different vocabulary ([see `db sign`](./README.md#verbs)).
 
-`migrate` is forward-only. It walks the directed graph from the current marker to the ref. Backward motion is not a `migrate` mode — that's `db update --to <contract>` (off-graph rebuild, destructive, dev-only).
+`migrate` is forward-only. It walks the directed graph from the current marker to the ref. Backward motion is not a `migrate` mode — that's `db update --to <contract>` (off-graph reconciliation, which asks before losing data).
 
 **Exercised by:** `schema-evolution-migrations.e2e.test.ts`, `multi-step-migration.e2e.test.ts`, every journey that lands a real schema change.
 

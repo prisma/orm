@@ -1,6 +1,6 @@
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
-import { notOk, ok, type Result } from '@internal/utils/result';
+import { and, notOk, ok, okVoid, type Result } from '@internal/utils/result';
 import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
 import { nodePslSpan } from '../resolve';
 import type { FieldAttributeAst, ModelAttributeAst } from '../syntax/ast/attributes';
@@ -16,11 +16,11 @@ import type {
   PositionalParam,
 } from './types';
 
-// The positional/named argument-binding for an attribute or a function call. `name` labels the
+// The positional/named argument-binding for an attribute or a function call. `label` names the
 // callee in binding diagnostics (`Attribute "<name>" …`); `span` anchors the arity diagnostics
 // (too-many / missing) that have no per-argument node to point at.
 export interface ArgBindingSpec<Ctx extends AttributeCtx> {
-  readonly name: string;
+  readonly label: string;
   readonly positional: readonly PositionalParam<unknown, Ctx>[];
   readonly named: Readonly<Record<string, Param<unknown, Ctx>>>;
 }
@@ -32,7 +32,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
   span: PslSpan,
   sourceNode: SyntaxNode,
 ): Result<Record<string, unknown>, readonly PslDiagnostic[]> {
-  const diagnostics: PslDiagnostic[] = [];
+  let outcome: Result<void, readonly PslDiagnostic[]> = okVoid();
 
   const output: Record<string, unknown> = {};
   const seen = new Set<string>();
@@ -48,13 +48,16 @@ export function interpretArgs<Ctx extends AttributeCtx>(
       const posParam = spec.positional[positionalSlot];
       if (posParam === undefined) {
         if (!reportedExcess) {
-          diagnostics.push(
-            diagnostic(
-              `Attribute "${spec.name}" received too many positional arguments`,
-              ctx,
-              span,
-              sourceNode,
-            ),
+          outcome = and(
+            outcome,
+            notOk([
+              diagnostic(
+                `${spec.label} received too many positional arguments`,
+                ctx,
+                span,
+                sourceNode,
+              ),
+            ]),
           );
           reportedExcess = true;
         }
@@ -66,13 +69,16 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     } else {
       const namedParam = Object.hasOwn(spec.named, name) ? spec.named[name] : undefined;
       if (namedParam === undefined) {
-        diagnostics.push(
-          diagnostic(
-            `Attribute "${spec.name}" received unknown argument "${name}"`,
-            ctx,
-            nodePslSpan(arg.syntax, ctx.sources),
-            arg.syntax,
-          ),
+        outcome = and(
+          outcome,
+          notOk([
+            diagnostic(
+              `${spec.label} received unknown argument "${name}"`,
+              ctx,
+              nodePslSpan(arg.syntax, ctx.sources),
+              arg.syntax,
+            ),
+          ]),
         );
         continue;
       }
@@ -81,19 +87,23 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     }
 
     if (seen.has(key)) {
-      diagnostics.push(
-        diagnostic(
-          `Attribute "${spec.name}" received duplicate argument "${key}"`,
-          ctx,
-          nodePslSpan(arg.syntax, ctx.sources),
-          arg.syntax,
-        ),
+      outcome = and(
+        outcome,
+        notOk([
+          diagnostic(
+            `${spec.label} received duplicate argument "${key}"`,
+            ctx,
+            nodePslSpan(arg.syntax, ctx.sources),
+            arg.syntax,
+          ),
+        ]),
       );
       continue;
     }
     seen.add(key);
-    const result = parseArgValue(arg, param, ctx, diagnostics);
+    const result = parseArgValue(arg, param, ctx);
     if (result.ok) output[key] = result.value;
+    outcome = and(outcome, result);
   }
 
   const finalized = new Set<string>();
@@ -110,13 +120,11 @@ export function interpretArgs<Ctx extends AttributeCtx>(
       if (effective.hasDefault) output[key] = effective.defaultValue;
       return;
     }
-    diagnostics.push(
-      diagnostic(
-        `Attribute "${spec.name}" is missing required argument "${key}"`,
-        ctx,
-        span,
-        sourceNode,
-      ),
+    outcome = and(
+      outcome,
+      notOk([
+        diagnostic(`${spec.label} is missing required argument "${key}"`, ctx, span, sourceNode),
+      ]),
     );
   };
 
@@ -128,9 +136,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     finalizeAbsentKey(key, undefined, spec.named[key]?.type);
   }
 
-  if (diagnostics.length > 0) {
-    return notOk<readonly PslDiagnostic[]>(diagnostics);
-  }
+  if (!outcome.ok) return notOk<readonly PslDiagnostic[]>(outcome.failure);
   return ok(output);
 }
 
@@ -142,7 +148,7 @@ export function interpretAttribute<Out, Ctx extends AttributeCtx>(
   const attributeSpan = nodePslSpan(attrNode.syntax, ctx.sources);
   const bound = interpretArgs(
     attrNode.argList()?.args() ?? [],
-    spec,
+    { ...spec, label: `Attribute "${spec.name}"` },
     ctx,
     attributeSpan,
     attrNode.syntax,
@@ -166,27 +172,22 @@ function parseArgValue<Ctx extends AttributeCtx>(
   arg: AttributeArgAst,
   argType: ArgType<unknown, Ctx>,
   ctx: Ctx,
-  diagnostics: PslDiagnostic[],
 ): Result<unknown, readonly PslDiagnostic[]> {
   const value = arg.value();
   if (value === undefined) {
-    const missing = diagnostic(
-      'Attribute argument is missing a value',
-      ctx,
-      nodePslSpan(arg.syntax, ctx.sources),
-      arg.syntax,
-    );
-    diagnostics.push(missing);
-    return notOk<readonly PslDiagnostic[]>([missing]);
+    return notOk<readonly PslDiagnostic[]>([
+      diagnostic(
+        'Attribute argument is missing a value',
+        ctx,
+        nodePslSpan(arg.syntax, ctx.sources),
+        arg.syntax,
+      ),
+    ]);
   }
-  const result = argType.parse(value, ctx);
-  if (!result.ok) {
-    for (const failure of result.failure) diagnostics.push(failure);
-  }
-  return result;
+  return argType.parse(value, ctx);
 }
 
-function isOptionalArgType<Ctx extends AttributeCtx>(
+export function isOptionalArgType<Ctx extends AttributeCtx>(
   param: ArgType<unknown, Ctx>,
 ): param is OptionalArgType<unknown, Ctx> {
   return 'optional' in param && param.optional === true;

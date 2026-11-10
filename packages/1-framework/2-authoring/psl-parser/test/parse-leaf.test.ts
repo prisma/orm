@@ -33,19 +33,18 @@ function greenText(element: GreenElement): string {
 
 describe('offset tracking', () => {
   it('maps a diagnostic range through interspersed trivia using the running offset', () => {
-    // The second `.` is the offending separator; a newline precedes it, so its
+    // The second `.` is the offending separator; spaces precede it, so its
     // start offset is only correct if every consumed token (the leading
     // segments and that trivia) advanced the running offset counter.
-    const source = 'a.b\n.c';
+    const source = 'a.b  .c';
     const { diagnostics, cursor } = parseTypeAnnotationTree(source);
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]!.code).toBe('PSL_INVALID_QUALIFIED_NAME');
     expect(highlight(cursor.sourceFile, diagnostics[0]!.range)).toMatchInlineSnapshot(`
       "
-      a.b
-      .c
-      ~
+      a.b  .c
+           ~
       "
     `);
   });
@@ -110,7 +109,7 @@ function parse(source: string, run: (cursor: Cursor) => GreenNode) {
 function parseTypeAnnotationTree(source: string) {
   const cursor = new Cursor('test.psl', source);
   cursor.startNode('Document');
-  parseTypeAnnotation(cursor);
+  parseTypeAnnotation(cursor, 'PSL_INVALID_MODEL_MEMBER');
   const root = cursor.finishNode();
   const node = root.children[0];
   if (node === undefined || node.type !== 'node') {
@@ -494,6 +493,58 @@ describe('parseTypeAnnotation well-formed', () => {
     expect(greenText(node)).toBe(source);
     expect(diagnostics).toHaveLength(0);
   });
+
+  it('parses a list-nullable suffix', () => {
+    const source = 'String[]?';
+    const { node, diagnostics } = parseTypeAnnotationTree(source);
+
+    expect(printTree(node)).toMatchInlineSnapshot(`
+      "TypeAnnotation
+        QualifiedName
+          Identifier
+            Ident "String"
+        LBracket "["
+        RBracket "]"
+        Question "?""
+    `);
+    expect(greenText(node)).toBe(source);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it('parses an element-nullable list with a `?` before the brackets', () => {
+    const source = 'String?[]';
+    const { node, diagnostics } = parseTypeAnnotationTree(source);
+
+    expect(printTree(node)).toMatchInlineSnapshot(`
+      "TypeAnnotation
+        QualifiedName
+          Identifier
+            Ident "String"
+        Question "?"
+        LBracket "["
+        RBracket "]""
+    `);
+    expect(greenText(node)).toBe(source);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it('parses a both-nullable list with a `?` on either side of the brackets', () => {
+    const source = 'String?[]?';
+    const { node, diagnostics } = parseTypeAnnotationTree(source);
+
+    expect(printTree(node)).toMatchInlineSnapshot(`
+      "TypeAnnotation
+        QualifiedName
+          Identifier
+            Ident "String"
+        Question "?"
+        LBracket "["
+        RBracket "]"
+        Question "?""
+    `);
+    expect(greenText(node)).toBe(source);
+    expect(diagnostics).toHaveLength(0);
+  });
 });
 
 describe('parseTypeAnnotation fault tolerance', () => {
@@ -550,6 +601,32 @@ describe('parseTypeAnnotation fault tolerance', () => {
     expect(greenText(node)).toBe(source);
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]!.code).toBe('PSL_INVALID_QUALIFIED_NAME');
+  });
+
+  it('flags a doubled `?` with no list between them but still round-trips', () => {
+    const source = 'String??';
+    const { node, diagnostics, cursor } = parseTypeAnnotationTree(source);
+
+    expect(node.kind).toBe('TypeAnnotation');
+    expect(greenText(node)).toBe(source);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.code).toBe('PSL_INVALID_MODEL_MEMBER');
+    expect(highlight(cursor.sourceFile, diagnostics[0]!.range)).toMatchInlineSnapshot(`
+      "
+      String??
+             ~
+      "
+    `);
+  });
+
+  it('flags a `?` trailing a both-nullable list (`Foo?[]??`)', () => {
+    const source = 'String?[]??';
+    const { node, diagnostics } = parseTypeAnnotationTree(source);
+
+    expect(node.kind).toBe('TypeAnnotation');
+    expect(greenText(node)).toBe(source);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.code).toBe('PSL_INVALID_MODEL_MEMBER');
   });
 });
 
@@ -799,6 +876,14 @@ function parseStringValue(literal: string): string | undefined {
 }
 
 describe('StringLiteralExprAst.value() escape decoding', () => {
+  it.each([
+    ['"\\/"', '/'],
+    ['"\\b"', '\b'],
+    ['"\\f"', '\f'],
+  ])('decodes JSON escape %s', (literal, value) => {
+    expect(parseStringValue(literal)).toBe(value);
+  });
+
   it('decodes \\xHH to the matching code unit', () => {
     expect(parseStringValue('"\\x41"')).toBe('A');
   });
@@ -848,6 +933,20 @@ function parseNumberExpr(source: string) {
   const { node } = parse(source, (c) => parseExpression(c) as GreenNode);
   return { node, expr: NumberLiteralExprAst.cast(createSyntaxTree(node)) };
 }
+
+describe('NumberLiteralExprAst for a number written with a plus sign', () => {
+  it.each([
+    ['+1', 1],
+    ['+1.5', 1.5],
+    ['+007.50', 7.5],
+  ])('reads %s with its value and keeps the text as written', (source, value) => {
+    const { node, expr } = parseNumberExpr(source);
+
+    expect(node.kind).toBe('NumberLiteralExpr');
+    expect(expr?.value()).toBe(value);
+    expect(expr?.token()?.text).toBe(source);
+  });
+});
 
 describe('NumberLiteralExprAst.value() for NaN / Infinity', () => {
   it('parses Infinity as a NumberLiteralExpr whose value() is Infinity', () => {

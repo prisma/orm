@@ -43,55 +43,13 @@ describe('ports/prisma/functional/composites/list/create', () => {
             },
           ],
         });
-        expect(comment._id).toEqual(expect.any(String));
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set shorthand (same as set for ORM — no prisma set wrapper)',
-    () =>
-      withComposites(async ({ db }) => {
-        const comment = await db.comment_required_list.create({
-          country: 'France',
-          contents: [
-            {
-              text: 'Hello World',
-              upvotes: [{ vote: true, userId: '10' }],
-            },
-          ],
-        });
-
-        expect(comment).toMatchObject({
-          country: 'France',
-          contents: [
-            {
-              text: 'Hello World',
-              upvotes: [{ userId: '10', vote: true }],
-            },
-          ],
-        });
-        expect(comment._id).toEqual(expect.any(String));
+        expect(comment.id).toEqual(expect.any(String));
       }),
     timeouts.spinUpMongoMemoryServer,
   );
 
   it(
     'set null',
-    () =>
-      withComposites(async ({ db }) => {
-        const comment = db.comment_required_list.create({
-          country: 'France',
-          // @ts-expect-error required `contents` list cannot be null
-          contents: null,
-        });
-        await expect(comment).rejects.toThrow();
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set null shorthand',
     () =>
       withComposites(async ({ db }) => {
         const comment = db.comment_required_list.create({
@@ -133,7 +91,7 @@ describe('ports/prisma/functional/composites/list/create', () => {
             },
           ],
         });
-        expect(comment._id).toEqual(expect.any(String));
+        expect(comment.id).toEqual(expect.any(String));
       }),
     timeouts.spinUpMongoMemoryServer,
   );

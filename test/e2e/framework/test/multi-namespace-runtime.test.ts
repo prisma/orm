@@ -21,13 +21,15 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createControlClientForTests, withE2eMigrationsDir } from './utils';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 const postgresContractSerializer = new PostgresContractSerializer();
 
 function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
   const userTable = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] as const },
     uniques: [],
@@ -37,9 +39,9 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
 
   const noteTable = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      author_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      author_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
     },
     primaryKey: { columns: ['id'] as const },
     uniques: [],
@@ -56,8 +58,6 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           tableName: 'user',
           columns: ['id'],
         },
-        constraint: true,
-        index: false,
       },
     ],
   };
@@ -93,8 +93,16 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           models: {
             User: {
               fields: {
-                id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-                name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                id: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
+                name: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                },
               },
               relations: {},
               storage: {
@@ -109,9 +117,21 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
           models: {
             Note: {
               fields: {
-                id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-                body: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-                authorId: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+                id: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
+                body: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                },
+                authorId: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
               },
               relations: {
                 author: {
@@ -153,12 +173,13 @@ describe('multi-namespace runtime', () => {
         try {
           await withE2eMigrationsDir(async (migrationsDir) => {
             const init = await controlClient.dbInit({
+              invocation: TEST_INVOCATION,
               contract: contractJson,
               mode: 'apply',
               migrationsDir,
             });
             if (!init.ok) {
-              throw new Error(`dbInit failed: ${init.failure.summary}`);
+              throw new Error(`dbInit failed: ${init.failure.message}`);
             }
           });
         } finally {

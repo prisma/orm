@@ -13,6 +13,7 @@ export default {
   extensions: [],
   contract: {
     source: {
+      format: 'typescript',
       load: async () => ({ ok: true, value: contract }),
     },
     output: 'output/contract.json',

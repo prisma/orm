@@ -1,0 +1,471 @@
+import type { JsonValue } from '@internal/contract/types';
+import type {
+  CodecInstanceContext,
+  DataType,
+  DataTypeValue,
+} from '@internal/framework-components/codec';
+import { timeouts } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import {
+  pgBitDescriptor,
+  pgBoolDescriptor,
+  pgCharDescriptor,
+  pgEnumDescriptor,
+  pgFloat4Descriptor,
+  pgFloat8Descriptor,
+  pgFloatDescriptor,
+  pgInetDescriptor,
+  pgInt2Descriptor,
+  pgInt4Descriptor,
+  pgIntDescriptor,
+  pgNumericDescriptor,
+  pgTextArrayDescriptor,
+  pgTextDescriptor,
+  pgTimetzDescriptor,
+  pgTsqueryDescriptor,
+  pgUuidDescriptor,
+  pgVarbitDescriptor,
+  pgVarcharDescriptor,
+  postgresSqlCharDescriptor,
+  postgresSqlIntDescriptor,
+  postgresSqlVarcharDescriptor,
+} from '../src/core/codecs';
+import {
+  pgDateTemporalDescriptor,
+  pgTimestampTemporalDescriptor,
+  pgTimestamptzTemporalDescriptor,
+  pgTimeTemporalDescriptor,
+} from '../src/core/temporal-codecs';
+import {
+  pgDateStringDescriptor,
+  pgTimeStringDescriptor,
+  pgTimestampStringDescriptor,
+  pgTimestamptzStringDescriptor,
+} from '../src/core/temporal-string-codecs';
+import { fromContractJson, toContractJson } from './contract-json';
+
+const ctx: CodecInstanceContext = { name: 'decode-json-forms' };
+
+interface ContractJsonCase {
+  readonly codec: {
+    readonly id: string;
+    readonly dataType: DataType;
+    fromDataTypeValue(value: DataTypeValue): unknown;
+  };
+  readonly params?: Readonly<Record<string, unknown>>;
+  /** The JSON PostgreSQL produces for the type (`to_json`, `json_agg`) and what the codec's `toDataTypeValue` writes. */
+  readonly accepts: readonly JsonValue[];
+  readonly rejects: readonly JsonValue[];
+}
+
+// The accepted forms are what PostgreSQL 17 (PGlite) wrote for each type, recorded with `to_json`, `json_build_object` and `json_agg`.
+const cases: readonly ContractJsonCase[] = [
+  {
+    codec: pgTextDescriptor.factory()(ctx),
+    accepts: ['hello', ''],
+    rejects: [1, true, null, [], {}],
+  },
+  {
+    codec: pgEnumDescriptor.factory({ typeName: 'mood' })(ctx),
+    params: { typeName: 'mood' },
+    accepts: ['happy'],
+    rejects: [1, false, null],
+  },
+  {
+    codec: pgInt4Descriptor.factory()(ctx),
+    accepts: [42, -2147483648, 2147483647, 0],
+    rejects: ['42', 1.5, 2147483648, -2147483649, true, null],
+  },
+  {
+    codec: pgInt2Descriptor.factory()(ctx),
+    accepts: [7, -32768, 32767],
+    rejects: ['7', 1.5, 32768, -32769, null],
+  },
+  ...[pgFloat8Descriptor, pgFloat4Descriptor, pgFloatDescriptor].map((descriptor) => ({
+    codec: descriptor.factory()(ctx),
+    accepts: [1.5, -2, 0, 'NaN', 'Infinity', '-Infinity'],
+    rejects: ['1.5', 'nan', true, null, []],
+  })),
+  {
+    codec: pgFloat4Descriptor.factory()(ctx),
+    accepts: [3.4e38, -3.4e38, 1e-40, -0],
+    rejects: [1e300, 3.5e38, -3.5e38, 1e-50],
+  },
+  {
+    codec: postgresSqlIntDescriptor.factory()(ctx),
+    accepts: [2147483647, -2147483648],
+    rejects: [2147483648, 3000000000, -2147483649],
+  },
+  ...[pgCharDescriptor, postgresSqlCharDescriptor].flatMap((descriptor) => [
+    {
+      codec: descriptor.factory({ length: 3 })(ctx),
+      params: { length: 3 },
+      accepts: ['abc', 'ab', '\u{1F600}\u{1F600}\u{1F600}'],
+      rejects: ['abcd', ' abc', 'abc  ', 'ab ', 1, null],
+    },
+    { codec: descriptor.factory({})(ctx), accepts: ['a', ''], rejects: ['ab', 'a  '] },
+  ]),
+  ...[pgVarcharDescriptor, postgresSqlVarcharDescriptor].flatMap((descriptor) => [
+    {
+      codec: descriptor.factory({ length: 3 })(ctx),
+      params: { length: 3 },
+      accepts: ['abc', '', '\u{1F600}\u{1F600}\u{1F600}'],
+      rejects: ['abcd', 'abc ', 1, null],
+    },
+    { codec: descriptor.factory({})(ctx), accepts: ['a'.repeat(1000)], rejects: [1] },
+  ]),
+  {
+    codec: pgBoolDescriptor.factory()(ctx),
+    accepts: [true, false],
+    rejects: ['true', 1, 0, null],
+  },
+  {
+    codec: pgBitDescriptor.factory({})(ctx),
+    accepts: ['1', '0'],
+    rejects: [1, '2', 'a', '01', '', null],
+  },
+  {
+    codec: pgBitDescriptor.factory({ length: 4 })(ctx),
+    params: { length: 4 },
+    accepts: ['1010'],
+    rejects: ['101', '10101'],
+  },
+  {
+    codec: pgVarbitDescriptor.factory({ length: 4 })(ctx),
+    params: { length: 4 },
+    accepts: ['1010', '1', ''],
+    rejects: ['10101'],
+  },
+  {
+    codec: pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+    params: { precision: 5, scale: 2 },
+    accepts: ['123.45', '-999.99', '1.50', '0.00', '0.01', 'NaN'],
+    rejects: [
+      '1.5',
+      '0',
+      '1234.5',
+      '1000',
+      '1.555',
+      '0.001',
+      'Infinity',
+      '-Infinity',
+      '1e3',
+      '+1',
+      'abc',
+    ],
+  },
+  {
+    codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
+    params: { precision: 3 },
+    accepts: ['999', '-999', '7'],
+    rejects: ['1000', '1.5', '007', '-0'],
+  },
+  {
+    codec: pgNumericDescriptor.factory({})(ctx),
+    accepts: [
+      '123456789012345678901234567890.123',
+      'Infinity',
+      'NaN',
+      '0',
+      '0.00',
+      '-0.10',
+      '1.50',
+    ],
+    rejects: ['1e3', 'abc', '', '01.5', '00', '-0', '-0.00', '-007.50'],
+  },
+  {
+    codec: pgIntDescriptor.factory()(ctx),
+    accepts: [2147483647, -2147483648],
+    rejects: [2147483648, 3000000000, -2147483649],
+  },
+  {
+    codec: pgVarbitDescriptor.factory({})(ctx),
+    accepts: ['1010', ''],
+    rejects: [1010, '10a1', null],
+  },
+  {
+    codec: pgUuidDescriptor.factory()(ctx),
+    accepts: ['123e4567-e89b-12d3-a456-426614174000'],
+    rejects: [
+      1,
+      'not-a-uuid',
+      '123e4567-e89b-12d3-a456-42661417400',
+      '123E4567-E89B-12D3-A456-426614174000',
+      '123e4567e89b12d3a456426614174000',
+      '{123e4567-e89b-12d3-a456-426614174000}',
+      '123e-4567-e89b-12d3-a456-4266-1417-4000',
+      null,
+    ],
+  },
+  {
+    codec: pgInetDescriptor.factory()(ctx),
+    accepts: ['192.168.0.1', '::1', '10.0.0.0/8', '::ffff:10.0.0.1', '2001:db8::1/64'],
+    rejects: [
+      192,
+      null,
+      '10.0.0.1/32',
+      '::1/128',
+      '::FFFF:10.0.0.1',
+      '2001:0db8::1',
+      '0:0:0:0:0:0:0:1',
+      '010.0.0.1',
+      'not an address',
+      '',
+    ],
+  },
+  {
+    codec: pgTsqueryDescriptor.factory()(ctx),
+    accepts: ["'zebra' & !'graze'"],
+    rejects: [1, null],
+  },
+  {
+    codec: pgTextArrayDescriptor.factory()(ctx),
+    accepts: [['a', 'b'], [], ['a', null]],
+    rejects: ['a', [1], [true], null, {}],
+  },
+  // A date and time type reads only its stored form (ADR 254, "Date and time types"): ISO 8601 with a
+  // four-digit or signed six-digit year, a T, no trailing zeros in a fraction and Z for UTC. The text
+  // PostgreSQL prints is a wire value, which the codec's fromWire reads.
+  {
+    codec: pgDateStringDescriptor.factory()(ctx),
+    accepts: [
+      '2026-01-02',
+      'infinity',
+      '-infinity',
+      '-000043-03-15',
+      '0000-01-01',
+      '+010000-01-01',
+      '+275760-09-13',
+    ],
+    rejects: [
+      20260102,
+      null,
+      'not a date',
+      '2024-02-30',
+      '2024-13-01',
+      '2024-1-1',
+      '0000-01-01 BC',
+      '-000043-03-15 BC',
+      '0044-03-15 BC',
+      '10000-01-01',
+      '5874897-12-31',
+      '2024-01-01 12:00:00',
+      '12:00:00',
+      'Infinity',
+    ],
+  },
+  {
+    codec: pgTimestampStringDescriptor.factory({})(ctx),
+    accepts: [
+      '2026-01-02T03:04:05.123456',
+      '2024-01-01T12:00:00',
+      '2024-01-01T12:34:56.5',
+      'infinity',
+      '-infinity',
+      '-000043-03-15T12:00:00',
+      '+010000-01-01T00:00:00',
+    ],
+    rejects: [
+      1,
+      null,
+      'not a date',
+      '2024-01-01',
+      '2026-01-02 03:04:05.123456',
+      '2024-01-01T12:34:56.50',
+      '0044-03-15 12:00:00 BC',
+      '294276-12-31 23:59:59',
+      '2024-01-01 12:00:00+00',
+      '2024-01-01 24:00:00',
+      '2024-02-30 12:00:00',
+      '2024-01-01 12:00',
+      '2024-01-01 12:00:00.1234567',
+    ],
+  },
+  {
+    codec: pgTimestamptzStringDescriptor.factory({})(ctx),
+    accepts: [
+      '2024-01-01T12:00:00Z',
+      '2026-01-02T03:04:05.123456Z',
+      'infinity',
+      '-infinity',
+      '-000043-03-15T12:00:00Z',
+    ],
+    rejects: [
+      1,
+      null,
+      'not a date',
+      '2026-01-02 03:04:05.123456+00',
+      '2024-01-01T12:00:00+00:00',
+      '2024-01-01 13:00:00+01',
+      '0044-03-15 12:00:00+00 BC',
+      '2024-01-01 12:00:00',
+      '2024-01-01',
+      '2024-02-30 12:00:00+00',
+      '2024-01-01 12:00:00+16',
+    ],
+  },
+  {
+    codec: pgTimeStringDescriptor.factory({})(ctx),
+    accepts: ['03:04:05.123456', '00:00:00', '12:34:56', '23:59:59.999999', '12:00:00.5'],
+    rejects: [
+      1,
+      null,
+      'noon',
+      '24:00:00',
+      '12:34:56.10',
+      '25:00:00',
+      '24:00:00.5',
+      '24:00:01',
+      '12:60:00',
+      '12:00',
+      '12:00:00+00',
+      '2024-01-01 12:00:00',
+    ],
+  },
+  {
+    codec: pgTimetzDescriptor.factory({})(ctx),
+    accepts: [
+      '12:00:00Z',
+      '12:00:00+02:00',
+      '12:00:00+01:30:15',
+      '12:00:00-15:59',
+      '12:34:56.5+05:45',
+    ],
+    rejects: [
+      1,
+      null,
+      'noon',
+      '03:04:05+02',
+      '03:04:05+00',
+      '24:00:00+00',
+      '12:00:00',
+      '12:00:00+16:00',
+      '25:00:00+00',
+      '2024-01-01 12:00:00+00',
+    ],
+  },
+  {
+    codec: pgDateTemporalDescriptor.factory()(ctx),
+    accepts: ['2026-01-02'],
+    rejects: [1, null, '0044-03-15 BC'],
+  },
+  {
+    codec: pgTimestampTemporalDescriptor.factory({})(ctx),
+    accepts: ['2026-01-02T03:04:05.123456'],
+    rejects: [1, null, '2026-01-02 03:04:05.123456'],
+  },
+  {
+    codec: pgTimestamptzTemporalDescriptor.factory({})(ctx),
+    accepts: ['2026-01-02T03:04:05.123456Z'],
+    rejects: [1, null, '2026-01-02 03:04:05.123456+00'],
+  },
+  {
+    codec: pgTimeTemporalDescriptor.factory({})(ctx),
+    accepts: ['03:04:05.123456'],
+    rejects: [1, null, '03:04:05.123450'],
+  },
+];
+
+describe('the float codecs write NaN and the infinities as the text PostgreSQL writes, and read them back', () => {
+  for (const descriptor of [pgFloat8Descriptor, pgFloat4Descriptor, pgFloatDescriptor]) {
+    it(descriptor.codecId, () => {
+      const codec = descriptor.factory()(ctx);
+      const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+      const stored = values.map((value) => toContractJson(codec, value));
+      expect({ stored, read: stored.map((json) => fromContractJson(codec, json)) }).toEqual({
+        stored: ['NaN', 'Infinity', '-Infinity'],
+        read: values,
+      });
+    });
+  }
+});
+
+describe('pg/text-array@1 fromDataTypeValue', () => {
+  it('keeps a NULL element as null', () => {
+    expect(fromContractJson(pgTextArrayDescriptor.factory()(ctx), ['a', null, ''])).toEqual([
+      'a',
+      null,
+      '',
+    ]);
+  });
+});
+
+describe("a codec's data type reads the stored JSON form of the type and refuses any other", () => {
+  for (const { codec, params = {}, accepts, rejects } of cases) {
+    it(`${codec.id} accepts ${JSON.stringify(accepts)}`, () => {
+      for (const json of accepts) expect(() => fromContractJson(codec, json, params)).not.toThrow();
+    });
+
+    it(`${codec.id} refuses ${JSON.stringify(rejects)}`, () => {
+      for (const json of rejects) {
+        expect(() => fromContractJson(codec, json, params)).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: expect.objectContaining({ dataType: codec.dataType.id }),
+          }),
+        );
+      }
+    });
+  }
+});
+
+describe('the length and scale checks on a long run of padding', () => {
+  const run = 50_000;
+
+  it.each([
+    [
+      'pg/char@1 with a length',
+      () => pgCharDescriptor.factory({ length: run + 1 })(ctx),
+      { length: run + 1 },
+      `${' '.repeat(run)}x${' '.repeat(run - 1)}`,
+    ],
+    [
+      'pg/numeric@1 with a scale',
+      () => pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+      { precision: 5, scale: 2 },
+      `1.${'0'.repeat(run)}1${'0'.repeat(run - 1)}`,
+    ],
+  ])('%s decides in time linear in the length', (_name, build, params, json) => {
+    const codec = build();
+    const started = performance.now();
+    let refused = false;
+    try {
+      fromContractJson(codec, json, params);
+    } catch {
+      refused = true;
+    }
+    expect({ withinBound: performance.now() - started < timeouts.default, refused }).toEqual({
+      withinBound: true,
+      refused: true,
+    });
+  });
+});
+
+describe('the date and time codecs that carry text store only the stored form', () => {
+  it.each([
+    ['pg/date-string@1', pgDateStringDescriptor.factory()(ctx), '0044-03-15 BC', '-000043-03-15'],
+    [
+      'pg/timestamp-string@1',
+      pgTimestampStringDescriptor.factory({})(ctx),
+      '2024-01-01 12:34:56.500',
+      '2024-01-01T12:34:56.5',
+    ],
+    [
+      'pg/timestamptz-string@1',
+      pgTimestamptzStringDescriptor.factory({})(ctx),
+      '2024-01-01 01:00:00+01',
+      '2024-01-01T00:00:00Z',
+    ],
+    ['pg/time-string@1', pgTimeStringDescriptor.factory({})(ctx), '12:34', '12:34:00'],
+    ['pg/timetz@1', pgTimetzDescriptor.factory({})(ctx), '12:34:56+02', '12:34:56+02:00'],
+  ])('%s refuses %s and stores %s as written', (_id, codec, other, stored) => {
+    expect(() => toContractJson(codec, other)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: expect.stringContaining(stored),
+      }),
+    );
+    const json = toContractJson(codec, stored);
+    expect({ json, read: fromContractJson(codec, json) }).toEqual({ json: stored, read: stored });
+  });
+});

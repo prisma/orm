@@ -110,7 +110,7 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const rows = await ormClientBm25TopMatches(query, limit, runtime);
+      const rows = await ormClientBm25TopMatches(query, limit);
       console.log(JSON.stringify(rows, null, 2));
     } else {
       console.log(

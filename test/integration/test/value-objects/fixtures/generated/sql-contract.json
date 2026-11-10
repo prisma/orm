@@ -25,8 +25,11 @@
               "location": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "public",
+                  "plane": "storage"
                 }
               },
               "name": {
@@ -39,8 +42,11 @@
               "notes": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "public",
+                  "plane": "storage"
                 }
               }
             },
@@ -64,33 +70,6 @@
               "table": "shop"
             }
           }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -101,25 +80,37 @@
         "entries": {
           "table": {
             "shop": {
+              "checks": [
+                {
+                  "expression": "jsonb_path_match(\"location\", 'strict $.type() == \"object\" && exists($.keyvalue() ? (@.key == \"city\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"zip\" && (@.value.type() == \"string\"))) && !exists($.keyvalue() ? (@.key != \"city\" && @.key != \"street\" && @.key != \"zip\"))') IS TRUE",
+                  "name": "shop_location_shape_9799c974",
+                  "prefix": "shop_location_shape"
+                },
+                {
+                  "expression": "\"notes\" IS NULL OR jsonb_path_match(\"notes\", 'strict $.type() == \"null\" || ($.type() == \"object\" && exists($.keyvalue() ? (@.key == \"city\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"zip\" && (@.value.type() == \"string\"))) && !exists($.keyvalue() ? (@.key != \"city\" && @.key != \"street\" && @.key != \"zip\")))') IS TRUE",
+                  "name": "shop_notes_shape_5554921a",
+                  "prefix": "shop_notes_shape"
+                }
+              ],
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "location": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "notes": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 }
               },
@@ -132,17 +123,46 @@
               },
               "uniques": []
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "36c2557fc1c8e38328d6515c94c66a20ca4843d34209dd1a4b68ea914b050355"
+    "storageHash": "d1f566293d77a0d2d3dc4b1fbcec129b2a6a25ac509570d6f757dc83665939b4"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -150,9 +170,18 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }
