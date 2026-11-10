@@ -67,6 +67,10 @@ const db = postgres({
 });
 ```
 
+## Transaction start intent
+
+`withTransaction(runtime, callback, resolvedOptions?)` creates an explicit start; connection and activity `transaction(start?)` methods forward `SqlTransactionStart` unchanged. Facades own validated callback defaults, targets own allowed levels, and drivers own SQL setup. Wrappers must preserve start/refusal/settlement metadata. Release only known-clean connections; destroy uncertain starts or rollbacks, including a failed MySQL BEGIN after SET. See the [start SPI and isolation reference](../../../docs/reference/transaction-isolation.md#driver-and-runtime-start-spi).
+
 ## Exports
 
 ### Runtime

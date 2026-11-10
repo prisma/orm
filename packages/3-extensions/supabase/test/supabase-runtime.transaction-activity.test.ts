@@ -2,7 +2,7 @@ import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import type { AffectedCount } from '@internal/sql-relational-core/expression';
 import { planFromAst } from '@internal/sql-relational-core/plan';
 import type { SqlMiddleware, SqlMiddlewareContext } from '@internal/sql-runtime';
-import { withTransaction } from '@internal/sql-runtime';
+import { startActivityOn, withTransaction } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
 import { createTestSetup, stubPlan, testContract } from './supabase-runtime-fixtures';
 
@@ -40,6 +40,43 @@ function createRecordingSetup() {
     recorded.map((event) => event.name).filter((name) => !name.startsWith('started:'));
   return { ...setup, recorded, events };
 }
+
+describe.each(['session', 'activity', 'held-activity'] as const)(
+  'isolation through %s role ownership',
+  (route) => {
+    it.each([
+      undefined,
+      { kind: 'implicit' },
+      { kind: 'explicit', isolationLevel: 'Serializable' },
+    ] as const)('forwards %j without changing role ownership', async (start) => {
+      const { runtime, driver } = createTestSetup();
+      const session =
+        route === 'activity' ? undefined : await runtime.openRoleSession({ role: 'anon' });
+      const activity =
+        route === 'session'
+          ? undefined
+          : await startActivityOn(session ?? runtime.forRole({ role: 'anon' }), {
+              kind: 'test-call',
+              contentHash: async () => 'test',
+            });
+      const tx = activity ? await activity.transaction?.(start) : await session?.transaction(start);
+      if (!tx) throw new Error('Expected a transaction');
+      await tx.commit();
+      await activity?.end({ outcome: 'succeeded' });
+      await session?.release();
+      expect(driver.connection.beginTransactionSpy).toHaveBeenCalledExactlyOnceWith(start);
+      expect(driver.connection.release).toHaveBeenCalledTimes(1);
+      expect(driver.connection.destroy).not.toHaveBeenCalled();
+      expect(driver.connection.executeCalls.map(({ sql }) => sql)).toEqual([
+        'SELECT set_config($1, $2, false)',
+        'SELECT set_config($1, $2, false)',
+        'RESET ALL',
+        'RESET ROLE',
+      ]);
+      await runtime.close();
+    });
+  },
+);
 
 describe('a role session transaction activity', () => {
   it('finalizes each statement committed, then itself, after the commit', async () => {

@@ -255,7 +255,7 @@ describe('running a graph', () => {
         rowsOfUsers({ selectedFields: ['id', 'name'] }),
       );
 
-      expect(transactional.open).toHaveBeenCalledTimes(1);
+      expect(transactional.open).toHaveBeenCalledExactlyOnceWith({ kind: 'implicit' });
       expect(transactional.commit).toHaveBeenCalledTimes(1);
       expect(transactional.rollback).not.toHaveBeenCalled();
     });

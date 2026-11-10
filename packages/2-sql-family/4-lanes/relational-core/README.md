@@ -66,6 +66,10 @@ flowchart TD
     AST --> ORM
 ```
 
+## Transaction start SPI
+
+`SqlTransactionStart` carries either `{ kind: 'explicit', isolationLevel?: string | undefined }` or `{ kind: 'implicit' }` to `SqlConnection.beginTransaction(start?)`. Shared types carry intent only; target validators and drivers decide supported levels and SQL. An omitted start preserves manual/default behavior. See [ownership and forwarding requirements](../../../../docs/reference/transaction-isolation.md#driver-and-runtime-start-spi).
+
 ## Components
 
 ### Schema Builder (`schema.ts`)

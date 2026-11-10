@@ -1,5 +1,9 @@
 import type { PostgresDriverCreateOptions } from '@internal/driver-postgres/runtime';
 import type { SqlExecutionOptions } from '@internal/sql-runtime';
+import {
+  type PostgresIsolationLevel,
+  postgresIsolationLevelSchema,
+} from '@internal/target-postgres/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { postgresError } from '../errors';
@@ -34,6 +38,30 @@ export interface PostgresCursorOptions {
  */
 export interface PostgresExecutionOptions extends SqlExecutionOptions<PostgresTargetId> {
   readonly cursor?: PostgresCursorOptions;
+  readonly transactionOptions?: PostgresTransactionOptions | undefined;
+}
+
+export interface PostgresTransactionOptions {
+  readonly isolationLevel?: PostgresIsolationLevel | undefined;
+}
+
+const transactionOptionsSchema = type({
+  'isolationLevel?': postgresIsolationLevelSchema.or('undefined'),
+}).onUndeclaredKey('reject');
+
+export function validateTransactionOptions(
+  options: PostgresTransactionOptions | undefined,
+): PostgresTransactionOptions | undefined {
+  if (options === undefined) return undefined;
+  const result = transactionOptionsSchema(options);
+  if (result instanceof type.errors) {
+    throw postgresError('RUNTIME.ARGUMENT_INVALID', 'Invalid transaction options', {
+      why: result.summary,
+      fix: 'Pass an isolationLevel of ReadUncommitted, ReadCommitted, RepeatableRead, or Serializable, or leave it unset.',
+      meta: { extension: 'postgres', argument: 'transactionOptions', received: options },
+    });
+  }
+  return result;
 }
 
 const cursorOptionsSchema = type({

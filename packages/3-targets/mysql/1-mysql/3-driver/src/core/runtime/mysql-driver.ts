@@ -12,7 +12,9 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionStart,
 } from '@internal/sql-relational-core/ast';
+import { validateMysqlIsolationLevel } from '@internal/target-mysql/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
@@ -415,8 +417,23 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     onRelease?.();
   }
 
-  async beginTransaction(): Promise<SqlTransaction> {
-    await this.underLock(() => this.client.beginTransaction());
+  async beginTransaction(start?: SqlTransactionStart): Promise<SqlTransaction> {
+    const isolationLevel =
+      start?.kind === 'implicit'
+        ? 'ReadCommitted'
+        : start?.isolationLevel === undefined
+          ? undefined
+          : validateMysqlIsolationLevel(start.isolationLevel);
+    const statements = {
+      ReadUncommitted: 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
+      ReadCommitted: 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
+      RepeatableRead: 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+      Serializable: 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
+    };
+    await this.underLock(async () => {
+      if (isolationLevel !== undefined) await this.client.query(statements[isolationLevel]);
+      await this.client.beginTransaction();
+    });
     return new MysqlTransactionImpl(this.client, this.held, this.streams);
   }
 

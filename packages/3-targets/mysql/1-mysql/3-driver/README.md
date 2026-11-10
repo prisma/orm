@@ -49,11 +49,15 @@ The driver never writes a value into SQL. The `mariadb` package does: it writes 
 
 The ORM's writes also need these:
 
-- **Binary logging, when it is on, must be row-based (`binlog_format = ROW`, MySQL 8.4's default).** Every session runs at READ COMMITTED, and with statement-based logging InnoDB refuses every write at that level with MySQL error 1665.
+- **Binary logging, when it is on, must be row-based (`binlog_format = ROW`, MySQL 8.4's default).** ORM-owned transactions use READ COMMITTED, and with statement-based logging InnoDB refuses writes at that level with MySQL error 1665. Explicit transactions keep their selected or server/session isolation.
 - **The session's `sql_mode` must keep `NO_AUTO_VALUE_ON_ZERO`.** The driver adds it on every connection it opens, so an explicit 0 in an auto-increment column is stored as 0, as on Postgres. Without it MySQL stores a generated value instead, and the ORM's read-back by the key it wrote finds no row and fails with `ORM.MUTATION_ROW_MISSING`.
 - **The contract must list every unique index of a table the ORM upserts into.** MySQL has no way to limit `ON DUPLICATE KEY UPDATE` to the columns `conflictOn` names, so it fires on any unique key. When the insert collides on an index the contract does not list and no row has the `conflictOn` values, the read-back finds no row, the call fails with `ORM.MUTATION_ROW_MISSING` and the transaction rolls back. When a row with those values also exists, MySQL can update the row the unlisted index matched, and the call returns the `conflictOn` row unchanged, with no error. `db verify --strict` reports unique indexes the contract does not list.
 
 The driver does not check the database at startup or deploy time for these requirements.
+
+## Transaction starts
+
+`beginTransaction(start?)` accepts explicit isolation intent or an implicit ORM start. Explicit levels are validated by the MySQL target and mapped to fixed `SET TRANSACTION ISOLATION LEVEL ...` statements; implicit starts select READ COMMITTED. An absent start or explicit start without a level uses plain BEGIN and leaves the server/session default unchanged. SET and BEGIN share one connection query lock. A transaction owner must destroy the connection after uncertain setup failure, because a successful SET followed by failed BEGIN can leave a pending next-transaction setting.
 
 ## Exports
 

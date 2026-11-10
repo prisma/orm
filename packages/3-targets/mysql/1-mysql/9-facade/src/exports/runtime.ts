@@ -11,5 +11,6 @@ export type {
   MysqlTransactionContext,
 } from '../runtime/mysql';
 export { default } from '../runtime/mysql';
+export type { MysqlTransactionOptions } from '../runtime/mysql-options';
 export type { MysqlRuntime } from '../runtime/mysql-runtime';
 export { MysqlRuntimeImpl } from '../runtime/mysql-runtime';

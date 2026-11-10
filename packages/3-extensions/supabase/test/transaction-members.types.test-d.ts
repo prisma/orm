@@ -1,9 +1,14 @@
-import type { PostgresClient, PostgresTransactionContext } from '@internal/postgres/runtime';
+import type {
+  PostgresClient,
+  PostgresTransactionContext,
+  PostgresTransactionOptions,
+} from '@internal/postgres/runtime';
 import type { Collection } from '@internal/sql-orm-client';
 import type { Pool } from 'pg';
 import { expectTypeOf, test } from 'vitest';
 import type {
   RoleBoundDb,
+  SupabaseInternalDb,
   SupabaseOptions,
   SupabaseTransactionContext,
 } from '../src/exports/runtime';
@@ -54,6 +59,24 @@ test('a role-bound client and its transaction have the enums and nativeEnums a p
 
 test('a role-bound transaction has the members of a postgres transaction', () => {
   expectTypeOf<Tx>().toEqualTypeOf<PostgresTransactionContext<Contract, Classes>>();
+});
+
+test('role callback options use PostgreSQL levels and preserve result inference', () => {
+  expectTypeOf<Parameters<Client['transaction']>[1]>().toEqualTypeOf<
+    PostgresTransactionOptions | undefined
+  >();
+  expectTypeOf<SupabaseOptions<Contract>['transactionOptions']>().toEqualTypeOf<
+    PostgresTransactionOptions | undefined
+  >();
+  expectTypeOf<null>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<{ isolationLevel: null }>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<{ isolationLevel: 'Snapshot' }>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<
+    Extract<keyof SupabaseInternalDb, 'transaction' | 'transactionOptions'>
+  >().toBeNever();
+  const check = (db: Client) =>
+    db.transaction(async () => ({ value: 42 }), { isolationLevel: 'Serializable' });
+  expectTypeOf(check).returns.toEqualTypeOf<Promise<{ value: number }>>();
 });
 
 test('the pg option takes a pg.Pool only', () => {

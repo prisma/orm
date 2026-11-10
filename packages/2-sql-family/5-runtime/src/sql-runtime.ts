@@ -36,6 +36,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionStart,
 } from '@internal/sql-relational-core/ast';
 import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
@@ -169,7 +170,7 @@ export interface Runtime extends RuntimeQueryable {
 }
 
 export interface RuntimeConnection extends RuntimeQueryable {
-  transaction(): Promise<RuntimeTransaction>;
+  transaction(start?: SqlTransactionStart): Promise<RuntimeTransaction>;
   /**
    * Returns the connection to the pool for reuse. Only call this when the connection is known to be in a clean state. If a transaction commit/rollback failed or the connection is otherwise suspect, call `destroy(reason)` instead.
    */
@@ -226,7 +227,9 @@ export interface ActivityRoute {
     options: ActivityExecuteOptions,
   ): Promise<SqlStatementStats>;
   /** Begins a transaction beneath `parent`; absent where the route is a transaction. */
-  readonly transaction: ((parent: ActivityParent) => Promise<RuntimeTransaction>) | undefined;
+  readonly transaction:
+    | ((parent: ActivityParent, start?: SqlTransactionStart) => Promise<RuntimeTransaction>)
+    | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -490,7 +493,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       activity: StartActivity<K>,
     ): Promise<ActivityHandle<K>> => {
       this.#runtimeRoute ??= this.queryableRoute(this.driver, 'runtime', () => undefined, {
-        transaction: (parent) => this.beginOwnedTransactionBeneath(parent),
+        transaction: (parent, start) => this.beginOwnedTransactionBeneath(parent, start),
         runtimeWork: true,
       });
       return this.startActivityOnRoute(this.#runtimeRoute, activity, undefined);
@@ -607,7 +610,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.queryableRoute(connection, 'connection', () => openTransaction, {
       transaction:
         openTransaction === undefined
-          ? (parent) => this.beginTransactionBeneathOn(connection, owner, parent)
+          ? (parent, start) => this.beginTransactionBeneathOn(connection, owner, parent, start)
           : undefined,
       runtimeWork: false,
     });
@@ -618,12 +621,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent,
+    start?: SqlTransactionStart,
   ): Promise<RuntimeTransaction> {
     const openTransaction = this.#openTransactions.get(connection);
     if (openTransaction !== undefined) {
       return Promise.reject(transactionAlreadyOpenError(parent, openTransaction));
     }
-    return this.beginTransactionOn(connection, owner, parent);
+    return this.beginTransactionOn(connection, owner, parent, start);
   }
 
   /** The `activitySource` member of a held connection that `owner()` wraps. */
@@ -736,18 +740,21 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const beginTransaction = route.transaction;
     if (beginTransaction === undefined) return handle;
     return Object.assign(handle, {
-      transaction: async (): Promise<RuntimeTransaction> => {
+      transaction: async (start?: SqlTransactionStart): Promise<RuntimeTransaction> => {
         run.assertAcceptsChildren();
-        return beginTransaction(run);
+        return beginTransaction(run, start);
       },
     });
   }
 
   // A transaction beneath an activity on the runtime takes a connection of its own and gives it back when it settles.
-  private async beginOwnedTransactionBeneath(parent: ActivityParent): Promise<RuntimeTransaction> {
+  private async beginOwnedTransactionBeneath(
+    parent: ActivityParent,
+    start?: SqlTransactionStart,
+  ): Promise<RuntimeTransaction> {
     const { driverConnection, connection } = await this.openConnection({ activityParent: parent });
     return this.ownTransaction(connection, () =>
-      this.beginTransactionOn(driverConnection, connection, parent),
+      this.beginTransactionOn(driverConnection, connection, parent, start),
     );
   }
 
@@ -783,7 +790,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const held: SqlConnection = {
       query: (request) => this.trackRows(connection.query(request)),
       execute: (request) => this.#inFlight.track(() => connection.execute(request)),
-      beginTransaction: () => connection.beginTransaction(),
+      beginTransaction: (start) => connection.beginTransaction(start),
       ...ifDefined('explain', connection.explain?.bind(connection)),
       release: () => dispose(() => connection.release()),
       destroy: (reason) => dispose(() => connection.destroy(reason)),
@@ -1342,8 +1349,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       [transactionStart]: createTransactionStart(),
-      transaction(): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(driverConn, wrappedConnection, undefined);
+      transaction(start?: SqlTransactionStart): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, start);
       },
       [activitySource]: self.connectionActivitySource(driverConn, () => wrappedConnection),
       release: () => driverConn.release(),
@@ -1408,6 +1415,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent | undefined,
+    start?: SqlTransactionStart,
   ): Promise<RuntimeTransaction> {
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
@@ -1427,7 +1435,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
     let driverTx: SqlTransaction;
     try {
-      driverTx = await connection.beginTransaction();
+      driverTx = await connection.beginTransaction(start);
     } catch (error) {
       endTransactionWork();
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
@@ -1802,11 +1810,15 @@ export function withTransactionMembers<TMembers extends object>(
 export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
+  options?: { readonly isolationLevel?: string | undefined },
 ): Promise<R> {
   const connection = await runtime.connection();
   let transaction: RuntimeTransaction;
   try {
-    transaction = await connection.transaction();
+    transaction = await connection.transaction({
+      kind: 'explicit',
+      isolationLevel: options?.isolationLevel,
+    });
   } catch (error) {
     // A teardown error would mask the start error.
     if (wasRefusedBeforeBegin(connection)) {

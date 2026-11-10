@@ -49,6 +49,7 @@ import { validateSqliteContract } from '../static/contract-from-json';
 import { buildSqliteStaticContext, type SqliteStaticContext } from '../static/sqlite-static';
 import { resolveOptionalSqliteBinding, resolveSqliteBinding } from './binding';
 import { SqliteRuntimeImpl } from './sqlite-runtime';
+import { type SqliteTransactionOptions, validateTransactionOptions } from './transaction-options';
 
 export type SqliteTargetId = 'sqlite';
 type OrmClient<
@@ -120,6 +121,7 @@ export interface SqliteClient<
   runtime(): Runtime;
   transaction<R>(
     fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    options?: SqliteTransactionOptions,
   ): Promise<R>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -179,7 +181,9 @@ function buildSqliteTransactionMembers<
   };
 }
 
-export interface SqliteOptionsBase extends SqlExecutionOptions<SqliteTargetId> {}
+export interface SqliteOptionsBase extends SqlExecutionOptions<SqliteTargetId> {
+  readonly transactionOptions?: SqliteTransactionOptions | undefined;
+}
 
 export type SqliteOptions<
   TContract extends Contract<SqlStorage>,
@@ -211,6 +215,7 @@ export default function sqlite<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(options: SqliteOptions<TContract, TCollections>): SqliteClient<TContract, TCollections> {
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validateSqliteContract(options.contract);
   let binding = resolveOptionalSqliteBinding(options);
 
@@ -383,25 +388,35 @@ export default function sqlite<
 
     transaction<R>(
       fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      localOptions?: SqliteTransactionOptions,
     ): Promise<R> {
-      return withTransaction(workRuntime, (txCtx) => {
-        const tx: SqliteTransactionContext<TContract, TCollections> = withTransactionMembers(
-          txCtx,
-          buildSqliteTransactionMembers<TContract, TCollections>(
-            {
-              context,
-              collections: options.collections,
-              rawCodecInferer: stack.adapter.rawCodecInferer,
-              enums,
-              toSql,
-              prepareRuntime: workRuntime,
-            },
+      const local = validateTransactionOptions(localOptions);
+      const isolationLevel =
+        local?.isolationLevel !== undefined
+          ? local.isolationLevel
+          : transactionOptions?.isolationLevel;
+      return withTransaction(
+        workRuntime,
+        (txCtx) => {
+          const tx: SqliteTransactionContext<TContract, TCollections> = withTransactionMembers(
             txCtx,
-          ),
-        );
+            buildSqliteTransactionMembers<TContract, TCollections>(
+              {
+                context,
+                collections: options.collections,
+                rawCodecInferer: stack.adapter.rawCodecInferer,
+                enums,
+                toSql,
+                prepareRuntime: workRuntime,
+              },
+              txCtx,
+            ),
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        },
+        { isolationLevel },
+      );
     },
 
     close(): Promise<void> {

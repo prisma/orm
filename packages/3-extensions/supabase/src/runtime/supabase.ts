@@ -12,6 +12,7 @@ import {
   resolveOptionalPostgresBinding,
   toDriverCursorOptions,
   validateCursorOptions,
+  validateTransactionOptions,
 } from '@internal/postgres/internal/options';
 import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
 import { buildPostgresQueryMembers } from '@internal/postgres/internal/transaction-members';
@@ -23,6 +24,7 @@ import type {
   PostgresOptionsBase,
   PostgresQueryMembers,
   PostgresTransactionContext,
+  PostgresTransactionOptions,
 } from '@internal/postgres/runtime';
 import { isPgClient } from '@internal/postgres/runtime';
 import type { Db } from '@internal/sql-builder/types';
@@ -93,6 +95,7 @@ export interface RoleBoundDb<
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
   transaction<R>(
     fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
 
@@ -346,6 +349,7 @@ export default async function supabase<
 >(options: SupabaseOptions<TContract, TCollections>): Promise<SupabaseDb<TContract, TCollections>> {
   const keyMaterial = resolveKeyMaterial(options);
   const cursor = validateCursorOptions(options.cursor, 'supabase');
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const binding = resolveSupabaseBinding(options);
   const contract = validatePostgresContract(options.contract);
 
@@ -473,25 +477,34 @@ export default async function supabase<
       [preparedStatementExecute]: role[preparedStatementExecute],
       transaction<R>(
         fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+        localOptions?: PostgresTransactionOptions,
       ): Promise<R> {
-        return withTransaction(role, (txCtx) =>
-          fn(
-            withTransactionMembers(txCtx, {
-              ...buildPostgresQueryMembers<TContract, TCollections>(
-                {
-                  context,
-                  collections: options.collections,
-                  sql: appSql,
-                  raw,
-                  toSql,
-                  prepareRuntime: workRuntime,
-                },
-                txCtx,
-              ),
-              enums,
-              nativeEnums,
-            }),
-          ),
+        const local = validateTransactionOptions(localOptions);
+        const isolationLevel =
+          local?.isolationLevel !== undefined
+            ? local.isolationLevel
+            : transactionOptions?.isolationLevel;
+        return withTransaction(
+          role,
+          (txCtx) =>
+            fn(
+              withTransactionMembers(txCtx, {
+                ...buildPostgresQueryMembers<TContract, TCollections>(
+                  {
+                    context,
+                    collections: options.collections,
+                    sql: appSql,
+                    raw,
+                    toSql,
+                    prepareRuntime: workRuntime,
+                  },
+                  txCtx,
+                ),
+                enums,
+                nativeEnums,
+              }),
+            ),
+          { isolationLevel },
         );
       },
     };

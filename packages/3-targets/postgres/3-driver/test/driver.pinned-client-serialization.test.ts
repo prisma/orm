@@ -125,7 +125,10 @@ describe('pinned-client serialization', { timeout: timeouts.databaseOperation },
     const state = createConcurrencyState();
     const driver = makeDirectDriver(state);
     const connection = await driver.acquireConnection();
-    const transaction = await connection.beginTransaction();
+    const transaction = await connection.beginTransaction({
+      kind: 'explicit',
+      isolationLevel: 'Serializable',
+    });
 
     await Promise.all([
       queryRows(transaction, 'select 1'),
@@ -136,8 +139,15 @@ describe('pinned-client serialization', { timeout: timeouts.databaseOperation },
     await connection.release();
 
     expect(state.maxInFlight).toBe(1);
-    expect(state.started).toEqual(['BEGIN', 'select 1', 'select 2', 'select 3', 'COMMIT']);
-    expect(state.completed).toEqual(['BEGIN', 'select 1', 'select 2', 'select 3', 'COMMIT']);
+    const expected = [
+      'BEGIN ISOLATION LEVEL SERIALIZABLE',
+      'select 1',
+      'select 2',
+      'select 3',
+      'COMMIT',
+    ];
+    expect(state.started).toEqual(expected);
+    expect(state.completed).toEqual(expected);
   });
 
   it('serializes driver-level and pinned-connection statements sharing one physical client', async () => {

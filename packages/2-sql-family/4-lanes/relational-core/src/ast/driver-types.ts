@@ -45,11 +45,15 @@ export interface SqlDriver<TBinding = void> extends SqlQueryable {
   close(): Promise<void>;
 }
 
+export type SqlTransactionStart =
+  | { kind: 'explicit'; isolationLevel?: string | undefined }
+  | { kind: 'implicit' };
+
 export interface SqlConnection extends SqlQueryable {
   /**
    * Begins a transaction on this connection's session. Until it commits or rolls back, a statement sent on this connection runs inside it.
    */
-  beginTransaction(): Promise<SqlTransaction>;
+  beginTransaction(start?: SqlTransactionStart): Promise<SqlTransaction>;
   /**
    * Returns the connection to the pool for reuse. Must only be called when the
    * connection is known to be in a clean, reusable state. If a transaction

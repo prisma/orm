@@ -15,6 +15,11 @@ export type { PostgresFullTextMethods } from '../core/full-text-collection-metho
 export { decodePostgresListText } from '../core/list-decoder';
 export { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 export { PostgresContractView } from '../core/postgres-contract-view';
+export {
+  type PostgresIsolationLevel,
+  postgresIsolationLevelSchema,
+  validatePostgresIsolationLevel,
+} from '../core/transaction-isolation';
 
 export interface PostgresRuntimeTargetInstance extends RuntimeTargetInstance<'sql', 'postgres'> {}
 

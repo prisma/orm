@@ -9,10 +9,9 @@ const mysqlTargetDescriptorMetaRuntimeBase = {
   version: '0.0.1',
   capabilities: {},
   dataTypes: mysqlDataTypes,
-  sessionSettings: { time_zone: '+00:00', transaction_isolation: 'READ-COMMITTED' },
+  sessionSettings: { time_zone: '+00:00' },
 } as const;
 
-/** The runtime-safe part of the MySQL target's metadata: it leaves out `authoring`, which only contract construction reads. Every session runs in UTC, because the datetime codec reads and writes UTC, and at READ COMMITTED, as Postgres does, so a read inside a transaction sees rows other sessions committed. Transaction isolation controls will replace the setting. */
 export const mysqlTargetDescriptorMetaRuntime: typeof mysqlTargetDescriptorMetaRuntimeBase & {
   readonly __codecTypes?: CodecTypes;
 } = mysqlTargetDescriptorMetaRuntimeBase;
