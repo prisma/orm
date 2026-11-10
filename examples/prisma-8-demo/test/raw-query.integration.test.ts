@@ -14,6 +14,7 @@ import { contract, db } from '../src/prisma/db';
 import {
   rawQueryActiveAuthors,
   rawQueryBumpViews,
+  rawQueryCopyPosts,
   rawQueryPromoteAndList,
   rawQueryReport,
 } from '../src/queries/raw-query-demo';
@@ -182,6 +183,50 @@ describe('whole-query raw demos', () => {
           const rows = await rawQueryPromoteAndList('numbers', runtime);
 
           expect(rows).toEqual([{ title: 'Bernoulli numbers', email: 'ada@example.com' }]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'rawQueryCopyPosts inserts the rows of an embedded builder query',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+        try {
+          await seed(runtime);
+
+          const rows = await rawQueryCopyPosts(
+            'ada@example.com',
+            'linus@example.com',
+            'Copy of ',
+            runtime,
+          );
+
+          expect([...rows].sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+            {
+              id: expect.any(String),
+              title: 'Copy of Analytical engine notes',
+              userId: userIds.linus,
+            },
+            { id: expect.any(String), title: 'Copy of Bernoulli numbers', userId: userIds.linus },
+          ]);
+
+          const linusPosts = await runtime.query(
+            sql({ context, rawCodecInferer: { inferCodec: () => 'pg/text@1' } })
+              .public.post.select('title')
+              .where((f, fns) => fns.eq(f.userId, userIds.linus))
+              .orderBy('title')
+              .build(),
+          );
+          expect(linusPosts).toEqual([
+            { title: 'Copy of Analytical engine notes' },
+            { title: 'Copy of Bernoulli numbers' },
+          ]);
         } finally {
           await runtime.close();
         }

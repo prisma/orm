@@ -131,10 +131,12 @@ export type ShellName =
   | '@prisma/orm-target-postgres'
   | '@prisma/orm-target-sqlite'
   | '@prisma/orm-target-mysql'
+  | '@prisma/orm-target-mariadb'
   | '@prisma/orm-target-mongo'
   | '@prisma/orm-postgres'
   | '@prisma/orm-sqlite'
   | '@prisma/orm-mysql'
+  | '@prisma/orm-mariadb'
   | '@prisma/orm-mongo'
   | '@prisma/orm-extension-postgis'
   | '@prisma/orm-extension-pgvector'
@@ -632,18 +634,44 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       kind: 'platform',
       packages: [
         {
-          dir: 'packages/3-targets/mysql/1-target',
+          dir: 'packages/3-targets/mysql/1-mysql/1-target',
           name: '@internal/target-mysql',
           entry: 'target',
         },
         {
-          dir: 'packages/3-targets/mysql/2-adapter',
+          dir: 'packages/3-targets/mysql/1-mysql/2-adapter',
           name: '@internal/adapter-mysql',
           entry: 'adapter',
         },
         {
-          dir: 'packages/3-targets/mysql/3-driver',
+          dir: 'packages/3-targets/mysql/1-mysql/3-driver',
           name: '@internal/driver-mysql',
+          entry: 'driver',
+        },
+      ],
+    },
+  ],
+  // MariaDB extends MySQL: this shell publishes only the MariaDB packages, and
+  // reaches MySQL's through `@prisma/orm-target-mysql`, their one owner.
+  [
+    '@prisma/orm-target-mariadb',
+    {
+      dir: 'packages/9-public/@prisma/orm-target-mariadb',
+      kind: 'platform',
+      packages: [
+        {
+          dir: 'packages/3-targets/mysql/2-mariadb/1-target',
+          name: '@internal/target-mariadb',
+          entry: 'target',
+        },
+        {
+          dir: 'packages/3-targets/mysql/2-mariadb/2-adapter',
+          name: '@internal/adapter-mariadb',
+          entry: 'adapter',
+        },
+        {
+          dir: 'packages/3-targets/mysql/2-mariadb/3-driver',
+          name: '@internal/driver-mariadb',
           entry: 'driver',
         },
       ],
@@ -757,7 +785,9 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
     {
       dir: 'packages/9-public/@prisma/orm-mysql',
       kind: 'facade',
-      packages: [{ dir: 'packages/3-targets/mysql/9-facade', name: '@internal/mysql', entry: '' }],
+      packages: [
+        { dir: 'packages/3-targets/mysql/1-mysql/9-facade', name: '@internal/mysql', entry: '' },
+      ],
       reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
@@ -766,6 +796,27 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
         adapter: '@internal/adapter-mysql',
         driver: '@internal/driver-mysql',
         queryBuilders: SQL_QUERY_REEXPORTS,
+      }),
+    },
+  ],
+  [
+    '@prisma/orm-mariadb',
+    {
+      dir: 'packages/9-public/@prisma/orm-mariadb',
+      kind: 'facade',
+      packages: [
+        {
+          dir: 'packages/3-targets/mysql/2-mariadb/9-facade',
+          name: '@internal/mariadb',
+          entry: '',
+        },
+      ],
+      reexports: facadeContractReexports({
+        family: '@internal/sql-contract',
+        familyPack: '@internal/family-sql',
+        target: '@internal/target-mariadb',
+        adapter: '@internal/adapter-mariadb',
+        driver: '@internal/driver-mariadb',
       }),
     },
   ],

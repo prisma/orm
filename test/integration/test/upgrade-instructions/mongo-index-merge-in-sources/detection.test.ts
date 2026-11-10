@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
-const APP_NOTE = 'upgrade-instructions/pending/mongo-index-merge-in-sources/app/instructions.md';
+const APP_NOTE =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md';
 const EXTENSION_NOTE =
-  'upgrade-instructions/pending/mongo-index-merge-in-sources/extension/instructions.md';
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md';
 
 const matcher = (path: string, id: string) => (content: string) =>
   detectionPatterns(path, id).some((pattern) => pattern.test(content));

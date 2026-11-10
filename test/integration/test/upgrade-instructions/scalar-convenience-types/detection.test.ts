@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = [
-  'upgrade-instructions/pending/scalar-convenience-types/app/instructions.md',
-  'upgrade-instructions/pending/scalar-convenience-types/extension/instructions.md',
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md',
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md',
 ];
 
 describe.each(GUIDES)('the renamed PostgreSQL scalar type detection in %s', (guidePath) => {

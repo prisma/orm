@@ -2,6 +2,8 @@
 
 Status: **Accepted**
 
+Amended: 2026-11-10 — a builder query, or a builder INSERT, UPDATE or DELETE after `.returning()`, embeds in a raw template as one statement part (see "Amendment 2026-11-10").
+
 Related: [ADR 012 — Raw SQL escape hatch with required annotations](<./ADR 012 - Raw SQL Escape Hatch.md>) introduced raw plans as AST-less envelopes carrying `meta.annotations`. This ADR supersedes that plan-construction model: a whole-query raw statement is an AST node like any other. ADR 012's minimal annotation schema is unaffected.
 
 ## The surface
@@ -52,7 +54,7 @@ const plan = db.raw.sql`
 
 A bare template builds nothing. The node's `result` field is the discriminator the rest of the system reads: `{ kind: 'rows', columns }` or `{ kind: 'affected-count' }`.
 
-**3. `returns*` names what is usable where expressions go.** `.returns(codecId)` yields an expression; `.returnsRow(spec)` yields a statement that produces rows and therefore embeds in another template. `.affectedCount()` carries no prefix because it yields a plan handle and nothing else. The prefix is the reader's cue, and the type system enforces it: only a row-returning raw query is in the interpolation union.
+**3. `returns*` names what is usable where expressions go.** `.returns(codecId)` yields an expression; `.returnsRow(spec)` yields a statement that produces rows and therefore embeds in another template. `.affectedCount()` carries no prefix because it yields a plan handle and nothing else. The prefix is the reader's cue, and the type system enforces it: of the raw queries, only a row-returning one is in the interpolation union. A builder query, and a builder mutation after `.returning()`, are in it too (see "Amendment 2026-11-10").
 
 **4. A row spec is hybrid.** Each entry is either a contract column reference — `user.columns.email`, which carries the column's codec id, its nullability, and the TypeScript type the contract resolves it to — or an explicit codec id (`'pg/int8@1'`) or `{ codecId, nullable }` descriptor for a column the contract has no name for, such as a `count(*)`. Both forms resolve through the same codec-type map the query builders read, so a mixed spec types each entry by its own form. The explicit form is structurally the contract-free lane's `ColumnDescriptor`, so a spec written against one lane reads as a spec for the other.
 
@@ -117,9 +119,9 @@ A mutation without `RETURNING` terminates with `.affectedCount()`, which is a pl
 
 ## Responsibilities
 
-- **Lane (`@internal/sql-relational-core`)** owns the node, the terminators, spec normalization (a bare codec id becomes `{ codecId, nullable: false }`), and the splice.
-- **Contract-typed lane (`@internal/sql-builder`)** owns the lane type and its factory (`createRawLane`, which each facade composes as `db.raw`), the table proxy's `columns` accessor, and the resolution of spec entries to TypeScript row types.
-- **Adapters** render the node by walking its parts through the same expression renderer that serves `RawExpr`, emitting each target's placeholder form (`$N` for Postgres, `?N` for SQLite).
+- **Lane (`@internal/sql-relational-core`)** owns the node, the terminators, spec normalization (a bare codec id becomes `{ codecId, nullable: false }`), the splice of a raw row query, and the placement of a builder statement's AST as one part, including the runtime refusal of a mutation without `RETURNING`.
+- **Contract-typed lane (`@internal/sql-builder`)** owns the lane type and its factory (`createRawLane`, which each facade composes as `db.raw`), the table proxy's `columns` accessor, the resolution of spec entries to TypeScript row types, and the mutation builders' `buildAst()` and row-returning marker.
+- **Adapters** render the node by walking its parts. A string is written as is, an expression part goes through the same expression renderer that serves `RawExpr`, and a statement part goes through the adapter's own statement renderer. Each target writes its own placeholder form (`$N` for Postgres, `?N` for SQLite and MySQL).
 - **Runtime** reads the node's `result` twice: where it decodes, a row spec becomes the decode context's aliases and per-column codecs; where it prepares, the declared result picks which prepared handle the statement earns. Which runtime operation a plan belongs to needs no raw-specific code — a row-returning statement is run through `runtime.query(plan)`, which streams decoded rows, and a statement declaring an affected-row count through `runtime.execute(plan)`, which resolves to `SqlStatementStats`. Guardrails run over the SQL text via `evaluateRawGuardrails`, because a raw statement has no structural shape for the AST lints to inspect.
 
 ## Result semantics
@@ -139,6 +141,57 @@ A mutation without `RETURNING` terminates with `.affectedCount()`, which is a pl
 **Raw statement plans carry no annotations.** `.annotations()` is not part of this surface. One consequence is concrete: `evaluateRawGuardrails` reads `meta.annotations.intent` to decide whether a mutation contradicts a read-only intent, so `LINT.READ_ONLY_MUTATION` cannot fire for a raw statement plan until annotations reach it. The text-derived lints do apply: `LINT.SELECT_STAR` and `LINT.NO_LIMIT` both fire for a raw statement. `evaluateRawGuardrails` also computes an unbounded-select budget finding, but the lint middleware reads only the lints it returns, so that finding reaches no consumer — for raw statements as for any other plan the function evaluates.
 
 **The lane is composed, not derived.** The client builds `db.raw` alongside `sql`, `runtime()` and `prepare`. It is not a key the namespace map answers, so nothing a contract declares can collide with it, and a storage namespace may be named `raw` like any other. The lane holds one key today: `sql`. That is the key an editor keys its SQL highlighting on, and the name the plans' `lane: 'raw'` already uses. Anything else raw authoring needs can join it later, without moving the address again.
+
+## Amendment 2026-11-10: builder queries embed as statement parts
+
+A raw template also accepts a query written with the SQL builder. A `SelectQuery` or `GroupedQuery` embeds as it is. A builder INSERT, UPDATE or DELETE embeds once `.returning()` has named at least one column. From the shipped demo (`examples/prisma-8-demo/src/queries/raw-query-demo.ts`):
+
+```ts
+const copies = post
+  .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+  .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
+  .select((f, fns) => ({
+    id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
+    title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
+    body: f.post.body,
+    userId: f.target.id,
+  }))
+  .where((f, fns) => fns.eq(f.user.email, fromEmail));
+
+const plan = db.raw.sql`
+  INSERT INTO "post" (id, title, body, "userId")
+  ${copies}
+  RETURNING id, title, "userId"
+`
+  .returnsRow({
+    id: post.columns.id,
+    title: post.columns.title,
+    userId: post.columns.userId,
+  })
+  .build();
+```
+
+On Postgres the plan lowers to:
+
+```sql
+INSERT INTO "post" (id, title, body, "userId")
+SELECT gen_random_uuid() AS "id", $1 || "post"."title" AS "title", "post"."body" AS "body", "target"."id" AS "userId" FROM "public"."post" INNER JOIN "public"."user" ON "user"."id" = "post"."userId" INNER JOIN "public"."user" AS "target" ON "target"."email" = $3 WHERE "user"."email" = $2
+RETURNING id, title, "userId"
+```
+
+The builder query's parameters take their place in template order. The two `fns.raw` fragments cover what the builder has no function for: `gen_random_uuid()` and text concatenation.
+
+**The statement AST is one part.** The tag calls the query's `buildAst()` once and decides by the class of what comes back. A `RawQueryAst` is still flattened into the outer parts, as described under "Composition". A `SelectAst`, `InsertAst`, `UpdateAst` or `DeleteAst` is placed in the parts as one element. The parts type is `RawPart = string | AnyExpression | SelectAst | InsertAst | UpdateAst | DeleteAst`, shared by `RawExpr` and `RawQueryAst`. The node walkers handle the statement kinds: `RawQueryAst.rewrite` rewrites a statement part, so a `beforeCompile` rewriter reaches into it; `collectParamRefs` collects its parameters in place; and `RawExpr.fold` folds a select part through the folder's `select` arm and a mutation part through its `mutation` arm. Because parameters are numbered from that collection, a parameter written before, inside or after the embedded query keeps its template position.
+
+**The adapter renders the part with no parentheses.** Each adapter renders a statement part with the renderer it uses for that statement at top level, with the same contract and placeholder numbering. It adds no parentheses and checks no column count. The author writes parentheses where SQL needs them, as with a spliced raw query: `WITH x AS (${q})` and `FROM (${q}) AS t` have them, and `INSERT INTO t (a, b) ${q}` does not. SQLite rejects a parenthesised SELECT as the source of an INSERT, so adding parentheses in the renderer would make that shape impossible.
+
+**Why a statement part and not `SubqueryExpr`.** `SubqueryExpr` is the expression node for a scalar subquery: it is rendered in parentheses and must project exactly one column. Statement position needs neither property, and `SubqueryExpr` keeps that meaning for expression position. A flag on `SubqueryExpr` would be settable in every expression position where it has no meaning, and every consumer of `SubqueryExpr` would have to read it. A new expression kind would have to join `AnyExpression`, `ExprVisitor` and every exhaustive expression visitor, for a node that is legal only in raw parts. The statement ASTs already carry `rewrite` and `collectParamRefs`, so the walkers need one branch each.
+
+**The row-returning rule applies to builder mutations.** "Embeddable iff row-returning" holds for builders as it does for raw queries. A mutation builder carries a type-only marker that holds its row type once `.returning()` names a column, and a type no row matches before that, so the type system rejects a mutation builder without `RETURNING` (and one whose `.returning()` lists no column) as an interpolation. The tag also refuses such a mutation at runtime with `RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION`, telling the author to call `.returning(...)`. A raw `.affectedCount()` query stays rejected, as before.
+
+**The targets differ on mutation parts, and the adapters do not refuse them.** Postgres runs a data-modifying CTE, such as `WITH renamed AS (${update}) SELECT …`. SQLite's grammar allows only a SELECT in a CTE or subquery, so it rejects the statement when it runs. MySQL has no `RETURNING`, so its adapter refuses every mutation part at render time, as it refuses `RETURNING` anywhere. An adapter renders a mutation part the same way whatever surrounds it, because the author writes the surrounding SQL, and the database reports SQL it does not accept, as it does for any raw text.
+
+**Out of scope: reusing the builder query's row in the outer spec.** A raw row query publishes its declared columns as `.returns`; a builder query has no equivalent. Its row fields carry codec ids but not the output types an outer spec entry needs. The outer `returnsRow` names its columns with contract column references (`post.columns.title`) or codec ids.
 
 ## Consequences
 

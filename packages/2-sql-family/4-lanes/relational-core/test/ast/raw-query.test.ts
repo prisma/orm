@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BinaryExpr, isQueryAst, queryAstKinds, RawQueryAst } from '../../src/exports/ast';
-import { col, param, shiftParamRef } from './test-helpers';
+import {
+  BinaryExpr,
+  DeleteAst,
+  InsertAst,
+  isQueryAst,
+  type ParamRef,
+  queryAstKinds,
+  RawQueryAst,
+  SelectAst,
+  UpdateAst,
+} from '../../src/exports/ast';
+import { col, param, returning, shiftParamRef, simpleSelect, table } from './test-helpers';
 
 const columns = {
   id: { codecId: 'pg/int4@1', nullable: false },
@@ -130,6 +140,44 @@ describe('ast/RawQueryAst', () => {
       expect(node.collectParamRefs()).toEqual([nested]);
     });
 
+    it('collects param refs inside an embedded select in template order', () => {
+      const before = param(1, 'before');
+      const inside = param(2, 'inside');
+      const after = param(3, 'after');
+      const select = simpleSelect('user', ['id']).withWhere(
+        BinaryExpr.eq(col('user', 'id'), inside),
+      );
+      const node = RawQueryAst.rows(
+        ['with x as (select ', before, ') insert into t ', select, ' returning ', after],
+        columns,
+      );
+
+      expect(node.collectParamRefs()).toEqual([before, inside, after]);
+    });
+
+    it('collects param refs inside embedded mutations in template order', () => {
+      const inserted = param(1, 'inserted');
+      const updated = param(2, 'updated');
+      const updateWhere = param(3, 'updateWhere');
+      const deleted = param(4, 'deleted');
+      const insert = InsertAst.into(table('user'))
+        .withRows([{ email: inserted }])
+        .withReturning(returning('user', ['id']));
+      const update = UpdateAst.table(table('user'))
+        .withSet({ email: updated })
+        .withWhere(BinaryExpr.eq(col('user', 'id'), updateWhere))
+        .withReturning(returning('user', ['id']));
+      const remove = DeleteAst.from(table('user'))
+        .withWhere(BinaryExpr.eq(col('user', 'id'), deleted))
+        .withReturning(returning('user', ['id']));
+      const node = RawQueryAst.rows(
+        ['with a as (', insert, '), b as (', update, '), c as (', remove, ') select 1'],
+        columns,
+      );
+
+      expect(node.collectParamRefs()).toEqual([inserted, updated, updateWhere, deleted]);
+    });
+
     it('reports no params for a template made only of strings', () => {
       expect(RawQueryAst.rows(['select 1'], columns).collectParamRefs()).toEqual([]);
     });
@@ -146,6 +194,48 @@ describe('ast/RawQueryAst', () => {
       expect(rewritten.collectParamRefs()[0]?.kind).toBe('param-ref');
       expect(node.collectParamRefs()[0]).toEqual(expect.objectContaining({ value: 1 }));
       expect(rewritten.collectParamRefs()[0]).toEqual(expect.objectContaining({ value: 11 }));
+    });
+
+    it('rewrites inside an embedded select part', () => {
+      const select = simpleSelect('user', ['id']).withWhere(
+        BinaryExpr.eq(col('user', 'id'), param(1, 'inside')),
+      );
+      const node = RawQueryAst.rows(
+        ['insert into t ', select, ' returning ', param(2, 'after')],
+        columns,
+      );
+
+      const rewritten = node.rewrite({ paramRef: shiftParamRef(10) });
+
+      expect(rewritten.parts[1]).toBeInstanceOf(SelectAst);
+      expect(rewritten.parts[1]).not.toBe(select);
+      expect(rewritten.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([11, 12]);
+      expect(node.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([1, 2]);
+    });
+
+    it('rewrites inside embedded mutation parts', () => {
+      const insert = InsertAst.into(table('user'))
+        .withRows([{ email: param(1, 'inserted') }])
+        .withReturning(returning('user', ['id']));
+      const update = UpdateAst.table(table('user'))
+        .withSet({ email: param(2, 'updated') })
+        .withReturning(returning('user', ['id']));
+      const remove = DeleteAst.from(table('user'))
+        .withWhere(BinaryExpr.eq(col('user', 'id'), param(3, 'deleted')))
+        .withReturning(returning('user', ['id']));
+      const node = RawQueryAst.rows(
+        ['with a as (', insert, '), b as (', update, '), c as (', remove, ') select 1'],
+        columns,
+      );
+
+      const rewritten = node.rewrite({ paramRef: shiftParamRef(10) });
+
+      expect(rewritten.parts[1]).toBeInstanceOf(InsertAst);
+      expect(rewritten.parts[3]).toBeInstanceOf(UpdateAst);
+      expect(rewritten.parts[5]).toBeInstanceOf(DeleteAst);
+      expect(rewritten.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([
+        11, 12, 13,
+      ]);
     });
 
     it('preserves the result declaration across a rewrite', () => {

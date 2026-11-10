@@ -34,28 +34,28 @@ const scaffold = { family: mongoFamilyPack, target: mongoTargetPack } as const;
 const timestampNow = { kind: 'generator', id: 'timestampNow' } as const;
 
 describe('Mongo TS generated fields', () => {
-  const contract = defineContract(scaffold, ({ field, model, gen }) => ({
+  const contract = defineContract(scaffold, ({ field, model, gen, type }) => ({
     models: {
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          _id: field.objectId(),
-          updatedAt: field.date().onCreate(gen.now()).onUpdate(gen.now()),
-          createdAt: field.date().onCreate(gen.now()),
-          touchedAt: field.date().onUpdate(gen.now()),
+          _id: field.scalar(type.ObjectId()),
+          updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
+          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+          touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
         },
       }),
     },
   }));
 
   it('keys the execution default of a field by its stored name', () => {
-    const mapped = defineContract(scaffold, ({ field, model, gen }) => ({
+    const mapped = defineContract(scaffold, ({ field, model, gen, type }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
           fields: {
-            id: field.objectId().mongo({ field: '_id' }),
-            createdAt: field.date().onCreate(gen.now()).mongo({ field: 'created_at' }),
+            id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+            createdAt: field.scalar(type.Date()).onCreate(gen.now()).mongo({ field: 'created_at' }),
           },
         }),
       },
@@ -113,11 +113,14 @@ describe('Mongo TS generated fields', () => {
     } as const satisfies TargetPackRef<'mongo', 'mongo-other'>;
     const bound = defineContract(
       { family: mongoFamilyPack, target: otherTarget },
-      ({ field, model, gen }) => ({
+      ({ field, model, gen, type }) => ({
         models: {
           Post: model('Post', {
             collection: 'posts',
-            fields: { _id: field.objectId(), createdAt: field.date().onCreate(gen.now()) },
+            fields: {
+              _id: field.scalar(type.ObjectId()),
+              createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+            },
           }),
         },
       }),
@@ -133,9 +136,12 @@ describe('Mongo TS generated fields', () => {
   });
 
   it('omits the execution section when no field has execution defaults', () => {
-    const plain = defineContract(scaffold, ({ field, model }) => ({
+    const plain = defineContract(scaffold, ({ field, model, type }) => ({
       models: {
-        Post: model('Post', { collection: 'posts', fields: { _id: field.objectId() } }),
+        Post: model('Post', {
+          collection: 'posts',
+          fields: { _id: field.scalar(type.ObjectId()) },
+        }),
       },
     }));
     expect(plain).not.toHaveProperty('execution');
@@ -144,11 +150,14 @@ describe('Mongo TS generated fields', () => {
 
 describe('Mongo TS generated field misuse', () => {
   it('builds an optional field that generates a value', () => {
-    const contract = defineContract(scaffold, ({ field, model, gen }) => ({
+    const contract = defineContract(scaffold, ({ field, model, gen, type }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
-          fields: { _id: field.objectId(), createdAt: field.date().onCreate(gen.now()).optional() },
+          fields: {
+            _id: field.scalar(type.ObjectId()),
+            createdAt: field.scalar(type.Date()).onCreate(gen.now()).optional(),
+          },
         }),
       },
     }));
@@ -169,13 +178,13 @@ describe('Mongo TS generated field misuse', () => {
 
   it('refuses a list field with execution defaults', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model, gen }) => ({
+      defineContract(scaffold, ({ field, model, gen, type }) => ({
         models: {
           Post: model('Post', {
             collection: 'posts',
             fields: {
-              _id: field.objectId(),
-              createdAt: untyped(field.date().onCreate(gen.now())).many(),
+              _id: field.scalar(type.ObjectId()),
+              createdAt: untyped(field.scalar(type.Date()).onCreate(gen.now())).many(),
             },
           }),
         },
@@ -192,14 +201,17 @@ describe('Mongo TS generated field misuse', () => {
 
   it('refuses execution defaults on a model without a collection', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model, gen }) => {
-        const Owner = model('Owner', { collection: 'owners', fields: { _id: field.objectId() } });
+      defineContract(scaffold, ({ field, model, gen, type }) => {
+        const Owner = model('Owner', {
+          collection: 'owners',
+          fields: { _id: field.scalar(type.ObjectId()) },
+        });
         return {
           models: {
             Owner,
             Address: model('Address', {
               owner: Owner,
-              fields: { createdAt: field.date().onCreate(gen.now()) },
+              fields: { createdAt: field.scalar(type.Date()).onCreate(gen.now()) },
             }),
           },
         };
@@ -214,12 +226,17 @@ describe('Mongo TS generated field misuse', () => {
 
   it('refuses execution defaults on a value-object field', () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model, valueObject, gen }) => ({
+      defineContract(scaffold, ({ field, model, valueObject, gen, type }) => ({
         valueObjects: {
-          Audit: valueObject('Audit', { fields: { createdAt: field.date().onCreate(gen.now()) } }),
+          Audit: valueObject('Audit', {
+            fields: { createdAt: field.scalar(type.Date()).onCreate(gen.now()) },
+          }),
         },
         models: {
-          Post: model('Post', { collection: 'posts', fields: { _id: field.objectId() } }),
+          Post: model('Post', {
+            collection: 'posts',
+            fields: { _id: field.scalar(type.ObjectId()) },
+          }),
         },
       })),
     ).toThrow(
@@ -237,13 +254,13 @@ describe('Mongo TS generated field misuse', () => {
 
 describe('Mongo TS generated fields on polymorphic models', () => {
   function eventContract(clickFields: 'plain' | 'withGenerated') {
-    return defineContract(scaffold, ({ field, model, gen }) => {
+    return defineContract(scaffold, ({ field, model, gen, type }) => {
       const Event = model('Event', {
         collection: 'events',
         fields: {
-          _id: field.objectId(),
-          kind: field.string(),
-          createdAt: field.date().onCreate(gen.now()),
+          _id: field.scalar(type.ObjectId()),
+          kind: field.scalar(type.String()),
+          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
         },
         discriminator: { field: 'kind', variants: { Click: { value: 'click' } } },
       });
@@ -252,8 +269,11 @@ describe('Mongo TS generated fields on polymorphic models', () => {
         base: Event,
         fields:
           clickFields === 'withGenerated'
-            ? { url: field.string(), clickedAt: field.date().onCreate(gen.now()) }
-            : { url: field.string() },
+            ? {
+                url: field.scalar(type.String()),
+                clickedAt: field.scalar(type.Date()).onCreate(gen.now()),
+              }
+            : { url: field.scalar(type.String()) },
       });
       return { models: { Event, Click } };
     });
@@ -284,20 +304,23 @@ describe('Mongo TS generated fields on polymorphic models', () => {
 
 describe('Mongo TS generated fields on models sharing a collection', () => {
   function sharedCollectionContract(pageStamp: 'createdAt' | 'updatedAt') {
-    return defineContract(scaffold, ({ field, model, gen }) => ({
+    return defineContract(scaffold, ({ field, model, gen, type }) => ({
       models: {
         Post: model('Post', {
           collection: 'entries',
-          fields: { _id: field.objectId(), stamp: field.date().onCreate(gen.now()) },
+          fields: {
+            _id: field.scalar(type.ObjectId()),
+            stamp: field.scalar(type.Date()).onCreate(gen.now()),
+          },
         }),
         Page: model('Page', {
           collection: 'entries',
           fields: {
-            _id: field.objectId(),
+            _id: field.scalar(type.ObjectId()),
             stamp:
               pageStamp === 'createdAt'
-                ? field.date().onCreate(gen.now())
-                : field.date().onCreate(gen.now()).onUpdate(gen.now()),
+                ? field.scalar(type.Date()).onCreate(gen.now())
+                : field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
           },
         }),
       },
@@ -324,21 +347,24 @@ describe('Mongo TS generated fields on models sharing a collection', () => {
 
   it("names each model's own field when differing defaults share a stored name", () => {
     expect(() =>
-      defineContract(scaffold, ({ field, model, gen }) => ({
+      defineContract(scaffold, ({ field, model, gen, type }) => ({
         models: {
           Post: model('Post', {
             collection: 'entries',
             fields: {
-              _id: field.objectId(),
-              createdAt: field.date().onCreate(gen.now()).mongo({ field: 'created_at' }),
+              _id: field.scalar(type.ObjectId()),
+              createdAt: field
+                .scalar(type.Date())
+                .onCreate(gen.now())
+                .mongo({ field: 'created_at' }),
             },
           }),
           Page: model('Page', {
             collection: 'entries',
             fields: {
-              _id: field.objectId(),
+              _id: field.scalar(type.ObjectId()),
               created: field
-                .date()
+                .scalar(type.Date())
                 .onCreate(gen.now())
                 .onUpdate(gen.now())
                 .mongo({ field: 'created_at' }),

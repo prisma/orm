@@ -16,7 +16,7 @@ Every subagent dispatch in this repo runs on **Opus**: implementers, reviewers, 
 | Spike (read, count, structure findings) | Sonnet or composer-2.5 |
 | Architect-class finding remediation (single discipline, narrow surface) | Sonnet by default; **composer-2.5 when the brief is precise and a sibling dispatch already established the pattern** |
 | Voice-aware doc edits (skill / README / matcher updates with explicit insertion points and an established voice to match) | composer-2.5 |
-| Long-running validation gate runs (typecheck, test:packages) | Whichever tier the parent dispatch chose (no model dispatch — just bash) |
+| Long-running validation gate runs (typecheck, the touched packages' tests) | Whichever tier the parent dispatch chose (no model dispatch — just bash) |
 
 ## Confidence notes
 

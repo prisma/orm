@@ -570,11 +570,11 @@ export function addressedModel(
     : [variant.namespaceId, variant.modelName];
 }
 
-interface ResolvedThrough extends ContractRelationThrough {
+export interface ResolvedThrough extends ContractRelationThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface ResolvedRelation {
+export interface ResolvedRelation {
   readonly to: string;
   readonly toNamespace: string;
   readonly cardinality: RelationCardinalityTag | undefined;
@@ -1016,6 +1016,10 @@ export function assertLockCapability(
   throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
     meta: { capability, method: methodName },
   });
+}
+
+export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
+  return contract.capabilities['sql']?.['defaultInInsert'] === true;
 }
 
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {

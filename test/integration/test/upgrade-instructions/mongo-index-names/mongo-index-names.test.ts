@@ -14,7 +14,7 @@ import { dirname, join, relative } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/mongo-index-names/app/scripts/mongo-index-names.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/scripts/mongo-index-names/mongo-index-names.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));

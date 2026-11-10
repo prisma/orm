@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
-const guide = 'upgrade-instructions/pending/supabase-takes-postgres-options/app/instructions.md';
+const guide = 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.22-to-8.0.0-rc.23/instructions.md';
 
 function detector(changeId: string): (content: string) => boolean {
   return (content) => detectionPatterns(guide, changeId).some((pattern) => pattern.test(content));
