@@ -361,7 +361,7 @@ export class TransactionManager {
             await this.#requiredRollbackToSavepoint(txw.transaction)(scope.savepoint)
             await this.#releaseSavepoint(txw.transaction, scope.savepoint)
           } finally {
-            txw.scopes.pop()
+            popRolledBackScope(txw)
           }
           return
         }
@@ -703,6 +703,17 @@ function mergeInnermostScope(tx: TransactionWrapper): void {
   }
   child.runningStatements.clear()
   child.mergedInto = parent
+}
+
+function popRolledBackScope(tx: TransactionWrapper): void {
+  const child = innermostScope(tx)
+  tx.scopes.pop()
+  const parent = innermostScope(tx)
+  for (const statement of child.runningStatements) {
+    parent.runningStatements.add(statement)
+    void statement.then(() => currentScope(parent).runningStatements.delete(statement))
+  }
+  child.runningStatements.clear()
 }
 
 function markClosing(scopes: Scope[], reason: ClosingReason): void {
