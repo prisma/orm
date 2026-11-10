@@ -13,6 +13,7 @@ import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient, ObjectId } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { contract } from './runner-statements-fixtures';
 
 const controlAdapter = new MongoControlAdapterImpl();
 const policy: MigrationOperationPolicy = {
@@ -130,7 +131,10 @@ function addPlanValidator(checkDocuments: boolean | undefined): AnyMongoMigratio
   );
 }
 
-async function run(operations: readonly AnyMongoMigrationOperation[]) {
+async function run(
+  operations: readonly AnyMongoMigrationOperation[],
+  destinationContract: MongoContract = usersWithPlan,
+) {
   const plan: MigrationPlan = {
     targetId: 'mongo',
     operations: JSON.parse(serializeMongoOps(operations)),
@@ -148,7 +152,7 @@ async function run(operations: readonly AnyMongoMigrationOperation[]) {
         operationCount: operations.length,
       }),
     ],
-    destinationContract: usersWithPlan,
+    destinationContract,
     policy,
     frameworkComponents: [],
   });
@@ -298,13 +302,23 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
       await db.createCollection('users', { validator: { $jsonSchema: shared(['name']) } });
       await db.collection('users').insertOne({ name: 'Ada' });
 
-      const result = await run([
-        collMod(
-          'users',
-          { validator: { $jsonSchema: shared(['name', 'plan']) } },
-          { id: 'validator.users.update', checkDocuments: true },
+      const result = await run(
+        [
+          collMod(
+            'users',
+            { validator: { $jsonSchema: shared(['name', 'plan']) } },
+            { id: 'validator.users.update', checkDocuments: true },
+          ),
+        ],
+        contract(
+          'dest',
+          {
+            User: { collection: 'users', fields: ['_id', 'name', 'plan'] },
+            Admin: { collection: 'users', fields: ['_id', 'level'] },
+          },
+          { users: new MongoCollection({}) },
         ),
-      ]);
+      );
 
       if (result.ok) throw new Error('Expected the validator change to stop at its document check');
       expect({

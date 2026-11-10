@@ -47,11 +47,7 @@ import {
 } from './mongo-data-transforms';
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planFieldFills } from './mongo-field-fills';
-import {
-  type PlannedRewrite,
-  sharedCollectionRefusals,
-  timeSeriesRefusals,
-} from './mongo-rewrite-refusals';
+import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
   collectionControlOf,
@@ -799,8 +795,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ),
       ...unrewritableTypeChangeRefusals(unconverted, contract),
       ...noCastRefusals(rewritable, contract),
-      ...timeSeriesRefusals(rewrites, schema),
-      ...sharedCollectionRefusals(rewrites, contract, schema),
+      ...rewrites.flatMap((rewrite) =>
+        rewriteRefusals(rewrite, contract, {
+          timeSeries: schema.collection(rewrite.collection)?.options?.timeseries !== undefined,
+          validator: schema.collection(rewrite.collection)?.validator?.jsonSchema,
+        }),
+      ),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
     const castCalls = casts.map(({ call }) => call);

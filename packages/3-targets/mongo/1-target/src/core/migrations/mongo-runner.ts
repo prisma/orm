@@ -37,7 +37,6 @@ import {
   propertyBsonTypesOf,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
-  validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -75,6 +74,8 @@ import {
   unrewritableFieldNameReason,
 } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
+import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
+import { variantFilter } from './mongo-statement-planning';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -292,32 +293,39 @@ function joinedList(items: readonly string[]): string {
 
 /**
  * The `--backfill` statements that let the user choose values for the fields a change makes
- * required. None where the planner refuses a backfill: in a time-series collection, in a collection
- * several root models share, and for a stored name MongoDB reads as a path or an operator.
+ * required: one for each field the planner would accept the statement for, as its rewrite refusals
+ * and stored name rules say.
  */
 function backfillAdvice(
   contract: MongoContract,
   collection: string,
-  fields: {
-    readonly requires: readonly string[];
-    readonly timeSeries: boolean;
-    readonly sharedByRootModels: boolean;
-  },
+  requires: readonly string[],
+  rewriteCollection: RewriteCollection,
 ): readonly string[] {
-  if (fields.timeSeries || fields.sharedByRootModels) return [];
-  const requires = fields.requires.filter(
-    (stored) => unrewritableFieldNameReason(stored) === undefined,
-  );
-  if (requires.length === 0) return [];
-  const statements = requires.flatMap((stored) => {
+  const accepted = requires.flatMap((stored) => {
+    if (unrewritableFieldNameReason(stored) !== undefined) return [];
     const field = fieldStoredAt(contract, collection, stored);
-    return field.kind === 'field' ? [`--backfill ${fieldStatementText(contract, field)}`] : [];
+    if (field.kind !== 'field') return [];
+    const model = { namespaceId: field.namespaceId, model: field.model };
+    const refusals = rewriteRefusals(
+      {
+        kind: 'backfill',
+        collection,
+        field: stored,
+        filter: variantFilter(contract, model),
+        model,
+      },
+      contract,
+      rewriteCollection,
+    );
+    return refusals.length === 0
+      ? [{ stored, statement: fieldStatementText(contract, field) }]
+      : [];
   });
-  const plan =
-    statements.length === requires.length
-      ? `migration plan ${statements.join(' ')}`
-      : 'migration plan and --backfill <Model.field> for each';
-  return [`To give ${quotedList(requires)} values you choose, plan the change with ${plan}.`];
+  if (accepted.length === 0) return [];
+  return [
+    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${accepted.map(({ statement }) => `--backfill ${statement}`).join(' ')}.`,
+  ];
 }
 
 /** How to change documents by hand while the old validator, which may reject their new shape, is in place. */
@@ -1063,14 +1071,12 @@ export class MongoMigrationRunner {
     ];
     const advice = hadValidator
       ? [
-          ...backfillAdvice(apply.contract, collection, {
-            requires: touched.requires,
+          ...backfillAdvice(apply.contract, collection, touched.requires, {
             timeSeries:
               typeof options === 'object' &&
               options !== null &&
               Reflect.get(options, 'timeseries') !== undefined,
-            sharedByRootModels:
-              validatorRootShapesOf(Reflect.get(validator, '$jsonSchema')).length > 1,
+            validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
           }),
           byHandAdvice(collection),
         ]
