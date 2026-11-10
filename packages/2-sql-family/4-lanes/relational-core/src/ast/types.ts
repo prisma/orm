@@ -269,6 +269,17 @@ function collectParamRefsWith<TNode extends Expression>(node: TNode): AnyParamRe
   });
 }
 
+export function collectTableSources(ast: AnyQueryAst): readonly TableSource[] {
+  const sources: TableSource[] = [];
+  ast.rewrite({
+    tableSource: (source) => {
+      sources.push(source);
+      return source;
+    },
+  });
+  return sources;
+}
+
 function rewriteTableSource(table: TableSource, rewriter: AstRewriter): TableSource {
   return rewriter.tableSource ? rewriter.tableSource(table) : table;
 }

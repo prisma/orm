@@ -15,21 +15,15 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
-import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { getColumnsReadOnTable, resolvePrimaryKeyColumns } from './collection-contract';
 import type { CollectionTables } from './collection-tables';
 import { ormError } from './orm-errors';
-import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract } from './storage-resolution';
-import { type AliasedTable, createTableScope } from './table-scope';
+import type { AliasedTable } from './table-scope';
 import { combineWhereExprs } from './where-utils';
-
-function aliasTarget(namespaceId: string, tableName: string): AliasedTable {
-  return createTableScope().aliasTable({ namespaceId, tableName });
-}
 
 export function projectTableColumn(
   contract: Contract<SqlStorage>,
@@ -184,35 +178,6 @@ export function insertAst(
     .withOnConflict(conflictSkipClause(target, conflictSkip));
 }
 
-export function compileInsertReturning(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  modelName: string,
-  tableName: string,
-  rows: readonly Record<string, unknown>[],
-  returningColumns: readonly string[] | undefined,
-  conflictSkip?: InsertConflictSkip,
-): SqlQueryPlan<Record<string, unknown>> {
-  const target = aliasTarget(namespaceId, tableName);
-  const ast = insertAst(contract, target, rows, conflictSkip).withReturning(
-    returningProjection(contract, modelName, target, returningColumns),
-  );
-  const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params);
-}
-
-export function compileInsertCount(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-  rows: readonly Record<string, unknown>[],
-  conflictSkip?: InsertConflictSkip,
-): SqlQueryPlan<Record<string, unknown>> {
-  const ast = insertAst(contract, aliasTarget(namespaceId, tableName), rows, conflictSkip);
-  const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params);
-}
-
 function stripUndefinedValues(row: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
@@ -335,44 +300,4 @@ export function deleteAst(
   where: AnyExpression | undefined,
 ): DeleteAst {
   return DeleteAst.from(tables.root.tableSource(contract)).withWhere(where);
-}
-
-export function compileUpdateReturning(
-  contract: Contract<SqlStorage>,
-  modelName: string,
-  tables: CollectionTables,
-  setValues: Record<string, unknown>,
-  filters: readonly AnyExpression[],
-  returningColumns: readonly string[] | undefined,
-): SqlQueryPlan<Record<string, unknown>> {
-  const ast = updateAst(contract, tables, setValues, combineWhereExprs(filters)).withReturning(
-    returningProjection(contract, modelName, tables.root, returningColumns),
-  );
-  const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params);
-}
-
-export function compileUpdateCount(
-  contract: Contract<SqlStorage>,
-  tables: CollectionTables,
-  setValues: Record<string, unknown>,
-  filters: readonly AnyExpression[],
-  variantValue?: string | undefined,
-): SqlQueryPlan<Record<string, unknown>> {
-  const where = countMutationWhere(contract, tables, filters, variantValue);
-  const ast = updateAst(contract, tables, setValues, where);
-  const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params);
-}
-
-export function compileDeleteCount(
-  contract: Contract<SqlStorage>,
-  tables: CollectionTables,
-  filters: readonly AnyExpression[],
-  variantValue?: string | undefined,
-): SqlQueryPlan<Record<string, unknown>> {
-  const where = countMutationWhere(contract, tables, filters, variantValue);
-  const ast = deleteAst(contract, tables, where);
-  const { params } = deriveParamsFromAst(ast);
-  return buildOrmQueryPlan(contract, ast, params);
 }

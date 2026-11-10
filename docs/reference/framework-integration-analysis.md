@@ -126,7 +126,7 @@ Next.js (11.2M downloads/week) and Remix (1.1M) use React Server Components. Thi
 
 - The **ORM client** (`orm()`) is a Proxy that lazily caches Collection instances in a `Map` and holds a reference to the runtime. Each query execution goes through `acquireRuntimeScope()` which borrows a connection, executes, and releases.
 
-- **Mutations** are wrapped in transactions (`withMutationScope()`) — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
+- **Mutations** of more than one statement run in a transaction that the mutation graph runner opens beneath the call's `orm-call` activity — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
 
 ### How RSC exposes the statefulness
 
@@ -134,7 +134,7 @@ In RSC, multiple Server Components render **concurrently within the same request
 
 **Reads in parallel Server Components**: Multiple components calling `db.users.all()` and `db.posts.all()` concurrently should be fine — each `acquireRuntimeScope()` borrows and releases a connection independently. The statefulness is scoped to the connection lifetime, not the ORM client instance.
 
-**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). Mutations go through `withMutationScope()` which handles transaction lifecycle automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
+**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). The mutation graph runner handles the transaction lifecycle of a mutation automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
 
 **Transactions across components**: If a user wants a transaction spanning operations in different Server Components, the current API has no way to express this — and shouldn't. Transactions should be scoped to a single logical operation, not spread across UI components.
 
