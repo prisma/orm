@@ -1,11 +1,11 @@
-import { defineContract, field, index, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, index, model, type } from '@internal/mongo/contract-builder';
 
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
-    email: field.string(),
-    name: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    email: field.scalar(type.String()),
+    name: field.scalar(type.String()),
   },
   indexes: [index({ email: 1 }, { unique: true }), index({ email: 1, name: 1 })],
 });

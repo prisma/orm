@@ -10,6 +10,7 @@ import type {
 import { expectTypeOf, test } from 'vitest';
 import { defineContract, field, index, model, valueObject } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
+import { type } from './mongo-test-packs';
 
 const mongoFamilyPack = {
   kind: 'family',
@@ -29,15 +30,15 @@ const mongoTargetPack = {
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     homeAddress: field.valueObject(Address).optional(),
     previousAddresses: field.valueObject(Address).many(),
   },
@@ -53,8 +54,8 @@ const contract = defineContract({
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    _id: field.objectId(),
-    type: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    type: field.scalar(type.String()),
   },
   discriminator: {
     field: 'type',
@@ -69,7 +70,7 @@ const Bug = model('Bug', {
   collection: 'tasks',
   base: Task,
   fields: {
-    severity: field.string(),
+    severity: field.scalar(type.String()),
   },
 });
 
@@ -77,7 +78,7 @@ const Feature = model('Feature', {
   collection: 'tasks',
   base: Task,
   fields: {
-    priority: field.string(),
+    priority: field.scalar(type.String()),
   },
 });
 
@@ -119,8 +120,8 @@ test('double helper infers numeric row values', () => {
   const Measurement = model('Measurement', {
     collection: 'measurements',
     fields: {
-      _id: field.objectId(),
-      reading: field.double(),
+      _id: field.scalar(type.ObjectId()),
+      reading: field.scalar(type.Double()),
     },
   });
 
@@ -139,12 +140,12 @@ test('BSON scalar helpers infer their application types', () => {
   const Post = model('Post', {
     collection: 'posts',
     fields: {
-      _id: field.objectId(),
-      views: field.int64(),
-      hits: field.int64Number(),
-      price: field.decimal128(),
-      thumbnail: field.binary(),
-      meta: field.json(),
+      _id: field.scalar(type.ObjectId()),
+      views: field.scalar(type.Int64()),
+      hits: field.scalar(type.Int64Number()),
+      price: field.scalar(type.Decimal128()),
+      thumbnail: field.scalar(type.Binary()),
+      meta: field.scalar(type.Json()),
     },
   });
 
@@ -194,8 +195,8 @@ test('model authoring accepts typed Mongo collection options', () => {
   model('Event', {
     collection: 'events',
     fields: {
-      _id: field.objectId(),
-      createdAt: field.date(),
+      _id: field.scalar(type.ObjectId()),
+      createdAt: field.scalar(type.Date()),
     },
     collectionOptions: {
       capped: true,
@@ -253,14 +254,17 @@ const F11Contract = defineContract({
     F11Account: model('F11Account', {
       collection: 'f11_accounts',
       fields: {
-        _id: field.objectId(),
-        scalarField: field.string(),
-        nullableField: field.string().optional(),
-        manyField: field.string().many(),
-        explicitlyStrictManyField: field.string().many({ elementsNullable: false }),
-        nullableElementsManyField: field.string().many({ elementsNullable: true }),
-        nullableManyField: field.string().optional().many(),
-        fullyNullableManyField: field.string().optional().many({ elementsNullable: true }),
+        _id: field.scalar(type.ObjectId()),
+        scalarField: field.scalar(type.String()),
+        nullableField: field.scalar(type.String()).optional(),
+        manyField: field.scalar(type.String()).many(),
+        explicitlyStrictManyField: field.scalar(type.String()).many({ elementsNullable: false }),
+        nullableElementsManyField: field.scalar(type.String()).many({ elementsNullable: true }),
+        nullableManyField: field.scalar(type.String()).optional().many(),
+        fullyNullableManyField: field
+          .scalar(type.String())
+          .optional()
+          .many({ elementsNullable: true }),
         role: field.namedType(F11Role),
         nullableRole: field.namedType(F11Role).optional(),
         manyRoles: field.namedType(F11Role).many(),
@@ -298,9 +302,9 @@ test('F11: many fields preserve both element-nullability states', () => {
 test('F11: many options reject incomplete and widened state', () => {
   const widened: boolean = Math.random() > 0.5;
   // @ts-expect-error widened booleans cannot determine element-nullability state
-  field.string().many({ elementsNullable: widened });
+  field.scalar(type.String()).many({ elementsNullable: widened });
   // @ts-expect-error options require elementsNullable
-  field.string().many({});
+  field.scalar(type.String()).many({});
 });
 
 test('F11: nullable+many field resolves to Base[] | null, not (Base | null)[]', () => {
@@ -392,8 +396,8 @@ test('F11 input: nullable+many enum resolves to (union)[] | null, not (union | n
 
 const Inner = valueObject('Inner', {
   fields: {
-    x: field.string(),
-    y: field.double(),
+    x: field.scalar(type.String()),
+    y: field.scalar(type.Double()),
   },
 });
 
@@ -401,14 +405,14 @@ const Outer = valueObject('Outer', {
   fields: {
     inner: field.valueObject(Inner),
     nullableInner: field.valueObject(Inner).optional(),
-    name: field.string(),
+    name: field.scalar(type.String()),
   },
 });
 
 const VOModel = model('VOModel', {
   collection: 'vo_models',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     nested: field.valueObject(Outer),
     nullableNested: field.valueObject(Outer).optional(),
     manyNested: field.valueObject(Outer).many(),
@@ -526,9 +530,9 @@ test('a model storage type names the stored name of each field', () => {
   const Account = model('Account', {
     collection: 'accounts',
     fields: {
-      id: field.objectId().mongo({ field: '_id' }),
-      handle: field.string().optional().mongo({ field: 'user_handle' }),
-      email: field.string(),
+      id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+      handle: field.scalar(type.String()).optional().mongo({ field: 'user_handle' }),
+      email: field.scalar(type.String()),
     },
   });
   const contract = defineContract({
@@ -569,9 +573,9 @@ const VectorContract = defineContract({
     Doc: model('Doc', {
       collection: 'docs',
       fields: {
-        _id: field.objectId(),
-        embedding: field.vector({ typeParams: { length: 3 } }),
-        plain: field.vector(),
+        _id: field.scalar(type.ObjectId()),
+        embedding: field.scalar(type.Vector(3)),
+        plain: field.scalar(type.Vector()),
       },
     }),
   },
@@ -616,7 +620,7 @@ const BadgeContract = defineContract({
   models: {
     Member: model('Member', {
       collection: 'members',
-      fields: { _id: field.objectId(), badge: field.valueObject(Badge) },
+      fields: { _id: field.scalar(type.ObjectId()), badge: field.valueObject(Badge) },
     }),
   },
 });

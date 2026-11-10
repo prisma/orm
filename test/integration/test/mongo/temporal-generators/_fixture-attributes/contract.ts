@@ -1,12 +1,12 @@
 import { defineContract, gen } from '@internal/mongo/contract-builder';
 
-export const contract = defineContract({}, ({ field, model }) => {
+export const contract = defineContract({}, ({ field, model, type }) => {
   const Event = model('Event', {
     collection: 'events',
     fields: {
-      id: field.objectId().mongo({ field: '_id' }),
-      kind: field.string(),
-      createdAt: field.date().onCreate(gen.now()),
+      id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+      kind: field.scalar(type.String()),
+      createdAt: field.scalar(type.Date()).onCreate(gen.now()),
     },
     discriminator: {
       field: 'kind',
@@ -18,33 +18,41 @@ export const contract = defineContract({}, ({ field, model }) => {
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          title: field.string(),
-          createdAt: field.date().onCreate(gen.now()),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          title: field.scalar(type.String()),
+          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
           updatedAt: field
-            .date()
+            .scalar(type.Date())
             .onCreate(gen.now())
             .onUpdate(gen.now())
             .mongo({ field: 'updated_at' }),
-          touchedAt: field.date().onUpdate(gen.now()),
+          touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
         },
       }),
       Counter: model('Counter', {
         collection: 'counters',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          key: field.string(),
-          tags: field.string().many(),
-          scores: field.int32().many(),
-          factor: field.double(),
-          hits: field.int32(),
-          label: field.string().optional(),
-          updatedAt: field.date().onCreate(gen.now()).onUpdate(gen.now()),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          key: field.scalar(type.String()),
+          tags: field.scalar(type.String()).many(),
+          scores: field.scalar(type.Int32()).many(),
+          factor: field.scalar(type.Double()),
+          hits: field.scalar(type.Int32()),
+          label: field.scalar(type.String()).optional(),
+          updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
         },
       }),
       Event,
-      Click: model('Click', { collection: 'events', base: Event, fields: { url: field.string() } }),
-      View: model('View', { collection: 'events', base: Event, fields: { path: field.string() } }),
+      Click: model('Click', {
+        collection: 'events',
+        base: Event,
+        fields: { url: field.scalar(type.String()) },
+      }),
+      View: model('View', {
+        collection: 'events',
+        base: Event,
+        fields: { path: field.scalar(type.String()) },
+      }),
     },
   };
 });

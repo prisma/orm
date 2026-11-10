@@ -1,7 +1,7 @@
 {
   "name": "@internal/driver-mariadb",
   "private": true,
-  "version": "8.0.0-rc.22",
+  "version": "8.0.0-rc.23",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,13 +15,13 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/driver-mysql": "workspace:8.0.0-rc.22",
-    "@internal/framework-components": "workspace:8.0.0-rc.22"
+    "@internal/driver-mysql": "workspace:8.0.0-rc.23",
+    "@internal/framework-components": "workspace:8.0.0-rc.23"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.22",
-    "@repo/tsconfig": "workspace:8.0.0-rc.22",
-    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
+    "@repo/tsdown": "workspace:8.0.0-rc.23",
     "mariadb": "3.5.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",

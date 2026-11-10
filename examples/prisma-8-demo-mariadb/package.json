@@ -17,15 +17,15 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mariadb": "workspace:8.0.0-rc.22"
+    "@prisma/orm-mariadb": "workspace:8.0.0-rc.23"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.9.0",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.22",
-    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.22"
+  "version": "8.0.0-rc.23"
 }
