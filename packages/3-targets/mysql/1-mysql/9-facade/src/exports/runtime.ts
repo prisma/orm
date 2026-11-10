@@ -1,4 +1,5 @@
 export type { MysqlPoolOptions } from '@internal/driver-mysql/runtime';
+export { mysqlIsolationLevels as IsolationLevel } from '@internal/target-mysql/runtime';
 export type { MysqlBindingInput } from '../runtime/binding';
 export type {
   MysqlClient,

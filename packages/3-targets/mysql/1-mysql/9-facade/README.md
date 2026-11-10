@@ -24,7 +24,7 @@ Wires the MySQL target, adapter and driver together for a project's `prisma.conf
 
 ## Transaction isolation
 
-`mysql({ contract, url, transactionOptions: { isolationLevel: 'RepeatableRead' } })` sets the default for callback transactions. `db.transaction(fn, { isolationLevel: 'Serializable' })` overrides it for one call. Supported values are `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, and `Serializable`.
+Import `mysql, { IsolationLevel }` from `@prisma/orm-mysql/runtime`. `mysql({ contract, url, transactionOptions: { isolationLevel: IsolationLevel.RepeatableRead } })` sets the default for callback transactions. `db.transaction(fn, { isolationLevel: IsolationLevel.Serializable })` overrides it for one call. String literals remain accepted. Supported values are `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, and `Serializable`.
 
 An omitted or `undefined` local level inherits the factory default; without either, the transaction uses the server/session default. Invalid options, including `null` and unknown keys, fail before connection acquisition. Factory defaults do not affect manually started runtime transactions.
 

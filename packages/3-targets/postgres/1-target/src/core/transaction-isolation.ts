@@ -1,11 +1,19 @@
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 
-export const postgresIsolationLevelSchema = type(
-  "'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable'",
-);
+export const postgresIsolationLevels = {
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
+  Serializable: 'Serializable',
+} as const;
 
-export type PostgresIsolationLevel = typeof postgresIsolationLevelSchema.infer;
+export type PostgresIsolationLevel =
+  (typeof postgresIsolationLevels)[keyof typeof postgresIsolationLevels];
+
+export const postgresIsolationLevelSchema = type.enumerated(
+  ...Object.values(postgresIsolationLevels),
+);
 
 export function validatePostgresIsolationLevel(value: unknown): PostgresIsolationLevel {
   const result = postgresIsolationLevelSchema(value);

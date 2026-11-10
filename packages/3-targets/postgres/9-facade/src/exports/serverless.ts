@@ -1,4 +1,5 @@
 export type { PostgresFullTextMethods } from '@internal/target-postgres/full-text';
+export { postgresIsolationLevels as IsolationLevel } from '@internal/target-postgres/runtime';
 export type {
   PostgresCursorOptions,
   PostgresTransactionOptions,

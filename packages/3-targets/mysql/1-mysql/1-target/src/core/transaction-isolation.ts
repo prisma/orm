@@ -1,11 +1,16 @@
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 
-export const mysqlIsolationLevelSchema = type(
-  "'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable'",
-);
+export const mysqlIsolationLevels = {
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
+  Serializable: 'Serializable',
+} as const;
 
-export type MysqlIsolationLevel = typeof mysqlIsolationLevelSchema.infer;
+export type MysqlIsolationLevel = (typeof mysqlIsolationLevels)[keyof typeof mysqlIsolationLevels];
+
+export const mysqlIsolationLevelSchema = type.enumerated(...Object.values(mysqlIsolationLevels));
 
 export function validateMysqlIsolationLevel(value: unknown): MysqlIsolationLevel {
   const result = mysqlIsolationLevelSchema(value);

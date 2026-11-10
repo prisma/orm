@@ -5,5 +5,6 @@ export { default } from '../core/runtime/runtime-target';
 export {
   type MysqlIsolationLevel,
   mysqlIsolationLevelSchema,
+  mysqlIsolationLevels,
   validateMysqlIsolationLevel,
 } from '../core/transaction-isolation';

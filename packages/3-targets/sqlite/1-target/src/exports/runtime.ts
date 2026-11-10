@@ -6,5 +6,6 @@ export { SqliteContractView } from '../core/sqlite-contract-view';
 export {
   type SqliteIsolationLevel,
   sqliteIsolationLevelSchema,
+  sqliteIsolationLevels,
   validateSqliteIsolationLevel,
 } from '../core/transaction-isolation';

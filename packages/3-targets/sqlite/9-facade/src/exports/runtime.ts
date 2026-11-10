@@ -1,3 +1,4 @@
+export { sqliteIsolationLevels as IsolationLevel } from '@internal/target-sqlite/runtime';
 export type { SqliteBindingInput } from '../runtime/binding';
 export type {
   SqliteClient,

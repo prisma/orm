@@ -3,12 +3,16 @@
 PostgreSQL (pooled and serverless), SQLite, MySQL, and Supabase role-bound clients support `transaction(callback, options?)`. Factory `transactionOptions` provides defaults for explicit callbacks only.
 
 ```typescript
-const db = postgres({ contract, url, transactionOptions: { isolationLevel: 'RepeatableRead' } });
+import postgres, { IsolationLevel } from '@prisma/orm-postgres/runtime';
+
+const db = postgres({ contract, url, transactionOptions: { isolationLevel: IsolationLevel.RepeatableRead } });
 const rows = await db.transaction(
   (tx) => tx.orm.public.User.select('id').all(),
-  { isolationLevel: 'Serializable' },
+  { isolationLevel: IsolationLevel.Serializable },
 );
 ```
+
+Each facade runtime exports a named `IsolationLevel` const object: `@prisma/orm-postgres/runtime`, `@prisma/orm-mysql/runtime`, `@prisma/orm-sqlite/runtime`, and `@prisma/orm-extension-supabase/runtime`. PostgreSQL's `/serverless` entry exports the same object as `/runtime`; Supabase reuses that PostgreSQL object too. PostgreSQL/MySQL expose all four supported keys, while SQLite exposes only `Serializable`. Values remain string literals, so existing string inputs are still accepted. The supported type and validator are derived from each target's object, not a TypeScript enum.
 
 ## Resolution and validation
 

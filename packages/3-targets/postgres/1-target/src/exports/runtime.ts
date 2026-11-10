@@ -18,6 +18,7 @@ export { PostgresContractView } from '../core/postgres-contract-view';
 export {
   type PostgresIsolationLevel,
   postgresIsolationLevelSchema,
+  postgresIsolationLevels,
   validatePostgresIsolationLevel,
 } from '../core/transaction-isolation';
 

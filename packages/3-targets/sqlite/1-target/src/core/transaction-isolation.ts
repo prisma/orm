@@ -1,9 +1,12 @@
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 
-export const sqliteIsolationLevelSchema = type("'Serializable'");
+export const sqliteIsolationLevels = { Serializable: 'Serializable' } as const;
 
-export type SqliteIsolationLevel = typeof sqliteIsolationLevelSchema.infer;
+export type SqliteIsolationLevel =
+  (typeof sqliteIsolationLevels)[keyof typeof sqliteIsolationLevels];
+
+export const sqliteIsolationLevelSchema = type.enumerated(...Object.values(sqliteIsolationLevels));
 
 export function validateSqliteIsolationLevel(value: unknown): SqliteIsolationLevel {
   const result = sqliteIsolationLevelSchema(value);
