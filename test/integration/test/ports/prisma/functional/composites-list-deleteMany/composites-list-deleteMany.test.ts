@@ -21,7 +21,7 @@ describe('ports/prisma/functional/composites/list/deleteMany', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create({
-          _id: id,
+          id,
           country: 'France',
           contents: [
             {
@@ -31,9 +31,9 @@ describe('ports/prisma/functional/composites/list/deleteMany', () => {
           ],
         });
 
-        await db.comment_required_list.where({ _id: id }).deleteAndCount();
+        await db.comment_required_list.where({ id }).deleteAndCount();
 
-        const remaining = await db.comment_required_list.where({ _id: id }).all();
+        const remaining = await db.comment_required_list.where({ id }).all();
         expect(remaining).toHaveLength(0);
       }),
     timeouts.spinUpMongoMemoryServer,

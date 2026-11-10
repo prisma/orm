@@ -1,4 +1,4 @@
-import type { JsonValue } from '@internal/contract/types';
+import type { JsonValue, ParameterizedOutputTypesFunction } from '@internal/contract/types';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   InferModelRow,
@@ -10,6 +10,7 @@ import type {
 import { expectTypeOf, test } from 'vitest';
 import { defineContract, field, index, model, valueObject } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
+import { type } from './mongo-test-packs';
 
 const mongoFamilyPack = {
   kind: 'family',
@@ -29,15 +30,15 @@ const mongoTargetPack = {
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     homeAddress: field.valueObject(Address).optional(),
     previousAddresses: field.valueObject(Address).many(),
   },
@@ -53,8 +54,8 @@ const contract = defineContract({
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    _id: field.objectId(),
-    type: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    type: field.scalar(type.String()),
   },
   discriminator: {
     field: 'type',
@@ -69,7 +70,7 @@ const Bug = model('Bug', {
   collection: 'tasks',
   base: Task,
   fields: {
-    severity: field.string(),
+    severity: field.scalar(type.String()),
   },
 });
 
@@ -77,7 +78,7 @@ const Feature = model('Feature', {
   collection: 'tasks',
   base: Task,
   fields: {
-    priority: field.string(),
+    priority: field.scalar(type.String()),
   },
 });
 
@@ -93,28 +94,24 @@ test('contract roots stay specific', () => {
   expectTypeOf(contract.roots.users.model).toEqualTypeOf<'User'>();
 });
 
-test('polymorphic variants keep literal model keys', () => {
-  type VariantKeys = keyof NonNullable<
-    MongoModelsMap<typeof polymorphicContract>['Task']['variants']
-  >;
+test('polymorphic variants are keyed by literal discriminator value', () => {
+  type Variants = MongoModelsMap<typeof polymorphicContract>['Task']['variants'];
 
-  expectTypeOf<VariantKeys>().toEqualTypeOf<'Bug' | 'Feature'>();
-  type BugVariantValue = MongoModelsMap<
-    typeof polymorphicContract
-  >['Task']['variants']['Bug']['value'];
-  expectTypeOf<BugVariantValue>().toBeString();
+  expectTypeOf<keyof Variants>().toEqualTypeOf<'bug' | 'feature'>();
+  expectTypeOf<Variants['bug']['model']>().toEqualTypeOf<'Bug'>();
+  expectTypeOf<Variants['feature']['model']>().toEqualTypeOf<'Feature'>();
 });
 
 test('value object rows flow through InferModelRow', () => {
   expectTypeOf<UserRow['_id']>().toEqualTypeOf<string>();
   expectTypeOf<UserRow['homeAddress']>().toEqualTypeOf<{
-    street: string;
-    zip: string | null;
+    readonly street: string;
+    readonly zip: string | null;
   } | null>();
   expectTypeOf<UserRow['previousAddresses']>().toEqualTypeOf<
-    {
-      street: string;
-      zip: string | null;
+    readonly {
+      readonly street: string;
+      readonly zip: string | null;
     }[]
   >();
 });
@@ -123,8 +120,8 @@ test('double helper infers numeric row values', () => {
   const Measurement = model('Measurement', {
     collection: 'measurements',
     fields: {
-      _id: field.objectId(),
-      reading: field.double(),
+      _id: field.scalar(type.ObjectId()),
+      reading: field.scalar(type.Double()),
     },
   });
 
@@ -143,12 +140,12 @@ test('BSON scalar helpers infer their application types', () => {
   const Post = model('Post', {
     collection: 'posts',
     fields: {
-      _id: field.objectId(),
-      views: field.int64(),
-      hits: field.int64Number(),
-      price: field.decimal128(),
-      thumbnail: field.binary(),
-      meta: field.json(),
+      _id: field.scalar(type.ObjectId()),
+      views: field.scalar(type.Int64()),
+      hits: field.scalar(type.Int64Number()),
+      price: field.scalar(type.Decimal128()),
+      thumbnail: field.scalar(type.Binary()),
+      meta: field.scalar(type.Json()),
     },
   });
 
@@ -198,8 +195,8 @@ test('model authoring accepts typed Mongo collection options', () => {
   model('Event', {
     collection: 'events',
     fields: {
-      _id: field.objectId(),
-      createdAt: field.date(),
+      _id: field.scalar(type.ObjectId()),
+      createdAt: field.scalar(type.Date()),
     },
     collectionOptions: {
       capped: true,
@@ -244,7 +241,7 @@ test('Mongo option types reject unsupported authoring shapes', () => {
 
 const F11Role = enumType(
   'F11Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );
@@ -257,14 +254,17 @@ const F11Contract = defineContract({
     F11Account: model('F11Account', {
       collection: 'f11_accounts',
       fields: {
-        _id: field.objectId(),
-        scalarField: field.string(),
-        nullableField: field.string().optional(),
-        manyField: field.string().many(),
-        explicitlyStrictManyField: field.string().many({ elementsNullable: false }),
-        nullableElementsManyField: field.string().many({ elementsNullable: true }),
-        nullableManyField: field.string().optional().many(),
-        fullyNullableManyField: field.string().optional().many({ elementsNullable: true }),
+        _id: field.scalar(type.ObjectId()),
+        scalarField: field.scalar(type.String()),
+        nullableField: field.scalar(type.String()).optional(),
+        manyField: field.scalar(type.String()).many(),
+        explicitlyStrictManyField: field.scalar(type.String()).many({ elementsNullable: false }),
+        nullableElementsManyField: field.scalar(type.String()).many({ elementsNullable: true }),
+        nullableManyField: field.scalar(type.String()).optional().many(),
+        fullyNullableManyField: field
+          .scalar(type.String())
+          .optional()
+          .many({ elementsNullable: true }),
         role: field.namedType(F11Role),
         nullableRole: field.namedType(F11Role).optional(),
         manyRoles: field.namedType(F11Role).many(),
@@ -287,26 +287,30 @@ test('F11: nullable field resolves to Base | null', () => {
 });
 
 test('F11: many fields preserve both element-nullability states', () => {
-  expectTypeOf<F11Row['manyField']>().toEqualTypeOf<string[]>();
-  expectTypeOf<F11Row['explicitlyStrictManyField']>().toEqualTypeOf<string[]>();
-  expectTypeOf<F11Row['nullableElementsManyField']>().toEqualTypeOf<(string | null)[]>();
-  expectTypeOf<F11Row['fullyNullableManyField']>().toEqualTypeOf<(string | null)[] | null>();
-  expectTypeOf<F11Input['nullableElementsManyField']>().toEqualTypeOf<(string | null)[]>();
-  expectTypeOf<F11Input['fullyNullableManyField']>().toEqualTypeOf<(string | null)[] | null>();
+  expectTypeOf<F11Row['manyField']>().toEqualTypeOf<readonly string[]>();
+  expectTypeOf<F11Row['explicitlyStrictManyField']>().toEqualTypeOf<readonly string[]>();
+  expectTypeOf<F11Row['nullableElementsManyField']>().toEqualTypeOf<readonly (string | null)[]>();
+  expectTypeOf<F11Row['fullyNullableManyField']>().toEqualTypeOf<
+    readonly (string | null)[] | null
+  >();
+  expectTypeOf<F11Input['nullableElementsManyField']>().toEqualTypeOf<readonly (string | null)[]>();
+  expectTypeOf<F11Input['fullyNullableManyField']>().toEqualTypeOf<
+    readonly (string | null)[] | null
+  >();
 });
 
 test('F11: many options reject incomplete and widened state', () => {
   const widened: boolean = Math.random() > 0.5;
   // @ts-expect-error widened booleans cannot determine element-nullability state
-  field.string().many({ elementsNullable: widened });
+  field.scalar(type.String()).many({ elementsNullable: widened });
   // @ts-expect-error options require elementsNullable
-  field.string().many({});
+  field.scalar(type.String()).many({});
 });
 
 test('F11: nullable+many field resolves to Base[] | null, not (Base | null)[]', () => {
   // The precedence bug produced (string | null)[]; the fix produces string[] | null.
-  expectTypeOf<F11Row['nullableManyField']>().toEqualTypeOf<string[] | null>();
-  expectTypeOf<F11Row['nullableManyField']>().not.toEqualTypeOf<(string | null)[]>();
+  expectTypeOf<F11Row['nullableManyField']>().toEqualTypeOf<readonly string[] | null>();
+  expectTypeOf<F11Row['nullableManyField']>().not.toEqualTypeOf<readonly (string | null)[]>();
 });
 
 test('F11: enum field resolves to value union', () => {
@@ -318,17 +322,23 @@ test('F11: nullable enum field resolves to value union | null', () => {
 });
 
 test('F11: many enum field resolves to value union array', () => {
-  expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<('user' | 'admin')[]>();
+  expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<readonly ('user' | 'admin')[]>();
 });
 
 test('F12M: enum lists preserve both nullability axes on output and input', () => {
-  expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<('user' | 'admin')[]>();
-  expectTypeOf<F11Row['nullableElementRoles']>().toEqualTypeOf<('user' | 'admin' | null)[]>();
-  expectTypeOf<F11Row['manyNullableRoles']>().toEqualTypeOf<('user' | 'admin')[] | null>();
-  expectTypeOf<F11Row['fullyNullableRoles']>().toEqualTypeOf<('user' | 'admin' | null)[] | null>();
-  expectTypeOf<F11Input['nullableElementRoles']>().toEqualTypeOf<('user' | 'admin' | null)[]>();
+  expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<readonly ('user' | 'admin')[]>();
+  expectTypeOf<F11Row['nullableElementRoles']>().toEqualTypeOf<
+    readonly ('user' | 'admin' | null)[]
+  >();
+  expectTypeOf<F11Row['manyNullableRoles']>().toEqualTypeOf<readonly ('user' | 'admin')[] | null>();
+  expectTypeOf<F11Row['fullyNullableRoles']>().toEqualTypeOf<
+    readonly ('user' | 'admin' | null)[] | null
+  >();
+  expectTypeOf<F11Input['nullableElementRoles']>().toEqualTypeOf<
+    readonly ('user' | 'admin' | null)[]
+  >();
   expectTypeOf<F11Input['fullyNullableRoles']>().toEqualTypeOf<
-    ('user' | 'admin' | null)[] | null
+    readonly ('user' | 'admin' | null)[] | null
   >();
 });
 
@@ -352,12 +362,12 @@ test('F11 input: nullable scalar resolves to Base | null', () => {
 });
 
 test('F11 input: many scalar resolves to Base[]', () => {
-  expectTypeOf<F11Input['manyField']>().toEqualTypeOf<string[]>();
+  expectTypeOf<F11Input['manyField']>().toEqualTypeOf<readonly string[]>();
 });
 
 test('F11 input: nullable+many scalar resolves to Base[] | null, not (Base | null)[]', () => {
-  expectTypeOf<F11Input['nullableManyField']>().toEqualTypeOf<string[] | null>();
-  expectTypeOf<F11Input['nullableManyField']>().not.toEqualTypeOf<(string | null)[]>();
+  expectTypeOf<F11Input['nullableManyField']>().toEqualTypeOf<readonly string[] | null>();
+  expectTypeOf<F11Input['nullableManyField']>().not.toEqualTypeOf<readonly (string | null)[]>();
 });
 
 test('F11 input: plain enum resolves to value union', () => {
@@ -369,21 +379,25 @@ test('F11 input: nullable enum resolves to value union | null', () => {
 });
 
 test('F11 input: many enum resolves to value union array', () => {
-  expectTypeOf<F11Input['manyRoles']>().toEqualTypeOf<('user' | 'admin')[]>();
+  expectTypeOf<F11Input['manyRoles']>().toEqualTypeOf<readonly ('user' | 'admin')[]>();
 });
 
 test('F11 input: nullable+many enum resolves to (union)[] | null, not (union | null)[]', () => {
-  expectTypeOf<F11Input['manyNullableRoles']>().toEqualTypeOf<('user' | 'admin')[] | null>();
+  expectTypeOf<F11Input['manyNullableRoles']>().toEqualTypeOf<
+    readonly ('user' | 'admin')[] | null
+  >();
   // Precedence trap: nullable applied inside the array gives (union | null)[]; correct form is outside.
-  expectTypeOf<F11Input['manyNullableRoles']>().not.toEqualTypeOf<('user' | 'admin' | null)[]>();
+  expectTypeOf<F11Input['manyNullableRoles']>().not.toEqualTypeOf<
+    readonly ('user' | 'admin' | null)[]
+  >();
 });
 
 // --- Value object and nested VO matrix ---
 
 const Inner = valueObject('Inner', {
   fields: {
-    x: field.string(),
-    y: field.double(),
+    x: field.scalar(type.String()),
+    y: field.scalar(type.Double()),
   },
 });
 
@@ -391,14 +405,14 @@ const Outer = valueObject('Outer', {
   fields: {
     inner: field.valueObject(Inner),
     nullableInner: field.valueObject(Inner).optional(),
-    name: field.string(),
+    name: field.scalar(type.String()),
   },
 });
 
 const VOModel = model('VOModel', {
   collection: 'vo_models',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     nested: field.valueObject(Outer),
     nullableNested: field.valueObject(Outer).optional(),
     manyNested: field.valueObject(Outer).many(),
@@ -418,79 +432,206 @@ const VOContract = defineContract({
 type VORow = InferModelRow<typeof VOContract, 'VOModel'>;
 type VOInput = MongoUnboundFieldInputTypes<typeof VOContract>['VOModel'];
 
+test('value objects are typed in the storage namespace, not the domain', () => {
+  type Namespace = (typeof VOContract)['storage']['namespaces']['__unbound__'];
+  expectTypeOf<keyof Namespace['entries']['valueObject']>().toEqualTypeOf<'Inner' | 'Outer'>();
+  expectTypeOf<
+    Namespace['entries']['valueObject']['Outer']['fields']['inner']['type']['entityName']
+  >().toEqualTypeOf<'Inner'>();
+  expectTypeOf<
+    keyof (typeof VOContract)['domain']['namespaces']['__unbound__']
+  >().toEqualTypeOf<'models'>();
+});
+
 test('VO output: plain value object resolves to the full nested shape', () => {
   expectTypeOf<VORow['nested']>().toEqualTypeOf<{
-    inner: { x: string; y: number };
-    nullableInner: { x: string; y: number } | null;
-    name: string;
+    readonly inner: { readonly x: string; readonly y: number };
+    readonly nullableInner: { readonly x: string; readonly y: number } | null;
+    readonly name: string;
   }>();
 });
 
 test('VO output: nullable value object resolves to shape | null', () => {
   expectTypeOf<VORow['nullableNested']>().toEqualTypeOf<{
-    inner: { x: string; y: number };
-    nullableInner: { x: string; y: number } | null;
-    name: string;
+    readonly inner: { readonly x: string; readonly y: number };
+    readonly nullableInner: { readonly x: string; readonly y: number } | null;
+    readonly name: string;
   } | null>();
 });
 
 test('VO output: many value object resolves to shape[]', () => {
   expectTypeOf<VORow['manyNested']>().toEqualTypeOf<
-    {
-      inner: { x: string; y: number };
-      nullableInner: { x: string; y: number } | null;
-      name: string;
+    readonly {
+      readonly inner: { readonly x: string; readonly y: number };
+      readonly nullableInner: { readonly x: string; readonly y: number } | null;
+      readonly name: string;
     }[]
   >();
 });
 
 test('F12M: value-object lists preserve both nullability axes on output and input', () => {
   type Shape = {
-    inner: { x: string; y: number };
-    nullableInner: { x: string; y: number } | null;
-    name: string;
+    readonly inner: { readonly x: string; readonly y: number };
+    readonly nullableInner: { readonly x: string; readonly y: number } | null;
+    readonly name: string;
   };
-  expectTypeOf<VORow['manyNested']>().toEqualTypeOf<Shape[]>();
-  expectTypeOf<VORow['nullableElementNested']>().toEqualTypeOf<(Shape | null)[]>();
-  expectTypeOf<VORow['nullableManyNested']>().toEqualTypeOf<Shape[] | null>();
-  expectTypeOf<VORow['fullyNullableNested']>().toEqualTypeOf<(Shape | null)[] | null>();
-  expectTypeOf<VOInput['nullableElementNested']>().toEqualTypeOf<(Shape | null)[]>();
-  expectTypeOf<VOInput['fullyNullableNested']>().toEqualTypeOf<(Shape | null)[] | null>();
+  expectTypeOf<VORow['manyNested']>().toEqualTypeOf<readonly Shape[]>();
+  expectTypeOf<VORow['nullableElementNested']>().toEqualTypeOf<readonly (Shape | null)[]>();
+  expectTypeOf<VORow['nullableManyNested']>().toEqualTypeOf<readonly Shape[] | null>();
+  expectTypeOf<VORow['fullyNullableNested']>().toEqualTypeOf<readonly (Shape | null)[] | null>();
+  expectTypeOf<VOInput['nullableElementNested']>().toEqualTypeOf<readonly (Shape | null)[]>();
+  expectTypeOf<VOInput['fullyNullableNested']>().toEqualTypeOf<readonly (Shape | null)[] | null>();
 });
 
 test('VO output: nested VO recursion resolves inner shape (not unknown)', () => {
-  // If BuilderFieldChannelType recursion regresses, nested.inner resolves to unknown.
-  expectTypeOf<VORow['nested']['inner']>().toEqualTypeOf<{ x: string; y: number }>();
+  // If value object recursion in the shared field type generic regresses, nested.inner resolves to unknown.
+  expectTypeOf<VORow['nested']['inner']>().toEqualTypeOf<{
+    readonly x: string;
+    readonly y: number;
+  }>();
   expectTypeOf<VORow['nested']['inner']>().not.toBeUnknown();
 });
 
 test('VO input: plain value object resolves to the full nested shape', () => {
   expectTypeOf<VOInput['nested']>().toEqualTypeOf<{
-    inner: { x: string; y: number };
-    nullableInner: { x: string; y: number } | null;
-    name: string;
+    readonly inner: { readonly x: string; readonly y: number };
+    readonly nullableInner: { readonly x: string; readonly y: number } | null;
+    readonly name: string;
   }>();
 });
 
 test('VO input: nullable value object resolves to shape | null', () => {
   expectTypeOf<VOInput['nullableNested']>().toEqualTypeOf<{
-    inner: { x: string; y: number };
-    nullableInner: { x: string; y: number } | null;
-    name: string;
+    readonly inner: { readonly x: string; readonly y: number };
+    readonly nullableInner: { readonly x: string; readonly y: number } | null;
+    readonly name: string;
   } | null>();
 });
 
 test('VO input: many value object resolves to shape[]', () => {
   expectTypeOf<VOInput['manyNested']>().toEqualTypeOf<
-    {
-      inner: { x: string; y: number };
-      nullableInner: { x: string; y: number } | null;
-      name: string;
+    readonly {
+      readonly inner: { readonly x: string; readonly y: number };
+      readonly nullableInner: { readonly x: string; readonly y: number } | null;
+      readonly name: string;
     }[]
   >();
 });
 
 test('VO input: nested VO recursion resolves inner shape (not unknown)', () => {
-  expectTypeOf<VOInput['nested']['inner']>().toEqualTypeOf<{ x: string; y: number }>();
+  expectTypeOf<VOInput['nested']['inner']>().toEqualTypeOf<{
+    readonly x: string;
+    readonly y: number;
+  }>();
   expectTypeOf<VOInput['nested']['inner']>().not.toBeUnknown();
+});
+
+test('a model storage type names the stored name of each field', () => {
+  const Account = model('Account', {
+    collection: 'accounts',
+    fields: {
+      id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+      handle: field.scalar(type.String()).optional().mongo({ field: 'user_handle' }),
+      email: field.scalar(type.String()),
+    },
+  });
+  const contract = defineContract({
+    family: mongoFamilyPack,
+    target: mongoTargetPack,
+    models: { Account },
+  });
+  expectTypeOf<MongoModelsMap<typeof contract>['Account']['storage']['fields']>().toEqualTypeOf<{
+    readonly id: { readonly field: '_id' };
+    readonly handle: { readonly field: 'user_handle' };
+    readonly email: { readonly field: 'email' };
+  }>();
+  expectTypeOf<InferModelRow<typeof contract, 'Account'>>().toHaveProperty('id');
+});
+
+// --- Parameterized output types from the target pack ---
+
+type TestVector<N extends number> = readonly number[] & { readonly __length?: N };
+
+type TestVectorOutputTypeMap<TypeParams> = {
+  readonly 'mongo/vector@1': TypeParams extends { readonly length: infer N extends number }
+    ? TestVector<N>
+    : never;
+};
+
+interface TestVectorOutputTypes extends ParameterizedOutputTypesFunction {
+  readonly outputTypes: TestVectorOutputTypeMap<this['typeParams']>;
+}
+
+const vectorTargetPack: typeof mongoTargetPack & {
+  readonly __parameterizedOutputTypes?: TestVectorOutputTypes;
+} = mongoTargetPack;
+
+const VectorContract = defineContract({
+  family: mongoFamilyPack,
+  target: vectorTargetPack,
+  models: {
+    Doc: model('Doc', {
+      collection: 'docs',
+      fields: {
+        _id: field.scalar(type.ObjectId()),
+        embedding: field.scalar(type.Vector(3)),
+        plain: field.scalar(type.Vector()),
+      },
+    }),
+  },
+});
+
+type VectorRow = InferModelRow<typeof VectorContract, 'Doc'>;
+type VectorInput = MongoUnboundFieldInputTypes<typeof VectorContract>['Doc'];
+
+test('a vector with a length reads as the type the target pack gives it, and writes as the codec input', () => {
+  expectTypeOf<VectorRow['embedding']>().toEqualTypeOf<TestVector<3>>();
+  expectTypeOf<VectorInput['embedding']>().toEqualTypeOf<readonly number[]>();
+});
+
+test('a vector without type parameters keeps the codec output type', () => {
+  expectTypeOf<VectorRow['plain']>().toEqualTypeOf<readonly number[]>();
+  expectTypeOf<
+    (typeof VectorContract)['domain']['namespaces']['__unbound__']['models']['Doc']['fields']['plain']['type']
+  >().toEqualTypeOf<{ readonly kind: 'scalar'; readonly codecId: 'mongo/vector@1' }>();
+});
+
+// --- Enum fields inside value objects ---
+
+const BadgeRole = enumType(
+  'BadgeRole',
+  { codecId: 'mongo/string@1' },
+  member('Reader', 'reader'),
+  member('Editor', 'editor'),
+);
+
+const Badge = valueObject('Badge', {
+  fields: {
+    role: field.namedType(BadgeRole),
+    pastRoles: field.namedType(BadgeRole).optional().many(),
+  },
+});
+
+const BadgeContract = defineContract({
+  family: mongoFamilyPack,
+  target: mongoTargetPack,
+  enums: { BadgeRole },
+  valueObjects: { Badge },
+  models: {
+    Member: model('Member', {
+      collection: 'members',
+      fields: { _id: field.scalar(type.ObjectId()), badge: field.valueObject(Badge) },
+    }),
+  },
+});
+
+type BadgeRow = InferModelRow<typeof BadgeContract, 'Member'>;
+type BadgeInput = MongoUnboundFieldInputTypes<typeof BadgeContract>['Member'];
+
+test('an enum field inside a value object reads and writes the members of its enum', () => {
+  expectTypeOf<BadgeRow['badge']['role']>().toEqualTypeOf<'reader' | 'editor'>();
+  expectTypeOf<BadgeInput['badge']['role']>().toEqualTypeOf<'reader' | 'editor'>();
+  expectTypeOf<BadgeRow['badge']['pastRoles']>().toEqualTypeOf<
+    readonly ('reader' | 'editor')[] | null
+  >();
 });

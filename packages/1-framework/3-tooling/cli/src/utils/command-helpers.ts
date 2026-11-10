@@ -8,6 +8,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { relative, resolve } from 'pathe';
 import type { ControlClient } from '../control-api/types';
+import { migrationsDirFor } from '../orm/migration/paths';
 import { CliStructuredError, errorRuntime } from './cli-errors';
 import {
   hasUrlScheme,
@@ -66,7 +67,7 @@ export function resolveMigrationPaths(
   const configPath = 'prisma.config.ts';
   // A validated config carries the directory absolute; a config handed in
   // raw by a programmatic caller is anchored on its baseDir, else on cwd.
-  const migrationsDir = resolve(config.baseDir ?? cwd, config.migrations?.dir ?? 'migrations');
+  const migrationsDir = migrationsDirFor(config, cwd);
   const migrationsRelative = relative(cwd, migrationsDir);
   const appMigrationsDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
   const appMigrationsRelative = relative(cwd, appMigrationsDir);

@@ -32,7 +32,7 @@ function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
 }
 
 const seedA = (id: string) => ({
-  _id: id,
+  id,
   country: null,
   contents: [{ text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] }],
 });
@@ -45,24 +45,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedA(id));
 
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
-          country: 'Mars',
-          contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
-        });
-
-        expect(count).toBe(1);
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set shorthand (same as set for ORM — no prisma set wrapper)',
-    () =>
-      withComposites(async ({ db }) => {
-        const id = new ObjectId().toHexString();
-        await db.comment_required_list.create(seedA(id));
-
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
+        const count = await db.comment_required_list.where({ id }).updateAndCount({
           country: 'Mars',
           contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
         });
@@ -83,24 +66,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         await db.comment_required_list.create(seedA(id));
 
         // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).updateAndCount({
-          country: 'France',
-          contents: null,
-        });
-        await expect(promise).rejects.toThrow();
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set null shorthand',
-    () =>
-      withComposites(async ({ db }) => {
-        const id = new ObjectId().toHexString();
-        await db.comment_required_list.create(seedA(id));
-
-        // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).updateAndCount({
+        const promise = db.comment_required_list.where({ id }).updateAndCount({
           country: 'France',
           contents: null,
         });
@@ -116,7 +82,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedA(id));
 
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
+        const count = await db.comment_required_list.where({ id }).updateAndCount({
           country: 'Mars',
           contents: [
             {
@@ -142,7 +108,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         await db.comment_required_list.create(seedA(id));
 
         const count = await db.comment_required_list
-          .where({ _id: id })
+          .where({ id })
           .updateAndCount((u) => [u.contents.push({ text: 'Goodbye World', upvotes: [] })]);
 
         expect(count).toBe(1);

@@ -144,7 +144,8 @@ function namedTypeDeclarationToPrinterNamedType(decl: PslNamedTypeDeclaration): 
 
 function formatTypeConstructor(tc: PslTypeConstructorCall): string {
   const path = tc.path.join('.');
-  if (tc.args.length === 0) {
+  const isNamespaced = tc.path.length > 1;
+  if (tc.args.length === 0 && !isNamespaced) {
     return path;
   }
   return `${path}(${tc.args.map(renderAttributeArgument).join(', ')})`;
@@ -260,8 +261,6 @@ function fieldToPrinterField(field: PslField): PrinterField {
 
   const isRelation = field.attributes.some((a) => a.name === 'relation' && a.target === 'field');
 
-  const isUnsupported = typeName.startsWith('Unsupported(');
-
   const isId = field.attributes.some((a) => a.name === 'id' && a.target === 'field');
 
   return {
@@ -274,7 +273,6 @@ function fieldToPrinterField(field: PslField): PrinterField {
     mapName,
     isId,
     isRelation,
-    isUnsupported,
     comment: undefined,
   };
 }

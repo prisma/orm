@@ -4,6 +4,7 @@ import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import type { AttributeCtx } from '../src/attribute-spec/types';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
+import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
@@ -18,9 +19,11 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   const expr = first?.value();
   if (!expr) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, cursor.sourceFile]]);
-  const symbols = {
-    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
-  };
+  const { symbolTable: symbols } = buildSymbolTable({
+    documents: [],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   return {
     expr,
     ctx: { sources, symbols, binder: supportBinder({ sources, symbolTable: symbols }) },

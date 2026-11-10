@@ -22,7 +22,13 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 | `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys | Stable |
 | `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
 | `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
-| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. | Stable |
+| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. It covers skipping only, not an upsert without conflict columns. | Stable |
+| `insertOnConflictTarget` | boolean | An insert's conflict clause applies only to the unique columns it names. MySQL's `ON DUPLICATE KEY UPDATE` fires on any unique key, so the MySQL adapter does not report it. When an adapter does not report it, the ORM sends an upsert as an insert whose update-on-conflict clause names no conflict columns, meaning any unique key; the adapter must render that clause as "any unique key" or refuse it. | Stable |
+| `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. | Stable |
+| `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. | Stable |
+| `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
+| `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
+| `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
@@ -34,6 +40,8 @@ PostgreSQL-specific capabilities managed by the adapter.
 | `savepoints` | boolean | Supports savepoint transactions | Stable |
 | `transactionalDDL` | boolean | Supports transactional DDL | Stable |
 | `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
+| `forNoKeyUpdate` | boolean | Can render the row-locking clause `FOR NO KEY UPDATE` on a select. Gates `forNoKeyUpdate()`. | Stable |
+| `forKeyShare` | boolean | Can render the row-locking clause `FOR KEY SHARE` on a select. Gates `forKeyShare()`. | Stable |
 
 ### `mysql`
 MySQL-specific capabilities managed by the adapter.
@@ -232,6 +240,7 @@ Canonical capability keys with descriptions, typical implementers, and ADR refer
 | sql.defaultInInsert | Supports DEFAULT in multi-row INSERT VALUES | adapters that support DEFAULT keyword as a value | — |
 | sql.insertOnConflictSkip | Skip rows colliding with a unique constraint; gates `onConflict: 'skip'` | adapters that can skip conflicting rows | — |
 | sql.insertOnConflictWithoutTarget | Skip colliding rows without naming the constraint | adapters that can skip without a conflict target | — |
+| sql.insertOnConflictTarget | A conflict clause applies only to the columns it names | adapters whose conflict clause can be limited to named columns | — |
 | postgres.partialIndex | Partial/filtered index support | postgres adapter | ADR 065 |
 | mysql.generatedColumns | Generated column support | mysql adapter | ADR 065 |
 | sqlite.fts5 | FTS5 support | sqlite adapter | ADR 065 |

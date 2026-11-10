@@ -1,4 +1,4 @@
-import { type Binder, isNamespaceLike, type Resolution } from '@internal/psl-parser';
+import type { Binder, Resolution } from '@internal/psl-parser';
 import {
   ArrayLiteralAst,
   type AttributeArgAst,
@@ -14,6 +14,9 @@ import {
   FunctionCallAst,
   type GenericBlockMemberAst,
   type IdentifierAst,
+  KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -235,14 +238,14 @@ function collectDeclaration(
   if (declaration instanceof ModelDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'class', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens);
+    collectFieldBlockMembers(declaration.members(), source, tokens);
     return;
   }
 
   if (declaration instanceof CompositeTypeDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'struct', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens);
+    collectFieldBlockMembers(declaration.members(), source, tokens);
     return;
   }
 
@@ -263,9 +266,80 @@ function collectDeclaration(
     return;
   }
 
+  if (declaration instanceof MixinDeclarationAst) {
+    addToken(declaration.keyword(), 'keyword', tokens);
+    addToken(declaration.mixinKeyword(), 'keyword', tokens);
+    addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
+    if (FIELD_BLOCK_KEYWORDS.has(declaration.keyword()?.text ?? '')) {
+      collectFieldBlockMembers(declaration.members(), source, tokens);
+    } else {
+      collectEntryBlockMembers(declaration.members(), source, tokens);
+    }
+    return;
+  }
+
   addToken(declaration.keyword(), 'keyword', tokens);
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
-  collectGenericBlockMembers(declaration.members(), source, tokens);
+  collectEntryBlockMembers(declaration.members(), source, tokens);
+}
+
+const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+type BodyMemberAst = BlockMemberAst | GenericBlockMemberAst;
+
+function collectFieldBlockMembers(
+  members: Iterable<BodyMemberAst>,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of members) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof FieldDeclarationAst) {
+      collectField(member, source, tokens);
+    } else if (!(member instanceof KeyValuePairAst)) {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectEntryBlockMembers(
+  members: Iterable<BodyMemberAst>,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of members) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof KeyValuePairAst) {
+      addIdentifier(member.key(), 'property', tokens);
+      collectExpression(member.value(), source, tokens);
+    } else if (!(member instanceof FieldDeclarationAst)) {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectInclusion(
+  inclusion: MixinInclusionAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  const name = inclusion.name();
+  if (name === undefined) return;
+  const plus = inclusion.plus();
+  const segments = identifierSegments(name);
+  for (const [index, segment] of segments.entries()) {
+    const isName = index === segments.length - 1;
+    const qualifier = isName ? undefined : source.binder.symbolForNode(segment.identifier.syntax);
+    if (!isName && qualifier?.kind !== 'namespace') continue;
+    const range = rangeForIdentifier(segment.identifier, isName ? 'type' : 'namespace');
+    tokens.push(
+      index === 0 && plus !== undefined && plus.offset < range.startOffset
+        ? createPendingSemanticToken(plus.offset, range.endOffset, isName ? 'type' : 'namespace')
+        : range,
+    );
+  }
 }
 
 function collectNamedTypeDeclaration(
@@ -276,35 +350,6 @@ function collectNamedTypeDeclaration(
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
   collectTypeAnnotation(declaration.typeAnnotation(), source, tokens);
   collectAttributes(declaration.attributes(), source, tokens);
-}
-
-function collectGenericBlockMembers(
-  members: Iterable<GenericBlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-): void {
-  for (const member of members) {
-    if ('key' in member) {
-      addIdentifier(member.key(), 'property', tokens);
-      collectExpression(member.value(), source, tokens);
-      continue;
-    }
-    collectAttribute(member, source, tokens);
-  }
-}
-
-function collectBlockMembers(
-  members: Iterable<BlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-): void {
-  for (const member of members) {
-    if (member instanceof FieldDeclarationAst) {
-      collectField(member, source, tokens);
-      continue;
-    }
-    collectAttribute(member, source, tokens);
-  }
 }
 
 function collectField(
@@ -416,7 +461,7 @@ function collectExpression(
     if (memberPath === undefined) {
       collectTypeReference(expression.name(), source, tokens);
     } else {
-      collectMemberPath(memberPath, tokens);
+      collectMemberPath(memberPath, source, tokens);
     }
     for (const arg of expression.args()) {
       collectAttributeArg(arg, source, tokens);
@@ -440,11 +485,15 @@ function collectExpression(
   }
 
   if (expression instanceof TaggedLiteralExprAst) {
+    const tag = expression.tag();
+    addIdentifier(tag?.namespace(), 'namespace', tokens);
+    addIdentifier(tag?.identifier(), 'keyword', tokens);
+    addToken(expression.literal()?.token(), 'string', tokens);
     return;
   }
 
   if (expression instanceof PathExprAst) {
-    collectMemberPath(expression, tokens);
+    collectMemberPath(expression, source, tokens);
     return;
   }
 
@@ -452,9 +501,16 @@ function collectExpression(
 }
 
 /** A member path such as `address.city` names fields, one per segment. */
-function collectMemberPath(path: PathExprAst, tokens: PendingSemanticToken[]): void {
+function collectMemberPath(
+  path: PathExprAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
   for (const segment of path.segments()) {
-    addIdentifier(segment, 'property', tokens);
+    const resolution = source.binder.symbolForNode(segment.syntax);
+    const namespace =
+      resolution?.kind === 'namespace' || resolution?.kind === 'contributedNamespace';
+    addIdentifier(segment, namespace ? 'namespace' : 'property', tokens);
   }
 }
 
@@ -507,8 +563,8 @@ function collectTypeReference(
   }
 
   for (const segment of segments.slice(0, -1)) {
-    const qualifier = source.binder.scopeAt(name.syntax).lookup(segment.text);
-    if (qualifier !== undefined && isNamespaceLike(qualifier)) {
+    const qualifier = source.binder.symbolForNode(segment.identifier.syntax);
+    if (qualifier?.kind === 'namespace' || qualifier?.kind === 'contributedNamespace') {
       tokens.push(rangeForIdentifier(segment.identifier, 'namespace'));
     }
   }

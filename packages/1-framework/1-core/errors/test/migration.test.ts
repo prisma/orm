@@ -8,6 +8,7 @@ import {
   errorMigrationTargetMismatch,
   errorUnfilledPlaceholder,
   placeholder,
+  unfilledPlaceholderOperation,
 } from '../src/migration';
 
 describe('Migration Errors', () => {
@@ -150,5 +151,28 @@ describe('Migration Errors', () => {
     expect(error.why).toContain('"mongo"');
     expect(error.fix).toContain('--config');
     expect(error.toEnvelope().code).toBe('MIGRATION.TARGET_MISMATCH');
+  });
+});
+
+describe('unfilledPlaceholderOperation', () => {
+  it('rejects with MIGRATION.UNFILLED_PLACEHOLDER naming the slot', async () => {
+    await expect(unfilledPlaceholderOperation('backfill-status:run')).rejects.toMatchObject({
+      code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+      meta: { slot: 'backfill-status:run' },
+    });
+  });
+
+  it('raises no unhandled rejection when nobody awaits it', async () => {
+    const unhandled: unknown[] = [];
+    const listener = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', listener);
+    try {
+      unfilledPlaceholderOperation('backfill-status:run');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', listener);
+    }
+    expect(unhandled).toEqual([]);
   });
 });

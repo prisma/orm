@@ -30,7 +30,7 @@ Prisma 8 rethinks Prisma's data layer around a **contract-first model**, where t
 
 ### Extensible Middleware Framework
 
-- First-class hook system for Plan lifecycle events (`beforeCompile`, `afterExecute`, `onError`)
+- Middleware observes a tree of activities (statements, transactions, ORM calls) through the lifecycle events `activityStarted`, `activityEnded` and `activityFinalized`, and changes or stops statements, or supplies an activity's result, through the interceptors `beforeCompile` (SQL), `beforeEncode`, `intercept` and `onRow`; `intercept.onActivity` answers client activities such as ORM calls ([ADR 271](docs/architecture%20docs/adrs/ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md))
 - Composable linting, telemetry, query budgets, and policy enforcement
 - Extension packs for domain-specific capabilities (vector search, geospatial, etc.)
 

@@ -26,6 +26,8 @@ export {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '../commands';
+export type { MongoCodecLookup, MongoExecutionContext } from '../execution-context';
+export { enumMemberCodecFor } from '../execution-context';
 export type { MongoFilterExpr } from '../filter-expressions';
 export {
   isMongoFilterExpr,
@@ -36,6 +38,7 @@ export {
   MongoNotExpr,
   MongoOrExpr,
 } from '../filter-expressions';
+export type { MongoQueryExecutor } from '../query-executor';
 export type { MongoQueryPlan } from '../query-plan';
 export type { RawMongoCommand } from '../raw-commands';
 export {

@@ -1,6 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
-import type { CodecLookup, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoIndex } from '@internal/mongo-contract';
 
@@ -8,12 +7,14 @@ function modelsOf(ir: Contract): Record<string, unknown> {
   return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.models;
 }
 
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
   interpretMongoContract,
 } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -23,32 +24,6 @@ const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
 ]);
-
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-  'mongo/bool@1': ['bool'],
-  'mongo/date@1': ['date'],
-  'mongo/objectId@1': ['objectId'],
-  'mongo/double@1': ['double'],
-};
-
-const mongoCodecLookup: CodecLookupWithDescriptors = {
-  get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => j,
-    } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
 
 function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, unknown> {
   const storage = ir.storage as {
@@ -61,12 +36,10 @@ function interpret(schema: string) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: {
-        dataTypeEntries: {},
-        defaultFunctionRegistry: new Map(),
-      },
+      scalarTypes: mongoScalarTypeDescriptors,
+      defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
+      dataTypes: mongoDataTypeSupport,
     },
     'test.prisma',
   );
@@ -97,12 +70,12 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     expect(forward).toEqual(interpretOk(`${base}\n${variant}`));
     expect(modelsOf(forward)['Bug']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        level: {
+        severity: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
@@ -110,29 +83,36 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       },
       relations: {},
       base: crossRef('Task', UNBOUND_NAMESPACE_ID),
-      storage: { collection: 'tasks' },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, severity: { field: 'level' } },
+      },
     });
     expect(modelsOf(forward)['Task']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        task_kind: {
+        kind: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
         },
       },
       relations: {},
-      storage: { collection: 'tasks' },
-      discriminator: { field: 'task_kind' },
-      variants: { Bug: { value: 'bug' } },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, kind: { field: 'task_kind' } },
+      },
+      discriminator: { field: 'kind' },
+      variants: { bug: crossRef('Bug', UNBOUND_NAMESPACE_ID) },
     });
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });
     expect((mongoCollectionsOf(forward)['tasks'] as { indexes: unknown }).indexes).toEqual([
       new MongoIndex({
+        name: 'level_1',
         keys: [{ field: 'level', direction: 1 }],
         partialFilterExpression: { task_kind: 'bug' },
       }),
@@ -194,7 +174,7 @@ namespace scoped {
 
       expect(modelsOf(ir)['Task']).toMatchObject({
         discriminator: { field: 'type' },
-        variants: { Bug: { value: 'bug' } },
+        variants: { bug: crossRef('Bug', UNBOUND_NAMESPACE_ID) },
       });
     });
 
@@ -269,8 +249,8 @@ namespace scoped {
       expect(modelsOf(ir)['Task']).toMatchObject({
         discriminator: { field: 'type' },
         variants: {
-          Bug: { value: 'bug' },
-          Feature: { value: 'feature' },
+          bug: crossRef('Bug', UNBOUND_NAMESPACE_ID),
+          feature: crossRef('Feature', UNBOUND_NAMESPACE_ID),
         },
       });
       expect(modelsOf(ir)['Bug']).toMatchObject({ base: crossRef('Task') });
@@ -326,6 +306,44 @@ namespace scoped {
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {
+    it('diagnoses duplicate discriminator values', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  String
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+
+        model OtherBug {
+          id          ObjectId @id @map("_id")
+          description String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_DUPLICATE_DISCRIMINATOR_VALUE',
+            message:
+              'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task"',
+          }),
+        ]),
+      );
+    });
+
     it('diagnoses orphaned @@discriminator (no @@base declarations)', () => {
       const result = interpret(`
         model Task {
@@ -420,7 +438,7 @@ namespace scoped {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: expect.stringContaining('must be of type String'),
+            message: expect.stringContaining('must be text, such as String'),
           }),
         ]),
       );
@@ -452,20 +470,11 @@ namespace scoped {
         {
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message:
-            'Discriminator field "type" on model "Task" must be of type String, but is "String"',
+            'Discriminator field "type" on model "Task" must be text, such as String, but is "String"',
           sourceId: 'test.prisma',
           span: {
             start: { line: 10, column: 11, offset: 150 },
             end: { line: 10, column: 32, offset: 171 },
-          },
-        },
-        {
-          code: 'PSL_ORPHANED_BASE',
-          message: 'Model "Bug" declares @@base(Task, ...) but "Task" has no @@discriminator',
-          sourceId: 'test.prisma',
-          span: {
-            start: { line: 16, column: 11, offset: 239 },
-            end: { line: 16, column: 30, offset: 258 },
           },
         },
       ]);

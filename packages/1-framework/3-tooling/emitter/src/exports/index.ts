@@ -3,7 +3,6 @@ export { getEmittedArtifactPaths } from '../artifact-paths';
 export {
   deduplicateImports,
   generateCodecTypeIntersection,
-  generateFieldOutputTypesMap,
   generateHashTypeAliases,
   generateImportLines,
   generateModelRelationsType,

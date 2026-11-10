@@ -38,8 +38,15 @@ interface PlanJson {
 
 interface SignJson {
   readonly ok: boolean;
-  readonly contract: { readonly storageHash: string };
-  readonly advancedRef: { readonly name: string; readonly hash: string } | null;
+  readonly spaces: readonly {
+    readonly space: string;
+    readonly contract: { readonly storageHash: string };
+  }[];
+  readonly advancedRefs: readonly {
+    readonly space: string;
+    readonly name: string;
+    readonly hash: string;
+  }[];
 }
 
 function emittedStorageHash(ctx: JourneyContext): string {
@@ -101,7 +108,7 @@ withTempDir(({ createTempDir }) => {
           const signedHash = emittedStorageHash(ctx);
 
           const signed = await signJson(ctx);
-          expect(signed.advancedRef).toEqual({ name: 'db', hash: signedHash });
+          expect(signed.advancedRefs).toEqual([{ space: 'app', name: 'db', hash: signedHash }]);
           expect(refHash(ctx, 'db')).toBe(signedHash);
           expect(snapshotExists(ctx, signedHash)).toBe(true);
 
@@ -135,7 +142,7 @@ withTempDir(({ createTempDir }) => {
 
           const signed = await signJson(ctx, ['--db', connectionString]);
 
-          expect(signed.advancedRef).toEqual({ name: 'db', hash: signedHash });
+          expect(signed.advancedRefs).toEqual([{ space: 'app', name: 'db', hash: signedHash }]);
           expect(refHash(ctx, 'db')).toBe(signedHash);
           expect(snapshotExists(ctx, signedHash)).toBe(true);
         });
@@ -204,7 +211,9 @@ withTempDir(({ createTempDir }) => {
 
           const signed = await signJson(ctx, ['--advance-ref', 'staging']);
 
-          expect(signed.advancedRef).toEqual({ name: 'staging', hash: signedHash });
+          expect(signed.advancedRefs).toEqual([
+            { space: 'app', name: 'staging', hash: signedHash },
+          ]);
           expect(refHash(ctx, 'staging')).toBe(signedHash);
           expect(refHash(ctx, 'db')).toBeUndefined();
         });
@@ -238,7 +247,7 @@ withTempDir(({ createTempDir }) => {
 
           const signed = await signJson(ctx, ['--no-advance-ref']);
 
-          expect(signed.advancedRef).toBeNull();
+          expect(signed.advancedRefs).toEqual([]);
           expect(existsSync(refsDir(ctx))).toBe(false);
           expect(snapshotExists(ctx, signedHash)).toBe(false);
           await withClient(connectionString, async (client) => {

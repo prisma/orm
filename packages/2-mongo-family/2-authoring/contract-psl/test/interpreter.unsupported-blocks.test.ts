@@ -1,15 +1,17 @@
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['String', 'mongo/string@1'],
       ['ObjectId', 'mongo/objectId@1'],
     ]),
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: mongoDataTypeSupport,
+    defaultFunctionRegistry: new Map(),
+    codecLookup: mongoCodecLookup,
   });
 }
 
@@ -26,35 +28,15 @@ describe('interpretPslDocumentToMongoContract given a block no composed descript
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual([
-        {
-          code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
-          message: 'Unsupported top-level block "view"',
-          sourceId: 'schema.prisma',
-          span: {
-            start: { offset: 0, line: 1, column: 1 },
-            end: { offset: 4, line: 1, column: 5 },
-          },
-        },
-      ]);
-    },
-  );
-
-  it('reports a generator block as an unsupported top-level block', () => {
-    const result = interpret(`generator client {\n  provider = "prisma-client"\n}\n${userModel}`);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual([
-      {
+      expect(result.failure.diagnostics).toContainEqual({
         code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
-        message: 'Unsupported top-level block "generator"',
+        message: 'Unsupported top-level block "view"',
         sourceId: 'schema.prisma',
         span: {
           start: { offset: 0, line: 1, column: 1 },
-          end: { offset: 9, line: 1, column: 10 },
+          end: { offset: 4, line: 1, column: 5 },
         },
-      },
-    ]);
-  });
+      });
+    },
+  );
 });

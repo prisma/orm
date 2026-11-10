@@ -7,6 +7,8 @@ export type SyntaxKind =
   // The generic/extension block node: the `kw [name] { key = value }` form,
   // distinct from the reserved `model`/`namespace`/`type`/`types` declarations.
   | 'GenericBlockDeclaration'
+  | 'MixinDeclaration'
+  | 'MixinInclusion'
   | 'FieldDeclaration'
   | 'NamedTypeDeclaration'
   | 'KeyValuePair'

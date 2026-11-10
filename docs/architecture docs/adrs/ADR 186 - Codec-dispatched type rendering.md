@@ -1,6 +1,8 @@
 # ADR 186 — Codec-dispatched type rendering
 
-> **Retrospective note.** This ADR introduced the `renderOutputType` slot on the codec record (and shows `defineCodec({...})` examples). Both the codec authoring shape and the home of `renderOutputType` have since moved on: [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) relocated `renderOutputType` to the unified `CodecDescriptor`, and the `defineCodec({...})` factory was retired in favor of class-based descriptors (`CodecDescriptorImpl`) and codecs (`CodecImpl`). The decision this ADR records — that the codec is the dispatch authority for type rendering — is unchanged; only the slot's home and the authoring syntax have moved. See [Codec authoring guide](../../reference/codec-authoring-guide.md).
+> **Retrospective note.** This ADR introduced the `renderOutputType` slot on the codec record (and shows `defineCodec({...})` examples). Both the codec authoring shape and the home of `renderOutputType` have since moved on: [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) relocated `renderOutputType` to the unified `CodecDescriptor`, and the `defineCodec({...})` factory was retired in favor of class-based descriptors (`CodecDescriptorImpl`) and codecs (`CodecImpl`). The decision this ADR records — that the codec is the dispatch authority for type rendering — is unchanged; only the slot's home and the authoring syntax have moved. The slot's scope has also narrowed: a codec whose output type is a function of its type parameters, such as `pg/vector@1`, now declares that type once in its pack's type function (`types.codecTypes.parameterizedOutputTypes`), which the emitter references and `defineContract` applies, and `renderOutputType` remains only for an output type no type can compute, such as an arktype schema's text. See [Codec authoring guide](../../reference/codec-authoring-guide.md).
+
+> **Retrospective note — the codec's JSON methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) replaces `encodeJson` and `decodeJson` with `toDataTypeValue` and `fromDataTypeValue`, and the stored form belongs to the data type, not the codec.
 
 ## At a glance
 
@@ -61,7 +63,7 @@ Codecs already own three of the four representations of a type:
 |---|---|---|
 | Wire format (driver ↔ database) | Codec | `encode` / `decode` |
 | Contract JSON (serialized values) | Codec | `encodeJson` / `decodeJson` ([ADR 184](ADR%20184%20-%20Codec-owned%20value%20serialization.md)) |
-| DDL string (migration SQL) | Target-layer codec hook | `expandNativeType` ([ADR 171](ADR%20171%20-%20Parameterized%20native%20types%20in%20contracts.md)) |
+| DDL string (migration SQL) | Data type the codec represents | its written texts ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which superseded the `expandNativeType` hook of ADR 171) |
 | **TypeScript type in contract.d.ts** | **Scattered** | See below |
 
 The fourth representation — the TypeScript output type in `contract.d.ts` — is currently spread across three systems: a `CodecTypes` type map (handles non-parameterized codecs), a `parameterized` renderer map in descriptor metadata (produces type expression strings at emit time), and a `parameterizedOutput` function type on `CodecTypes` (handles the no-emit path). These systems don't share an interface or abstraction.
@@ -128,7 +130,6 @@ Here's what the JSONB codec looks like with `renderOutputType`:
 ```ts
 const pgJsonbCodec = defineCodec({
   typeId: 'pg/jsonb@1',
-  targetTypes: ['jsonb'],
   encode: (value): string => JSON.stringify(value),
   decode: (wire): JsonValue => typeof wire === 'string' ? JSON.parse(wire) : wire,
   renderOutputType(typeParams) {

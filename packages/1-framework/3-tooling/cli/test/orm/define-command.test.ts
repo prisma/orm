@@ -102,17 +102,6 @@ describe('defineOrmCommand', () => {
         error: { code: 'CLI.INTERNAL_ERROR', summary: 'the per-space map was empty' },
       });
     });
-
-    it('does not restate it as a CLI.UNEXPECTED failure at exit 2', async () => {
-      const run = await cliThatThrows(new InternalError('invariant broke')).run(
-        ['boom', '--json'],
-        {
-          cwd: process.cwd(),
-        },
-      );
-
-      expect(erroredEnvelope(run).error.code).not.toBe('CLI.UNEXPECTED');
-    });
   });
 
   describe('a handler that returns normally', () => {

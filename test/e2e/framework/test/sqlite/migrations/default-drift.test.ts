@@ -3,17 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { applyMigration, int, integerColumn } from './harness';
 
 /**
- * Regression for the integer `@default` drift loop.
- *
- * `parseSqliteDefault` used to return integer-affinity defaults as JS strings
- * (e.g. `'42'`) while contract literals authored with `.default(42)` are JS
- * `number`. The verifier's `literalValuesEqual` does no cross-type coercion,
- * so `42 === '42'` failed and the schema verify reported a default mismatch
- * on every plan — making real-world contracts effectively unmigratable.
- *
- * The fix mirrors `parsePostgresDefault`'s bigint handling: parse as JS
- * `number` when the value is in the safe-integer range, fall back to the raw
- * text only for SQLite's 64-bit integers that exceed JS's safe range.
+ * Regression for the integer `@default` drift loop: an integer default the database reports must
+ * read, through the column's codec, as the value the contract stores, or every plan reports a
+ * default mismatch.
  */
 describe('SQLite Migration E2E - integer default drift', () => {
   it('verifies an integer `@default(42)` without drift', async () => {

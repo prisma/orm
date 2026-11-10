@@ -48,8 +48,8 @@ function buildContract(overrides?: Partial<Contract>): Contract {
               users: {
                 primaryKey: { columns: ['id'] },
                 columns: {
-                  id: { nativeType: 'uuid', nullable: false, codecId: 'pg/uuid@1' },
-                  email: { nativeType: 'text', nullable: false, codecId: 'pg/text@1' },
+                  id: { dataType: 'pg/uuid', nullable: false, codecId: 'pg/uuid@1' },
+                  email: { dataType: 'pg/text', nullable: false, codecId: 'pg/text@1' },
                 },
                 foreignKeys: [],
                 uniques: [],

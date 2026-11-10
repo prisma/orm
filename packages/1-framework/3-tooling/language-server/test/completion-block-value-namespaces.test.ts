@@ -35,8 +35,8 @@ function topLevelPolicy(entry: string) {
 describe('generic block value completion across namespaces', () => {
   it('offers namespaces that contain a matching role alongside top-level roles', () => {
     const result = topLevelPolicy('roles = [|');
-    expect(result.labels).toEqual(['admin', 'auth']);
-    expect(result.items[1]).toEqual({
+    expect(result.labels).toEqual(['admin', 'public', 'auth']);
+    expect(result.items[2]).toEqual({
       label: 'auth',
       kind: CompletionItemKind.Module,
       detail: 'Namespace',
@@ -49,12 +49,12 @@ describe('generic block value completion across namespaces', () => {
         newText: 'auth.',
       },
       command: { title: 'Suggest namespace members', command: 'editor.action.triggerSuggest' },
-      sortText: '0001',
+      sortText: '0002',
     });
   });
 
   it('offers every namespace that contains a matching model', () => {
-    expect(topLevelPolicy('target = |').labels).toEqual(['User', 'auth', 'reporting']);
+    expect(topLevelPolicy('target = |').labels).toEqual(['User', 'public', 'auth', 'reporting']);
   });
 
   it('offers only matching members after a namespace qualifier', () => {
@@ -125,6 +125,6 @@ describe('generic block value completion across namespaces', () => {
       ),
       { clientSupportsTriggerSuggestCommand: true },
     );
-    expect(result.labels).toEqual(['auditor', 'admin', 'auth']);
+    expect(result.labels).toEqual(['auditor', 'admin', 'public', 'auth']);
   });
 });

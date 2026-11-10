@@ -138,7 +138,7 @@ describe('integration: SQL middleware rewriting', { timeout: timeouts.databaseOp
     const resolvedDriver = stackInstance.driver;
     if (!resolvedDriver) throw new Error('Driver missing');
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     closeFns.push(
       () => driver.close(),

@@ -1,0 +1,48 @@
+[
+  {
+    "id": "table.Event",
+    "label": "Create table Event",
+    "summary": "Creates table Event with its columns, primary key and unique constraints",
+    "operationClass": "additive",
+    "target": {
+      "id": "mysql",
+      "details": {
+        "objectType": "table",
+        "name": "Event"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Event\" does not exist",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) = 0 AS result",
+        "params": [
+          "Event"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"Event\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Event\"",
+        "sql": "CREATE TABLE `Event` (\n  `createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),\n  `day` date NOT NULL,\n  `id` int NOT NULL AUTO_INCREMENT,\n  `opensAt` time(6) NOT NULL,\n  `startsAt` datetime(3) NOT NULL,\n  `title` varchar(191) NOT NULL,\n  PRIMARY KEY (`id`)\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Event\" exists",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) > 0 AS result",
+        "params": [
+          "Event"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"Event\""
+        }
+      }
+    ]
+  }
+]

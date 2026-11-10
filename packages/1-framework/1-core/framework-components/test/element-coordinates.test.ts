@@ -1,9 +1,9 @@
-import type { StorageBase } from '@internal/contract/types';
+import type { EntityCoordinate, StorageBase } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
+  changedElementCoordinates,
   coordinateKey,
-  type EntityCoordinate,
   elementCoordinates,
   entityAt,
 } from '../src/ir/storage';
@@ -149,5 +149,58 @@ describe('entityAt', () => {
     expect(
       entityAt(storage, { namespaceId: 'public', entityKind: 'table', entityName: 'constructor' }),
     ).toBeUndefined();
+  });
+});
+
+describe('changedElementCoordinates', () => {
+  function storageOf(namespaces: Record<string, unknown>): Pick<StorageBase, 'namespaces'> {
+    return blindCast<Pick<StorageBase, 'namespaces'>, 'synthetic storage diff fixture'>({
+      namespaces,
+    });
+  }
+
+  it('lists added, removed and changed entities, sorted, and leaves out equal ones', () => {
+    const from = storageOf({
+      public: {
+        entries: {
+          table: { users: { columns: { id: 'int', name: 'text' } }, posts: { id: 1 } },
+          valueSet: { Status: { values: ['open'] } },
+        },
+      },
+    });
+    const to = storageOf({
+      public: {
+        entries: {
+          table: {
+            users: { columns: { name: 'text', id: 'int', note: 'text' } },
+            posts: { id: 1 },
+          },
+          valueSet: { Role: { values: ['admin'] } },
+        },
+      },
+      audit: { entries: { table: { events: {} } } },
+    });
+
+    expect(changedElementCoordinates(from, to)).toEqual([
+      { plane: 'storage', namespaceId: 'audit', entityKind: 'table', entityName: 'events' },
+      { plane: 'storage', namespaceId: 'public', entityKind: 'table', entityName: 'users' },
+      { plane: 'storage', namespaceId: 'public', entityKind: 'valueSet', entityName: 'Role' },
+      { plane: 'storage', namespaceId: 'public', entityKind: 'valueSet', entityName: 'Status' },
+    ]);
+  });
+
+  it('ignores key order inside an entity', () => {
+    const from = storageOf({ public: { entries: { table: { users: { a: 1, b: 2 } } } } });
+    const to = storageOf({ public: { entries: { table: { users: { b: 2, a: 1 } } } } });
+
+    expect(changedElementCoordinates(from, to)).toEqual([]);
+  });
+
+  it('treats every entity as added when there is no earlier storage', () => {
+    const to = storageOf({ public: { entries: { table: { users: {} } } } });
+
+    expect(changedElementCoordinates(null, to)).toEqual([
+      { plane: 'storage', namespaceId: 'public', entityKind: 'table', entityName: 'users' },
+    ]);
   });
 });

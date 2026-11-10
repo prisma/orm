@@ -5,7 +5,8 @@ import type {
   ContractSourceDiagnostic,
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import {
   buildSymbolTable,
   createBinder,
@@ -28,24 +29,26 @@ import {
   describeUnsupportedMongoAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
+import { mongoTestStack } from '../src/test';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const SOURCE_ID = './schema.prisma';
 
 const mongoScalarAuthoringTypes = {
-  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1', nativeType: 'string' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
   ObjectId: {
     kind: 'typeConstructor',
-    output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
+    output: { codecId: 'mongo/objectId@1' },
   },
 } as const;
 
 function createMongoTestContext(overrides?: Partial<ContractSourceContext>): ContractSourceContext {
   return {
     composedExtensions: [],
+    defaultNamespaceId: '__unbound__',
     composedExtensionContracts: new Map(),
     authoringContributions: {
       dataTypes: {},
-      field: {},
       type: mongoScalarAuthoringTypes,
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -56,12 +59,13 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
       describeUnresolvedType: describeUnresolvedMongoType,
     },
-    dataTypeLookup: createDataTypeLookup([]),
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: mongoDataTypeSupport,
+    codecLookup: mongoCodecLookup,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     resolvedInputs: [],
     capabilities: {},
     ...overrides,
@@ -74,7 +78,11 @@ function buildInterpretInput(
   filename = SOURCE_ID,
 ): PslInterpretInput & { readonly binderDiagnostics: ReturnType<typeof mapPslDiagnostics> } {
   const { document, sources } = parse(schema, filename);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: '__unbound__',
+  });
   const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
   return {
     documents: [document],
@@ -94,7 +102,7 @@ function interpretViaSource(
 }
 
 function interpretCapableSource(schemaPath: string) {
-  const contract = mongoContract(schemaPath);
+  const contract = mongoContract(schemaPath, mongoTestStack);
   if (!hasPslInterpreter(contract.source)) {
     throw new Error('expected mongoContract source to carry the interpret capability');
   }
@@ -114,7 +122,7 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('narrows a real mongoContract source via hasPslInterpreter', () => {
-    const contract = mongoContract(SOURCE_ID);
+    const contract = mongoContract(SOURCE_ID, mongoTestStack);
 
     expect(hasPslInterpreter(contract.source)).toBe(true);
     if (!hasPslInterpreter(contract.source)) return;
@@ -366,6 +374,7 @@ it('attributes multi-document semantic failures to the owning file, not the entr
     [owned.document.syntax, owned.sources.sourceFileFor(owned.document.syntax)],
   ]);
   const { symbolTable } = buildSymbolTable({
+    defaultNamespaceId: '__unbound__',
     documents: [entry.document, owned.document],
     sources,
   });

@@ -5,6 +5,7 @@ import {
   CreateIndexCommand,
   DropCollectionCommand,
   DropIndexCommand,
+  RenameCollectionCommand,
 } from '../src/ddl-commands';
 import type { MongoDdlCommandVisitor, MongoInspectionCommandVisitor } from '../src/ddl-visitors';
 import { ListCollectionsCommand, ListIndexesCommand } from '../src/inspection-commands';
@@ -17,6 +18,7 @@ function makeDdlVisitor(
     dropIndex: () => 'dropIndex',
     createCollection: () => 'createCollection',
     dropCollection: () => 'dropCollection',
+    renameCollection: () => 'renameCollection',
     collMod: () => 'collMod',
     ...overrides,
   };
@@ -65,15 +67,6 @@ describe('CreateIndexCommand', () => {
       wildcardProjection: { name: 1, email: 1 },
     });
     expect(cmd.wildcardProjection).toEqual({ name: 1, email: 1 });
-  });
-
-  it('exposes options as direct properties', () => {
-    const cmd = new CreateIndexCommand('users', [{ field: 'email', direction: 1 }], {
-      unique: true,
-      name: 'email_1',
-    });
-    expect(cmd.unique).toBe(true);
-    expect(cmd.name).toBe('email_1');
   });
 
   it('JSON.stringify yields flat shape with no options key', () => {
@@ -193,12 +186,6 @@ describe('CreateCollectionCommand', () => {
     expect(cmd.changeStreamPreAndPostImages).toEqual({ enabled: true });
   });
 
-  it('exposes options as direct properties', () => {
-    const cmd = new CreateCollectionCommand('events', { capped: true, size: 1048576 });
-    expect(cmd.capped).toBe(true);
-    expect(cmd.size).toBe(1048576);
-  });
-
   it('JSON.stringify yields flat shape with no options key', () => {
     const cmd = new CreateCollectionCommand('events', { capped: true, size: 1048576 });
     const json = JSON.parse(JSON.stringify(cmd));
@@ -252,6 +239,29 @@ describe('DropCollectionCommand', () => {
   });
 });
 
+describe('RenameCollectionCommand', () => {
+  it('constructs with the source collection and the new name', () => {
+    const cmd = new RenameCollectionCommand('profiles', 'users');
+    expect({ kind: cmd.kind, collection: cmd.collection, to: cmd.to }).toEqual({
+      kind: 'renameCollection',
+      collection: 'profiles',
+      to: 'users',
+    });
+  });
+
+  it('is frozen', () => {
+    expect(Object.isFrozen(new RenameCollectionCommand('profiles', 'users'))).toBe(true);
+  });
+
+  it('dispatches via DDL visitor', () => {
+    const cmd = new RenameCollectionCommand('profiles', 'users');
+    const visitor = makeDdlVisitor({
+      renameCollection: (c) => `rename:${c.collection}->${c.to}`,
+    });
+    expect(cmd.accept(visitor)).toBe('rename:profiles->users');
+  });
+});
+
 describe('CollModCommand', () => {
   it('constructs with validator', () => {
     const cmd = new CollModCommand('users', {
@@ -271,15 +281,6 @@ describe('CollModCommand', () => {
       changeStreamPreAndPostImages: { enabled: true },
     });
     expect(cmd.changeStreamPreAndPostImages).toEqual({ enabled: true });
-  });
-
-  it('exposes options as direct properties', () => {
-    const cmd = new CollModCommand('users', {
-      validator: { $jsonSchema: { bsonType: 'object' } },
-      validationLevel: 'strict',
-    });
-    expect(cmd.validator).toEqual({ $jsonSchema: { bsonType: 'object' } });
-    expect(cmd.validationLevel).toBe('strict');
   });
 
   it('JSON.stringify yields flat shape with no options key', () => {

@@ -2,6 +2,7 @@ import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
 import mongoControlDriver, { MongoControlDriver } from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import { planOriginOf } from '@internal/framework-components/control';
 import { MongoCollection, type MongoContract, MongoIndex } from '@internal/mongo-contract';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
 import {
@@ -39,7 +40,10 @@ const emptyContract: MongoContract = {
           },
         },
         relations: {},
-        storage: { collection: 'users' },
+        storage: {
+          collection: 'users',
+          fields: { _id: { field: '_id' }, email: { field: 'email' } },
+        },
       },
     },
   }),
@@ -83,7 +87,10 @@ const indexedContract: MongoContract = {
           },
         },
         relations: {},
-        storage: { collection: 'users' },
+        storage: {
+          collection: 'users',
+          fields: { _id: { field: '_id' }, email: { field: 'email' } },
+        },
       },
     },
   }),
@@ -96,7 +103,11 @@ const indexedContract: MongoContract = {
           collection: {
             users: new MongoCollection({
               indexes: [
-                new MongoIndex({ keys: [{ field: 'email', direction: 1 as const }], unique: true }),
+                new MongoIndex({
+                  name: 'email_1',
+                  keys: [{ field: 'email', direction: 1 as const }],
+                  unique: true,
+                }),
               ],
             }),
           },
@@ -155,6 +166,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
         schema,
         policy: ALL_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -177,6 +190,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
         schema,
         policy: ALL_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -225,6 +240,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
         schema,
         policy: ALL_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -267,6 +284,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
         schema,
         policy: ALL_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: [],
         snapshotsImportPath: '../../snapshots',
       });
@@ -321,6 +340,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
           schema: createSchema,
           policy: ALL_POLICY,
           fromContract: null,
+          origin: null,
+          statements: [],
           frameworkComponents: [],
           snapshotsImportPath: '../../snapshots',
         });
@@ -352,6 +373,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
           schema: dropSchema,
           policy: ALL_POLICY,
           fromContract: indexedContract,
+          origin: planOriginOf(indexedContract),
+          statements: [],
           frameworkComponents: [],
           snapshotsImportPath: '../../snapshots',
         });
@@ -359,7 +382,7 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
 
         expect(dropResult.plan.operations).toHaveLength(1);
         const dropOp = await dropResult.plan.operations[0]!;
-        expect(dropOp.operationClass).toBe('destructive');
+        expect(dropOp.operationClass).toBe('widening');
         expect(dropOp.label).toContain('Drop index');
 
         // Step 3: Apply drop
@@ -421,6 +444,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
           schema,
           policy: ALL_POLICY,
           fromContract: null,
+          origin: null,
+          statements: [],
           frameworkComponents: [],
           snapshotsImportPath: '../../snapshots',
         });
@@ -484,6 +509,8 @@ describe('MongoDB migration E2E', { timeout: timeouts.spinUpMongoMemoryServer },
           schema,
           policy: ALL_POLICY,
           fromContract: null,
+          origin: null,
+          statements: [],
           frameworkComponents: [],
           snapshotsImportPath: '../../snapshots',
         });

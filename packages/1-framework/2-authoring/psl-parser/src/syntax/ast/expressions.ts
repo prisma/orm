@@ -1,8 +1,8 @@
-import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import {
   canonicalizeTaggedLiteralBody,
-  resolvePslBacktickEscapes,
-} from '@internal/framework-components/control';
+  type TaggedLiteralCanonicalization,
+} from '@internal/framework-components/authoring';
+import { resolvePslBacktickEscapes } from '@internal/framework-components/control';
 import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
@@ -266,10 +266,10 @@ export class TaggedLiteralExprAst implements AstNode {
     return canonicalizeTaggedLiteralBody(this.literal()?.value() ?? '');
   }
 
-  /** The canonical body shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
-  body(): string | undefined {
+  /** The canonical text shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
+  text(): string | undefined {
     const result = this.canonicalization();
-    return result.ok ? result.body : undefined;
+    return result.ok ? result.text : undefined;
   }
 
   static cast(node: SyntaxNode): TaggedLiteralExprAst | undefined {

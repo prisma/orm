@@ -1,0 +1,101 @@
+[
+  {
+    "id": "index.users.create(email:1)",
+    "label": "Create index on users (email:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on users",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "users"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "email": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { email: 1 } in \"users\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on users",
+        "command": {
+          "kind": "createIndex",
+          "collection": "users",
+          "keys": [
+            {
+              "field": "email",
+              "direction": 1
+            }
+          ],
+          "unique": true,
+          "name": "email_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on users",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "users"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "email": 1
+              }
+            },
+            {
+              "kind": "field",
+              "field": "unique",
+              "op": "$eq",
+              "value": true
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

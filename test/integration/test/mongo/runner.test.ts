@@ -11,6 +11,7 @@ import {
   createControlStack,
   hasMigrations,
   type MigrationRunnerPerSpaceOptions,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
@@ -77,7 +78,10 @@ function buildAppContract(): MongoContract {
             },
           },
           relations: {},
-          storage: { collection: 'users' },
+          storage: {
+            collection: 'users',
+            fields: { _id: { field: '_id' }, email: { field: 'email' } },
+          },
         },
         Post: {
           fields: {
@@ -93,7 +97,10 @@ function buildAppContract(): MongoContract {
             },
           },
           relations: {},
-          storage: { collection: 'posts' },
+          storage: {
+            collection: 'posts',
+            fields: { _id: { field: '_id' }, slug: { field: 'slug' } },
+          },
         },
       },
     }),
@@ -109,6 +116,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -119,6 +127,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'slug_1',
                     keys: [{ field: 'slug', direction: 1 as const }],
                     unique: true,
                   },
@@ -166,7 +175,10 @@ function buildAppContractMissingPosts(): MongoContract {
             },
           },
           relations: {},
-          storage: { collection: 'users' },
+          storage: {
+            collection: 'users',
+            fields: { _id: { field: '_id' }, email: { field: 'email' } },
+          },
         },
       },
     }),
@@ -182,6 +194,7 @@ function buildAppContractMissingPosts(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -218,6 +231,7 @@ function buildExtContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'tenantId_1',
                     keys: [{ field: 'tenantId', direction: 1 as const }],
                     unique: true,
                   },
@@ -243,6 +257,8 @@ function planFor(contract: MongoContract, fromContract: MongoContract | null) {
     schema: contractToMongoSchemaIR(fromContract),
     policy: ALL_POLICY,
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -444,8 +460,18 @@ describe('mongoTargetDescriptor.execute (across spaces)', {
 
       expect(failingResult.ok).toBe(false);
       if (failingResult.ok) throw new Error('unreachable');
-      expect(failingResult.failure.failingSpace).toBe(APP_SPACE_ID);
-      expect(failingResult.failure.code).toBe('MIGRATION.SCHEMA_VERIFY_FAILED');
+      expect({
+        code: failingResult.failure.code,
+        message: failingResult.failure.message,
+        failingSpace: failingResult.failure.meta.failingSpace,
+        databaseUnchanged: failingResult.failure.meta.databaseUnchanged,
+      }).toEqual({
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        message: expect.any(String),
+        failingSpace: APP_SPACE_ID,
+        databaseUnchanged: false,
+      });
+      expect(failingResult.failure.message).not.toBe('');
 
       const extMarkerAfterFail = await controlAdapter.readMarker(
         new MongoControlDriver(db, client),

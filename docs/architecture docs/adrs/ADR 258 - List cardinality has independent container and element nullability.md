@@ -2,7 +2,7 @@
 
 Status: **Accepted**
 
-Related: [ADR 178 — Value objects in the contract](<./ADR 178 - Value objects in the contract.md>) established `many` and whole-field `nullable` as orthogonal field-shape dimensions. [ADR 244 — Check constraints are opaque wire-named expressions](<./ADR 244 - Check constraints are opaque wire-named expressions.md>) established generated `elementNotNull` checks and explicit per-column `noCheck` waivers. This ADR adds element nullability as a third field-shape dimension and keeps it distinct from enforcement waivers.
+Related: [ADR 178 — Value objects in the contract](<./ADR 178 - Value objects in the contract.md>) established `many` and whole-field `nullable` as orthogonal field-shape dimensions. [ADR 244 — Check constraints are opaque wire-named expressions](<./ADR 244 - Check constraints are opaque wire-named expressions.md>) established generated `elementNotNull` checks. This ADR adds element nullability as a third field-shape dimension, which decides whether that check is derived.
 
 ## At a glance
 
@@ -19,10 +19,10 @@ The TypeScript authoring surface couples the element option to list construction
 
 ```ts
 const fields = {
-  strict: field.text().many(),
-  nullableElements: field.text().many({ elementsNullable: true }),
-  nullableList: field.text().many().optional(),
-  fullyNullable: field.text().many({ elementsNullable: true }).optional(),
+  strict: field.column(type.String()).many(),
+  nullableElements: field.column(type.String()).many({ elementsNullable: true }),
+  nullableList: field.column(type.String()).many().optional(),
+  fullyNullable: field.column(type.String()).many({ elementsNullable: true }).optional(),
 };
 ```
 
@@ -32,7 +32,7 @@ Omitting `elementsNullable`, or passing the literal `false`, preserves strict el
 
 `nullable` describes whether the field value can be `null`. For a list field, that answers whether the entire list can be absent, but it says nothing about the values stored inside a present list. Treating one flag as both answers cannot represent all four useful combinations.
 
-This distinction also crosses architectural layers. The domain contract needs element nullability to generate correct input and output types for every family. Native SQL array storage needs the same semantic fact so query-builder storage types and generated database checks agree. MongoDB needs it when deriving the BSON schema for array items. An enforcement waiver cannot substitute for this semantic information because waiving a check does not change what the contract declares or what TypeScript accepts.
+This distinction also crosses architectural layers. The domain contract needs element nullability to generate correct input and output types for every family. Native SQL array storage needs the same semantic fact so query-builder storage types and generated database checks agree. MongoDB needs it when deriving the BSON schema for array items.
 
 ## Decision
 
@@ -58,22 +58,16 @@ The marker does not enter `SqlColumnIR`. Schema IR describes physical columns an
 
 Value-object lists stored as JSON do not receive a scalar-list `StorageColumn.many` descriptor; their element semantics remain in `ContractField.many` and in the JSON/BSON structure derived from the value-object type.
 
-### Semantic nullability and enforcement waivers remain distinct
+### Element nullability decides the element check
 
-PostgreSQL derives an `elementNotNull` check only when a native array column has `many !== false` and `many.elementNullable === false`. The ordinary explicit-waiver filter runs after candidate derivation.
-
-These two declarations therefore mean different things:
+(Updated October 15, 2026.) PostgreSQL derives an `elementNotNull` check exactly when a native array column has `many !== false` and `many.elementNullable === false`. There is no way to keep a non-null element type and drop its check: the per-column waiver `noCheck` that allowed it is removed, because it let the declared type claim more than the database enforced.
 
 ```ts
-field.text().many({ elementsNullable: true })
-field.text().many().noCheck('elementNotNull')
+field.column(type.String()).many({ elementsNullable: true })   // ReadonlyArray<string | null>, no element check
+field.column(type.String()).many()                             // ReadonlyArray<string>, element check derived
 ```
 
-The first declares `ReadonlyArray<string | null>` and produces no element-non-null check because that check does not apply. The second still declares `ReadonlyArray<string>` but explicitly declines database enforcement of the declared invariant. It carries `noCheck: ['elementNotNull']` while retaining `many: { elementNullable: false }`.
-
-No automatic `noCheck` is added for nullable elements, and type generation never infers nullable elements from `noCheck`. An explicit `elementNotNull` waiver on an element-nullable list is rejected because there is no applicable generated check to waive.
-
-An absent database check is therefore not evidence of semantic element nullability. When the live database lacks the derived check, `contract infer` conservatively emits a strict list with `@noCheck(elementNotNull)`, not `Foo?[]`. The author must declare nullable elements explicitly. Changing declared element nullability changes the derived check set; migration comparison and verification observe that physical difference, not a separate schema-IR marker.
+Two producers describe a schema Prisma 8 did not create, and both write the nullability the database enforces. When the live database lacks the derived check, `contract infer` writes `Foo?[]`. The Prisma 7 reader reads every list in a Prisma 7 `schema.prisma` as nullable elements, because Prisma 7 creates no element check. A project that keeps its Prisma 7 schema as the contract source therefore always gets nullable element types. To get non-null elements, the project moves to a Prisma 8 source and writes `Foo[]`, and the next migration adds the check.
 
 ### Family enforcement follows the semantic marker
 
@@ -109,7 +103,7 @@ The later Mongo container-validator correction in [PR #30568](https://github.com
 
 - The contract and generated TypeScript describe all four list-nullability combinations exactly.
 - PSL and TypeScript authoring have equivalent expressive power.
-- SQL storage typing has the semantic marker it needs without misusing an enforcement waiver.
+- SQL storage typing has the semantic marker it needs.
 - List cardinality and element nullability form one nested descriptor, so invalid parallel states are not representable.
 - PostgreSQL and MongoDB derive their different enforcement representations from the same domain meaning.
 
@@ -123,9 +117,9 @@ The later Mongo container-validator correction in [PR #30568](https://github.com
 
 **Use whole-field `nullable` for both axes.** Rejected: one boolean cannot represent four combinations, and a nullable list is semantically different from a list containing nullable elements.
 
-**Infer element nullability from the absence of an `elementNotNull` check.** Rejected: a check may be explicitly waived or absent from an external database. Enforcement state is not a reliable type declaration.
+**Infer element nullability from the absence of an `elementNotNull` check.** First rejected, because a check could be explicitly waived. Adopted on October 15, 2026, when the waiver was removed: a database without the check accepts null elements, so a type that excludes them would be wrong.
 
-**Represent nullable elements as automatic `noCheck('elementNotNull')`.** Rejected: `noCheck` is an author-controlled enforcement waiver that deliberately leaves the declared non-null type unchanged. Reusing it for semantic nullability would make SQL builder types ambiguous and collapse two different author intents.
+**Represent nullable elements as automatic `noCheck('elementNotNull')`.** Rejected: the waiver left the declared non-null type unchanged, so it could not describe nullable elements. The waiver itself was later removed.
 
 **Keep `elementNullable` only on `ContractField`.** Rejected for native SQL lists: SQL storage-column consumers infer element types without consulting the domain field, so removing the storage marker loses necessary type information.
 

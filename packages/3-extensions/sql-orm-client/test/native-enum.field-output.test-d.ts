@@ -12,7 +12,7 @@ import { createMockRuntime } from './helpers';
 // Mirrors `enum-type.field-output.test-d.ts` but with `codecId: 'pg/enum@1'`
 // (the native-enum codec) and `FieldOutputTypes`/`FieldInputTypes` carrying
 // the value union — exactly what the emitter produces for a native-enum
-// column, via `resolveFieldValueSet` reading the STORAGE column's `valueSet`
+// column, via `resolveStorageValueSet` reading the STORAGE column's `valueSet`
 // (not a domain-field `valueSet` — a native enum has no domain enum;
 // querying-design.md §2.2). This proves ORM read/write typing for a native
 // enum works with no domain enum involved, matching the real emitted shape.
@@ -61,7 +61,7 @@ type NativeEnumStorage = {
             columns: {
               aal: {
                 readonly many: false;
-                nativeType: 'aal_level';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: false;
               };

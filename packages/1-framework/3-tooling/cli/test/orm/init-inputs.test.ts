@@ -49,6 +49,12 @@ function recordingPrompt(): { readonly prompt: PromptSurface; readonly textCalls
       return opts?.default ?? '';
     },
     browserWait: async () => undefined,
+    statement: async () => {
+      throw new Error('unexpected statement prompt');
+    },
+    statements: async () => {
+      throw new Error('unexpected statement prompt');
+    },
   };
   return { prompt, textCalls };
 }

@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Network {
+  id     Int                 @id
+  prefix Unsupported("cidr") @unique
+  hosts  Host[]
+}
+
+model Host {
+  id      Int                 @id
+  net     Unsupported("cidr")
+  network Network             @relation(fields: [net], references: [prefix])
+}

@@ -18,7 +18,6 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-postgres/components/control';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
@@ -42,8 +41,11 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresDataMigrationHeader } from '../utils/journey-workspace-helpers';
 
 const INVARIANT_ID = 'backfill-user-name';
+/** The slots `--backfill User.name` writes, named by the field. */
+const BACKFILL_SLOT = 'User.name';
 const BACKFILLED_NAME = 'unknown';
 
 /**
@@ -81,21 +83,19 @@ function patchBackfillMigrationTs(
 
   let filled = injectMigrationSqlDbSetup(scaffold)
     .replace(
-      `() => placeholder('${INVARIANT_ID}:check')`,
+      `() => placeholder('${BACKFILL_SLOT}:check')`,
       "() => db.public.user.select('id').where((f, fns) => fns.eq(f.name, null)).limit(1)",
     )
     .replace(
-      `() => placeholder('${INVARIANT_ID}:run')`,
+      `() => placeholder('${BACKFILL_SLOT}:run')`,
       `() => db.public.user.update({ name: '${BACKFILLED_NAME}' }).where((f, fns) => fns.eq(f.name, null))`,
     );
 
   if (opts.addInvariantId) {
     const id = opts.invariantId ?? INVARIANT_ID;
-    // Inject `invariantId` as the first key in the dataTransform options
-    // object. The scaffold always starts the options with `check:`.
     filled = filled.replace(
-      /(this\.dataTransform\(endContract,\s*['"][\w-]+['"]\s*,\s*\{\s*)check:/,
-      `$1invariantId: '${id}',\n  check:`,
+      /(this\.dataTransform\(endContract,\s*['"][\w-]+['"]\s*,\s*\{\n)/,
+      `$1  invariantId: '${id}',\n`,
     );
   }
 
@@ -128,7 +128,7 @@ withTempDir(({ createTempDir }) => {
         );
 
         // O.03: swap to the contract that adds a NOT NULL `name` column;
-        // the planner emits a placeholder dataTransform.
+        // `--backfill` makes the planner emit a placeholder dataTransform.
         swapContract(ctx, 'contract-additive-required-name');
         expect((await runContractEmit(ctx)).exitCode, 'O.03: emit C2').toBe(0);
         const planResult = await runMigrationPlan(ctx, [
@@ -136,6 +136,8 @@ withTempDir(({ createTempDir }) => {
           'add-required-name',
           '--from',
           latestMigrationDirName(ctx),
+          '--backfill',
+          'User.name',
         ]);
         expect(planResult.exitCode, 'O.03: plan add-required-name').toBe(0);
 
@@ -269,6 +271,8 @@ withTempDir(({ createTempDir }) => {
               'add-required-name',
               '--from',
               latestMigrationDirName(ctx),
+              '--backfill',
+              'User.name',
             ])
           ).exitCode,
           'P.02: plan',
@@ -360,6 +364,8 @@ withTempDir(({ createTempDir }) => {
           'branch-a-with-invariant',
           '--from',
           latestMigrationDirName(ctx),
+          '--backfill',
+          'User.name',
         ]);
         expect(planA.exitCode, 'Q.02: plan branch A').toBe(0);
         const migrationsDir = join(ctx.testDir, 'migrations', 'app');
@@ -469,6 +475,8 @@ withTempDir(({ createTempDir }) => {
               'add-required-name',
               '--from',
               latestMigrationDirName(ctx),
+              '--backfill',
+              'User.name',
             ])
           ).exitCode,
           'R.02: plan',
@@ -605,24 +613,7 @@ withTempDir(({ createTempDir }) => {
         expect(draftManifest.from, 'S.03: scaffold has from === to').toBe(c1Hash);
         expect(draftManifest.to).toBe(c1Hash);
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };
@@ -758,24 +749,7 @@ MigrationCLI.run(import.meta.url, M);
             .at(-1)!,
         );
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };

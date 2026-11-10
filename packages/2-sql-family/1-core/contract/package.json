@@ -1,0 +1,77 @@
+{
+  "name": "@internal/sql-contract",
+  "private": true,
+  "version": "8.0.0-rc.23",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "SQL contract types, validators, IR factories and shared authoring definitions for Prisma 8",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/contract": "workspace:8.0.0-rc.23",
+    "@internal/framework-components": "workspace:8.0.0-rc.23",
+    "@internal/sql-schema-ir": "workspace:8.0.0-rc.23",
+    "@internal/utils": "workspace:8.0.0-rc.23",
+    "arktype": "^2.2.2"
+  },
+  "devDependencies": {
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
+    "@repo/tsdown": "workspace:8.0.0-rc.23",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./authored-check-naming": "./dist/authored-check-naming.mjs",
+    "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
+    "./check-expressions": "./dist/check-expressions.mjs",
+    "./codec-json-type": "./dist/codec-json-type.mjs",
+    "./contract-view": "./dist/contract-view.mjs",
+    "./data-type": "./dist/data-type.mjs",
+    "./data-type-support": "./dist/data-type-support.mjs",
+    "./entity-handle-lowering-hook": "./dist/entity-handle-lowering-hook.mjs",
+    "./entity-kinds": "./dist/entity-kinds.mjs",
+    "./factories": "./dist/factories.mjs",
+    "./foreign-key-materialization": "./dist/foreign-key-materialization.mjs",
+    "./generated-id-column-aliases": "./dist/generated-id-column-aliases.mjs",
+    "./index-naming": "./dist/index-naming.mjs",
+    "./index-type-validation": "./dist/index-type-validation.mjs",
+    "./index-types": "./dist/index-types.mjs",
+    "./referential-action-sql": "./dist/referential-action-sql.mjs",
+    "./resolve-storage-table": "./dist/resolve-storage-table.mjs",
+    "./sql-expression": "./dist/sql-expression.mjs",
+    "./types": "./dist/types.mjs",
+    "./validators": "./dist/validators.mjs",
+    "./value-set-derivation-hook": "./dist/value-set-derivation-hook.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/2-sql-family/1-core/contract"
+  }
+}

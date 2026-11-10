@@ -12,7 +12,7 @@
 //
 // Subject: JSON values containing a `$type` key are stored and read back verbatim.
 model Test {
-  id   String @id @default(cuid(2))
+  id   String @id @onCreate(cuid(2))
   json Json
   @@map("test")
 }

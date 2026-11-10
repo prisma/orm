@@ -1,0 +1,13 @@
+datasource db {
+  provider   = "postgresql"
+  extensions = [pg_trgm]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+}
+
+model User {
+  id Int @id
+}

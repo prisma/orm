@@ -1,7 +1,9 @@
 # ADR 126 — PSL top-level block SPI
 
-**Status:** Accepted; amended by [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). The registration SPI stands — descriptors claim keywords, pair a `discriminator` with an `entityTypes` factory, and keep the framework as the only parser — but a descriptor no longer carries a typed parameter table. The four parameter value-kinds, the descriptor-data validator, the codec-JSON value medium, and descriptor-driven printing described below are superseded: a descriptor declares its value grammar as a `spec` factory built from the shared argument combinators, validation happens by interpreting that spec after complete declaration collection, and the printer renders producer-built print documents (parsed source is never converted to text). The superseded sections are preserved as a historical record.
+**Status:** Accepted; amended by [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md). The registration SPI stands — descriptors claim keywords, pair a `discriminator` with an `entityTypes` factory, and keep the framework as the only parser — but a descriptor no longer carries a typed parameter table. The four parameter value-kinds, the descriptor-data validator, the codec-JSON value medium, and descriptor-driven printing described below are superseded: a descriptor declares its value grammar as a `spec` factory built from the shared argument combinators, validation happens by interpreting that spec after complete declaration collection, and the printer renders producer-built print documents (parsed source is never converted to text). The superseded sections are preserved as a historical record.
 **Date:** 2026-06-08
+
+> **Retrospective note — the codec's JSON methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) replaces `encodeJson` and `decodeJson` with `toDataTypeValue` and `fromDataTypeValue`, and a value of a data type is read from its stored form by the data type, not the codec. Where this ADR says a `value` parameter rides the codec JSON medium, the value is now a value of the parameter's data type.
 
 ---
 
@@ -39,6 +41,8 @@ const policySelectDescriptor: AuthoringPslBlockDescriptor = {
 };
 ```
 
+> Note 2026-10-22: this example predates the current descriptor, which declares a block's parameters with an attribute specification in `spec` ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)). Its `option` parameter kind is not the authoring argument kind of the same name, which [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) removed with field presets.
+
 No parsing or printing code runs from the extension. The descriptor is registered on `AuthoringContributions.pslBlockDescriptors`, paired with a matching `AuthoringContributions.entityTypes` factory under the same `discriminator`; the parsed block lowers to an IR class instance through that factory.
 
 ## Why describe blocks as data
@@ -49,7 +53,7 @@ The constraint this addresses: PSL's keyword set was closed, so an extension tha
 
 ## Parameter value-kinds
 
-> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`structBlock` / `mapBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
+> **Superseded by [ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`structBlock` / `mapBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
 
 A parameter is one of four kinds. The split is principled, not incidental:
 
@@ -68,7 +72,7 @@ A parameter is one of four kinds. The split is principled, not incidental:
 
 ## How the framework interprets a block
 
-> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)** for the validate and print steps: validation interprets the descriptor's spec after complete declaration collection and publishes typed envelopes; the printer renders producer-built print documents without consulting the descriptor, and parsed source is never converted to text. Parse dispatch by keyword and lowering through the `discriminator`-matched factory stand.
+> **Superseded by [ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)** for the validate and print steps: validation interprets the descriptor's spec after complete declaration collection and publishes typed envelopes; the printer renders producer-built print documents without consulting the descriptor, and parsed source is never converted to text. Parse dispatch by keyword and lowering through the `discriminator`-matched factory stand.
 
 **Parse.** On an unknown top-level keyword, the framework looks it up in the `pslBlockDescriptors` registry. If a descriptor claims it, the generic parser reads the block into a `PslExtensionBlock` node — a name plus a `parameters` map keyed by parameter name. No extension code runs.
 

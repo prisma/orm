@@ -3,8 +3,8 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
-const pgFloat = { codecId: 'pg/float@1', nativeType: 'float8' } as const;
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'float8' } as const;
+const pgFloat = { codecId: 'pg/float@1' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const Reading = model('Reading', {
   fields: {

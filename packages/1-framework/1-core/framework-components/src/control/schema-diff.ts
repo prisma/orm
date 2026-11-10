@@ -25,8 +25,21 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
    * (the dependency is satisfied by reality).
    */
   readonly dependsOn?: readonly (readonly string[])[];
-  /** Why the actual node is not equal to the expected one, as text for people, when the expected node can say. Not an outcome: read that with `issueOutcome`. */
-  readonly explanation?: string;
+  /** Why the actual node is not equal to the expected one, when the expected node can say. Not an outcome: read that with `issueOutcome`. */
+  readonly explanation?: MismatchExplanation;
+}
+
+/**
+ * The cause of a mismatch the expected node can name: the two sides hold different values
+ * (`differs`), or the database may hold the expected value in a form of its own, so the two may
+ * mean the same (`possibly-equivalent`). A tool that chooses actions from the cause maps every value.
+ */
+export type MismatchCause = 'differs' | 'possibly-equivalent';
+
+export interface MismatchExplanation {
+  /** The explanation as text for people. */
+  readonly text: string;
+  readonly cause: MismatchCause;
 }
 
 /**
@@ -92,7 +105,7 @@ export interface DiffableNode {
    * the two values, such as an expected value the node's type refuses. Called after `isEqualTo`
    * returned false, and with `undefined` when the actual side has no such node.
    */
-  explainMismatch?(actual: DiffableNode | undefined): string | undefined;
+  explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined;
   children(): readonly DiffableNode[];
 }
 

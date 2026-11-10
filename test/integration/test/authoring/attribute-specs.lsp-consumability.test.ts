@@ -3,7 +3,10 @@ import { assembleAttributeSpecs, buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { classifyPslCompletionContext } from '../../../../packages/1-framework/3-tooling/language-server/src/completion-context';
+import { providePslCompletionItems } from '../../../../packages/1-framework/3-tooling/language-server/src/completion-provider';
 import { resolveConfigInputs } from '../../../../packages/1-framework/3-tooling/language-server/src/config-resolution';
+import { testBinder } from '../../../../packages/1-framework/3-tooling/language-server/test/helpers/binder';
 
 const configPath = join(import.meta.dirname, 'attribute-specs/_fixture/prisma.config.ts');
 const mongoConfigPath = join(
@@ -14,13 +17,47 @@ const mongoConfigPath = join(
 function modelSymbolFor(source: string) {
   const { document, sources } = parse(source, 'attribute-specs-consumability.prisma');
   const { symbolTable } = buildSymbolTable({
+    defaultNamespaceId: 'public',
     documents: [document],
     sources,
   });
-  return { symbolTable, model: symbolTable.topLevel.models['Widget'] };
+  return { symbolTable, model: symbolTable.defaultNamespace.models['Widget'] };
 }
 
 describe('postgres attribute specs are consumable from a resolved language-server project', () => {
+  it('completes @onCreate( on a String field with the functions bound to its codec', async () => {
+    const { controlStack } = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
+    const markedSource = 'model Widget {\n  id String @id @onCreate(|)\n}\n';
+    const offset = markedSource.indexOf('|');
+    const { document, sources } = parse(
+      markedSource.replace('|', ''),
+      'attribute-specs-consumability.prisma',
+    );
+    const sourceFile = sources.sourceFileFor(document.syntax);
+    const { symbolTable } = buildSymbolTable({
+      defaultNamespaceId: 'public',
+      documents: [document],
+      sources,
+    });
+
+    const items = providePslCompletionItems({
+      context: classifyPslCompletionContext({
+        document,
+        sourceFile,
+        position: sourceFile.positionAt(offset),
+      }),
+      sourceFile,
+      candidates: {
+        ...controlStack,
+        binder: testBinder({ ...controlStack, sources, symbolTable }),
+        symbolTable,
+      },
+      clientSupportsSnippets: false,
+    });
+
+    expect(items.map((item) => item.label)).toEqual(['cuid', 'ksuid', 'nanoid', 'ulid', 'uuid']);
+  });
+
   it("enumerates the postgres pack's @@rls by its attribute name", async () => {
     const resolution = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
 
@@ -46,10 +83,10 @@ describe('postgres attribute specs are consumable from a resolved language-serve
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[
@@ -79,7 +116,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       field: Object.keys(specs.field).sort(),
     }).toEqual({
       model: ['base', 'discriminator', 'index', 'map', 'textIndex', 'unique'],
-      field: ['id', 'map', 'relation', 'unique'],
+      field: ['id', 'map', 'onCreate', 'onUpdate', 'relation', 'unique'],
     });
   });
 
@@ -98,10 +135,10 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[
@@ -145,7 +182,8 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       'default',
       'id',
       'map',
-      'noCheck',
+      'onCreate',
+      'onUpdate',
       'relation',
       'unique',
     ]);
@@ -169,10 +207,11 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       model,
       field,
       typeResolution: undefined,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      contributedType: undefined,
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
+      dataTypes: interpretation.context.dataTypes,
     });
 
     expect(spec).toMatchObject({

@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
+import { withTempDir } from './utils/cli-test-helpers';
 import { runDbInit, runDbInitAllowFailure, setupDbInitFixture } from './utils/db-init-test-helpers';
 import { runDbUpdate, setupDbUpdateFixture } from './utils/db-update-test-helpers';
 
@@ -255,21 +255,25 @@ withTempDir(({ createTempDir }) => {
       'does not write refs when apply fails before success',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
-          const testSetup = setupTestDirectoryFromFixtures(
+          const { testSetup, configPath } = await setupDbInitFixture(
+            connectionString,
             createTempDir,
             fixtureSubdir,
-            'prisma.config.with-db.ts',
-            { '{{DB_URL}}': connectionString },
+            'CREATE SEQUENCE "user"',
           );
           const refsDir = appRefsDir(testSetup.testDir);
 
-          await runDbInitAllowFailure(testSetup, [
+          const run = await runDbInitAllowFailure(testSetup, [
             '--config',
-            testSetup.configPath,
+            configPath,
+            '--advance-ref',
+            'staging',
             '--json',
             '--no-color',
           ]);
 
+          expect(run.exitCode).not.toBe(0);
+          expect(run.document).toMatchObject({ code: 'MIGRATION.PRECHECK_FAILED' });
           expect(noRefFilesUnder(refsDir)).toBe(true);
         });
       },

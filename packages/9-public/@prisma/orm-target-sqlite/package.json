@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-sqlite",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.23",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -11,26 +11,31 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.23",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.23",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.23",
     "@standard-schema/spec": "1.1.0",
     "arktype": "^2.2.2",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/adapter-sqlite": "workspace:8.0.0-rc.14",
-    "@internal/driver-sqlite": "workspace:8.0.0-rc.14",
-    "@internal/target-sqlite": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@internal/adapter-sqlite": "workspace:8.0.0-rc.23",
+    "@internal/driver-sqlite": "workspace:8.0.0-rc.23",
+    "@internal/target-sqlite": "workspace:8.0.0-rc.23",
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
+    "@repo/tsdown": "workspace:8.0.0-rc.23",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -63,7 +68,6 @@
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/migration": "./dist/target__migration.mjs",
-    "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",
     "./target/op-factory-call": "./dist/target__op-factory-call.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/planner": "./dist/target__planner.mjs",
@@ -72,6 +76,7 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"
   },
   "repository": {

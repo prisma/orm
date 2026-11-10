@@ -1,6 +1,6 @@
 {
   "name": "telemetry-backend",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.23",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,7 +11,7 @@
     "deploy": "bun run scripts/deploy.ts",
     "emit": "prisma contract emit",
     "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
-    "migrate": "prisma migrate",
+    "migrate": "prisma db migrate",
     "start": "bun run src/server.ts",
     "start:node": "tsx src/server-node.ts",
     "test": "vitest run",
@@ -22,16 +22,17 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.23",
     "arktype": "catalog:",
     "evlog": "^2.24.0"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.2",
+    "@prisma/cli-engine": "0.9.0",
     "@prisma/compute-sdk": "^0.43.0",
     "@prisma/management-api-sdk": "^1.76.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.14",
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.23",
+    "@repo/test-utils": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@types/bun": "^1.2.18",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",

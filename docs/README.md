@@ -12,6 +12,12 @@ This directory contains the primary documentation for the repository.
 
 - [Serverless Deployment Guide](./Serverless%20Deployment%20Guide.md) — deploying to per-request runtimes (Cloudflare Workers + Hyperdrive worked example, with pointers for AWS Lambda, Vercel, Deno, Bun)
 
+## Direction
+
+- [Project intent](./design/00-purpose/project-intent.md) — who Prisma 8 is for, what it optimises for, and what not to assume
+- [Vision](./design/00-purpose/vision.md) — values, durable themes, and how to judge a request
+- [Steering list](./architecture%20docs/ADR-INDEX.md#steering-list) — requests already answered, with what to use instead
+
 ## Architecture deep dives
 
 - [ADRs](./architecture%20docs/adrs/) — decisions (append-only)
@@ -26,9 +32,9 @@ This directory contains the primary documentation for the repository.
 - [Reference docs](./reference/) — conventions and patterns used across the codebase
 - [Codec authoring guide](./reference/codec-authoring-guide.md) — class-based codecs (`CodecImpl`, `CodecDescriptorImpl`) and column helpers
 - [Scalar types](./reference/scalar-types.md) — every scalar type per target (PSL name, TS helper, codec, storage and application type) and a cross-target concept table with the Prisma 6/7 names
-- [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigIntNumber`, or `UnboundedInt` by target, storage, application value, and aggregate behavior
+- [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigInt(as: number)`, or `BigInt(storage: numeric)` by target, storage, application value, and aggregate behavior
 - [Aggregate descriptor guide](./reference/aggregate-descriptor-guide.md) — how a target or extension declares aggregate operations and their result codecs (`SqlAggregateDescriptor` on `types.aggregateDescriptors`)
-- [PSL editor tooling for tagged literal defaults](./reference/psl-editor-tooling-tagged-literals.md) — what the language server, formatter and highlighting need for `` sql`...` `` and `` json`...` `` defaults, and what is not done yet
+- [PSL editor tooling for tagged literals](./reference/psl-editor-tooling-tagged-literals.md) — what the language server, formatter and highlighting do for `` sql`...` `` and `` json`...` `` literals, and what is not done yet
 - [TypeScript module settings for Prisma 8 projects](./reference/typescript-module-settings.md) — the `tsconfig.json` settings a Prisma 8 project needs, which fit which kind of project, and what `prisma orm init` writes
 - [Naming model and result types](./reference/model-and-result-types.md) — `Models`, `Scalars`, `Shape`, and `ResultType` on ORM queries
 - [Mongo Pipeline Builder](./reference/Mongo%20Pipeline%20Builder.md) — typed builder for MongoDB aggregation pipelines, reads, writes, and find-and-modify

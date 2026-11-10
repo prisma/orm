@@ -6,17 +6,20 @@ import {
   FieldAttributeAst,
   FieldDeclarationAst,
   FunctionCallAst,
-  GenericBlockDeclarationAst,
   IdentifierAst,
   KeyValuePairAst,
   type ModelAttributeAst,
-  ModelDeclarationAst,
   nonTriviaSibling,
   ObjectLiteralExprAst,
   SyntaxNode,
   skipTriviaToken,
 } from '@internal/psl-parser/syntax';
-import type { ArgumentOwner, AttributeOwner } from './attribute-spec-resolution';
+import {
+  type ArgumentOwner,
+  type AttributeOwner,
+  castEntryBlock,
+  castModelBlock,
+} from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
   argumentAtCursor,
@@ -62,7 +65,7 @@ function blockValueSignatureContext(input: PslCursorInput): SignatureContext | u
   const pair = preceding?.parent.findAncestor(KeyValuePairAst.cast);
   const equals = pair?.equals();
   if (pair === undefined || equals === undefined || offset <= equals.offset) return undefined;
-  const block = pair.syntax.findAncestor(GenericBlockDeclarationAst.cast);
+  const block = pair.syntax.findAncestor(castEntryBlock);
   const blockKeyword = block?.keyword()?.text;
   const key = pair.key()?.name();
   if (block === undefined || blockKeyword === undefined || key === undefined) return undefined;
@@ -77,19 +80,19 @@ function signatureOwner(
 ): AttributeOwner | undefined {
   if (attribute instanceof FieldAttributeAst) {
     const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
-    const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
+    const model = attribute.syntax.findAncestor(castModelBlock);
     return field === undefined || model === undefined
       ? undefined
       : { ownerKind: 'field', field, model };
   }
-  const block = attribute.syntax.findAncestor(GenericBlockDeclarationAst.cast);
+  const block = attribute.syntax.findAncestor(castEntryBlock);
   if (block !== undefined) {
     const blockKeyword = block.keyword()?.text;
     return blockKeyword === undefined || blockKeyword.length === 0
       ? undefined
       : { ownerKind: 'block', block, blockKeyword };
   }
-  const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
+  const model = attribute.syntax.findAncestor(castModelBlock);
   return model === undefined ? undefined : { ownerKind: 'model', model };
 }
 

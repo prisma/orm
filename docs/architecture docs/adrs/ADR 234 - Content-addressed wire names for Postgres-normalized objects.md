@@ -26,8 +26,8 @@ A user authors an RLS policy that lets authenticated users update their own prof
 policyUpdate(Profile, {
   name: 'profile_owner_write',
   roles: [authenticated],
-  using: '"userId"::uuid = auth.uid()',
-  withCheck: '"userId"::uuid = auth.uid()',
+  using: sql`"userId"::uuid = auth.uid()`,
+  withCheck: sql`"userId"::uuid = auth.uid()`,
 })
 ```
 
@@ -37,10 +37,12 @@ or equivalently in PSL:
 policy_update profile_owner_write {
   target    = Profile
   roles     = [authenticated]
-  using     = "\"userId\"::uuid = auth.uid()"
-  withCheck = "\"userId\"::uuid = auth.uid()"
+  using     = sql`"userId"::uuid = auth.uid()`
+  withCheck = sql`"userId"::uuid = auth.uid()`
 }
 ```
+
+PSL writes each predicate as a `sql` literal, so the quoted column name needs no escaping ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
 
 The lowering normalizes the content, hashes it, and stores the full wire name in the IR:
 
@@ -126,7 +128,7 @@ The `PostgresRlsPolicy` IR node carries the **full wire name** in its `name` fie
 
 ```ts
 // TS authoring — prefix only
-policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], using: 'true' })
+policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], using: sql`true` })
 ```
 
 ```prisma
@@ -134,7 +136,7 @@ policySelect(Profile, { name: 'profile_owner_read', roles: [authenticated], usin
 policy_select profile_owner_read {
   target = Profile
   roles  = [authenticated]
-  using  = "true"
+  using  = sql`true`
 }
 ```
 

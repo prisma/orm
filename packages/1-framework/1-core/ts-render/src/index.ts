@@ -7,4 +7,4 @@ export {
 } from './json-to-ts-source';
 export { renderImports } from './render-imports';
 export { type ImportRequirement, TsExpression } from './ts-expression';
-export { tsQuotedTextSource, tsStringLiteral } from './ts-string-literal';
+export { tsQuotedTextSource, tsStringLiteral, tsTemplateText } from './ts-string-literal';

@@ -51,6 +51,43 @@ function loadContract(relativePath: string): Contract<SqlStorage> {
  */
 const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }> = [
   {
+    name: 'value objects with nested, list, enum and self-referring members, and a discriminator, each with its derived check',
+    schema: readFileSync(
+      join(
+        repoRoot,
+        'test/integration/test/sql-orm-client/fixtures/value-object-checks/contract.prisma',
+      ),
+      'utf-8',
+    ).replace('// use prisma-8\n', ''),
+  },
+  {
+    name: 'a value object field of a variant that shares the base table, whose column is nullable',
+    schema: `type Geo {
+  lat Float
+  lng Float
+}
+
+model Shape {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Circle {
+  center Geo
+
+  @@base(Shape, "circle")
+}
+
+model Square {
+  side Int
+
+  @@base(Shape, "square")
+}
+`,
+  },
+  {
     name: 'a model control policy',
     schema: `model Ledger {
   id Int @id
@@ -67,9 +104,24 @@ const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }
   tags String[]
 
   @@index([body], type: "gin", options: { fastupdate: "off" }, name: "doc_body_gin")
-  @@index([id], where: "id > 10", name: "doc_recent")
-  @@index(expression: "lower(body)", name: "doc_body_lower")
+  @@index([id], where: sql\`id > 10\`, name: "doc_recent")
+  @@index(expression: sql\`lower(body)\`, name: "doc_body_lower")
   @@index([tags], unique: true, name: "doc_tags_key")
+}
+`,
+  },
+  {
+    name: 'full-text indexes: one field, weight groups, a language, a predicate and an exact name',
+    schema: `model Post {
+  id       Int     @id
+  title    String
+  subtitle String? @map("sub_title")
+  body     String?
+
+  @@fullTextIndex([title], name: "post_title_search")
+  @@fullTextIndex([[title, subtitle], body], name: "post_search")
+  @@fullTextIndex([body, title], language: "german", where: sql\`id > 10\`, name: "post_search_de")
+  @@fullTextIndex([[body]], map: "legacy_body_search")
 }
 `,
   },
@@ -85,7 +137,6 @@ model Task {
   id         Int        @id
   priority   Priority
   priorities Priority[]
-  waived     Priority   @noCheck(membership)
   preset     Priority   @default(Low)
 }
 `,
@@ -113,8 +164,8 @@ model Pair {
   zoned TimestamptzString(3)
   js    TimestamptzJsDate(3)
   time  TimeString(3)
-  big   BigIntNumber
-  huge  UnboundedInt
+  big   Int8Number
+  huge  NumericBigInt
 }
 `,
   },
@@ -138,27 +189,27 @@ model Profile {
 policy_select p_read {
   target = Profile
   roles  = [app_user, admin]
-  using  = "owner_id = current_setting('app.uid')::int"
+  using  = sql\`owner_id = current_setting('app.uid')::int\`
 }
 
 policy_insert p_write {
   target    = Profile
   roles     = [app_user]
-  withCheck = "owner_id > 0"
+  withCheck = sql\`owner_id > 0\`
 }
 
 policy_update p_update {
   target     = Profile
   roles      = [admin]
-  using      = "true"
-  withCheck  = "owner_id > 0"
+  using      = sql\`true\`
+  withCheck  = sql\`owner_id > 0\`
   permissive = false
 }
 
 policy_all p_admin {
   target = Profile
   roles  = [admin]
-  using  = "true"
+  using  = sql\`true\`
 
   @@map("profile_admin_policy")
 }
@@ -182,7 +233,7 @@ namespace auth {
 policy_select p_read {
   target = auth.Account
   roles  = [unbound.auditor]
-  using  = "true"
+  using  = sql\`true\`
 }
 `,
   },
@@ -192,8 +243,35 @@ policy_select p_read {
   id    Int    @id
   email String
 
-  @@check(expression: "length(email) > 0", name: "widget_email_not_blank")
-  @@check(expression: "id > 0", map: "widget_id_positive")
+  @@check(expression: sql\`length(email) > 0\`, name: "widget_email_not_blank")
+  @@check(expression: sql\`id > 0\`, map: "widget_id_positive")
+}
+`,
+  },
+  {
+    name: 'a value object nested in another, a list of nested value objects, and an enum member',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Geo {
+  lat Float
+  lng Float
+}
+
+type Address {
+  street  String
+  country Country
+  geo     Geo
+  stops   Geo[]
+}
+
+model Person {
+  id    Int       @id
+  home  Address
+  homes Address[]
 }
 `,
   },
@@ -229,8 +307,8 @@ model Person {
   {
     name: 'value-object members with type parameters, single and list',
     schema: `type Price {
-  amount  Numeric(65, 30)
-  history Numeric(65, 30)[]
+  amount  NumericString(65, 30)
+  history NumericString(65, 30)[]
 }
 
 model Product {
@@ -275,7 +353,7 @@ model Note {
 policy_select p_read {
   target = Note
   roles  = [app_user]
-  using  = "owner = 'a\\"b' OR owner ~ '\\\\d'\\nOR owner = 'c'"
+  using  = sql"owner = 'a\\"b' OR owner ~ '\\\\d'\\nOR owner = 'c'"
 }
 `,
   },
@@ -296,7 +374,7 @@ model Note {
 policy_select p_read {
   target = Note
   roles  = [app_user]
-  using  = "owner = 'a\tb\u0001'"
+  using  = sql"owner = 'a\\tb\\u0001'"
 }
 `,
   },
@@ -311,6 +389,79 @@ policy_select p_read {
 model Tagged {
   id    Int   @id
   label Label
+}
+`,
+  },
+  {
+    name: 'enum members that are not text: numbers, NaN and infinities, dates and times, an interval, an address, a uuid, and bare members',
+    schema: `enum Level {
+  @@type("pg/int4@1")
+  Low  = 1
+  High = 2
+}
+
+enum Ratio {
+  @@type("pg/numeric@1")
+  Half  = 0.5
+  Whole = 1.50
+}
+
+enum Reading {
+  @@type("pg/float8@1")
+  Nan      = NaN
+  Up       = Infinity
+  Down     = -Infinity
+  Fraction = 2.25
+}
+
+enum Launch {
+  @@type("pg/date-temporal@1")
+  First = date\`2024-01-02\`
+}
+
+enum Instant {
+  @@type("pg/timestamptz-temporal@1")
+  Start = timestamptz\`2024-01-02T03:04:05.5Z\`
+}
+
+enum Slot {
+  @@type("pg/time-temporal@1")
+  Morning = time\`03:04:05.5\`
+}
+
+enum Span {
+  @@type("pg/interval@1")
+  Day  = interval\`P1D\`
+  Hour = interval\`PT1H\`
+}
+
+enum Network {
+  @@type("pg/inet@1")
+  Private = "10.0.0.0/8"
+}
+
+enum Key {
+  @@type("pg/uuid@1")
+  Only = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+}
+
+enum Color {
+  Red
+  Green
+}
+
+model Sample {
+  id      Int      @id
+  level   Level
+  ratio   Ratio
+  reading Reading
+  launch  Launch
+  instant Instant
+  slot    Slot
+  span    Span
+  network Network
+  key     Key
+  color   Color
 }
 `,
   },
@@ -375,7 +526,7 @@ describe('a value-object member typed by a named type', () => {
     async () => {
       const authored = await readPsl(`// use prisma-8
 types {
-  Short = VarChar(10)
+  Short = Varchar(10)
 }
 
 type Label {
@@ -392,7 +543,7 @@ model Product {
       const printed = await printAndReadBack(authored);
 
       expect(printContract(authored).text).toMatch(
-        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+        /type Label \{\s+code\s+String\(storage: varchar, length: 10\)\s+codes\s+String\(storage: varchar, length: 10\)\[\]/,
       );
       expect(serializedWithoutCapabilities(printed)).toEqual(
         serializedWithoutCapabilities(authored),

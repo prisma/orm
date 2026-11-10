@@ -6,8 +6,16 @@ import {
   buildNamespacedEnums,
   createEnumAccessor,
 } from '../src/enum-accessor';
+import type { JsonValue } from '../src/types';
+import { enumMemberCodec } from './support/enum-member-codec';
 
 type ContractWithDomain<TDomain> = Contract & { readonly domain: TDomain };
+
+const storedForms = () =>
+  enumMemberCodec({
+    fromStored: (json: JsonValue) => json,
+    toStored: (value: unknown) => value as JsonValue,
+  });
 
 const roleEnum = {
   codecId: 'pg/text@1',
@@ -50,12 +58,6 @@ describe('createEnumAccessor()', () => {
     it('maps member names to their values', () => {
       const accessor = createEnumAccessor(roleEnum);
       expect(accessor.members).toEqual({ User: 'user', Admin: 'admin' });
-    });
-
-    it('resolves each member name to the correct value', () => {
-      const accessor = createEnumAccessor(roleEnum);
-      expect(accessor.members['User']).toBe('user');
-      expect(accessor.members['Admin']).toBe('admin');
     });
   });
 
@@ -143,7 +145,7 @@ describe('buildEnumsMapForNamespace()', () => {
       },
     };
 
-    const map = buildEnumsMapForNamespace(domain, 'public');
+    const map = buildEnumsMapForNamespace(domain, 'public', storedForms);
     expect(Object.keys(map).sort()).toEqual(['Role', 'Status']);
     expect(map['Role']?.values).toEqual(['user', 'admin']);
     expect(map['Status']?.values).toEqual(['active', 'inactive', 'pending']);
@@ -156,7 +158,7 @@ describe('buildEnumsMapForNamespace()', () => {
       },
     };
 
-    expect(buildEnumsMapForNamespace(domain, 'public')).toEqual({});
+    expect(buildEnumsMapForNamespace(domain, 'public', storedForms)).toEqual({});
   });
 
   it('returns an empty map for an unknown namespace', () => {
@@ -166,7 +168,7 @@ describe('buildEnumsMapForNamespace()', () => {
       },
     };
 
-    expect(buildEnumsMapForNamespace(domain, 'audit')).toEqual({});
+    expect(buildEnumsMapForNamespace(domain, 'audit', storedForms)).toEqual({});
   });
 
   it('keeps same-named enums in different namespaces separate', () => {
@@ -177,8 +179,11 @@ describe('buildEnumsMapForNamespace()', () => {
       },
     };
 
-    expect(buildEnumsMapForNamespace(domain, 'public')['Role']?.values).toEqual(['user', 'admin']);
-    expect(buildEnumsMapForNamespace(domain, 'audit')['Role']?.values).toEqual([
+    expect(buildEnumsMapForNamespace(domain, 'public', storedForms)['Role']?.values).toEqual([
+      'user',
+      'admin',
+    ]);
+    expect(buildEnumsMapForNamespace(domain, 'audit', storedForms)['Role']?.values).toEqual([
       'active',
       'inactive',
       'pending',
@@ -194,7 +199,7 @@ describe('buildNamespacedEnums()', () => {
       },
     };
 
-    const enums = buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain);
+    const enums = buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain, storedForms);
     expect(Object.keys(enums).sort()).toEqual(['public']);
     expect(enums['public']?.['Role']?.values).toEqual(['user', 'admin']);
     expect(enums['public']?.['Status']?.values).toEqual(['active', 'inactive', 'pending']);
@@ -208,7 +213,7 @@ describe('buildNamespacedEnums()', () => {
       },
     };
 
-    const enums = buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain);
+    const enums = buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain, storedForms);
     expect(enums['public']?.['Role']?.values).toEqual(['user', 'admin']);
     expect(enums['audit']?.['Role']?.values).toEqual(['active', 'inactive', 'pending']);
   });
@@ -218,8 +223,9 @@ describe('buildNamespacedEnums()', () => {
       namespaces: { public: { models: {}, enum: { Role: roleEnum } } },
     };
 
-    const role =
-      buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain)['public']?.['Role'];
+    const role = buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain, storedForms)[
+      'public'
+    ]?.['Role'];
     expect(role?.members['User']).toBe('user');
     expect(role?.has('admin')).toBe(true);
     expect(role?.nameOf('user')).toBe('User');
@@ -231,7 +237,7 @@ describe('buildNamespacedEnums()', () => {
       namespaces: { public: { models: {} } },
     };
 
-    expect(buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain)).toEqual({
+    expect(buildNamespacedEnums<ContractWithDomain<typeof domain>>(domain, storedForms)).toEqual({
       public: {},
     });
   });

@@ -1,7 +1,9 @@
 import type { ContractSourceContext, PslParserOptions } from '@internal/config/config-types';
 import { loadConfig, type PrismaNextConfig, requireConfigSections } from '@internal/config-loader';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { ifDefined } from '@internal/utils/defined';
@@ -31,7 +33,9 @@ export interface ConfigResolution {
 
 const emptyLspControlStack: LspControlStack = {
   scalarTypes: [],
+  defaultNamespaceId: UNBOUND_NAMESPACE_ID,
   pslBlockDescriptors: {},
+  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
 };
 
 export async function resolveConfigInputs(
@@ -89,11 +93,14 @@ export async function resolveConfigInputs(
 function lspControlStackFromStack(stack: ControlStack): LspControlStack {
   return {
     scalarTypes: [...stack.scalarTypes],
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
     authoringContributions: stack.authoringContributions,
+    dataTypes: stack.dataTypes,
     ...(stack.controlMutationDefaults === undefined
       ? {}
       : { controlMutationDefaults: stack.controlMutationDefaults }),
+    generatorFunctions: stack.generatorFunctions,
     ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
   };
 }
@@ -115,10 +122,12 @@ function resolveInterpretation(
       authoringContributions: stack.authoringContributions,
       ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
       codecLookup: stack.codecLookup,
-      dataTypeLookup: stack.dataTypeLookup,
+      dataTypes: stack.dataTypes,
       controlMutationDefaults: stack.controlMutationDefaults,
+      generatorFunctions: stack.generatorFunctions,
       resolvedInputs: [...inputs.uris()],
       capabilities: stack.capabilities,
+      defaultNamespaceId: stack.target.defaultNamespaceId,
     },
   };
 }

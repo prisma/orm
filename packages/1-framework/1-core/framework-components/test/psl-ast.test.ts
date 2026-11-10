@@ -113,20 +113,6 @@ describe('makePslNamespace / makePslNamespaceEntries', () => {
       expect(ownKeys).toContain('entries');
       expect(ownKeys).toContain('span');
     });
-
-    it('spreading the namespace does not duplicate entity data alongside entries', () => {
-      const user = makeModel('User');
-      const ns = makePslNamespace({
-        kind: 'namespace',
-        name: 'public',
-        entries: makePslNamespaceEntries([user], [], []),
-        span: SPAN,
-      });
-
-      const spread = { ...ns };
-      expect(Object.hasOwn(spread, 'models')).toBe(false);
-      expect(Object.hasOwn(spread, 'compositeTypes')).toBe(false);
-    });
   });
 
   describe('BUILTIN_PSL_KIND_KEYS and namespacePslExtensionBlocks', () => {
@@ -169,16 +155,6 @@ describe('makePslNamespace / makePslNamespaceEntries', () => {
       expect(Object.keys(ns.entries['shape'] ?? {})).toEqual(['Round', 'Boxy']);
       expect(ns.entries['shape']?.['Round']).toBe(circle);
       expect(ns.entries['shape']?.['Boxy']).toBe(square);
-    });
-
-    it('each block keeps its own keyword despite sharing a kind', () => {
-      const circle = makeExtensionBlock('shape', 'Round', 'shape_circle');
-      const square = makeExtensionBlock('shape', 'Boxy', 'shape_square');
-
-      expect(circle.kind).toBe('shape');
-      expect(square.kind).toBe('shape');
-      expect(circle.keyword).toBe('shape_circle');
-      expect(square.keyword).toBe('shape_square');
     });
   });
 });

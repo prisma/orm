@@ -1,36 +1,46 @@
 [
   {
-    "id": "index.post.post_title_search_724b05e5",
-    "label": "Create index \"post_title_search_724b05e5\" on \"post\"",
+    "id": "index.post.post_title_search_e0dd1131",
+    "label": "Create index \"post_title_search_e0dd1131\" on \"post\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
       "details": {
         "schema": "public",
         "objectType": "index",
-        "name": "post_title_search_724b05e5",
+        "name": "post_title_search_e0dd1131",
         "table": "post"
       }
     },
     "precheck": [
       {
-        "description": "ensure index \"post_title_search_724b05e5\" does not exist",
+        "description": "ensure index \"post_title_search_e0dd1131\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_724b05e5\""]
+        "params": ["\"public\".\"post_title_search_e0dd1131\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"post_title_search_e0dd1131\""
+        }
       }
     ],
     "execute": [
       {
-        "description": "create index \"post_title_search_724b05e5\"",
-        "sql": "CREATE INDEX \"post_title_search_724b05e5\" ON \"public\".\"post\" USING \"gin\" (to_tsvector('english', \"title\"))",
+        "description": "create index \"post_title_search_e0dd1131\"",
+        "sql": "CREATE INDEX \"post_title_search_e0dd1131\" ON \"public\".\"post\" USING \"gin\" (to_tsvector('english', \"title\"))",
         "params": []
       }
     ],
     "postcheck": [
       {
-        "description": "verify index \"post_title_search_724b05e5\" exists",
-        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_724b05e5\""]
+        "description": "verify index \"post_title_search_e0dd1131\" exists on \"post\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND NOT (\"i\".\"indisunique\") AND \"m\".\"amname\" = $5 AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"post_title_search_e0dd1131\"",
+          "i",
+          "I",
+          "\"public\".\"post\"",
+          "gin"
+        ]
       }
     ]
   }

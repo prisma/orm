@@ -1,6 +1,6 @@
 {
   "name": "@repo/test-utils",
-  "version": "8.0.0-rc.14",
+  "version": "8.0.0-rc.23",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -13,18 +13,19 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.14",
-    "@internal/utils": "workspace:8.0.0-rc.14"
+    "@internal/contract": "workspace:8.0.0-rc.23",
+    "@internal/utils": "workspace:8.0.0-rc.23"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@prisma/dev": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.23",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "mariadb": "3.5.4"
   },
   "exports": {
     ".": {
@@ -51,13 +52,25 @@
       "types": "./dist/exports/semantic-lines.d.mts",
       "import": "./dist/exports/semantic-lines.mjs"
     },
+    "./temporal-fallback-entries": {
+      "types": "./dist/exports/temporal-fallback-entries.d.mts",
+      "import": "./dist/exports/temporal-fallback-entries.mjs"
+    },
     "./timeouts": {
       "types": "./dist/exports/timeouts.d.mts",
       "import": "./dist/exports/timeouts.mjs"
     },
+    "./data-loss-expectations": {
+      "types": "./dist/exports/data-loss-expectations.d.mts",
+      "import": "./dist/exports/data-loss-expectations.mjs"
+    },
     "./typed-expectations": {
       "types": "./dist/exports/typed-expectations.d.mts",
       "import": "./dist/exports/typed-expectations.mjs"
+    },
+    "./mysql-database": {
+      "types": "./dist/exports/mysql-database.d.mts",
+      "import": "./dist/exports/mysql-database.mjs"
     }
   }
 }

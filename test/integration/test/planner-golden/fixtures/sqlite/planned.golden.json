@@ -1,0 +1,63 @@
+{
+  "contract": "test/integration/test/planner-golden/fixtures/sqlite/generated/contract.json",
+  "target": "sqlite",
+  "extensions": [],
+  "planned": {
+    "kind": "success",
+    "operations": [
+      {
+        "id": "table.scalar",
+        "label": "Create table scalar",
+        "summary": "Creates table scalar with required columns",
+        "operationClass": "additive",
+        "target": {
+          "id": "sqlite",
+          "details": {
+            "schema": "main",
+            "objectType": "table",
+            "name": "scalar"
+          }
+        },
+        "precheck": [
+          {
+            "description": "ensure table \"scalar\" does not exist",
+            "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+            "params": [
+              "table",
+              "scalar"
+            ],
+            "expectation": {
+              "expects": "absent",
+              "object": "table \"scalar\""
+            }
+          }
+        ],
+        "execute": [
+          {
+            "description": "create table \"scalar\"",
+            "sql": "CREATE TABLE \"scalar\" (\n  \"bigint\" INTEGER NOT NULL,\n  \"bigintNumber\" INTEGER NOT NULL,\n  \"blob\" BLOB NOT NULL,\n  \"char\" CHARACTER NOT NULL,\n  \"charLength\" CHARACTER NOT NULL,\n  \"datetime\" TEXT NOT NULL,\n  \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,\n  \"integer\" INTEGER NOT NULL,\n  \"json\" TEXT NOT NULL,\n  \"real\" REAL NOT NULL,\n  \"shortText\" CHARACTER VARYING NOT NULL,\n  \"sqlFloat\" REAL NOT NULL,\n  \"sqlInt\" INTEGER NOT NULL,\n  \"text\" TEXT NOT NULL,\n  \"varchar\" CHARACTER VARYING NOT NULL,\n  \"varcharLength\" CHARACTER VARYING NOT NULL\n)",
+            "params": []
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "verify table \"scalar\" exists",
+            "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+            "params": [
+              "table",
+              "scalar"
+            ],
+            "expectation": {
+              "expects": "present",
+              "object": "table \"scalar\""
+            }
+          },
+          {
+            "description": "verify table \"scalar\" has exactly its columns",
+            "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('scalar')) = 16 AND (SELECT COUNT(*) FROM pragma_table_info('scalar') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('bigint', 'integer', 1, 0), ('bigintNumber', 'integer', 1, 0), ('blob', 'blob', 1, 0), ('char', 'character', 1, 0), ('charLength', 'character', 1, 0), ('datetime', 'text', 1, 0), ('id', 'integer', 0, 1), ('integer', 'integer', 1, 0), ('json', 'text', 1, 0), ('real', 'real', 1, 0), ('shortText', 'character varying', 1, 0), ('sqlFloat', 'real', 1, 0), ('sqlInt', 'integer', 1, 0), ('text', 'text', 1, 0), ('varchar', 'character varying', 1, 0), ('varcharLength', 'character varying', 1, 0))) = 16"
+          }
+        ]
+      }
+    ]
+  }
+}

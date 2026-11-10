@@ -41,6 +41,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
       kind: 'target',
       familyId: 'sql',
       targetId: 'postgres',
+      defaultNamespaceId: 'public',
       id: 'postgres',
       version: '0.0.1',
       manifest: {},

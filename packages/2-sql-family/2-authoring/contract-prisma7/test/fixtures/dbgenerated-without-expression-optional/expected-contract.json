@@ -1,0 +1,111 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "T": {
+            "storage": {
+              "table": "T",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "a": {
+                  "column": "a"
+                },
+                "list": {
+                  "column": "list"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "a": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": false
+              },
+              "list": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": {
+                  "elementNullable": true
+                }
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "T": {
+      "namespace": "public",
+      "model": "T"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "60eaaefc1765e512dfb145b9cd15b6a2c42dfd3409262d06d1a0d0335bfada6c",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "T": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "a": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": false
+                },
+                "list": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": true
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

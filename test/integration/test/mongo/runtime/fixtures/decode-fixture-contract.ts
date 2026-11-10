@@ -6,6 +6,8 @@ import type {
   MongoTypeMaps,
 } from '@internal/mongo-contract';
 
+type StoredAs<TFields extends string> = { readonly [K in TFields]: { readonly field: K } };
+
 type DecodeFixtureModels = {
   readonly User: {
     readonly fields: {
@@ -36,7 +38,10 @@ type DecodeFixtureModels = {
       };
     };
     readonly relations: Record<string, never>;
-    readonly storage: { readonly collection: 'users' };
+    readonly storage: {
+      readonly collection: 'users';
+      readonly fields: StoredAs<'_id' | 'name' | 'email' | 'createdAt' | 'embeddings'>;
+    };
   };
   readonly Post: {
     readonly fields: {
@@ -67,7 +72,10 @@ type DecodeFixtureModels = {
         };
       };
     };
-    readonly storage: { readonly collection: 'posts' };
+    readonly storage: {
+      readonly collection: 'posts';
+      readonly fields: StoredAs<'_id' | 'title' | 'userId'>;
+    };
   };
 };
 
@@ -90,7 +98,7 @@ type DecodeFixtureStorage = {
 /**
  * Shared fixture contract for the decode integration tests.
  *
- * Lives in a typed `.ts` so it can drive `mongoQuery<TContract>(...)` row-type
+ * Lives in a typed `.ts` so it can drive `mongoQuery({ context: { contract } })` row-type
  * inference end-to-end. Call sites validate the JSON via the Mongo contract
  * serializer SPI to keep the runtime structural shape honest, then thread
  * `TContract` through `mongoQuery` for the type-level path.
@@ -148,6 +156,7 @@ export type TDecodeFixtureContract = MongoContractWithTypeMaps<
 >;
 
 export const decodeFixtureContractJson = {
+  target: 'mongo' as const,
   targetFamily: 'mongo' as const,
   roots: { users: crossRef('User'), posts: crossRef('Post') },
   domain: {
@@ -155,7 +164,16 @@ export const decodeFixtureContractJson = {
       __unbound__: {
         models: {
           User: {
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: {
+                _id: { field: '_id' },
+                name: { field: 'name' },
+                email: { field: 'email' },
+                createdAt: { field: 'createdAt' },
+                embeddings: { field: 'embeddings' },
+              },
+            },
             relations: {},
             fields: {
               _id: {
@@ -186,7 +204,14 @@ export const decodeFixtureContractJson = {
             },
           },
           Post: {
-            storage: { collection: 'posts' },
+            storage: {
+              collection: 'posts',
+              fields: {
+                _id: { field: '_id' },
+                title: { field: 'title' },
+                userId: { field: 'userId' },
+              },
+            },
             relations: {
               user: {
                 to: crossRef('User'),

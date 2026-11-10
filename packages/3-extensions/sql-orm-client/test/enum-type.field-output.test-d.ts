@@ -59,13 +59,13 @@ type EnumStorage = {
             columns: {
               role: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               status: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: true;
               };

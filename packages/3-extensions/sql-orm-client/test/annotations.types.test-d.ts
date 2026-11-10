@@ -57,10 +57,6 @@ describe('Collection.all (read-typed)', () => {
     );
   });
 
-  test('accepts an omitted configurator', () => {
-    userCollection.all();
-  });
-
   test('rejects a configurator that applies a write-only annotation (negative)', () => {
     userCollection.all((meta) =>
       // @ts-expect-error - audit declares applicableTo: ['write'], not 'read'
@@ -111,14 +107,6 @@ describe('Collection.first (read-typed)', () => {
       (meta) =>
         meta.annotate(cacheAnnotation({ ttl: 60 })).annotate(otelAnnotation({ traceId: 't' })),
     );
-  });
-
-  test('accepts no arguments at all', () => {
-    userCollection.first();
-  });
-
-  test('accepts a function filter without a configurator', () => {
-    userCollection.first((user) => user.name.eq('Alice'));
   });
 
   test('rejects a configurator that applies a write-only annotation (negative)', () => {
@@ -180,10 +168,9 @@ declare const userCollectionWithWhere: Collection<
   'User',
   Record<string, unknown>,
   {
-    readonly hasOrderBy: false;
+    readonly hasOrderBy: boolean;
     readonly hasWhere: true;
-    readonly hasUniqueFilter: false;
-    readonly variantName: undefined;
+    readonly variantValue: undefined;
     readonly nsId: never;
   }
 >;
@@ -199,10 +186,6 @@ describe('Collection.create (write-typed)', () => {
     userCollection.create({ id: 1, name: 'Alice', email: 'a@b.com' }, (meta) =>
       meta.annotate(otelAnnotation({ traceId: 't' })),
     );
-  });
-
-  test('accepts an omitted configurator', () => {
-    userCollection.create({ id: 1, name: 'Alice', email: 'a@b.com' });
   });
 
   test('rejects a configurator that applies a read-only annotation (negative)', () => {
@@ -239,10 +222,6 @@ describe('Collection.createAll (write-typed)', () => {
     userCollection.createAll([{ id: 1, name: 'Alice', email: 'a@b.com' }], (meta) =>
       meta.annotate(auditAnnotation({ actor: 'system' })),
     );
-  });
-
-  test('accepts an omitted configurator', () => {
-    userCollection.createAll([{ id: 1, name: 'Alice', email: 'a@b.com' }]);
   });
 
   test('rejects a configurator that applies a read-only annotation (negative)', () => {
@@ -415,10 +394,6 @@ describe('Collection.aggregate (read-typed)', () => {
     );
   });
 
-  test('accepts an omitted configurator', () => {
-    userCollection.aggregate((aggregate) => ({ count: aggregate.count() }));
-  });
-
   test('rejects a configurator that applies a write-only annotation (negative)', () => {
     userCollection.aggregate(
       (aggregate) => ({ count: aggregate.count() }),
@@ -452,10 +427,6 @@ describe('GroupedCollection.aggregate (read-typed)', () => {
       (aggregate) => ({ count: aggregate.count() }),
       (meta) => meta.annotate(otelAnnotation({ traceId: 't' })),
     );
-  });
-
-  test('accepts an omitted configurator', () => {
-    userGroupedCollection.aggregate((aggregate) => ({ count: aggregate.count() }));
   });
 
   test('rejects a configurator that applies a write-only annotation (negative)', () => {

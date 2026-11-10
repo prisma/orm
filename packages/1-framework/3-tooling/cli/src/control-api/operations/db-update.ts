@@ -9,25 +9,23 @@ import type {
 } from '@internal/framework-components/control';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
-import { notOk } from '@internal/utils/result';
-import type { DbUpdateResult, OnControlProgress } from '../types';
+import type { CliInvocation } from '../../utils/printed-command';
+import type { AnswerPlanQuestions } from '../statements/plan-questions';
+import type { StatementText } from '../statements/statement-text';
+import type { DbUpdateResult, OnControlProgress, PlannerWarningsListener } from '../types';
 import { executeRun } from './db-run';
-import { computePlanHash } from './plan-identity';
-
-export const DB_UPDATE_POLICY = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
-} as const;
+import { DB_UPDATE_POLICY } from './db-update-policy';
 
 /**
  * Options for the `db update` operation.
  *
  * Same loader → planner → runner pipeline as `db init`, but with the
- * widened operation policy (additive + widening + destructive). The
- * destructive-change confirmation gate runs at this layer: when
- * `mode === 'apply'` and `acceptDataLoss` is `false`, the operation
- * pre-plans, surfaces destructive ops to the caller, and aborts.
+ * widened operation policy (additive + widening + destructive). An apply
+ * asks `answerQuestions` what each operation that would lose data means and
+ * whether each that would change access may run, before it applies anything.
  */
-export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string> {
+export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string>
+  extends PlannerWarningsListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -39,34 +37,34 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
     ControlFamilyInstance<TFamilyId, unknown>
   >;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
+  /** Consents to every operation that would lose data, without asking. */
   readonly acceptDataLoss?: boolean;
-  /**
-   * Consent to the plan a prior `DESTRUCTIVE_CHANGES` refusal named by its
-   * `planHash`. The apply recomputes its plan and refuses with
-   * `CONSENT_PLAN_MISMATCH` when the fresh plan differs.
-   */
-  readonly consent?: { readonly planHash: string };
+  /** Consents to every operation that would change who can read or write data, without asking. */
+  readonly acceptAccessChanges?: boolean;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /**
+   * The statements as the user wrote them, in the order given. A `rename` and a convert of a
+   * variant are planned; a `delete` or `allow` answers the question about the subject it names.
+   * Any other `convert` or `backfill` fails, once resolved, with
+   * `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`: `db update` has no migration file to fill.
+   */
+  readonly statements?: readonly StatementText[];
+  /** Asks the questions no statement answered; see {@link AnswerPlanQuestions}. */
+  readonly answerQuestions: AnswerPlanQuestions;
+  /** The command line the advice of a failure repeats. */
+  readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
 }
 
-/**
- * Execute `db update` against the configured contract.
- *
- * Routes through the loader → planner → runner pipeline. Destructive
- * operations require either `acceptDataLoss: true` or a prior
- * `mode: 'plan'` invocation that surfaces the destructive ops; the
- * confirmation gate is implemented here so the lower-level applier
- * remains policy-agnostic.
- */
+/** Execute `db update` against the configured contract. */
 export async function executeDbUpdate<TFamilyId extends string, TTargetId extends string>(
   options: ExecuteDbUpdateOptions<TFamilyId, TTargetId>,
 ): Promise<DbUpdateResult> {
-  const sharedInputs = {
+  return (await executeRun<TFamilyId, TTargetId>({
     driver: options.driver,
     adapter: options.adapter,
     familyInstance: options.familyInstance,
@@ -77,55 +75,15 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     targetId: options.targetId,
     extensions: options.extensions ?? [],
     policy: DB_UPDATE_POLICY,
-    action: 'dbUpdate' as const,
-    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
-    ...ifDefined('onProgress', options.onProgress),
-  };
-  if (options.mode === 'apply' && !options.acceptDataLoss && options.consent === undefined) {
-    const refusal = await guardDestructiveChanges<TFamilyId, TTargetId>(sharedInputs);
-    if (refusal !== null) return refusal;
-  }
-  return (await executeRun<TFamilyId, TTargetId>({
-    ...sharedInputs,
+    invocation: options.invocation,
+    action: 'dbUpdate',
     mode: options.mode,
-    ...ifDefined('consentedPlanHash', options.consent?.planHash),
+    statements: options.statements ?? [],
+    answerQuestions: options.answerQuestions,
+    acceptDataLoss: options.acceptDataLoss ?? false,
+    acceptAccessChanges: options.acceptAccessChanges ?? false,
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
+    ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+    ...ifDefined('onProgress', options.onProgress),
   })) as DbUpdateResult;
-}
-
-/**
- * Pre-plan once when running `db update apply` without `acceptDataLoss`.
- * Surfaces destructive operations across every space; if any are
- * planned, returns a `DESTRUCTIVE_CHANGES` failure that the CLI shows
- * as a confirmation prompt. Returns `null` when the apply is safe to
- * run.
- */
-async function guardDestructiveChanges<TFamilyId extends string, TTargetId extends string>(
-  sharedInputs: Omit<Parameters<typeof executeRun<TFamilyId, TTargetId>>[0], 'mode'>,
-): Promise<DbUpdateResult | null> {
-  const planResult = (await executeRun<TFamilyId, TTargetId>({
-    ...sharedInputs,
-    mode: 'plan',
-  })) as DbUpdateResult;
-  if (!planResult.ok) return planResult;
-  const destructiveOps = planResult.value.plan.operations
-    .filter((op) => op.operationClass === 'destructive')
-    .map((op) => ({ id: op.id, label: op.label }));
-  if (destructiveOps.length === 0) return null;
-  const databaseName = await sharedInputs.driver.databaseName?.();
-  return notOk({
-    code: 'DESTRUCTIVE_CHANGES',
-    summary: `Planned ${destructiveOps.length} destructive operation(s) that require confirmation`,
-    why: 'Destructive operations require explicit consent, which the caller has not given',
-    conflicts: undefined,
-    meta: undefined,
-    destructiveChanges: {
-      destructiveOperations: destructiveOps,
-      databaseName,
-      planHash: computePlanHash({
-        operations: planResult.value.plan.operations,
-        destination: planResult.value.destination,
-      }),
-    },
-    ...ifDefined('warnings', planResult.value.warnings),
-  });
 }

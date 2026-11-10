@@ -35,7 +35,10 @@ const testContract: MongoContract = {
               },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: { _id: { field: '_id' }, email: { field: 'email' } },
+            },
           },
         },
       },
@@ -50,7 +53,11 @@ const testContract: MongoContract = {
           collection: {
             users: new MongoCollection({
               indexes: [
-                new MongoIndex({ keys: [{ field: 'email', direction: 1 as const }], unique: true }),
+                new MongoIndex({
+                  name: 'email_1',
+                  keys: [{ field: 'email', direction: 1 as const }],
+                  unique: true,
+                }),
               ],
             }),
           },

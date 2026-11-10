@@ -13,6 +13,7 @@ import {
   issueOutcome,
   type MigrationOperationPolicy,
   type MigrationRunnerFailure,
+  planOriginOf,
 } from '@prisma/orm-sqlite/components/control';
 import type { Contract } from '@prisma/orm-sqlite/contract/types';
 import { field } from '@prisma/orm-sqlite/contract-builder';
@@ -22,6 +23,7 @@ import type { SqlStorage } from '@prisma/orm-sqlite/family-contract/types';
 import { buildFabricatedMigrationEdge } from '@prisma/orm-sqlite/migration-tools/aggregate';
 import { SqlSchemaIR } from '@prisma/orm-sqlite/schema-ir/types';
 import sqliteTargetDescriptor from '@prisma/orm-sqlite/target/control';
+import { sqliteDataTypes } from '@prisma/orm-sqlite/target/data-types';
 
 const controlStack = createControlStack({
   family: sqlFamilyDescriptor,
@@ -110,28 +112,58 @@ export interface MigrationResult {
 }
 
 function formatFailure(f: MigrationRunnerFailure): string {
-  const parts = [`[${f.code}] ${f.summary}`];
+  const parts = [`[${f.code}] ${f.message}`];
   if (f.why) parts.push(`  why: ${f.why}`);
-  const issues = f.meta?.['issues'];
-  if (Array.isArray(issues)) for (const i of issues) parts.push(`  - ${JSON.stringify(i)}`);
+  for (const i of f.meta.schemaIssues ?? []) parts.push(`  - ${JSON.stringify(i)}`);
   return parts.join('\n');
 }
 
+interface MigrationOptions {
+  origin?: Contract<SqlStorage>;
+  destination: Contract<SqlStorage>;
+  policy?: MigrationOperationPolicy;
+  seed?: (driver: Driver) => Promise<void>;
+}
+
+export interface FailedMigrationResult {
+  readonly driver: Driver;
+  readonly failure: MigrationRunnerFailure;
+}
+
 export async function applyMigration(
-  options: {
-    origin?: Contract<SqlStorage>;
-    destination: Contract<SqlStorage>;
-    policy?: MigrationOperationPolicy;
-    seed?: (driver: Driver) => Promise<void>;
-  },
+  options: MigrationOptions,
   runAssertions: (result: MigrationResult) => Promise<void>,
+): Promise<void> {
+  await runMigration(options, runAssertions, async ({ failure }) => {
+    throw new Error(`Destination runner failed: ${formatFailure(failure)}`);
+  });
+}
+
+/** Applies the destination plan, expects the runner to fail, and hands the failure and the database to `assertFailure`. */
+export async function applyMigrationExpectingFailure(
+  options: MigrationOptions,
+  assertFailure: (result: FailedMigrationResult) => Promise<void>,
+): Promise<void> {
+  await runMigration(
+    options,
+    async () => {
+      throw new Error('Expected the destination runner to fail, but it succeeded');
+    },
+    assertFailure,
+  );
+}
+
+async function runMigration(
+  options: MigrationOptions,
+  onSuccess: (result: MigrationResult) => Promise<void>,
+  onFailure: (result: FailedMigrationResult) => Promise<void>,
 ): Promise<void> {
   const testDb = createTestDb();
   const { driver } = testDb;
   try {
     const planner = sqliteTargetDescriptor.createPlanner(controlAdapter);
     const runner = sqliteTargetDescriptor.createRunner(familyInstance);
-    const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup());
+    const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup(), sqliteDataTypes);
     const policy = options.policy ?? INIT_ADDITIVE_POLICY;
 
     let currentSchema: SqlSchemaIR = emptySchema;
@@ -141,6 +173,8 @@ export async function applyMigration(
         schema: emptySchema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents: fw,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
@@ -162,7 +196,7 @@ export async function applyMigration(
         ],
       });
       if (!run.ok) throw new Error(`Origin runner failed: ${formatFailure(run.failure)}`);
-      currentSchema = await adapter.introspect(driver);
+      currentSchema = await adapter.introspect(driver, options.destination);
     }
     if (options.seed) await options.seed(driver);
 
@@ -171,6 +205,8 @@ export async function applyMigration(
       schema: currentSchema,
       policy,
       fromContract: options.origin ?? null,
+      origin: planOriginOf(options.origin ?? null),
+      statements: [],
       frameworkComponents: fw,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -195,10 +231,12 @@ export async function applyMigration(
         },
       ],
     });
-    if (!runResult.ok)
-      throw new Error(`Destination runner failed: ${formatFailure(runResult.failure)}`);
+    if (!runResult.ok) {
+      await onFailure({ driver, failure: runResult.failure });
+      return;
+    }
 
-    const freshSchema = await adapter.introspect(driver);
+    const freshSchema = await adapter.introspect(driver, options.destination);
     const vr = familyInstance.verifySchema({
       contract: options.destination,
       schema: freshSchema,
@@ -214,7 +252,7 @@ export async function applyMigration(
     for (const [name, tbl] of Object.entries(freshSchema.tables)) {
       if (!CONTROL_TABLES.has(name)) userTables[name] = tbl;
     }
-    await runAssertions({
+    await onSuccess({
       driver,
       schema: new SqlSchemaIR({ ...freshSchema, tables: userTables }),
       operationsExecuted: runResult.value.perSpaceResults[0]?.value.operationsExecuted ?? 0,

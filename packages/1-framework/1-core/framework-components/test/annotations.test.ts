@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   type AnnotationValue,
   assertAnnotationsApplicable,
+  brandedAnnotations,
   defineAnnotation,
-  type OperationKind,
 } from '../src/annotations';
 
 const meta: PlanMeta = {
@@ -194,6 +194,40 @@ describe('defineAnnotation', () => {
       const out = handle.read(plan);
       expect(out).toBe(payload);
     });
+
+    it("reads an activity's annotations", () => {
+      const cache = defineAnnotation<{ ttl: number }>()({
+        namespace: 'cache',
+        applicableTo: ['read'],
+      });
+      const audit = defineAnnotation<{ actor: string }>()({
+        namespace: 'audit',
+        applicableTo: ['write'],
+      });
+      const activity = { annotations: new Map([['cache', cache({ ttl: 60 })]]) };
+
+      expect(cache.read(activity)).toEqual({ ttl: 60 });
+      expect(audit.read(activity)).toBeUndefined();
+    });
+  });
+});
+
+describe('brandedAnnotations', () => {
+  it('keeps only branded annotation values, keyed by namespace', () => {
+    const cache = defineAnnotation<{ ttl: number }>()({
+      namespace: 'cache',
+      applicableTo: ['read'],
+    });
+    const applied = cache({ ttl: 60 });
+
+    expect(brandedAnnotations({ cache: applied, codecs: { id: 'pg/int4@1' } })).toEqual(
+      new Map([['cache', applied]]),
+    );
+  });
+
+  it('is empty when the plan has no annotations', () => {
+    expect(brandedAnnotations(undefined)).toEqual(new Map());
+    expect(brandedAnnotations({ codecs: {} })).toEqual(new Map());
   });
 });
 
@@ -277,17 +311,21 @@ describe('assertAnnotationsApplicable', () => {
       );
     });
 
-    it('with a message naming the offending annotation namespace and the terminal', () => {
-      try {
-        assertAnnotationsApplicable([cache({ ttl: 60 })], 'write', 'create');
-        expect.fail('expected assertAnnotationsApplicable to throw');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        const message = (error as Error).message;
-        expect(message).toContain("'cache'");
-        expect(message).toContain("'create'");
-        expect(message).toContain("'write'");
-      }
+    it('with a message that says what to do, in terms the caller wrote', () => {
+      expect(() =>
+        assertAnnotationsApplicable([audit({ actor: 'system' })], 'read', 'first'),
+      ).toThrow(
+        expect.objectContaining({
+          message:
+            'An annotation that applies only to write operations was given to a read operation. Remove it from the read and put it on a write operation instead.',
+        }),
+      );
+    });
+
+    it('without a fix field', () => {
+      expect(() =>
+        assertAnnotationsApplicable([audit({ actor: 'system' })], 'read', 'first'),
+      ).toThrow(expect.not.objectContaining({ fix: expect.anything() }));
     });
 
     it('with structured details including namespace, terminalName, kind, and applicableTo', () => {
@@ -303,25 +341,6 @@ describe('assertAnnotationsApplicable', () => {
           applicableTo: ['read'],
         });
       }
-    });
-  });
-
-  describe('does not require AnnotationValue typing on its parameter', () => {
-    // The runtime helper takes readonly AnnotationValue<unknown, OperationKind>[]
-    // so it can be called from lane terminals that have already passed
-    // the type gate via ValidAnnotations. The runtime check is the
-    // belt-and-suspenders that catches casts / `any` / dynamic
-    // invocations.
-    it('rejects an opaquely-typed inapplicable annotation forced through a cast', () => {
-      const sneakyWriteAnnotation = audit({ actor: 'system' });
-      // Imagine a caller bypassed the type gate via `as any` and handed
-      // the runtime an annotation whose kinds do not match the terminal.
-      const annotations: readonly AnnotationValue<unknown, OperationKind>[] = [
-        sneakyWriteAnnotation,
-      ];
-      expect(() => assertAnnotationsApplicable(annotations, 'read', 'first')).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.ANNOTATION_INAPPLICABLE' }),
-      );
     });
   });
 });

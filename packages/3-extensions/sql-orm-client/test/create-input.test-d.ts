@@ -14,7 +14,7 @@ type CreateInputStorage = {
             columns: {
               id: {
                 readonly many: false;
-                nativeType: 'int4';
+                dataType: 'pg/int4';
                 codecId: 'pg/int4@1';
                 nullable: false;
                 default: {
@@ -24,25 +24,25 @@ type CreateInputStorage = {
               };
               email: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               name: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: true;
               };
               slug: {
                 readonly many: false;
-                nativeType: 'text';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
               };
               created_at: {
                 readonly many: false;
-                nativeType: 'timestamptz';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
                 default: {
@@ -112,7 +112,11 @@ type CreateInputContract = Omit<Contract<CreateInputStorage>, 'domain'> & {
     readonly mutations: {
       readonly defaults: [
         {
-          readonly ref: { readonly entry: 'user'; readonly field: 'slug' };
+          readonly ref: {
+            readonly namespace: '__unbound__';
+            readonly entry: 'user';
+            readonly field: 'slug';
+          };
           readonly onCreate: {
             readonly kind: 'generator';
             readonly id: 'uuidv4';

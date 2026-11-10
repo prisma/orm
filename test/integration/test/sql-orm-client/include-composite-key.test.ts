@@ -43,10 +43,6 @@ const context = createExecutionContext({
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
 });
 
-// The DSL types a relation's target model as any string and its cardinality as a union. So an
-// include refinement here sees an accessor keyed by any string, and its count() is typed away.
-const countRelated = (related: unknown): unknown => (related as { count: () => unknown }).count();
-
 async function seedCompositeTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('drop table if exists composite_orders');
   await runtime.query('drop table if exists composite_customers');
@@ -154,7 +150,7 @@ describe('integration/include over a composite foreign key', () => {
         const rows = await customers
           .select('tenantId', 'id', 'name')
           .orderBy([(customer) => customer.tenantId.asc(), (customer) => customer.id.asc()])
-          .include('orders', (order) => countRelated(order) as never)
+          .include('orders', (order) => order.count())
           .all();
 
         expect(rows).toEqual([

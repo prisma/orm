@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 6,
+    "message": "Field \"FieldKey.id\" has type Unsupported(...), so the Prisma 8 model has no field for it, but its @id uses it, and without it model \"FieldKey\" has no field that identifies a row, so Prisma 8 could not update, delete or relate its rows. Add @@ignore on model \"FieldKey\": Prisma 7 then requires @ignore on every relation field that points to the model, its next migration is empty, Prisma 8 keeps the model's table with its primary key, and the model disappears from both clients."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 15,
+    "message": "Field \"CompositeKey.b\" has type Unsupported(...), so the Prisma 8 model has no field for it, but @@id on model \"CompositeKey\" uses it, and without it model \"CompositeKey\" has no field that identifies a row, so Prisma 8 could not update, delete or relate its rows. Add @@ignore on model \"CompositeKey\": Prisma 7 then requires @ignore on every relation field that points to the model, its next migration is empty, Prisma 8 keeps the model's table with its primary key, and the model disappears from both clients."
+  }
+]

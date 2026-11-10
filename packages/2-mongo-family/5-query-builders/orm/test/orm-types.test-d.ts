@@ -10,7 +10,6 @@ import type {
   DotPath,
   FieldAccessor,
   FieldExpression,
-  FieldOperation,
   ResolveDotPathType,
 } from '../src/field-accessor';
 import type { MongoOrmClient } from '../src/mongo-orm';
@@ -23,11 +22,11 @@ import type {
   InferRootRow,
   MongoIncludeSpec,
   MongoWhereFilter,
+  NoIncludes,
   ReferenceRelationKeys,
   ResolvedCreateInput,
   VariantCreateInput,
   VariantModelRow,
-  VariantNames,
 } from '../src/types';
 
 // --- Root accessors ---
@@ -171,20 +170,10 @@ test('InferRootRow for non-polymorphic model returns plain row', () => {
   expectTypeOf<UserRow>().toHaveProperty('addresses');
 });
 
-// --- VariantNames / VariantModelRow ---
-
-test('VariantNames extracts variant names from polymorphic model', () => {
-  type Names = VariantNames<Contract, 'Task'>;
-  expectTypeOf<Names>().toEqualTypeOf<'Bug' | 'Feature'>();
-});
-
-test('VariantNames is never for non-polymorphic model', () => {
-  type Names = VariantNames<Contract, 'User'>;
-  expectTypeOf<Names>().toBeNever();
-});
+// --- VariantModelRow ---
 
 test('VariantModelRow narrows to Bug-specific fields', () => {
-  type BugRow = VariantModelRow<Contract, 'Task', 'Bug'>;
+  type BugRow = VariantModelRow<Contract, 'Task', 'bug'>;
   expectTypeOf<BugRow>().toHaveProperty('severity');
   expectTypeOf<BugRow>().toHaveProperty('_id');
   expectTypeOf<BugRow>().toHaveProperty('title');
@@ -192,7 +181,7 @@ test('VariantModelRow narrows to Bug-specific fields', () => {
 });
 
 test('VariantModelRow narrows to Feature-specific fields', () => {
-  type FeatureRow = VariantModelRow<Contract, 'Task', 'Feature'>;
+  type FeatureRow = VariantModelRow<Contract, 'Task', 'feature'>;
   expectTypeOf<FeatureRow>().toHaveProperty('priority');
   expectTypeOf<FeatureRow>().toHaveProperty('targetRelease');
   expectTypeOf<FeatureRow['type']>().toEqualTypeOf<'feature'>();
@@ -210,6 +199,25 @@ test('first() returns Promise of InferRootRow or null', () => {
   type Col = MongoCollection<Contract, 'User'>;
   type FirstResult = ReturnType<Col['first']>;
   expectTypeOf<FirstResult>().toExtend<Promise<InferRootRow<Contract, 'User'> | null>>();
+});
+
+test('firstOrThrow() returns the first() row without null', () => {
+  const col = {} as MongoCollection<Contract, 'User'>;
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<Promise<InferRootRow<Contract, 'User'>>>();
+  expectTypeOf<Parameters<typeof col.firstOrThrow>>().toEqualTypeOf<[]>();
+});
+
+test('include().firstOrThrow() returns the included row without null', () => {
+  const col = ({} as MongoCollection<Contract, 'Task'>).include('assignee');
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<
+    Promise<InferRootRow<Contract, 'Task'> & { assignee: InferFullRow<Contract, 'User'> | null }>
+  >();
 });
 
 test('include() accepts reference relation keys', () => {
@@ -280,7 +288,6 @@ type ContractWithAssignee<Nullable extends boolean> = Omit<Contract, 'domain'> &
             'relations'
           > & { readonly relations: { readonly assignee: AssigneeRelation<Nullable> } };
         };
-        readonly valueObjects: Contract['domain']['namespaces']['__unbound__']['valueObjects'];
       };
     };
   };
@@ -358,7 +365,7 @@ test('select() rejects nonexistent field after chaining', () => {
 // --- VariantCreateInput ---
 
 test('VariantCreateInput includes base + variant fields minus _id and discriminator', () => {
-  type BugCreate = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type BugCreate = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<BugCreate>().toHaveProperty('title');
   expectTypeOf<BugCreate>().toHaveProperty('assigneeId');
   expectTypeOf<BugCreate>().toHaveProperty('severity');
@@ -366,26 +373,26 @@ test('VariantCreateInput includes base + variant fields minus _id and discrimina
 });
 
 test('VariantCreateInput excludes other variant fields', () => {
-  type BugCreate = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type BugCreate = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<BugCreate>().not.toHaveProperty('priority');
   expectTypeOf<BugCreate>().not.toHaveProperty('targetRelease');
 });
 
-test('ResolvedCreateInput falls through to CreateInput when TVariant is never', () => {
+test('ResolvedCreateInput falls through to CreateInput when TVariantValue is never', () => {
   type Resolved = ResolvedCreateInput<Contract, 'Task', never>;
   type Expected = CreateInput<Contract, 'Task'>;
   expectTypeOf<Resolved>().toEqualTypeOf<Expected>();
 });
 
 test('ResolvedCreateInput resolves to VariantCreateInput when variant is specified', () => {
-  type Resolved = ResolvedCreateInput<Contract, 'Task', 'Bug'>;
-  type Expected = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type Resolved = ResolvedCreateInput<Contract, 'Task', 'bug'>;
+  type Expected = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<Resolved>().toEqualTypeOf<Expected>();
 });
 
 test('variant().create() accepts variant-specific fields without discriminator', () => {
   const col = {} as MongoCollection<Contract, 'Task'>;
-  const bug = col.variant('Bug');
+  const bug = col.variant('bug');
   type CreateParam = Parameters<typeof bug.create>[0];
   expectTypeOf<CreateParam>().toHaveProperty('title');
   expectTypeOf<CreateParam>().toHaveProperty('severity');
@@ -399,15 +406,79 @@ test('non-variant create() uses base CreateInput', () => {
   expectTypeOf<CreateParam>().toHaveProperty('title');
 });
 
-test('variant() preserves TVariant through chaining', () => {
+test('variant() preserves TVariantValue through chaining', () => {
   const col = {} as MongoCollection<Contract, 'Task'>;
   const chained = col
-    .variant('Bug')
+    .variant('bug')
     .where({} as never)
     .limit(10);
   type CreateParam = Parameters<typeof chained.create>[0];
   expectTypeOf<CreateParam>().toHaveProperty('severity');
   expectTypeOf<CreateParam>().not.toHaveProperty('type');
+});
+
+test('variant() accepts a declared discriminator value', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  expectTypeOf(col.variant('bug')).toEqualTypeOf<
+    MongoCollection<Contract, 'Task', NoIncludes, 'bug'>
+  >();
+});
+
+test('variant() rejects a variant model name', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  // @ts-expect-error variant() takes a discriminator value, not a model name
+  col.variant('Bug');
+});
+
+test('variant() rejects an undeclared discriminator value', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  // @ts-expect-error 'epic' is not a declared discriminator value of Task
+  col.variant('epic');
+});
+
+test('variant() cannot be called on a non-polymorphic receiver', () => {
+  const col = {} as MongoCollection<Contract, 'User'>;
+  // @ts-expect-error User declares no discriminator values
+  col.variant('bug');
+});
+
+test('variant() keeps a union of values', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  const value = 'bug' as 'bug' | 'feature';
+  expectTypeOf(col.variant(value)).toEqualTypeOf<
+    MongoCollection<Contract, 'Task', NoIncludes, 'bug' | 'feature'>
+  >();
+  expectTypeOf<VariantModelRow<Contract, 'Task', 'bug' | 'feature'>>().toEqualTypeOf<
+    VariantModelRow<Contract, 'Task', 'bug'> | VariantModelRow<Contract, 'Task', 'feature'>
+  >();
+});
+
+test('variant() cannot be called on a collection with a variant selected', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  expectTypeOf(col.where({ title: 'X' }).variant('bug')).not.toBeNever();
+  const bugs = col.variant('bug');
+  // @ts-expect-error a variant is already selected; select from the base collection
+  bugs.variant('feature');
+  const value = 'bug' as 'bug' | 'feature';
+  // @ts-expect-error a variant is already selected, even when it is a union
+  col.variant(value).variant('bug');
+});
+
+test('a variant helper result rejects a second variant selection', () => {
+  const tasks = {} as MongoCollection<Contract, 'Task'>;
+  const bugs = () => tasks.variant('bug');
+  expectTypeOf(bugs().where({ title: 'X' })).not.toBeNever();
+  // @ts-expect-error bugs() already selected a variant
+  bugs().variant('feature');
+});
+
+test('a zero-argument custom helper exposes the variant collection and create input', () => {
+  const tasks = {} as MongoCollection<Contract, 'Task'>;
+  const bugs = () => tasks.variant('bug');
+  expectTypeOf(bugs).returns.toEqualTypeOf<MongoCollection<Contract, 'Task', NoIncludes, 'bug'>>();
+  expectTypeOf<Parameters<ReturnType<typeof bugs>['create']>[0]>().toEqualTypeOf<
+    VariantCreateInput<Contract, 'Task', 'bug'>
+  >();
 });
 
 // --- 1:N reference relation include ---
@@ -435,10 +506,7 @@ test('include() on 1:N reference relation all() returns array type', () => {
 test('FieldAccessor has FieldExpression for scalar fields', () => {
   type Accessor = FieldAccessor<Contract, 'User', CodecTypes>;
   expectTypeOf<Accessor['name']>().toExtend<FieldExpression<string>>();
-  expectTypeOf<Accessor['loginCount']>().toMatchTypeOf<{
-    set: (v: unknown) => FieldOperation;
-    unset: () => FieldOperation;
-  }>();
+  expectTypeOf<Accessor['loginCount']>().toExtend<FieldExpression<number>>();
 });
 
 test('FieldAccessor has FieldExpression for array fields', () => {

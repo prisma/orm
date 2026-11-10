@@ -44,10 +44,6 @@ describe('defineAnnotation generics', () => {
     expectTypeOf(both).toEqualTypeOf<AnnotationHandle<{ traceId: string }, 'read' | 'write'>>();
   });
 
-  test('AnnotationHandle.namespace is a string', () => {
-    expectTypeOf(readOnly.namespace).toBeString();
-  });
-
   test('AnnotationHandle.applicableTo is a ReadonlySet narrowed to the declared Kinds', () => {
     expectTypeOf(readOnly.applicableTo).toEqualTypeOf<ReadonlySet<'read'>>();
     expectTypeOf(writeOnly.applicableTo).toEqualTypeOf<ReadonlySet<'write'>>();

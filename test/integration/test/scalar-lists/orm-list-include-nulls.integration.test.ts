@@ -31,9 +31,9 @@ model Item {
   id      Int       @id
   ownerId Int
   owner   Owner     @relation(fields: [ownerId], references: [id])
-  tags    String[]  @noCheck(elementNotNull)
-  scores  Int[]     @noCheck(elementNotNull)
-  labels  String[]? @noCheck(elementNotNull)
+  tags    String?[]
+  scores  Int?[]
+  labels  String?[]?
 
   @@map("item")
 }
@@ -68,6 +68,8 @@ async function migrateContract(connectionString: string, contract: Contract<SqlS
       schema: await familyInstance.introspect({ driver }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',

@@ -26,8 +26,9 @@ function build(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  const model = symbolTable.topLevel.models['User']!;
+  const model = symbolTable.defaultNamespace.models['User']!;
   const { binder } = createBinder({
     sources,
     symbolTable,

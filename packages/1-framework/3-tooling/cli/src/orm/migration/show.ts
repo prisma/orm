@@ -28,6 +28,7 @@ import {
   errorMigrationPackageNotFound,
   errorNoMigrations,
 } from '../../utils/cli-errors';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { previewBlockHeader, renderPreviewStatement } from '../../utils/formatters/migrations';
 import {
   findPackageByDirPath,
@@ -35,6 +36,7 @@ import {
   resolveAppTargetPath,
 } from '../../utils/migration-path-target';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { dataLine, fieldLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
@@ -107,7 +109,19 @@ function showPresentations(inputs: {
 }): Presentations {
   const migration = inputs.document.migration;
   return {
-    stdout: () => [],
+    stdout: () => [
+      ...fieldLines([
+        ['name', migration.name],
+        ['space', migration.space],
+        ['from', migration.fromContract],
+        ['to', migration.toContract],
+        ['hash', migration.hash],
+        ['created', migration.createdAt],
+      ]),
+      ...migration.operations.map((operation) =>
+        dataLine(['operation', operation.id, operation.operationClass, operation.label]),
+      ),
+    ],
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -265,7 +279,7 @@ export const migrationShowCommand = defineOrmCommand({
         normalizeError(
           errorContractValidationFailed(
             `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-            { where: { path: contractPath } },
+            { where: { path: contractPath }, meta: contractValidationMeta(error) },
           ),
         ),
       );

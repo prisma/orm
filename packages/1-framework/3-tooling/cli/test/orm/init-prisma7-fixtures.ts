@@ -72,6 +72,12 @@ export function scriptedPrompt(answers: Record<string, unknown> = {}): {
       return opts?.default ?? '';
     },
     browserWait: async () => undefined,
+    statement: async () => {
+      throw new Error('unexpected statement prompt');
+    },
+    statements: async () => {
+      throw new Error('unexpected statement prompt');
+    },
   };
   return { prompt, calls };
 }

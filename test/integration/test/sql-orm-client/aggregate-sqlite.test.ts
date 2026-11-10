@@ -6,7 +6,7 @@ import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
+import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import { defineContract, field, model } from '@internal/sqlite/contract-builder';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
@@ -96,22 +96,13 @@ async function withPostsRuntime(
 // `distinctOn` is out of scope here: it is gated on `postgres.distinctOn`,
 // which this contract does not declare, so the ORM refuses the call before
 // it ever reaches the renderer.
-// The contract is authored in this file, so its static aggregate map is
-// unknown and the typed builder surface (`.sum()`, `.count()`) is empty —
-// dispatch dynamically, mirroring `sqlite-include-canonical-json.test.ts`.
-function dynamicAggregate(
-  aggregate: unknown,
-): Record<string, (field?: string) => AggregateSpec[string]> {
-  return aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-}
-
 describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation }, () => {
   it('limit() after orderBy() sums only the top n rows', async () => {
     await withPostsRuntime(async (_runtime, posts) => {
       const top2 = await posts
         .orderBy((post) => post.views.desc())
         .limit(2)
-        .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
+        .aggregate((aggregate) => ({ total: aggregate.sum('views') }));
 
       // Sum of the top 2 by views (50 + 40); the unpaginated sum over all
       // five rows is 150.
@@ -125,7 +116,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
         .where((post) => post.views.gte(20))
         .orderBy((post) => post.views.desc())
         .limit(2)
-        .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
+        .aggregate((aggregate) => ({ total: aggregate.sum('views') }));
 
       // Matching rows are 20/30/40/50 (sum 140); the top 2 of those is
       // 50 + 40.
@@ -138,7 +129,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       const stats = await posts
         .orderBy((post) => post.id.asc())
         .distinct('userId')
-        .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
+        .aggregate((aggregate) => ({ count: aggregate.count() }));
 
       // Three distinct userId groups (1, 2, 3) out of five rows, against an
       // unpaginated count of 5.
@@ -153,7 +144,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
         .where((post) => post.views.lte(40))
         .orderBy((post) => post.views.desc())
         .limit(2)
-        .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
+        .aggregate((aggregate) => ({ total: aggregate.sum('views') }));
 
       // Matching rows are 20/30/40 (sum 90); the top 2 of those is 40 + 30.
       // The SQLite renderer emits one `?` per ParamRef occurrence without
@@ -169,7 +160,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       const stats = await posts
         .orderBy((post) => post.id.asc())
         .offset(2)
-        .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
+        .aggregate((aggregate) => ({ total: aggregate.sum('views') }));
 
       // Ordered by id asc, offset(2) drops the 10/20 rows and reduces over
       // 30 + 40 + 50; the unpaginated sum over all five rows is 150.
@@ -189,8 +180,8 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
           .limit(3)
           .groupBy('userId')
           .aggregate((aggregate) => ({
-            count: dynamicAggregate(aggregate)['count']!(),
-            total: dynamicAggregate(aggregate)['sum']!('views'),
+            count: aggregate.count(),
+            total: aggregate.sum('views'),
           }));
 
         const sorted = [...grouped].sort((a, b) => Number(a.userId) - Number(b.userId));
@@ -211,7 +202,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
           .groupBy('userId')
           .orderBy((group) => group.userId.desc())
           .limit(2)
-          .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
+          .aggregate((aggregate) => ({ count: aggregate.count() }));
 
         // Three distinct groups exist (userId 1, 2, 3); post-group limit(2)
         // returns only the top 2 by userId desc — if limit() were dropped,
@@ -229,7 +220,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
           .groupBy('userId')
           .orderBy((group) => group.userId.asc())
           .offset(1)
-          .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
+          .aggregate((aggregate) => ({ count: aggregate.count() }));
 
         // Three distinct groups exist (userId 1, 2, 3); offset(1) with no limit()
         // drops the first group by userId and returns all-but-the-first —
@@ -251,8 +242,8 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
           .orderBy((group) => group.userId.asc())
           .limit(2)
           .aggregate((aggregate) => ({
-            count: dynamicAggregate(aggregate)['count']!(),
-            total: dynamicAggregate(aggregate)['sum']!('views'),
+            count: aggregate.count(),
+            total: aggregate.sum('views'),
           }));
 
         // Pre-group limit(4) drops user 1's lowest row (views 10), leaving

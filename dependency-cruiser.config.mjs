@@ -9,6 +9,7 @@
  */
 
 import config from './architecture.config.json' with { type: 'json' };
+import { DEPENDENCY_CRUISER_EXCLUDES, normalizeGlob } from './scripts/architecture-globs.mjs';
 
 const {
   packages: packageConfigs,
@@ -17,28 +18,6 @@ const {
   crossDomainExceptions,
   crossDomainRules,
 } = config;
-
-const normalizeGlob = (glob) => {
-  const DOUBLE_WILDCARD = '__DOUBLE_WILDCARD__';
-  const SINGLE_WILDCARD = '__SINGLE_WILDCARD__';
-  const hasWildcard = glob.includes('*');
-  const lastPathSegment = glob.split('/').pop() ?? '';
-  const isFileLikePattern = !hasWildcard && lastPathSegment.includes('.');
-
-  let pattern = glob
-    .replace(/\*\*/g, DOUBLE_WILDCARD)
-    .replace(/\*/g, SINGLE_WILDCARD)
-    .replaceAll(DOUBLE_WILDCARD, '.*')
-    .replaceAll(SINGLE_WILDCARD, '[^/]*');
-
-  if (isFileLikePattern) {
-    return `^${pattern}$`;
-  }
-  if (!hasWildcard && !pattern.endsWith('/')) {
-    pattern += '/.*';
-  }
-  return `^${pattern}`;
-};
 
 const moduleGroupMap = new Map();
 
@@ -328,20 +307,7 @@ export default {
     },
     includeOnly: '^packages/',
     exclude: {
-      path: [
-        'node_modules',
-        '\\.test\\.',
-        '\\.spec\\.',
-        '/test/',
-        '\\.config\\.',
-        'vitest\\.config',
-        'tsdown\\.config',
-        '\\.d\\.ts$',
-        'dist',
-        'coverage',
-        '^packages/document/',
-        '^test/',
-      ],
+      path: DEPENDENCY_CRUISER_EXCLUDES,
     },
     reporterOptions: {
       dot: {

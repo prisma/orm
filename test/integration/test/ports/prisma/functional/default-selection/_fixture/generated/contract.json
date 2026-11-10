@@ -188,8 +188,8 @@
             "model": {
               "checks": [
                 {
-                  "expression": "array_remove(\"enumList\"::text[], NULL) <@ ARRAY['A', 'B']::text[]",
-                  "name": "model_enumList_check_1c166cb8",
+                  "expression": "array_remove(\"enumList\", NULL) <@ '{\"A\",\"B\"}'",
+                  "name": "model_enumList_check_2dfa0729",
                   "prefix": "model_enumList_check"
                 },
                 {
@@ -211,7 +211,7 @@
               "columns": {
                 "enum": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -222,10 +222,10 @@
                 },
                 "enumList": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -236,30 +236,35 @@
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": {
                     "elementNullable": false
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "otherId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "value": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
               "foreignKeys": [
                 {
+                  "index": {
+                    "unique": [
+                      "otherId"
+                    ]
+                  },
                   "source": {
                     "columns": [
                       "otherId"
@@ -294,7 +299,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -322,11 +327,13 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7ee8029cfb611651262de2818234c05e0f09da1373f372c7c49a66dc81e4c0c5"
+    "storageHash": "5681547f78f5e53d296f797d6f0383799cf72d8c2ca632ba9f7ec04d072f7d38"
   },
   "capabilities": {
     "postgres": {
       "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
       "jsonAgg": true,
       "lateral": true,
       "limit": true,
@@ -337,9 +344,15 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "returning": true,
       "scalarList": true
     }

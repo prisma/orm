@@ -53,7 +53,8 @@ withTempDir(({ createTempDir }) => {
           },
         });
         expect(JSON.stringify(envelope)).toContain('prisma-test db sign --db <url>');
-        expect(envelope).not.toHaveProperty('fix');
+        expect(envelope?.ok).toBe(false);
+        expect(envelope).not.toHaveProperty('error.fix');
       },
       timeouts.spinUpPpgDev,
     );

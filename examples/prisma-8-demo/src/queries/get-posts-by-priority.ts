@@ -9,7 +9,7 @@ export async function getPostsByPriority(limit = 10) {
     .orderBy('id')
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }
 
 export async function getPostsByPriorityMember(priority: typeof Priority.Value, limit = 10) {
@@ -19,5 +19,5 @@ export async function getPostsByPriorityMember(priority: typeof Priority.Value, 
     .orderBy('id')
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

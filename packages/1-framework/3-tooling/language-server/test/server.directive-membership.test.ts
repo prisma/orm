@@ -41,6 +41,7 @@ vi.mock('../src/config-resolution', async (original) => ({
       inputs: await resolveSchemaInputs(schemaInputConfig, readText),
       controlStack: {
         scalarTypes: ['Int'],
+        defaultNamespaceId: 'public',
         pslBlockDescriptors: {},
         authoringContributions: assembleAuthoringContributions([
           { id: 'scalars', authoring: { type: testTypeConstructors(['Int']) } },

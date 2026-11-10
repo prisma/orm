@@ -1,13 +1,11 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 export async function ormClientGetUsersByIdCursor(
   cursor: string | null,
   limit: number,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  const orderedUsers = db.User.orderBy((user) => user.id.asc()).select('id', 'email', 'kind');
+  const orderedUsers = orm.User.orderBy((user) => user.id.asc()).select('id', 'email', 'kind');
   const scopedUsers = cursor ? orderedUsers.cursor({ id: cursor }) : orderedUsers;
   return scopedUsers.limit(limit).all();
 }

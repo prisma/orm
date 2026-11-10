@@ -47,11 +47,11 @@ export interface AnnotationValue<Payload, Kinds extends OperationKind> {
  * - `applicableTo` — the frozen `ReadonlySet<Kinds>` consumed by both
  *   the type-level `ValidAnnotations` gate and the runtime
  *   `assertAnnotationsApplicable` gate.
- * - `read(plan)` — extract the `Payload` from a plan's `meta.annotations`
- *   if a value was previously written under this handle's namespace.
- *   Returns `undefined` when the annotation is absent or when the stored
- *   value is not a branded `AnnotationValue` (e.g. framework-internal
- *   metadata under the same namespace key).
+ * - `read(source)` — extract the `Payload` from a plan's `meta.annotations`
+ *   or an activity's `annotations` if a value was previously written under
+ *   this handle's namespace. Returns `undefined` when the annotation is
+ *   absent or when the stored value is not a branded `AnnotationValue`
+ *   (e.g. framework-internal metadata under the same namespace key).
  *
  * Handles are the only supported public entry point for reading and
  * writing annotations. Direct mutation of `plan.meta.annotations` is not
@@ -82,10 +82,13 @@ export interface AnnotationHandle<Payload, Kinds extends OperationKind> {
   (value: Payload): AnnotationValue<Payload, Kinds>;
   readonly namespace: string;
   readonly applicableTo: ReadonlySet<Kinds>;
-  read(plan: {
-    readonly meta: { readonly annotations?: Record<string, unknown> };
-  }): Payload | undefined;
+  read(source: AnnotationSource): Payload | undefined;
 }
+
+/** A plan, or an activity, whose annotations a handle reads. */
+export type AnnotationSource =
+  | { readonly meta: { readonly annotations?: Record<string, unknown> } }
+  | { readonly annotations: ReadonlyMap<string, unknown> };
 
 /**
  * Options accepted by `defineAnnotation`.
@@ -169,10 +172,9 @@ export function defineAnnotation<Payload>(): <const Kinds extends OperationKind>
       });
     }
 
-    function read(plan: {
-      readonly meta: { readonly annotations?: Record<string, unknown> };
-    }): Payload | undefined {
-      const stored = plan.meta.annotations?.[namespace];
+    function read(source: AnnotationSource): Payload | undefined {
+      const stored =
+        'meta' in source ? source.meta.annotations?.[namespace] : source.annotations.get(namespace);
       if (!isAnnotationValue(stored)) {
         return undefined;
       }
@@ -227,7 +229,9 @@ export function defineAnnotation<Payload>(): <const Kinds extends OperationKind>
  * db.users.select('id').annotate(cacheAnnotation({ ttl: 60 }));
  * // ✓ cacheAnnotation declares 'read'; SelectQuery.annotate requires 'read'.
  *
- * db.users.insert([{ name: 'Alice' }]).annotate(cacheAnnotation({ ttl: 60 }));
+ * db.users
+ *   .insert([{ id: 1, name: 'Alice', email: 'alice@example.com' }])
+ *   .annotate(cacheAnnotation({ ttl: 60 }));
  * // ✗ cacheAnnotation declares 'read'; InsertQuery.annotate requires 'write'.
  * //   Element resolves to `never` → tuple unassignable → type error.
  * ```
@@ -287,22 +291,31 @@ export function assertAnnotationsApplicable(
 ): void {
   for (const annotation of annotations) {
     if (!annotation.applicableTo.has(kind)) {
+      const applicableTo = Array.from(annotation.applicableTo);
+      const kinds = applicableTo.join(' and ');
       throw runtimeError(
         'RUNTIME.ANNOTATION_INAPPLICABLE',
-        `Annotation '${annotation.namespace}' is not applicable to '${kind}' operations (terminal: '${terminalName}'). The annotation declares applicableTo = [${Array.from(
-          annotation.applicableTo,
-        )
-          .map((k) => `'${k}'`)
-          .join(', ')}].`,
-        {
-          namespace: annotation.namespace,
-          terminalName,
-          kind,
-          applicableTo: Array.from(annotation.applicableTo),
-        },
+        `An annotation that applies only to ${kinds} operations was given to a ${kind} operation. Remove it from the ${kind} and put it on a ${kinds} operation instead.`,
+        { namespace: annotation.namespace, terminalName, kind, applicableTo },
       );
     }
   }
+}
+
+const noAnnotations: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> = new Map();
+
+/** The branded annotation values in a plan's `meta.annotations`, keyed by namespace. */
+export function brandedAnnotations(
+  annotations: Readonly<Record<string, unknown>> | undefined,
+): ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> {
+  if (annotations === undefined) return noAnnotations;
+  let branded: Map<string, AnnotationValue<unknown, OperationKind>> | undefined;
+  for (const [namespace, value] of Object.entries(annotations)) {
+    if (!isAnnotationValue(value)) continue;
+    branded ??= new Map();
+    branded.set(namespace, value);
+  }
+  return branded ?? noAnnotations;
 }
 
 /**

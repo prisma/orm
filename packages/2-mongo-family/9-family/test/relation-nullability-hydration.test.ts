@@ -51,12 +51,18 @@ function contractJson(input: {
       Post: {
         fields: postFields,
         relations: { author: input.relation },
-        storage: { collection: 'posts' },
+        storage: {
+          fields: { _id: { field: '_id' }, authorId: { field: 'authorId' } },
+          collection: 'posts',
+        },
       },
       User: {
         fields: { _id: { ...objectId, nullable: false }, postId: { ...objectId, nullable: false } },
         relations: {},
-        storage: { collection: 'users' },
+        storage: {
+          fields: { _id: { field: '_id' }, postId: { field: 'postId' } },
+          collection: 'users',
+        },
       },
     },
     storageCollections: { posts: {}, users: {} },

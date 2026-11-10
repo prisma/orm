@@ -65,7 +65,7 @@ describe('integration/polymorphism-variant-include-relationships', () => {
         await setupVariantAssigneeSchema(runtime);
 
         const rows = await tasksOf(runtime)
-          .variant('Bug')
+          .variant('bug')
           .select('id', 'title', 'type')
           .orderBy((task) => task.id.asc())
           .include('assignee', (person) => person.select('id', 'name'))
@@ -97,7 +97,7 @@ describe('integration/polymorphism-variant-include-relationships', () => {
         await setupVariantAssigneeSchema(runtime);
 
         const rows = await tasksOf(runtime)
-          .variant('Feature')
+          .variant('feature')
           .select('id', 'title', 'type')
           .orderBy((task) => task.id.asc())
           .include('assignee', (person) => person.select('id', 'name'))

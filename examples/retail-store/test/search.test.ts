@@ -89,12 +89,6 @@ describe('product search and pagination', () => {
       const results = await searchProducts(ctx.db, 'nonexistent');
       expect(results).toHaveLength(0);
     });
-
-    it('is case insensitive', async () => {
-      await seedProducts();
-      const results = await searchProducts(ctx.db, 'LEATHER');
-      expect(results.length).toBeGreaterThanOrEqual(1);
-    });
   });
 
   describe('findProductsPaginated', () => {

@@ -48,7 +48,7 @@ describe('the language server and the provider agree on Mongo earlier-name wordi
       (diagnostic) => diagnostic.code === 'PSL_UNRESOLVED_REFERENCE',
     )?.message;
     expect(providerMessage).toBe(
-      'Field "Post.value" has type "BigInt", which is not a Mongo scalar type; use "Int64" (stored as BSON long).',
+      'Field "Post.value" has type "BigInt", which is not a Mongo scalar type; use "Int64".',
     );
 
     const project = new ProjectArtifacts({

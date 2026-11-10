@@ -1,7 +1,6 @@
 import 'temporal-polyfill/full/global';
 
 import { Client } from 'pg';
-import { createOrmClient } from './orm-client/client';
 import { postgres, streamingPostgres } from './prisma/db';
 
 interface Env {
@@ -39,21 +38,18 @@ export default {
 
     if (url.pathname === '/sql/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const rows = await db
-        .runtime()
-        .query(
-          db.sql.public.user
-            .select('id', 'email', 'displayName', 'kind', 'createdAt')
-            .limit(limit)
-            .build(),
-        );
+      const rows = await db.query(
+        db.sql.public.user
+          .select('id', 'email', 'displayName', 'kind', 'createdAt')
+          .limit(limit)
+          .build(),
+      );
       return Response.json({ ok: true, route: 'sql/users', count: rows.length, rows });
     }
 
     if (url.pathname === '/orm/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const orm = createOrmClient(db);
-      const rows = await orm.User.newestFirst().limit(limit).all();
+      const rows = await db.orm.public.User.newestFirst().limit(limit).all();
       return Response.json({ ok: true, route: 'orm/users', count: rows.length, rows });
     }
 
@@ -140,7 +136,7 @@ export default {
         // server-side cursor and streams in ~100-row batches; an early
         // `break` only fetches one batch and closes. Without the cursor option
         // the driver buffers all 10_000 rows before the first yield.
-        const iter = db.runtime().query(
+        const iter = db.query(
           db.sql.public.post
             .select('id', 'title')
             .orderBy((f) => f.createdAt, { direction: 'asc' })
@@ -179,9 +175,6 @@ export default {
       }
     }
 
-    // The Task collection and its Bug and Feature variants are registered in
-    // `src/orm-client/collections.ts` for parity with the demo schema; no
-    // route queries them.
     return notFound(url);
   },
 };

@@ -43,9 +43,13 @@ export type DeclarationFor<S extends EntitySelector> = Extract<
   { kind: S['kind'] }
 >;
 
+type NamespaceOfDeclaration<D extends EntityDeclaration> = D extends NamedTypeSymbol
+  ? undefined
+  : NamespaceSymbol;
+
 export interface ResolvedEntityReference<D extends EntityDeclaration = EntityDeclaration> {
   readonly declaration: D;
-  readonly namespace: NamespaceSymbol | undefined;
+  readonly namespace: NamespaceOfDeclaration<D>;
 }
 
 const references = new WeakMap<EntityDeclaration, ResolvedEntityReference>();
