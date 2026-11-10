@@ -84,7 +84,7 @@ Today every row of this table is planned as a validator change and nothing else.
 
 ## Order inside the rewrite step
 
-4a's plan order stays: renames, creates, index drops, rewrites, index creates, validator changes, option changes, drops. Inside the rewrite step:
+4a's plan order stays: renames, creates, index drops, rewrites, index creates, validator changes, option changes, drops. Every collection's `checkDocuments` runs before the first rewrite or index create of any collection, so a failing check on any collection stops the apply before anything changes. Inside the rewrite step:
 
 1. Field and key renames
 2. Variant document deletes, so a freed discriminator value can be taken
