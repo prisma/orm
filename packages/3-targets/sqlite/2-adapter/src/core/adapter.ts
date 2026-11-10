@@ -41,7 +41,7 @@ import type {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import { collectOrderedParamRefs, isDdlNode, isQueryAst } from '@internal/sql-relational-core/ast';
+import { collectOrderedParamRefs, isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
 import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
@@ -453,10 +453,18 @@ function renderParts(
       if (typeof part === 'string') {
         return part;
       }
-      if (isQueryAst(part)) {
-        throw new InternalError(`Rendering an embedded ${part.kind} statement is not supported`);
+      switch (part.kind) {
+        case 'select':
+          return renderSelect(part, ctx);
+        case 'insert':
+          return renderInsert(part, ctx);
+        case 'update':
+          return renderUpdate(part, ctx);
+        case 'delete':
+          return renderDelete(part, ctx);
+        default:
+          return renderExpr(part, ctx);
       }
-      return renderExpr(part, ctx);
     })
     .join('');
 }

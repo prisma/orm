@@ -38,7 +38,7 @@ import type {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import { collectOrderedParamRefs, isQueryAst } from '@internal/sql-relational-core/ast';
+import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { MysqlCodecDescriptorRegistry } from '@internal/target-mysql/codec-descriptor';
 import { mysqlError } from '@internal/target-mysql/errors';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-mysql/sql-utils';
@@ -396,10 +396,18 @@ function renderParts(parts: RawExpr['parts'] | RawQueryAst['parts'], ctx: Render
       if (typeof part === 'string') {
         return part;
       }
-      if (isQueryAst(part)) {
-        throw new InternalError(`Rendering an embedded ${part.kind} statement is not supported`);
+      switch (part.kind) {
+        case 'select':
+          return renderSelect(part, ctx);
+        case 'insert':
+          return renderInsert(part, ctx);
+        case 'update':
+          return renderUpdate(part, ctx);
+        case 'delete':
+          return renderDelete(part, ctx);
+        default:
+          return renderExpr(part, ctx);
       }
-      return renderExpr(part, ctx);
     })
     .join('');
 }

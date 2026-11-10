@@ -26,7 +26,6 @@ import {
   type FunctionCallExpr,
   type InsertAst,
   type InsertValue,
-  isQueryAst,
   type JoinAst,
   type JoinOnExpr,
   type JsonArrayAggExpr,
@@ -1137,10 +1136,18 @@ function renderParts(
       if (typeof part === 'string') {
         return part;
       }
-      if (isQueryAst(part)) {
-        throw new InternalError(`Rendering an embedded ${part.kind} statement is not supported`);
+      switch (part.kind) {
+        case 'select':
+          return renderSelect(part, contract, pim);
+        case 'insert':
+          return renderInsert(part, contract, pim);
+        case 'update':
+          return renderUpdate(part, contract, pim);
+        case 'delete':
+          return renderDelete(part, contract, pim);
+        default:
+          return renderExpr(part, contract, pim);
       }
-      return renderExpr(part, contract, pim);
     })
     .join('');
 }

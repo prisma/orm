@@ -1,5 +1,19 @@
 import { createDataTypeLookup } from '@internal/framework-components/codec';
-import { ColumnRef } from '@internal/sql-relational-core/ast';
+import {
+  AndExpr,
+  BinaryExpr,
+  ColumnRef,
+  DeleteAst,
+  InsertAst,
+  ParamRef,
+  ProjectionItem,
+  RawExpr,
+  type RawPart,
+  RawQueryAst,
+  SelectAst,
+  TableSource,
+  UpdateAst,
+} from '@internal/sql-relational-core/ast';
 import { buildOperation, createRawSql, param } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -137,5 +151,134 @@ describe('raw-query postgres lowering', () => {
 
     expect(lowered.sql).toBe('SELECT id FROM "user" WHERE id > $1');
     expect(lowered.params).toEqual([{ kind: 'literal', value: 2_147_483_648 }]);
+  });
+});
+
+describe('raw-query postgres lowering of embedded statements', () => {
+  const user = TableSource.named('user');
+  const userId = ColumnRef.of('user', 'id');
+  const userEmail = ColumnRef.of('user', 'email');
+  const int4 = (value: number) => ParamRef.of(value, { codec: { codecId: 'pg/int4@1' } });
+  const text = (value: string) => ParamRef.of(value, { codec: { codecId: 'pg/text@1' } });
+  const idColumn = { id: { codecId: 'pg/int4@1', nullable: false } };
+
+  function selectUsers(where: ParamRef): SelectAst {
+    return SelectAst.from(user)
+      .addProjection('id', userId)
+      .addProjection('email', userEmail)
+      .withWhere(BinaryExpr.gt(userId, where));
+  }
+
+  function lowerParts(parts: ReadonlyArray<RawPart>) {
+    return lower({ ast: RawQueryAst.rows(parts, idColumn) });
+  }
+
+  it('splices a select after INSERT INTO without parentheses', () => {
+    const lowered = lowerParts([
+      'INSERT INTO archive (id, email) ',
+      selectUsers(int4(5)),
+      ' RETURNING id',
+    ]);
+
+    expect(lowered.sql).toBe(
+      'INSERT INTO archive (id, email) SELECT "user"."id" AS "id", "user"."email" AS "email" FROM "user" WHERE "user"."id" > $1 RETURNING id',
+    );
+    expect(lowered.params).toEqual([{ kind: 'literal', value: 5 }]);
+  });
+
+  it('splices a select into a CTE body', () => {
+    const lowered = lowerParts(['WITH x AS (', selectUsers(int4(5)), ') SELECT id FROM x']);
+
+    expect(lowered.sql).toBe(
+      'WITH x AS (SELECT "user"."id" AS "id", "user"."email" AS "email" FROM "user" WHERE "user"."id" > $1) SELECT id FROM x',
+    );
+  });
+
+  it('splices a multi-column select as a derived table', () => {
+    const lowered = lowerParts(['SELECT * FROM (', selectUsers(int4(5)), ') AS t']);
+
+    expect(lowered.sql).toBe(
+      'SELECT * FROM (SELECT "user"."id" AS "id", "user"."email" AS "email" FROM "user" WHERE "user"."id" > $1) AS t',
+    );
+  });
+
+  it('splices UPDATE ... RETURNING and DELETE ... RETURNING as data-modifying CTEs', () => {
+    const update = UpdateAst.table(user)
+      .withSet({ email: text('new@b.example') })
+      .withWhere(BinaryExpr.eq(userId, int4(1)))
+      .withReturning([ProjectionItem.of('id', userId)]);
+    const remove = DeleteAst.from(user)
+      .withWhere(BinaryExpr.eq(userId, int4(2)))
+      .withReturning([ProjectionItem.of('id', userId)]);
+
+    const lowered = lowerParts([
+      'WITH u AS (',
+      update,
+      '), d AS (',
+      remove,
+      ') SELECT id FROM u UNION ALL SELECT id FROM d',
+    ]);
+
+    expect(lowered.sql).toBe(
+      'WITH u AS (UPDATE "user" SET "email" = $1 WHERE "user"."id" = $2 RETURNING "user"."id"), d AS (DELETE FROM "user" WHERE "user"."id" = $3 RETURNING "user"."id") SELECT id FROM u UNION ALL SELECT id FROM d',
+    );
+    expect(lowered.params).toEqual([
+      { kind: 'literal', value: 'new@b.example' },
+      { kind: 'literal', value: 1 },
+      { kind: 'literal', value: 2 },
+    ]);
+  });
+
+  it('splices INSERT ... RETURNING as a data-modifying CTE', () => {
+    const insert = InsertAst.into(user)
+      .withRows([{ id: int4(7), email: text('a@b.example') }])
+      .withReturning([ProjectionItem.of('id', userId)]);
+
+    const lowered = lowerParts(['WITH i AS (', insert, ') SELECT id FROM i']);
+
+    expect(lowered.sql).toBe(
+      'WITH i AS (INSERT INTO "user" ("id", "email") VALUES ($1, $2) RETURNING "user"."id") SELECT id FROM i',
+    );
+  });
+
+  it('numbers params before, inside and after the embedded select in template order', () => {
+    const lowered = lowerParts([
+      'WITH n AS (SELECT ',
+      int4(1),
+      ' AS v) INSERT INTO archive (id, email) ',
+      selectUsers(int4(2)),
+      ' AND "user"."id" < ',
+      int4(3),
+      ' RETURNING id',
+    ]);
+
+    expect(lowered.sql).toBe(
+      'WITH n AS (SELECT $1 AS v) INSERT INTO archive (id, email) SELECT "user"."id" AS "id", "user"."email" AS "email" FROM "user" WHERE "user"."id" > $2 AND "user"."id" < $3 RETURNING id',
+    );
+    expect(lowered.params).toEqual([
+      { kind: 'literal', value: 1 },
+      { kind: 'literal', value: 2 },
+      { kind: 'literal', value: 3 },
+    ]);
+  });
+
+  it('renders a select part inside a RawExpr in expression position', () => {
+    const exists = new RawExpr({
+      parts: ['EXISTS (', selectUsers(int4(2)), ')'],
+      returns: { codecId: 'pg/bool@1', nullable: false },
+    });
+    const outer = SelectAst.from(user)
+      .addProjection('id', userId)
+      .withWhere(AndExpr.of([BinaryExpr.eq(userEmail, text('a@b.example')), exists]));
+
+    const lowered = lower({ ast: outer });
+
+    expect(lowered.sql).toBe(
+      'SELECT "user"."id" AS "id" FROM "user" WHERE ("user"."email" = $1 AND EXISTS (SELECT "user"."id" AS "id", "user"."email" AS "email" FROM "user" WHERE "user"."id" > $2))',
+    );
+    expect(lowered.params).toEqual([
+      { kind: 'literal', value: 'a@b.example' },
+      { kind: 'literal', value: 2 },
+    ]);
   });
 });
