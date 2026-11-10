@@ -253,11 +253,17 @@ function nestedShapeOf(schema: unknown): FieldsShape | undefined {
   };
 }
 
+/** Why a document does not fit a validator, and whether it is a field the validator cannot check, which no change of the document fixes. */
+interface DocumentProblem {
+  readonly text: string;
+  readonly uncheckable: boolean;
+}
+
 function problemsAgainst(
   fields: ReadonlyMap<string, DocumentField>,
   shape: FieldsShape,
   path: string,
-): readonly string[] {
+): readonly DocumentProblem[] {
   const named = (field: string) => JSON.stringify(`${path}${field}`);
   const unreadable = (field: string) =>
     field === '_id' ? undefined : unrewritableFieldNameReason(field);
@@ -286,7 +292,10 @@ function problemsAgainst(
         )
         .map((field) => `has ${named(field)}, a field the new validator does not name`)
     : [];
-  return [...unchecked, ...missing, ...retyped, ...undeclared];
+  return [
+    ...unchecked.map((text) => ({ text, uncheckable: true })),
+    ...[...missing, ...retyped, ...undeclared].map((text) => ({ text, uncheckable: false })),
+  ];
 }
 
 /**
@@ -1095,41 +1104,50 @@ export class MongoMigrationRunner {
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
       `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
-      ...(problems.length === 0 ? [] : [`That document ${joinedList(problems)}.`]),
+      ...(problems.length === 0
+        ? []
+        : [`That document ${joinedList(problems.map(({ text }) => text))}.`]),
       `Find them all with ${query} in mongosh.`,
     ];
-    const advice = hadValidator
+    const uncheckable = problems.length > 0 && problems.every((problem) => problem.uncheckable);
+    const advice = uncheckable
       ? [
-          ...backfillAdvice(apply.contract, collection, touched.requires, {
-            timeSeries:
-              typeof options === 'object' &&
-              options !== null &&
-              Reflect.get(options, 'timeseries') !== undefined,
-            validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
-          }),
-          byHandAdvice(collection),
+          'A document that holds such a field can never fit the validator, so changing the documents does not help: store the field under a name without "." that does not start with "$".',
         ]
-      : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
+      : hadValidator
+        ? [
+            ...backfillAdvice(apply.contract, collection, touched.requires, {
+              timeSeries:
+                typeof options === 'object' &&
+                options !== null &&
+                Reflect.get(options, 'timeseries') !== undefined,
+              validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
+            }),
+            byHandAdvice(collection),
+          ]
+        : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const ran = apply.ranOn(collection);
     const why = beforeRewrites
       ? [
           ...found,
           `No rewrite of this plan changes what makes ${one ? 'it' : 'them'} fail, so nothing was rewritten.`,
           ...advice,
-          'Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
-          'Once the documents are fixed, run the command again.',
+          `Under db migrate you can instead apply the validator over them: remove this checkDocuments call from that migration.ts, set checkDocuments to false on the validator change, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
+          uncheckable
+            ? 'Then run the command again.'
+            : 'Once the documents are fixed, run the command again.',
         ].join(' ')
       : [
           ...found,
           ...advice,
-          'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.',
+          `Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
           'The validator was not changed.',
           ...(ran.length === 0
             ? []
             : [
                 `These operations of this apply already changed collection ${collection} and stay applied: ${ran.join('; ')}.`,
               ]),
-          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
+          `${uncheckable ? 'Then run the command again' : 'Once the documents are fixed, run the command again'}; operations that already ran are skipped.`,
         ].join(' ');
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
@@ -1209,7 +1227,7 @@ export class MongoMigrationRunner {
     fields: ReadonlyMap<string, DocumentField>,
     shape: FieldsShape,
     path: string,
-  ): Promise<readonly string[]> {
+  ): Promise<readonly DocumentProblem[]> {
     const nested = await Promise.all(
       [...fields].map(async ([field, { type }]) => {
         const nestedShape = type === 'object' ? nestedShapeOf(shape.properties[field]) : undefined;

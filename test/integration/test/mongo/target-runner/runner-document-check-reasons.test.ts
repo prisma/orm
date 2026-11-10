@@ -355,9 +355,15 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
       ]);
 
       if (result.ok) throw new Error('Expected the validator change to stop at its document check');
-      expect(result.failure.why).toContain(
-        'That document has "addr.zip", which the new validator cannot check: MongoDB reads a name containing "." as a path into embedded documents.',
-      );
+      expect({
+        reason: result.failure.why?.includes(
+          'That document has "addr.zip", which the new validator cannot check: MongoDB reads a name containing "." as a path into embedded documents.',
+        ),
+        advice: result.failure.why?.includes(
+          'A document that holds such a field can never fit the validator, so changing the documents does not help: store the field under a name without "." that does not start with "$".',
+        ),
+        changeThem: result.failure.why?.includes('change them with a dataTransform'),
+      }).toEqual({ reason: true, advice: true, changeThem: false });
     },
     timeouts.spinUpMongoMemoryServer,
   );
