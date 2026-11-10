@@ -292,30 +292,6 @@ describe('serializeMongoOps / deserializeMongoOps', () => {
     });
   });
 
-  it('refuses a checkDocuments entry with no check, saying to run its migration.ts again', () => {
-    const json = [
-      {
-        id: 'collection.users.checkDocuments',
-        label: 'Check that the documents in users can fit the new validator',
-        operationClass: 'widening',
-        meta: {
-          checkDocuments: { collection: 'users', rewrittenFields: ['plan'], renamedFields: {} },
-        },
-        precheck: [],
-        execute: [],
-        postcheck: [],
-      },
-    ];
-
-    expect(() => deserializeMongoOps(json)).toThrow(
-      expect.objectContaining({
-        code: 'MIGRATION.INVALID_OPERATION_ENTRY',
-        message:
-          'Operation collection.users.checkDocuments checks the documents of collection users, but has no check.',
-      }),
-    );
-  });
-
   it('rejects createIndex with missing collection', () => {
     const json = [
       {

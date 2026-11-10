@@ -64,15 +64,14 @@ describe('MongoMigrationPlanner, a collection that stores several root models', 
       ),
     ).toEqual({
       labels: [
-        'Check that the documents in users can fit the new validator',
         'Remove field nickname from collection users',
         'Update validator on users (removed: nickname)',
       ],
-      classes: ['widening', 'destructive', 'widening'],
+      classes: ['destructive', 'widening'],
       applied: [],
       dataLoss: [
         {
-          operationIndex: 1,
+          operationIndex: 0,
           subject: { kind: 'storage', name: 'users.nickname' },
           loss: 'drop',
           label: 'Remove field nickname from collection users',
@@ -125,12 +124,11 @@ describe('MongoMigrationPlanner, field changes in a collection that stores sever
       ),
     ).toEqual({
       labels: [
-        'Check that the documents in users can fit the new validator',
         'Rename field level to rank in collection users',
         'Update validator on users (added: rank; removed: level)',
       ],
-      classes: ['widening', 'widening', 'widening'],
-      applied: [[1], [1]],
+      classes: ['widening', 'widening'],
+      applied: [[0], [0]],
       dataLoss: [],
     });
   });
@@ -165,7 +163,7 @@ describe('MongoMigrationPlanner, field changes in a collection that stores sever
           ],
           statements: [renameField('Admin', 'level', 'Admin', 'rank')],
         }),
-      ).labels[1],
+      ).labels[0],
     ).toBe('Rename field level to rank in collection users');
   });
 

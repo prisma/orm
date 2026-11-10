@@ -59,12 +59,11 @@ describe('MongoMigrationPlanner, field statements', () => {
         ),
       ).toEqual({
         labels: [
-          'Check that the documents in profiles can fit the new validator',
           'Rename field display_name to title in collection profiles',
           'Update validator on profiles (added: title; removed: display_name)',
         ],
-        classes: ['widening', 'widening', 'widening'],
-        applied: [[1]],
+        classes: ['widening', 'widening'],
+        applied: [[0]],
         dataLoss: [],
       });
     });
@@ -138,14 +137,13 @@ describe('MongoMigrationPlanner, field statements', () => {
       ),
     ).toEqual({
       labels: [
-        'Check that the documents in profiles can fit the new validator',
         'Drop index name_1 on profiles (name:1)',
         'Rename field name to fullName in collection profiles',
         'Create index fullName_1 on profiles (fullName:1)',
         'Update validator on profiles (added: fullName; removed: name)',
       ],
-      classes: ['widening', 'widening', 'widening', 'additive', 'widening'],
-      applied: [[2]],
+      classes: ['widening', 'widening', 'additive', 'widening'],
+      applied: [[1]],
       dataLoss: [],
     });
   });
@@ -171,13 +169,12 @@ describe('MongoMigrationPlanner, field statements', () => {
     ).toMatchObject({
       labels: [
         'Rename collection profiles to users',
-        'Check that the documents in users can fit the new validator',
         'Drop index name_1 on users (name:1)',
         'Rename field name to fullName in collection users',
         'Create index fullName_1 on users (fullName:1)',
         'Update validator on users (added: fullName; removed: name)',
       ],
-      applied: [[0], [3]],
+      applied: [[0], [2]],
       dataLoss: [],
     });
   });
@@ -248,15 +245,14 @@ describe('MongoMigrationPlanner, removed fields', () => {
   it('unsets a removed field from every document and reports the field as lost', () => {
     expect(planned(plan({ from, to: withoutName, schema }))).toEqual({
       labels: [
-        'Check that the documents in profiles can fit the new validator',
         'Remove field name from collection profiles',
         'Update validator on profiles (removed: name)',
       ],
-      classes: ['widening', 'destructive', 'widening'],
+      classes: ['destructive', 'widening'],
       applied: [],
       dataLoss: [
         {
-          operationIndex: 1,
+          operationIndex: 0,
           subject: { kind: 'field', namespaceId: NS, model: 'Profile', field: 'name' },
           loss: 'drop',
           label: 'Remove field name from collection profiles',
@@ -268,7 +264,7 @@ describe('MongoMigrationPlanner, removed fields', () => {
   it('names the field by its storage name when the origin contract is unknown', () => {
     expect(planned(plan({ from: null, to: withoutName, schema })).dataLoss).toEqual([
       {
-        operationIndex: 1,
+        operationIndex: 0,
         subject: { kind: 'storage', name: 'profiles.name' },
         loss: 'drop',
         label: 'Remove field name from collection profiles',

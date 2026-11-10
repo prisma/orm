@@ -121,10 +121,10 @@ describe('MongoMigrationPlanner and runner - statements on variants', () => {
 
       const { planned, result } = await live.planAndRun(tasks('from', ['note'], []), to);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(3);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(2);
       expect(planned.kind === 'success' ? planned.dataLoss : undefined).toEqual([
         {
-          operationIndex: 1,
+          operationIndex: 0,
           subject: { kind: 'field', namespaceId: NS, model: 'Task', field: 'note' },
           label: 'Remove field note from collection tasks in documents whose type is not "bug"',
           loss: 'drop',
@@ -168,7 +168,7 @@ describe('MongoMigrationPlanner and runner - statements on variants', () => {
         },
       ]);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(3);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(2);
       expect({
         tasks: await live.documents('tasks'),
         further: await live.furtherPlanLabels(to),

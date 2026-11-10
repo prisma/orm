@@ -7,13 +7,8 @@ import {
   resolveRequirementSpecifiers,
 } from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
-import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
-import {
-  type OpFactoryCall,
-  type OpFactoryCallNode,
-  type SharedNames,
-  TARGET_MIGRATION_MODULE,
-} from './op-factory-call';
+import { type ImportRequirement, renderImports } from '@internal/ts-render';
+import { type OpFactoryCall, TARGET_MIGRATION_MODULE } from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
@@ -75,14 +70,7 @@ export function renderCallsToTypeScript(
   meta: RenderMigrationMeta,
 ): string {
   const imports = buildImports(calls, meta);
-  const shared = sharedDeclarations(calls);
-  const names: SharedNames = {
-    nameOf: (collection, value) =>
-      shared.find((declaration) => declaration.key === sharedKey(collection, value))?.name,
-  };
-  const operationsBody = calls
-    .map((call: OpFactoryCallNode) => call.renderTypeScript(names))
-    .join(',\n');
+  const operationsBody = calls.map((c) => c.renderTypeScript()).join(',\n');
   const hasStart = meta.from !== null;
   const startField = hasStart ? ['  override readonly startContractJson = startContract;'] : [];
 
@@ -90,7 +78,6 @@ export function renderCallsToTypeScript(
     shebangLineFor(detectScaffoldRuntime()),
     imports,
     '',
-    ...shared.flatMap(({ name, value }) => [`const ${name} = ${jsonToTsSource(value)};`, '']),
     `class M extends Migration<${hasStart ? 'Start' : 'never'}, End> {`,
     ...startField,
     '  override readonly endContractJson = endContract;',
@@ -106,42 +93,6 @@ export function renderCallsToTypeScript(
     'MigrationCLI.run(import.meta.url, M);',
     '',
   ].join('\n');
-}
-
-/** A name for a `const`, from `stem`, usable as a TypeScript identifier and not yet taken. */
-function constName(stem: string, taken: ReadonlySet<string>): string {
-  const name = stem.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(?=[0-9])/, '_');
-  if (!taken.has(name)) return name;
-  for (let suffix = 2; ; suffix++) {
-    if (!taken.has(`${name}${suffix}`)) return `${name}${suffix}`;
-  }
-}
-
-/** What makes two declared values one shared value: the same collection and the same value, key order included. */
-function sharedKey(collection: string, value: unknown): string {
-  return JSON.stringify([collection, value]);
-}
-
-/**
- * The values more than one call on the same collection declares, each declared once as a `const` the
- * calls refer to, so an edit of it applies to all of them. A value only one call declares is written
- * out in that call.
- */
-function sharedDeclarations(
-  calls: ReadonlyArray<OpFactoryCallNode>,
-): readonly { readonly key: string; readonly name: string; readonly value: unknown }[] {
-  const declared = calls
-    .flatMap((call) => call.sharedValues())
-    .map((shared) => ({ ...shared, key: sharedKey(shared.collection, shared.value) }));
-  const taken = new Set<string>();
-  const keys = new Set<string>();
-  return declared.flatMap(({ stem, key, value }) => {
-    if (keys.has(key) || declared.filter((other) => other.key === key).length < 2) return [];
-    keys.add(key);
-    const name = constName(stem, taken);
-    taken.add(name);
-    return [{ key, name, value }];
-  });
 }
 
 function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigrationMeta): string {

@@ -61,7 +61,7 @@ const schemaWithPlan = {
 };
 
 const CHECK_DOCUMENTS_FALSE =
-  'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, remove the checkDocuments call before the rewrites if the file has one, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.';
+  'Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first.';
 const NO_VALIDATOR_BY_HAND =
   'Change them with a dataTransform in migration.ts, or with an update in mongosh.';
 
@@ -186,7 +186,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation validator.users.update stopped: 2 documents in collection users do not fit the new validator',
-        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         meta: {
           databaseUnchanged: true,
           operationId: 'validator.users.update',
@@ -232,7 +232,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} The validator was not changed. These operations of this apply already ran and stay applied: Create index name_1 on users (name:1). Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
       });
@@ -298,49 +298,6 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
       ]);
 
       expect(again.ok ? again.value.operationsExecuted : again.failure).toBe(0);
-    },
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'says an earlier validator change of the apply set the validator in place, and lists it with what ran',
-    async () => {
-      await db.createCollection('users');
-      await db.collection('users').insertOne({ name: 'Ada' });
-      const nameOnly = { ...schemaWithPlan, required: ['_id', 'name'] };
-
-      const result = await run([
-        collMod(
-          'users',
-          { validator: { $jsonSchema: nameOnly } },
-          {
-            id: 'validator.users.first',
-            label: 'Set the first validator on users',
-            checkDocuments: true,
-          },
-        ),
-        collMod(
-          'users',
-          { validator: { $jsonSchema: schemaWithPlan } },
-          {
-            id: 'validator.users.second',
-            label: 'Set the second validator on users',
-            checkDocuments: true,
-          },
-        ),
-      ]);
-
-      if (result.ok)
-        throw new Error('Expected the second validator change to stop at its document check');
-      expect({
-        inPlace: result.failure.why?.includes(
-          'The validator in place is the one an earlier operation of this apply set: Set the first validator on users.',
-        ),
-        notChanged: result.failure.why?.includes('The validator was not changed.'),
-        ran: result.failure.why?.includes(
-          'These operations of this apply already ran and stay applied: Set the first validator on users.',
-        ),
-      }).toEqual({ inPlace: true, notChanged: false, ran: true });
     },
     timeouts.spinUpMongoMemoryServer,
   );

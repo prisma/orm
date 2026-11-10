@@ -48,7 +48,7 @@ describe('MongoMigrationPlanner and runner - statements', () => {
         },
       ]);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(6);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(5);
       expect(planned.kind === 'success' ? planned.dataLoss : undefined).toEqual([]);
       expect({
         collections: (
@@ -102,10 +102,10 @@ describe('MongoMigrationPlanner and runner - statements', () => {
 
       const { planned, result } = await live.planAndRun(from, to);
 
-      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(3);
+      expect(result.ok ? result.value.operationsExecuted : result.failure).toBe(2);
       expect(planned.kind === 'success' ? planned.dataLoss : undefined).toEqual([
         {
-          operationIndex: 1,
+          operationIndex: 0,
           subject: { kind: 'field', namespaceId: NS, model: 'User', field: 'nickname' },
           label: 'Remove field nickname from collection users',
           loss: 'drop',

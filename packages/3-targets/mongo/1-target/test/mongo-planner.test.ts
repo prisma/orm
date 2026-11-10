@@ -1136,7 +1136,6 @@ describe('MongoMigrationPlanner', () => {
           (operation) => operation.label,
         );
         expect(labels).toEqual([
-          'Check that the documents in items can fit the new validator',
           'Cast field name in collection items from int to string',
           'Remove field legacy from collection items',
           'Update validator on items (changed: name; added: note; removed: legacy)',

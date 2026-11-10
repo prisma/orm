@@ -16,8 +16,6 @@ const INT: FieldTypeSpec = { codecId: 'mongo/int32@1' };
 const STRING: FieldTypeSpec = { codecId: 'mongo/string@1' };
 const OPTIONAL_STRING: FieldTypeSpec = { codecId: 'mongo/string@1', nullable: true };
 
-const CHECK_USERS = 'Check that the documents in users can fit the new validator';
-
 const BSON_TYPE: Readonly<Record<string, string>> = {
   'mongo/int32@1': 'int',
   'mongo/string@1': 'string',
@@ -104,12 +102,8 @@ describe('MongoMigrationPlanner, --convert of a field whose type changes', () =>
 
   it('writes a data transform in place of the cast, before the validator change, and asks nothing', async () => {
     expect(await scaffolded(converted())).toEqual({
-      operations: [
-        CHECK_USERS,
-        'Data transform: User.age',
-        'Update validator on users (changed: age)',
-      ],
-      applied: [[1]],
+      operations: ['Data transform: User.age', 'Update validator on users (changed: age)'],
+      applied: [[0]],
       dataLoss: [],
     });
   });
@@ -197,13 +191,12 @@ describe('MongoMigrationPlanner, --backfill of a required field', () => {
 
     expect(await scaffolded(result)).toMatchObject({
       operations: [
-        CHECK_USERS,
         'Cast field age in collection users from string to int',
         'Data transform: User.plan',
         'Remove field nickname from collection users',
         'Update validator on users (changed: age; added: plan; removed: nickname)',
       ],
-      applied: [[2]],
+      applied: [[1]],
     });
     expect(migrationTs(result)).toContain(
       compact(
@@ -224,11 +217,7 @@ describe('MongoMigrationPlanner, --backfill of a required field', () => {
           }),
         )
       ).operations,
-    ).toEqual([
-      CHECK_USERS,
-      'Data transform: User.plan',
-      'Update validator on users (changed: plan)',
-    ]);
+    ).toEqual(['Data transform: User.plan', 'Update validator on users (changed: plan)']);
   });
 
   it('refuses a field that was already required, one that stays optional, and one in a new collection', () => {

@@ -85,10 +85,8 @@ function planOf(
   });
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
   return {
-    commands: (result.plan.operations as readonly MongoMigrationPlanOperation[]).map((op) =>
-      op.execute[0] === undefined
-        ? op.id
-        : `${op.execute[0].command.kind} ${op.execute[0].command.collection}`,
+    commands: (result.plan.operations as readonly MongoMigrationPlanOperation[]).map(
+      (op) => `${op.execute[0]?.command.kind} ${op.execute[0]?.command.collection}`,
     ),
     warnings: result.warnings ?? [],
   };
@@ -107,94 +105,7 @@ describe('MongoMigrationPlanner under a collection control policy', () => {
         contract,
         new MongoSchemaIR([liveCollection('users')], { fromDatabase: false }),
       ),
-    ).toEqual(['collection.users.checkDocuments', 'createIndex users', 'collMod users']);
-  });
-
-  it('runs collection creates, then the early checks, then the index drops', () => {
-    const contract = contractOf({ users: declared, posts: declared });
-    const oldIndex = new MongoSchemaIndex({
-      name: 'old_1',
-      keys: [{ field: 'old', direction: 1 }],
-    });
-
-    expect(
-      plannedCommands(
-        contract,
-        new MongoSchemaIR([liveCollection('users', [oldIndex])], { fromDatabase: false }),
-      ),
-    ).toEqual([
-      'createCollection posts',
-      'collection.users.checkDocuments',
-      'dropIndex users',
-      'createIndex posts',
-      'createIndex users',
-      'collMod users',
-    ]);
-  });
-
-  describe('the early document check', () => {
-    const validatorOnly: MongoCollectionInput = {
-      validator: {
-        jsonSchema: { bsonType: 'object', properties: { email: { bsonType: 'string' } } },
-        validationLevel: 'strict',
-        validationAction: 'error',
-      },
-    };
-    const codeIndex = new MongoSchemaIndex({
-      name: 'code_1',
-      keys: [{ field: 'code', direction: 1 }],
-      unique: true,
-    });
-    const liveEmailIndex = new MongoSchemaIndex({
-      name: 'email_1',
-      keys: [{ field: 'email', direction: 1 }],
-      unique: true,
-    });
-
-    it('checks a collection whose validator changes before an index drop on another collection', () => {
-      expect(
-        plannedCommands(
-          contractOf({ accounts: {}, users: validatorOnly }),
-          new MongoSchemaIR([liveCollection('accounts', [codeIndex]), liveCollection('users')], {
-            fromDatabase: false,
-          }),
-        ),
-      ).toEqual(['collection.users.checkDocuments', 'dropIndex accounts', 'collMod users']);
-    });
-
-    it('checks a collection before an index drop on the same collection', () => {
-      expect(
-        plannedCommands(
-          contractOf({ users: validatorOnly }),
-          new MongoSchemaIR([liveCollection('users', [liveEmailIndex])], { fromDatabase: false }),
-        ),
-      ).toEqual(['collection.users.checkDocuments', 'dropIndex users', 'collMod users']);
-    });
-
-    it('checks every collection when the plan changes two validators and nothing else', () => {
-      expect(
-        plannedCommands(
-          contractOf({ accounts: validatorOnly, users: validatorOnly }),
-          new MongoSchemaIR([liveCollection('accounts'), liveCollection('users')], {
-            fromDatabase: false,
-          }),
-        ),
-      ).toEqual([
-        'collection.accounts.checkDocuments',
-        'collection.users.checkDocuments',
-        'collMod accounts',
-        'collMod users',
-      ]);
-    });
-
-    it('plans no check when one validator change is the only operation', () => {
-      expect(
-        plannedCommands(
-          contractOf({ users: validatorOnly }),
-          new MongoSchemaIR([liveCollection('users')], { fromDatabase: false }),
-        ),
-      ).toEqual(['collMod users']);
-    });
+    ).toEqual(['createIndex users', 'collMod users']);
   });
 
   it.each(['external', 'observed'] as const)(
