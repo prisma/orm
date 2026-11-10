@@ -1382,11 +1382,9 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 ### RUNTIME.MULTIPLE_ORM_COPIES
 
-Prisma ORM is loaded from more than one folder. Each folder holding `@prisma/orm-framework` is a separate copy, even at the same version, and values and registries made by one copy are not recognised by another. Commands and clients refuse to start, before they read the contract or connect. The message names each copy's version, and the details list each copy's folder.
+Retired. 8.0.0-rc.22 raised this when Prisma ORM was loaded from more than one folder, and commands and clients refused to start. Later releases removed the check, because a host that loads the ORM in two module instances, such as Prisma Composer's boot wrapper beside the application bundle, cannot satisfy it. Nothing raises this code.
 
-Two copies usually mean versions that differ: an `@prisma/orm-*` package, or an extension, at a different version from the application's database package, or a `prisma` CLI that runs a different ORM version. Install the same version of every `@prisma/orm-*` package and a `prisma` CLI that runs it. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy. npm refuses a mismatched peer dependency, but pnpm and bun only warn, so a mismatch can install without an error. When every copy has the same version, reinstall so the package manager keeps one copy. With pnpm, copies of one version can also differ by their peer dependencies: `pnpm why @prisma/orm-framework` shows the difference, and giving every dependent the same peer leaves one copy.
-
-Copies bundled into a single file can't be told apart, so this check doesn't detect them. Payload: `copies`, a list of `{ folder, version }`; `version` is absent where it cannot be read.
+A second copy still breaks values and registries that cross between copies. Install the same version of every `@prisma/orm-*` package and a `prisma` CLI that runs it. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy.
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 

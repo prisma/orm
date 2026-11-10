@@ -19,9 +19,6 @@ import {
   dataTypeParams,
   requireValueOf,
 } from './data-type';
-import { registerFrameworkCopy } from './framework-copies';
-
-registerFrameworkCopy();
 
 /**
  * A codec converts a value of one data type to the value an application holds, and that application value to and from what the database driver exchanges (ADR 254).
