@@ -9,7 +9,7 @@ import {
 import { ormError } from '../orm-errors';
 import { combineWhereExprs } from '../where-utils';
 import type { WrittenRowOwner } from '../written-keys';
-import type { ColumnPair, StorageRow } from './edge';
+import type { ColumnMapping, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
 import { anyOf, withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
@@ -32,10 +32,10 @@ const KEYS_PER_STATEMENT = 500;
 export class FindByKeys extends StatementNode<Keyed> {
   readonly slots = { keys: 'one', state: 'list', requires: 'list' } as const;
   readonly ast: SelectAst;
-  readonly keyColumns: readonly ColumnPair[];
+  readonly keyColumns: readonly ColumnMapping[];
   readonly owner: WrittenRowOwner;
 
-  constructor(ast: SelectAst, keyColumns: readonly ColumnPair[], owner: WrittenRowOwner) {
+  constructor(ast: SelectAst, keyColumns: readonly ColumnMapping[], owner: WrittenRowOwner) {
     super();
     this.ast = ast;
     this.keyColumns = Object.freeze([...keyColumns]);

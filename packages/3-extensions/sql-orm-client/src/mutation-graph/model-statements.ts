@@ -15,7 +15,7 @@ import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-p
 import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
 import { Delete } from './delete';
-import type { ColumnPair, NodeId } from './edge';
+import type { ColumnMapping, NodeId } from './edge';
 import type { Graph } from './graph';
 import { Insert } from './insert';
 import { InsertChunked } from './insert-chunked';
@@ -31,7 +31,7 @@ export interface Model {
 
 export interface KeySource {
   readonly from: NodeId;
-  readonly columns: readonly ColumnPair[];
+  readonly columns: readonly ColumnMapping[];
 }
 
 export interface InsertRows {

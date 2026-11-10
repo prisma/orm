@@ -2,9 +2,9 @@ import { describe, it } from 'vitest';
 import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import { Insert } from '../../src/mutation-graph/insert';
 import { UnionAll } from '../../src/mutation-graph/union-all';
-import { columnPairs, findUsers, insertInto, newGraph } from './statements';
+import { columnMappings, findUsers, insertInto, newGraph } from './statements';
 
-const sameId = columnPairs('users', 'users', [['id', 'id']]);
+const sameId = columnMappings('users', 'users', [['id', 'id']]);
 
 describe('graph edge methods', () => {
   it('take only a target that has the slot the edge goes into', () => {

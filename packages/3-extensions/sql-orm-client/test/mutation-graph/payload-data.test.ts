@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
-import { columnPairs, positions } from './statements';
+import { columnMappings, positions } from './statements';
 
 const [from] = positions();
-const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
+const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
 
 describe('PayloadData', () => {
-  it('holds its source position and its column pairs, and is frozen', () => {
+  it('holds its source position and its column mappings, and is frozen', () => {
     const edge = new PayloadData(from, idToUserId);
 
     expect(edge).toMatchObject({ from, columns: [[{ alias: 'id' }, { alias: 'user_id' }]] });
@@ -14,12 +14,12 @@ describe('PayloadData', () => {
   });
 
   it('gives a record of values for the target columns from one source row', () => {
-    const pairs = columnPairs('users', 'posts', [
+    const mappings = columnMappings('users', 'posts', [
       ['id', 'user_id'],
       ['name', 'title'],
     ]);
 
-    expect(new PayloadData(from, pairs).output({ id: 7, name: 'Ada', email: 'a@b.c' })).toEqual({
+    expect(new PayloadData(from, mappings).output({ id: 7, name: 'Ada', email: 'a@b.c' })).toEqual({
       user_id: expect.objectContaining({ kind: 'param-ref', value: 7, name: 'user_id' }),
       title: expect.objectContaining({ kind: 'param-ref', value: 'Ada', name: 'title' }),
     });

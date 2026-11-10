@@ -2,10 +2,10 @@ import type { SelectAst } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import { printExpression } from './print-expression';
-import { columnPairs, columnsOf, findUsers, nameIsAda, recordingRun } from './statements';
+import { columnMappings, columnsOf, findUsers, nameIsAda, recordingRun } from './statements';
 
-const ids = columnPairs('users', 'users', [['id', 'id']]);
-const idsAndEmails = columnPairs('users', 'users', [
+const ids = columnMappings('users', 'users', [['id', 'id']]);
+const idsAndEmails = columnMappings('users', 'users', [
   ['id', 'id'],
   ['email', 'email'],
 ]);

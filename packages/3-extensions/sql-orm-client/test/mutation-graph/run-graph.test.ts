@@ -6,7 +6,7 @@ import { createMockRuntime, type MockExecution, type MockRuntime } from '../help
 import { printExpression } from './print-expression';
 import {
   addFiltered,
-  columnPairs,
+  columnMappings,
   contextOf,
   deletePosts,
   deleteUsers,
@@ -78,8 +78,8 @@ function withTransaction(runtime: MockRuntime) {
 }
 
 const allUserColumns = ['address', 'email', 'id', 'invited_by_id', 'name'];
-const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
-const idAndName = columnPairs('users', 'posts', [
+const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
+const idAndName = columnMappings('users', 'posts', [
   ['id', 'user_id'],
   ['name', 'title'],
 ]);
@@ -290,7 +290,7 @@ describe('running a graph', () => {
       expect(whereText(runtime.executions[1]!, 'posts')).toBe('user_id in (7, 8)');
     });
 
-    it('gives the target every column pair of the edge', async () => {
+    it('gives the target every column mapping of the edge', async () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7, name: 'Ada' }], []]);
 
@@ -325,7 +325,7 @@ describe('running a graph', () => {
       const graph = newGraph();
       const find = graph.add(findUsers([nameIsAda]));
       const update = addFiltered(graph, updatePosts({ title: 'New' }), [find, idToUserId]);
-      const sameId = columnPairs('posts', 'posts', [['id', 'id']]);
+      const sameId = columnMappings('posts', 'posts', [['id', 'id']]);
       graph.setResult(addFiltered(graph, deletePosts(), [update, sameId]));
 
       expect(await affectedBy(graph, contextOf(runtime))).toBe(0);
@@ -353,7 +353,7 @@ describe('running a graph', () => {
       runtime.setNextResults([[{ id: 7, invited_by_id: 2 }]]);
       const graph = newGraph();
       const find = graph.add(findUsers([nameIsAda], ['id', 'invited_by_id']));
-      const sameId = columnPairs('users', 'users', [['id', 'id']]);
+      const sameId = columnMappings('users', 'users', [['id', 'id']]);
       addFiltered(graph, deleteUsers(), [find, sameId]);
       graph.setResult(find);
 
@@ -405,7 +405,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada', posts: [] }]]);
       const state = { ...usersWithPosts(), selectedFields: ['id', 'name'] };
-      const sameId = columnPairs('users', 'users', [['id', 'id']]);
+      const sameId = columnMappings('users', 'users', [['id', 'id']]);
       const graph = newGraph();
       const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
       graph.setResult(addFiltered(graph, findUsersWith(state), [update, sameId]));
@@ -422,7 +422,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
       const state = { ...usersWithPosts(), selectedFields: ['id', 'name'] };
-      const sameId = columnPairs('users', 'users', [['id', 'id']]);
+      const sameId = columnMappings('users', 'users', [['id', 'id']]);
       const graph = newGraph();
       const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
       graph.setResult(addFiltered(graph, findUsersWith(state), [update, sameId]));
@@ -453,7 +453,7 @@ describe('running a graph', () => {
       const state = { ...usersWithPosts(), selectedFields: ['name'] };
       const graph = newGraph();
       const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }));
-      const sameId = columnPairs('users', 'users', [['id', 'id']]);
+      const sameId = columnMappings('users', 'users', [['id', 'id']]);
       addFiltered(graph, deleteUsers(), [find, sameId]);
       graph.setResult(find);
 

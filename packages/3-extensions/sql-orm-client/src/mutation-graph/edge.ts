@@ -9,7 +9,7 @@ export type NodeId<Inputs extends Slots = Slots> = number &
 
 export type StorageRow = Record<string, unknown>;
 
-export type ColumnPair = readonly [source: ProjectionItem, target: ProjectionItem];
+export type ColumnMapping = readonly [source: ProjectionItem, target: ProjectionItem];
 
 export abstract class Edge<Output> {
   readonly from: NodeId;
@@ -22,9 +22,9 @@ export abstract class Edge<Output> {
 }
 
 export abstract class DataEdge<Output> extends Edge<Output> {
-  readonly columns: readonly ColumnPair[];
+  readonly columns: readonly ColumnMapping[];
 
-  constructor(from: NodeId, columns: readonly ColumnPair[]) {
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
     super(from);
     this.columns = Object.freeze([...columns]);
   }

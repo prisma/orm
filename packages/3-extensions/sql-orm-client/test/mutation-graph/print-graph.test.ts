@@ -8,7 +8,7 @@ import { printGraph } from './print-graph';
 import {
   addFiltered,
   aliasedTable,
-  columnPairs,
+  columnMappings,
   deletePosts,
   deleteUsers,
   findUsers,
@@ -28,10 +28,10 @@ describe('printGraph', () => {
     );
   });
 
-  it('prints a FilterData edge with its column pair', () => {
+  it('prints a FilterData edge with its column mapping', () => {
     const graph = newGraph();
     const find = graph.add(findUsers([nameIsAda]));
-    const sameId = columnPairs('users', 'users', [['id', 'id']]);
+    const sameId = columnMappings('users', 'users', [['id', 'id']]);
     graph.setResult(addFiltered(graph, deleteUsers(), [find, sameId]));
 
     expect(printGraph(graph)).toBe(
@@ -43,14 +43,14 @@ describe('printGraph', () => {
     );
   });
 
-  it('prints every column pair of a FilterData edge', () => {
+  it('prints every column mapping of a FilterData edge', () => {
     const graph = newGraph();
     const find = graph.add(findUsers());
-    const pairs = columnPairs('users', 'posts', [
+    const mappings = columnMappings('users', 'posts', [
       ['id', 'user_id'],
       ['name', 'title'],
     ]);
-    graph.setResult(addFiltered(graph, deletePosts(), [find, pairs]));
+    graph.setResult(addFiltered(graph, deletePosts(), [find, mappings]));
 
     expect(printGraph(graph)).toBe(
       [
@@ -65,7 +65,7 @@ describe('printGraph', () => {
     const graph = newGraph();
     const find = graph.add(findUsers());
     const other = graph.add(findUsers());
-    const sameId = columnPairs('users', 'users', [['id', 'id']]);
+    const sameId = columnMappings('users', 'users', [['id', 'id']]);
     addFiltered(graph, deleteUsers(), [find, sameId], [other, sameId]);
     graph.setResult(find);
 
@@ -143,9 +143,9 @@ describe('printGraph', () => {
 
     it('prints the chain of a variant create: Insert, Insert with PayloadData, CrossJoin, UnionAll', () => {
       const graph = newGraph();
-      const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
-      const sameUserId = columnPairs('users', 'users', [['id', 'id']]);
-      const samePostId = columnPairs('posts', 'posts', [['id', 'id']]);
+      const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
+      const sameUserId = columnMappings('users', 'users', [['id', 'id']]);
+      const samePostId = columnMappings('posts', 'posts', [['id', 'id']]);
       const joins = [1, 2].map(() => {
         const base = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
         const variant = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])));

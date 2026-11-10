@@ -12,7 +12,7 @@ import {
 import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatch';
 import { createCollectionTables } from '../../src/collection-tables';
 import { Delete } from '../../src/mutation-graph/delete';
-import type { ColumnPair, NodeId, StorageRow } from '../../src/mutation-graph/edge';
+import type { ColumnMapping, NodeId, StorageRow } from '../../src/mutation-graph/edge';
 import type { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { Graph } from '../../src/mutation-graph/graph';
@@ -113,18 +113,18 @@ export function columnsOf(
   return projectTableColumns(contract, tablesOf[table].root, columns);
 }
 
-export function columnPairs(
+export function columnMappings(
   sourceTable: 'users' | 'posts',
   targetTable: 'users' | 'posts',
   names: readonly (readonly [string, string])[],
-): ColumnPair[] {
+): ColumnMapping[] {
   const source = tablesOf[sourceTable].root;
   const target = tablesOf[targetTable].root;
   return names.map(([sourceColumn, targetColumn]) => {
     const [sourceItem] = projectTableColumns(contract, source, [sourceColumn]);
     const [targetItem] = projectTableColumns(contract, target, [targetColumn]);
     if (sourceItem === undefined || targetItem === undefined) {
-      throw new Error('a column pair needs both columns');
+      throw new Error('a column mapping needs both columns');
     }
     return [sourceItem, targetItem];
   });
@@ -184,7 +184,7 @@ export function recordingRun(
 export function addFiltered<Inputs extends Slots & { filter: FilterData[] }>(
   graph: Graph,
   node: Node<Inputs>,
-  ...sources: readonly (readonly [NodeId, readonly ColumnPair[]])[]
+  ...sources: readonly (readonly [NodeId, readonly ColumnMapping[]])[]
 ): NodeId<Inputs> {
   const id = graph.add(node);
   for (const [from, columns] of sources) {

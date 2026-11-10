@@ -7,7 +7,12 @@ import type {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { Delete } from '../../src/mutation-graph/delete';
-import { type ColumnPair, DataEdge, type Edge, type NodeId } from '../../src/mutation-graph/edge';
+import {
+  type ColumnMapping,
+  DataEdge,
+  type Edge,
+  type NodeId,
+} from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
@@ -139,14 +144,14 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (!(edge instanceof DataEdge)) {
     return `state ${names.get(edge.from)}`;
   }
-  const pairs = edge.columns.map(
-    ([source, target]: ColumnPair) => `${source.alias}->${target.alias}`,
+  const mappings = edge.columns.map(
+    ([source, target]: ColumnMapping) => `${source.alias}->${target.alias}`,
   );
   const changed =
     edge instanceof FilterData && Object.keys(edge.changed).length > 0
       ? ` with ${JSON.stringify(edge.changed)}`
       : '';
-  return `${edge.constructor.name} ${names.get(edge.from)} (${pairs.join(', ')})${changed}`;
+  return `${edge.constructor.name} ${names.get(edge.from)} (${mappings.join(', ')})${changed}`;
 }
 
 function printInputs(names: NodeNames, inputs: readonly Edge<unknown>[]): string {

@@ -11,7 +11,7 @@ import { StateEdge } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import {
-  columnPairs,
+  columnMappings,
   deletePosts,
   deleteUsers,
   findUsers,
@@ -21,9 +21,9 @@ import {
   visibleNodes,
 } from './statements';
 
-const sameId = columnPairs('users', 'users', [['id', 'id']]);
-const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
-const emailToTitle = columnPairs('users', 'posts', [['email', 'title']]);
+const sameId = columnMappings('users', 'users', [['id', 'id']]);
+const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
+const emailToTitle = columnMappings('users', 'posts', [['email', 'title']]);
 const posts = { namespaceId: 'public', tableName: 'posts' };
 
 function returned(graph: Graph, id: NodeId): string[] {

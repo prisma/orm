@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { StatementAst } from '../../src/mutation-graph/node';
 import { printExpression } from './print-expression';
 import {
-  columnPairs,
+  columnMappings,
   deleteUsers,
   findUsers,
   nameIsAda,
@@ -12,7 +12,9 @@ import {
 } from './statements';
 
 const idIs = (value: number) => BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value));
-const emailColumn = columnPairs('users', 'users', [['email', 'email']]).map(([source]) => source);
+const emailColumn = columnMappings('users', 'users', [['email', 'email']]).map(
+  ([source]) => source,
+);
 
 function whereOf(ast: StatementAst): string | undefined {
   return ast.kind === 'insert' || ast.where === undefined

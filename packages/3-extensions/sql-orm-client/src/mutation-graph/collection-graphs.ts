@@ -32,7 +32,7 @@ import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import { readBackIdentity, type WrittenRowOwner, writtenKeys } from '../written-keys';
 import { CrossJoin } from './cross-join';
-import type { ColumnPair, NodeId, StorageRow } from './edge';
+import type { ColumnMapping, NodeId, StorageRow } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
@@ -270,8 +270,8 @@ export function createAllVariantGraph(
     root.storage.namespaceId,
     root.storage.tableName,
   );
-  const keyPairs = keyColumns.map(
-    (column): ColumnPair => [
+  const keyMappings = keyColumns.map(
+    (column): ColumnMapping => [
       projectTableColumn(contract, root, column),
       projectTableColumn(contract, variantTable, column),
     ],
@@ -286,7 +286,7 @@ export function createAllVariantGraph(
       variantColumns,
     );
     const variant = graph.add(new Insert(variantInsert));
-    graph.addPayloadDataEdge(base, variant, keyPairs);
+    graph.addPayloadDataEdge(base, variant, keyMappings);
     const join = graph.add(new CrossJoin());
     graph.addRowsEdge(base, join, 'left', sameColumns(baseColumns));
     graph.addRowsEdge(variant, join, 'right', sameColumns(variantColumns));
@@ -307,7 +307,7 @@ export function createAllVariantGraph(
   return graph;
 }
 
-function sameColumns(columns: readonly ProjectionItem[]): ColumnPair[] {
+function sameColumns(columns: readonly ProjectionItem[]): ColumnMapping[] {
   return columns.map((column) => [column, column]);
 }
 
@@ -415,11 +415,11 @@ function addFindOfWrittenRows(
   keyColumns: readonly ProjectionItem[],
   owner: WrittenRowOwner,
 ): NodeId {
-  const pairs = sameColumns(keyColumns);
+  const mappings = sameColumns(keyColumns);
   const found = graph.add(
-    new FindByKeys(readBackAst(collection, collection.state.includes), pairs, owner),
+    new FindByKeys(readBackAst(collection, collection.state.includes), mappings, owner),
   );
-  graph.addRowsEdge(inserted, found, 'keys', pairs);
+  graph.addRowsEdge(inserted, found, 'keys', mappings);
   return found;
 }
 
@@ -561,7 +561,7 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
   return resolveRowIdentityColumns(collection.context.contract, namespaceId, tableName);
 }
 
-function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnPair[] {
+function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnMapping[] {
   return sameColumns(identityProjection(collection));
 }
 

@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { castAs } from '@internal/utils/casts';
+import { blindCast, castAs } from '@internal/utils/casts';
 import {
   columnOfContractField,
   type ResolvedRelation,
@@ -34,7 +34,7 @@ import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from 
 import { emptyState } from '../types';
 import { readBackIdentity, writtenKeys } from '../written-keys';
 import { Assert } from './assert';
-import type { ColumnPair, NodeId } from './edge';
+import type { ColumnMapping, NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
@@ -131,17 +131,17 @@ function addInsertAndReadBack(
     requireParentRow(t, insert);
   }
   const identity = readBackIdentity(contract, namespaceId, tableName, model.modelName, 'create()');
-  const identityPairs = projectTableColumns(contract, root, identity).map(
-    (column): ColumnPair => [column, column],
+  const identityMappings = projectTableColumns(contract, root, identity).map(
+    (column): ColumnMapping => [column, column],
   );
   const read = graph.add(
     new FindByKeys(
       collectionSelectAst(contract, model.modelName, emptyState(model.tables)),
-      identityPairs,
+      identityMappings,
       owner,
     ),
   );
-  graph.addRowsEdge(insert, read, 'keys', identityPairs);
+  graph.addRowsEdge(insert, read, 'keys', identityMappings);
   return read;
 }
 
@@ -221,7 +221,7 @@ function addParentOwned(
 ): KeySource {
   const { contract } = t.context;
   const related = relatedModel(contract, relation);
-  const columns = pairs(
+  const columns = columnMappings(
     contract,
     related.tables.root,
     resolveRelationTargetColumns(contract, relation),
@@ -263,7 +263,7 @@ function addChildOwned(
   const { contract } = context;
   const related = relatedModel(contract, relation);
   const targetColumns = resolveRelationTargetColumns(contract, relation);
-  const fromParent = pairs(
+  const fromParent = columnMappings(
     contract,
     model.tables.root,
     localColumnsOf(contract, model, relation),
@@ -334,14 +334,14 @@ function addJunctionOwned(
     namespaceId: through.namespaceId,
     tableName: through.table,
   });
-  const fromParent = pairs(
+  const fromParent = columnMappings(
     contract,
     model.tables.root,
     localColumnsOf(contract, model, relation),
     junction.root,
     through.parentColumns,
   );
-  const fromTarget = pairs(
+  const fromTarget = columnMappings(
     contract,
     related.tables.root,
     through.targetColumns,
@@ -421,7 +421,7 @@ function addFindAndAssert(
   name: string,
   kind: 'connect' | 'disconnect',
   criterion: Readonly<Record<string, unknown>>,
-  columns: readonly ColumnPair[],
+  columns: readonly ColumnMapping[],
 ): NodeId {
   const { graph, context } = t;
   const where = requiredCriterion(context, related, name, kind, criterion);
@@ -540,22 +540,22 @@ function parseCreateInput(
   return parseMutationInput(t.context.contract, model.namespaceId, model.modelName, row);
 }
 
-function pairs(
+function columnMappings(
   contract: Contract<SqlStorage>,
-  source: AliasedTable,
-  sourceColumns: readonly string[],
-  target: AliasedTable,
-  targetColumns: readonly string[],
-): ColumnPair[] {
-  return sourceColumns.flatMap((column, index) => {
-    const targetColumn = targetColumns[index];
-    return targetColumn === undefined
-      ? []
-      : [
-          [
-            projectTableColumn(contract, source, column),
-            projectTableColumn(contract, target, targetColumn),
-          ] as const,
-        ];
-  });
+  from: AliasedTable,
+  fromColumns: readonly string[],
+  to: AliasedTable,
+  toColumns: readonly string[],
+): ColumnMapping[] {
+  return fromColumns.map((column, index) => [
+    projectTableColumn(contract, from, column),
+    projectTableColumn(
+      contract,
+      to,
+      blindCast<
+        string,
+        'the contract validator and assertJunctionMetadataShape give both column lists of a relation one length'
+      >(toColumns[index]),
+    ),
+  ]);
 }

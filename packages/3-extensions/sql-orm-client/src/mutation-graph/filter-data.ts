@@ -5,10 +5,13 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
-import { type ColumnPair, DataEdge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type NodeId, type StorageRow } from './edge';
 
 /** The condition that matches the row whose source columns hold the values in `sourceRow`. */
-export function keyCondition(columns: readonly ColumnPair[], sourceRow: StorageRow): AnyExpression {
+export function keyCondition(
+  columns: readonly ColumnMapping[],
+  sourceRow: StorageRow,
+): AnyExpression {
   const conditions = columns.map(([source, target]) =>
     BinaryExpr.eq(
       target.expr,
@@ -26,7 +29,7 @@ export function keyCondition(columns: readonly ColumnPair[], sourceRow: StorageR
 export class FilterData extends DataEdge<AnyExpression> {
   readonly changed: Readonly<StorageRow>;
 
-  constructor(from: NodeId, columns: readonly ColumnPair[], changed: Readonly<StorageRow> = {}) {
+  constructor(from: NodeId, columns: readonly ColumnMapping[], changed: Readonly<StorageRow> = {}) {
     super(from, columns);
     this.changed = changed;
     Object.freeze(this);

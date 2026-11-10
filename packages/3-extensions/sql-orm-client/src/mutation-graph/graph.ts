@@ -8,7 +8,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
-import { type ColumnPair, DataEdge, type Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type Edge, type NodeId, type StorageRow } from './edge';
 import { FilterData } from './filter-data';
 import type { Node, Slot, Slots, StatementAst } from './node';
 import { PayloadData } from './payload-data';
@@ -65,7 +65,7 @@ export class Graph {
   addFilterDataEdge(
     from: NodeId,
     to: NodeId<{ filter: FilterData[] }>,
-    columns: readonly ColumnPair[],
+    columns: readonly ColumnMapping[],
     changed: Readonly<StorageRow> = {},
   ): void {
     this.#read(from, columns);
@@ -75,7 +75,7 @@ export class Graph {
   addPayloadDataEdge(
     from: NodeId,
     to: NodeId<{ payload: PayloadData[] }>,
-    columns: readonly ColumnPair[],
+    columns: readonly ColumnMapping[],
   ): void {
     this.#read(from, columns);
     this.#connect(to, 'payload', new PayloadData(from, columns));
@@ -85,7 +85,7 @@ export class Graph {
     from: NodeId,
     to: NodeId<{ [Slot in Name]: Rows | Rows[] }>,
     slot: Name,
-    columns: readonly ColumnPair[],
+    columns: readonly ColumnMapping[],
   ): void {
     this.#read(from, columns);
     this.#connect(to, slot, new Rows(from, columns));
@@ -168,7 +168,7 @@ export class Graph {
     this.#readers[edge.from]?.push({ reader: to, edge });
   }
 
-  #read(from: NodeId, columns: readonly ColumnPair[]): void {
+  #read(from: NodeId, columns: readonly ColumnMapping[]): void {
     const source = this.#nodes[from];
     if (source instanceof StatementNode) {
       this.#nodes[from] = source.withReturning(columns.map(([column]) => column));

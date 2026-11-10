@@ -17,7 +17,7 @@ import { cascadeContract } from './cascade-contract';
 import { printGraph } from './print-graph';
 import {
   addFiltered,
-  columnPairs,
+  columnMappings,
   findUsers,
   findUsersWith,
   insertInto,
@@ -28,7 +28,7 @@ import {
 
 const users = { namespaceId: 'public', tableName: 'users' };
 const posts = { namespaceId: 'public', tableName: 'posts' };
-const sameId = columnPairs('users', 'users', [['id', 'id']]);
+const sameId = columnMappings('users', 'users', [['id', 'id']]);
 const withState = { state: true };
 
 function cascadeTable(name: string): TableSource {
