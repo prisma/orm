@@ -151,7 +151,7 @@ changes:
         - 'Call connect\(\) at most once per client'
   - id: create-extension-takes-options
     summary: |
-      The free function `createExtension` from `@prisma/orm-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class: `this.createExtension({ extension: 'btree_gist' })`, and drop `createExtension` from the import. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
+      The free function `createExtension` from `@prisma/orm-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class with the schema the extension is installed in, usually `public`: `this.createExtension({ schema: 'public', extension: 'btree_gist' })`, and drop `createExtension` from the import. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
     detection:
       glob: "**/migration.{ts,mts}"
       matches:
@@ -561,7 +561,7 @@ await expect(db.connect({ url })).rejects.toThrow('Postgres client is already bo
 
 In 8.0.0-rc.22 the free function `createExtension` from `@prisma/orm-postgres/migration` changed to take an options object and an internal argument that only the migration class can supply. A `migration.ts` that still calls it the old way fails when it runs, with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote the old call into every migration that created an extension.
 
-In every `migration.ts` the detection matches, call the method instead and remove `createExtension` from the import:
+In every `migration.ts` the detection matches, call the method instead and remove `createExtension` from the import. In 8.0.0-rc.22 the method requires `schema`: pass the schema the extension is installed in, usually `public`.
 
 ```ts
 // Before
@@ -575,13 +575,12 @@ override get operations() {
 import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
 
 override get operations() {
-  return [this.createExtension({ extension: 'btree_gist' }), ...];
+  return [this.createExtension({ schema: 'public', extension: 'btree_gist' }), ...];
 }
 ```
 
-Without `schema`, the method creates the extension where the old function did: in the connection's current schema, unless the extension's control file names one. The migration's `ops.json` does not change, and there is no need to run `node migration.ts` again: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.
+The migration's `ops.json` does not change, and there is no need to run `node migration.ts` again: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.
 
 ## `contract-artifacts-restamp`
 
 For every `contract.json` matched by `detection`, run the project's emit command (`prisma contract emit`, or the project's `contract:emit` script) once after upgrading. This entry accounts for the extension's embedded `version` moving to `8.0.0-rc.22`; any other difference in the emitted files comes from an earlier entry in this guide.
-
