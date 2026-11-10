@@ -105,6 +105,7 @@ function castOptions(
   to: FieldShape,
 ): Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined {
   const [target, ...others] = to.types;
+  if (from.types.length === 0) return undefined;
   if (from.list !== to.list || target === undefined || others.length > 0) return undefined;
   if (!isConvertTarget(target) || !from.types.every((type) => castsFrom(type, target))) {
     return undefined;

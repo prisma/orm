@@ -249,6 +249,20 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it('refuses Bson to Boolean, since a Bson field can hold a value $convert makes true', () => {
+      expect(
+        refusal(
+          plan({
+            from: users('from', { active: { codecId: 'mongo/bson@1' } }),
+            to: users('to', { active: BOOLEAN }),
+            schema: [liveUsers({ active: { codecId: 'mongo/bson@1' } })],
+          }),
+        ).map(({ summary }) => summary),
+      ).toEqual([
+        'Cannot change the type of field "User.active" in collection "users" from any value to bool: MongoDB has no cast from any value to bool that keeps what the values mean',
+      ]);
+    });
+
     it('refuses a cast in a time-series collection', () => {
       expect(
         refusal(
@@ -329,6 +343,26 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           },
         ],
       });
+    });
+
+    it('refuses a change from a property that takes any value to one type, pointing to --from', () => {
+      const destination = contract(
+        'to',
+        { User: { collection: 'users', fields: ['_id', 'age'], types: { _id: OBJECT_ID } } },
+        { users: { jsonSchema: closedSchema({ age: { bsonType: 'int' } }) } },
+      );
+
+      expect(
+        refusal(
+          plan({
+            from: null,
+            to: destination,
+            schema: [schemaCollection('users', { jsonSchema: closedSchema({ age: {} }) })],
+          }),
+        ).map(({ summary }) => summary),
+      ).toEqual([
+        'Cannot change the type of field "users.age" in collection "users" from any value to int: MongoDB has no cast from any value to int that keeps what the values mean',
+      ]);
     });
 
     it('refuses Bson to Json, since a Bson field can hold values Json cannot, pointing to --from', () => {
