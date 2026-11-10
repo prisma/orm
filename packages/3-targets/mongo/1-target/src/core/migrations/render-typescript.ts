@@ -10,9 +10,9 @@ import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools
 import { canonicalize } from '@internal/mongo-contract';
 import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
 import {
-  CheckDocumentsCall,
-  CollModCall,
   type OpFactoryCall,
+  type OpFactoryCallNode,
+  type SharedNames,
   TARGET_MIGRATION_MODULE,
 } from './op-factory-call';
 
@@ -76,14 +76,12 @@ export function renderCallsToTypeScript(
   meta: RenderMigrationMeta,
 ): string {
   const imports = buildImports(calls, meta);
-  const validators = sharedValidators(calls);
-  const validatorNames = new Map(validators.map(({ collection, name }) => [collection, name]));
+  const shared = sharedDeclarations(calls);
+  const names: SharedNames = {
+    nameOf: (value) => shared.find((declaration) => declaration.key === canonicalize(value))?.name,
+  };
   const operationsBody = calls
-    .map((call) =>
-      call instanceof CollModCall || call instanceof CheckDocumentsCall
-        ? call.renderTypeScript(validatorNames)
-        : call.renderTypeScript(),
-    )
+    .map((call: OpFactoryCallNode) => call.renderTypeScript(names))
     .join(',\n');
   const hasStart = meta.from !== null;
   const startField = hasStart ? ['  override readonly startContractJson = startContract;'] : [];
@@ -92,7 +90,7 @@ export function renderCallsToTypeScript(
     shebangLineFor(detectScaffoldRuntime()),
     imports,
     '',
-    ...validators.flatMap(({ name, value }) => [`const ${name} = ${jsonToTsSource(value)};`, '']),
+    ...shared.flatMap(({ name, value }) => [`const ${name} = ${jsonToTsSource(value)};`, '']),
     `class M extends Migration<${hasStart ? 'Start' : 'never'}, End> {`,
     ...startField,
     '  override readonly endContractJson = endContract;',
@@ -110,10 +108,9 @@ export function renderCallsToTypeScript(
   ].join('\n');
 }
 
-/** A name for a `const` that holds a collection's validator, usable as a TypeScript identifier. */
-function validatorConstName(collection: string, taken: ReadonlySet<string>): string {
-  const stem = collection.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(?=[0-9])/, '_');
-  const name = `${stem}Validator`;
+/** A name for a `const`, from `stem`, usable as a TypeScript identifier and not yet taken. */
+function constName(stem: string, taken: ReadonlySet<string>): string {
+  const name = stem.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(?=[0-9])/, '_');
   if (!taken.has(name)) return name;
   for (let suffix = 2; ; suffix++) {
     if (!taken.has(`${name}${suffix}`)) return `${name}${suffix}`;
@@ -121,26 +118,25 @@ function validatorConstName(collection: string, taken: ReadonlySet<string>): str
 }
 
 /**
- * The validators a `checkDocuments` call and the validator change of its collection both use: the
- * file declares each once, as a `const` the two calls refer to, so an edit applies to both.
+ * The values more than one call declares, each declared once as a `const` the calls refer to, so an
+ * edit of it applies to all of them. Values are matched by their canonical form; a value only one
+ * call declares is written out in that call.
  */
-function sharedValidators(
-  calls: ReadonlyArray<OpFactoryCall>,
-): readonly { readonly collection: string; readonly name: string; readonly value: unknown }[] {
+function sharedDeclarations(
+  calls: ReadonlyArray<OpFactoryCallNode>,
+): readonly { readonly key: string; readonly name: string; readonly value: unknown }[] {
+  const declared = calls.flatMap((call) => call.sharedValues());
   const taken = new Set<string>();
-  return calls.flatMap((call) => {
-    if (!(call instanceof CheckDocumentsCall)) return [];
-    const shared = calls.some(
-      (other) =>
-        other instanceof CollModCall &&
-        other.collection === call.collection &&
-        canonicalize(other.options.validator?.['$jsonSchema']) ===
-          canonicalize(call.options.validator),
-    );
-    if (!shared) return [];
-    const name = validatorConstName(call.collection, taken);
+  const keys = new Set<string>();
+  return declared.flatMap(({ stem, value }) => {
+    const key = canonicalize(value);
+    if (keys.has(key) || declared.filter((other) => canonicalize(other.value) === key).length < 2) {
+      return [];
+    }
+    keys.add(key);
+    const name = constName(stem, taken);
     taken.add(name);
-    return [{ collection: call.collection, name, value: call.options.validator }];
+    return [{ key, name, value }];
   });
 }
 

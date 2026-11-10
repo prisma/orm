@@ -82,4 +82,29 @@ describe('a migration.ts with an early document check', () => {
       validatorChange: validatorChange?.includes('"required":["_id","email","plan","nick"]'),
     }).toEqual({ check: true, validatorChange: true });
   });
+
+  it('shares the const only with a validator change whose validator is the same value', async () => {
+    const other = { ...validator, required: ['_id', 'email'] };
+    const twoChanges = [
+      ...calls,
+      new CollModCall(
+        'users',
+        { validator: { $jsonSchema: other }, validationLevel: 'strict', validationAction: 'error' },
+        { id: 'validator.users.loosen', label: 'Loosen validator on users', checkDocuments: true },
+      ),
+    ];
+    const source = renderCallsToTypeScript(twoChanges, meta).replace(
+      "'@internal/target-mongo/migration'",
+      `'${factoryExport}'`,
+    );
+    await directory.writeMigration(source, meta);
+
+    expect({
+      uses: source.match(/usersValidator\b/g)?.length,
+      run: await directory.runMigration(),
+    }).toEqual({ uses: 3, run: { exitCode: 0, stderr: '' } });
+    expect(await directory.readOps()).toEqual(
+      JSON.parse(serializeMongoOps(twoChanges.map((call) => call.toOp()))),
+    );
+  });
 });

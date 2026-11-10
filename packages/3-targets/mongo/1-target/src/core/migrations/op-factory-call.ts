@@ -80,18 +80,38 @@ export interface CollModMeta {
  */
 export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
 
-/** For each collection whose validator `migration.ts` declares once, the name of its `const`. */
-export type ValidatorNames = ReadonlyMap<string, string>;
-
-/** The source of `value`, or the name of the `const` that holds the collection's validator. */
-function validatorSource(collection: string, value: unknown, names: ValidatorNames): string {
-  return names.get(collection) ?? jsonToTsSource(value);
+/**
+ * A value a call wants `migration.ts` to declare once, as a `const` other calls can share:
+ * `stem` suggests the `const`'s name.
+ */
+export interface SharedValue {
+  readonly stem: string;
+  readonly value: unknown;
 }
 
-abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
+/** The names `migration.ts` declares shared values under, looked up by value. */
+export interface SharedNames {
+  /** The name of the `const` that holds `value`, when the file declares it once. */
+  nameOf(value: unknown): string | undefined;
+}
+
+const NO_SHARED_NAMES: SharedNames = { nameOf: () => undefined };
+
+/** The source of `value`: the name of the `const` that holds it, or the value written out. */
+function sharedSource(value: unknown, names: SharedNames): string {
+  return names.nameOf(value) ?? jsonToTsSource(value);
+}
+
+export abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
   abstract readonly operationClass: MigrationOperationClass;
   abstract readonly label: string;
+  abstract override renderTypeScript(names?: SharedNames): string;
+
+  /** The values this call wants declared once in `migration.ts`, so other calls can use the same `const`. */
+  sharedValues(): readonly SharedValue[] {
+    return [];
+  }
   abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
@@ -431,15 +451,14 @@ export class CheckDocumentsCall extends OpFactoryCallNode {
     return checkDocuments(this.options);
   }
 
-  renderTypeScript(validatorNames: ValidatorNames = new Map()): string {
+  override sharedValues(): readonly SharedValue[] {
+    return [{ stem: `${this.collection}Validator`, value: this.options.validator }];
+  }
+
+  renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
     const entries = Object.entries(this.options).map(
       ([key, value]) =>
-        [
-          key,
-          key === 'validator'
-            ? validatorSource(this.collection, value, validatorNames)
-            : jsonToTsSource(value),
-        ] as const,
+        [key, key === 'validator' ? sharedSource(value, names) : jsonToTsSource(value)] as const,
     );
     return `checkDocuments(${tsObjectSource(entries)})`;
   }
@@ -467,7 +486,14 @@ export class CollModCall extends OpFactoryCallNode {
     return collMod(this.collection, this.options, this.meta);
   }
 
-  renderTypeScript(validatorNames: ValidatorNames = new Map()): string {
+  override sharedValues(): readonly SharedValue[] {
+    const jsonSchema = this.options.validator?.['$jsonSchema'];
+    return jsonSchema === undefined
+      ? []
+      : [{ stem: `${this.collection}Validator`, value: jsonSchema }];
+  }
+
+  renderTypeScript(names: SharedNames = NO_SHARED_NAMES): string {
     const options = tsObjectSource(
       Object.entries(this.options)
         .filter(([, value]) => value !== undefined)
@@ -478,7 +504,7 @@ export class CollModCall extends OpFactoryCallNode {
                 Object.entries(value).map(([validatorKey, validatorValue]) => [
                   validatorKey,
                   validatorKey === '$jsonSchema'
-                    ? validatorSource(this.collection, validatorValue, validatorNames)
+                    ? sharedSource(validatorValue, names)
                     : jsonToTsSource(validatorValue),
                 ]),
               )
