@@ -391,7 +391,25 @@ function assertNoDigitAfterParam(parts: RawExpr['parts'] | RawQueryAst['parts'])
 
 function renderParts(parts: RawExpr['parts'] | RawQueryAst['parts'], ctx: RenderContext): string {
   assertNoDigitAfterParam(parts);
-  return parts.map((part) => (typeof part === 'string' ? part : renderExpr(part, ctx))).join('');
+  return parts
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      switch (part.kind) {
+        case 'select':
+          return renderSelect(part, ctx);
+        case 'insert':
+          return renderInsert(part, ctx);
+        case 'update':
+          return renderUpdate(part, ctx);
+        case 'delete':
+          return renderDelete(part, ctx);
+        default:
+          return renderExpr(part, ctx);
+      }
+    })
+    .join('');
 }
 
 function renderColumn(ref: ColumnRef, ctx: RenderContext): string {

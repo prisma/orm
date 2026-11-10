@@ -144,6 +144,7 @@ export interface ExpressionFolder<T> {
   literal?(expr: LiteralExpr): T;
   list?(expr: ListExpression): T;
   select?(ast: SelectAst): T;
+  mutation?(ast: InsertAst | UpdateAst | DeleteAst): T;
   rawExpr?(expr: RawExpr): T;
 }
 
@@ -220,6 +221,34 @@ function foldComparable<T>(value: AnyExpression, folder: ExpressionFolder<T>): T
   }
 }
 
+function rewriteRawPart(part: RawPart, rewriter: AstRewriter): RawPart {
+  if (typeof part === 'string') {
+    return part;
+  }
+  switch (part.kind) {
+    case 'select':
+    case 'insert':
+    case 'update':
+    case 'delete':
+      return part.rewrite(rewriter);
+    default:
+      return rewriteComparable(part, rewriter);
+  }
+}
+
+function foldRawPart<T>(part: Exclude<RawPart, string>, folder: ExpressionFolder<T>): T {
+  switch (part.kind) {
+    case 'select':
+      return folder.select ? folder.select(part) : folder.empty;
+    case 'insert':
+    case 'update':
+    case 'delete':
+      return folder.mutation ? folder.mutation(part) : folder.empty;
+    default:
+      return part.fold(folder);
+  }
+}
+
 function collectColumnRefsWith<TNode extends Expression>(node: TNode): ColumnRef[] {
   return node.fold<ColumnRef[]>({
     empty: [],
@@ -236,6 +265,7 @@ function collectParamRefsWith<TNode extends Expression>(node: TNode): AnyParamRe
     paramRef: (paramRef) => [paramRef],
     preparedParamRef: (paramRef) => [paramRef],
     select: (ast) => ast.collectParamRefs(),
+    mutation: (ast) => ast.collectParamRefs(),
   });
 }
 
@@ -775,11 +805,11 @@ export class OperationExpr extends Expression {
 
 export class RawExpr extends Expression {
   readonly kind = 'raw-expr' as const;
-  readonly parts: ReadonlyArray<string | AnyExpression>;
+  readonly parts: ReadonlyArray<RawPart>;
   readonly returns: ParamSpec;
 
   constructor(options: {
-    readonly parts: ReadonlyArray<string | AnyExpression>;
+    readonly parts: ReadonlyArray<RawPart>;
     readonly returns: ParamSpec;
   }) {
     super();
@@ -803,8 +833,8 @@ export class RawExpr extends Expression {
     return combineAll(
       folder,
       this.parts
-        .filter((p): p is AnyExpression => typeof p !== 'string')
-        .map((p) => () => p.fold(folder)),
+        .filter((p): p is Exclude<RawPart, string> => typeof p !== 'string')
+        .map((p) => () => foldRawPart(p, folder)),
     );
   }
 }
@@ -2296,11 +2326,11 @@ function frozenRawQueryResult(result: RawQueryResult): RawQueryResult {
  */
 export class RawQueryAst extends QueryAst {
   readonly kind = 'raw-query' as const;
-  readonly parts: ReadonlyArray<string | AnyExpression>;
+  readonly parts: ReadonlyArray<RawPart>;
   readonly result: RawQueryResult;
 
   constructor(options: {
-    readonly parts: ReadonlyArray<string | AnyExpression>;
+    readonly parts: ReadonlyArray<RawPart>;
     readonly result: RawQueryResult;
   }) {
     super();
@@ -2310,21 +2340,19 @@ export class RawQueryAst extends QueryAst {
   }
 
   static rows(
-    parts: ReadonlyArray<string | AnyExpression>,
+    parts: ReadonlyArray<RawPart>,
     columns: Readonly<Record<string, RawQueryColumn>>,
   ): RawQueryAst {
     return new RawQueryAst({ parts, result: { kind: 'rows', columns } });
   }
 
-  static affectedCount(parts: ReadonlyArray<string | AnyExpression>): RawQueryAst {
+  static affectedCount(parts: ReadonlyArray<RawPart>): RawQueryAst {
     return new RawQueryAst({ parts, result: { kind: 'affected-count' } });
   }
 
   rewrite(rewriter: AstRewriter): RawQueryAst {
     return new RawQueryAst({
-      parts: this.parts.map((part) =>
-        typeof part === 'string' ? part : rewriteComparable(part, rewriter),
-      ),
+      parts: this.parts.map((part) => rewriteRawPart(part, rewriter)),
       result: this.result,
     });
   }
@@ -2345,6 +2373,7 @@ export class RawQueryAst extends QueryAst {
 }
 
 export type AnyQueryAst = SelectAst | InsertAst | UpdateAst | DeleteAst | RawQueryAst;
+export type RawPart = string | AnyExpression | SelectAst | InsertAst | UpdateAst | DeleteAst;
 export type AnyFromSource = TableSource | DerivedTableSource | FunctionSource;
 export type AnyExpression =
   | ColumnRef

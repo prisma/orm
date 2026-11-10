@@ -93,3 +93,42 @@ describe('MySQL raw SQL with integer values', { timeout: timeouts.databaseOperat
     });
   });
 });
+
+describe('MySQL raw SQL with an embedded builder query', {
+  timeout: timeouts.databaseOperation,
+}, () => {
+  it('inserts the rows of an embedded select, with params before, inside and after it', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const copies = db.sql.Post.innerJoin(db.sql.User, (f, fns) =>
+        fns.eq(f.User.id, f.Post.authorId),
+      )
+        .select((f, fns) => ({
+          id: fns.raw`${f.Post.id} + ${10}`.returns('mysql/int@1'),
+          title: f.Post.title,
+          authorId: f.Post.authorId,
+        }))
+        .where((f, fns) => fns.eq(f.User.role, 'ADMIN'));
+
+      const stats = await db.execute(
+        db.raw
+          .sql`INSERT INTO Post (id, title, authorId) SELECT c.id, CONCAT(${'Copy of '}, c.title), c.authorId FROM (${copies}) AS c WHERE c.id < ${14}`
+          .affectedCount()
+          .build(),
+      );
+      expect(stats).toEqual({ affectedRows: 3 });
+
+      const rows = await db.query(
+        db.sql.Post.select('id', 'title', 'authorId')
+          .where((f, fns) => fns.gt(f.id, 10))
+          .orderBy('id')
+          .build(),
+      );
+      expect(rows).toEqual([
+        { id: 11, title: 'Copy of Alpha', authorId: 1 },
+        { id: 12, title: 'Copy of Gamma', authorId: 1 },
+        { id: 13, title: 'Copy of Beta', authorId: 1 },
+      ]);
+    });
+  });
+});
