@@ -40,7 +40,7 @@ const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
 const hello = { id: 10, title: 'Hello', views: 0 };
 
 describe('nested write graphs on a contract without capability "returning"', () => {
-  it('inserts each row another node reads, reports its key and reads it back by that key', () => {
+  it('inserts each row another node reads, and reads it back by its key', () => {
     const graph = graphOf(
       {
         ...targetOf('Post'),
@@ -51,9 +51,9 @@ describe('nested write graphs on a contract without capability "returning"', () 
 
     expect(printGraph(graph)).toBe(
       [
-        'n1 InsertReportingKeys Insert users keys [{"id":1}]',
+        'n1 Insert users',
         'n2 FindByKeys users by (id) for create <- Rows n1',
-        'n3 InsertReportingKeys Insert posts keys [{"id":10}] <- PayloadData n2 (id->user_id)',
+        'n3 Insert posts <- PayloadData n2 (id->user_id)',
         'n4 FindByKeys posts by (id) for create <- Rows n3',
         'result: n4',
       ].join('\n'),
@@ -74,7 +74,7 @@ describe('nested write graphs on a contract without capability "returning"', () 
 
     expect(printGraph(graph)).toBe(
       [
-        'n1 InsertReportingKeys Insert users keys [{"id":1}]',
+        'n1 Insert users',
         'n2 FindByKeys users by (id) for create <- Rows n1',
         'n3 Insert posts 2 rows <- PayloadData n2 (id->user_id)',
         'result: n2',

@@ -115,7 +115,7 @@ result: n2"
 
 exports[`state edges of the graphs builders build, without returning > createAllGraph 1`] = `
 "n1 State users
-n2 InsertReportingKeys Insert users keys [{"id":1}] <- state n1
+n2 Insert users <- state n1
 n3 State users <- state n2
 n4 State posts
 n5 FindByKeys users by (id) for create <- Rows n2, state n3, state n4
@@ -124,17 +124,17 @@ result: n5"
 
 exports[`state edges of the graphs builders build, without returning > createGraph with relation operations 1`] = `
 "n1 State users
-n2 InsertReportingKeys Insert users keys [{"id":2}] <- state n1
+n2 Insert users <- state n1
 n3 State users <- state n2
 n4 FindByKeys users by (id) for create <- Rows n2, state n3
-n5 InsertReportingKeys Insert users keys [{"id":1}] <- PayloadData n4 (id->invited_by_id), state n3
+n5 Insert users <- PayloadData n4 (id->invited_by_id), state n3
 n6 State users <- state n5
 n7 FindByKeys users by (id) for create <- Rows n5, state n6
 n8 State posts
 n9 Insert posts <- PayloadData n7 (id->user_id), state n8
 n10 State posts <- state n9
 n11 State tags
-n12 InsertReportingKeys Insert tags keys [{"id":5}] <- state n11
+n12 Insert tags <- state n11
 n13 State tags <- state n12
 n14 FindByKeys tags by (id) for create <- Rows n12, state n13
 n15 State user_tags
@@ -209,7 +209,7 @@ result: n17"
 
 exports[`state edges of the graphs builders build, without returning > upsertGraph 1`] = `
 "n1 State users
-n2 InsertReportingKeys Insert users on conflict (email) do update keys [{"email":"ada@example.com"}] <- state n1
+n2 Insert users on conflict (email) do update <- state n1
 n3 State users <- state n2
 n4 FindByKeys users by (email) for upsert <- Rows n2, state n3
 result: n4"

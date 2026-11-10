@@ -1,21 +1,21 @@
 import { ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Insert } from '../../src/mutation-graph/insert';
-import { columnsOf, insertInto, recordingRun } from './statements';
+import { columnsOf, insertInto, insertOwner, recordingRun } from './statements';
 
 const userIdOf7 = { user_id: ParamRef.of(7, { name: 'user_id' }) };
 
 describe('Insert', () => {
   it('holds its statement as SQL AST and is frozen', () => {
     const ast = insertInto('posts', [{ title: 'Hello' }]);
-    const insert = new Insert(ast);
+    const insert = new Insert(ast, insertOwner);
 
     expect(insert.ast).toBe(ast);
     expect(Object.isFrozen(insert)).toBe(true);
   });
 
   it('runs its statement as it is when the payload slot has no edge', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
     const run = recordingRun([{ id: 1 }]);
 
     expect(await insert.execute({ payload: null, state: null, requires: null }, run)).toEqual([
@@ -25,7 +25,7 @@ describe('Insert', () => {
   });
 
   it('adds the record of each edge to its row', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
     const run = recordingRun();
     const titleOfEdge = { views: ParamRef.of(3, { name: 'views' }) };
 
@@ -48,7 +48,7 @@ describe('Insert', () => {
   });
 
   it('returns no rows and runs nothing when an edge has no source row', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
     const run = recordingRun([{ id: 1 }]);
 
     expect(
@@ -59,7 +59,7 @@ describe('Insert', () => {
   });
 
   it('refuses two edges that give one column of a junction different values, before running', () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), {
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner, {
       relation: 'tags',
       junction: 'post_tags',
     });
@@ -80,7 +80,7 @@ describe('Insert', () => {
   });
 
   it('accepts two edges that give one column of a junction the same value', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), {
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner, {
       relation: 'tags',
       junction: 'post_tags',
     });
@@ -95,7 +95,7 @@ describe('Insert', () => {
   });
 
   it('returns no rows and runs nothing when a node it requires produced no row', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']));
+    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
     const run = recordingRun([{ id: 1 }]);
 
     expect(await insert.execute({ payload: null, state: null, requires: [[]] }, run)).toEqual([]);
@@ -103,7 +103,7 @@ describe('Insert', () => {
   });
 
   it('gives the affected row count when its statement returns no column', async () => {
-    const insert = new Insert(insertInto('posts', [{ title: 'a' }, { title: 'b' }]));
+    const insert = new Insert(insertInto('posts', [{ title: 'a' }, { title: 'b' }]), insertOwner);
     const run = recordingRun([], 2);
 
     expect(await insert.execute({ payload: null, state: null, requires: null }, run)).toEqual({
@@ -113,7 +113,7 @@ describe('Insert', () => {
   });
 
   it('gives a node that also returns the columns it is asked for, once each', () => {
-    const insert = new Insert(insertInto('users', [{ name: 'Ada' }], ['id']));
+    const insert = new Insert(insertInto('users', [{ name: 'Ada' }], ['id']), insertOwner);
 
     const widened = insert.withReturning(columnsOf('users', ['email', 'id']));
 

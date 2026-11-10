@@ -38,7 +38,7 @@ import type { ColumnMapping, NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
-import { InsertReportingKeys } from './insert-reporting-keys';
+import { Insert } from './insert';
 import {
   addDeleteRows,
   addInsertRows,
@@ -99,6 +99,7 @@ function addParentInsert(
     keys,
     junction: undefined,
     requires: requiresParentRow ? parentRowRequired(t) : [],
+    owner: { operation: 'create', modelName: model.modelName },
   });
 }
 
@@ -114,13 +115,7 @@ function addInsertAndReadBack(
   const { root } = model.tables;
   const { namespaceId, tableName } = root.storage;
   const owner = { operation: 'create', modelName: model.modelName };
-  const written = writtenKeysOf(t, model, row, keys);
-  const inserted = new InsertReportingKeys(
-    [insertAst(contract, root, [row], undefined)],
-    written.keys,
-    written.generated,
-    owner,
-  );
+  const inserted = new Insert(insertAst(contract, root, [row], undefined), owner);
   const insert = graph.add(inserted, {
     payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
     state: graph.stateEdgesFor(inserted),
@@ -354,6 +349,7 @@ function addJunctionOwned(
       ],
       junction: { relation: name, junction: through.table },
       requires: [],
+      owner: { operation: 'create', modelName: model.modelName },
     });
   };
 
@@ -410,6 +406,7 @@ function addChildInserts(
     keys,
     junction: undefined,
     requires: [],
+    owner: { operation: 'create', modelName: model.modelName },
   });
 }
 

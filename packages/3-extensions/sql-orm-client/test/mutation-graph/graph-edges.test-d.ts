@@ -7,7 +7,7 @@ import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { StateEdge } from '../../src/mutation-graph/state';
 import { UnionAll } from '../../src/mutation-graph/union-all';
-import { columnMappings, findUsers, insertInto, newGraph } from './statements';
+import { columnMappings, findUsers, insertInto, insertOwner, newGraph } from './statements';
 
 const sameId = columnMappings('users', 'users', [['id', 'id']]);
 
@@ -15,7 +15,7 @@ describe('graph edge methods', () => {
   it('take only a target that has the slot the edge goes into', () => {
     const graph = newGraph();
     const find = graph.add(findUsers());
-    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
     const join = graph.add(new CrossJoin());
     const union = graph.add(new UnionAll());
 
@@ -43,7 +43,7 @@ describe('graph edge methods', () => {
     const users = { namespaceId: 'public', tableName: 'users' };
 
     graph.add(findUsers(), { filter: [new FilterData(find, sameId)] });
-    graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])), {
+    graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner), {
       payload: [new PayloadData(find, sameId)],
     });
     graph.add(new CrossJoin(), { left: new Rows(find, sameId) });

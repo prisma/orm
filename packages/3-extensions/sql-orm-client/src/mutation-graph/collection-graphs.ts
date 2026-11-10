@@ -11,12 +11,10 @@ import {
   resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveUniqueKeyColumnSets,
-  supportsDefaultInInsert,
 } from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import {
   countMutationWhere,
-  groupRowsByColumnSignature,
   type InsertConflictSkip,
   insertAst,
   projectTableColumn,
@@ -38,7 +36,6 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
-import { InsertReportingKeys } from './insert-reporting-keys';
 import { addDeleteRows, addInsertRows, addUpdateRows, selectAstOf } from './model-statements';
 import {
   addAfterWrite,
@@ -204,10 +201,14 @@ export function createAllGraph(
   requireIdentityColumnsForIncludes(collection);
   const { contract } = context;
   const { root } = state.tables;
+  const owner = {
+    operation: rows.length === 1 ? 'create' : 'createAll',
+    modelName: collection.modelName,
+  };
   if (readsBack(collection, returns)) {
-    const method = rows.length === 1 ? 'create()' : 'createAll()';
+    const method = `${owner.operation}()`;
     refuseSkipWithReadBack(collection, conflict, method);
-    const { keys, generated } = writtenKeys({
+    writtenKeys({
       context,
       namespaceId: root.storage.namespaceId,
       tableName: root.storage.tableName,
@@ -215,17 +216,13 @@ export function createAllGraph(
       rows,
       method,
     });
-    const asts = supportsDefaultInInsert(contract)
-      ? [insertAst(contract, root, rows, undefined)]
-      : groupRowsByColumnSignature(rows).map((group) =>
-          insertAst(contract, root, group, undefined),
-        );
-    const owner = {
-      operation: rows.length === 1 ? 'create' : 'createAll',
-      modelName: collection.modelName,
-    };
-    const reporting = new InsertReportingKeys(asts, keys, generated, owner);
-    const inserted = graph.add(reporting, { state: graph.stateEdgesFor(reporting) });
+    const inserted = addInsertRows(graph, contract, root, rows, {
+      conflict: undefined,
+      keys: [],
+      junction: undefined,
+      requires: [],
+      owner,
+    });
     graph.setResult(
       addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), owner),
     );
@@ -236,6 +233,7 @@ export function createAllGraph(
     keys: [],
     junction: undefined,
     requires: [],
+    owner,
   });
   graph.setResult(addWithIncludes(graph, collection, inserted));
   return graph;
@@ -284,13 +282,16 @@ export function createAllVariantGraph(
   const baseColumns = returningProjection(contract, modelName, root, undefined);
   const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
 
+  const owner = { operation: 'createAll', modelName };
   const joins = rows.map((row) => {
     const baseInsert = new Insert(
       insertAst(contract, root, [row.base], undefined).withReturning(baseColumns),
+      owner,
     );
     const base = graph.add(baseInsert, { state: graph.stateEdgesFor(baseInsert) });
     const variantInsert = new Insert(
       insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns),
+      { operation: 'createAll', modelName: variantModelName },
     );
     const variant = graph.add(variantInsert, {
       payload: [new PayloadData(base, keyMappings)],
@@ -350,11 +351,11 @@ export function upsertGraph(
           conflictColumns.slice(0, 1).map((column) => [column, ColumnRef.of('excluded', column)]),
         );
   const upsert = upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet);
+  const upsertOwner = { operation: 'upsert', modelName: collection.modelName };
+  const upsertInsert = new Insert(upsert, upsertOwner);
   if (readsBack(collection, 'rows')) {
-    const conflictValues = upsertConflictValues(collection, create, update, conflictColumns);
-    const upsertOwner = { operation: 'upsert', modelName: collection.modelName };
-    const reporting = new InsertReportingKeys([upsert], [conflictValues], undefined, upsertOwner);
-    const upserted = graph.add(reporting, { state: graph.stateEdgesFor(reporting) });
+    requireUpsertConflictValues(collection, create, update, conflictColumns);
+    const upserted = graph.add(upsertInsert, { state: graph.stateEdgesFor(upsertInsert) });
     graph.setResult(
       addFindOfWrittenRows(
         graph,
@@ -366,7 +367,6 @@ export function upsertGraph(
     );
     return graph;
   }
-  const upsertInsert = new Insert(upsert);
   const upserted = graph.add(upsertInsert, { state: graph.stateEdgesFor(upsertInsert) });
   graph.setResult(addWithIncludes(graph, collection, upserted));
   return graph;
@@ -494,13 +494,12 @@ function requireOnlyCollidingKey(
   );
 }
 
-/** The create's values for the conflict columns, by which an upsert without `RETURNING` reads its row back. */
-function upsertConflictValues(
+function requireUpsertConflictValues(
   collection: DescribeCollectionRowsOptions,
   create: Readonly<Record<string, unknown>>,
   update: Readonly<Record<string, unknown>>,
   conflictColumns: readonly string[],
-): StorageRow {
+): void {
   const { modelName } = collection;
   const refused = (problem: string) =>
     ormError(
@@ -516,7 +515,6 @@ function upsertConflictValues(
   if (absent.length > 0) {
     throw refused(`gives conflict column "${absent.join('", "')}" no create value`);
   }
-  return Object.fromEntries(conflictColumns.map((column) => [column, create[column]]));
 }
 
 function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {

@@ -29,13 +29,27 @@ export function writtenKeys(options: {
 }): WrittenKeys {
   const { context, namespaceId, tableName, modelName, rows, method } = options;
   const identity = readBackIdentity(context.contract, namespaceId, tableName, modelName, method);
-  const supplied = identity.filter((column) => rows.every((row) => row[column] !== undefined));
+  const generated = generatedKey({ ...options, columns: identity });
+  const supplied = identity.filter((column) => column !== generated?.column);
   const keys = rows.map((row) =>
     Object.fromEntries(supplied.map((column) => [column, row[column]])),
   );
-  const [column, ...others] = identity.filter((key) => !supplied.includes(key));
+  return { keys, generated };
+}
+
+export function generatedKey(options: {
+  readonly context: ExecutionContext<Contract<SqlStorage>>;
+  readonly namespaceId: string;
+  readonly tableName: string;
+  readonly modelName: string;
+  readonly rows: readonly Readonly<Record<string, unknown>>[];
+  readonly method: string;
+  readonly columns: readonly string[];
+}): GeneratedKey | undefined {
+  const { context, namespaceId, tableName, modelName, rows, method, columns } = options;
+  const [column, ...others] = columns.filter((key) => !rows.every((row) => row[key] !== undefined));
   if (column === undefined) {
-    return { keys, generated: undefined };
+    return undefined;
   }
   const refused = (problem: string) =>
     ormError('ORM.CAPABILITY_MISSING', `${method} on model "${modelName}" ${problem}`, {
@@ -56,14 +70,11 @@ export function writtenKeys(options: {
   }
   const codec = context.contractCodecs.forColumn(namespaceId, tableName, column);
   return {
-    keys,
-    generated: {
-      column,
-      decode: async (insertId) =>
-        codec === undefined
-          ? insertId
-          : codec.fromWire(insertId, { column: { table: tableName, name: column } }),
-    },
+    column,
+    decode: async (insertId) =>
+      codec === undefined
+        ? insertId
+        : codec.fromWire(insertId, { column: { table: tableName, name: column } }),
   };
 }
 

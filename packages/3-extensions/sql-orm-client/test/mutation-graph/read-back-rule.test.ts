@@ -28,6 +28,7 @@ import {
   findUsers,
   findUsersWith,
   insertInto,
+  insertOwner,
   nameIsAda,
   newGraph,
   newGraphWithoutReturning,
@@ -69,7 +70,7 @@ describe('the read-back rule, on a contract with returning', () => {
     const graph = newGraph();
     const insert = addWithState(
       graph,
-      new Insert(insertInto('users', [{ name: 'Ada' }, { name: 'Bob' }])),
+      new Insert(insertInto('users', [{ name: 'Ada' }, { name: 'Bob' }]), insertOwner),
     );
 
     const read = addWithState(graph, readBackByKeys(['id', 'name']), {
@@ -85,10 +86,13 @@ describe('the read-back rule, on a contract with returning', () => {
     const graph = newGraph();
     const inserted = addWithState(
       graph,
-      new InsertChunked([
-        insertInto('users', [{ name: 'Ada' }]),
-        insertInto('users', [{ name: 'Bob', email: 'bob@example.com' }]),
-      ]),
+      new InsertChunked(
+        [
+          insertInto('users', [{ name: 'Ada' }]),
+          insertInto('users', [{ name: 'Bob', email: 'bob@example.com' }]),
+        ],
+        insertOwner,
+      ),
     );
 
     const read = addWithState(graph, readBackByKeys(['id', 'email']), {
@@ -219,7 +223,10 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a read-back as it is when another write to the table follows the write it reads', () => {
     const graph = newGraph();
-    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
+    const insert = addWithState(
+      graph,
+      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+    );
     addWithState(graph, updateUsers({ name: 'Bob' }));
 
     addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
@@ -262,7 +269,10 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a read-back as it is when the caller passes it no state edge', () => {
     const graph = newGraph();
-    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
+    const insert = addWithState(
+      graph,
+      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+    );
 
     graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
@@ -276,7 +286,7 @@ describe('the read-back rule, on a contract with returning', () => {
   it('adds a read-back of an Insert that skips conflicting rows as it is', () => {
     const graph = newGraph();
     const ast = insertInto('users', [{ name: 'Ada' }]).withOnConflict(InsertOnConflict.doNothing());
-    const insert = addWithState(graph, new Insert(ast));
+    const insert = addWithState(graph, new Insert(ast, insertOwner));
 
     addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
@@ -293,7 +303,10 @@ describe('the read-back rule, on a contract with returning', () => {
 describe('the read-back rule, on a contract without returning', () => {
   it('adds the read-back as it is, and the write returns the key it reads', () => {
     const graph = newGraphWithoutReturning();
-    const insert = addWithState(graph, new Insert(insertInto('users', [{ name: 'Ada' }])));
+    const insert = addWithState(
+      graph,
+      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+    );
 
     const read = addWithState(graph, readBackByKeys(['id', 'name']), {
       keys: new Rows(insert, sameId),

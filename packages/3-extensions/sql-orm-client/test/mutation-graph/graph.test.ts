@@ -17,6 +17,7 @@ import {
   deleteUsers,
   findUsers,
   insertInto,
+  insertOwner,
   newGraph,
   updateUsers,
   visibleNodes,
@@ -136,10 +137,10 @@ describe('Graph', () => {
 
     it('makes each source of a data edge return the columns the edge reads', () => {
       const graph = newGraph();
-      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
       const find = graph.add(findUsers([], ['name']));
 
-      graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])), {
+      graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner), {
         payload: [new PayloadData(user, idToUserId)],
         requires: [new Requires(find)],
       });
@@ -279,8 +280,8 @@ describe('Graph', () => {
   describe('addPayloadDataEdge', () => {
     it('puts a PayloadData edge into the payload slot of the target and widens the source', () => {
       const graph = newGraph();
-      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
-      const post = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])));
+      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
+      const post = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
 
       graph.addPayloadDataEdge(user, post, idToUserId);
 

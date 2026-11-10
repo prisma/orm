@@ -9,6 +9,7 @@ import {
   ParamRef,
   type ProjectionItem,
 } from '@internal/sql-relational-core/ast';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatch';
 import { createCollectionTables } from '../../src/collection-tables';
 import { Delete } from '../../src/mutation-graph/delete';
@@ -38,6 +39,13 @@ const { contract, aggregateDescriptors } = getTestContext();
 const usersTables = createCollectionTables(contract, 'public', 'User');
 const postsTables = createCollectionTables(contract, 'public', 'Post');
 const tablesOf = { users: usersTables, posts: postsTables };
+
+export const insertOwner = { operation: 'create', modelName: 'User' };
+
+export const contextWithoutReturning = {
+  ...getTestContext(),
+  contract: withoutCapabilityKeys(baseContract, ['returning']),
+};
 
 export const nameIsAda = BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'));
 
@@ -163,13 +171,14 @@ export function recordingRun(
   rows: readonly StorageRow[] = [],
   affectedRows = 0,
   insertId?: string,
+  context: ExecutionContext = getTestContext(),
 ): RecordingRun {
   const queried: StatementAst[] = [];
   const executed: StatementAst[] = [];
   return {
     queried,
     executed,
-    context: getTestContext(),
+    context,
     query(ast) {
       queried.push(ast);
       const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
@@ -209,7 +218,7 @@ export function newGraph(): Graph {
 }
 
 export function newGraphWithoutReturning(): Graph {
-  return new Graph(withoutCapabilityKeys(baseContract, ['returning']));
+  return new Graph(contextWithoutReturning.contract);
 }
 
 export function positions(): [NodeId, NodeId, NodeId] {

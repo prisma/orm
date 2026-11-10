@@ -1,7 +1,7 @@
 import { ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
-import { columnsOf, insertInto, recordingRun } from './statements';
+import { columnsOf, insertInto, insertOwner, recordingRun } from './statements';
 
 const first = insertInto('users', [{ name: 'Ada' }, { name: 'Grace' }], ['id']);
 const second = insertInto('users', [{ name: 'Edsger', email: 'e@d.nl' }], ['id']);
@@ -9,7 +9,7 @@ const invitedBy7 = { invited_by_id: ParamRef.of(7, { name: 'invited_by_id' }) };
 
 describe('InsertChunked', () => {
   it('holds its statements as SQL AST and is frozen', () => {
-    const chunked = new InsertChunked([first, second]);
+    const chunked = new InsertChunked([first, second], insertOwner);
 
     expect(chunked.asts).toEqual([first, second]);
     expect(Object.isFrozen(chunked)).toBe(true);
@@ -19,7 +19,7 @@ describe('InsertChunked', () => {
   it('runs its statements in order and gives their rows one statement after another', async () => {
     const run = recordingRun([{ id: 1 }]);
 
-    const rows = await new InsertChunked([first, second]).execute(
+    const rows = await new InsertChunked([first, second], insertOwner).execute(
       { payload: null, state: null, requires: null },
       run,
     );
@@ -30,10 +30,13 @@ describe('InsertChunked', () => {
 
   it('gives the sum of the affected row counts when its statements return no column', async () => {
     const run = recordingRun([], 2);
-    const counted = new InsertChunked([
-      insertInto('users', [{ name: 'Ada' }]),
-      insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
-    ]);
+    const counted = new InsertChunked(
+      [
+        insertInto('users', [{ name: 'Ada' }]),
+        insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
+      ],
+      insertOwner,
+    );
 
     expect(await counted.execute({ payload: null, state: null, requires: null }, run)).toEqual({
       affectedRows: 4,
@@ -43,7 +46,9 @@ describe('InsertChunked', () => {
   });
 
   it('gives a node whose every statement also returns the columns it is asked for', () => {
-    const widened = new InsertChunked([first, second]).withReturning(columnsOf('users', ['email']));
+    const widened = new InsertChunked([first, second], insertOwner).withReturning(
+      columnsOf('users', ['email']),
+    );
 
     expect(widened).toBeInstanceOf(InsertChunked);
     expect(widened.returns.map((column) => column.alias)).toEqual(['id', 'email']);
@@ -57,7 +62,7 @@ describe('InsertChunked', () => {
     const run = recordingRun();
     const viewsOfEdge = { views: ParamRef.of(3, { name: 'views' }) };
 
-    await new InsertChunked([first, second]).execute(
+    await new InsertChunked([first, second], insertOwner).execute(
       { payload: [[invitedBy7], [viewsOfEdge]], state: null, requires: null },
       run,
     );
@@ -88,7 +93,7 @@ describe('InsertChunked', () => {
     const run = recordingRun([{ id: 1 }]);
 
     expect(
-      await new InsertChunked([first, second]).execute(
+      await new InsertChunked([first, second], insertOwner).execute(
         { payload: [[invitedBy7], []], state: null, requires: null },
         run,
       ),
@@ -97,7 +102,10 @@ describe('InsertChunked', () => {
   });
 
   it('refuses two edges that give one column of a junction different values, before running', () => {
-    const chunked = new InsertChunked([first, second], { relation: 'tags', junction: 'post_tags' });
+    const chunked = new InsertChunked([first, second], insertOwner, {
+      relation: 'tags',
+      junction: 'post_tags',
+    });
     const run = recordingRun();
     const invitedBy8 = { invited_by_id: ParamRef.of(8, { name: 'invited_by_id' }) };
 
@@ -116,7 +124,9 @@ describe('InsertChunked', () => {
     const junction = { relation: 'tags', junction: 'post_tags' };
 
     expect(
-      new InsertChunked([first], junction).withReturning(columnsOf('users', ['email'])),
+      new InsertChunked([first], insertOwner, junction).withReturning(
+        columnsOf('users', ['email']),
+      ),
     ).toMatchObject({
       junction,
     });

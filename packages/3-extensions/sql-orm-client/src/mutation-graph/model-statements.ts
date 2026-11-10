@@ -14,6 +14,7 @@ import {
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
+import type { WrittenRowOwner } from '../written-keys';
 import { Delete } from './delete';
 import type { ColumnMapping, NodeId } from './edge';
 import { FilterData } from './filter-data';
@@ -41,6 +42,7 @@ export interface InsertRows {
   readonly keys: readonly KeySource[];
   readonly junction: JunctionWrite | undefined;
   readonly requires: readonly Requires[];
+  readonly owner: WrittenRowOwner;
 }
 
 export function addInsertRows(
@@ -48,14 +50,15 @@ export function addInsertRows(
   contract: Contract<SqlStorage>,
   table: AliasedTable,
   rows: readonly Record<string, unknown>[],
-  { conflict, keys, junction, requires }: InsertRows,
+  { conflict, keys, junction, requires, owner }: InsertRows,
 ): NodeId {
   const inserted = supportsDefaultInInsert(contract)
-    ? new Insert(insertAst(contract, table, rows, conflict), junction)
+    ? new Insert(insertAst(contract, table, rows, conflict), owner, junction)
     : new InsertChunked(
         groupRowsByColumnSignature(rows).map((group) =>
           insertAst(contract, table, group, conflict),
         ),
+        owner,
         junction,
       );
   return graph.add(inserted, {

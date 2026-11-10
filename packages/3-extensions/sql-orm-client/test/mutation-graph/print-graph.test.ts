@@ -13,6 +13,7 @@ import {
   deleteUsers,
   findUsers,
   insertInto,
+  insertOwner,
   nameIsAda,
   newGraph,
   updateUsers,
@@ -90,9 +91,14 @@ describe('printGraph', () => {
   describe('inserts', () => {
     it('prints an Insert of one row and of several rows', () => {
       const graph = newGraph();
-      graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+      graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
       graph.setResult(
-        graph.add(new Insert(insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }]))),
+        graph.add(
+          new Insert(
+            insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }]),
+            insertOwner,
+          ),
+        ),
       );
 
       expect(printGraph(graph)).toBe(
@@ -111,12 +117,16 @@ describe('printGraph', () => {
               email: users.column('email'),
             }),
           ),
+          insertOwner,
         ),
       );
       graph.add(
-        new Insert(ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing())),
+        new Insert(
+          ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing()),
+          insertOwner,
+        ),
       );
-      graph.add(new Insert(ast.withOnConflict(InsertOnConflict.doNothing())));
+      graph.add(new Insert(ast.withOnConflict(InsertOnConflict.doNothing()), insertOwner));
 
       expect(printGraph(graph)).toBe(
         [
@@ -130,10 +140,13 @@ describe('printGraph', () => {
 
     it('prints an InsertChunked with the number of its statements', () => {
       const graph = newGraph();
-      const chunked = new InsertChunked([
-        insertInto('users', [{ name: 'Ada' }]),
-        insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
-      ]);
+      const chunked = new InsertChunked(
+        [
+          insertInto('users', [{ name: 'Ada' }]),
+          insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
+        ],
+        insertOwner,
+      );
       graph.setResult(graph.add(chunked));
 
       expect(printGraph(graph)).toBe(
@@ -147,8 +160,10 @@ describe('printGraph', () => {
       const sameUserId = columnMappings('users', 'users', [['id', 'id']]);
       const samePostId = columnMappings('posts', 'posts', [['id', 'id']]);
       const joins = [1, 2].map(() => {
-        const base = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
-        const variant = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])));
+        const base = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
+        const variant = graph.add(
+          new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner),
+        );
         graph.addPayloadDataEdge(base, variant, idToUserId);
         const join = graph.add(new CrossJoin());
         graph.addRowsEdge(base, join, 'left', sameUserId);

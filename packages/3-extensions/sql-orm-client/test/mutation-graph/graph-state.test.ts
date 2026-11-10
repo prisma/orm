@@ -22,6 +22,7 @@ import {
   findUsers,
   findUsersWith,
   insertInto,
+  insertOwner,
   newGraph,
   recordingRun,
   updateUsers,
@@ -89,7 +90,7 @@ describe('table state in the graph', () => {
 
   it('adds a State only for the target of an insert', () => {
     const graph = newGraph();
-    addWithState(graph, new Insert(insertInto('posts', [{ title: 'Hello' }])));
+    addWithState(graph, new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
 
     expect(printGraph(graph, withState)).toBe(
       [
@@ -171,7 +172,7 @@ describe('sameState', () => {
   it('holds for a table the write in between did not change', () => {
     const graph = newGraph();
     const first = addWithState(graph, findUsers());
-    addWithState(graph, new Insert(insertInto('posts', [{ title: 'b' }])));
+    addWithState(graph, new Insert(insertInto('posts', [{ title: 'b' }]), insertOwner));
     const second = addWithState(graph, findUsers());
 
     expect(graph.sameState(first, second, users)).toBe(true);
@@ -180,7 +181,10 @@ describe('sameState', () => {
   it('does not hold when a node does not read the table', () => {
     const graph = newGraph();
     const read = addWithState(graph, findUsers());
-    const insert = addWithState(graph, new Insert(insertInto('posts', [{ title: 'a' }])));
+    const insert = addWithState(
+      graph,
+      new Insert(insertInto('posts', [{ title: 'a' }]), insertOwner),
+    );
 
     expect(graph.sameState(read, insert, posts)).toBe(false);
     expect(graph.sameState(read, insert, users)).toBe(false);

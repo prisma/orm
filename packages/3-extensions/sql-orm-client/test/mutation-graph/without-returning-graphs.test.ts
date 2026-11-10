@@ -1,22 +1,20 @@
-import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import { autoincrement } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createCollectionTables } from '../../src/collection-tables';
 import {
   createAllGraph,
+  createGraph,
   deleteAllGraph,
   deleteFirstGraph,
   updateAllGraph,
   updateFirstGraph,
   upsertGraph,
 } from '../../src/mutation-graph/collection-graphs';
-import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
+import { executeGraph, queryGraph } from '../../src/mutation-graph/run-graph';
+import { parseMutationInput } from '../../src/relation-mutations';
 import { emptyState } from '../../src/types';
 import { baseContract, createCollectionFor, withoutCapabilityKeys } from '../collection-fixtures';
-import { defineContract, field, model } from '../contract-builder';
-import { buildTestContextFromContract, getTestContext } from '../helpers';
+import { createMockRuntime, getTestContext } from '../helpers';
+import { generatedContext } from './generated-keys-contract';
 import { printGraph } from './print-graph';
 
 const withoutReturning = withoutCapabilityKeys(baseContract, [
@@ -33,32 +31,10 @@ function targetOf(state: typeof users.state) {
 const target = targetOf(users.state);
 const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
 
-const Counter = model('Counter', {
-  fields: {
-    id: field.column(int4Column).default(autoincrement()).id(),
-    label: field.column(textColumn),
-    slug: field.column(textColumn).unique(),
-  },
-}).sql({ table: 'counters' });
-const Note = model('Note', {
-  fields: {
-    id: field.column(textColumn).defaultSql('gen_random_uuid()').id(),
-    body: field.column(textColumn),
-  },
-}).sql({ table: 'notes' });
-const generatedContract: Contract<SqlStorage> = {
-  ...defineContract({ models: { Counter, Note } }),
-  capabilities: { sql: { defaultInInsert: true } },
-};
-const generatedContext = {
-  ...buildTestContextFromContract(generatedContract),
-  contract: generatedContract,
-};
-
 function generatedTarget(modelName: 'Counter' | 'Note', tableName: string) {
   return {
     context: generatedContext,
-    state: emptyState(createCollectionTables(generatedContract, 'public', modelName)),
+    state: emptyState(createCollectionTables(generatedContext.contract, 'public', modelName)),
     modelName,
     namespaceId: 'public',
     tableName,
@@ -66,13 +42,11 @@ function generatedTarget(modelName: 'Counter' | 'Note', tableName: string) {
 }
 
 describe('write graphs on a contract without capability "returning"', () => {
-  it('createAllGraph inserts, then reads the rows back by the keys the client wrote', () => {
+  it('createAllGraph inserts, then reads the rows back by their keys', () => {
     expect(printGraph(createAllGraph(target, [ada], undefined, 'rows'))).toBe(
-      [
-        'n1 InsertReportingKeys Insert users keys [{"id":1}]',
-        'n2 FindByKeys users by (id) for create <- Rows n1',
-        'result: n2',
-      ].join('\n'),
+      ['n1 Insert users', 'n2 FindByKeys users by (id) for create <- Rows n1', 'result: n2'].join(
+        '\n',
+      ),
     );
   });
 
@@ -80,23 +54,6 @@ describe('write graphs on a contract without capability "returning"', () => {
     expect(printGraph(createAllGraph(target, [ada], undefined, 'count'))).toBe(
       ['n1 Insert users', 'result: n1'].join('\n'),
     );
-  });
-
-  it('createAllGraph reads one generated key, decoded with its column codec', async () => {
-    const graph = createAllGraph(
-      generatedTarget('Counter', 'counters'),
-      [{ label: 'a', slug: 'a' }],
-      undefined,
-      'rows',
-    );
-    const [, insert] = graph.nodes().find(([, node]) => node instanceof InsertReportingKeys) ?? [];
-
-    expect(insert).toBeInstanceOf(InsertReportingKeys);
-    const generated = (insert as InsertReportingKeys).generated;
-    expect({ column: generated?.column, value: await generated?.decode('42') }).toEqual({
-      column: 'id',
-      value: 42,
-    });
   });
 
   it('refuses createAllGraph of several rows whose keys the database generates', () => {
@@ -115,6 +72,21 @@ describe('write graphs on a contract without capability "returning"', () => {
     );
   });
 
+  it('counts the rows of createAllGraph for a count whose keys the database generates', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextStats([{ affectedRows: 2 }]);
+    const graph = createAllGraph(
+      generatedTarget('Counter', 'counters'),
+      [{ label: 'a' }, { label: 'b' }],
+      undefined,
+      'count',
+    );
+
+    expect(await executeGraph(graph, { runtime, context: generatedContext })).toEqual({
+      affectedRows: 2,
+    });
+  });
+
   it('refuses createAllGraph when a key column gets a database default that is not auto-increment', () => {
     expect(() =>
       createAllGraph(generatedTarget('Note', 'notes'), [{ body: 'a' }], undefined, 'rows'),
@@ -124,6 +96,23 @@ describe('write graphs on a contract without capability "returning"', () => {
         meta: expect.objectContaining({ action: 'create()' }),
       }),
     );
+  });
+
+  it('refuses, before running anything, a nested create whose key column gets a database default that is not auto-increment', async () => {
+    const runtime = createMockRuntime();
+    const notes = generatedTarget('Note', 'notes');
+    const graph = createGraph(
+      notes,
+      parseMutationInput(generatedContext.contract, 'public', 'Note', { body: 'a' } as never),
+    );
+
+    await expect(
+      queryGraph(graph, { runtime, context: generatedContext }, notes).toArray(),
+    ).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(runtime.executions).toEqual([]);
   });
 
   it('refuses createAllGraph that skips conflicting rows and returns them', () => {
@@ -199,7 +188,7 @@ describe('write graphs on a contract without capability "returning"', () => {
       printGraph(upsertGraph(counters, { label: 'a', slug: 'a' }, { label: 'b' }, ['slug'])),
     ).toBe(
       [
-        'n1 InsertReportingKeys Insert counters on conflict do update keys [{"slug":"a"}]',
+        'n1 Insert counters on conflict do update',
         'n2 FindByKeys counters by (slug) for upsert <- Rows n1',
         'result: n2',
       ].join('\n'),

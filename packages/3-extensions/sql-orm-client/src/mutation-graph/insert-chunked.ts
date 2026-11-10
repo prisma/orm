@@ -4,11 +4,15 @@ import type {
   ProjectionItem,
   SqlStatementStats,
 } from '@internal/sql-relational-core/ast';
-import type { StorageRow } from './edge';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import type { WrittenRowOwner } from '../written-keys';
+import type { NodeId, StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
+import type { Graph } from './graph';
 import { payloadOf, withPayload } from './insert';
 import type { JunctionWrite } from './junction-write';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import { checkOwnValues, givesOwnValues, insertGivingOwnValues } from './own-values';
 import type { PayloadData } from './payload-data';
 import { type Requires, requirementUnmet } from './requires';
 import { rowsResult } from './run-statement';
@@ -20,11 +24,13 @@ type Payloads = { payload: PayloadData[]; state: StateEdge[]; requires: Requires
 export class InsertChunked extends StatementNode<Payloads> {
   readonly slots = { payload: 'list', state: 'list', requires: 'list' } as const;
   readonly asts: readonly InsertAst[];
+  readonly owner: WrittenRowOwner;
   readonly junction: JunctionWrite | undefined;
 
-  constructor(asts: readonly InsertAst[], junction?: JunctionWrite) {
+  constructor(asts: readonly InsertAst[], owner: WrittenRowOwner, junction?: JunctionWrite) {
     super();
     this.asts = Object.freeze([...asts]);
+    this.owner = owner;
     this.junction = junction;
     Object.freeze(this);
   }
@@ -50,6 +56,9 @@ export class InsertChunked extends StatementNode<Payloads> {
     if (this.returns.length === 0) {
       return this.#sumOfCounts(asts, run);
     }
+    if (givesOwnValues(run.context, this.returns)) {
+      return insertGivingOwnValues(asts, this.returns, this.owner, run);
+    }
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const ast of asts) {
         yield* run.query(ast);
@@ -58,9 +67,14 @@ export class InsertChunked extends StatementNode<Payloads> {
     return new AsyncIterableResult(generator());
   }
 
+  override check(graph: Graph, id: NodeId, context: ExecutionContext): void {
+    checkOwnValues(graph, id, context, this.asts, this.returns, this.owner);
+  }
+
   override withReturning(columns: readonly ProjectionItem[]): InsertChunked {
     return new InsertChunked(
       this.asts.map((ast) => ast.withReturning(withColumns(ast.returning ?? [], columns))),
+      this.owner,
       this.junction,
     );
   }

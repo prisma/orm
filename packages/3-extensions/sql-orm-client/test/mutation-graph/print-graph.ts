@@ -19,7 +19,6 @@ import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
-import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
 import type { Node } from '../../src/mutation-graph/node';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -102,18 +101,9 @@ function printFindByKeys(node: FindByKeys): string {
   return `${find} by (${keys}) for ${node.owner.operation}`;
 }
 
-function printInsertReportingKeys(node: InsertReportingKeys): string {
-  const statements = node.asts.map(printInsert).join('; ');
-  const generated = node.generated === undefined ? '' : `, generated ${node.generated.column}`;
-  return `InsertReportingKeys ${statements} keys ${JSON.stringify(node.keys)}${generated}`;
-}
-
 function printNode(node: Node): string {
   if (node instanceof FindByKeys) {
     return printFindByKeys(node);
-  }
-  if (node instanceof InsertReportingKeys) {
-    return printInsertReportingKeys(node);
   }
   if (node instanceof Find) {
     return printFind(node.ast);
