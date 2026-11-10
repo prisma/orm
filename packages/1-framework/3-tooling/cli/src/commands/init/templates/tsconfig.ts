@@ -42,11 +42,7 @@ const MODULE_COMPILER_OPTIONS: readonly string[] = ['module', 'moduleResolution'
  * The `module` values that go with each resolution mode the scaffold
  * already typechecks under, so a project that has picked one keeps its
  * own pair. `db.ts` spells its type import `./contract.js`, which
- * resolves to the emitted `contract.d.ts` under both.
- *
- * Node 18 and Node 20 projects resolve under `moduleResolution:
- * 'node16'` — TypeScript has no `node18` or `node20` resolution mode —
- * and under `'nodenext'` as well.
+ * resolves to the emitted `contract.d.ts` under each.
  *
  * Only whole pairs count: TypeScript rejects a mismatched one (TS5110,
  * TS5095), so a project carrying half of one still gets the required
@@ -54,8 +50,21 @@ const MODULE_COMPILER_OPTIONS: readonly string[] = ['module', 'moduleResolution'
  * attributes — `db.ts` imports `contract.json with { type: 'json' }`,
  * which is TS2823 there.
  */
-const SUPPORTED_MODULE_PAIRS: Readonly<Record<string, readonly string[]>> = {
+const BUNDLER_MODULE_PAIRS: Readonly<Record<string, readonly string[]>> = {
   bundler: ['preserve', 'esnext'],
+};
+
+/**
+ * Node 18 and Node 20 projects resolve under `moduleResolution:
+ * 'node16'` — TypeScript has no `node18` or `node20` resolution mode —
+ * and under `'nodenext'` as well.
+ *
+ * These modes compile a `.ts` file as CommonJS unless `package.json`
+ * declares `"type": "module"`, and TypeScript rejects the import
+ * attribute in a file compiled as CommonJS (TS2856). So they are kept
+ * only in an ES module package.
+ */
+const NODE_MODULE_PAIRS: Readonly<Record<string, readonly string[]>> = {
   node16: ['node18', 'node20'],
   nodenext: ['nodenext', 'node18', 'node20'],
 };
@@ -120,12 +129,11 @@ function formatTsConfigParseErrors(errors: readonly ParseError[]): string {
  * The caller must catch this and surface a structured error before
  * writing any scaffold files (FR6.2 atomicity).
  *
- * A project already on a `SUPPORTED_MODULE_PAIRS` pair keeps its own
- * `module` / `moduleResolution`: rewriting a resolution mode the
- * scaffold typechecks under buys nothing, and the options a project
- * never set are still added.
+ * A project already on a pair the scaffold typechecks under keeps its
+ * own `module` / `moduleResolution`; the options it never set are still
+ * added. `packageType` is the `package.json` `"type"` after init.
  */
-export function mergeTsConfig(existing: string): string {
+export function mergeTsConfig(existing: string, packageType: string | undefined): string {
   const { config } = parseTsConfigText(existing);
 
   // Match the indentation / line-ending style of the existing file so
@@ -139,7 +147,7 @@ export function mergeTsConfig(existing: string): string {
   };
 
   const compilerOptions = config['compilerOptions'] as Record<string, unknown> | undefined;
-  const keepModuleOptions = resolvesScaffoldImports(compilerOptions);
+  const keepModuleOptions = resolvesScaffoldImports(compilerOptions, packageType);
 
   let result = existing;
   for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {
@@ -188,17 +196,30 @@ export function parseTsConfigText(text: string): {
   return { config: value as Record<string, unknown> };
 }
 
-function resolvesScaffoldImports(compilerOptions: Record<string, unknown> | undefined): boolean {
+function resolvesScaffoldImports(
+  compilerOptions: Record<string, unknown> | undefined,
+  packageType: string | undefined,
+): boolean {
+  return (
+    isModulePairIn(BUNDLER_MODULE_PAIRS, compilerOptions) ||
+    (packageType === 'module' && isModulePairIn(NODE_MODULE_PAIRS, compilerOptions))
+  );
+}
+
+function isModulePairIn(
+  pairs: Readonly<Record<string, readonly string[]>>,
+  compilerOptions: Record<string, unknown> | undefined,
+): boolean {
   const moduleResolution = compilerOptions?.['moduleResolution'];
   const moduleOption = compilerOptions?.['module'];
   if (typeof moduleResolution !== 'string' || typeof moduleOption !== 'string') {
     return false;
   }
   const resolution = moduleResolution.toLowerCase();
-  if (!Object.hasOwn(SUPPORTED_MODULE_PAIRS, resolution)) {
+  if (!Object.hasOwn(pairs, resolution)) {
     return false;
   }
-  return SUPPORTED_MODULE_PAIRS[resolution]?.includes(moduleOption.toLowerCase()) ?? false;
+  return pairs[resolution]?.includes(moduleOption.toLowerCase()) ?? false;
 }
 
 function detectIndent(text: string): number {

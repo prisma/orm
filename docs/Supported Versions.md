@@ -44,7 +44,7 @@ Your project's `tsconfig.json` must set:
 }
 ```
 
-`"module": "nodenext"` with `"moduleResolution": "nodenext"` works too, so a project already on that pair keeps it. So do `"module": "node18"` and `"node20"`, which pair with `"moduleResolution": "node16"` or `"nodenext"` — TypeScript has no `node18` or `node20` resolution mode.
+`"module": "nodenext"` with `"moduleResolution": "nodenext"` works too in a package whose `package.json` sets `"type": "module"`, so such a project keeps that pair. So do `"module": "node18"` and `"node20"`, which pair with `"moduleResolution": "node16"` or `"nodenext"` — TypeScript has no `node18` or `node20` resolution mode. Without `"type": "module"`, these modes compile the scaffolded `db.ts` as CommonJS, where TypeScript rejects its `with { type: "json" }` import, so `prisma orm init` moves such a project to `preserve` / `bundler`.
 
 The `prisma orm init` command configures these automatically. If you are integrating Prisma 8 into an existing project, `prisma orm init` merges the options your `tsconfig.json` is missing and leaves a supported pair alone.
 

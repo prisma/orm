@@ -119,6 +119,34 @@ describe('init scaffold', () => {
     );
 
     it(
+      'moves a nodenext project with no package.json type to bundler, where its CommonJS db.ts typechecks',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'tsconfig.json'),
+          JSON.stringify({ compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' } }),
+          'utf-8',
+        );
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          JSON.stringify({ name: 'app', dependencies: { express: '5.0.0' } }),
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const merged = JSON.parse(readFileSync(join(projectDir, 'tsconfig.json'), 'utf-8'));
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.type).toBeUndefined();
+        expect(merged.compilerOptions).toMatchObject({
+          module: 'preserve',
+          moduleResolution: 'bundler',
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'synthesises a manifest for a bare directory and says so',
       async () => {
         const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
