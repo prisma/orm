@@ -59,6 +59,24 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
   );
 
   it(
+    'names --backfill only for the required fields the documents that do not fit lack',
+    async () => {
+      const nameOnly = { ...usersSchema(PLAN), required: ['_id', 'name'] };
+      const withBorn = { ...PLAN, born: { bsonType: 'date' } };
+      await live.db().createCollection('users', { validator: { $jsonSchema: nameOnly } });
+      await live.db().collection('users').insertOne({ name: 'Ada', plan: 'free' });
+
+      const result = await run([usersValidatorChange(withBorn)], usersContract(withBorn));
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        `To give "born" values you choose, plan the change with migration plan --backfill User.born. ${BY_HAND}`,
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'names no --backfill for a field of a root model that shares the collection, which the planner would refuse',
     async () => {
       const root = (required: readonly string[]) => ({

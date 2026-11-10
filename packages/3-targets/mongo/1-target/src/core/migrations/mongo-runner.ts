@@ -1059,13 +1059,23 @@ export class MongoMigrationRunner {
         ]
       : hadValidator
         ? [
-            ...backfillAdvice(contract, collection, touched.requires, {
-              timeSeries:
-                typeof options === 'object' &&
-                options !== null &&
-                Reflect.get(options, 'timeseries') !== undefined,
-              validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
-            }),
+            ...backfillAdvice(
+              contract,
+              collection,
+              await this.fieldsSomeDocumentLacks(
+                failed.source,
+                collection,
+                failing,
+                touched.requires,
+              ),
+              {
+                timeSeries:
+                  typeof options === 'object' &&
+                  options !== null &&
+                  Reflect.get(options, 'timeseries') !== undefined,
+                validator: Reflect.get(validatorBefore ?? {}, '$jsonSchema'),
+              },
+            ),
             byHandAdvice(collection),
           ]
         : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
@@ -1170,6 +1180,30 @@ export class MongoMigrationRunner {
       }),
     );
     return [...problemsAgainst(fields, shape, path), ...nested.flat()];
+  }
+
+  /** Each of `fields` that a document matching `failing` lacks or holds as `null`. */
+  private async fieldsSomeDocumentLacks(
+    source: MongoQueryPlan,
+    collection: string,
+    failing: Readonly<Record<string, unknown>>,
+    fields: readonly string[],
+  ): Promise<readonly string[]> {
+    const lacking = await Promise.all(
+      fields.map(async (field) =>
+        unrewritableFieldNameReason(field) === undefined &&
+        (await this.firstRow({
+          ...source,
+          command: new RawAggregateCommand(collection, [
+            { $match: { $and: [failing, { [field]: null }] } },
+            { $limit: 1 },
+          ]),
+        })) !== undefined
+          ? [field]
+          : [],
+      ),
+    );
+    return lacking.flat();
   }
 
   /**
