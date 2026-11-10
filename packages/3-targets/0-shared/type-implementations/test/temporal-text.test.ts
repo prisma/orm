@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { Temporal as otherTemporal } from 'temporal-polyfill/implementation';
 import { describe, expect, it } from 'vitest';
 import {
@@ -86,6 +87,7 @@ describe('describeValue', () => {
   it.each([
     [null, 'null'],
     [new Date(0), 'a Date'],
+    [runInNewContext('new Date(0)'), 'a Date'],
     ['text', 'a string'],
     [1, 'a number'],
   ])('names %o as %s', (value, description) => {

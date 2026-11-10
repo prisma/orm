@@ -1,6 +1,13 @@
+import { types } from 'node:util';
+
+/** Whether `value` is a `Date`, including one created in another realm such as a `vm` context or a Jest test file. */
+export function isDate(value: unknown): value is Date {
+  return types.isDate(value);
+}
+
 /** Whether `value` is a `Date` that holds an instant, not an Invalid Date. */
 export function isValidDate(value: unknown): value is Date {
-  return value instanceof Date && Number.isFinite(value.getTime());
+  return isDate(value) && Number.isFinite(value.getTime());
 }
 
 /** Whether ISO text has nonzero fraction digits past the first `fractionDigits`. */

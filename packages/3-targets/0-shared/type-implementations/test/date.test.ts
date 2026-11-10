@@ -1,13 +1,38 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { hasDigitsBelow, hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../src/date';
+import {
+  hasDigitsBelow,
+  hasDigitsBelowAMillisecond,
+  isDate,
+  isValidDate,
+  utcIsoTextOf,
+} from '../src/date';
 
 const EARLIEST = new Date('-004713-11-24T00:00:00Z').getTime();
+
+const fakeDate = { [Symbol.toStringTag]: 'Date', getTime: () => 0 };
+
+describe('isDate', () => {
+  it.each([
+    [new Date(0), true],
+    [new Date(Number.NaN), true],
+    [runInNewContext('new Date(0)'), true],
+    [fakeDate, false],
+    [0, false],
+    [null, false],
+  ])('%o is %s', (value, date) => {
+    expect(isDate(value)).toBe(date);
+  });
+});
 
 describe('isValidDate', () => {
   it.each([
     [new Date('2024-01-01T00:00:00Z'), true],
     [new Date(8.64e15), true],
+    [runInNewContext('new Date("2024-01-01T00:00:00Z")'), true],
     [new Date(Number.NaN), false],
+    [runInNewContext('new Date(Number.NaN)'), false],
+    [fakeDate, false],
     ['2024-01-01T00:00:00Z', false],
     [Date.parse('2024-01-01T00:00:00Z'), false],
     [null, false],

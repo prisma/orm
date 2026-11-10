@@ -1,1 +1,7 @@
-export { hasDigitsBelow, hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../date';
+export {
+  hasDigitsBelow,
+  hasDigitsBelowAMillisecond,
+  isDate,
+  isValidDate,
+  utcIsoTextOf,
+} from '../date';
