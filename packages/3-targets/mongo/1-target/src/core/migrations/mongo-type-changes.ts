@@ -157,6 +157,7 @@ export function planFieldTypeChanges(
         const to = fieldShapeOf(destinationModel.fields[destinationField], lookups);
         const storedName = ownStoredNameOf(destinationModel, destinationField);
         if (from === undefined || to === undefined || takesEveryValue(from, to)) return [];
+        if (storedName === '_id') return [];
         return [
           typeChange({
             subject: { kind: 'field', ...origin, field },
@@ -191,7 +192,7 @@ export function planValidatorTypeChanges(input: {
       const matched = before.find(({ key }) => key === after.key);
       if (matched === undefined) return [];
       return Object.keys(after.properties)
-        .filter((field) => Object.hasOwn(matched.properties, field))
+        .filter((field) => field !== '_id' && Object.hasOwn(matched.properties, field))
         .flatMap((field) => {
           const from = propertyShapeOf(matched.properties[field]);
           const to = propertyShapeOf(after.properties[field]);

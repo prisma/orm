@@ -305,10 +305,25 @@ const StepJson = type({
   command: 'Record<string, unknown>',
 });
 
+const OperationMetaJson = type({
+  'rewrite?': type({
+    kind: '"cast"',
+    collection: 'string',
+    field: 'string',
+    to: 'string',
+  }).or({ kind: '"fill"', collection: 'string', field: 'string' }),
+  'checkDocuments?': {
+    collection: 'string',
+    rewrittenFields: 'string[]',
+    renamedFields: 'Record<string, string>',
+  },
+});
+
 const DdlOperationJson = type({
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive"',
+  'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   execute: 'Record<string, unknown>[]',
   postcheck: 'Record<string, unknown>[]',
@@ -326,6 +341,7 @@ const DmlOperationJson = type({
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive" | "data"',
   name: 'string',
+  'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   run: 'Record<string, unknown>[]',
   postcheck: 'Record<string, unknown>[]',
@@ -769,6 +785,7 @@ function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
     id: data.id,
     label: data.label,
     operationClass: data.operationClass,
+    ...ifDefined('meta', data.meta),
     precheck: data.precheck.map(deserializeCheck),
     execute: data.execute.map(deserializeStep),
     postcheck: data.postcheck.map(deserializeCheck),
@@ -792,6 +809,7 @@ function deserializeDmlOp(json: unknown): MongoDmlOperation {
     label: data.label,
     operationClass: data.operationClass,
     name: data.name,
+    ...ifDefined('meta', data.meta),
     precheck: data.precheck.map(deserializeDmlCheck),
     run: data.run.map(deserializeMongoQueryPlan),
     postcheck: data.postcheck.map(deserializeDmlCheck),

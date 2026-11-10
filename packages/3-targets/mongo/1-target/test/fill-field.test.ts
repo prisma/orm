@@ -15,6 +15,7 @@ describe('fillField', () => {
   it('sets the field where it is missing or null, skipping validation, and checks none is left', () => {
     expect(fillField({ collection: 'users', field: 'age', value: { $toLong: 0 } })).toEqual({
       id: 'field.users.age.fill',
+      meta: { rewrite: { kind: 'fill', collection: 'users', field: 'age' } },
       label: 'Fill field age in collection users where it is missing or null',
       operationClass: 'widening',
       name: 'field.users.age.fill',

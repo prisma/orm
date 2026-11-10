@@ -69,7 +69,11 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
-import { castFieldOf, unrewritableFieldNameReason } from './migration-factories';
+import {
+  relaxedDocumentsCheck,
+  relaxedValidator,
+  unrewritableFieldNameReason,
+} from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
@@ -321,32 +325,53 @@ function byHandAdvice(collection: string): string {
   return `The old validator may reject a document changed to the new shape, so the update that fixes one can skip document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: ${JSON.stringify(collection)}, updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }).`;
 }
 
+function isDocument(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The check a `checkDocuments` operation runs, and the relaxed validator it checks against. */
+interface EarlyCheck {
+  readonly collection: string;
+  readonly check: MongoMigrationCheck;
+  readonly validator: Readonly<Record<string, unknown>>;
+}
+
 /**
- * The collection and validator a document check reads: a validator change's own, or, for the check
- * before a collection's first rewrite, the relaxed validator its aggregate matches against.
+ * The check each `checkDocuments` operation of a plan runs, against the validator of the first
+ * validator change of its collection after it. A plan whose `checkDocuments` has none is refused
+ * before anything runs.
  */
-function documentsCheckedBy(
-  op: MongoMigrationPlanOperation,
-  source: MongoQueryPlan,
-):
-  | {
-      readonly collection: string;
-      readonly validator: Readonly<Record<string, unknown>>;
-      readonly beforeRewrites: boolean;
-    }
-  | undefined {
-  const collMod = validatorSetBy(op);
-  if (collMod?.validator !== undefined) {
-    return { collection: collMod.collection, validator: collMod.validator, beforeRewrites: false };
-  }
-  if (op.execute.length > 0 || !(source.command instanceof RawAggregateCommand)) return undefined;
-  const match: unknown = Reflect.get(source.command.pipeline[0] ?? {}, '$match');
-  const nor: unknown =
-    typeof match === 'object' && match !== null ? Reflect.get(match, '$nor') : undefined;
-  const [validator] = Array.isArray(nor) ? nor : [];
-  return typeof validator === 'object' && validator !== null && !Array.isArray(validator)
-    ? { collection: source.command.collection, validator, beforeRewrites: true }
-    : undefined;
+function earlyChecksOf(
+  operations: readonly AnyMongoMigrationOperation[],
+): ReadonlyMap<AnyMongoMigrationOperation, EarlyCheck> {
+  return new Map(
+    operations.flatMap((operation, index): [AnyMongoMigrationOperation, EarlyCheck][] => {
+      const fields = operation.meta?.checkDocuments;
+      if (fields === undefined) return [];
+      const change = operations
+        .slice(index + 1)
+        .flatMap((later) => (isMongoDmlOperation(later) ? [] : [validatorSetBy(later)]))
+        .find((collMod) => collMod?.collection === fields.collection);
+      const jsonSchema: unknown = change?.validator?.['$jsonSchema'];
+      if (!isDocument(jsonSchema)) {
+        throw mongoTargetError(
+          'MIGRATION.INVALID_OPERATION_ENTRY',
+          `checkDocuments on collection ${fields.collection} has no validator change of that collection after it to read the validator from.`,
+          { meta: { operationId: operation.id, collection: fields.collection } },
+        );
+      }
+      return [
+        [
+          operation,
+          {
+            collection: fields.collection,
+            check: relaxedDocumentsCheck(fields, jsonSchema),
+            validator: relaxedValidator(fields, jsonSchema),
+          },
+        ],
+      ];
+    }),
+  );
 }
 
 function bsonTypeOf(value: object): unknown {
@@ -593,7 +618,7 @@ function rewriteFailure(
   }
   const rewrite = fieldRewriteOf(op);
   if (rewrite === undefined) return undefined;
-  const cast = castFieldOf(op);
+  const cast = op.meta?.rewrite?.kind === 'cast' ? op.meta.rewrite : undefined;
   if (mongoCode !== MONGO_CONVERSION_FAILURE || cast === undefined) {
     const fix = rewriteErrorFix(mongoCode, reason);
     return runnerFailure(
@@ -685,6 +710,7 @@ export class MongoMigrationRunner {
     const filterEvaluator = new FilterEvaluator();
 
     let operationsExecuted = 0;
+    const earlyChecks = earlyChecksOf(operations);
     const rewritesRan = new Map<string, string[]>();
     const ranOn = (collection: string): readonly string[] => rewritesRan.get(collection) ?? [];
 
@@ -724,8 +750,9 @@ export class MongoMigrationRunner {
         }
 
         if (runPrechecks) {
+          const early = earlyChecks.get(operation);
           const failing = await this.firstFailingCheck(
-            operation.precheck,
+            early === undefined ? operation.precheck : [early.check],
             inspectionExecutor,
             filterEvaluator,
           );
@@ -736,6 +763,7 @@ export class MongoMigrationRunner {
               (await this.documentsFailingValidatorRefusal(operation, failing, {
                 ranOn,
                 contract: options.destinationContract,
+                early,
               })) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
@@ -985,10 +1013,17 @@ export class MongoMigrationRunner {
     apply: {
       readonly ranOn: (collection: string) => readonly string[];
       readonly contract: MongoContract;
+      readonly early: EarlyCheck | undefined;
     },
   ): Promise<MongoMigrationRunnerResult | undefined> {
     if (isInspectionCheckSource(failed.source)) return undefined;
-    const checked = documentsCheckedBy(op, failed.source);
+    const collMod = validatorSetBy(op);
+    const checked =
+      apply.early !== undefined
+        ? { ...apply.early, beforeRewrites: true }
+        : collMod?.validator !== undefined
+          ? { collection: collMod.collection, validator: collMod.validator, beforeRewrites: false }
+          : undefined;
     if (checked === undefined) return undefined;
     const { collection, validator, beforeRewrites } = checked;
     const failing = { $nor: [validator] };

@@ -1,37 +1,77 @@
 import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
-import { checkDocuments } from '../src/core/migrations/migration-factories';
+import {
+  castField,
+  checkDocuments,
+  fillField,
+  relaxedDocumentsCheck,
+} from '../src/core/migrations/migration-factories';
+import {
+  deserializeMongoOps,
+  serializeMongoOps,
+} from '../src/core/migrations/mongo-ops-serializer';
 import { CheckDocumentsCall } from '../src/core/migrations/op-factory-call';
 
-function matchedValidator(op: ReturnType<typeof checkDocuments>): unknown {
-  const [check] = op.precheck;
-  const command = check?.source && 'command' in check.source ? check.source.command : undefined;
+function matchedValidator(check: ReturnType<typeof relaxedDocumentsCheck>): unknown {
+  const command = 'command' in check.source ? check.source.command : undefined;
   if (!(command instanceof RawAggregateCommand)) throw new Error('Expected an aggregate');
   return command.pipeline[0];
 }
 
-describe('checkDocuments', () => {
+describe('what the new factories write about their operation', () => {
+  it('describes a cast, a fill and a document check in the operation, which ops.json keeps', () => {
+    const ops = [
+      castField({ collection: 'users', field: 'age', from: ['string'], to: 'int' }),
+      fillField({ collection: 'users', field: 'plan', value: { $literal: '' } }),
+      checkDocuments({ collection: 'users', rewrittenFields: ['age', 'plan'] }),
+    ];
+
+    expect({
+      meta: ops.map((op) => op.meta),
+      checkDocuments: { precheck: ops[2]?.precheck, execute: Reflect.get(ops[2] ?? {}, 'execute') },
+      roundTrip: deserializeMongoOps(JSON.parse(serializeMongoOps(ops))).map((op) => op.meta),
+    }).toEqual({
+      meta: [
+        { rewrite: { kind: 'cast', collection: 'users', field: 'age', to: 'int' } },
+        { rewrite: { kind: 'fill', collection: 'users', field: 'plan' } },
+        {
+          checkDocuments: {
+            collection: 'users',
+            rewrittenFields: ['age', 'plan'],
+            renamedFields: {},
+          },
+        },
+      ],
+      checkDocuments: { precheck: [], execute: [] },
+      roundTrip: [
+        { rewrite: { kind: 'cast', collection: 'users', field: 'age', to: 'int' } },
+        { rewrite: { kind: 'fill', collection: 'users', field: 'plan' } },
+        {
+          checkDocuments: {
+            collection: 'users',
+            rewrittenFields: ['age', 'plan'],
+            renamedFields: {},
+          },
+        },
+      ],
+    });
+  });
+});
+
+describe('relaxedDocumentsCheck', () => {
   it('matches the documents the validator rejects once the rewritten fields are optional and take any value', () => {
-    const op = checkDocuments({
-      collection: 'users',
-      validator: {
+    const check = relaxedDocumentsCheck(
+      { collection: 'users', rewrittenFields: ['plan', 'nickname'], renamedFields: {} },
+      {
         bsonType: 'object',
         required: ['_id', 'email', 'plan'],
         properties: { _id: { bsonType: 'objectId' }, email: { bsonType: 'string' } },
         additionalProperties: false,
       },
-      rewrittenFields: ['plan', 'nickname'],
-    });
+    );
 
-    expect({
-      id: op.id,
-      label: op.label,
-      execute: op.execute,
-      match: matchedValidator(op),
-    }).toEqual({
-      id: 'collection.users.checkDocuments',
-      label: 'Check that the documents in users can fit the new validator',
-      execute: [],
+    expect({ description: check.description, match: matchedValidator(check) }).toEqual({
+      description: 'every document in users fits the new validator',
       match: {
         $match: {
           $nor: [
@@ -60,13 +100,12 @@ describe('checkDocuments', () => {
       properties: { type: { enum: ['bug'] }, severity: { bsonType: 'int' } },
       additionalProperties: false,
     };
-    const op = checkDocuments({
-      collection: 'tasks',
-      validator: { bsonType: 'object', anyOf: [{ oneOf: [branch] }] },
-      rewrittenFields: ['severity'],
-    });
+    const check = relaxedDocumentsCheck(
+      { collection: 'tasks', rewrittenFields: ['severity'], renamedFields: {} },
+      { bsonType: 'object', anyOf: [{ oneOf: [branch] }] },
+    );
 
-    expect(matchedValidator(op)).toEqual({
+    expect(matchedValidator(check)).toEqual({
       $match: {
         $nor: [
           {
@@ -91,11 +130,11 @@ describe('checkDocuments', () => {
   });
 });
 
-describe('checkDocuments with a renamed field', () => {
+describe('relaxedDocumentsCheck with a renamed field', () => {
   it("allows the old name with the new name's schema, and drops a required list left empty", () => {
-    const op = checkDocuments({
-      collection: 'tasks',
-      validator: {
+    const check = relaxedDocumentsCheck(
+      { collection: 'tasks', rewrittenFields: [], renamedFields: { type: 'kind' } },
+      {
         bsonType: 'object',
         required: ['_id', 'kind'],
         oneOf: [
@@ -106,11 +145,9 @@ describe('checkDocuments with a renamed field', () => {
           },
         ],
       },
-      rewrittenFields: [],
-      renamedFields: { type: 'kind' },
-    });
+    );
 
-    expect(matchedValidator(op)).toEqual({
+    expect(matchedValidator(check)).toEqual({
       $match: {
         $nor: [
           {
@@ -133,11 +170,7 @@ describe('checkDocuments with a renamed field', () => {
 
 describe('CheckDocumentsCall', () => {
   it('renders the call migration.ts writes, and lowers to checkDocuments', () => {
-    const options = {
-      collection: 'users',
-      validator: { required: ['plan'] },
-      rewrittenFields: ['plan'],
-    };
+    const options = { collection: 'users', rewrittenFields: ['plan'] };
     const call = new CheckDocumentsCall(options);
 
     expect({
@@ -147,8 +180,7 @@ describe('CheckDocumentsCall', () => {
         .replace(/,(?=[\]}])/g, ''),
       op: call.toOp(),
     }).toEqual({
-      source:
-        'checkDocuments({collection:"users",validator:{required:["plan"]},rewrittenFields:["plan"]})',
+      source: 'checkDocuments({collection:"users",rewrittenFields:["plan"]})',
       op: checkDocuments(options),
     });
   });

@@ -12,6 +12,7 @@ describe('castField', () => {
 
     expect(castField({ collection: 'users', field: 'age', from: ['int'], to: 'long' })).toEqual({
       id: 'field.users.age.cast(long)',
+      meta: { rewrite: { kind: 'cast', collection: 'users', field: 'age', to: 'long' } },
       label: 'Cast field age in collection users from int to long',
       operationClass: 'widening',
       name: 'field.users.age.cast(long)',

@@ -519,13 +519,11 @@ function withDocumentChecks(
         op.collection === collection &&
         op.meta?.checkDocuments === true,
     );
-    const validator: unknown = validatorOp?.options.validator?.['$jsonSchema'];
-    if (!isDocument(validator)) return [call];
+    if (!isDocument(validatorOp?.options.validator?.['$jsonSchema'])) return [call];
     const fields = documentChecks.get(collection);
     return [
       new CheckDocumentsCall({
         collection,
-        validator,
         rewrittenFields: fields?.rewrittenFields ?? [],
         ...(fields === undefined || Object.keys(fields.renamedFields).length === 0
           ? {}

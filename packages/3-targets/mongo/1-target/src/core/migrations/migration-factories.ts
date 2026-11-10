@@ -1,11 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
-import { fieldRewriteOf } from '@internal/family-mongo/control';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
   type MongoIndexOptionKey,
 } from '@internal/mongo-contract';
 import type {
+  MongoCheckDocumentsMeta,
   MongoDmlCheck,
   MongoDmlOperation,
   MongoFilterExpr,
@@ -393,6 +393,7 @@ export function castField(options: CastFieldOptions): MongoDmlOperation {
   const toCast = documentsToCast(field, to, options);
   return {
     id,
+    meta: { rewrite: { kind: 'cast', collection: collectionName, field, to } },
     label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${listOf(options.from.join(', '))}`} to ${listOf(to)}${labelSuffix(filter)}`,
     operationClass:
       options.from.length > 0 && options.from.every((from) => convertKeepsEveryValue(from, to))
@@ -445,6 +446,7 @@ export function fillField(options: FillFieldOptions): MongoDmlOperation {
   const toFill = filter === undefined ? unfilled : { $and: [filter, unfilled] };
   return {
     id,
+    meta: { rewrite: { kind: 'fill', collection: collectionName, field } },
     label: `Fill field ${field} in collection ${collectionName} where it is missing or null${labelSuffix(filter)}`,
     operationClass: 'widening',
     name: id,
@@ -463,26 +465,6 @@ export function fillField(options: FillFieldOptions): MongoDmlOperation {
       },
     ],
   };
-}
-
-/** The field a `castField` operation casts, and the BSON type it casts it to, if the operation is one. */
-export function castFieldOf(
-  operation: MongoDmlOperation,
-): { readonly collection: string; readonly field: string; readonly to: string } | undefined {
-  const rewrite = fieldRewriteOf(operation);
-  const { update } = rewrite?.command ?? {};
-  if (rewrite === undefined || !Array.isArray(update)) return undefined;
-  const expression: unknown = Reflect.get(
-    Reflect.get(update[0] ?? {}, '$set') ?? {},
-    rewrite.field,
-  );
-  const mapped: unknown = Reflect.get(Reflect.get(expression ?? {}, '$map') ?? {}, 'in');
-  const convert: unknown = Reflect.get(mapped ?? expression ?? {}, '$convert');
-  const to: unknown =
-    typeof convert === 'object' && convert !== null ? Reflect.get(convert, 'to') : undefined;
-  return typeof to === 'string'
-    ? { collection: rewrite.collection, field: rewrite.field, to }
-    : undefined;
 }
 
 function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {
@@ -915,8 +897,6 @@ function relaxedSchema(
 
 export interface CheckDocumentsOptions {
   readonly collection: string;
-  /** The `$jsonSchema` of the validator the plan sets on the collection. */
-  readonly validator: Readonly<Record<string, unknown>>;
   /** The stored names whose values the plan's rewrites change on the collection, removed ones included. */
   readonly rewrittenFields: readonly string[];
   /** Each field the plan renames on the collection: its old stored name, with its new one. */
@@ -924,9 +904,11 @@ export interface CheckDocumentsOptions {
 }
 
 /**
- * Checks, before the plan rewrites a collection's documents, that each fits the new validator once
- * the fields the plan rewrites are left out of it. A document that does not fit fails for a reason
- * no rewrite of the plan fixes, so the apply stops before any rewrite runs.
+ * Checks, before the plan rewrites a collection's documents, that each fits the validator the
+ * collection's validator change later in the same migration sets, once the fields the plan rewrites
+ * are left out of it. A document that does not fit fails for a reason no rewrite of the plan fixes,
+ * so the apply stops before any rewrite runs. The operation names the fields; the runner reads the
+ * validator from the validator change, so `migration.ts` holds it once.
  */
 export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPlanOperation {
   const { collection } = options;
@@ -934,17 +916,38 @@ export function checkDocuments(options: CheckDocumentsOptions): MongoMigrationPl
     id: `collection.${collection}.checkDocuments`,
     label: `Check that the documents in ${collection} can fit the new validator`,
     operationClass: 'widening',
-    precheck: [
-      documentsFitValidator(collection, {
-        $jsonSchema: relaxedSchema(options.validator, {
-          rewritten: options.rewrittenFields,
-          renamed: options.renamedFields ?? {},
-        }),
-      }),
-    ],
+    meta: {
+      checkDocuments: {
+        collection,
+        rewrittenFields: options.rewrittenFields,
+        renamedFields: options.renamedFields ?? {},
+      },
+    },
+    precheck: [],
     execute: [],
     postcheck: [],
   };
+}
+
+/** The validator a `checkDocuments` operation checks against: `jsonSchema`, the one its collection's validator change sets, with its fields left out. */
+export function relaxedValidator(
+  fields: MongoCheckDocumentsMeta,
+  jsonSchema: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  return {
+    $jsonSchema: relaxedSchema(jsonSchema, {
+      rewritten: fields.rewrittenFields,
+      renamed: fields.renamedFields,
+    }),
+  };
+}
+
+/** The check a `checkDocuments` operation runs, against the relaxed validator. */
+export function relaxedDocumentsCheck(
+  fields: MongoCheckDocumentsMeta,
+  jsonSchema: Readonly<Record<string, unknown>>,
+): MongoMigrationCheck {
+  return documentsFitValidator(fields.collection, relaxedValidator(fields, jsonSchema));
 }
 
 /**
