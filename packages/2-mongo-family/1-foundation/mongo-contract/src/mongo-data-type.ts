@@ -5,18 +5,13 @@
  * ADR 254.
  */
 
-import type { ContractField } from '@internal/contract/types';
 import type {
   DataType,
   DataTypeParamsProblem,
   DataTypeSpec,
   TypeLookups,
 } from '@internal/framework-components/codec';
-import {
-  assertDataTypeParams,
-  dataType,
-  dataTypeParamsProblem,
-} from '@internal/framework-components/codec';
+import { dataType, dataTypeParamsProblem } from '@internal/framework-components/codec';
 
 export interface MongoDataTypeSpec extends DataTypeSpec {
   readonly bsonTypes: readonly string[];
@@ -51,51 +46,7 @@ export function bsonTypesOfCodec(
   return type !== undefined && isMongoDataType(type) ? type.mongo.bsonTypes : undefined;
 }
 
-type FieldOwner =
-  | { readonly modelName: string; readonly valueObjectName?: never }
-  | { readonly valueObjectName: string; readonly modelName?: never };
-
-interface DomainNamespaceFields {
-  readonly models: Readonly<
-    Record<string, { readonly fields: Readonly<Record<string, ContractField>> }>
-  >;
-  readonly valueObjects?: Readonly<
-    Record<string, { readonly fields: Readonly<Record<string, ContractField>> }>
-  >;
-}
-
-/**
- * Refuses a field whose type parameters its codec's data type does not accept, such as a vector `length` of 0, with `CONTRACT.TYPE_PARAMS_INVALID`. A Mongo `defineContract` build calls it, and the PSL interpreter reports the same problem as a diagnostic through {@link codecTypeParamsProblem}: the type parameters a field carries reach only the TypeScript types and the emitted `contract.d.ts`, so nothing later checks them.
- */
-export function assertMongoFieldTypeParams(
-  namespaces: Readonly<Record<string, DomainNamespaceFields>>,
-  lookups: TypeLookups,
-): void {
-  for (const namespace of Object.values(namespaces)) {
-    for (const [modelName, model] of Object.entries(namespace.models)) {
-      assertFieldsTypeParams(model.fields, { modelName }, lookups);
-    }
-    for (const [valueObjectName, valueObject] of Object.entries(namespace.valueObjects ?? {})) {
-      assertFieldsTypeParams(valueObject.fields, { valueObjectName }, lookups);
-    }
-  }
-}
-
-function assertFieldsTypeParams(
-  fields: Readonly<Record<string, ContractField>>,
-  owner: FieldOwner,
-  lookups: TypeLookups,
-): void {
-  for (const [fieldName, field] of Object.entries(fields)) {
-    const { type: fieldType } = field;
-    if (fieldType.kind !== 'scalar' || fieldType.typeParams === undefined) continue;
-    const type = dataTypeOfCodec(fieldType.codecId, lookups);
-    if (type !== undefined)
-      assertDataTypeParams(type, fieldType.typeParams, { ...owner, fieldName });
-  }
-}
-
-/** What is wrong with the type parameters `typeParams` for the data type the codec `codecId` represents, or undefined when it accepts them or the stack registers no such codec or data type. */
+/** What is wrong with the type parameters `typeParams` for the data type the codec `codecId` represents, or undefined when it accepts them or the stack registers no such codec or data type. The Mongo contract builder checks each field with it: the type parameters a field carries reach only the TypeScript types and the emitted `contract.d.ts`, so nothing later checks them. */
 export function codecTypeParamsProblem(
   codecId: string,
   typeParams: Readonly<Record<string, unknown>>,

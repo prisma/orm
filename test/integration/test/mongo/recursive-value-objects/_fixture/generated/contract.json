@@ -28,8 +28,11 @@
                 },
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "NavItem",
                   "kind": "valueObject",
-                  "name": "NavItem"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "name": {
@@ -52,29 +55,6 @@
                 },
                 "name": {
                   "field": "name"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "NavItem": {
-            "fields": {
-              "children": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "NavItem"
-                }
-              },
-              "label": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -135,13 +115,39 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "NavItem": {
+              "fields": {
+                "children": {
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "NavItem",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "label": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "842683ee4dbc4b81d370b11a296f09c5a9ef623aea522ea76b492732f7c7a7ee"
+    "storageHash": "0d971a3402142eb5ee3d6dae1a8b52571ad8f06bd0bb027509f62ed409e68710"
   },
   "capabilities": {},
   "extensions": {},

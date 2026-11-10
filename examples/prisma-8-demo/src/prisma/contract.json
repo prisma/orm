@@ -546,8 +546,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "public",
+                  "plane": "storage"
                 }
               },
               "createdAt": {
@@ -647,40 +650,6 @@
               },
               "namespaceId": "public",
               "table": "user"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              }
             }
           }
         }
@@ -815,7 +784,9 @@
                   "codecId": "pg/vector@1",
                   "dataType": "pgvector/vector",
                   "nullable": true,
-                  "typeRef": "Embedding1536"
+                  "typeParams": {
+                    "length": 1536
+                  }
                 },
                 "expiresAt": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1056,6 +1027,13 @@
               ]
             },
             "task": {
+              "checks": [
+                {
+                  "expression": "\"type\" IN ('bug', 'feature')",
+                  "name": "task_type_check_cda3f5e7",
+                  "prefix": "task_type_check"
+                }
+              ],
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1093,7 +1071,13 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
-                  "nullable": false
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "userId": {
                   "codecId": "pg/uuid@1",
@@ -1141,6 +1125,11 @@
             },
             "user": {
               "checks": [
+                {
+                  "expression": "\"address\" IS NULL OR jsonb_path_match(\"address\", 'strict $.type() == \"null\" || ($.type() == \"object\" && exists($.keyvalue() ? (@.key == \"city\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"country\" && (@.value.type() == \"string\"))) && exists($.keyvalue() ? (@.key == \"street\" && (@.value.type() == \"string\"))) && !exists($.keyvalue() ? (@.key == \"zip\" && !(@.value.type() == \"null\" || (@.value.type() == \"string\")))) && !exists($.keyvalue() ? (@.key != \"city\" && @.key != \"country\" && @.key != \"street\" && @.key != \"zip\")))') IS TRUE",
+                  "name": "user_address_shape_69432dc1",
+                  "prefix": "user_address_shape"
+                },
                 {
                   "expression": "\"kind\" IN ('admin', 'user')",
                   "name": "user_kind_check_836d43ef",
@@ -1199,6 +1188,40 @@
               "uniques": []
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "pg/text@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Priority": {
               "kind": "valueSet",
@@ -1206,6 +1229,13 @@
                 0,
                 1,
                 2
+              ]
+            },
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "feature"
               ]
             },
             "user_type": {
@@ -1221,17 +1251,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0cc3858331779e3853a61a911a7fe85ca764430aa9de12c2a0bb36bfa3165743",
-    "types": {
-      "Embedding1536": {
-        "codecId": "pg/vector@1",
-        "dataType": "pgvector/vector",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 1536
-        }
-      }
-    }
+    "storageHash": "e1916bd73bb2388302d81a1eaa17125c0cedb6ce47b489a7adeeb41c2ef50ebf"
   },
   "execution": {
     "executionHash": "eb9bffd4c01945792e83de10d571b20df42f5bf40405ec8c642c6592f7dc4655",
@@ -1303,6 +1323,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

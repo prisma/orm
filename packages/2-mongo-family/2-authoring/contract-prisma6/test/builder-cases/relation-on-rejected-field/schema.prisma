@@ -1,0 +1,22 @@
+datasource db {
+  provider = "mongodb"
+}
+
+model User {
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  handle String  @unique @updatedAt
+  posts  Post[]
+  notes  Note[]
+}
+
+model Post {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  authorId String @updatedAt @db.ObjectId
+  author   User   @relation(fields: [authorId], references: [id])
+}
+
+model Note {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  authorHandle String
+  author       User   @relation(fields: [authorHandle], references: [handle])
+}

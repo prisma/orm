@@ -273,7 +273,7 @@ withTempDir(({ createTempDir }) => {
           ]);
 
           expect(run.exitCode).not.toBe(0);
-          expect(run.document).toMatchObject({ code: 'MIGRATION.RUNNER_FAILED' });
+          expect(run.document).toMatchObject({ code: 'MIGRATION.PRECHECK_FAILED' });
           expect(noRefFilesUnder(refsDir)).toBe(true);
         });
       },

@@ -116,6 +116,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -126,6 +127,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'slug_1',
                     keys: [{ field: 'slug', direction: 1 as const }],
                     unique: true,
                   },
@@ -192,6 +194,7 @@ function buildAppContractMissingPosts(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -228,6 +231,7 @@ function buildExtContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'tenantId_1',
                     keys: [{ field: 'tenantId', direction: 1 as const }],
                     unique: true,
                   },
@@ -456,8 +460,18 @@ describe('mongoTargetDescriptor.execute (across spaces)', {
 
       expect(failingResult.ok).toBe(false);
       if (failingResult.ok) throw new Error('unreachable');
-      expect(failingResult.failure.failingSpace).toBe(APP_SPACE_ID);
-      expect(failingResult.failure.code).toBe('MIGRATION.SCHEMA_VERIFY_FAILED');
+      expect({
+        code: failingResult.failure.code,
+        message: failingResult.failure.message,
+        failingSpace: failingResult.failure.meta.failingSpace,
+        databaseUnchanged: failingResult.failure.meta.databaseUnchanged,
+      }).toEqual({
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        message: expect.any(String),
+        failingSpace: APP_SPACE_ID,
+        databaseUnchanged: false,
+      });
+      expect(failingResult.failure.message).not.toBe('');
 
       const extMarkerAfterFail = await controlAdapter.readMarker(
         new MongoControlDriver(db, client),

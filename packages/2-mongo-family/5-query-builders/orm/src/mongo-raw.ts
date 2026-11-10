@@ -4,6 +4,7 @@ import {
   type MongoContract,
   mongoModelsOf,
 } from '@internal/mongo-contract';
+import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 import { ormError } from './orm-errors';
 import { createRawMongoCollection, type RawMongoCollection } from './raw-collection';
 
@@ -12,9 +13,9 @@ export interface MongoRawClient<TContract extends MongoContract> {
 }
 
 export function mongoRaw<TContract extends MongoContract>(options: {
-  contract: TContract;
+  readonly context: MongoExecutionContext<TContract>;
 }): MongoRawClient<TContract> {
-  const { contract } = options;
+  const { contract } = options.context;
 
   return {
     collection<K extends keyof TContract['roots'] & string>(rootName: K): RawMongoCollection {

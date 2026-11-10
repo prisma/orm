@@ -1,6 +1,6 @@
 # ADR 274 — A client takes a typed contract value, so every other option is inferred
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-16
 **Domain:** Adapters / Targets, Runtime
 **Builds on:** [ADR 159 — Definition-only contracts and type-only codec-operation maps](ADR%20159%20-%20Definition-only%20contracts%20and%20type-only%20codec-operation%20maps.md), [ADR 263 — A serverless Postgres connection has the same query interface as a postgres client](ADR%20263%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md), [ADR 265 — A collection keeps its class through the chain](ADR%20265%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md)
@@ -99,7 +99,7 @@ The record changes no client's behaviour. It only saves a validator from checkin
 
 ### No side effects on creation
 
-Tools such as linters need to import an application's `db.ts` and read its client without a database. The ORM builds a plan from the contract alone and uses the database only when the query runs, so this works as long as creating the client does nothing else. Every client therefore creates its pool or driver on the first query, and each has a test that creates it with no URL and builds a plan.
+Tools such as linters need to import an application's `db.ts` and read its client without a database. The ORM builds a plan from the contract alone and uses the database only when the query runs, so this works as long as creating the client does nothing else. Creating a client therefore does not touch the database: every client creates its pool or driver on the first query, and each has a test that creates it with no URL and builds a plan. Opening a serverless connection is a separate, deliberate step: `postgresServerless().connect({ url })` connects before it returns (ADR 263), and the serverless client itself creates nothing. Each SQL client's test also renders the plan with `toSql(plan)`, which needs only the adapter and the contract, so it is a static member. `mongo()` has no `toSql`.
 
 ADR 263 lists `orm` among the members that need a database connection. That is about running an ORM query. Building one does not need a connection.
 

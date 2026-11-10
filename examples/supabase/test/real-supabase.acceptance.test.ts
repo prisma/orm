@@ -85,9 +85,14 @@ async function runDbInit(connectionString: string, migrationsDir: string): Promi
 
   try {
     await client.connect(connectionString);
-    const result = await client.dbInit({ contract: contractJson, mode: 'apply', migrationsDir });
+    const result = await client.dbInit({
+      contract: contractJson,
+      mode: 'apply',
+      migrationsDir,
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
+    });
     if (!result.ok) {
-      throw new Error(`dbInit apply failed: ${result.failure.summary}`);
+      throw new Error(`dbInit apply failed: ${result.failure.message}`);
     }
   } finally {
     await client.close();

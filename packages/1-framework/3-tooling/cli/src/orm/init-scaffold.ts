@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { detect } from 'package-manager-detector/detect';
-import { basename, dirname, isAbsolute, join } from 'pathe';
+import { basename, dirname, isAbsolute, join, relative } from 'pathe';
 import type { PackageManager } from '../commands/init/detect-package-manager';
 import { formatRunCommand } from '../commands/init/detect-package-manager';
 import {
@@ -493,7 +493,7 @@ export function scaffoldProject(ctx: {
   }
 
   for (const file of plan.files) {
-    const target = join(ctx.cwd, file.path);
+    const target = isAbsolute(file.path) ? file.path : join(ctx.cwd, file.path);
     try {
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, file.content, 'utf-8');
@@ -505,7 +505,7 @@ export function scaffoldProject(ctx: {
         filesRenamed,
       });
     }
-    filesWritten.push(file.path);
+    filesWritten.push(relative(ctx.cwd, target));
     if (file.note !== undefined) {
       notes.push(file.note);
     }

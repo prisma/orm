@@ -1,9 +1,10 @@
 import type {
   ContractEmbedRelation,
+  ContractModel,
   ContractRelation,
   ContractToOneRelation,
 } from '@internal/contract/types';
-import type { MongoModelDefinition } from './contract-types';
+import type { MongoModelStorage } from './contract-types';
 import { DOCUMENT_ID, ownStoredNameOf } from './stored-names';
 
 export type MongoToOneRelationFields = {
@@ -18,7 +19,7 @@ export type MongoToOneRelationFields = {
  * foreign key, and whether each local field is nullable.
  */
 export function resolveMongoToOneRelationFields(
-  model: MongoModelDefinition,
+  model: ContractModel<MongoModelStorage>,
   relation: ContractToOneRelation,
 ): MongoToOneRelationFields {
   const fields = relation.on.localFields.map((name) => ({

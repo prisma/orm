@@ -6,7 +6,8 @@
 
 import { crossRef, type NamespaceId } from '@internal/contract/types';
 import mongoFamilyPack from '@internal/family-mongo/pack';
-import { contractFromJson } from '@internal/mongo/static';
+import { type } from '@internal/mongo/contract-builder';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -14,7 +15,7 @@ import type {
 } from '@internal/mongo-contract';
 import { defineContract, field, model, rel } from '@internal/mongo-contract-ts/contract-builder';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
-import { acc, fn, mongoQuery } from '@internal/mongo-query-builder';
+import { acc, fn } from '@internal/mongo-query-builder';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
@@ -151,19 +152,19 @@ const contractJson = {
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
-    name: field.string(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    name: field.scalar(type.String()),
+    email: field.scalar(type.String()),
   },
 });
 
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    _id: field.objectId(),
-    title: field.string(),
-    type: field.string(),
-    assigneeId: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
+    title: field.scalar(type.String()),
+    type: field.scalar(type.String()),
+    assigneeId: field.scalar(type.ObjectId()),
   },
   relations: {
     assignee: rel.belongsTo(User, {
@@ -180,7 +181,7 @@ const contract = defineContract({
 });
 
 describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
-  const p = mongoQuery({ contract: contractFromJson<TContract>(contractJson) });
+  const p = mongoStatic({ contract: contractFromJson<TContract>(contractJson) }).query;
 
   it('match → group → sort → limit analytics query', async () => {
     await withMongod(async (ctx) => {
@@ -358,8 +359,8 @@ describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemorySe
         },
       ]);
 
-      const plan = mongoQuery({ contract })
-        .from('tasks')
+      const plan = mongoStatic({ contract })
+        .query.from('tasks')
         .group((f) => ({
           _id: f.type,
           count: acc.count(),

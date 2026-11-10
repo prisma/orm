@@ -103,7 +103,7 @@ describe('contract infer — cross-space FK into the Supabase pack', () => {
         expect(relationField?.typeContractSpaceId).toBe('supabase');
         expect(profileModel?.fields.some((f) => f.typeName === 'Users')).toBe(false);
 
-        const printed = printPsl(ast);
+        const printed = printPsl(ast, { pslBlockDescriptors: client.getPslBlockDescriptors() });
         expect(printed).toMatch(/\buser\s+supabase:auth\.AuthUser\b/);
         expect(printed).toContain(
           '@relation(fields: [userId], references: [id], onDelete: Cascade',

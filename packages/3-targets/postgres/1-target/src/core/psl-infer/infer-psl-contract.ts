@@ -1,0 +1,521 @@
+import type { SqlDescribedContractSpace, SqlPslBuildContext } from '@internal/family-sql/control';
+import {
+  type ColumnTypeOf,
+  type IntrospectedTable,
+  inferColumnTypes,
+  inferredTypeConstructors,
+} from '@internal/family-sql/psl-build';
+import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
+import { inferRelations, toModelName } from '@internal/family-sql/psl-infer';
+import { coordinateKey } from '@internal/framework-components/ir';
+import type {
+  PslDocumentAst,
+  PslExtensionBlock,
+  PslModel,
+  PslNamespace,
+} from '@internal/framework-components/psl-ast';
+import {
+  makePslNamespace,
+  makePslNamespaceEntries,
+  UNSPECIFIED_PSL_NAMESPACE_ID,
+} from '@internal/framework-components/psl-ast';
+import { isPslIdentifier } from '@internal/psl-parser';
+import { type SqlColumnIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { invariant } from '@internal/utils/assertions';
+import { postgresError } from '../errors';
+import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import { buildExtensionBlock } from '../psl-build/extension-block';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
+import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
+import { type InferredColumnDefaults, inferredColumnDefaults } from './infer-default-codec';
+import {
+  adoptedEnumTypeName,
+  buildNativeEnumBlocks,
+  PSL_SCALAR_TYPE_NAMES,
+} from './infer-enum-blocks';
+import {
+  describedContractOwners,
+  type ForeignKeyResolution,
+  resolveForeignKeys,
+} from './infer-foreign-keys';
+import { buildModel } from './infer-model-blocks';
+import { buildFieldNamesByTable, buildTopLevelNameMap, topologicalSort } from './infer-names';
+import { buildIntrospectedPolicyBlocks } from './infer-policy-blocks';
+import {
+  columnTypeReadsDefault,
+  type InferredDefaultOf,
+  readInferredDefaults,
+} from './infer-read-defaults';
+import { createPostgresDefaultMapping } from './postgres-default-mapping';
+
+/**
+ * Infers a PSL AST (for `printPsl`) from an introspected Postgres schema tree.
+ *
+ * Target-owned inference: it walks the `PostgresDatabaseSchemaNode` tree and
+ * owns the Postgres dialect knowledge — native enums and the default map.
+ * It reads each reported default with the codec of the type constructor it prints for the column (`readInferredDefaults`). A column's type is the SQL family's: the constructor marked
+ * `inferred` for the data type that claims the type the database reported.
+ * Relation inference, name transforms, and generic default mapping are
+ * shape-neutral utilities imported from the SQL family as well.
+ *
+ * The tree's tables (across its namespaces — `contract infer` introspects a
+ * single live namespace) are gathered into the model set and emitted in one
+ * bucket, alongside native-enum and RLS policy blocks. That bucket is named
+ * after the introspected schema when the content needs a `namespace { … }`
+ * wrap, and is the flat `UNSPECIFIED_PSL_NAMESPACE_ID` bucket otherwise. This
+ * entry point emits nothing else, so its output is always exactly one bucket
+ * and byte-identical to the prior flat inference. {@link buildPslDocumentAst}
+ * can emit a second, always-flat bucket for content that must stay top-level
+ * even under a wrap; no caller asks for one yet.
+ *
+ * `describedContracts` — the stack's extension packs' already-assembled
+ * contracts, each paired with its space id — is consulted while gathering
+ * tables: a table whose coordinate `(schemaName, 'table', tableName)` one of
+ * those contracts already declares is omitted, before the duplicate-name
+ * check below and before relation inference, so it cannot spuriously
+ * collide with an app table and never contributes a bare relation field. A
+ * surviving table's foreign key into an omitted, pack-owned table is not
+ * dropped: {@link resolveForeignKeys} rewrites it into a relation qualified
+ * with the pack's space id (`<spaceId>:<namespaceId>.<Model>`) instead.
+ */
+export async function inferPostgresPslContract(
+  tree: PostgresDatabaseSchemaNode,
+  context: SqlPslBuildContext,
+  describedContracts?: readonly SqlDescribedContractSpace[],
+): Promise<PslDocumentAst> {
+  const namespaces = Object.values(tree.namespaces);
+  const owners = describedContractOwners(describedContracts ?? []);
+
+  // Native enum adoption: each namespace's introspected `enums` nodes become
+  // `native_enum` blocks + `pg.enum(<Name>)` columns, minus the types a
+  // described pack contract already declares (resolved through the same
+  // `owners` / `describedContractOwners` coordinate map as table subtraction —
+  // `elementCoordinates` keys `entries.native_enum` by physical type name, no
+  // enum-specific index). An inferred block carries no explicit `control` and
+  // inherits the contract's `defaultControl`; under `defaultControl: 'managed'`
+  // the planner owns the type's create/drop lifecycle and `db verify` reports
+  // member drift (#949). A suffix-appended member plans `ALTER TYPE ... ADD
+  // VALUE`; any other member change (rename, removal, reorder) is refused
+  // with a named diagnostic — see `docs/reference/postgres-native-enums.md`.
+  const enumDefinitions = new Map<string, readonly string[]>();
+  const enumNamespaceNames = new Set<string>();
+  for (const namespace of namespaces) {
+    for (const { typeName, members } of namespace.nativeEnums) {
+      const owner = owners.get(
+        coordinateKey({
+          namespaceId: namespace.schemaName,
+          entityKind: 'native_enum',
+          entityName: typeName,
+        }),
+      );
+      if (owner !== undefined) continue;
+      enumDefinitions.set(typeName, members);
+      enumNamespaceNames.add(namespace.schemaName);
+    }
+  }
+
+  // Stopgap (TML-2958): flatten the schema-IR *tree* into the single `{ tables }`
+  // map the PSL writer expects. The writer still walks a flat table map, so this
+  // is a read-only projection — it does not reintroduce a stored flat schema.
+  // The real fix is to extend the PSL writer to walk the namespace tree and emit
+  // per-namespace `namespace { … }` blocks; until then `contract infer` handles a
+  // single introspected namespace, and a same-named table in two schemas has no
+  // unambiguous single-bucket model, so we throw rather than silently drop one.
+  const tables: Record<string, SqlTableIR> = {};
+  const introspectedTables: IntrospectedTable[] = [];
+  const tableNamespaceNames = new Set<string>();
+  const rlsEnabledTables = new Set<string>();
+  const policiesByTable = new Map<string, readonly PostgresPolicySchemaNode[]>();
+  for (const namespace of namespaces) {
+    for (const [tableName, table] of Object.entries(namespace.tables)) {
+      if (
+        owners.has(
+          coordinateKey({
+            namespaceId: namespace.schemaName,
+            entityKind: 'table',
+            entityName: tableName,
+          }),
+        )
+      ) {
+        continue;
+      }
+      if (tables[tableName] !== undefined) {
+        throw postgresError(
+          'CONTRACT.INFER_UNSUPPORTED',
+          `contract infer: duplicate table name "${tableName}" across schemas is not yet supported ` +
+            '(single-namespace PSL inference emits one flat bucket; multi-namespace `namespace { … }` ' +
+            'output is a later slice).',
+          { meta: { tableName } },
+        );
+      }
+      for (const column of Object.values(table.columns)) {
+        const reported = column.reportedType;
+        const owningSpaceId =
+          reported?.kind === 'enum' && reported.schema !== undefined && reported.name !== undefined
+            ? owners.get(
+                coordinateKey({
+                  namespaceId: reported.schema,
+                  entityKind: 'native_enum',
+                  entityName: reported.name,
+                }),
+              )?.spaceId
+            : undefined;
+        if (owningSpaceId !== undefined) {
+          throw postgresError(
+            'CONTRACT.INFER_UNSUPPORTED',
+            `contract infer: column "${tableName}"."${column.name}" is typed by native enum ` +
+              `type "${column.typeText}", which extension pack space "${owningSpaceId}" ` +
+              'already describes. A cross-space enum-typed column has no authorable PSL form ' +
+              "yet; describe the table in that pack's contract or retype the column before " +
+              're-running contract infer.',
+            { meta: { tableName, columnName: column.name } },
+          );
+        }
+      }
+      tables[tableName] = new SqlTableIR(table);
+      introspectedTables.push({
+        schemaName: namespace.schemaName,
+        tableName,
+        columns: Object.values(table.columns),
+      });
+      tableNamespaceNames.add(namespace.schemaName);
+      if (table.rlsEnabled) {
+        rlsEnabledTables.add(tableName);
+      }
+      if (table.policies.length > 0) {
+        policiesByTable.set(tableName, table.policies);
+      }
+    }
+  }
+
+  // Namespace wrap (pinned during shaping): a `native_enum` block only lowers
+  // inside an explicit `namespace { … }` block — the interpreter skips
+  // extension entities in the unspecified top-level bucket — so enum-bearing
+  // output wraps everything in the introspected schema's name; policy blocks
+  // wrap for the same reason. Block-free output stays flat and byte-identical
+  // to the prior inference.
+  let wrapNamespaceName: string | undefined;
+  if (enumDefinitions.size > 0 || policiesByTable.size > 0) {
+    const contentNamespaces = new Set([...enumNamespaceNames, ...tableNamespaceNames]);
+    if (contentNamespaces.size > 1) {
+      // Hard failure is the stated choice for BOTH triggers (enums and RLS
+      // policies): namespaced content requires the namespace wrap, and a
+      // partial emit (policies silently dropped) would under-describe the
+      // database — the property this inference exists to guarantee.
+      throw postgresError(
+        'CONTRACT.INFER_UNSUPPORTED',
+        'contract infer: adopting native enums or RLS policies with content across multiple ' +
+          'schemas is not yet supported (single-namespace PSL inference emits one ' +
+          '`namespace { … }` block; multi-namespace output is a later slice). Schemas: ' +
+          `${[...contentNamespaces].sort().join(', ')}.`,
+        { meta: { schemas: [...contentNamespaces].sort() } },
+      );
+    }
+    wrapNamespaceName = [...contentNamespaces][0];
+  }
+
+  const {
+    tables: resolvedTables,
+    extraRelationsByTable,
+    crossSpaceFieldNamesByTable,
+    danglingForeignKeysByTable,
+  } = resolveForeignKeys(tables, owners);
+  const schemaIR = new SqlSchemaIR({ tables: resolvedTables });
+
+  const enumInfo: EnumInfo = { definitions: enumDefinitions };
+  const isEnumColumn = (column: SqlColumnIR) =>
+    adoptedEnumTypeName(column, enumInfo.definitions, wrapNamespaceName) !== undefined;
+  const columnTypes = await inferColumnTypes({
+    tables: introspectedTables,
+    constructors: inferredTypeConstructors({
+      authoringTypes: context.authoringContributions.type,
+      codecLookup: context.codecLookup,
+      dataTypeLookup: context.dataTypes.lookup,
+    }),
+    authoringTypes: context.authoringContributions.type,
+    dataTypes: context.dataTypes,
+    isEnumColumn,
+    readsDefault: columnTypeReadsDefault(context),
+  });
+  const options: PostgresPslInferOptions = {
+    columnTypes,
+    defaultMapping: createPostgresDefaultMapping(),
+    defaultOf: await readInferredDefaults(schemaIR, columnTypes, isEnumColumn, context),
+    columnDefaults: inferredColumnDefaults(context),
+    ...(enumDefinitions.size > 0 ? { enumInfo } : {}),
+  };
+
+  return buildPslDocumentAst(
+    schemaIR,
+    options,
+    {
+      extraRelationsByTable,
+      crossSpaceFieldNamesByTable,
+      danglingForeignKeysByTable,
+    },
+    wrapNamespaceName,
+    { rlsEnabledTables, policiesByTable },
+    [],
+    inferredExtensionBlocks(tree, describedContracts ?? []),
+  );
+}
+
+/** Postgres installs it in every database, so a contract never declares it. */
+const ALWAYS_INSTALLED_EXTENSION = 'plpgsql';
+
+/**
+ * One `extension` block per installed extension, keyed by the schema that holds its objects. An extension a composed pack declares is that pack's to declare, in whatever namespace it chose, since an extension's name is unique in the database.
+ */
+function inferredExtensionBlocks(
+  tree: PostgresDatabaseSchemaNode,
+  describedContracts: readonly SqlDescribedContractSpace[],
+): ReadonlyMap<string, readonly PslExtensionBlock[]> {
+  const packExtensions = new Set(
+    describedContracts.flatMap(({ contract }) =>
+      Object.values(contract.storage.namespaces).flatMap((namespace) =>
+        Object.keys(namespace.entries['extension'] ?? {}),
+      ),
+    ),
+  );
+  const blocksBySchema = new Map<string, PslExtensionBlock[]>();
+  for (const extension of tree.extensions) {
+    if (extension.name === ALWAYS_INSTALLED_EXTENSION || packExtensions.has(extension.name)) {
+      continue;
+    }
+    if (!isPslIdentifier(extension.name)) {
+      throw postgresError(
+        'CONTRACT.INFER_UNSUPPORTED',
+        `contract infer: extension "${extension.name}" is installed, and its name cannot be written as a PSL block name. Declare it in a TypeScript contract with extension("${extension.name}").`,
+        { meta: { extensionName: extension.name } },
+      );
+    }
+    invariant(
+      extension.location.kind === 'installed',
+      `contract infer reads extension "${extension.name}" from the database, so it has an installed schema`,
+    );
+    const { schemaName } = extension.location;
+    const blocks = blocksBySchema.get(schemaName) ?? [];
+    blocks.push(buildExtensionBlock(extension.name));
+    blocksBySchema.set(schemaName, blocks);
+  }
+  return blocksBySchema;
+}
+
+/** Per-table RLS emission inputs collected from the Postgres schema tree. */
+export interface RlsEmissionExtras {
+  readonly rlsEnabledTables: ReadonlySet<string>;
+  readonly policiesByTable: ReadonlyMap<string, readonly PostgresPolicySchemaNode[]>;
+}
+
+/** The printer options, and how a column's literal default is checked to read back. */
+export type PostgresPslInferOptions = PslPrinterOptions & {
+  readonly columnTypes: ColumnTypeOf;
+  readonly columnDefaults: InferredColumnDefaults;
+  /** The default each column prints, as `readInferredDefaults` read it. */
+  readonly defaultOf: InferredDefaultOf;
+};
+
+/**
+ * Builds the PSL document for one introspected schema.
+ *
+ * `namespaceName` wraps the output in `namespace <name> { … }`; omit it for
+ * flat output. `topLevelExtensionBlocks` are declarations that must stay
+ * top-level even when a wrap applies, such as a recovered domain enum — a
+ * family `enum` inside a namespace is a hard diagnostic. They land in their
+ * own always-flat bucket when a wrap applies, and in the single flat bucket
+ * when none does; either way they print unwrapped.
+ *
+ * Their names are reserved before the policy blocks are built, so a policy
+ * renames itself out of the way. Against the rest of the top-level scope — the
+ * models, the native enums, PSL's scalar type names, and the other blocks in
+ * the list — a clash throws instead: a block's name is its contract key
+ * (`entries.valueSet[name]`, with no `@@map` escape), so it cannot be rewritten
+ * here.
+ */
+export function buildPslDocumentAst(
+  schemaIR: SqlSchemaIR,
+  options: PostgresPslInferOptions,
+  foreignKeyExtras: Pick<
+    ForeignKeyResolution,
+    'extraRelationsByTable' | 'crossSpaceFieldNamesByTable' | 'danglingForeignKeysByTable'
+  >,
+  namespaceName?: string,
+  rlsExtras?: RlsEmissionExtras,
+  topLevelExtensionBlocks: readonly PslExtensionBlock[] = [],
+  extensionBlocksBySchema: ReadonlyMap<string, readonly PslExtensionBlock[]> = new Map(),
+): PslDocumentAst {
+  const { columnTypes, defaultMapping, defaultOf } = options;
+  const { extraRelationsByTable, crossSpaceFieldNamesByTable, danglingForeignKeysByTable } =
+    foreignKeyExtras;
+
+  const modelNames = buildTopLevelNameMap(
+    Object.keys(schemaIR.tables),
+    toModelName,
+    'model',
+    'table',
+  );
+
+  const modelNameMap = new Map(
+    [...modelNames].map(([tableName, result]) => [tableName, result.name]),
+  );
+
+  const { enumNameMap: bareEnumNameMap, enumBlocks } = buildNativeEnumBlocks(
+    options.enumInfo?.definitions ?? new Map(),
+    modelNames,
+  );
+
+  const enumNameOf = (column: SqlColumnIR): string | undefined => {
+    const typeName = adoptedEnumTypeName(column, bareEnumNameMap, namespaceName);
+    return typeName === undefined ? undefined : bareEnumNameMap.get(typeName);
+  };
+
+  // Cross-space entries are seeded first so a real local table of the same
+  // bare name (an existing single-namespace-flat-bucket limitation, not new
+  // here) always wins the merge, matching `resolveForeignKeys`'s own
+  // precedence: a surviving local table is never treated as cross-space.
+  const fieldNamesByTable = new Map([
+    ...crossSpaceFieldNamesByTable,
+    ...buildFieldNamesByTable(schemaIR.tables),
+  ]);
+  const { relationsByTable } = inferRelations(schemaIR.tables, modelNameMap);
+
+  const policyEmission = buildIntrospectedPolicyBlocks(
+    rlsExtras?.policiesByTable ?? new Map(),
+    modelNameMap,
+    new Set([
+      ...modelNameMap.values(),
+      ...bareEnumNameMap.values(),
+      ...topLevelExtensionBlocks.map((block) => block.name),
+    ]),
+  );
+
+  // A caller's block shares one top-level name scope with the models, the
+  // native enums, PSL's scalar type names, and the caller's other blocks. A
+  // clash costs differently depending on the partner: against a scalar name
+  // the enum wins the type lookup and retypes every field of that type
+  // (`psl-column-resolution` consults enums before scalars), while against a
+  // model it is two declarations claiming one top-level name, which does not
+  // parse back. Either way the block cannot be renamed here, so it is refused.
+  // Policies are absent from this set on purpose — they were handed these
+  // names above and have already renamed themselves out of the way.
+  const claimedTopLevelNames = new Set([
+    ...PSL_SCALAR_TYPE_NAMES,
+    ...modelNameMap.values(),
+    ...bareEnumNameMap.values(),
+  ]);
+  for (const block of topLevelExtensionBlocks) {
+    if (claimedTopLevelNames.has(block.name)) {
+      throw postgresError(
+        'CONTRACT.NAME_DUPLICATE',
+        `contract infer: recovered ${block.keyword} "${block.name}" collides with a model, a ` +
+          'native enum, a PSL scalar type, or another recovered declaration of the same name. ' +
+          'Rename the recovered declaration, or exclude it.',
+        { meta: { kind: block.keyword, name: block.name } },
+      );
+    }
+    claimedTopLevelNames.add(block.name);
+  }
+
+  const models: PslModel[] = [];
+  for (const table of Object.values(schemaIR.tables)) {
+    models.push(
+      buildModel(
+        table,
+        columnTypes,
+        enumNameOf,
+        fieldNamesByTable,
+        defaultMapping,
+        defaultOf,
+        options.columnDefaults,
+        [
+          ...(relationsByTable.get(table.name) ?? []),
+          ...(extraRelationsByTable.get(table.name) ?? []),
+        ],
+        danglingForeignKeysByTable.get(table.name) ?? [],
+        rlsExtras?.rlsEnabledTables.has(table.name) ?? false,
+        policyEmission.skipNotesByTable.get(table.name) ?? [],
+      ),
+    );
+  }
+
+  const sortedModels = topologicalSort(models, schemaIR.tables, modelNameMap);
+
+  // The named bucket below carries models, native-enum blocks, and policy
+  // blocks exactly as before: named `namespaceName` when the introspected
+  // content needs a schema wrap (native enums or RLS policies), otherwise the
+  // synthesised `__unspecified__` bucket, which the framework printer emits
+  // flat with no `namespace { … }` wrapper.
+  //
+  // A second, always-`__unspecified__` bucket carries schema-less top-level
+  // content — the printer sorts it before any named namespace and never wraps
+  // it either. The bucket is only pushed when non-empty. Printed output would
+  // be the same either way, because the printer drops a section with no
+  // content; the reason is the AST, which callers index by position and
+  // assert the length of.
+  //
+  // The two buckets must not share a name, so the split needs a wrap name
+  // that is a real schema. Both `undefined` and `__unspecified__` mean "no
+  // wrap" downstream, and a live schema can be called `__unspecified__` even
+  // though PSL reserves that name in source — so both are excluded and the
+  // top-level blocks join the single flat bucket instead.
+  //
+  // Within one bucket the printer emits models before blocks, so in the
+  // merged case a top-level block prints after the models rather than above
+  // them. It is still a top-level declaration, which is what the wrap would
+  // have broken; only its position in the file differs from the split case.
+  const separateTopLevelBucket =
+    namespaceName !== undefined &&
+    namespaceName !== UNSPECIFIED_PSL_NAMESPACE_ID &&
+    topLevelExtensionBlocks.length > 0;
+
+  const namespaces: PslNamespace[] = [];
+  if (separateTopLevelBucket) {
+    namespaces.push(
+      makePslNamespace({
+        kind: 'namespace',
+        name: UNSPECIFIED_PSL_NAMESPACE_ID,
+        entries: makePslNamespaceEntries([], [], topLevelExtensionBlocks),
+        span: SYNTHETIC_SPAN,
+      }),
+    );
+  }
+  const mainSchema = namespaceName ?? DEFAULT_NAMESPACE_ID;
+  namespaces.push(
+    makePslNamespace({
+      kind: 'namespace',
+      name: namespaceName ?? UNSPECIFIED_PSL_NAMESPACE_ID,
+      entries: makePslNamespaceEntries(
+        sortedModels,
+        [],
+        [
+          ...(separateTopLevelBucket ? [] : topLevelExtensionBlocks),
+          ...(extensionBlocksBySchema.get(mainSchema) ?? []),
+          ...enumBlocks,
+          ...policyEmission.blocks,
+        ],
+      ),
+      span: SYNTHETIC_SPAN,
+    }),
+  );
+  for (const [schemaName, blocks] of extensionBlocksBySchema) {
+    if (schemaName === mainSchema) continue;
+    namespaces.push(
+      makePslNamespace({
+        kind: 'namespace',
+        name: schemaName,
+        entries: makePslNamespaceEntries([], [], blocks),
+        span: SYNTHETIC_SPAN,
+      }),
+    );
+  }
+
+  const ast: PslDocumentAst = {
+    kind: 'document',
+    sourceId: '<sql-schema-ir>',
+    namespaces,
+    span: SYNTHETIC_SPAN,
+  };
+
+  return ast;
+}

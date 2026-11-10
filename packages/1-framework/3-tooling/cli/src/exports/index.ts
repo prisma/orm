@@ -5,6 +5,7 @@
 export { ormConfigSection } from '@internal/config-loader';
 export type { LoadTsContractOptions } from '../load-ts-contract';
 export { loadContractFromTs } from '../load-ts-contract';
+export { runOrmBin } from '../orm/cli';
 export { ormCommandFamily } from '../orm/family';
 export type { LoadOrmConfigOptions } from '../orm/load-config';
 export { loadOrmConfig } from '../orm/load-config';

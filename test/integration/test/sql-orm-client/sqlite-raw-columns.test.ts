@@ -8,7 +8,7 @@ import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
-import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
+import { defineContract, field, model, rel, sql } from '@internal/sqlite/contract-builder';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
 import sqliteTarget from '@internal/target-sqlite/runtime';
 import { InternalError } from '@internal/utils/internal-error';
@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const OwnerBase = model('Owner', {
   fields: {
     id: field.column(integerColumn).id(),
-    shape: field.column(rawColumn('geometry')).optional(),
+    shape: field.column(rawColumn(sql`geometry`)).optional(),
   },
 }).sql({ table: 'raw_owners' });
 
@@ -26,7 +26,7 @@ const Place = model('Place', {
   fields: {
     id: field.column(integerColumn).id(),
     ownerId: field.column(integerColumn).column('owner_id'),
-    shape: field.column(rawColumn('geometry')).optional(),
+    shape: field.column(rawColumn(sql`geometry`)).optional(),
   },
   relations: { owner: rel.belongsTo(OwnerBase, { from: 'ownerId', to: 'id' }) },
 }).sql({ table: 'raw_places' });

@@ -1,0 +1,27 @@
+// use prisma-8
+
+namespace public {
+  model Payment {
+    id        Int             @id
+    invoiceId Int
+    invoice   billing.Invoice @relation(fields: [invoiceId], references: [id])
+  }
+}
+
+namespace billing {
+  model Invoice {
+    id       Int              @id
+    number   String           @unique
+    status   String
+    payments public.Payment[]
+
+    @@index([status])
+    @@rls
+  }
+
+  policy_select invoice_read {
+    target = Invoice
+    roles  = [app_user]
+    using  = sql`(id > 0)`
+  }
+}

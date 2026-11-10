@@ -3,6 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-05-20
 
+> **Note:** value objects have since moved out of the domain plane. They are storage entities, at `storage.namespaces.<ns>.entries.valueObject`, and a domain field refers to one by coordinate ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)). The domain `valueObjects` key shown below no longer exists.
+
 ---
 
 ## A concrete example
@@ -142,6 +144,8 @@ There is no separate "slot key" field. The property name where a kind's entries 
 The built-in kinds (`tables`, `collections`) stay hardcoded inside their family packs rather than going through the descriptor mechanism. They guarantee a stable family-shape contract for consumers, and routing them through the descriptor surface would touch every framework consumer to deliver nothing but conceptual symmetry. The result is a dual surface — hardcoded built-ins alongside descriptor-driven contributed kinds — and that is a deliberate, acceptable trade. The descriptor mechanism earns its keep on *extensibility*, not on retrofitting surfaces that already work.
 
 The mechanism's value is that it satisfies two requirements at once: a kind is contributed at the framework level (so authoring tools — the PSL interpreter, the TS DSL, the emitter — all see it) *without* any target-specific symbol appearing in the framework or in sibling-target packages. A cheaper-looking option — keep a kind hardcoded but move the hardcode from the framework into the pack — fails the second requirement, because the slot name still leaks into the framework's authoring-tool dispatch.
+
+**Kinds the framework defines or reads.** One storage kind is not contributed but defined by the framework, because domain fields refer to it: `valueObject`. The framework reads it by slot key, validates a value object's fields against one schema that both families use, and types it in `contract.d.ts`. Where a value object member names a value set, the framework also reads the `valueSet` slot by key, to check that the reference resolves; the families define the value set entity. Each family still registers a descriptor and an IR class for both kinds. See [ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md).
 
 ## The `Namespace` interface
 

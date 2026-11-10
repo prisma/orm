@@ -17,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emit } from '../utils/emit';
 import { createIntegrationTestDir } from './utils/cli-test-helpers';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 // ============================================================================
 // Test Fixtures
 // ============================================================================
@@ -235,6 +237,7 @@ describe('control-api', () => {
             try {
               await client.connect(connectionString);
               const result = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'plan',
                 migrationsDir: resolve(testDir, 'migrations'),
@@ -272,6 +275,7 @@ describe('control-api', () => {
             try {
               await client.connect(connectionString);
               const result = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'apply',
                 migrationsDir: resolve(testDir, 'migrations'),
@@ -322,6 +326,7 @@ describe('control-api', () => {
 
               // Apply first time
               const result1 = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'apply',
                 migrationsDir,
@@ -332,6 +337,7 @@ describe('control-api', () => {
               // flow achieves idempotency by the planner returning an
               // empty plan and the runner being a no-op on empty plans.
               const result2 = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'apply',
                 migrationsDir,
@@ -376,6 +382,7 @@ describe('control-api', () => {
 
               // First init the database
               const initResult = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'apply',
                 migrationsDir: resolve(testDir, 'migrations'),
@@ -433,6 +440,7 @@ describe('control-api', () => {
 
               // First init the database
               const initResult = await client.dbInit({
+                invocation: TEST_INVOCATION,
                 contract: contractJson,
                 mode: 'apply',
                 migrationsDir: resolve(testDir, 'migrations'),

@@ -20,6 +20,8 @@ import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime'
 import { withClient, withDevDatabase } from '@repo/test-utils';
 import type { Client } from 'pg';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 const execFileAsync = promisify(execFile);
 
 export async function collect<T>(iter: AsyncIterable<T>): Promise<T[]> {
@@ -101,23 +103,21 @@ export async function emitAndVerifyContract(
  * Materialise pgvector's pinned contract-space artifacts under
  * `<migrationsDir>/pgvector/...`. The e2e contracts declare pgvector
  * in their extension packs, so the per-space `db init` flow requires
- * its head ref + baseline migration to be present on disk.
+ * its head ref and migrations to be present on disk.
  */
 async function materialisePgvectorPinnedArtifacts(migrationsDir: string): Promise<void> {
   const space = pgvector.contractSpace;
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
 }
 
 export async function withE2eMigrationsDir<T>(
@@ -143,13 +143,14 @@ export async function runDbInit(options: {
 
   const invoke = async (migrationsDir: string): Promise<void> => {
     const result = await controlClient.dbInit({
+      invocation: TEST_INVOCATION,
       contract: contractJson,
       mode: 'apply',
       migrationsDir,
     });
     if (!result.ok) {
       throw new Error(
-        `dbInit failed: ${result.failure.summary}\n${JSON.stringify(result.failure, null, 2)}`,
+        `dbInit failed: ${result.failure.message}\n${JSON.stringify(result.failure, null, 2)}`,
       );
     }
   };
@@ -175,13 +176,14 @@ async function getPlannedDdlSql(options: {
 
   const invoke = async (migrationsDir: string): Promise<string> => {
     const result = await controlClient.dbInit({
+      invocation: TEST_INVOCATION,
       contract,
       mode: 'plan',
       connection: connectionString,
       migrationsDir,
     });
     if (!result.ok) {
-      throw new Error(`dbInit plan failed: ${result.failure.summary}`);
+      throw new Error(`dbInit plan failed: ${result.failure.message}`);
     }
 
     const sqlStatements =

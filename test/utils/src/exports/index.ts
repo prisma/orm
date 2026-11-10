@@ -7,6 +7,7 @@ export * from '../column-descriptors';
 export * from '../contract-factories';
 export * from '../lowered-params';
 export * from '../operation-descriptors';
+export * from '../startup-parameters';
 export * from '../timeouts';
 
 function normalizeConnectionString(raw: string): string {

@@ -356,23 +356,40 @@ export interface NoInvariantPathStructuralEdge {
   readonly invariants: readonly string[];
 }
 
+/** The extension space a `NO_INVARIANT_PATH` is about, and the advice for it, which only the caller can write. */
+export interface NoInvariantPathExtensionSpace {
+  readonly spaceId: string;
+  readonly why: string;
+  readonly fix: string;
+  readonly nextActions: readonly NextAction[];
+}
+
 export function errorNoInvariantPath(args: {
   readonly refName?: string;
   readonly required: readonly string[];
   readonly missing: readonly string[];
   readonly structuralPath: readonly NoInvariantPathStructuralEdge[];
+  readonly extensionSpace?: NoInvariantPathExtensionSpace;
 }): MigrationToolsError {
-  const { refName, required, missing, structuralPath } = args;
+  const { refName, required, missing, structuralPath, extensionSpace } = args;
   const refClause = refName ? `Ref "${refName}"` : 'Target';
   const missingList = missing.map((id) => JSON.stringify(id)).join(', ');
   const requiredList = required.map((id) => JSON.stringify(id)).join(', ');
   return new MigrationToolsError(
     'MIGRATION.NO_INVARIANT_PATH',
-    'No path covers the required invariants',
+    extensionSpace === undefined
+      ? 'No path covers the required invariants'
+      : `No path covers the required invariants of extension space "${extensionSpace.spaceId}"`,
     {
-      why: `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
-      fix: 'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      why:
+        extensionSpace?.why ??
+        `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
+      fix:
+        extensionSpace?.fix ??
+        'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      ...ifDefined('nextActions', extensionSpace?.nextActions),
       meta: {
+        ...ifDefined('spaceId', extensionSpace?.spaceId),
         required,
         missing,
         structuralPath,

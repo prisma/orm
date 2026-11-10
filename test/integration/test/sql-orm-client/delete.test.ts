@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -237,20 +236,6 @@ describe('integration/delete', () => {
           'select id, name from users order by id',
         );
         expect(remaining).toEqual([{ id: 3, name: 'Keep' }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'delete() and deleteAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-        const filtered = users.where({ id: 1 });
-
-        await expect(filtered.delete()).rejects.toThrow(/requires contract capability "returning"/);
-        expect(() => filtered.deleteAll()).toThrow(/requires contract capability "returning"/);
       });
     },
     timeouts.spinUpPpgDev,

@@ -33,8 +33,8 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql/1-core/contract/test/introspected-column';
-import { createTestPostgresControlAdapter } from '../../../../3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
 const introspectedColumn = (
@@ -86,6 +86,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('returns empty plan when schema already satisfies contract (superset)', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -131,6 +132,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('plans additive operations for subset schema (missing column/index/fk)', async () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -183,6 +185,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('fails with conflicts when schema has incompatible column types', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -364,38 +367,6 @@ describe('NOT NULL column without default uses temporary default', () => {
         typeParams: { length: 3 },
       },
       { frameworkComponents: [pgvectorDescriptor] },
-    );
-
-    expect(addCol.precheck.map((p) => p.sql)).not.toContain(
-      `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
-    );
-    expect(addCol.execute.map((step) => step.sql)).toEqual([
-      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "embedding" vector(3) DEFAULT ('[0,0,0]'::vector) NOT NULL`,
-      `ALTER TABLE ${qualifiedUserTable} ALTER COLUMN "embedding" DROP DEFAULT`,
-    ]);
-  });
-
-  it('uses codec hook temporary defaults for parameterized pgvector storage type refs', async () => {
-    const addCol = await planAddColumn(
-      'embedding',
-      {
-        many: false,
-        dataType: 'pgvector/vector',
-        codecId: 'pg/vector@1',
-        nullable: false,
-        typeRef: 'Embedding3',
-      },
-      {
-        frameworkComponents: [pgvectorDescriptor],
-        extraStorageTypes: {
-          Embedding3: {
-            kind: 'codec-instance',
-            codecId: 'pg/vector@1',
-            dataType: 'pgvector/vector',
-            typeParams: { length: 3 },
-          },
-        },
-      },
     );
 
     expect(addCol.precheck.map((p) => p.sql)).not.toContain(
@@ -731,12 +702,10 @@ function planAddColumn(
     codecId: string;
     nullable: boolean;
     typeParams?: Record<string, unknown>;
-    typeRef?: string;
     default?: { kind: 'literal'; value: ColumnDefaultLiteralInputValue };
   },
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
   },
 ) {
   const operationsPromise = planUserTableOperations(
@@ -787,7 +756,6 @@ async function planUserTableOperations(
   schemaUserTable: PostgresTableSchemaNode,
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
     extraContractTables?: Record<string, StorageTable>;
     extraSchemaTables?: Record<string, PostgresTableSchemaNode>;
   },
@@ -806,10 +774,10 @@ async function planUserTableOperations(
           },
         }),
       },
-      ...(options?.extraStorageTypes ? { types: options.extraStorageTypes } : {}),
     },
   });
   const schema = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

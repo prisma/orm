@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.area\": @default on a field of type Unsupported(...) must be dbgenerated(\"...\"). Prisma 7 refuses this schema too: \"Only @default(dbgenerated(\"...\")) can be used for Unsupported types.\" Write the default as @default(dbgenerated(\"<sql expression>\")), or remove it."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.counter\": @default on a field of type Unsupported(...) must be dbgenerated(\"...\"). Prisma 7 refuses this schema too: \"Only @default(dbgenerated(\"...\")) can be used for Unsupported types.\" Write the default as @default(dbgenerated(\"<sql expression>\")), or remove it."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.seenAt\": @default on a field of type Unsupported(...) must be dbgenerated(\"...\"). Prisma 7 refuses this schema too: \"Only @default(dbgenerated(\"...\")) can be used for Unsupported types.\" Write the default as @default(dbgenerated(\"<sql expression>\")), or remove it."
+  }
+]

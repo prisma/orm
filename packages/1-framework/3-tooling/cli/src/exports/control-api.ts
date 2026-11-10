@@ -71,10 +71,7 @@ export {
   type ExecuteDbVerifyResult,
   executeDbVerify,
 } from '../control-api/operations/db-verify';
-export {
-  hasMigrationPath,
-  refuseMarkerOutsideGraph,
-} from '../control-api/operations/graph-queries';
+export { hasMigrationPath } from '../control-api/operations/graph-queries';
 export {
   refuseMissingInvariantPath,
   refuseUnknownInvariants,
@@ -168,14 +165,10 @@ export type {
   ControlClient,
   ControlClientOptions,
   ControlProgressEvent,
-  DbInitFailure,
-  DbInitFailureCode,
   DbInitOptions,
   DbInitResult,
   DbInitSuccess,
   DbSignOptions,
-  DbUpdateFailure,
-  DbUpdateFailureCode,
   DbUpdateOptions,
   DbUpdateResult,
   DbUpdateSuccess,
@@ -192,3 +185,4 @@ export type {
 } from '../control-api/types';
 // Lifecycle helpers for hosts that publish to many output paths
 export { disposeEmitQueue } from '../utils/emit-queue';
+export type { CliInvocation } from '../utils/printed-command';

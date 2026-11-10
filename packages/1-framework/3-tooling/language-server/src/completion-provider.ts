@@ -112,7 +112,7 @@ const documentNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCa
     'types',
     'types ',
     'types {\n  $' + '{0:// Type aliases}\n}',
-    'Defines reusable named types.',
+    'Defines reusable type aliases.',
   ),
   nativeDeclarationKeyword(
     'namespace',
@@ -575,6 +575,7 @@ function provideModelTypeCompletionItems(
   return scopeCompletionItems(
     source.binder.scopeAt(context.field.syntax).entries(),
     source.binder,
+    source.dataTypes ?? EMPTY_DATA_TYPES,
     {
       start: sourceFile.positionAt(context.replacementStartOffset),
       end: sourceFile.positionAt(context.offset),
@@ -630,6 +631,7 @@ function provideMixinInclusionCompletionItems(
   return scopeCompletionItems(
     entries,
     source.binder,
+    source.dataTypes ?? EMPTY_DATA_TYPES,
     {
       start: sourceFile.positionAt(context.replacementStartOffset),
       end: sourceFile.positionAt(context.offset),
@@ -657,6 +659,7 @@ function provideNamespaceMemberCompletionItems(
   return scopeCompletionItems(
     qualifier !== undefined && isNamespaceLike(qualifier) ? memberEntries(qualifier) : [],
     source.binder,
+    source.dataTypes ?? EMPTY_DATA_TYPES,
     {
       start: sourceFile.positionAt(context.replacementStartOffset),
       end: sourceFile.positionAt(context.offset),

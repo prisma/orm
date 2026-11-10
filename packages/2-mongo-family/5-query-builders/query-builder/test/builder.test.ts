@@ -24,14 +24,15 @@ import { acc } from '../src/accumulator-helpers';
 import { fn } from '../src/expression-helpers';
 import type { LookupOnResult } from '../src/lookup-builder';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import { testContract } from './fixtures/test-contract';
 
 function createOrdersBuilder() {
-  return mongoQuery({ contract: testContract }).from('orders');
+  return mongoQuery({ context: contextOf(testContract) }).from('orders');
 }
 
 function createCustomersBuilder() {
-  return mongoQuery({ contract: testContract }).from('customers');
+  return mongoQuery({ context: contextOf(testContract) }).from('customers');
 }
 
 describe('PipelineChain', () => {
@@ -387,14 +388,14 @@ describe('PipelineChain', () => {
 
 describe('mongoQuery()', () => {
   it('from() creates builder for known root', () => {
-    const p = mongoQuery({ contract: testContract });
+    const p = mongoQuery({ context: contextOf(testContract) });
     const builder = p.from('orders');
     const plan = builder.build();
     expect(plan.collection).toBe('orders');
   });
 
   it('from() throws for unknown root', () => {
-    const p = mongoQuery({ contract: testContract });
+    const p = mongoQuery({ context: contextOf(testContract) });
     expect(() => p.from('nonexistent' as 'orders')).toThrow('Unknown root');
   });
 });

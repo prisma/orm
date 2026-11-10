@@ -1,6 +1,6 @@
 {
-  "targetFamily": "mongo",
   "target": "mongo",
+  "targetFamily": "mongo",
   "roots": {
     "Post": {
       "namespace": "__unbound__",
@@ -57,20 +57,23 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
+                "many": {
+                  "elementNullable": false
+                },
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",
                   "namespaceId": "__unbound__",
                   "entityName": "Role"
-                },
-                "many": {
-                  "elementNullable": false
                 }
               },
               "address": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "Address"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
                 },
                 "nullable": false,
                 "many": {
@@ -104,20 +107,6 @@
             }
           }
         },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "street": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              }
-            }
-          }
-        },
         "enum": {
           "Role": {
             "codecId": "mongo/string@1",
@@ -136,12 +125,12 @@
       }
     }
   },
-  "extensions": {},
   "capabilities": {},
+  "extensions": {},
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "3da02d07cd29acc61bc54a1929d31fe70720137e369c44564b6ca3e8f3e46546",
+    "storageHash": "e6d057cae9c68e89ed7207907298557efb1fdf16c57f31373bd9cffaec8b65be",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -156,6 +145,20 @@
             "Role": {
               "kind": "valueSet",
               "values": ["USER", "ADMIN"]
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
             }
           }
         }

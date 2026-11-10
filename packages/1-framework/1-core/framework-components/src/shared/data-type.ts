@@ -88,12 +88,14 @@ export interface DataType {
   /** Keyed by the id of the type each cast takes values of. */
   readonly casts: Readonly<Record<DataTypeId, Cast>>;
   readonly listCast?: ListCast;
-  /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, a value the parameters exclude, and JSON in a spelling other than the one the parameters give. */
+  /** The value `json` stores under `params`. It refuses JSON the type does not store in that form, a value the parameters exclude, and JSON in a spelling other than the one the parameters give. A codec whose application value is the stored form builds its values here too. */
   fromContract(json: JsonValue, params: DataTypeParams): DataTypeValue;
-  /** A value of the type built from `json`: read under `params`, which refuse a value they exclude, and written in the spelling they give. Every producer of a value that is not reading `contract.json` builds it here: a codec, a written default, a cast. */
+  /** A value of the type built from `json`: read under `params`, which refuse a value they exclude, and written in the spelling they give. Every producer of a value that is not reading `contract.json` builds it here: a written default, a cast, and a codec, except a codec whose application value is the stored form, which builds it with `fromContract` so that only the stored spelling is taken. */
   valueFrom<J extends JsonValue>(json: J, params: DataTypeParams): DataTypeValue<J>;
   /** The JSON `contract.json` stores for `value`. */
   toContract(value: DataTypeValue): JsonValue;
+  /** A key two stored forms share exactly when the type's equality holds them equal. Declared by a type whose equal values have more than one stored form, as `numeric` stores `0.5` and `0.50`; for every other type, values are equal when their stored forms are. */
+  readonly equalityKey?: (json: JsonValue) => string;
 }
 
 export interface DataTypeSpec {
@@ -104,6 +106,8 @@ export interface DataTypeSpec {
   readonly read: DataTypeReader;
   /** Gives an accepted value its one spelling; a type whose values have one spelling only declares none. */
   readonly spell?: DataTypeSpelling;
+  /** See {@link DataType.equalityKey}. */
+  readonly equalityKey?: (json: JsonValue) => string;
   /** The one form of parameters that mean the same type, such as `numeric(10)` and `numeric(10,0)`; a value stores its parameters in it. A type whose parameters have one form only declares none. */
   normalize?(params: DataTypeParams): DataTypeParams;
 }
@@ -180,6 +184,7 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
         construct(spelledUnder(json, params), params),
       ),
     toContract: (value) => requireValueOf(typeId, value, `Data type ${typeId}`).value,
+    ...ifDefined('equalityKey', spec.equalityKey),
   };
 }
 

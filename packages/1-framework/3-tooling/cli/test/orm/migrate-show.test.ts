@@ -254,7 +254,7 @@ describe('migrate --show', () => {
           ok: false,
           error: {
             code: 'MIGRATION.MARKER_MISMATCH',
-            meta: { markerHash: C2, reachableHashes: [] },
+            meta: { spaceId: 'app', markerHash: C2, targetHash: C2, missingMigrations: [] },
           },
         },
       });
@@ -374,6 +374,16 @@ describe('migrate --show', () => {
         status: 'info',
         text: 'The following 2 migrations will run:',
       });
+    });
+
+    it('prints one data line per migration that will run: space, name, from and to', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show'], { cwd });
+
+      expect(run.stdout).toBe(
+        `app\t20260101_100000_111111\t\t${C1}\n` + `app\t20260101_100000_222222\t${C1}\t${C2}\n`,
+      );
     });
 
     it('keeps every arrow in the run list in one column', async () => {

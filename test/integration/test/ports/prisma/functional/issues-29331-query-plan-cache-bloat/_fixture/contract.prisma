@@ -22,13 +22,13 @@ model ContactAnalytics {
   id        String   @id @onCreate(cuid(2))
   contactId String
   contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  date1     DateTime?
-  date2     DateTime?
-  date3     DateTime?
-  date4     DateTime?
-  date5     DateTime?
-  date6     DateTime?
-  date7     DateTime?
+  date1     TimestamptzTemporal?
+  date2     TimestamptzTemporal?
+  date3     TimestamptzTemporal?
+  date4     TimestamptzTemporal?
+  date5     TimestamptzTemporal?
+  date6     TimestamptzTemporal?
+  date7     TimestamptzTemporal?
   val1      Int?
   val2      Int?
   val3      Int?

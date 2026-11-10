@@ -1,0 +1,18 @@
+{
+  "ts": {
+    "code": "CONTRACT.ARGUMENT_INVALID",
+    "message": "Variant model \"Bug\" restates field \"title\" of its base \"Task\" with a different stored name and type. A variant's documents are checked against the base's field, so restate it exactly or remove it from the variant."
+  },
+  "psl": [
+    {
+      "code": "PSL_VARIANT_FIELD_DIFFERS_FROM_BASE",
+      "message": "Field \"Bug.title\" restates field \"title\" of base model \"Task\" with a different @map and type. A variant's documents are checked against the base's field, so declare it exactly as the base does, or remove it from the variant.",
+      "spanText": "title Int32   @map(\"t\")"
+    },
+    {
+      "code": "PSL_VARIANT_FIELD_DIFFERS_FROM_BASE",
+      "message": "Field \"Bug.note\" restates field \"note\" of base model \"Task\" with a different optionality. A variant's documents are checked against the base's field, so declare it exactly as the base does, or remove it from the variant.",
+      "spanText": "note  String?"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import { ProjectArtifacts } from '../../../../packages/1-framework/3-tooling/lan
 
 const fixtureDir = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages',
 );
 const configPath = join(fixtureDir, 'prisma.config.ts');
 const schemaPath = join(fixtureDir, 'contract.prisma');
@@ -37,7 +37,7 @@ describe('the language server in a Postgres project', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          'Unsupported("hstore") is not a Prisma 8 type. Write the column\'s type with a type constructor, or as Raw("hstore") when no type constructor names it. If "hstore" comes from a database extension that has a Prisma 8 pack, add the pack to extensions in prisma.config.ts.',
+          'Unsupported("hstore") is not a Prisma 8 type. Write the column\'s type with a type constructor, or as Raw(sql`hstore`) when no type constructor names it. If "hstore" comes from a database extension that has a Prisma 8 pack, add the pack to extensions in prisma.config.ts.',
       },
     ]);
   });

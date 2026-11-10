@@ -1,0 +1,18 @@
+// use prisma-8
+
+// Emitted fixture for the sql-orm-client value object type tests.
+// `User.address` holds an `Address` value object in a jsonb column.
+
+type Address {
+  street String
+  city   String
+  zip    String?
+}
+
+model User {
+  id      Int      @id
+  name    String
+  address Address?
+
+  @@map("users")
+}

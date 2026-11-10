@@ -1,8 +1,9 @@
 import { ormConfigSection } from '@internal/config-loader';
+import type { MigrationPlannerConflict } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
+import { flag, noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
@@ -17,7 +18,6 @@ import type { CreateControlClient, DbInitSuccess } from '../../control-api/types
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
-import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
@@ -26,6 +26,7 @@ import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
+import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
 
 function initPresentations(inputs: {
@@ -38,7 +39,9 @@ function initPresentations(inputs: {
 }): Presentations {
   const { document, database, dryRun } = inputs;
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'Data lines are not defined: this command applies a plan, not migrations, so the db migrate fields do not fit. --json carries the plan and what ran.',
+    ),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -67,6 +70,7 @@ function initDocument(inputs: {
   readonly advancedRef: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef: { readonly name: string; readonly hash: string } | null;
   readonly startedAt: number;
+  readonly plannerWarnings: readonly MigrationPlannerConflict[];
 }): MigrationCommandResult {
   const { value } = inputs;
   return {
@@ -104,6 +108,7 @@ function initDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
+    ...(inputs.plannerWarnings.length > 0 ? { warnings: inputs.plannerWarnings } : {}),
     summary: value.summary,
     timings: { total: Date.now() - inputs.startedAt },
   };
@@ -175,16 +180,18 @@ export function createDbInitCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
+        const plannerWarnings = plannerWarningsCollector(ctx.report);
         const result = await client.dbInit({
           contract: contractJson,
           mode: args.flags.dryRun ? 'plan' : 'apply',
           migrationsDir,
+          invocation: cliInvocation(ctx, args.flags.db),
+          onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
-          return notOk(
-            normalizeError(mapDbInitFailure(result.failure, cliInvocation(ctx, args.flags.db))),
-          );
+          plannerWarnings.reportCollected();
+          return notOk(normalizeError(result.failure));
         }
 
         const advancementHash =
@@ -212,6 +219,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           advancedRef: advanced.value.advancedRef,
           plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
+          plannerWarnings: plannerWarnings.collected(),
         });
       } catch (error) {
         if (

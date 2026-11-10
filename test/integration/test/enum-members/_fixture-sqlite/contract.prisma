@@ -8,20 +8,20 @@ enum TextLevel {
 
 enum BigLevel {
   @@type("sqlite/bigint@1")
-  Low  = "1"
-  High = "10"
+  Low  = 1
+  High = 10
 }
 
 enum WhenLevel {
   @@type("sqlite/datetime@1")
-  Launch = "2024-01-01T00:00:00.000Z"
-  Sunset = "2025-06-30T12:00:00.000Z"
+  Launch = datetime`2024-01-01T00:00:00.000Z`
+  Sunset = datetime`2025-06-30T12:00:00.000Z`
 }
 
 enum RealLevel {
   @@type("sqlite/real@1")
   Half     = 1.5
-  Infinite = "Infinity"
+  Infinite = Infinity
 }
 
 model Reading {

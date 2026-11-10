@@ -1,3 +1,4 @@
+import { CliStructuredError } from '@internal/errors/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { notOk } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +8,8 @@ import {
   FIXTURE_TARGET_ID,
   type FixtureControlClient,
 } from '../../../src/control-api/testing/fixture-client';
+
+const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
 describe('createFixtureControlClient', () => {
   it('serves realistic default fixtures for every operation', async () => {
@@ -25,6 +28,7 @@ describe('createFixtureControlClient', () => {
     expect(schemaVerify.schema.issues).toEqual([]);
 
     const dbInit = await client.dbInit({
+      invocation: TEST_INVOCATION,
       contract: {},
       mode: 'apply',
       migrationsDir: 'migrations',
@@ -35,6 +39,7 @@ describe('createFixtureControlClient', () => {
     });
 
     const dbUpdate = await client.dbUpdate({
+      invocation: TEST_INVOCATION,
       contract: {},
       mode: 'plan',
       migrationsDir: 'migrations',
@@ -64,7 +69,11 @@ describe('createFixtureControlClient', () => {
     expect(ledger).toHaveLength(1);
     expect(ledger[0]).toMatchObject({ space: APP_SPACE_ID, to: FIXTURE_STORAGE_HASH });
 
-    const migrate = await client.migrate({ contract: {}, migrationsDir: 'migrations' });
+    const migrate = await client.migrate({
+      invocation: TEST_INVOCATION,
+      contract: {},
+      migrationsDir: 'migrations',
+    });
     expect(migrate.assertOk().markerHash).toBe(FIXTURE_STORAGE_HASH);
 
     expect(await client.introspect()).toBeDefined();
@@ -88,13 +97,7 @@ describe('createFixtureControlClient', () => {
   });
 
   it('lets tests override individual operation fixtures', async () => {
-    const failure = notOk({
-      code: 'PLANNING_FAILED' as const,
-      summary: 'planner exploded',
-      why: undefined,
-      conflicts: undefined,
-      meta: undefined,
-    });
+    const failure = notOk(new CliStructuredError('MIGRATION.PLANNING_FAILED', 'planner exploded'));
     const client = createFixtureControlClient({
       dbInit: failure,
       readMarker: null,
@@ -102,11 +105,12 @@ describe('createFixtureControlClient', () => {
     await client.connect('postgres://fixture');
 
     const dbInit = await client.dbInit({
+      invocation: TEST_INVOCATION,
       contract: {},
       mode: 'plan',
       migrationsDir: 'migrations',
     });
-    expect(dbInit.assertNotOk().summary).toBe('planner exploded');
+    expect(dbInit.assertNotOk().message).toBe('planner exploded');
     expect(await client.readMarker()).toBeNull();
 
     // Non-overridden operations keep their defaults.
@@ -117,7 +121,12 @@ describe('createFixtureControlClient', () => {
     const client = createFixtureControlClient();
     await client.connect('postgres://fixture');
 
-    await client.dbInit({ contract: {}, mode: 'plan', migrationsDir: 'moves' });
+    await client.dbInit({
+      invocation: TEST_INVOCATION,
+      contract: {},
+      mode: 'plan',
+      migrationsDir: 'moves',
+    });
     await client.readLedger('app');
 
     expect(client.calls).toEqual([
@@ -163,6 +172,7 @@ describe('createFixtureControlClient', () => {
         'dbInit',
         (c) =>
           c.dbInit({
+            invocation: TEST_INVOCATION,
             contract: {},
             mode: 'plan',
             migrationsDir: 'migrations',
@@ -172,6 +182,7 @@ describe('createFixtureControlClient', () => {
         'dbUpdate',
         (c) =>
           c.dbUpdate({
+            invocation: TEST_INVOCATION,
             contract: {},
             mode: 'plan',
             migrationsDir: 'migrations',
@@ -192,7 +203,11 @@ describe('createFixtureControlClient', () => {
       ['readMarker', (c) => c.readMarker()],
       ['readAllMarkers', (c) => c.readAllMarkers()],
       ['readLedger', (c) => c.readLedger()],
-      ['migrate', (c) => c.migrate({ contract: {}, migrationsDir: 'migrations' })],
+      [
+        'migrate',
+        (c) =>
+          c.migrate({ invocation: TEST_INVOCATION, contract: {}, migrationsDir: 'migrations' }),
+      ],
       ['introspect', (c) => c.introspect()],
     ];
 

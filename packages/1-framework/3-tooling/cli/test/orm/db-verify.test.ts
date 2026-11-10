@@ -472,7 +472,7 @@ describe('db verify', () => {
         {
           code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
           severity: 'error',
-          meta: { space: 'app', issues: ['missing: public/users/email'] },
+          meta: { space: 'app', schemaIssues: [MISSING_COLUMN] },
         },
       ]);
     });
@@ -614,8 +614,8 @@ describe('db verify', () => {
       });
 
       expect(run.exitCode).toBe(4);
-      expect(diagnosticsOf(run).map((entry) => entry.code)).toEqual([
-        'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+      expect(diagnosticsOf(run).map(({ code, meta }) => ({ code, meta }))).toEqual([
+        { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED', meta: { schemaIssues: [] } },
       ]);
     });
 

@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { createIntegrationTestDir } from '../utils/cli-test-helpers';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 /**
  * Materialise pgvector's pinned contract-space artifacts under
  * `<projectRoot>/migrations/pgvector/...` so the per-space db init
@@ -35,16 +37,14 @@ async function materialisePgvectorPinnedArtifacts(projectRoot: string): Promise<
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
   return migrationsDir;
 }
 
@@ -150,6 +150,7 @@ model Document {
           try {
             await client.connect(connectionString);
             const apply = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,

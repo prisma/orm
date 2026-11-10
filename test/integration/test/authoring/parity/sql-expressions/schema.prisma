@@ -7,7 +7,7 @@ namespace public {
     title      String
     email      String
     body       String
-    archivedAt DateTime?
+    archivedAt TimestamptzTemporal?
     slug       String    @default(sql`
       lower(
         'post-' || md5(random()::text)

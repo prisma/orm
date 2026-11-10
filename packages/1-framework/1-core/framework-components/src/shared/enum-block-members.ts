@@ -1,10 +1,10 @@
-import type { JsonValue } from '@internal/contract/types';
-import { isInternalError } from '@internal/utils/internal-error';
+import { InternalError } from '@internal/utils/internal-error';
 import { type Codec, readContractValue } from './codec';
 import type { EnumMemberProblem } from './enum-members';
 import { duplicateStoredMembers, type StoredEnumMember } from './enum-stored-members';
 import type { AuthoringEntityContext } from './framework-authoring';
 import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
+import { readWrittenValueIntoCodec, type WrittenValue } from './written-value';
 
 export interface EnumBlockMember {
   readonly name: string;
@@ -68,19 +68,36 @@ export function enumMemberProblemDiagnostic(
     case 'duplicate-member-value':
       return {
         code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
-        message: `enum "${enumName}": members "${problem.earlier}" and "${problem.later}" both store ${JSON.stringify(problem.stored)}`,
+        message:
+          problem.earlierStored === undefined
+            ? `enum "${enumName}": members "${problem.earlier}" and "${problem.later}" both store ${JSON.stringify(problem.stored)}`
+            : `enum "${enumName}": members "${problem.earlier}" and "${problem.later}" store ${JSON.stringify(problem.earlierStored)} and ${JSON.stringify(problem.stored)}, which the database holds equal`,
         ...at(problem.later),
       };
   }
 }
 
+/** A member as it is written: its recorded written value, or a bare member's name, as text. */
+function writtenMember(
+  block: ParsedPslExtensionBlock<Readonly<Record<string, unknown>>>,
+  memberName: string,
+  memberValue: unknown,
+): WrittenValue {
+  const written = block.writtenValues?.[memberName];
+  if (written !== undefined) return written;
+  if (memberValue === undefined) return { kind: 'string', text: memberName };
+  throw new InternalError(
+    `enum "${block.name}" member "${memberName}" has a value, but the block holds no written value for it.`,
+  );
+}
+
 /**
- * Reads the members of an `enum` block through its codec. A member written as a number literal is read from its source text as a column default is read, when the family gives a reader for it (`ctx.readWrittenNumber`), so no digit is lost; when that reader refuses the number, the codec's data type and then the codec read it, and only if they refuse it too is the reader's reason reported. Every other member is read the same way, as a value of the codec's data type converted by `fromDataTypeValue`, and a bare member is read from its own name.
- * Pushes a diagnostic and returns `undefined` when the codec refuses a member, when two members
+ * Reads the members of an `enum` block through its codec with {@link readWrittenValueIntoCodec}: each member's syntax gives it a data type, the codec's data type takes it directly or through a cast, and the codec checks it, so a number keeps every digit and a quoted value is text. A bare member is read from its own name, as text.
+ * Pushes a diagnostic and returns `undefined` when a member is refused, when two members
  * store the same value, or when the block has no members. Shared by every family's enum factory.
  */
 export function readEnumBlockMembers(
-  block: ParsedPslExtensionBlock<Readonly<Record<string, JsonValue | undefined>>>,
+  block: ParsedPslExtensionBlock<Readonly<Record<string, unknown>>>,
   codecId: string,
   codec: Codec,
   ctx: AuthoringEntityContext,
@@ -100,45 +117,28 @@ export function readEnumBlockMembers(
 
   for (const [memberName, memberValue] of Object.entries(block.values)) {
     const span = block.parameterSpans[memberName] ?? block.span;
-    const reading =
-      typeof memberValue === 'number'
-        ? ctx.readWrittenNumber?.({
-            text: block.numberTexts?.[memberName] ?? String(memberValue),
-            codecId,
-            subject: `enum "${block.name}" member "${memberName}"`,
-          })
-        : undefined;
-    const written = reading?.ok
-      ? reading.value
-      : memberValue === undefined
-        ? memberName
-        : memberValue;
-    let read: unknown;
-    try {
-      read = readContractValue(codec, written, undefined);
-    } catch (err) {
-      if (isInternalError(err)) throw err;
+    const reading = readWrittenValueIntoCodec({
+      support: ctx.dataTypes,
+      codecLookup: ctx.codecLookup,
+      ref: { codecId },
+      written: writtenMember(block, memberName, memberValue),
+      subject: `enum "${block.name}" member "${memberName}"`,
+    });
+    if (!reading.ok) {
       diagnostics?.push(
-        reading !== undefined && !reading.ok
-          ? { code: 'PSL_EXTENSION_INVALID_VALUE', message: reading.message, sourceId, span }
-          : memberValue === undefined
-            ? {
-                code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
-                message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
-                sourceId,
-                span,
-              }
-            : {
-                code: 'PSL_EXTENSION_INVALID_VALUE',
-                message: `enum "${block.name}" member "${memberName}" was rejected by codec "${codecId}": ${err instanceof Error ? err.message : String(err)}`,
-                sourceId,
-                span,
-              },
+        memberValue === undefined
+          ? {
+              code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
+              message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
+              sourceId,
+              span,
+            }
+          : { ...reading.failure, sourceId, span },
       );
       memberError = true;
       continue;
     }
-
+    const read = readContractValue(codec, reading.value, undefined);
     members.push({ name: memberName, value: read });
     storedMembers.push({
       name: memberName,
@@ -146,7 +146,7 @@ export function readEnumBlockMembers(
     });
   }
 
-  for (const duplicate of duplicateStoredMembers(storedMembers)) {
+  for (const duplicate of duplicateStoredMembers(storedMembers, codec.dataType.equalityKey)) {
     diagnostics?.push(
       enumMemberProblemDiagnostic({ kind: 'duplicate-member-value', ...duplicate }, site),
     );

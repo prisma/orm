@@ -316,7 +316,7 @@ describe('createBinder — a mixin name in type position', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          '"Timestamps" is a mixin; a type reference must name a model, composite type, enum, or named type',
+          '"Timestamps" is a mixin; a type reference must name a model, composite type, enum, or type alias',
         data: { reference: 'type', name: 'Timestamps', constructorCall: false },
         filename: '0.psl',
         range: rangeOf(source, 'Timestamps', 1),
@@ -342,7 +342,7 @@ describe('createBinder — a mixin name in type position', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          '"auth.Timestamps" is a mixin; a type reference must name a model, composite type, enum, or named type',
+          '"auth.Timestamps" is a mixin; a type reference must name a model, composite type, enum, or type alias',
         range: rangeOf(source, 'auth.Timestamps'),
       },
     ]);
@@ -602,7 +602,7 @@ describe('createBinder — binding a mixin body once', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(fieldContexts.map((ctx) => ctx.typeConstructor?.name)).toEqual([
+    expect(fieldContexts.map((ctx) => ctx.contributedType?.symbol.name)).toEqual([
       'Int',
       'Int',
       undefined,

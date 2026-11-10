@@ -33,7 +33,9 @@ Configured via the `contract:` property in `prisma.config.ts`.
 
 ### Extension
 
-An installable package that adds features to Prisma 8 — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+A component, installed from an npm package, that adds features to Prisma 8 — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+
+Most packages hold one extension; `@prisma/orm-postgres-contrib` holds one for each trusted PostgreSQL contrib module it supports, under its own entrypoints. The citext extension's contract declares the `citext` database extension, so the planner creates it and `db sign` checks a database has it.
 
 Configured via the `extensions` array in `prisma.config.ts`; emitted into the contract under the top-level `extensions` key. Concept-level type names (`ExtensionPackRef`, `ControlExtensionDescriptor`) keep the "pack" vocabulary.
 
@@ -213,6 +215,14 @@ A specific feature that a database may or may not support (e.g., `RETURNING` cla
 
 Handles the translation between JavaScript values and database values. When you read a timestamp from the database, a codec converts it to a JavaScript `Date`; when you write it back, the codec converts it the other way. Extensions provide codecs for specialized types like vectors or geometries.
 
+### Convenience type
+
+A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what a field means in the application, such as `DateTime`, `Date`, `Time` or `Duration`, that becomes exactly one explicit type. Optional arguments choose which, with defaults. The contract stores only the explicit type. See ADR 279.
+
+### Explicit type
+
+A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database (ADR 257). An explicit type that a convenience type chooses is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). It leaves the suffix off only when its column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 279 and ADR 315.
+
 ### Marker
 
 A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed.
@@ -226,6 +236,14 @@ A unique name that identifies an extension. Namespaces keep extensions from coll
 Where a database object's name comes from. An object is **wire-named** when Prisma 8 derives the name (see [wire name](#wire-name)), or **exact-named** when you supply the name and Prisma 8 adopts it verbatim — `map:` on an index, `@@map` on an RLS policy block. The two modes differ in how drift is detected: a wire name commits to the object's content, so comparing names is comparing content; an exact name says nothing about content, so the body is compared byte-for-byte against the database's own reprint.
 
 Naming mode is independent of [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which answers a different question: whether Prisma 8 may write to the object at all.
+
+### Type implementation
+
+The codecs, data types and `now()` generators that implement a target's types. Code that more than one target's type implementations share, and that depends on no database and no family, lives in `@internal/type-implementations`. See ADR 314.
+
+### Type choice
+
+The declaration a pack contributes for a convenience type: its option arguments with their values and defaults, the arguments it passes on, and a table from each allowed combination of option values to the name of an explicit type constructor. See ADR 279.
 
 ### Wire Name
 

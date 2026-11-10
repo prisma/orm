@@ -14,8 +14,8 @@ enum Int4Level {
 
 enum Int8Level {
   @@type("pg/int8@1")
-  Low  = "1"
-  High = "10"
+  Low  = 1
+  High = 10
 }
 
 enum UuidLevel {
@@ -26,14 +26,14 @@ enum UuidLevel {
 
 enum StampLevel {
   @@type("pg/timestamptz-temporal@1")
-  Launch = "2024-01-01T00:00:00Z"
-  Sunset = "2025-06-30T12:00:00Z"
+  Launch = timestamptz`2024-01-01T00:00:00Z`
+  Sunset = timestamptz`2025-06-30T12:00:00Z`
 }
 
 enum DayLevel {
   @@type("pg/date-temporal@1")
-  Launch = "2024-01-01"
-  Sunset = "2025-06-30"
+  Launch = date`2024-01-01`
+  Sunset = date`2025-06-30`
 }
 
 enum Float8Level {
@@ -44,15 +44,15 @@ enum Float8Level {
 
 enum FloatSpecial {
   @@type("pg/float8@1")
-  Nan      = "NaN"
-  Infinite = "Infinity"
-  Negative = "-Infinity"
+  Nan      = NaN
+  Infinite = Infinity
+  Negative = -Infinity
 }
 
 enum FloatMixed {
   @@type("pg/float8@1")
   Half = 1.5
-  Nan  = "NaN"
+  Nan  = NaN
 }
 
 enum Host {
@@ -64,8 +64,8 @@ enum Host {
 
 enum Ratio {
   @@type("pg/numeric@1")
-  Half  = "0.5"
-  Whole = "1.50"
+  Half  = 0.5
+  Whole = 1.50
 }
 
 model Network {

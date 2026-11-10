@@ -133,15 +133,22 @@ describe('emitter integration', () => {
           },
         },
         storage: {
-          tables: {
-            user: {
-              columns: {
-                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+          namespaces: {
+            __unbound__: {
+              id: '__unbound__',
+              entries: {
+                table: {
+                  user: {
+                    columns: {
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                    },
+                    primaryKey: { columns: ['id'] },
+                    uniques: [],
+                    indexes: [],
+                    foreignKeys: [],
+                  },
+                },
               },
-              primaryKey: { columns: ['id'] },
-              uniques: [],
-              indexes: [],
-              foreignKeys: [],
             },
           },
         },

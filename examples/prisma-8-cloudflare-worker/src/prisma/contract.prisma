@@ -17,7 +17,7 @@ model User {
   id          String    @id @onCreate(uuid())
   email       String
   displayName String
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime(as: temporal)  @default(now())
   kind        user_type
   address     Address?
   posts       Post[]
@@ -30,7 +30,7 @@ model Post {
   id        String   @id @onCreate(uuid())
   title     String
   userId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -44,7 +44,7 @@ model Task {
   status      String   @default("open")
   type        String
   userId      String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 

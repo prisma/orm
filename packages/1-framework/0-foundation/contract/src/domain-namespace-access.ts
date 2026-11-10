@@ -1,7 +1,7 @@
 import { contractError } from './contract-errors';
 import { soleDomainNamespaceId } from './default-namespace';
 import type { ApplicationDomain } from './domain-envelope';
-import type { ContractModelBase, ContractValueObject } from './domain-types';
+import type { ContractModelBase } from './domain-types';
 
 /**
  * Models map for the contract's single domain namespace. Throws when the
@@ -21,14 +21,4 @@ export function domainModelsAtDefaultNamespace(
     );
   }
   return domainNamespace.models;
-}
-
-/**
- * Value objects for the contract's single domain namespace, when present.
- * Throws when the contract does not declare exactly one namespace.
- */
-export function domainValueObjectsAtDefaultNamespace(
-  domain: ApplicationDomain,
-): Record<string, ContractValueObject> | undefined {
-  return domain.namespaces[soleDomainNamespaceId(domain)]?.valueObjects;
 }

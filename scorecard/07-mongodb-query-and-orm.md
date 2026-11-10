@@ -94,4 +94,4 @@ Legend:
 | Composite `isSet` filter | — | — | ❌ | |
 | Composite `orderBy _count` | — | — | ❌ | |
 
-Mongo count terminals are shipped, but remain 🟡 under this scorecard's integration-test legend until a qualifying MongoDB ORM integration test asserts them. The runtime and target-driver evidence is in `packages/2-mongo-family/7-runtime/test/mongo-middleware.test.ts` (statistics mapping and interception) and `packages/3-mongo-target/3-mongo-driver/test/mongo-driver.test.ts` (`modifiedCount` and `deletedCount`). Mongo update counts mean `modifiedCount`, not matched rows, so no-op updates return zero; deletes mean `deletedCount`.
+Mongo count terminals are shipped, but remain 🟡 under this scorecard's integration-test legend until a qualifying MongoDB ORM integration test asserts them. The runtime and target-driver evidence is in `packages/2-mongo-family/7-runtime/test/mongo-middleware.test.ts` (statistics mapping and interception) and `packages/3-targets/mongo/3-driver/test/mongo-driver.test.ts` (`modifiedCount` and `deletedCount`). Mongo update counts mean `modifiedCount`, not matched rows, so no-op updates return zero; deletes mean `deletedCount`.

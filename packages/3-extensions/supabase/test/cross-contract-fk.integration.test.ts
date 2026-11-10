@@ -35,6 +35,8 @@ import { AuthUser } from '../src/exports/contract';
 import supabasePack from '../src/exports/pack';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 // ---------------------------------------------------------------------------
 // Synthetic app contract — Profile model with cross-space FK to auth.users.id
 // ---------------------------------------------------------------------------
@@ -155,6 +157,7 @@ describe('AC7 — cross-contract FK: public.profile.user_id → auth.users.id', 
         await client.connect(connectionString);
 
         const applyResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: appContractJson,
           mode: 'apply',
           migrationsDir,
@@ -162,7 +165,7 @@ describe('AC7 — cross-contract FK: public.profile.user_id → auth.users.id', 
 
         if (!applyResult.ok) {
           throw new Error(
-            `db init apply failed: ${applyResult.failure.summary}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
+            `db init apply failed: ${applyResult.failure.message}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
           );
         }
 

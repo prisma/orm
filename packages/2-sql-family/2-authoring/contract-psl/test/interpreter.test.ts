@@ -1,0 +1,881 @@
+import { crossRef } from '@internal/contract/types';
+import {
+  assembleGeneratorFunctions,
+  singleGeneratorBinding,
+} from '@internal/framework-components/components';
+import { defineIndexTypes } from '@internal/sql-contract/index-types';
+import { type } from 'arktype';
+import { describe, expect, it } from 'vitest';
+import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
+import {
+  createBuiltinLikeControlMutationDefaults,
+  interpretSqlContract,
+  modelsOf,
+  postgresScalarTypeDescriptors,
+  postgresTarget,
+  testEnumEntityContributions,
+} from './fixtures';
+import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
+import { unboundTables } from './unbound-tables';
+
+const testIndexPack = {
+  kind: 'extension',
+  id: 'test-index-pack',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.1',
+  indexTypes: defineIndexTypes().add('bm25', { options: type('object') }),
+} as const;
+
+describe('interpretPslDocumentToSqlContract', () => {
+  const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
+  const interpretPostgresSchema = (
+    schema: string,
+    input: Omit<
+      InterpretPslDocumentToSqlContractInput,
+      | 'documents'
+      | 'sources'
+      | 'symbolTable'
+      | 'binder'
+      | 'target'
+      | 'scalarColumnDescriptors'
+      | 'composedExtensionContracts'
+      | 'createNamespace'
+      | 'capabilities'
+      | 'dataTypes'
+      | 'codecLookup'
+      | 'generatorFunctions'
+    > &
+      Partial<
+        Pick<
+          InterpretPslDocumentToSqlContractInput,
+          'composedExtensionContracts' | 'generatorFunctions'
+        >
+      >,
+  ) =>
+    interpretSqlContract(schema, {
+      target: postgresTarget,
+      scalarColumnDescriptors: postgresScalarTypeDescriptors,
+      authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
+      composedExtensionContracts: new Map(),
+      createNamespace: createTestSqlNamespace,
+      capabilities: { sql: { scalarList: true } },
+      ...fixtureInterpreterTypes,
+      ...input,
+    });
+
+  it('uses composed scalar type descriptors without hardcoded fallback', () => {
+    const result = interpretSqlContract(
+      `model User {
+  id Int @id
+  email String
+}`,
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: new Map([
+          ['Int', { codecId: 'pg/int4@1' }],
+          ['String', { codecId: 'custom/text@1' }],
+        ]),
+        composedExtensionContracts: new Map(),
+        controlMutationDefaults: builtinControlMutationDefaults,
+        createNamespace: createTestSqlNamespace,
+        ...fixtureInterpreterTypes,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              User: {
+                columns: {
+                  email: {
+                    codecId: 'custom/text@1',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(result.value.roots).toEqual({ User: crossRef('User', 'public') });
+  });
+
+  it('carries the enabled capabilities of the stack it is interpreted against', () => {
+    const result = interpretSqlContract(
+      `model User {
+  id Int @id
+  email String
+}`,
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        ...fixtureInterpreterTypes,
+        capabilities: {
+          sql: { scalarList: true, lateral: false },
+          postgres: { distinctOn: true },
+          disabled: { everything: false },
+        },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.capabilities).toEqual({
+      postgres: { distinctOn: true },
+      sql: { scalarList: true },
+    });
+  });
+
+  it('flows capabilities declared on the target pack through to the contract', () => {
+    const targetWithCapabilities = {
+      ...postgresTarget,
+      capabilities: { sql: { returning: true }, postgres: { lateral: true } },
+    } as const;
+
+    const result = interpretSqlContract(
+      `model User {
+  id Int @id
+  email String
+}`,
+      {
+        target: targetWithCapabilities,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        authoringContributions: { entityTypes: testEnumEntityContributions, type: {} },
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        ...fixtureInterpreterTypes,
+        capabilities: { sql: { scalarList: true } },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.capabilities).toEqual({
+      sql: { returning: true, scalarList: true },
+      postgres: { lateral: true },
+    });
+  });
+
+  it('does not derive generated column type without descriptor resolver', () => {
+    const result = interpretSqlContract(
+      `model User {
+  id Int @id
+  slug String @onCreate(slugid())
+}`,
+      {
+        target: postgresTarget,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+        composedExtensionContracts: new Map(),
+        capabilities: { sql: { scalarList: true } },
+        ...fixtureInterpreterTypes,
+        generatorFunctions: assembleGeneratorFunctions([
+          {
+            id: 'slugid-pack',
+            generatorFunctions: [
+              {
+                name: 'slugid',
+                signature: {
+                  documentation:
+                    'Generates a slug identifier without changing the field’s storage type.',
+                },
+                bindings: [
+                  singleGeneratorBinding({ codecIds: ['pg/text@1'], generatorId: 'slugid' }),
+                ],
+              },
+            ],
+            controlMutationDefaults: { generatorDescriptors: [{ id: 'slugid' }] },
+          },
+        ]),
+        createNamespace: createTestSqlNamespace,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              User: {
+                columns: {
+                  slug: {
+                    codecId: 'pg/text@1',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('populates roots from models', () => {
+    const result = interpretPostgresSchema(
+      `model User {
+  id Int @id
+  email String
+}
+
+model Post {
+  id Int @id
+  title String
+  userId Int
+  author User @relation(fields: [userId], references: [id])
+}
+
+model Comment {
+  id Int @id
+  body String
+  postId Int
+  post Post @relation(fields: [postId], references: [id])
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.roots).toEqual({
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
+      Comment: crossRef('Comment', 'public'),
+    });
+  });
+
+  it('builds sql contract ir from simple psl schema', () => {
+    const result = interpretPostgresSchema(
+      `model User {
+  id Int @id
+  email String
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.targetFamily).toBe('sql');
+    expect(result.value.target).toBe('postgres');
+    expect(result.value.roots).toEqual({ User: crossRef('User', 'public') });
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              User: {
+                columns: {
+                  id: { codecId: 'pg/int4@1' },
+                  email: { codecId: 'pg/text@1' },
+                },
+                primaryKey: { columns: ['id'] },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(modelsOf(result.value)).toMatchObject({
+      User: {
+        storage: {
+          namespaceId: 'public',
+          table: 'User',
+          fields: {
+            id: { column: 'id' },
+            email: { column: 'email' },
+          },
+        },
+      },
+    });
+  });
+
+  it('emits sql model with no @id and no @@id', () => {
+    const result = interpretPostgresSchema(
+      `model IdlessThing {
+  email String @unique
+  token String
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              IdlessThing: {
+                columns: {
+                  email: { codecId: 'pg/text@1' },
+                  token: { codecId: 'pg/text@1' },
+                },
+                uniques: [{ columns: ['email'] }],
+              },
+            },
+          },
+        },
+      },
+    });
+    // `toMatchObject` with `primaryKey: undefined` requires the key to be
+    // present — assert absence directly via a narrowed accessor instead.
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(unboundTables(storage)['IdlessThing']?.primaryKey).toBeUndefined();
+    expect(modelsOf(result.value)).toMatchObject({
+      IdlessThing: {
+        storage: {
+          namespaceId: 'public',
+          table: 'IdlessThing',
+          fields: {
+            email: { column: 'email' },
+            token: { column: 'token' },
+          },
+        },
+      },
+    });
+  });
+
+  it('emits composite model id as primary key', () => {
+    const result = interpretPostgresSchema(
+      `model CompositeThing {
+  email String
+  token String
+
+  @@id([email, token])
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              CompositeThing: {
+                primaryKey: { columns: ['email', 'token'] },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('emits mapped composite model id name and columns', () => {
+    const result = interpretPostgresSchema(
+      `model CompositeThing {
+  email String @map("email_address")
+  token String @map("api_token")
+
+  @@id([email, token], map: "composite_thing_pkey")
+  @@map("composite_thing")
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              composite_thing: {
+                primaryKey: {
+                  columns: ['email_address', 'api_token'],
+                  name: 'composite_thing_pkey',
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('names the storage table after the model verbatim when there is no @@map', () => {
+    const result = interpretPostgresSchema(
+      `model UserProfile {
+  id Int @id
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.roots).toEqual({ UserProfile: crossRef('UserProfile', 'public') });
+    expect(Object.keys(result.value.storage.namespaces['public']!.entries['table'] ?? {})).toEqual([
+      'UserProfile',
+    ]);
+  });
+
+  it('keeps every storage name when a model and a field are renamed and mapped to their old names', () => {
+    const before = interpretPostgresSchema(
+      `model Team {
+  id    Int    @id
+  label String
+}
+
+model Member {
+  id     Int  @id
+  teamId Int
+  team   Team @relation(fields: [teamId], references: [id])
+}
+`,
+      { controlMutationDefaults: builtinControlMutationDefaults },
+    );
+    const after = interpretPostgresSchema(
+      `model Squad {
+  id    Int    @id
+  title String @map("label")
+
+  @@map("Team")
+}
+
+model Member {
+  id     Int   @id
+  teamId Int
+  team   Squad @relation(fields: [teamId], references: [id])
+}
+`,
+      { controlMutationDefaults: builtinControlMutationDefaults },
+    );
+
+    expect(before.ok && after.ok).toBe(true);
+    if (!before.ok || !after.ok) return;
+
+    expect(after.value.storage).toEqual(before.value.storage);
+  });
+
+  it('maps @@map and @map to storage table and column names', () => {
+    const result = interpretPostgresSchema(
+      `model Team {
+  id Int @id @map("team_id")
+  @@map("org_team")
+}
+
+model Member {
+  id Int @id @map("member_id")
+  teamId Int @map("team_ref")
+  team Team @relation(fields: [teamId], references: [id])
+  @@map("team_member")
+  @@index([teamId])
+  @@unique([teamId, id])
+}
+`,
+      {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.roots).toEqual({
+      org_team: crossRef('Team', 'public'),
+      team_member: crossRef('Member', 'public'),
+    });
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              org_team: {
+                columns: {
+                  team_id: { codecId: 'pg/int4@1' },
+                },
+                primaryKey: { columns: ['team_id'] },
+              },
+              team_member: {
+                columns: {
+                  member_id: { codecId: 'pg/int4@1' },
+                  team_ref: { codecId: 'pg/int4@1' },
+                },
+                primaryKey: { columns: ['member_id'] },
+                indexes: [{ columns: ['team_ref'] }],
+                uniques: [{ columns: ['team_ref', 'member_id'] }],
+                foreignKeys: [
+                  {
+                    source: {
+                      namespaceId: 'public',
+                      tableName: 'team_member',
+                      columns: ['team_ref'],
+                    },
+                    target: {
+                      namespaceId: 'public',
+                      tableName: 'org_team',
+                      columns: ['team_id'],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(modelsOf(result.value)).toMatchObject({
+      Team: {
+        storage: {
+          namespaceId: 'public',
+          table: 'org_team',
+          fields: { id: { column: 'team_id' } },
+        },
+      },
+      Member: {
+        storage: {
+          namespaceId: 'public',
+          table: 'team_member',
+          fields: {
+            id: { column: 'member_id' },
+            teamId: { column: 'team_ref' },
+          },
+        },
+      },
+    });
+  });
+
+  // Round-trip companion to packages/2-sql-family/9-family/test/psl-contract-infer/print-psl/print-psl.core.test.ts
+  // The PSL strings below are copied verbatim from the printer's snapshots so
+  // a drift on either side breaks one of the two suites. Spec: id-less SQL
+  // tables and composite-PK tables emitted by introspection must round-trip
+  // through the SQL PSL interpreter.
+  describe('round-trips printer output', () => {
+    it('accepts the printer output for an id-less table', () => {
+      const printed = `// Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+// WARNING: This table has no primary key in the database
+model AuditLog {
+  event     String
+  timestamp DateTime
+
+  @@map("audit_log")
+}
+`;
+      const result = interpretPostgresSchema(printed, {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+      expect(unboundTables(storage)['audit_log']?.primaryKey).toBeUndefined();
+      expect(modelsOf(result.value)).toMatchObject({
+        AuditLog: { storage: { namespaceId: 'public', table: 'audit_log' } },
+      });
+    });
+
+    it('accepts the printer output for a composite-PK table', () => {
+      const printed = `// Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+model OrderItem {
+  orderId   Int @map("order_id")
+  productId Int @map("product_id")
+  quantity  Int
+
+  @@id([orderId, productId], map: "order_item_pkey")
+  @@map("order_item")
+}
+`;
+      const result = interpretPostgresSchema(printed, {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          public: {
+            entries: {
+              table: {
+                order_item: {
+                  primaryKey: {
+                    columns: ['order_id', 'product_id'],
+                    name: 'order_item_pkey',
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  });
+
+  describe('@@index type and options', () => {
+    it('lowers @@index([body], type: "bm25", options: { key_field: "id" }) to an IR index node with type and options', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], type: "bm25", options: { key_field: "id" }, map: "doc_body_bm25_idx")
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+          composedExtensions: [testIndexPack.id],
+          composedExtensionPackRefs: [testIndexPack],
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          public: {
+            entries: {
+              table: {
+                Doc: {
+                  indexes: [
+                    {
+                      columns: ['body'],
+                      name: 'doc_body_bm25_idx',
+                      type: 'bm25',
+                      options: { key_field: 'id' },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    it('accepts a multi-key options object with string-literal leaves', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], type: "bm25", options: { key_field: "id", language: "en" })
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+          composedExtensions: [testIndexPack.id],
+          composedExtensionPackRefs: [testIndexPack],
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          public: {
+            entries: {
+              table: {
+                Doc: {
+                  indexes: [{ type: 'bm25', options: { key_field: 'id', language: 'en' } }],
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    it('rejects a non-string-literal leaf in options (boolean)', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], type: "bm25", options: { key_field: "id", fastupdate: false })
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(
+        result.failure.diagnostics.some((d) => /Expected a string literal/.test(d.message)),
+      ).toBe(true);
+    });
+
+    it('rejects a non-string-literal leaf in options (number)', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], type: "bm25", options: { fillfactor: 70 })
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(
+        result.failure.diagnostics.some((d) => /Expected a string literal/.test(d.message)),
+      ).toBe(true);
+    });
+
+    it('rejects an options argument with no surrounding type argument', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], options: { key_field: "id" })
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(
+        result.failure.diagnostics.some((d) =>
+          /options argument requires a type argument/.test(d.message),
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects a malformed options object literal', () => {
+      const result = interpretPostgresSchema(
+        `model Doc {
+  id Int @id
+  body String
+  @@index([body], type: "bm25", options: { not_an_assignment })
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(
+        result.failure.diagnostics.some(
+          (d) =>
+            d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX' &&
+            d.message.includes('Expected a string literal'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  describe('per-target namespace resolution', () => {
+    it('Postgres leaves implicit top-level declarations on the late-bound default slot (TS/PSL byte parity for single-namespace contracts)', () => {
+      const result = interpretPostgresSchema(
+        `model User {
+  id Int @id
+}
+`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+      const table = unboundTables(storage)['User'];
+      expect(table).toBeDefined();
+      const json = JSON.parse(JSON.stringify(table)) as Record<string, unknown>;
+      expect(json).not.toHaveProperty('namespaceId');
+    });
+
+    it('Postgres lowers `namespace unbound { … }` to the late-binding sentinel slot', () => {
+      const result = interpretPostgresSchema(
+        `namespace unbound {
+  model Tenant {
+    id Int @id
+  }
+}
+`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+      const tenant = unboundTables(storage)['Tenant'];
+      expect(tenant).toBeDefined();
+      const json = JSON.parse(JSON.stringify(tenant)) as Record<string, unknown>;
+      expect(json).not.toHaveProperty('namespaceId');
+    });
+
+    it('Postgres lowers named `namespace auth { … }` to its eponymous schema slot', () => {
+      const result = interpretPostgresSchema(
+        `namespace auth {
+  model User {
+    id Int @id
+  }
+}
+`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+      const user = storage.namespaces['auth']!.entries.table?.['User'];
+      expect(user).toBeDefined();
+      expect(unboundTables(storage)['User']).toBeUndefined();
+      const json = JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
+      expect(json).not.toHaveProperty('namespaceId');
+    });
+
+    it('Postgres routes a mixed top-level + multi-namespace document into the right slots', () => {
+      const result = interpretPostgresSchema(
+        `model Post {
+  id Int @id
+}
+
+namespace auth {
+  model User {
+    id Int @id
+  }
+}
+
+namespace logs {
+  model AuditLog {
+    id Int @id
+  }
+}
+`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+      expect(unboundTables(storage)['Post']).toBeDefined();
+      expect(storage.namespaces['auth']!.entries.table?.['User']).toBeDefined();
+      expect(storage.namespaces['logs']!.entries.table?.['AuditLog']).toBeDefined();
+      expect(unboundTables(storage)['User']).toBeUndefined();
+    });
+  });
+});

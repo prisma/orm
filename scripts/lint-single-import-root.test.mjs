@@ -95,6 +95,28 @@ describe('findMixedPackages', () => {
     }
   });
 
+  test('skips the sample import lines of every fragment’s detection test', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'single-import-root-detection-'));
+    try {
+      const integration = join(tree, 'test/integration');
+      const fragment = join(integration, 'test/upgrade-instructions/any-fragment');
+      mkdirSync(fragment, { recursive: true });
+      writeFileSync(join(integration, 'package.json'), '{"name":"fixture"}');
+      writeFileSync(
+        join(integration, 'query.ts'),
+        "import { budgets } from '@internal/sql-runtime';",
+      );
+      writeFileSync(
+        join(fragment, 'detection.test.ts'),
+        'const sample = "import postgres from \'@prisma/orm-postgres/runtime\';";',
+      );
+
+      assert.deepEqual(findMixedPackages(tree, ['test']), []);
+    } finally {
+      rmSync(tree, { recursive: true, force: true });
+    }
+  });
+
   test('still reports the package when the same specifiers sit outside the exempt subtree', () => {
     const mixed = findMixedPackages(base, ['test'], []).map((entry) => entry.pkg);
     assert.ok(mixed.includes('test/integration'));

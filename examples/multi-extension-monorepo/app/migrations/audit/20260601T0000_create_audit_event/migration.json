@@ -1,0 +1,9 @@
+{
+  "from": null,
+  "to": "d60ebdd877de6283fafbbe0dc9a4fa13c1197009a53ba95ed37ba04fa3640cb1",
+  "providedInvariants": [
+    "audit:create-audit_event-v1"
+  ],
+  "createdAt": "2026-05-09T04:24:04.431Z",
+  "migrationHash": "8178c0cc351ff8c834c1ded25bb858ab8c4db568c78c489377e8b34046170186"
+}

@@ -20,28 +20,22 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import { createControlClient } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
 import {
   cacheAnnotation,
   createCacheMiddleware,
   createInMemoryCacheStore,
 } from '@internal/middleware-cache';
-import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import { contractFromJson } from '@internal/postgres/static';
 import type { SqlMiddleware } from '@internal/sql-runtime';
-import postgres from '@internal/target-postgres/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import supabasePack from '../src/exports/pack';
 import { supabase } from '../src/exports/runtime';
 import type { Contract } from './fixtures/example-app/contract';
 import contractJson from './fixtures/example-app/contract.json' with { type: 'json' };
 import { createDb, fixtureJwt } from './fixtures/example-app/db';
+import { runDbInit } from './fixtures/example-app/db-init';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
 async function signJwt(
@@ -66,35 +60,6 @@ function recordingMiddleware(): { middleware: SqlMiddleware; sqls: string[] } {
     },
   };
   return { middleware, sqls };
-}
-
-async function runDbInit(connectionString: string, migrationsDir: string): Promise<void> {
-  const space = supabasePack.contractSpace;
-  if (!space) throw new Error('supabasePack must declare a contractSpace');
-
-  await emitContractSpaceArtifacts(migrationsDir, 'supabase', {
-    contract: space.contractJson,
-    contractDts: '// supabase extension contract space\n',
-    headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
-  });
-
-  const client = createControlClient({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
-    extensions: [supabasePack],
-  });
-
-  try {
-    await client.connect(connectionString);
-    const result = await client.dbInit({ contract: contractJson, mode: 'apply', migrationsDir });
-    if (!result.ok) {
-      throw new Error(`dbInit apply failed: ${result.failure.summary}`);
-    }
-  } finally {
-    await client.close();
-  }
 }
 
 async function applyGrantsFixture(connectionString: string): Promise<void> {

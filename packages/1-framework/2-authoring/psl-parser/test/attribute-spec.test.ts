@@ -411,7 +411,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },
@@ -431,7 +431,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },

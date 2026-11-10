@@ -1,6 +1,6 @@
 import { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
 import type { SqlMiddleware, SqlMiddlewareContext } from '@internal/sql-runtime';
-import { startActivityOn } from '@internal/sql-runtime';
+import { activitySource, startActivityOn } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
 import { createTestSetup, stubPlan } from './supabase-runtime-fixtures';
 
@@ -31,7 +31,7 @@ describe('a role-bound activity handle', () => {
   it('sends each statement on a role session, as a child of the activity', async () => {
     const { runtime, driver, started } = createRecordingSetup();
 
-    const call = await runtime.roleActivitySource(binding).startActivity(testCall);
+    const call = await runtime.forRole(binding)[activitySource].startActivity(testCall);
     await call.execute(stubPlan());
     await call.end({ outcome: 'succeeded' });
 
@@ -51,6 +51,7 @@ describe('a role-bound activity handle', () => {
         'SELECT set_config($1, $2, false)',
         'select 1',
         'RESET ALL',
+        'RESET ROLE',
       ],
       released: 1,
     });
@@ -59,7 +60,7 @@ describe('a role-bound activity handle', () => {
   it('begins its transaction on a role session it releases after the commit', async () => {
     const { runtime, driver, started } = createRecordingSetup();
 
-    const call = await runtime.roleActivitySource(binding).startActivity(testCall);
+    const call = await runtime.forRole(binding)[activitySource].startActivity(testCall);
     const transaction = await call.transaction?.();
     await transaction?.execute(stubPlan());
     await transaction?.commit();
@@ -77,6 +78,7 @@ describe('a role-bound activity handle', () => {
         'SELECT set_config($1, $2, false)',
         'SELECT set_config($1, $2, false)',
         'RESET ALL',
+        'RESET ROLE',
       ],
       transactionSql: ['select 1'],
       commits: 1,
@@ -116,7 +118,7 @@ describe('the planContentHash of a role activity source', () => {
       ],
     });
 
-    await runtime.roleActivitySource(binding).planContentHash({
+    await runtime.forRole(binding)[activitySource].planContentHash({
       ast: SelectAst.from(TableSource.named('users')),
       params: [],
       meta: stubPlan().meta,
@@ -129,7 +131,7 @@ describe('the planContentHash of a role activity source', () => {
 describe('an ended role-bound activity handle', () => {
   it('rejects statements before it opens a role session', async () => {
     const { runtime, driver } = createRecordingSetup();
-    const call = await runtime.roleActivitySource(binding).startActivity(testCall);
+    const call = await runtime.forRole(binding)[activitySource].startActivity(testCall);
     await call.end({ outcome: 'succeeded' });
 
     await expect(call.execute(stubPlan())).rejects.toMatchObject({

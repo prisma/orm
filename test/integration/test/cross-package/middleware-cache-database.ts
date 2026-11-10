@@ -129,7 +129,7 @@ export function useMiddlewareCacheDatabase(): MiddlewareCacheDatabase {
     const resolvedDriver = stackInstance.driver;
     if (!resolvedDriver) throw new Error('Driver missing');
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     // Spy on the driver's query so we can count round-trips. The
     // cache middleware short-circuits via `intercept.onQuery` upstream of

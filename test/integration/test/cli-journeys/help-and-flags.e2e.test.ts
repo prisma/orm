@@ -81,17 +81,17 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'Y.04: auto-enables JSON output when stdout is piped',
+      'Y.04: a piped stdout receives the emitted file paths relative to the working directory, not JSON',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
         const result = await runContractEmit(ctx, [], { isTTY: false });
         expect(result.exitCode, 'Y.04: emit succeeds').toBe(0);
 
-        expect(stdoutFrames(result.stdout).at(-1)).toMatchObject({
-          kind: 'result',
-          envelope: { ok: true, result: { storageHash: expect.any(String) } },
-        });
+        expect(result.stdout.trimEnd().split('\n')).toEqual([
+          expect.stringMatching(/^[^/].*contract\.json$/),
+          expect.stringMatching(/^[^/].*contract\.d\.ts$/),
+        ]);
       },
       timeouts.typeScriptCompilation,
     );

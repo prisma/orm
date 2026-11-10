@@ -3,22 +3,22 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
 import { consumeCollectionRows, type DescribeCollectionRowsOptions } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
-import { withMutationScope } from '../mutation-executor';
+import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
-import { returningProjection } from '../query-plan-mutations';
 import { queryPlanRows } from '../query-plan-rows';
-import type { CollectionContext } from '../types';
+import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
-import type { Executed, OutputsOf, Run, Slots, StatementAst } from './node';
+import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
 type Context = CollectionContext<Contract<SqlStorage>>;
-type Collected = readonly (readonly StorageRow[] | number)[];
+type Collected = readonly (readonly StorageRow[] | SqlStatementStats)[];
 
 interface Outcome<Row> {
   readonly rows: readonly Row[];
@@ -31,11 +31,11 @@ export function queryGraph<Row>(
   callerRows: DescribeCollectionRowsOptions,
 ): AsyncIterableResult<Row> {
   returnCallerColumns(graph, callerRows);
-  const [only, ...others] = graph.nodes();
-  // A graph with one node is one statement. It runs without a transaction and its rows are
-  // handed to the caller as they arrive. A graph with several nodes runs inside the mutation
-  // scope, whose transaction ends when its callback returns, so its result is collected there
-  // and yielded afterwards.
+  const [only, ...others] = statementNodes(graph);
+  // A graph with one statement node is one statement. It runs without a transaction and its rows
+  // are handed to the caller as they arrive. A graph with several statement nodes runs inside the
+  // mutation scope, whose transaction ends when its callback returns, so its result is collected
+  // there and yielded afterwards.
   if (only !== undefined && others.length === 0 && only[0] === graph.result) {
     const [id, node] = only;
     const run = runOn(ctx, ctx.runtime);
@@ -69,17 +69,39 @@ function returnCallerColumns(graph: Graph, callerRows: DescribeCollectionRowsOpt
   }
 }
 
-function runAllNodes<Row>(
+async function runAllNodes<Row>(
   graph: Graph,
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
-  if (graph.nodes().length > 1) {
-    return withMutationScope(ctx.runtime, (scope) =>
+  const { runtime } = ctx;
+  if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
+    return runInTransaction(await runtime.transaction(), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
   }
-  return runNodesInOrder<Row>(graph, ctx, ctx.runtime, callerRows);
+  return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);
+}
+
+async function runInTransaction<T>(
+  transaction: RuntimeTransaction,
+  run: (scope: RuntimeScope) => Promise<T>,
+): Promise<T> {
+  try {
+    const result = await run(transaction);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
+      const settlement = settlementOf(transaction);
+      if (settlement?.rolledBack !== true) throw rollbackError;
+      settlement.logDroppedError(rollbackError);
+    }
+    throw error;
+  }
 }
 
 async function runNodesInOrder<Row>(
@@ -89,7 +111,7 @@ async function runNodesInOrder<Row>(
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
   const run = runOn(ctx, scope);
-  const collected: (readonly StorageRow[] | number)[] = [];
+  const collected: (readonly StorageRow[] | SqlStatementStats)[] = [];
   let rows: readonly Row[] = [];
   let count = 0;
 
@@ -100,7 +122,7 @@ async function runNodesInOrder<Row>(
       continue;
     }
     const storageRows = rowsOf(executed);
-    count = typeof executed === 'number' ? executed : storageRows.length;
+    count = Array.isArray(executed) ? storageRows.length : executed.affectedRows;
     if (callerRows !== undefined) {
       rows = await shapeRows<Row>(graph, id, streamOf(storageRows), callerRows).toArray();
     }
@@ -129,7 +151,7 @@ function runOn(ctx: Context, scope: RuntimeScope): Run {
     buildOrmQueryPlan<StorageRow>(contract, ast, deriveParamsFromAst(ast).params);
   return {
     query: (ast) => queryPlanRows(scope, planOf(ast)),
-    execute: async (ast) => (await scope.execute(planOf(ast))).affectedRows,
+    execute: (ast) => scope.execute(planOf(ast)),
   };
 }
 
@@ -145,8 +167,8 @@ function shapeRows<Row>(
   const selected =
     state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
   const hiddenColumns = graph
-    .readersOf(id)
-    .flatMap(({ edge }) => edge.columns.map(([source]) => source.alias))
+    .columnsReadFrom(id)
+    .map((column) => column.alias)
     .filter((column) => !selected.includes(column));
 
   return mapResultRows(consumeCollectionRows<StorageRow>(callerRows, storageRows), (row) => {
@@ -155,8 +177,14 @@ function shapeRows<Row>(
   });
 }
 
-function rowsOf(executed: readonly StorageRow[] | number | undefined): readonly StorageRow[] {
-  return typeof executed === 'object' ? executed : [];
+function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {
+  return graph.nodes().filter(([, node]) => node instanceof StatementNode);
+}
+
+function rowsOf(
+  executed: readonly StorageRow[] | SqlStatementStats | undefined,
+): readonly StorageRow[] {
+  return Array.isArray(executed) ? executed : [];
 }
 
 function rowStream(executed: Executed): AsyncIterableResult<StorageRow> {

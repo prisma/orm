@@ -63,7 +63,10 @@
                   "codecId": "pg/numeric@1",
                   "dataType": "pg/numeric",
                   "nullable": true,
-                  "typeRef": "Decimal65_30"
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
                 },
                 "id": {
                   "codecId": "pg/int4@1",
@@ -86,18 +89,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5d9bf11c889c9d192dbae04cee224431704fca1f87925ae1c9bac8c38b047c79",
-    "types": {
-      "Decimal65_30": {
-        "codecId": "pg/numeric@1",
-        "dataType": "pg/numeric",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 65,
-          "scale": 30
-        }
-      }
-    }
+    "storageHash": "1a418acbc9c5bb527ce8d84c5a66e888da78f1c68e7547ba783223fcdb80ee4d"
   },
   "capabilities": {
     "postgres": {
@@ -117,6 +109,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

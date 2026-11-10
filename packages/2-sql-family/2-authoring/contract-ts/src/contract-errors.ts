@@ -1,0 +1,48 @@
+import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
+import { structuredError } from '@internal/utils/structured-error';
+
+export type ContractCode = `CONTRACT.${ContractSubcode}`;
+
+type ContractSubcode =
+  | 'VALIDATION_FAILED'
+  | 'NAME_DUPLICATE'
+  | 'MODEL_UNKNOWN'
+  | 'PACK_CONTRIBUTION_INVALID'
+  | 'PACK_FAMILY_MISMATCH'
+  | 'PACK_TARGET_MISMATCH'
+  | 'PACK_REF_INVALID'
+  | 'PACK_MISSING'
+  | 'NAMESPACE_INVALID'
+  | 'NAMESPACE_UNSUPPORTED'
+  | 'NAMESPACE_UNKNOWN'
+  | 'ARGUMENT_INVALID'
+  | 'FOREIGN_KEY_INVALID'
+  | 'RELATION_INVALID'
+  | 'IDENTITY_INVALID'
+  | 'CONSTRAINT_INVALID'
+  | 'DEFAULT_INVALID'
+  | 'ENUM_INVALID'
+  | 'CHECK_NAME_RESERVED'
+  | 'CHECK_ON_STI_VARIANT'
+  | 'VARIANT_COLUMN_NOT_ON_BASE_TABLE'
+  | 'TYPE_PARAMS_INVALID'
+  | 'TYPE_UNKNOWN'
+  | 'TYPES_KEY_REMOVED'
+  | 'FIELD_UNKNOWN'
+  | 'FIELD_HELPER_UNKNOWN'
+  | 'MODEL_TOKEN_INVALID'
+  | 'MODULE_EXPORT_MISSING'
+  | 'ENTITY_KIND_UNKNOWN'
+  | 'ENTITY_KIND_INVALID'
+  | 'TABLE_MISMATCH'
+  | 'SQL_EXPRESSION_INVALID'
+  | 'TABLE_OWNED_BY_MODEL'
+  | 'TABLE_UNKNOWN';
+
+export function contractError(
+  code: ContractCode,
+  message: string,
+  options?: StructuredErrorOptions,
+): StructuredError {
+  return structuredError(code, message, options);
+}

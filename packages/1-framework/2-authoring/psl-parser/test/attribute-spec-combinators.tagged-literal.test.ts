@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBinder } from '../src/binder';
 import type { FieldAttributeCtx } from '../src/exports';
-import { taggedLiteral } from '../src/exports';
+import { enumMemberValue, taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -114,6 +114,50 @@ describe('taggedLiteral', () => {
     expect(type.parse(large.expr, large.ctx)).toMatchObject({
       ok: true,
       value: { canonicalization: { ok: false, reason: 'too-large' } },
+    });
+  });
+});
+
+describe('enumMemberValue', () => {
+  it('yields a tagged member as its written value', () => {
+    const { expr, ctx } = argOf('date"2024-01-31"');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { kind: 'tag', tag: 'date', text: '2024-01-31' },
+    });
+  });
+
+  it('yields a list member as the list of its scalar values', () => {
+    const { expr, ctx } = argOf('[1, "a", true, date"2024-01-31"]');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: [1, 'a', true, { kind: 'tag', tag: 'date', text: '2024-01-31' }],
+    });
+  });
+
+  it('refuses a list inside a list member', () => {
+    const { expr, ctx } = argOf('[1, [2]]');
+    const result = enumMemberValue().parse(expr, ctx);
+    expect(result.ok ? [] : result.failure.map(({ code, message }) => ({ code, message }))).toEqual(
+      [
+        {
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: string | number | boolean | tag`...`',
+        },
+      ],
+    );
+  });
+
+  it('refuses a tagged member whose text cannot be canonicalized, with the tagged literal diagnostic', () => {
+    const { expr, ctx } = argOf('json`a\0b`');
+    expect(enumMemberValue().parse(expr, ctx)).toMatchObject({
+      ok: false,
+      failure: [
+        {
+          code: 'PSL_TAGGED_LITERAL_NUL',
+          message: 'Tagged literals must not contain NUL characters.',
+        },
+      ],
     });
   });
 });

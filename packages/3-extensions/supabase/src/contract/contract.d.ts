@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'292489649ae6d6928de98a32b544bd9caf6b7d49718c10fe2720b83545a4b5a2'>;
+  StorageHashBase<'110ad99e1e466691bdb0a4349a17365561e76ad017f58beb272f4496b05b8e9e'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -42,6 +42,10 @@ export type AggregateTypes = {
       readonly 'pg/int4@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/interval-string@1': {
+        readonly output: 'pg/interval-string@1';
+        readonly nullable: true;
+      };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
@@ -91,13 +95,27 @@ export type AggregateTypes = {
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/interval-string@1': {
+        readonly output: 'pg/interval-string@1';
+        readonly nullable: true;
+      };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/oid@1': { readonly output: 'pg/oid@1'; readonly nullable: true };
       readonly 'pg/text-array@1': { readonly output: 'pg/text-array@1'; readonly nullable: true };
       readonly 'pg/text@1': { readonly output: 'pg/text@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/time-string@1'; readonly nullable: true };
       readonly 'pg/time-temporal@1': {
         readonly output: 'pg/time-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamp-date@1': {
+        readonly output: 'pg/timestamp-date@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamp-instant@1': {
+        readonly output: 'pg/timestamp-instant@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamp-string@1': {
@@ -151,13 +169,27 @@ export type AggregateTypes = {
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/interval-string@1': {
+        readonly output: 'pg/interval-string@1';
+        readonly nullable: true;
+      };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/oid@1': { readonly output: 'pg/oid@1'; readonly nullable: true };
       readonly 'pg/text-array@1': { readonly output: 'pg/text-array@1'; readonly nullable: true };
       readonly 'pg/text@1': { readonly output: 'pg/text@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/time-string@1'; readonly nullable: true };
       readonly 'pg/time-temporal@1': {
         readonly output: 'pg/time-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamp-date@1': {
+        readonly output: 'pg/timestamp-date@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamp-instant@1': {
+        readonly output: 'pg/timestamp-instant@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamp-string@1': {
@@ -203,7 +235,12 @@ export type AggregateTypes = {
       readonly 'pg/int4@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/interval-string@1': {
+        readonly output: 'pg/interval-string@1';
+        readonly nullable: true;
+      };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
       readonly 'pg/time-temporal@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
@@ -331,14 +368,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 type ColumnTypeOverrides = {
   readonly auth: {
@@ -1001,14 +1040,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly instance_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly ip_address: {
@@ -1019,14 +1056,13 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sql/varchar@1', ''>;
                   };
-                  readonly typeRef: 'IpAddress2';
+                  readonly typeParams: { readonly length: 64 };
                   readonly many: false;
                 };
                 readonly payload: {
                   readonly dataType: 'pg/json';
                   readonly codecId: 'pg/json@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Payload';
                   readonly many: false;
                 };
               };
@@ -1147,7 +1183,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly identifier: {
@@ -1317,7 +1352,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly invite_token: {
@@ -1330,14 +1364,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly oauth_client_state_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly provider_access_token: {
@@ -1374,7 +1406,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -1421,7 +1452,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly identity_data: {
@@ -1458,7 +1488,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -1509,7 +1538,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly raw_base_config: {
@@ -1528,7 +1556,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -1555,14 +1582,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly session_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -1608,21 +1633,18 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly ip_address: {
                   readonly dataType: 'pg/inet';
                   readonly codecId: 'pg/inet@1';
                   readonly nullable: false;
-                  readonly typeRef: 'IpAddress';
                   readonly many: false;
                 };
                 readonly otp_code: {
@@ -1697,7 +1719,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly last_challenged_at: {
@@ -1741,14 +1762,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly web_authn_aaguid: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly web_authn_credential: {
@@ -1828,7 +1847,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly code_challenge: {
@@ -1865,7 +1883,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly nonce: {
@@ -1924,7 +1941,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -1997,7 +2013,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly provider_type: {
@@ -2075,7 +2090,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly logo_uri: {
@@ -2131,7 +2145,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly granted_at: {
@@ -2145,7 +2158,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly revoked_at: {
@@ -2164,7 +2176,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -2233,14 +2244,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly typeRef: 'CreatedAt';
                   readonly many: false;
                 };
                 readonly id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly relates_to: {
@@ -2267,14 +2276,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly typeRef: 'CreatedAt';
                   readonly many: false;
                 };
                 readonly user_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -2340,14 +2347,13 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly parent: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly revoked: {
@@ -2360,14 +2366,13 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly token: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -2380,7 +2385,7 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
               };
@@ -2461,7 +2466,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly metadata_url: {
@@ -2486,7 +2490,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -2541,7 +2544,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly for_email: {
@@ -2554,7 +2556,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly redirect_to: {
@@ -2573,7 +2574,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -2640,7 +2640,7 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
               };
@@ -2671,21 +2671,18 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly ip: {
                   readonly dataType: 'pg/inet';
                   readonly codecId: 'pg/inet@1';
                   readonly nullable: true;
-                  readonly typeRef: 'IpAddress';
                   readonly many: false;
                 };
                 readonly not_after: {
@@ -2698,7 +2695,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly refresh_token_counter: {
@@ -2717,7 +2713,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: true;
-                  readonly typeRef: 'CreatedAt';
                   readonly many: false;
                 };
                 readonly scopes: {
@@ -2748,7 +2743,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -2823,14 +2817,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly sso_provider_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -2888,7 +2880,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly resource_id: {
@@ -2929,7 +2920,7 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly banned_until: {
@@ -2948,7 +2939,7 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly confirmed_at: {
@@ -2973,14 +2964,14 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly email_change: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly email_change_confirm_status: {
@@ -2991,7 +2982,6 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'pg/int2@1', 0>;
                   };
-                  readonly typeRef: 'EmailChangeConfirmStatus';
                   readonly many: false;
                 };
                 readonly email_change_sent_at: {
@@ -3008,14 +2998,14 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sql/varchar@1', ''>;
                   };
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly email_change_token_new: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly email_confirmed_at: {
@@ -3028,21 +3018,19 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly instance_id: {
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly invited_at: {
@@ -3113,7 +3101,7 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sql/varchar@1', ''>;
                   };
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly phone_confirmed_at: {
@@ -3148,7 +3136,7 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sql/varchar@1', ''>;
                   };
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly recovery_sent_at: {
@@ -3161,14 +3149,14 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly role: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Parent';
+                  readonly typeParams: { readonly length: 255 };
                   readonly many: false;
                 };
                 readonly updated_at: {
@@ -3266,7 +3254,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly session_data: {
@@ -3279,7 +3266,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -3322,7 +3308,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly attestation_type: {
@@ -3386,7 +3371,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly last_used_at: {
@@ -3432,7 +3416,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
               };
@@ -3574,7 +3557,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly owner_id: {
@@ -3656,7 +3638,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly name: {
@@ -3753,7 +3734,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly created_at: {
@@ -3771,7 +3751,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly metadata: {
@@ -3838,7 +3817,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly created_at: {
@@ -3856,7 +3834,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly location: {
@@ -3875,7 +3852,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly remote_table_id: {
@@ -3957,14 +3933,13 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: true;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly typeRef: 'CreatedAt';
                   readonly many: false;
                 };
                 readonly hash: {
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Hash';
+                  readonly typeParams: { readonly length: 40 };
                   readonly many: false;
                 };
                 readonly id: {
@@ -3977,7 +3952,7 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
-                  readonly typeRef: 'Name';
+                  readonly typeParams: { readonly length: 100 };
                   readonly many: false;
                 };
               };
@@ -4011,7 +3986,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly last_accessed_at: {
@@ -4037,7 +4011,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly owner_id: {
@@ -4237,7 +4210,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'gen_random_uuid()';
                   };
-                  readonly typeRef: 'Id';
                   readonly many: false;
                 };
                 readonly key: {
@@ -4415,62 +4387,6 @@ type ContractBase = Omit<
             };
           };
         };
-      };
-    };
-    readonly types: {
-      readonly CreatedAt: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/timestamp-temporal@1';
-        readonly dataType: 'pg/timestamp';
-        readonly typeParams: Record<string, never>;
-      };
-      readonly EmailChangeConfirmStatus: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/int2@1';
-        readonly dataType: 'pg/int2';
-        readonly typeParams: Record<string, never>;
-      };
-      readonly Hash: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sql/varchar@1';
-        readonly dataType: 'pg/varchar';
-        readonly typeParams: { readonly length: 40 };
-      };
-      readonly Id: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/uuid@1';
-        readonly dataType: 'pg/uuid';
-        readonly typeParams: Record<string, never>;
-      };
-      readonly IpAddress: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/inet@1';
-        readonly dataType: 'pg/inet';
-        readonly typeParams: Record<string, never>;
-      };
-      readonly IpAddress2: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sql/varchar@1';
-        readonly dataType: 'pg/varchar';
-        readonly typeParams: { readonly length: 64 };
-      };
-      readonly Name: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sql/varchar@1';
-        readonly dataType: 'pg/varchar';
-        readonly typeParams: { readonly length: 100 };
-      };
-      readonly Parent: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sql/varchar@1';
-        readonly dataType: 'pg/varchar';
-        readonly typeParams: { readonly length: 255 };
-      };
-      readonly Payload: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/json@1';
-        readonly dataType: 'pg/json';
-        readonly typeParams: Record<string, never>;
       };
     };
     readonly storageHash: StorageHash;
@@ -7615,6 +7531,7 @@ type ContractBase = Omit<
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
+      readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
       readonly lockNowait: true;
@@ -7626,7 +7543,6 @@ type ContractBase = Omit<
   };
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

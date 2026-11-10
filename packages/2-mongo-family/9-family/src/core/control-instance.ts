@@ -254,6 +254,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   return {
     familyId: 'mongo' as const,
 
+    get markerLocation(): string {
+      return getControlAdapter().markerLocation;
+    },
+
     deserializeContract(contractJson: unknown): Contract {
       return blindCast<
         Contract,

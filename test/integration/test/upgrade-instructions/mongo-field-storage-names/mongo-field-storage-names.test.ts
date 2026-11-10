@@ -1,12 +1,23 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/mongo-field-storage-names/app/scripts/mongo-field-storage-names.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/mongo-field-storage-names/mongo-field-storage-names.ts',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/mongo-field-storage-names/mongo-field-storage-names.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,13 +41,13 @@ function readTree(root: string, dir = root): Record<string, string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) Object.assign(files, readTree(root, path));
-    else files[relative(root, path)] = readFileSync(path, 'utf8');
+    else if (entry.isFile()) files[relative(root, path)] = readFileSync(path, 'utf8');
   }
   return files;
 }
 
-function run(root: string) {
-  const result = spawnSync(process.execPath, [script, root], { encoding: 'utf8' });
+function run(...args: string[]) {
+  const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -178,6 +189,56 @@ describe('a model with a field named storage', () => {
         "      readonly storage: { readonly collection: 'boxes'; readonly fields: { readonly storage: { readonly field: 'storage' } } };",
         ...declarations.slice(6),
       ].join('\n'),
+    );
+  });
+});
+
+describe('a project with hidden directories and broken links', () => {
+  it('skips every directory whose name starts with a dot and every link it cannot follow', () => {
+    const root = copyFixture('before');
+    const hidden = join(root, '.claude/worktrees/feature');
+    mkdirSync(hidden, { recursive: true });
+    cpSync(join(root, 'migrations'), join(hidden, 'migrations'), { recursive: true });
+    symlinkSync(join(root, 'missing'), join(root, 'dangling'));
+    symlinkSync(join(root, 'loop'), join(root, 'loop'));
+    symlinkSync(root, join(root, 'prisma', 'cycle'));
+    const result = run(root);
+    expect({ ...result, tree: readTree(root) }).toEqual({
+      status: 0,
+      stdout: `${snapshot}/contract.json\n${snapshot}/contract.d.ts\nRewrote 2 files.\n`,
+      stderr: '',
+      tree: {
+        ...readTree(join(fixtures, 'project', 'after')),
+        ...Object.fromEntries(
+          Object.entries(readTree(join(fixtures, 'project', 'before', 'migrations'))).map(
+            ([path, text]) => [`.claude/worktrees/feature/migrations/${path}`, text],
+          ),
+        ),
+      },
+    });
+  });
+});
+
+describe('the arguments', () => {
+  it('refuses an option or a project root that is not a directory', () => {
+    const missing = join(workDir(), 'missing');
+    expect([run('--help'), run(missing)]).toEqual([
+      {
+        status: 1,
+        stdout: '',
+        stderr: '--help: unknown option\nUsage: node mongo-field-storage-names.ts [project-root]\n',
+      },
+      {
+        status: 1,
+        stdout: '',
+        stderr: `${missing}: not a directory\nUsage: node mongo-field-storage-names.ts [project-root]\n`,
+      },
+    ]);
+  });
+
+  it('ships the same script for extensions', () => {
+    expect(readFileSync(join(repoRoot, SCRIPT_PATHS.extension), 'utf8')).toBe(
+      readFileSync(script, 'utf8'),
     );
   });
 });

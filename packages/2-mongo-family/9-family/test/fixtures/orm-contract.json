@@ -19,6 +19,28 @@
           "collection": {
             "tasks": {},
             "users": {}
+          },
+          "valueObject": {
+            "HomeAddress": {
+              "fields": {
+                "city": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "country": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
           }
         }
       }
@@ -31,13 +53,21 @@
         "models": {
           "Task": {
             "storage": {
-              "fields": {
-                "_id": { "field": "_id" },
-                "title": { "field": "title" },
-                "type": { "field": "type" },
-                "assigneeId": { "field": "assigneeId" }
-              },
               "collection": "tasks",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "type": {
+                  "field": "type"
+                },
+                "assigneeId": {
+                  "field": "assigneeId"
+                }
+              },
               "relations": {
                 "comments": {
                   "field": "comments"
@@ -114,7 +144,14 @@
             }
           },
           "Bug": {
-            "storage": { "fields": { "severity": { "field": "severity" } }, "collection": "tasks" },
+            "storage": {
+              "collection": "tasks",
+              "fields": {
+                "severity": {
+                  "field": "severity"
+                }
+              }
+            },
             "fields": {
               "severity": {
                 "type": {
@@ -133,11 +170,15 @@
           },
           "Feature": {
             "storage": {
+              "collection": "tasks",
               "fields": {
-                "priority": { "field": "priority" },
-                "targetRelease": { "field": "targetRelease" }
-              },
-              "collection": "tasks"
+                "priority": {
+                  "field": "priority"
+                },
+                "targetRelease": {
+                  "field": "targetRelease"
+                }
+              }
             },
             "fields": {
               "priority": {
@@ -165,15 +206,27 @@
           },
           "User": {
             "storage": {
-              "fields": {
-                "_id": { "field": "_id" },
-                "name": { "field": "name" },
-                "email": { "field": "email" },
-                "loginCount": { "field": "loginCount" },
-                "tags": { "field": "tags" },
-                "homeAddress": { "field": "homeAddress" }
-              },
               "collection": "users",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "loginCount": {
+                  "field": "loginCount"
+                },
+                "tags": {
+                  "field": "tags"
+                },
+                "homeAddress": {
+                  "field": "homeAddress"
+                }
+              },
               "relations": {
                 "addresses": {
                   "field": "addresses"
@@ -226,7 +279,10 @@
               "homeAddress": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "HomeAddress"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "HomeAddress"
                 },
                 "nullable": true,
                 "many": false
@@ -256,9 +312,15 @@
           "Address": {
             "storage": {
               "fields": {
-                "street": { "field": "street" },
-                "city": { "field": "city" },
-                "zip": { "field": "zip" }
+                "street": {
+                  "field": "street"
+                },
+                "city": {
+                  "field": "city"
+                },
+                "zip": {
+                  "field": "zip"
+                }
               }
             },
             "fields": {
@@ -293,9 +355,15 @@
           "Comment": {
             "storage": {
               "fields": {
-                "_id": { "field": "_id" },
-                "text": { "field": "text" },
-                "createdAt": { "field": "createdAt" }
+                "_id": {
+                  "field": "_id"
+                },
+                "text": {
+                  "field": "text"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                }
               }
             },
             "fields": {
@@ -326,28 +394,6 @@
             },
             "relations": {},
             "owner": "Task"
-          }
-        },
-        "valueObjects": {
-          "HomeAddress": {
-            "fields": {
-              "city": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              },
-              "country": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false,
-                "many": false
-              }
-            }
           }
         }
       }

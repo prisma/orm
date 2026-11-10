@@ -101,7 +101,7 @@ describe('planMigration', () => {
       plan: stubPlan,
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 
@@ -149,7 +149,7 @@ describe('planMigration', () => {
           plan: makeSyntheticPlan('postgres'),
           appliedStatements: [applied],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
         };
       },
@@ -191,7 +191,7 @@ describe('planMigration', () => {
           plan: makeSyntheticPlan('postgres'),
           appliedStatements: [],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
         };
       },
@@ -245,7 +245,7 @@ describe('planMigration', () => {
           plan: makeSyntheticPlan('postgres'),
           appliedStatements: [],
           dataLoss: [],
-          accessWidening: [],
+          accessChanges: [],
           temporaryValues: [],
         };
       },
@@ -292,7 +292,7 @@ describe('planMigration', () => {
       plan: stubPlan,
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 
@@ -342,7 +342,7 @@ describe('planMigration', () => {
         plan: makeSyntheticPlan('postgres'),
         appliedStatements: [],
         dataLoss: [],
-        accessWidening: [],
+        accessChanges: [],
         temporaryValues: [],
       }),
     );
@@ -405,7 +405,7 @@ describe('planMigration', () => {
       plan: makeSyntheticPlan('postgres'),
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 
@@ -449,7 +449,7 @@ describe('planMigration', () => {
       plan: makeSyntheticPlan('postgres'),
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 
@@ -509,7 +509,7 @@ describe('planMigration', () => {
       plan: makeSyntheticPlan('postgres'),
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 
@@ -567,7 +567,7 @@ describe('planMigration', () => {
       plan: makeSyntheticPlan('postgres'),
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
     });
 

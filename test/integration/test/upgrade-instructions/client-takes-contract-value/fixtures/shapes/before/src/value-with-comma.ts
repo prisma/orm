@@ -6,3 +6,5 @@ export const db = postgres<Contract>({
   contractJson: JSON.parse(readFileSync('./c.json', 'utf8')),
   url: process.env['DATABASE_URL'],
 });
+
+export const { parse } = JSON;

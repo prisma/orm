@@ -2,7 +2,10 @@ import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import type { JsonValue } from '@internal/contract/types';
 import mongoControlDriver from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import {
+  type AuthoringTypeConstructorDescriptor,
+  assembleDataTypeSupport,
+} from '@internal/framework-components/authoring';
 import {
   type Codec,
   type CodecLookupWithDescriptors,
@@ -26,6 +29,7 @@ import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
+  mongoTargetDescriptor,
   serializeMongoOps,
 } from '@internal/target-mongo/control';
 import { mongoDataTypes } from '@internal/target-mongo/data-types';
@@ -36,6 +40,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 
 const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
+
+const { support: mongoDataTypeSupport } = assembleDataTypeSupport(
+  [mongoTargetDescriptor],
+  (codecId) => mongoDescriptorById(codecId)?.dataType,
+);
 
 function identityCodec(id: string): Codec | undefined {
   const descriptor = mongoDescriptorById(id);
@@ -73,7 +82,7 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
 };
 
 function pslToContract(schema: string): MongoContract {
-  const scalarTypeCodecIds = new Map([
+  const scalarCodecIds = new Map([
     ['String', 'mongo/string@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
@@ -83,7 +92,7 @@ function pslToContract(schema: string): MongoContract {
   ]);
   const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
     Object.fromEntries(
-      [...scalarTypeCodecIds].map(([name, codecId]) => [
+      [...scalarCodecIds].map(([name, codecId]) => [
         name,
         { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
@@ -95,19 +104,18 @@ function pslToContract(schema: string): MongoContract {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
         modelAttributes: {},
         attributeSpecs: mongoAttributeSpecs,
-        dataTypes: {},
+        dataTypes: mongoDataTypeSupport.entries,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
       generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
+      dataTypes: mongoDataTypeSupport,
       resolvedInputs: [],
       capabilities: {},
     },
@@ -247,6 +255,24 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     const emailIdx = indexes.find((idx) => idx['key']?.['email'] === 1);
     expect(emailIdx).toBeDefined();
     expect(emailIdx!['unique']).toBe(true);
+  });
+
+  it('PSL with @unique and @@index on one field creates one unique index', async () => {
+    const contract = pslToContract(`
+      model User {
+        id    ObjectId @id @map("_id")
+        email String   @unique
+        @@index([email])
+      }
+    `);
+
+    await planAndApply(replSetUri, null, contract);
+
+    const indexes = await db.collection('User').listIndexes().toArray();
+    expect(indexes.map(({ key, unique }) => ({ key, unique }))).toEqual([
+      { key: { _id: 1 }, unique: undefined },
+      { key: { email: 1 }, unique: true },
+    ]);
   });
 
   it('PSL with model fields produces $jsonSchema validator on MongoDB', async () => {

@@ -10,6 +10,7 @@ import type {
   SchemaDiffIssue,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import { migrationRunnerFailure, schemaCheckWhy } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
@@ -171,13 +172,13 @@ function recordingMigrations() {
 function schemaCheckFailingMigrations(issues: readonly SchemaDiffIssue[]) {
   const runner: MigrationRunner<'sql', 'postgres'> = {
     execute: async () =>
-      notOk({
-        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
-        summary: 'Database schema does not satisfy contract',
-        meta: { issues },
-        schemaIssues: issues,
-        failingSpace: 'app',
-      }),
+      notOk(
+        migrationRunnerFailure(
+          'MIGRATION.SCHEMA_VERIFY_FAILED',
+          'Database schema does not satisfy contract',
+          { why: schemaCheckWhy(issues), meta: { schemaIssues: issues, failingSpace: 'app' } },
+        ),
+      ),
   };
   return blindCast<
     TargetMigrationsCapability<'sql', 'postgres', ControlFamilyInstance<'sql', unknown>>,
@@ -198,6 +199,7 @@ function migrateOptions(args: {
 }) {
   return {
     driver: fakeDriver(),
+    invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
     familyInstance: fakeFamily(args.markers),
     contract: APP_CONTRACT,
     migrations: args.migrations,
@@ -281,7 +283,7 @@ describe('executeMigrate runner schedule', () => {
     expect(runnerCalls).toEqual([[EXTERNAL_SPACE, 'app']]);
   });
 
-  it('carries the issues of a failed schema check, and keeps them in meta for JSON output', async () => {
+  it('reports a failed schema check with the runner code and meta, the issues in its why, and how to plan the migration again', async () => {
     const migrationsDir = await migrationsDirWithOneAppEdge();
     const issue: SchemaDiffIssue = {
       path: ['public', 'event', 'id'],
@@ -300,9 +302,18 @@ describe('executeMigrate runner schedule', () => {
       result.ok
         ? undefined
         : {
-            schemaIssues: result.failure.schemaIssues,
-            metaIssues: result.failure.meta?.['issues'],
+            code: result.failure.code,
+            message: result.failure.message,
+            why: result.failure.why,
+            meta: result.failure.meta,
+            replans: result.failure.fix?.includes('plan it again with'),
           },
-    ).toEqual({ schemaIssues: [issue], metaIssues: [issue] });
+    ).toEqual({
+      code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+      message: 'Database schema does not satisfy contract',
+      why: 'The schema check after apply found: missing: public/event/id.',
+      meta: { schemaIssues: [issue], failingSpace: 'app' },
+      replans: true,
+    });
   });
 });

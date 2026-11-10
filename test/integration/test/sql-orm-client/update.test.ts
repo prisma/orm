@@ -9,7 +9,6 @@ import { getTestContext } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -224,24 +223,6 @@ describe('integration/update', () => {
             { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
           ],
         });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'update() and updateAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-        const filtered = users.where({ id: 1 });
-
-        await expect(filtered.update({ name: 'Blocked' })).rejects.toThrow(
-          /requires contract capability "returning"/,
-        );
-        expect(() => filtered.updateAll({ name: 'Blocked' })).toThrow(
-          /requires contract capability "returning"/,
-        );
       });
     },
     timeouts.spinUpPpgDev,

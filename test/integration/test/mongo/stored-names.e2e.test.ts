@@ -1,5 +1,12 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { defineContract, field, model, rel, valueObject } from '@internal/mongo/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  rel,
+  type,
+  valueObject,
+} from '@internal/mongo/contract-builder';
 import {
   MongoAggFieldRef,
   MongoAggLiteral,
@@ -11,17 +18,17 @@ import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../_harness/mongo';
 
-const Home = valueObject('Home', { fields: { city: field.string() } });
+const Home = valueObject('Home', { fields: { city: field.scalar(type.String()) } });
 
 const User = model('User', {
   collection: 'users',
   storageRelations: { addresses: { field: 'user_addresses' } },
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    displayName: field.string().mongo({ field: 'display_name' }),
-    email: field.string().optional(),
-    visits: field.int32().mongo({ field: 'visit_count' }),
-    tags: field.string().many().mongo({ field: 'user_tags' }),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    displayName: field.scalar(type.String()).mongo({ field: 'display_name' }),
+    email: field.scalar(type.String()).optional(),
+    visits: field.scalar(type.Int32()).mongo({ field: 'visit_count' }),
+    tags: field.scalar(type.String()).many().mongo({ field: 'user_tags' }),
     home: field.valueObject(Home).optional().mongo({ field: 'home_address' }),
   },
   relations: {
@@ -33,17 +40,17 @@ const User = model('User', {
 const Address = model('Address', {
   owner: User,
   fields: {
-    street: field.string().mongo({ field: 'street_name' }),
-    city: field.string(),
+    street: field.scalar(type.String()).mongo({ field: 'street_name' }),
+    city: field.scalar(type.String()),
   },
 });
 
 const Post = model('Post', {
   collection: 'posts',
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    authorId: field.objectId().mongo({ field: 'author_id' }),
-    title: field.string(),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    authorId: field.scalar(type.ObjectId()).mongo({ field: 'author_id' }),
+    title: field.scalar(type.String()),
   },
   relations: { author: rel.belongsTo(User, { from: 'authorId', to: User.ref('id') }) },
 });
@@ -51,9 +58,9 @@ const Post = model('Post', {
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    id: field.objectId().mongo({ field: '_id' }),
-    kind: field.string().mongo({ field: '_kind' }),
-    title: field.string().mongo({ field: 'task_title' }),
+    id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+    kind: field.scalar(type.String()).mongo({ field: '_kind' }),
+    title: field.scalar(type.String()).mongo({ field: 'task_title' }),
   },
   discriminator: { field: 'kind', variants: { Bug: { value: 'bug' } } },
 });
@@ -61,7 +68,7 @@ const Task = model('Task', {
 const Bug = model('Bug', {
   collection: 'tasks',
   base: Task,
-  fields: { severity: field.string().mongo({ field: 'bug_severity' }) },
+  fields: { severity: field.scalar(type.String()).mongo({ field: 'bug_severity' }) },
 });
 
 const contract = defineContract({

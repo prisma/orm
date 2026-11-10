@@ -129,13 +129,15 @@ export interface CodecInstanceContext {
   readonly name: string;
 }
 
-// packages/2-sql/4-lanes/relational-core/src/ast/codec-types.ts
+// packages/2-sql-family/4-lanes/relational-core/src/ast/codec-types.ts
 export interface SqlCodecInstanceContext extends CodecInstanceContext {
   readonly usedAt: ReadonlyArray<{ readonly table: string; readonly column: string }>;
 }
 ```
 
 Pack authors never construct it. The runtime synthesizes it at contract-load time: `name` is the family-agnostic instance identity (in SQL, the `storage.types` entry name, a `<col:t.c>` for inline-`typeParams` columns, a `<codec:codecId>` sentinel for non-parameterized codecs, or the canonical cache key for ad-hoc refs the contract walk did not pre-populate); the SQL-extended `usedAt` is plural so a `storage.types` entry shared across multiple columns can derive shared per-instance state from the aggregated set (e.g. a column-scoped encryption codec deriving one key for every column referencing the entry). SQL extensions that consume `usedAt` author against `SqlCodecInstanceContext`; extensions that don't read it stay on the family-agnostic base.
+
+> **Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) (2026-10-21).** Contracts no longer store type aliases, so no column has a `typeRef` and a `storage.types` entry is never the unit of a shared codec instance. Every parameterized column is materialized from its own inline `typeParams`. Columns with the same codec id and canonical params share one instance, named `<col:Table.column>` after the first such column, and its `usedAt` lists every column that shares it. A codec that needs state shared by a chosen set of columns must put what identifies that set in its type parameters. "How it composes" §2 to §4 below describe the alias paths as they were before this change: today `FieldOutputType` and the emitter read the column's own `typeParams`, and the contract walk has no `typeRef` step.
 
 The split mirrors PR #400's `CodecCallContext` / `SqlCodecCallContext` precedent for the per-call context: SQL-domain vocabulary lives in `sql-relational-core`; framework-components stays family-agnostic.
 

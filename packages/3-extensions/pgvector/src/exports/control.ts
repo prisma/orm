@@ -38,13 +38,43 @@ import baselineMetadata from '../../migrations/20260601T0000_install_vector_exte
 import baselineOps from '../../migrations/20260601T0000_install_vector_extension/ops.json' with {
   type: 'json',
 };
+import installMetadata from '../../migrations/20261029T1342_create_vector_extension/migration.json' with {
+  type: 'json',
+};
+import installOps from '../../migrations/20261029T1342_create_vector_extension/ops.json' with {
+  type: 'json',
+};
+import upgradeMetadata from '../../migrations/20261029T1342_declare_vector_extension/migration.json' with {
+  type: 'json',
+};
+import upgradeOps from '../../migrations/20261029T1342_declare_vector_extension/ops.json' with {
+  type: 'json',
+};
+import searchPathMetadata from '../../migrations/20261106T1035_find_vector_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathOps from '../../migrations/20261106T1035_find_vector_on_search_path/ops.json' with {
+  type: 'json',
+};
+import searchPathInstallMetadata from '../../migrations/20261106T1401_install_vector_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathInstallOps from '../../migrations/20261106T1401_install_vector_on_search_path/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
-import { PGVECTOR_SPACE_ID } from '../core/contract-space-constants';
+import {
+  PGVECTOR_BASELINE_MIGRATION_NAME,
+  PGVECTOR_INSTALL_MIGRATION_NAME,
+  PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+  PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
+  PGVECTOR_SPACE_ID,
+  PGVECTOR_UPGRADE_MIGRATION_NAME,
+} from '../core/contract-space-constants';
 import { pgvectorPackMeta, pgvectorQueryOperations } from '../core/descriptor-meta';
 
 const PGVECTOR_CODEC_ID = 'pg/vector@1' as const;
-const BASELINE_DIR_NAME = '20260601T0000_install_vector_extension';
 
 function buildVectorIdentityValue(typeParams: Record<string, unknown> | undefined): string | null {
   const length = typeParams?.['length'];
@@ -63,10 +93,18 @@ const vectorControlPlaneHooks: CodecControlHooks = {
 const pgvectorContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
   contractJson,
   migrations: [
+    { dirName: PGVECTOR_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },
+    { dirName: PGVECTOR_UPGRADE_MIGRATION_NAME, metadata: upgradeMetadata, ops: upgradeOps },
+    { dirName: PGVECTOR_INSTALL_MIGRATION_NAME, metadata: installMetadata, ops: installOps },
     {
-      dirName: BASELINE_DIR_NAME,
-      metadata: baselineMetadata,
-      ops: baselineOps,
+      dirName: PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
+      metadata: searchPathMetadata,
+      ops: searchPathOps,
+    },
+    {
+      dirName: PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+      metadata: searchPathInstallMetadata,
+      ops: searchPathInstallOps,
     },
   ],
   headRef,

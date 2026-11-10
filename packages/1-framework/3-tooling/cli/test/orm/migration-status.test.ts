@@ -14,6 +14,7 @@ import {
   addAllExternalSpace,
   codesAndSeverities,
   DIR_BASE,
+  DIR_HEAD,
   driverConfig,
   EXTERNAL_SPACE,
   fakeDatabase,
@@ -25,6 +26,7 @@ import {
   markersAt,
   markersWithExternalAtHead,
   projectWithOneMigration,
+  projectWithTwoMigrations,
   withAllExternalExtension,
 } from './fixtures/status-database';
 
@@ -304,7 +306,20 @@ describe('migration status', () => {
     expect(rendered).toContain('20260101T0000_initial');
     expect(rendered).toContain('Up to date');
     expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+  });
+
+  it('prints the migration list fields plus status per migration, in document order; status is empty when it is null', async () => {
+    const project = await projectWithTwoMigrations();
+    const db = fakeDatabase({ markers: markersAt(HASH_BASE) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status'], {
+      cwd: project.dir,
+    });
+
+    expect(run.stdout).toBe(
+      `app\t${DIR_HEAD}\t${HASH_BASE}\t${HASH_HEAD}\t1\tpending\n` +
+        `app\t${DIR_BASE}\t\t${HASH_BASE}\t1\t\n`,
+    );
   });
 
   it('closes the ends of the run summary line with the pending count', async () => {

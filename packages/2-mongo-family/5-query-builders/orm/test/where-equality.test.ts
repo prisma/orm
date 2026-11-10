@@ -8,7 +8,13 @@ const stringType = { kind: 'scalar', codecId: 'mongo/string@1' } as const;
 
 const entryList: ContractField = {
   nullable: true,
-  type: { kind: 'valueObject', name: 'Entry' },
+  type: {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId: '__unbound__',
+    entityKind: 'valueObject',
+    entityName: 'Entry',
+  },
   many: { elementNullable: true },
 };
 

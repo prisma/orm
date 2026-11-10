@@ -12,6 +12,8 @@ export interface EnumMemberCodec {
   readonly dataType: {
     fromContract(json: JsonValue, params: Readonly<Record<string, unknown>>): unknown;
     toContract(value: unknown): JsonValue;
+    /** A key two stored forms share exactly when the data type's equality holds them equal; present when equal values have more than one stored form. */
+    readonly equalityKey?: (json: JsonValue) => string;
   };
   fromDataTypeValue(value: unknown): unknown;
   toDataTypeValue(value: unknown): unknown;
@@ -51,7 +53,7 @@ function isImmutable(value: unknown): boolean {
 }
 
 /**
- * Builds the accessor for one enum, decoding each member once. Each member holds the value `codec` reads from its stored form, which is the value a query returns. A primitive or immutable member is handed out as decoded; a mutable member is copied on every read, so changing a value read from the accessor leaves the enum unchanged. A value is a member when it equals one: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form `codec` stores it in, so two equal dates match. Without a codec, members are their stored forms.
+ * Builds the accessor for one enum, decoding each member once. Each member holds the value `codec` reads from its stored form, which is the value a query returns. A primitive or immutable member is handed out as decoded; a mutable member is copied on every read, so changing a value read from the accessor leaves the enum unchanged. A value is a member when it equals one: a primitive by SameValueZero, an object by its `Object.prototype.toString` kind and the form `codec` stores it in, so two equal dates match, and, for a data type whose equal values have more than one stored form, any value the type's equality holds equal to a member, so `0.50` is the `numeric` member `0.5`. Without a codec, members are their stored forms.
  */
 export function createEnumAccessor(
   contractEnum: ContractEnum,
@@ -92,15 +94,34 @@ export function createEnumAccessor(
   const allImmutable = entries.every((entry) => entry.immutable);
   const immutableValues = Object.freeze(entries.map((entry) => entry.value));
 
+  const equalityKey = codec?.dataType.equalityKey;
   const primitiveOrdinals = new Map<unknown, number>();
   const objectOrdinals = new Map<string, number>();
+  const equalOrdinals = new Map<string, number>();
   entries.forEach((entry, ordinal) => {
     if (isObject(entry.value)) objectOrdinals.set(storedFormKey(entry.value), ordinal);
     else primitiveOrdinals.set(entry.value, ordinal);
+    if (equalityKey !== undefined) equalOrdinals.set(equalityKey(entry.stored), ordinal);
   });
 
+  /** The member the data type's equality holds `v` equal to, for a type whose equal values have more than one stored form. */
+  const equalOrdinalOf = (v: unknown): number => {
+    if (equalityKey === undefined || codec === undefined) return -1;
+    try {
+      return (
+        equalOrdinals.get(equalityKey(codec.dataType.toContract(codec.toDataTypeValue(v)))) ?? -1
+      );
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return -1;
+    }
+  };
+
   const ordinalOf = (v: unknown): number => {
-    if (!isObject(v)) return primitiveOrdinals.get(v) ?? -1;
+    if (!isObject(v)) {
+      const ordinal = primitiveOrdinals.get(v);
+      return ordinal ?? equalOrdinalOf(v);
+    }
     let key: string;
     try {
       key = storedFormKey(v);
@@ -110,7 +131,7 @@ export function createEnumAccessor(
     }
     const ordinal = objectOrdinals.get(key) ?? -1;
     const member = entries[ordinal]?.value;
-    return isObject(member) && kindOf(member) === kindOf(v) ? ordinal : -1;
+    return isObject(member) && kindOf(member) === kindOf(v) ? ordinal : equalOrdinalOf(v);
   };
 
   return {

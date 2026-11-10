@@ -177,3 +177,40 @@ describe('buildNamespacedEnums() with codecs', () => {
     });
   });
 });
+
+describe('createEnumAccessor() with a data type whose equal values have more than one stored form', () => {
+  const decimalCodec: EnumMemberCodec = enumMemberCodec({
+    fromStored: (json) => json,
+    toStored: (value) => {
+      if (typeof value !== 'string') throw new Error(`not decimal text: ${String(value)}`);
+      return value;
+    },
+    equalityKey: (json) => String(Number(json)),
+  });
+  const ratio = createEnumAccessor(
+    {
+      codecId: 'test/decimal@1',
+      members: [
+        { name: 'Half', value: '0.5' },
+        { name: 'Whole', value: '1.50' },
+      ],
+    },
+    decimalCodec,
+  );
+
+  it('finds a value its data type holds equal to a member, in any of its stored forms', () => {
+    expect({
+      has: ['0.5', '0.50', '1.5', '1.500', '0.7'].map((value) => ratio.has(value)),
+      nameOf: ['0.50', '1.5'].map((value) => ratio.nameOf(value)),
+      ordinalOf: ratio.ordinalOf('1.5'),
+    }).toEqual({
+      has: [true, true, true, true, false],
+      nameOf: ['Half', 'Whole'],
+      ordinalOf: 1,
+    });
+  });
+
+  it('finds nothing for a value the codec refuses', () => {
+    expect(ratio.has(0.5)).toBe(false);
+  });
+});

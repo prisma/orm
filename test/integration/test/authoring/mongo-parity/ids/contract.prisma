@@ -1,0 +1,21 @@
+// use prisma-8
+
+model Doc {
+  id ObjectId @id @map("_id")
+
+  @@map("docs")
+}
+
+model Account {
+  id    String @id @map("_id")
+  email String
+
+  @@map("accounts")
+}
+
+model Counter {
+  id    Int32 @id @map("_id")
+  count Int32
+
+  @@map("counters")
+}

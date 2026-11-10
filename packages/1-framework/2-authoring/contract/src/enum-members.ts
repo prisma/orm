@@ -10,8 +10,9 @@ import type { StructuredError } from '@internal/utils/structured-error';
 import { contractError } from './contract-errors';
 import { duplicateMemberError, type EnumTypeHandle } from './enum-type';
 
-function enumMemberError(
-  handle: EnumTypeHandle,
+/** The `CONTRACT.*` error for one problem `encodeEnumMembers` finds, worded for `enumType`. */
+export function enumMemberError(
+  handle: Pick<EnumTypeHandle, 'enumName' | 'codecId'>,
   problem: EnumMemberProblem,
   storedBy: string,
 ): StructuredError {

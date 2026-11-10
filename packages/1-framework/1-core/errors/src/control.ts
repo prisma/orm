@@ -43,6 +43,8 @@ export interface CliErrorConflict {
   readonly why?: string;
   /** The statement the conflict refuses, in domain coordinates. */
   readonly refusedStatement?: ResolvedMigrationStatement;
+  /** The statements to leave out of a plan whose `migration.ts` the user finishes by hand. */
+  readonly leaveOut?: readonly ResolvedMigrationStatement[];
   /** Where the conflict is; `namespaceId` is left out of JSON output for the unbound namespace. */
   readonly location?: Readonly<Record<string, unknown>> & { readonly namespaceId?: string };
 }
@@ -410,6 +412,9 @@ function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
     ...(conflict.refusedStatement === undefined
       ? {}
       : { refusedStatement: migrationStatementJson(conflict.refusedStatement) }),
+    ...(conflict.leaveOut === undefined
+      ? {}
+      : { leaveOut: conflict.leaveOut.map(migrationStatementJson) }),
   };
 }
 
@@ -419,7 +424,7 @@ function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
 export function errorMigrationPlanningFailed(options: {
   readonly conflicts: readonly CliErrorConflict[];
   readonly why?: string;
-}): CliStructuredError {
+}): CliStructuredError & { readonly why: string } {
   const conflictSummaries = options.conflicts.map((c) => c.summary);
   const computedWhy = options.why ?? conflictSummaries.join('\n');
 
@@ -431,12 +436,13 @@ export function errorMigrationPlanningFailed(options: {
       ? conflictFixes.join('\n')
       : 'Use `db verify --schema-only` to inspect conflicts, or ensure the database is empty';
 
-  return new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
+  const error = new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
     why: computedWhy,
     fix: computedFix,
     meta: { conflicts: options.conflicts.map(conflictJson) },
     docsUrl: docsUrlFor('MIGRATION.PLANNING_FAILED'),
   });
+  return Object.assign(error, { why: computedWhy });
 }
 
 /**

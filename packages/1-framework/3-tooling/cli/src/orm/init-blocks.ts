@@ -7,6 +7,7 @@ import {
   PRISMA7_QUICK_REFERENCE_STEP,
 } from '../commands/init/output';
 import { chooseAction, runCommandAction } from '../utils/next-actions';
+import { valueLines } from './data-lines';
 import { DB_SIGN_COMMAND, EMIT_COMMAND } from './init-diagnostics';
 
 function fileNodes(paths: readonly string[]): readonly TreeNode[] {
@@ -106,10 +107,6 @@ export function buildInitNextActions(inputs: {
 const DONE_TEXT = 'Done. Open prisma-8.md to get started.';
 const INCOMPLETE_TEXT = 'Scaffold written. Finish the steps above to complete setup.';
 
-/**
- * `init` writes files rather than data another program reads, so it supplies
- * no `stdout` payload: human mode writes nothing to stdout.
- */
 export function initPresentations(inputs: {
   readonly document: InitOutput;
   readonly complete: boolean;
@@ -117,7 +114,7 @@ export function initPresentations(inputs: {
 }): Presentations {
   const { document } = inputs;
   return {
-    stdout: () => [],
+    stdout: () => valueLines(document.filesWritten),
     human: (): readonly Block[] => [
       {
         kind: 'fields',

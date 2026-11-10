@@ -90,6 +90,9 @@ withTempDir(({ createTempDir }) => {
         const contractDtsPath = join(ctx.testDir, 'contract.d.ts');
         expect(existsSync(contractJsonPath)).toBe(true);
         expect(existsSync(contractDtsPath)).toBe(true);
+        const contractDts = readFileSync(contractDtsPath, 'utf-8');
+        expect(contractDts).toContain("['public']['Post']['title']");
+        expect(contractDts).not.toContain("['public']['Post']['search']");
         expect(emit.presented?.data).toMatchObject({
           ok: true,
           storageHash: expect.any(String),

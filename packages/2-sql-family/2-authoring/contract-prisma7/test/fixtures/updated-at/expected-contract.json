@@ -1,0 +1,168 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Timestamps": {
+            "storage": {
+              "table": "Timestamps",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "updatedAtTz": {
+                  "column": "updatedAtTz"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "updatedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-date@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false,
+                "many": false
+              },
+              "updatedAtTz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-date@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Timestamps": {
+      "namespace": "public",
+      "model": "Timestamps"
+    }
+  },
+  "execution": {
+    "executionHash": "b2ae3a1c323b84ac42b2e3cbf2b9815dda604f2ab28dde7f041581168eeae217",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Timestamps",
+            "field": "updatedAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampNow",
+            "params": {
+              "precision": 3
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Timestamps",
+            "field": "updatedAtTz"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampNow",
+            "params": {
+              "precision": 6
+            }
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "ca3e29fc4e90265e1b10a48ef33decf69b48a26c5df9b257afc326b457127339",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Timestamps": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "updatedAt": {
+                  "dataType": "pg/timestamp",
+                  "codecId": "pg/timestamp-date@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "updatedAtTz": {
+                  "dataType": "pg/timestamptz",
+                  "codecId": "pg/timestamptz-date@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

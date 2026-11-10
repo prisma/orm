@@ -1,12 +1,9 @@
-import type {
-  SchemaDiffIssue,
-  VerifyDatabaseSchemaResult,
-} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type Diagnostic,
   isStructuredError,
   type NextAction,
+  type StructuredError,
 } from '@internal/utils/structured-error';
 import { CliStructuredError } from './control';
 
@@ -122,12 +119,8 @@ function isDriverError(err: unknown): boolean {
   return isStructuredError(err) && err.code.startsWith('DRIVER.');
 }
 
-function isMarkerRowParseError(err: unknown): err is Error {
-  return (
-    err instanceof Error &&
-    (err.message.startsWith('Invalid contract marker row:') ||
-      err.message.startsWith('Invalid marker doc on'))
-  );
+function isMarkerRowCorruptError(err: unknown): err is StructuredError {
+  return isStructuredError(err) && err.code === 'CONTRACT.MARKER_ROW_CORRUPT';
 }
 
 export function rethrowMarkerReadError(
@@ -137,7 +130,7 @@ export function rethrowMarkerReadError(
   if (CliStructuredError.is(err) || isDriverError(err)) {
     throw err;
   }
-  if (isMarkerRowParseError(err)) {
+  if (isMarkerRowCorruptError(err)) {
     throw errorMarkerRowCorrupt({
       why: err.message,
       space: context.space,
@@ -192,51 +185,6 @@ export function errorMarkerRequired(options?: {
     nextActions: options?.nextActions ?? [
       { kind: 'run-command', label: 'Sign the database', command: '{bin} db init' },
     ],
-  });
-}
-
-/**
- * Schema verification found mismatches between the database and the contract.
- * The full verification result is preserved in `meta.verificationResult`.
- */
-export function errorSchemaVerificationFailed(options: {
-  readonly summary: string;
-  readonly verificationResult: VerifyDatabaseSchemaResult;
-  readonly issues?: readonly SchemaDiffIssue[];
-}): CliStructuredError {
-  return new CliStructuredError('CONTRACT.SCHEMA_VERIFICATION_FAILED', options.summary, {
-    why: 'Database schema does not satisfy the contract',
-    fix: 'Run `{bin} db update` to reconcile, or adjust your contract to match the database',
-    nextActions: [
-      { kind: 'run-command', label: 'Reconcile the database', command: '{bin} db update' },
-      { kind: 'edit-file', label: 'Adjust your contract to match the database' },
-    ],
-    meta: {
-      verificationResult: options.verificationResult,
-      ...ifDefined('issues', options.issues),
-    },
-  });
-}
-
-/**
- * Migration runner failed during execution.
- */
-export function errorRunnerFailed(
-  summary: string,
-  options?: {
-    readonly why?: string;
-    readonly fix?: string;
-    readonly nextActions?: readonly NextAction[];
-    readonly meta?: Record<string, unknown>;
-    readonly cause?: unknown;
-  },
-): CliStructuredError {
-  return new CliStructuredError('MIGRATION.RUNNER_FAILED', summary, {
-    why: options?.why ?? 'Migration runner failed',
-    fix: options?.fix ?? 'Inspect the reported conflict and reconcile schema drift',
-    ...ifDefined('nextActions', options?.nextActions),
-    ...(options?.meta ? { meta: options.meta } : {}),
-    ...ifDefined('cause', options?.cause),
   });
 }
 
