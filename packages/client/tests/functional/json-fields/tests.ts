@@ -26,7 +26,7 @@ testMatrix.setupTestSuite(
 
     // Regression test for https://github.com/prisma/prisma/issues/30859
     test('primitive values', async () => {
-      const values = ['some string', 'another string', 42, 1.5, true]
+      const values = ['some string', 'another string', '{"a":1}', '', 42, 1.5, 0, true, false]
 
       for (const json of values) {
         const result = await prisma.entry.create({
