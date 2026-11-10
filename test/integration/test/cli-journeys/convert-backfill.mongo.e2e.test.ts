@@ -443,7 +443,7 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
 
     expect({
       documents: result.documents,
-      warnings: JSON.stringify(Reflect.get(result.updated, 'warnings') ?? result.updated),
+      warnings: JSON.stringify(Reflect.get(result.updated, 'plannerWarnings') ?? result.updated),
     }).toMatchObject({
       documents: [{ email: 'a@example.com', status: 'active' }],
       warnings: expect.stringContaining('Field \\"User.status\\" gains enum \\"Status\\"'),

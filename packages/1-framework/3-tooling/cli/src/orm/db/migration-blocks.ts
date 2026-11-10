@@ -108,7 +108,7 @@ function operationBlocks(result: MigrationCommandResult): readonly Block[] {
 
 /** What the planner flagged without refusing to plan it, each its summary followed by its why. */
 function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
-  return (result.warnings ?? []).map(
+  return (result.plannerWarnings ?? []).map(
     (warning): Block => ({ kind: 'summary', status: 'warn', text: plannerWarningText(warning) }),
   );
 }

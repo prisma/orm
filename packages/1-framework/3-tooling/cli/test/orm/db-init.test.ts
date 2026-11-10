@@ -584,7 +584,7 @@ describe('db init', () => {
     });
   });
 
-  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
+  it('lists the planner`s warnings in the --json result of a successful apply as plannerWarnings', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -593,9 +593,16 @@ describe('db init', () => {
     expect({
       exitCode: run.exitCode,
       messages: frames.filter((frame) => frame['kind'] === 'message'),
-      warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
-        .warnings,
-    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+      result: (frames.at(-1) as { envelope: { result: Record<string, unknown> } }).envelope.result,
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      result: expect.not.objectContaining({ warnings: expect.anything() }),
+    });
+    expect(
+      (frames.at(-1) as { envelope: { result: { plannerWarnings: unknown } } }).envelope.result
+        .plannerWarnings,
+    ).toEqual([WARNING]);
   });
 
   it('shows the planner`s warnings when the apply fails', async () => {
