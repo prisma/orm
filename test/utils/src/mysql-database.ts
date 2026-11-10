@@ -7,7 +7,7 @@ import { type ConnectionConfig, createConnection } from 'mariadb';
 export interface MysqlTestDatabase {
   /** The database's name, unique to this test. */
   readonly name: string;
-  /** `MYSQL_URL` with this database as its path. */
+  /** The server's URL with this database as its path. */
   readonly url: string;
 }
 
@@ -16,9 +16,9 @@ interface SkippableTest {
   skip(note?: string): void;
 }
 
-/** The URL of the MySQL server tests run against, from `MYSQL_URL`, or `undefined` when it is not set. */
-export function mysqlServerUrl(): string | undefined {
-  const url = process.env['MYSQL_URL'];
+/** The URL of the MySQL or MariaDB server tests run against, from the environment variable `variable`, `MYSQL_URL` unless given, or `undefined` when it is not set. */
+export function mysqlServerUrl(variable = 'MYSQL_URL'): string | undefined {
+  const url = process.env[variable];
   return url === undefined || url.length === 0 ? undefined : url;
 }
 
@@ -66,15 +66,16 @@ function uniqueDatabaseName(): string {
 }
 
 /**
- * Runs `fn` with a database of its own on the MySQL server `MYSQL_URL` names, and drops the database afterwards. Skips the test when `MYSQL_URL` is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
+ * Runs `fn` with a database of its own on the server the environment variable `variable` names, `MYSQL_URL` unless given, and drops the database afterwards. Skips the test when the variable is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
  */
 export async function withMysqlDatabase<T>(
   test: SkippableTest,
   fn: (database: MysqlTestDatabase) => Promise<T>,
+  variable = 'MYSQL_URL',
 ): Promise<T | undefined> {
-  const serverUrl = mysqlServerUrl();
+  const serverUrl = mysqlServerUrl(variable);
   if (serverUrl === undefined) {
-    test.skip('MYSQL_URL is not set');
+    test.skip(`${variable} is not set`);
     return undefined;
   }
   const name = uniqueDatabaseName();
@@ -111,3 +112,6 @@ export async function queryMysqlDatabase(url: string, sql: string): Promise<void
     await connection.end();
   }
 }
+
+/** Whether the tests run in CI, where every live-test server the job configures must be present. */
+export const inCi = process.env['CI'] !== undefined;

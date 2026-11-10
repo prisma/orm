@@ -29,6 +29,7 @@ export const SKILL_ANCHOR_PACKAGES: ReadonlyMap<string, string> = new Map([
   ['@prisma/orm-postgres', 'packages/9-public/@prisma/orm-postgres'],
   ['@prisma/orm-sqlite', 'packages/9-public/@prisma/orm-sqlite'],
   ['@prisma/orm-mysql', 'packages/9-public/@prisma/orm-mysql'],
+  ['@prisma/orm-mariadb', 'packages/9-public/@prisma/orm-mariadb'],
   ['@prisma/orm-mongo', 'packages/9-public/@prisma/orm-mongo'],
 ]);
 

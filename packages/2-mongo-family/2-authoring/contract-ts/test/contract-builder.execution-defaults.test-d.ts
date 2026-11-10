@@ -9,6 +9,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../src/contract-builder';
 import type { FieldBuilder } from '../src/contract-dsl';
 import type { EnumTypeHandle } from '../src/enum-type';
+import { mongoTestScalarTypes } from './mongo-test-packs';
 
 const mongoFamilyPack = {
   kind: 'family',
@@ -24,6 +25,7 @@ const mongoTargetPack = {
   targetId: 'mongo',
   version: '0.0.1',
   defaultNamespaceId: '__unbound__',
+  authoring: { type: mongoTestScalarTypes },
   generatorFunctions: [
     {
       name: 'now',
@@ -40,20 +42,20 @@ const mongoTargetPack = {
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
 test('a field a generator fills can be optional but not a list', () => {
-  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen }) => {
-    field.date().onCreate(gen.now()).optional();
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
+    field.scalar(type.Date()).onCreate(gen.now()).optional();
     // @ts-expect-error onCreate and onUpdate fill the field, so it cannot be a list
-    field.date().onCreate(gen.now()).onUpdate(gen.now()).many();
-    field.date().onUpdate(gen.now()).optional();
-    field.date().optional();
-    field.string().optional().many();
+    field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()).many();
+    field.scalar(type.Date()).onUpdate(gen.now()).optional();
+    field.scalar(type.Date()).optional();
+    field.scalar(type.String()).optional().many();
     return { models: {} };
   });
 });
 
 test('the type error for many() on a field that generates a value says why', () => {
-  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen }) => {
-    const createdAt = field.date().onCreate(gen.now());
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
+    const createdAt = field.scalar(type.Date()).onCreate(gen.now());
     expectTypeOf<
       ThisParameterType<typeof createdAt.many>
     >().toEqualTypeOf<'This field generates a value on write, so it cannot be a list'>();
@@ -69,9 +71,9 @@ test('a generated field still satisfies the widest FieldBuilder constraint', () 
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >;
-  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen }) => {
-    expectTypeOf(field.date().onCreate(gen.now())).toExtend<WideFieldBuilder>();
-    expectTypeOf(field.string().optional()).toExtend<WideFieldBuilder>();
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
+    expectTypeOf(field.scalar(type.Date()).onCreate(gen.now())).toExtend<WideFieldBuilder>();
+    expectTypeOf(field.scalar(type.String()).optional()).toExtend<WideFieldBuilder>();
     return { models: {} };
   });
 });
@@ -79,15 +81,15 @@ test('a generated field still satisfies the widest FieldBuilder constraint', () 
 test('the built contract types its execution defaults with the collection and field names', () => {
   const contract = defineContract(
     { family: mongoFamilyPack, target: mongoTargetPack },
-    ({ field, model, gen }) => ({
+    ({ field, model, gen, type }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
           fields: {
-            _id: field.objectId(),
-            title: field.string(),
-            createdAt: field.date().onCreate(gen.now()),
-            touchedAt: field.date().onUpdate(gen.now()),
+            _id: field.scalar(type.ObjectId()),
+            title: field.scalar(type.String()),
+            createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+            touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
           },
         }),
       },
@@ -117,13 +119,13 @@ test('the built contract types its execution defaults with the collection and fi
 test('the built contract types an execution default ref with the stored name of its field', () => {
   const contract = defineContract(
     { family: mongoFamilyPack, target: mongoTargetPack },
-    ({ field, model, gen }) => ({
+    ({ field, model, gen, type }) => ({
       models: {
         Post: model('Post', {
           collection: 'posts',
           fields: {
-            id: field.objectId().mongo({ field: '_id' }),
-            createdAt: field.date().onCreate(gen.now()).mongo({ field: 'created_at' }),
+            id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+            createdAt: field.scalar(type.Date()).onCreate(gen.now()).mongo({ field: 'created_at' }),
           },
         }),
       },

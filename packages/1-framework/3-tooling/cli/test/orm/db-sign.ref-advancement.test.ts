@@ -25,10 +25,10 @@ import {
   mocks,
   ormConfig,
   projectDir,
-  RENDERED_CONTRACT_DTS,
   refHashOf,
   refsDirOf,
   resetMocks,
+  SNAPSHOT_CONTRACT_DTS,
   signedSpace,
 } from './db-sign-fixtures';
 
@@ -52,7 +52,7 @@ describe('db sign', () => {
         storage: { storageHash: HASH_A },
         target: 'postgres',
       });
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('still advances db when --db names the database', async () => {
@@ -253,7 +253,7 @@ describe('db sign', () => {
         resolveImportSpecifier: expect.any(Function),
       });
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before verifying or signing when the contract types cannot be rendered', async () => {

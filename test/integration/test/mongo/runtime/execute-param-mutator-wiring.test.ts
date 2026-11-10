@@ -10,7 +10,7 @@ import {
   createMongoRuntime,
   type MongoExecutionContext,
 } from '@internal/mongo-runtime';
-import { MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { InsertOneWireCommand } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
@@ -88,6 +88,38 @@ describe('MongoRuntime execute param-mutator wiring', () => {
       .toArray();
 
     expect(observed).toEqual([{ isParamRef: true, codecId: BULK_CODEC_ID }]);
+  });
+
+  it('an ad-hoc run of a plan with a placeholder hides it from middleware and fails before the driver', async () => {
+    const observedCodecIds: Array<string | undefined> = [];
+    const middleware: MongoMiddleware = {
+      name: 'param-inspector',
+      async beforeEncode(_plan, _ctx, params) {
+        for (const entry of params?.entries() ?? []) {
+          observedCodecIds.push(entry.codecId);
+        }
+      },
+    };
+    const { driver } = recordingDriver();
+    const runtime = createMongoRuntime({ ...buildExecution(), driver, middleware: [middleware] });
+
+    const run = runtime
+      .query({
+        collection: 'users',
+        command: new InsertOneCommand('users', {
+          email: new MongoPreparedParamRef('email', 'mongo/string@1', false),
+          token: new MongoParamRef('secret', { codecId: BULK_CODEC_ID }),
+        }),
+        meta: baseMeta,
+      })
+      .toArray();
+
+    await expect(run).rejects.toMatchObject({
+      code: 'RUNTIME.PREPARE_BIND_ON_ADHOC',
+      details: { name: 'email' },
+    });
+    expect(observedCodecIds).toEqual([BULK_CODEC_ID]);
+    expect(driver.execute).not.toHaveBeenCalled();
   });
 
   it('bulk-pattern middleware mutates codec-tagged params before the driver runs', async () => {

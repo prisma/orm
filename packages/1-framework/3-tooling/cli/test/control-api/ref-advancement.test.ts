@@ -311,7 +311,9 @@ describe('buildRefAdvancementFields', () => {
     expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(true);
     const storeDir = contractSnapshotDir(migrationsDir, HASH_A);
     expect(existsSync(join(storeDir, 'contract.json'))).toBe(true);
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(contractIR.contractDts);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(
+      '/* generated */ export type Contract = unknown;\n',
+    );
   });
 
   it('maps a hash mismatch between the argument and the contract to the MigrationToolsError envelope', async () => {

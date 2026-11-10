@@ -16,21 +16,21 @@ import {
   writtenIndexPosition,
 } from '../src/merge-redundant-indexes';
 import { nameIndexes } from '../src/name-indexes';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 const codecLookup = extractCodecLookup([mongoFamilyPack, mongoTargetPack]);
 const { support: dataTypes } = assembleDataTypeSupport(
   [mongoFamilyPack, mongoTargetPack],
   (codecId) => codecLookup.descriptorFor(codecId)?.dataType,
 );
-const stringType = field.string().__type;
+const stringType = field.scalar(type.String()).__type;
 
 function scalar(fieldName: string): FieldNode {
   return { fieldName, type: stringType, nullable: false, many: false };
 }
 
 const fields = [
-  { ...scalar('_id'), type: field.objectId().__type },
+  { ...scalar('_id'), type: field.scalar(type.ObjectId()).__type },
   scalar('type'),
   scalar('a'),
   scalar('b'),

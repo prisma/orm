@@ -1,7 +1,13 @@
 import type { MongoParamRef } from './param-ref';
+import type { MongoPreparedParamRef } from './prepared-param-ref';
 
 export type LiteralValue = string | number | boolean | null | Date;
-export type MongoValue = MongoParamRef | LiteralValue | MongoDocument | MongoArray;
+export type MongoValue =
+  | MongoParamRef
+  | MongoPreparedParamRef
+  | LiteralValue
+  | MongoDocument
+  | MongoArray;
 export interface MongoDocument {
   readonly [key: string]: MongoValue;
 }

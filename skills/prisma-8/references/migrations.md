@@ -408,8 +408,8 @@ On Postgres the operations are **methods on the `Migration` base class**, each t
 - Indexes: `createIndex`, `renameIndex`, `dropIndex`.
 - Enums: `createNativeEnumType`, `addNativeEnumValue`, `dropNativeEnumType`.
 - Row-level security: `enableRowLevelSecurity`, `disableRowLevelSecurity`, `createRlsPolicy`, `renameRlsPolicy`, `dropRlsPolicy`.
-- Dependencies: `createSchema`, `installExtension`.
-- Free helpers on the import line: `col`, `primaryKey`, `unique`, `foreignKey`, `checkExpression`, `lit`, `fn` (column and constraint descriptors), `createExtension`, and the raw escape hatch `rawSql({ id, label, operationClass, target, precheck, execute, postcheck, ... })`. The runner runs an operation's postchecks first and skips the operation when they all hold, so a `rawSql` postcheck must hold only when the operation's full effect is in place. If you cannot check that, leave `postcheck` empty: the operation then always runs.
+- Dependencies: `createSchema`, `createExtension`, `dropExtension`, `setExtensionSchema`, `installExtension`.
+- Free helpers on the import line: `col`, `primaryKey`, `unique`, `foreignKey`, `checkExpression`, `lit`, `fn` (column and constraint descriptors), and the raw escape hatch `rawSql({ id, label, operationClass, target, precheck, execute, postcheck, ... })`. The runner runs an operation's postchecks first and skips the operation when they all hold, so a `rawSql` postcheck must hold only when the operation's full effect is in place. If you cannot check that, leave `postcheck` empty: the operation then always runs.
 - Data transforms: `this.dataTransform(endContract, name, { check, run })`.
 
 **Mongo** factories (from `@prisma/orm-mongo/target/migration`):

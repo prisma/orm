@@ -647,6 +647,31 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  examples/prisma-8-demo-mariadb:
+    dependencies:
+      '@prisma/orm-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../packages/9-public/@prisma/orm-mariadb
+    devDependencies:
+      '@prisma/cli-engine':
+        specifier: 0.9.0
+        version: 0.9.0(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+      '@repo/prisma-bin':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../test/prisma-bin
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../packages/0-config/tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   examples/prisma-8-demo-mysql:
     dependencies:
       '@prisma/orm-mysql':
@@ -4060,47 +4085,47 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/3-targets/mysql/1-target:
+  packages/3-targets/mysql/1-mysql/1-target:
     dependencies:
       '@internal/cli':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/3-tooling/cli
+        version: link:../../../../1-framework/3-tooling/cli
       '@internal/contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/contract
+        version: link:../../../../1-framework/0-foundation/contract
       '@internal/errors':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/errors
+        version: link:../../../../1-framework/1-core/errors
       '@internal/family-sql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/9-family
+        version: link:../../../../2-sql-family/9-family
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/framework-components
+        version: link:../../../../1-framework/1-core/framework-components
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/3-tooling/migration
+        version: link:../../../../1-framework/3-tooling/migration
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/contract
+        version: link:../../../../2-sql-family/1-core/contract
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/4-lanes/relational-core
+        version: link:../../../../2-sql-family/4-lanes/relational-core
       '@internal/sql-runtime':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/5-runtime
+        version: link:../../../../2-sql-family/5-runtime
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/schema-ir
+        version: link:../../../../2-sql-family/1-core/schema-ir
       '@internal/ts-render':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/ts-render
+        version: link:../../../../1-framework/1-core/ts-render
       '@internal/type-implementations':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../0-shared/type-implementations
+        version: link:../../../0-shared/type-implementations
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/utils
+        version: link:../../../../1-framework/0-foundation/utils
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -4113,13 +4138,13 @@ importers:
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../../test/utils
+        version: link:../../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsconfig
+        version: link:../../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsdown
+        version: link:../../../../0-config/tsdown
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
@@ -4133,54 +4158,54 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/3-targets/mysql/2-adapter:
+  packages/3-targets/mysql/1-mysql/2-adapter:
     dependencies:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/contract
+        version: link:../../../../1-framework/0-foundation/contract
       '@internal/errors':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/errors
+        version: link:../../../../1-framework/1-core/errors
       '@internal/family-sql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/9-family
+        version: link:../../../../2-sql-family/9-family
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/framework-components
+        version: link:../../../../1-framework/1-core/framework-components
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/3-tooling/migration
+        version: link:../../../../1-framework/3-tooling/migration
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/contract
+        version: link:../../../../2-sql-family/1-core/contract
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/4-lanes/relational-core
+        version: link:../../../../2-sql-family/4-lanes/relational-core
       '@internal/sql-runtime':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/5-runtime
+        version: link:../../../../2-sql-family/5-runtime
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/schema-ir
+        version: link:../../../../2-sql-family/1-core/schema-ir
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../1-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/utils
+        version: link:../../../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/driver-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../3-driver
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../../test/utils
+        version: link:../../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsconfig
+        version: link:../../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsdown
+        version: link:../../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4191,29 +4216,29 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/3-targets/mysql/3-driver:
+  packages/3-targets/mysql/1-mysql/3-driver:
     dependencies:
       '@internal/errors':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/errors
+        version: link:../../../../1-framework/1-core/errors
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/framework-components
+        version: link:../../../../1-framework/1-core/framework-components
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/contract
+        version: link:../../../../2-sql-family/1-core/contract
       '@internal/sql-errors':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/errors
+        version: link:../../../../2-sql-family/1-core/errors
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/4-lanes/relational-core
+        version: link:../../../../2-sql-family/4-lanes/relational-core
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../1-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/utils
+        version: link:../../../../1-framework/0-foundation/utils
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
@@ -4223,13 +4248,13 @@ importers:
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../../test/utils
+        version: link:../../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsconfig
+        version: link:../../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsdown
+        version: link:../../../../0-config/tsdown
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4240,56 +4265,56 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/3-targets/mysql/9-facade:
+  packages/3-targets/mysql/1-mysql/9-facade:
     dependencies:
       '@internal/adapter-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../2-adapter
       '@internal/cli':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/3-tooling/cli
+        version: link:../../../../1-framework/3-tooling/cli
       '@internal/config':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/config
+        version: link:../../../../1-framework/1-core/config
       '@internal/contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/contract
+        version: link:../../../../1-framework/0-foundation/contract
       '@internal/driver-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../3-driver
       '@internal/family-sql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/9-family
+        version: link:../../../../2-sql-family/9-family
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/1-core/framework-components
+        version: link:../../../../1-framework/1-core/framework-components
       '@internal/sql-builder':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/4-lanes/sql-builder
+        version: link:../../../../2-sql-family/4-lanes/sql-builder
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/contract
+        version: link:../../../../2-sql-family/1-core/contract
       '@internal/sql-contract-psl':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/2-authoring/contract-psl
+        version: link:../../../../2-sql-family/2-authoring/contract-psl
       '@internal/sql-contract-ts':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/2-authoring/contract-ts
+        version: link:../../../../2-sql-family/2-authoring/contract-ts
       '@internal/sql-orm-client':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../3-extensions/sql-orm-client
+        version: link:../../../../3-extensions/sql-orm-client
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/4-lanes/relational-core
+        version: link:../../../../2-sql-family/4-lanes/relational-core
       '@internal/sql-runtime':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/5-runtime
+        version: link:../../../../2-sql-family/5-runtime
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.23
         version: link:../1-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/0-foundation/utils
+        version: link:../../../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
         version: 2.2.7
@@ -4302,25 +4327,224 @@ importers:
     devDependencies:
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/3-tooling/migration
+        version: link:../../../../1-framework/3-tooling/migration
       '@internal/psl-parser':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../1-framework/2-authoring/psl-parser
+        version: link:../../../../1-framework/2-authoring/psl-parser
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../2-sql-family/1-core/schema-ir
+        version: link:../../../../2-sql-family/1-core/schema-ir
       '@prisma/cli-engine':
         specifier: 0.9.0
         version: 0.9.0(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../../test/utils
+        version: link:../../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsconfig
+        version: link:../../../../0-config/tsconfig
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../0-config/tsdown
+        version: link:../../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/3-targets/mysql/2-mariadb/1-target:
+    dependencies:
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/0-foundation/contract
+      '@internal/family-sql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/9-family
+      '@internal/sql-contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/contract
+      '@internal/target-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/1-target
+    devDependencies:
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/1-core/framework-components
+      '@internal/sql-relational-core':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/4-lanes/relational-core
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../../test/utils
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/3-targets/mysql/2-mariadb/2-adapter:
+    dependencies:
+      '@internal/adapter-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/2-adapter
+      '@internal/family-sql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/9-family
+      '@internal/sql-contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/contract
+      '@internal/target-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/1-target
+    devDependencies:
+      '@internal/driver-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../3-driver
+      '@internal/driver-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/3-driver
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/1-core/framework-components
+      '@internal/sql-schema-ir':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/schema-ir
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../1-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../../test/utils
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/3-targets/mysql/2-mariadb/3-driver:
+    dependencies:
+      '@internal/driver-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/3-driver
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/1-core/framework-components
+    devDependencies:
+      '@internal/sql-contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/contract
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../../test/utils
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsdown
+      mariadb:
+        specifier: 3.5.4
+        version: 3.5.4
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/3-targets/mysql/2-mariadb/9-facade:
+    dependencies:
+      '@internal/adapter-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../2-adapter
+      '@internal/cli':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/3-tooling/cli
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/1-core/config
+      '@internal/driver-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../3-driver
+      '@internal/family-sql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/9-family
+      '@internal/mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/9-facade
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../1-target
+      '@internal/target-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/1-target
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/0-foundation/utils
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+    devDependencies:
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/0-foundation/contract
+      '@internal/driver-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../1-mysql/3-driver
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/1-core/framework-components
+      '@internal/migration-tools':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../1-framework/3-tooling/migration
+      '@internal/sql-contract':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/contract
+      '@internal/sql-schema-ir':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../2-sql-family/1-core/schema-ir
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../../test/utils
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../../0-config/tsdown
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
@@ -5562,6 +5786,49 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/9-public/@prisma/orm-mariadb:
+    dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-framework
+      '@prisma/orm-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-mysql
+      '@prisma/orm-target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-target-mariadb
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-target-mysql
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-toolchain
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+    devDependencies:
+      '@internal/mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../3-targets/mysql/2-mariadb/9-facade
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/9-public/@prisma/orm-mongo:
     dependencies:
       '@prisma/orm-family-mongo':
@@ -5634,7 +5901,7 @@ importers:
     devDependencies:
       '@internal/mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../3-targets/mysql/9-facade
+        version: link:../../../3-targets/mysql/1-mysql/9-facade
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../0-config/tsconfig
@@ -5777,6 +6044,43 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  packages/9-public/@prisma/orm-target-mariadb:
+    dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-framework
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../orm-target-mysql
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
+    devDependencies:
+      '@internal/adapter-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../3-targets/mysql/2-mariadb/2-adapter
+      '@internal/driver-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../3-targets/mysql/2-mariadb/3-driver
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../3-targets/mysql/2-mariadb/1-target
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../../0-config/tsdown
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/9-public/@prisma/orm-target-mongo:
     dependencies:
       '@prisma/orm-family-mongo':
@@ -5849,13 +6153,13 @@ importers:
     devDependencies:
       '@internal/adapter-mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../3-targets/mysql/2-adapter
+        version: link:../../../3-targets/mysql/1-mysql/2-adapter
       '@internal/driver-mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../3-targets/mysql/3-driver
+        version: link:../../../3-targets/mysql/1-mysql/3-driver
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../../3-targets/mysql/1-target
+        version: link:../../../3-targets/mysql/1-mysql/1-target
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../../test/utils
@@ -6291,7 +6595,7 @@ importers:
         version: link:../../packages/2-mongo-family/6-transport/mongo-wire
       '@internal/mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../packages/3-targets/mysql/9-facade
+        version: link:../../packages/3-targets/mysql/1-mysql/9-facade
       '@internal/operations':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/1-framework/1-core/operations
@@ -6340,12 +6644,15 @@ importers:
       '@internal/sqlite':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/3-targets/sqlite/9-facade
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../../packages/3-targets/mysql/2-mariadb/1-target
       '@internal/target-mongo':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/3-targets/mongo/1-target
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.23
-        version: link:../../packages/3-targets/mysql/1-target
+        version: link:../../packages/3-targets/mysql/1-mysql/1-target
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.23
         version: link:../../packages/3-targets/postgres/1-target

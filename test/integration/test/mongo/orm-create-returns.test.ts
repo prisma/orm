@@ -1,11 +1,11 @@
-import { defineContract, field, model, valueObject } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type, valueObject } from '@internal/mongo/contract-builder';
 import mongo from '@internal/mongo/runtime';
 import { timeouts } from '@repo/test-utils';
 import { type CommandStartedEvent, Long, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const NoteKey = valueObject('NoteKey', { fields: { k: field.int32() } });
+const NoteKey = valueObject('NoteKey', { fields: { k: field.scalar(type.Int32()) } });
 
 const contract = defineContract({
   valueObjects: { NoteKey },
@@ -13,23 +13,23 @@ const contract = defineContract({
     Note: model('Note', {
       collection: 'notes',
       fields: {
-        _id: field.objectId(),
-        title: field.string(),
-        size: field.int64(),
-        raw: field.bson(),
+        _id: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
+        size: field.scalar(type.Int64()),
+        raw: field.scalar(type.Bson()),
       },
     }),
     DatedNote: model('DatedNote', {
       collection: 'dated_notes',
-      fields: { _id: field.date(), title: field.string() },
+      fields: { _id: field.scalar(type.Date()), title: field.scalar(type.String()) },
     }),
     ByteNote: model('ByteNote', {
       collection: 'byte_notes',
-      fields: { _id: field.binary(), title: field.string() },
+      fields: { _id: field.scalar(type.Binary()), title: field.scalar(type.String()) },
     }),
     BsonNote: model('BsonNote', {
       collection: 'bson_notes',
-      fields: { _id: field.valueObject(NoteKey), title: field.string() },
+      fields: { _id: field.valueObject(NoteKey), title: field.scalar(type.String()) },
     }),
   },
 });
