@@ -233,52 +233,71 @@ interface DocumentField {
   readonly value: unknown;
 }
 
+/** The fields an object schema requires and declares, and whether it allows any other. */
+type FieldsShape = Pick<ValidatorDocumentShape, 'required' | 'properties' | 'closed'>;
+
+/** The shape of a property schema that describes an embedded document, such as a value object. */
+function nestedShapeOf(schema: unknown): FieldsShape | undefined {
+  if (typeof schema !== 'object' || schema === null) return undefined;
+  const properties: unknown = Reflect.get(schema, 'properties');
+  const required: unknown = Reflect.get(schema, 'required');
+  if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
+    return undefined;
+  }
+  return {
+    properties: { ...properties },
+    required: Array.isArray(required)
+      ? required.filter((name): name is string => typeof name === 'string')
+      : [],
+    closed: Reflect.get(schema, 'additionalProperties') === false,
+  };
+}
+
 function problemsAgainst(
   fields: ReadonlyMap<string, DocumentField>,
-  shape: ValidatorDocumentShape,
+  shape: FieldsShape,
+  path: string,
 ): readonly string[] {
+  const named = (field: string) => JSON.stringify(`${path}${field}`);
   const missing = shape.required
     .filter((field) => !fields.has(field))
-    .map((field) => `has no ${JSON.stringify(field)}`);
+    .map((field) => `has no ${named(field)}`);
   const retyped = [...fields].flatMap(([field, { type }]) => {
     const allowed = allowedBsonTypes(shape.properties[field]);
     return allowed === undefined || allowed.has(type)
       ? []
       : [
-          `holds a value of type ${type} in ${JSON.stringify(field)}, which the new validator does not allow there`,
+          `holds a value of type ${type} in ${named(field)}, which the new validator does not allow there`,
         ];
   });
   const undeclared = shape.closed
     ? [...fields.keys()]
         .filter((field) => !Object.hasOwn(shape.properties, field))
-        .map((field) => `has ${JSON.stringify(field)}, a field the new validator does not name`)
+        .map((field) => `has ${named(field)}, a field the new validator does not name`)
     : [];
   return [...missing, ...retyped, ...undeclared];
 }
 
 /**
- * Why a document does not fit a validator: against the variant whose discriminator value the
- * document holds, or else the root model or variant it fits best, the required fields it lacks, the
- * fields whose type the validator does not allow, and, for a closed validator, the fields it does not
- * name.
+ * The root model or variant of a validator a document is read against: the variant whose
+ * discriminator value the document holds, or else the one it fits best.
  */
-function documentProblems(
+function shapeOfDocument(
   fields: ReadonlyMap<string, DocumentField>,
   shapes: readonly ValidatorDocumentShape[],
-): readonly string[] {
-  if (fields.size === 0) return [];
+): ValidatorDocumentShape | undefined {
   const selected = shapes.filter(
     ({ discriminator }) =>
       discriminator !== undefined &&
       canonicalize(fields.get(discriminator.field)?.value) === canonicalize(discriminator.value),
   );
-  return (
-    (selected.length > 0 ? selected : shapes)
-      .map((shape) => problemsAgainst(fields, shape))
-      .reduce<readonly string[] | undefined>(
-        (best, problems) => (best === undefined || problems.length < best.length ? problems : best),
-        undefined,
-      ) ?? []
+  return (selected.length > 0 ? selected : shapes).reduce<ValidatorDocumentShape | undefined>(
+    (best, shape) =>
+      best === undefined ||
+      problemsAgainst(fields, shape, '').length < problemsAgainst(fields, best, '').length
+        ? shape
+        : best,
+    undefined,
   );
 }
 
@@ -1022,10 +1041,26 @@ export class MongoMigrationRunner {
       Reflect.get(validator, '$jsonSchema'),
     );
     const one = documents === 1;
-    const problems = documentProblems(
-      await this.fieldsOfDocument(failed.source, collection, counted?.['documentId']),
-      validatorDocumentShapesOf(Reflect.get(validator, '$jsonSchema')),
+    const documentObjectId = counted?.['documentId'];
+    const fields = await this.fieldsOfDocument(
+      failed.source,
+      collection,
+      documentObjectId,
+      '$$ROOT',
     );
+    const shape =
+      fields.size === 0
+        ? undefined
+        : shapeOfDocument(fields, validatorDocumentShapesOf(Reflect.get(validator, '$jsonSchema')));
+    const problems =
+      shape === undefined
+        ? []
+        : await this.documentProblems(
+            { source: failed.source, collection, id: documentObjectId },
+            fields,
+            shape,
+            '',
+          );
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
       `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
@@ -1129,11 +1164,47 @@ export class MongoMigrationRunner {
     );
   }
 
-  /** Each field of the document with `_id`: its BSON type, read with `$type`, and its value. */
+  /**
+   * Why a document does not fit a validator, against `shape`: the required fields it lacks, the
+   * fields whose type the validator does not allow, the fields a closed validator does not name, and
+   * the same inside each embedded document the validator describes, such as a value object.
+   */
+  private async documentProblems(
+    document: {
+      readonly source: MongoQueryPlan;
+      readonly collection: string;
+      readonly id: unknown;
+    },
+    fields: ReadonlyMap<string, DocumentField>,
+    shape: FieldsShape,
+    path: string,
+  ): Promise<readonly string[]> {
+    const nested = await Promise.all(
+      [...fields].map(async ([field, { type }]) => {
+        const nestedShape = type === 'object' ? nestedShapeOf(shape.properties[field]) : undefined;
+        if (nestedShape === undefined) return [];
+        const nestedPath = `${path}${field}`;
+        const nestedFields = await this.fieldsOfDocument(
+          document.source,
+          document.collection,
+          document.id,
+          `$${nestedPath}`,
+        );
+        return this.documentProblems(document, nestedFields, nestedShape, `${nestedPath}.`);
+      }),
+    );
+    return [...problemsAgainst(fields, shape, path), ...nested.flat()];
+  }
+
+  /**
+   * Each field of the document with `_id`, at `input`, `$$ROOT` or the path of an embedded document:
+   * its BSON type, read with `$type`, and its value.
+   */
   private async fieldsOfDocument(
     source: MongoQueryPlan,
     collection: string,
     id: unknown,
+    input: string,
   ): Promise<ReadonlyMap<string, DocumentField>> {
     const row = await this.firstRow({
       ...source,
@@ -1145,7 +1216,7 @@ export class MongoMigrationRunner {
             _id: 0,
             fields: {
               $map: {
-                input: { $objectToArray: '$$ROOT' },
+                input: { $objectToArray: input },
                 in: ['$$this.k', { $type: '$$this.v' }, '$$this.v'],
               },
             },

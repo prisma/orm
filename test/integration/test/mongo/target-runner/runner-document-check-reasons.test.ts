@@ -288,4 +288,45 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'names why the document fails inside a value object',
+    async () => {
+      const withAddress = (zip: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'address'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          address: {
+            bsonType: 'object',
+            required: ['zip'],
+            properties: { zip: { bsonType: zip } },
+            additionalProperties: false,
+          },
+        },
+        additionalProperties: false,
+      });
+      await live
+        .db()
+        .createCollection('users', { validator: { $jsonSchema: withAddress('string') } });
+      await live
+        .db()
+        .collection('users')
+        .insertOne({ address: { zip: '10115' } });
+
+      const result = await run([
+        collMod(
+          'users',
+          { validator: { $jsonSchema: withAddress('int') } },
+          { id: 'validator.users.update', checkDocuments: true },
+        ),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        'That document holds a value of type string in "address.zip", which the new validator does not allow there.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
