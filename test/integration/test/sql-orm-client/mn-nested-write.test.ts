@@ -664,4 +664,30 @@ describe('integration/mn-nested-write', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'create(): connect with two criteria that find the same tag links it once',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
+
+        const created = await users
+          .select('id')
+          .include('tags', (tags) => tags.select('id', 'name'))
+          .create({
+            id: 1,
+            name: 'Ada',
+            email: 'ada@example.com',
+            tags: (tags) => tags.connect([{ id: TAG_RUST }, { name: 'Rust' }]),
+          });
+
+        expect(created).toEqual({ id: 1, tags: [{ id: TAG_RUST, name: 'Rust' }] });
+        expect(await runtime.query('select user_id, tag_id from user_tags')).toEqual([
+          { user_id: 1, tag_id: TAG_RUST },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

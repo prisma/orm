@@ -121,7 +121,7 @@ async function withDatabase(fn: (collections: Collections) => Promise<void>): Pr
   }
 }
 
-describe('integration/nested create() through the mutation graph on SQLite', () => {
+describe('integration/nested-mutations on SQLite: create()', () => {
   it(
     'creates children, created and connected tags, and returns the selected parent',
     async () => {
@@ -220,7 +220,7 @@ describe('integration/nested create() through the mutation graph on SQLite', () 
   );
 });
 
-describe('integration/nested update() through the mutation graph on SQLite', () => {
+describe('integration/nested-mutations on SQLite: update()', () => {
   it(
     'connects an author, links and unlinks tags, and disconnects a child',
     async () => {
