@@ -77,14 +77,13 @@ describe('rewriteConnectionString', () => {
   })
 
   test.each([
-    ['mariadb://user:pass@[::1]:3306/db', 'mariadb://user:pass@%3A%3A1:3306/db'],
-    ['mariadb://user:pass@[::1]/db', 'mariadb://user:pass@%3A%3A1/db'],
-    ['mysql://user:pass@[::1]:3306/db', 'mariadb://user:pass@%3A%3A1:3306/db'],
+    ['mariadb://user:pass@[::1]:3306/db', 'mariadb://user:pass@[::1]:3306/db'],
+    ['mysql://user:pass@[::1]:3306/db', 'mariadb://user:pass@[::1]:3306/db'],
     [
       'mariadb://user:pass@[2001:db8::1]:3306/db?connectionLimit=10&ssl=true',
-      'mariadb://user:pass@2001%3Adb8%3A%3A1:3306/db?connectionLimit=10&ssl=true',
+      'mariadb://user:pass@[2001:db8::1]:3306/db?connectionLimit=10&ssl=true',
     ],
-  ])('should percent-encode the IPv6 host of %s', (input, expected) => {
+  ])('should keep the bracketed IPv6 host of %s', (input, expected) => {
     expect(rewriteConnectionString(new URL(input)).toString()).toBe(expected)
   })
 })

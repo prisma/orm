@@ -521,6 +521,29 @@ testMatrix.setupTestSuite(
       expect(users.map((u) => u.email)).toEqual([outerEmail1, outerEmail2].sort())
     })
 
+    testIf(provider !== Providers.MONGODB)('sql: nested transaction does not mutate the options object', async () => {
+      const email1 = `user_${copycat.uuid(251)}@website.com`
+      const email2 = `user_${copycat.uuid(252)}@website.com`
+      const options = { maxWait: 5000, timeout: 5000 }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$transaction(async (tx2) => {
+          await tx2.user.create({ data: { email: email1 } })
+        }, options)
+      }, options)
+
+      expect(options).toStrictEqual({ maxWait: 5000, timeout: 5000 })
+
+      await prisma.$transaction(async (tx) => {
+        await tx.user.create({ data: { email: email2 } })
+      }, options)
+
+      const users = await prisma.user.findMany({
+        where: { email: { in: [email1, email2] } },
+      })
+      expect(users).toHaveLength(2)
+    })
+
     testIf(provider !== Providers.MONGODB)('sql: enforce order for nested transactions', async () => {
       const result = prisma.$transaction(async (tx) => {
         const nested = tx.$transaction(async (tx2) => {
