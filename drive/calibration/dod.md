@@ -46,7 +46,7 @@ A brief may add gates specific to the work:
 
 - **Per-commit** (during the dispatch): typecheck and any grep gates the brief specifies.
 - **End-of-dispatch**: typecheck, the touched packages' tests and lint, `lint:deps`, and brief-specified gates.
-- **Every package, integration and e2e test must pass before the PR merges.** You are not the only agent on this machine, so respect its CPU and memory limits: locally, make sure the tests of the packages you changed pass, and the integration and e2e files that cover your change; let CI and the merge queue run the full suites ([`running-tests.mdc`](../../.agents/rules/running-tests.mdc)).
+- **Every package, integration and e2e test must pass before the PR merges.** Locally you run your own packages' tests and the files that cover your change; CI runs the full suites, because the machine is shared ([`running-tests.mdc`](../../.agents/rules/running-tests.mdc)).
 - **The orchestrator picks the gate.** It does not ask the operator to confirm an inferred gate list; it writes the gate into the plan and states it.
 - **Orchestrator-side post-dispatch**: re-run the grep gates independently; spot-check the diff for spec compliance; run intent-validation.
 

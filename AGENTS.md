@@ -71,7 +71,8 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ```bash
 pnpm build                 # Build via Turbo
-pnpm test:packages         # Run package tests (cheapest healthy-workspace signal)
+# Full suites must pass, but CI runs them: the machine is shared. Locally, run your packages' tests (.agents/rules/running-tests.mdc)
+pnpm test:packages         # Package tests
 pnpm test:integration      # Integration tests (PGlite + mongodb-memory-server, no external DB)
 pnpm test:e2e              # E2E tests (also self-contained)
 pnpm test:all              # Everything
