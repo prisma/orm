@@ -25,11 +25,11 @@ That facade pulls in everything else — the framework, the SQL family, the Post
 └── @prisma/orm-toolchain       CLI (bin), emitter, config-loader, LSP
 ```
 
-Every published package lives under the single `@prisma` scope. The full public surface is **21 packages** — 5 database facades, 7 extension packs, 9 platform packages, and nothing else. The unscoped bin shim it once also counted is retired (see the note above). Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
+Every published package lives under the single `@prisma` scope. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
 
 | Published package | Role |
 |---|---|
-| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one; `orm-mariadb` depends on `orm-mysql` (see below) |
+| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
 | `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
@@ -39,8 +39,6 @@ Every published package lives under the single `@prisma` scope. The full public 
 ## What an application depends on
 
 One facade, plus whatever extension packs it installs. Nothing else — not `@prisma/orm-family-sql`, not `@prisma/orm-toolchain`, even though the facade brings both in. Those arrive as the facade's own dependencies, and an application that names one directly is claiming a version contract it does not have.
-
-The facade of a database that extends another depends on that database's facade: `@prisma/orm-mariadb` depends on `@prisma/orm-mysql`, whose `createMysqlDefineConfig` builds MariaDB's `defineConfig`. This is the only dependency from one facade to another. The extended database's facade arrives as a dependency like any other, and the application still names only its own facade.
 
 That holds only if the facade has a name for everything an application reaches, so it republishes each of them as one of its own entrypoints:
 
@@ -164,7 +162,7 @@ packages/9-public/
 
 ## Consequences
 
-- The npm registry carries 21 Prisma Next packages, each with a stated audience; internals are structurally absent rather than "present but discouraged".
+- Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
 - Extension packs peer-depend on target packages (e.g. `@prisma/orm-target-postgres`), which are always installed — directly or via a facade — so peer resolution is satisfied in both the facade and decomposed configurations.
 - Publishing remains a lockstep, whole-train operation; the release process is unchanged apart from the package list.
