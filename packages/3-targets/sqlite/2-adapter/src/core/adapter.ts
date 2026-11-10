@@ -41,7 +41,7 @@ import type {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import { collectOrderedParamRefs, isDdlNode } from '@internal/sql-relational-core/ast';
+import { collectOrderedParamRefs, isDdlNode, isQueryAst } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
 import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
@@ -448,7 +448,17 @@ function renderParts(
   parts: RawExpr['parts'] | RawQueryAst['parts'],
   ctx: SqliteRenderContext,
 ): string {
-  return parts.map((part) => (typeof part === 'string' ? part : renderExpr(part, ctx))).join('');
+  return parts
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (isQueryAst(part)) {
+        throw new InternalError(`Rendering an embedded ${part.kind} statement is not supported`);
+      }
+      return renderExpr(part, ctx);
+    })
+    .join('');
 }
 
 function renderRawExpr(node: RawExpr, ctx: SqliteRenderContext): string {

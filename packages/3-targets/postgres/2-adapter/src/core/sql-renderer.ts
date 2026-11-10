@@ -26,6 +26,7 @@ import {
   type FunctionCallExpr,
   type InsertAst,
   type InsertValue,
+  isQueryAst,
   type JoinAst,
   type JoinOnExpr,
   type JsonArrayAggExpr,
@@ -1132,7 +1133,15 @@ function renderParts(
   pim: ParamIndexMap,
 ): string {
   return parts
-    .map((part) => (typeof part === 'string' ? part : renderExpr(part, contract, pim)))
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (isQueryAst(part)) {
+        throw new InternalError(`Rendering an embedded ${part.kind} statement is not supported`);
+      }
+      return renderExpr(part, contract, pim);
+    })
     .join('');
 }
 
