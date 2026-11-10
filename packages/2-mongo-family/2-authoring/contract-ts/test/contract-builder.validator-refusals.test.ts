@@ -5,7 +5,12 @@ import { documentIdRefusalReason } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model, rel, valueObject } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
-import { identityCodecDescriptor, mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import {
+  identityCodecDescriptor,
+  mongoFamilyPack,
+  mongoTargetPack,
+  type,
+} from './mongo-test-packs';
 
 const plainGeoPoint = dataType('geo/point', { read: (json) => json });
 
@@ -36,7 +41,10 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     it('refuses a model field whose codec no pack provides', () => {
       const Place = model('Place', {
         collection: 'places',
-        fields: { _id: field.objectId(), location: field.scalar('geo/point@1') },
+        fields: {
+          _id: field.scalar(type.ObjectId()),
+          location: field.scalar({ kind: 'scalar', codecId: 'geo/point@1' }),
+        },
       });
       expect(() => defineContract({ ...scaffold, models: { Place } })).toThrow(
         expect.objectContaining({
@@ -51,7 +59,10 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     it('refuses a field whose codec represents a data type that is not a MongoDB data type', () => {
       const Place = model('Place', {
         collection: 'places',
-        fields: { _id: field.objectId(), location: field.scalar('geo/point@1') },
+        fields: {
+          _id: field.scalar(type.ObjectId()),
+          location: field.scalar({ kind: 'scalar', codecId: 'geo/point@1' }),
+        },
       });
       expect(() =>
         defineContract({ ...scaffold, extensions: { geo: sqlTypedPack }, models: { Place } }),
@@ -72,10 +83,12 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     });
 
     it('refuses a value object field whose codec no pack provides', () => {
-      const Address = valueObject('Address', { fields: { zip: field.scalar('geo/zip@1') } });
+      const Address = valueObject('Address', {
+        fields: { zip: field.scalar({ kind: 'scalar', codecId: 'geo/zip@1' }) },
+      });
       const User = model('User', {
         collection: 'users',
-        fields: { _id: field.objectId(), address: field.valueObject(Address) },
+        fields: { _id: field.scalar(type.ObjectId()), address: field.valueObject(Address) },
       });
       expect(() =>
         defineContract({ ...scaffold, models: { User }, valueObjects: { Address } }),
@@ -91,7 +104,7 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     it('names the codec of an _id that no pack provides, not the missing _id', () => {
       const User = model('User', {
         collection: 'users',
-        fields: { _id: field.scalar('custom/uuid@1') },
+        fields: { _id: field.scalar({ kind: 'scalar', codecId: 'custom/uuid@1' }) },
       });
       expect(() => defineContract({ ...scaffold, models: { User } })).toThrow(
         expect.objectContaining({
@@ -105,15 +118,18 @@ describe('mongo defineContract refuses what a collection validator cannot descri
 
   describe('the document id', () => {
     it('accepts a root model without an _id field', () => {
-      const User = model('User', { collection: 'users', fields: { email: field.string() } });
+      const User = model('User', {
+        collection: 'users',
+        fields: { email: field.scalar(type.String()) },
+      });
       expect(() => defineContract({ ...scaffold, models: { User } })).not.toThrow();
     });
 
     it.each([
-      ['a string', field.string(), { bsonType: 'string' }],
-      ['an int', field.int32(), { bsonType: 'int' }],
-      ['a date', field.date(), { bsonType: 'date' }],
-      ['bytes', field.binary(), { bsonType: 'binData' }],
+      ['a string', field.scalar(type.String()), { bsonType: 'string' }],
+      ['an int', field.scalar(type.Int32()), { bsonType: 'int' }],
+      ['a date', field.scalar(type.Date()), { bsonType: 'date' }],
+      ['bytes', field.scalar(type.Binary()), { bsonType: 'binData' }],
     ])(
       'accepts a root model whose _id holds %s, and validates it as such',
       (_case, idField, idSchema) => {
@@ -129,11 +145,16 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     );
 
     it.each([
-      ['a list', field.objectId().many(), 'mongo/objectId@1', ['array']],
-      ['nullable', field.string().optional(), 'mongo/string@1', ['null']],
-      ['json', field.json(), 'mongo/json@1', ['array', 'null']],
-      ['a vector', field.vector(), 'mongo/vector@1', ['array']],
-      ['any BSON value', field.bson(), 'mongo/bson@1', ['array', 'regex', 'undefined', 'null']],
+      ['a list', field.scalar(type.ObjectId()).many(), 'mongo/objectId@1', ['array']],
+      ['nullable', field.scalar(type.String()).optional(), 'mongo/string@1', ['null']],
+      ['json', field.scalar(type.Json()), 'mongo/json@1', ['array', 'null']],
+      ['a vector', field.scalar(type.Vector()), 'mongo/vector@1', ['array']],
+      [
+        'any BSON value',
+        field.scalar(type.Bson()),
+        'mongo/bson@1',
+        ['array', 'regex', 'undefined', 'null'],
+      ],
     ])(
       'refuses a root model whose _id is %s, with the reason reading the contract back gives',
       (_case, idField, codecId, forbidden) => {
@@ -159,16 +180,16 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     it('accepts an embedded model and a variant without an _id', () => {
       const Task = model('Task', {
         collection: 'tasks',
-        fields: { _id: field.objectId(), type: field.string() },
+        fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
         relations: { notes: rel.hasMany('Note') },
         discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
       });
       const Bug = model('Bug', {
         collection: 'tasks',
         base: Task,
-        fields: { level: field.int32() },
+        fields: { level: field.scalar(type.Int32()) },
       });
-      const Note = model('Note', { owner: Task, fields: { text: field.string() } });
+      const Note = model('Note', { owner: Task, fields: { text: field.scalar(type.String()) } });
       expect(() => defineContract({ ...scaffold, models: { Task, Bug, Note } })).not.toThrow();
     });
   });
@@ -232,15 +253,15 @@ describe('mongo defineContract refuses what a collection validator cannot descri
   it('refuses an embed relation to a model with variants', () => {
     const Owner = model('Owner', {
       collection: 'owners',
-      fields: { _id: field.objectId() },
+      fields: { _id: field.scalar(type.ObjectId()) },
       relations: { task: rel.hasOne('Task') },
     });
     const Task = model('Task', {
       owner: Owner,
-      fields: { type: field.string() },
+      fields: { type: field.scalar(type.String()) },
       discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
     });
-    const Bug = model('Bug', { base: Task, fields: { severity: field.int32() } });
+    const Bug = model('Bug', { base: Task, fields: { severity: field.scalar(type.Int32()) } });
     expect(() => defineContract({ ...scaffold, models: { Owner, Task, Bug } })).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.RELATION_INVALID',

@@ -13,15 +13,15 @@ test('the temporal presets are not on the field contract-builder exports', () =>
   expectTypeOf(importedField).not.toHaveProperty('temporal');
 });
 
-const contract = defineContract({}, ({ field, model, gen }) => ({
+const contract = defineContract({}, ({ field, model, gen, type }) => ({
   models: {
     Post: model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        createdAt: field.date().onCreate(gen.now()),
-        updatedAt: field.date().onCreate(gen.now()).onUpdate(gen.now()),
-        touchedAt: field.date().onUpdate(gen.now()),
+        _id: field.scalar(type.ObjectId()),
+        createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+        updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
+        touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
       },
     }),
   },

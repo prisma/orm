@@ -29,11 +29,11 @@ export default defineConfig({
 
 ```typescript
 // prisma/contract.ts
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```
@@ -42,7 +42,7 @@ export default defineContract({
 
 ### `@internal/mongo/config`
 
-Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 ```typescript
 import { defineConfig } from '@internal/mongo/config';
@@ -148,11 +148,11 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, `index`, `valueObject`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields. Pass `extensions: { [id]: pack }` with the extension packs whose codecs the contract uses, as the Postgres `defineContract` takes them; the contract records them, and `mongo()` requires their runtime descriptors.
 
 ```typescript
-import { defineContract, field, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
 
 export default defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 ```

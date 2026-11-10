@@ -523,12 +523,12 @@ export const mongoRows: readonly MongoRow[] = [
   {
     model: 'CreatedAt',
     psl: { preset: 'temporal.createdAt()', replacement: 'temporal.CreatedAt' },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()),
+    ts: ({ field, gen, type }) => field.scalar(type.Date()).onCreate(gen.now()),
   },
   {
     model: 'UpdatedAt',
     psl: { preset: 'temporal.updatedAt()', replacement: 'temporal.UpdatedAt' },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()).onUpdate(gen.now()),
+    ts: ({ field, gen, type }) => field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'TimestampBothPhases',
@@ -536,11 +536,11 @@ export const mongoRows: readonly MongoRow[] = [
       preset: 'temporal.timestamp(onCreate: now, onUpdate: now)',
       replacement: 'Date @onCreate(now()) @onUpdate(now())',
     },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()).onUpdate(gen.now()),
+    ts: ({ field, gen, type }) => field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'TimestampOnUpdate',
     psl: { preset: 'temporal.timestamp(onUpdate: now)', replacement: 'Date @onUpdate(now())' },
-    ts: ({ field, gen }) => field.date().onUpdate(gen.now()),
+    ts: ({ field, gen, type }) => field.scalar(type.Date()).onUpdate(gen.now()),
   },
 ];
