@@ -4,6 +4,7 @@ import type {
   ModelCoordinate,
 } from '@internal/framework-components/control';
 import { otherModelsReached, validatorRootShapesOf } from '@internal/mongo-contract';
+import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
 
 type Document = Record<string, unknown>;
 
@@ -22,8 +23,8 @@ export function sharedCollectionWhy(
 export const TIME_SERIES_UPDATES =
   'MongoDB updates the documents of a time-series collection only through its metaField';
 
-/** What a planned rewrite does to a field's documents. */
-export type RewriteKind = 'removal' | 'cast' | 'fill' | 'conversion' | 'backfill';
+/** What a planned rewrite does to a field's documents: a kind an operation's `meta.rewrite` names, or one carried out by an operation that names none. */
+export type RewriteKind = MongoFieldRewriteMeta['kind'] | 'removal' | 'conversion' | 'backfill';
 
 /** A rewrite the plan writes into one collection's documents, as its refusals read it. */
 export interface PlannedRewrite {
