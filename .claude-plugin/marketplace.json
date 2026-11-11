@@ -1,6 +1,6 @@
 {
   "name": "prisma",
-  "description": "The Prisma 8 agent skill for Claude Code",
+  "description": "The Prisma 8 agent skill",
   "owner": {
     "name": "Prisma",
     "url": "https://www.prisma.io"
