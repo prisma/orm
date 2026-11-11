@@ -18,12 +18,12 @@ Will's principle: a convenience type names an application concept (`Int` means "
 | --- | --- |
 | Slice 1: PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` become convenience types; explicit types renamed (`Int2`, `Int4`, `Int8BigInt`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Float8`, `Text`, `Varchar`, `Char`, `Bool`, `Bytea`, `Varbit`) with deprecated aliases warning `PSL_DEPRECATED_SCALAR_NAME`; ADR 316 | Merged: prisma/orm#30942, 2026-11-06 |
 | Old rename project `target-named-scalars-sql` deleted | Merged: prisma/orm#30916 |
-| Slice 2: `Json` as a convenience type defaulting to `jsonb` | **Rejected 2026-11-11.** See `decision-json.md`. PR prisma/orm#30966 (branch `tml-3789-json-convenience-type`, fully pushed to the `bot` remote) is to be closed unmerged. |
+| Slice 2: `Json` as a convenience type defaulting to `jsonb` | **Rejected 2026-11-11.** See `decision-json.md`. PR prisma/orm#30966 (branch `tml-3789-json-convenience-type`, fully pushed to the `bot` remote) was closed unmerged on 2026-11-11. |
 | This handover and the decision | Branch `tml-3789-json-stays-explicit`, cut from main, pushed to the `bot` remote. No PR. |
 
 ## Work left, in order
 
-1. **Close prisma/orm#30966** with a comment linking `decision-json.md`. Cancel TML-3789 in Linear with the reason.
+1. Done 2026-11-11: prisma/orm#30966 closed unmerged with a comment, and TML-3789 cancelled with the reason.
 2. **One small PR from this branch** (`tml-3789-json-stays-explicit`), closing the project:
    - ADR 316 and `spec.md` record that `Json` stays an explicit type, and why (`decision-json.md` steps 2 and 4).
    - `docs/reference/scalar-types.md` and the `prisma-8` skill reference (`skills/prisma-8/references/contract.md`) recommend `Jsonb` unless the input must be kept exactly.
