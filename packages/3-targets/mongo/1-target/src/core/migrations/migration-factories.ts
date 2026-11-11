@@ -648,7 +648,7 @@ export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperat
   const id = storedKeyId(options, `rename(${to})`);
   return {
     id,
-    meta: { storedKey: { kind: 'rename', collection: collectionName, field, path, to } },
+    meta: { rewrite: { kind: 'renameStoredKey', collection: collectionName, field, path, to } },
     label: `Rename key ${JSON.stringify(key)} at path ${JSON.stringify(path)} to ${JSON.stringify(to)} in field ${field} of collection ${collectionName}${labelSuffix(filter)}`,
     operationClass: 'widening',
     name: id,
@@ -696,7 +696,7 @@ export function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation {
   const id = storedKeyId(options, 'remove');
   return {
     id,
-    meta: { storedKey: { kind: 'remove', collection: collectionName, field, path } },
+    meta: { rewrite: { kind: 'removeStoredKey', collection: collectionName, field, path } },
     label: `Remove key ${JSON.stringify(key)} ${keyPlace(options)}${labelSuffix(filter)}`,
     operationClass: 'destructive',
     name: id,
@@ -731,7 +731,7 @@ export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation 
   const id = storedKeyId(options, 'fill');
   return {
     id,
-    meta: { storedKey: { kind: 'fill', collection: collectionName, field, path } },
+    meta: { rewrite: { kind: 'fillStoredKey', collection: collectionName, field, path } },
     label: `Fill key ${JSON.stringify(key)} ${keyPlace(options)} where it is missing or null${labelSuffix(filter)}`,
     operationClass: 'widening',
     name: id,

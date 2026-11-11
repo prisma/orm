@@ -311,14 +311,21 @@ const OperationMetaJson = type({
     collection: 'string',
     field: 'string',
     to: 'string',
-  }).or({ kind: '"fill"', collection: 'string', field: 'string' }),
-  'storedKey?': type({
-    kind: '"rename"',
-    collection: 'string',
-    field: 'string',
-    path: 'string',
-    to: 'string',
-  }).or({ kind: '"remove" | "fill"', collection: 'string', field: 'string', path: 'string' }),
+  })
+    .or({ kind: '"fill"', collection: 'string', field: 'string' })
+    .or({
+      kind: '"renameStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+      to: 'string',
+    })
+    .or({
+      kind: '"removeStoredKey" | "fillStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+    }),
 });
 
 const DdlOperationJson = type({

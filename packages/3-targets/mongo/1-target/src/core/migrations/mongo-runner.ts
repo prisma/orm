@@ -220,17 +220,17 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
  * the rename would overwrite: how to find them, and that the plan resumes.
  */
 function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResult | undefined {
-  const storedKey = op.meta?.storedKey;
-  if (storedKey?.kind !== 'rename') return undefined;
-  const keyPath = storedKeyPath(storedKey.field, storedKey.path);
+  const rewrite = op.meta?.rewrite;
+  if (rewrite?.kind !== 'renameStoredKey') return undefined;
+  const keyPath = storedKeyPath(rewrite.field, rewrite.path);
   if (!keyPath.ok) return undefined;
   const from = JSON.stringify(keyPath.value.key);
-  const to = JSON.stringify(storedKey.to);
+  const to = JSON.stringify(rewrite.to);
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
-    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(storedKey.path)} in field ${storedKey.field} of collection ${storedKey.collection} already hold key ${to} as well as key ${from}`,
+    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(rewrite.path)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
     {
-      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, storedKey.collection)} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },
     },
   );

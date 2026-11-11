@@ -100,6 +100,36 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedChange: 'the data transform would fill it in the documents',
     sharedGoal: (model) => `To fill it in ${model} documents only`,
   },
+  renameStoredKey: {
+    conflictKind: 'statementRefused',
+    verb: 'rename a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      "so the key cannot be renamed in the documents. Keep the key's name in the contract, then run this command again.",
+    sharedChange: 'renaming the key would rename it in the documents',
+    sharedGoal: (model) => `To rename it in ${model} documents only`,
+  },
+  removeStoredKey: {
+    conflictKind: 'fieldRemovalRefused',
+    verb: 'remove a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      'so the key cannot be removed from the documents that hold it. Keep the key in the contract, as an optional field if new documents leave it out, then run this command again.',
+    sharedChange: 'removing the key would remove it from the documents',
+    sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
+  },
+  fillStoredKey: {
+    conflictKind: 'fieldFillRefused',
+    verb: 'fill a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      'so the key cannot be filled in the documents. Make the key optional in the contract, then run this command again.',
+    sharedChange: 'filling the key would fill it in the documents',
+    sharedGoal: (model) => `To fill it in ${model} documents only`,
+  },
 };
 
 function quoted(names: readonly string[]): string {

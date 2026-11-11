@@ -80,8 +80,8 @@ describe('renameStoredKey', () => {
     ).toEqual({
       id: 'storedKey.users.addresses.$[*].street.rename(line1)',
       meta: {
-        storedKey: {
-          kind: 'rename',
+        rewrite: {
+          kind: 'renameStoredKey',
           collection: 'users',
           field: 'addresses',
           path: '$[*].street',
@@ -131,8 +131,8 @@ describe('removeStoredKey', () => {
     ).toEqual({
       id: 'storedKey.users.addresses.$[*].street.remove',
       meta: {
-        storedKey: {
-          kind: 'remove',
+        rewrite: {
+          kind: 'removeStoredKey',
           collection: 'users',
           field: 'addresses',
           path: '$[*].street',
@@ -174,8 +174,8 @@ describe('fillStoredKey', () => {
     ).toEqual({
       id: 'storedKey.users.addresses.$[*].street.fill',
       meta: {
-        storedKey: {
-          kind: 'fill',
+        rewrite: {
+          kind: 'fillStoredKey',
           collection: 'users',
           field: 'addresses',
           path: '$[*].street',

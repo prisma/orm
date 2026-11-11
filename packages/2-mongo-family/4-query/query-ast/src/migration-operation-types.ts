@@ -38,7 +38,7 @@ export interface MongoMigrationStep {
   readonly command: AnyMongoDdlCommand;
 }
 
-/** A field the planner rewrites, as the factory that writes the rewrite describes it. */
+/** A field the planner rewrites, or a key inside its value, as the factory that writes the rewrite describes it. */
 export type MongoFieldRewriteMeta =
   | {
       readonly kind: 'cast';
@@ -47,22 +47,21 @@ export type MongoFieldRewriteMeta =
       /** The BSON type `$convert` casts the field to. */
       readonly to: string;
     }
-  | { readonly kind: 'fill'; readonly collection: string; readonly field: string };
-
-/** A key inside a root field's value that an operation renames, removes or fills, at a JSONPath from the field's value. */
-export type MongoStoredKeyMeta =
+  | { readonly kind: 'fill'; readonly collection: string; readonly field: string }
   | {
-      readonly kind: 'rename';
+      readonly kind: 'renameStoredKey';
       readonly collection: string;
       readonly field: string;
+      /** The JSONPath from the field's value to the key. */
       readonly path: string;
       /** The key's new name. */
       readonly to: string;
     }
   | {
-      readonly kind: 'remove' | 'fill';
+      readonly kind: 'removeStoredKey' | 'fillStoredKey';
       readonly collection: string;
       readonly field: string;
+      /** The JSONPath from the field's value to the key. */
       readonly path: string;
     };
 
@@ -72,7 +71,6 @@ export type MongoStoredKeyMeta =
  */
 export interface MongoOperationMeta {
   readonly rewrite?: MongoFieldRewriteMeta;
-  readonly storedKey?: MongoStoredKeyMeta;
 }
 
 export interface MongoMigrationPlanOperation extends MigrationPlanOperation {
