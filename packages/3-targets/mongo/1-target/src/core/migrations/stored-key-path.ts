@@ -150,7 +150,7 @@ export interface StoredKeyPath {
 }
 
 /** The steps as a JSONPath: a member name in shorthand when it is an identifier, else in brackets. */
-function jsonPathText(steps: readonly JsonPathStep[]): string {
+export function jsonPathText(steps: readonly JsonPathStep[]): string {
   return `$${steps
     .map((step) => {
       if (step.kind === 'wildcard') return '[*]';

@@ -418,6 +418,7 @@ function backfillStatements(
         field: stored,
         variant: selectedVariantOf(contract.domain, model),
         model,
+        storedKey: undefined,
       },
       contract,
       rewriteCollection,

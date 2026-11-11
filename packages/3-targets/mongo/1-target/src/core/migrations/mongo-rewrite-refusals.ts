@@ -38,11 +38,15 @@ export interface PlannedRewrite {
   readonly variant: SelectedVariant | undefined;
   /** The model whose documents it changes; `undefined` when no origin contract names it. */
   readonly model: ModelCoordinate | undefined;
+  /** For a rewrite of a key inside the field: the field the key stores, in words, and the other models whose documents the same rewrite is planned for. */
+  readonly storedKey: { readonly key: string; readonly together: readonly string[] } | undefined;
 }
 
 interface RewriteWords {
   readonly conflictKind: string;
   readonly verb: string;
+  /** The verb for a key a rewrite names, as in "rename value object field "Address.street" inside". */
+  readonly keyVerb?: string;
   readonly preposition: string;
   /** Whether the rewrite reaches only the documents that hold the field, or every document its filter selects. */
   readonly reaches: 'holding' | 'selected';
@@ -103,6 +107,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To fill it in ${model} documents only`,
   },
   renameStoredKey: {
+    keyVerb: 'rename',
     conflictKind: 'statementRefused',
     verb: 'rename a key inside',
     preposition: 'in',
@@ -113,6 +118,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To rename it in ${model} documents only`,
   },
   removeStoredKey: {
+    keyVerb: 'remove',
     conflictKind: 'fieldRemovalRefused',
     verb: 'remove a key inside',
     preposition: 'in',
@@ -123,6 +129,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
   },
   fillStoredKey: {
+    keyVerb: 'fill',
     conflictKind: 'fieldFillRefused',
     verb: 'fill a key inside',
     preposition: 'in',
@@ -145,11 +152,19 @@ export interface RewriteCollection {
   readonly validator: unknown;
 }
 
+/** What a rewrite does, as a refusal names it: the key it rewrites inside the field, when it names one. */
+function action(rewrite: PlannedRewrite): string {
+  const words = WORDS[rewrite.kind];
+  return rewrite.storedKey !== undefined && words.keyVerb !== undefined
+    ? `${words.keyVerb} ${rewrite.storedKey.key} inside`
+    : words.verb;
+}
+
 function timeSeriesRefusal(rewrite: PlannedRewrite): MigrationPlannerConflict {
   const words = WORDS[rewrite.kind];
   return {
     kind: words.conflictKind,
-    summary: `Cannot ${words.verb} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
+    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
     why: `${TIME_SERIES_UPDATES}, ${words.timeSeries}`,
   };
 }
@@ -170,12 +185,16 @@ function sharedCollectionRefusal(
   const words = WORDS[rewrite.kind];
   const { collection, field, model } = rewrite;
   if (model === undefined) {
-    if (rewrite.kind === 'removal' || validatorRootShapesOf(validator).length <= 1) {
+    if (
+      rewrite.kind === 'removal' ||
+      rewrite.kind === 'removeStoredKey' ||
+      validatorRootShapesOf(validator).length <= 1
+    ) {
       return undefined;
     }
     return {
       kind: words.conflictKind,
-      summary: `Cannot ${words.verb} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
+      summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
       why: 'No discriminator tells their documents apart, and without the origin contract the plan cannot tell which documents belong to the model that changed. Plan the change with migration plan --from <hash of the migration the database is at>.',
     };
   }
@@ -185,13 +204,13 @@ function sharedCollectionRefusal(
     collection,
     rewrite.variant,
     words.reaches === 'holding' ? field : undefined,
-  );
+  ).filter((name) => !(rewrite.storedKey?.together.includes(name) ?? false));
   if (others.length === 0) return undefined;
   const named = quoted(others);
   const modelName = JSON.stringify(model.model);
   return {
     kind: words.conflictKind,
-    summary: `Cannot ${words.verb} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
+    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
     why: `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${SEPARATE_THE_MODELS}.`,
   };
 }

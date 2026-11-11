@@ -55,8 +55,10 @@ import {
   type DataTransformCall,
   type FillFieldCall,
   type OpFactoryCall,
+  type RemoveStoredKeyCall,
   RenameCollectionCall,
   RenameFieldCall,
+  type RenameStoredKeyCall,
   UnsetFieldCall,
 } from './op-factory-call';
 
@@ -200,6 +202,8 @@ export interface StatementCalls {
     | DataTransformCall
     | FillFieldCall
     | UnsetFieldCall
+    | RenameStoredKeyCall
+    | RemoveStoredKeyCall
   )[];
 }
 
@@ -270,15 +274,7 @@ export function planStatements(input: {
               ),
             }
           : statement.entity === 'valueObjectField'
-            ? {
-                kind: 'refused',
-                conflict: refused(
-                  statement,
-                  label,
-                  'MongoDB does not rename value object fields in this release',
-                  LEAVE_OUT,
-                ),
-              }
+            ? { kind: 'unchanged' }
             : statement.entity === 'model'
               ? planModelStatement(statement, label, schema, input)
               : planFieldStatement(statement, label, renamedCollections, schema, input);
@@ -470,10 +466,16 @@ function planFieldStatement(
     kind: 'refused',
     conflict: refused(statement, label, reason, why),
   });
-  const embedded =
-    embeddedModelReason(input.fromContract, statement.from) ??
-    embeddedModelReason(input.contract, statement.to);
-  if (embedded !== undefined) return refuse(embedded, EMBEDDED_MODEL_WHY);
+  const embeddedFrom = embeddedModelReason(input.fromContract, statement.from);
+  const embeddedTo = embeddedModelReason(input.contract, statement.to);
+  if (embeddedFrom !== undefined && embeddedTo !== undefined) return { kind: 'unchanged' };
+  const embedded = embeddedFrom ?? embeddedTo;
+  if (embedded !== undefined) {
+    return refuse(
+      embedded,
+      `A statement renames a field of an embedded model only while the model stays embedded. ${LEAVE_OUT}`,
+    );
+  }
   const fromField = storedField(modelAt(input.fromContract, statement.from), statement.from.field);
   const toField = storedField(modelAt(input.contract, statement.to), statement.to.field);
   if (fromField.kind === 'embed' || toField.kind === 'embed') {

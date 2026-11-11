@@ -126,6 +126,7 @@ export function convertTransform(
       field: change.field,
       variant: change.variant,
       model: change.destination,
+      storedKey: undefined,
     },
   };
 }
@@ -236,6 +237,7 @@ export function backfillTransform(
       field: storedName,
       variant,
       model: statement.field,
+      storedKey: undefined,
     },
   };
 }

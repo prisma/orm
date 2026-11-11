@@ -59,6 +59,7 @@ import {
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
+import { planStoredKeyRewrites } from './mongo-stored-key-planning';
 import {
   castFieldCallOf,
   noCastRefusals,
@@ -603,6 +604,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     if (!statementPlan.ok) return { kind: 'failure', conflicts: statementPlan.failure };
     const { schema, collectionRenames, fieldRenames, callOfStatement } = statementPlan.value;
     const destinationIR = contractToMongoSchemaIR(contract);
+    const storedKeys = planStoredKeyRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      destination: destinationIR,
+    });
+    if (!storedKeys.ok) return { kind: 'failure', conflicts: [...storedKeys.failure] };
+    const storedKeyRewrites = [...storedKeys.value.renames, ...storedKeys.value.removals];
     const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
     const removals: readonly FieldRemoval[] =
       fromContract === null
@@ -685,6 +695,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           field: call.field,
           variant,
           model: subject.kind === 'field' ? subject : undefined,
+          storedKey: undefined,
         }),
       ),
       ...casts.map(
@@ -694,6 +705,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           field: change.field,
           variant: change.variant,
           model: change.destination,
+          storedKey: undefined,
         }),
       ),
       ...transforms.flatMap(({ outcome }) =>
@@ -706,6 +718,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           field: call.options.field,
           variant,
           model: subject.kind === 'field' ? subject : undefined,
+          storedKey: undefined,
         }),
       ),
     ];
@@ -724,12 +737,18 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
     const castCalls = casts.map(({ call }) => call);
-    const callOf = new Map<ResolvedMigrationStatement, OpFactoryCall | undefined>([
-      ...renames.map((statement, index) => [statement, callOfStatement[index]] as const),
+    const callsOf = new Map<ResolvedMigrationStatement, readonly OpFactoryCall[]>([
+      ...renames.map((statement, index) => {
+        const call = callOfStatement[index];
+        const keyCalls = storedKeyRewrites.flatMap((rewrite) =>
+          rewrite.statement === statement ? [rewrite.call] : [],
+        );
+        return [statement, call === undefined ? keyCalls : [call, ...keyCalls]] as const;
+      }),
       ...transforms.map(({ statement, outcome }) =>
         outcome.kind === 'transform'
-          ? ([statement, outcome.call] as const)
-          : ([statement, undefined] as const),
+          ? ([statement, [outcome.call]] as const)
+          : ([statement, []] as const),
       ),
     ]);
     const transformCalls = (kind: 'convert' | 'backfill') =>
@@ -743,11 +762,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         collectionRenames,
         rewrites: [
           ...fieldRenames,
+          ...storedKeys.value.renames.map((rewrite) => rewrite.call),
           ...castCalls,
           ...transformCalls('convert'),
           ...fills.map((fill) => fill.call),
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
+          ...storedKeys.value.removals.map((rewrite) => rewrite.call),
         ],
       },
     });
@@ -759,6 +780,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
       ...removals.map((removal) => ({
+        operationIndex: calls.indexOf(removal.call),
+        subject: removal.subject,
+        loss: 'drop' as const,
+        label: removal.call.label,
+      })),
+      ...storedKeys.value.removals.map((removal) => ({
         operationIndex: calls.indexOf(removal.call),
         subject: removal.subject,
         loss: 'drop' as const,
@@ -787,10 +814,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         },
         options.snapshotsImportPath,
       ),
-      appliedStatements: options.statements.map((statement) => {
-        const call = callOf.get(statement);
-        return { statement, operationIndexes: call === undefined ? [] : [calls.indexOf(call)] };
-      }),
+      appliedStatements: options.statements.map((statement) => ({
+        statement,
+        operationIndexes: (callsOf.get(statement) ?? []).map((call) => calls.indexOf(call)),
+      })),
       dataLoss: [
         ...collectionDrops(calls, fromContract, contract, {
           origin: schema,
