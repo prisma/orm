@@ -30,7 +30,6 @@ import {
 } from './statements';
 
 const users = { namespaceId: 'public', tableName: 'users' };
-const posts = { namespaceId: 'public', tableName: 'posts' };
 const sameId = columnMappings('users', 'users', [['id', 'id']]);
 const withState = { state: true };
 
@@ -149,46 +148,6 @@ describe('table state in the graph', () => {
         'result: n2',
       ].join('\n'),
     );
-  });
-});
-
-describe('sameState', () => {
-  it('holds for two reads of a table that nothing wrote in between', () => {
-    const graph = newGraph();
-    const first = addWithState(graph, findUsers());
-    const second = addWithState(graph, findUsers());
-
-    expect(graph.sameState(first, second, users)).toBe(true);
-  });
-
-  it('does not hold across a write to the table', () => {
-    const graph = newGraph();
-    const first = addWithState(graph, findUsers());
-    addWithState(graph, updateUsers({ name: 'Ada' }));
-    const second = addWithState(graph, findUsers());
-
-    expect(graph.sameState(first, second, users)).toBe(false);
-  });
-
-  it('holds for a table the write in between did not change', () => {
-    const graph = newGraph();
-    const first = addWithState(graph, findUsers());
-    addWithState(graph, new Insert(insertInto('posts', [{ title: 'b' }]), insertOwner));
-    const second = addWithState(graph, findUsers());
-
-    expect(graph.sameState(first, second, users)).toBe(true);
-  });
-
-  it('does not hold when a node does not read the table', () => {
-    const graph = newGraph();
-    const read = addWithState(graph, findUsers());
-    const insert = addWithState(
-      graph,
-      new Insert(insertInto('posts', [{ title: 'a' }]), insertOwner),
-    );
-
-    expect(graph.sameState(read, insert, posts)).toBe(false);
-    expect(graph.sameState(read, insert, users)).toBe(false);
   });
 });
 

@@ -5,6 +5,7 @@ import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
+import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { State, StateEdge } from '../../src/mutation-graph/state';
@@ -12,14 +13,13 @@ import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { printGraph } from './print-graph';
 import {
-  addWithState,
   columnMappings,
   deletePosts,
-  deleteUsers,
   findUsers,
   insertInto,
   insertOwner,
   newGraph,
+  newGraphWithoutReturning,
   updateUsers,
   visibleNodes,
 } from './statements';
@@ -164,184 +164,47 @@ describe('Graph', () => {
         right: new Rows(right, sameId),
       });
     });
-  });
 
-  describe('moveReaders', () => {
-    it('points every edge that reads one node at another, in the slot it was in', () => {
-      const graph = newGraph();
-      const first = graph.add(findUsers());
-      const second = graph.add(findUsers());
-      const del = graph.add(deletePosts(), { filter: [new FilterData(first, idToUserId)] });
-      const join = graph.add(new CrossJoin(), {
-        left: new Rows(first, sameId),
-        right: new Rows(second, sameId),
-      });
-
-      graph.moveReaders(first, second);
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find users',
-          'n2 Find users',
-          'n3 Delete posts <- FilterData n2 (id->user_id)',
-          'n4 CrossJoin <- Rows n2, Rows n2',
-          'result: none',
-        ].join('\n'),
-      );
-      expect(graph.readersOf(first)).toEqual([]);
-      expect(graph.readersOf(second)).toEqual([
-        { reader: join, edge: new Rows(second, sameId) },
-        { reader: del, edge: new FilterData(second, idToUserId) },
-        { reader: join, edge: new Rows(second, sameId) },
-      ]);
-    });
-
-    it('moves FilterData and Requires edges', () => {
-      const graph = newGraph();
-      const first = graph.add(findUsers());
-      const second = graph.add(findUsers());
-      const update = graph.add(updateUsers({ name: 'Ada' }), {
-        filter: [new FilterData(first, sameId)],
-        requires: [new Requires(first)],
-      });
-
-      graph.moveReaders(first, second);
-
-      expect(graph.inputsOf(update)).toEqual({
-        filter: [new FilterData(second, sameId)],
-        payload: [],
-        state: [],
-        requires: [new Requires(second)],
-      });
-    });
-
-    it('makes the node the edges now read return the columns they read', () => {
-      const graph = newGraph();
-      const first = graph.add(findUsers([], ['id', 'email']));
-      const second = graph.add(findUsers([], ['name']));
-      graph.add(deletePosts(), {
-        filter: [new FilterData(first, idToUserId), new FilterData(first, emailToTitle)],
-      });
-
-      graph.moveReaders(first, second);
-
-      expect(returned(graph, second)).toEqual(['name', 'id', 'email']);
-    });
-  });
-
-  describe('addFilterDataEdge', () => {
-    it('puts a FilterData edge into the filter slot of the target, in the order they are added', () => {
-      const graph = newGraph();
-      const find = graph.add(findUsers([], ['id', 'email']));
-      const del = graph.add(deletePosts());
-
-      graph.addFilterDataEdge(find, del, idToUserId);
-      graph.addFilterDataEdge(find, del, emailToTitle);
-
-      expect(filterOf(graph, del)).toEqual([
-        new FilterData(find, idToUserId),
-        new FilterData(find, emailToTitle),
-      ]);
-    });
-
-    it('makes the source return the columns the edge reads', () => {
-      const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }));
-      expect(returned(graph, update)).toEqual([]);
-
-      graph.addFilterDataEdge(update, graph.add(deletePosts()), idToUserId);
-      const del = graph.add(deletePosts());
-      graph.addFilterDataEdge(update, del, emailToTitle);
-      graph.addFilterDataEdge(update, del, idToUserId);
-
-      expect(returned(graph, update)).toEqual(['id', 'email']);
-    });
-
-    it('leaves the inputs of the source as they were when it widens it', () => {
+    it('widens the source by the columns each edge reads, once each, and leaves its inputs as they were', () => {
       const graph = newGraph();
       const find = graph.add(findUsers());
-      const update = graph.add(updateUsers({ name: 'Ada' }));
-      graph.addFilterDataEdge(find, update, sameId);
+      const update = graph.add(updateUsers({ name: 'Ada' }), {
+        filter: [new FilterData(find, sameId)],
+      });
+      expect(returned(graph, update)).toEqual([]);
 
-      graph.addFilterDataEdge(update, graph.add(deletePosts()), idToUserId);
+      graph.add(deletePosts(), { filter: [new FilterData(update, idToUserId)] });
+      graph.add(deletePosts(), {
+        filter: [new FilterData(update, emailToTitle), new FilterData(update, idToUserId)],
+      });
 
+      expect(returned(graph, update)).toEqual(['id', 'email']);
       expect(filterOf(graph, update)).toEqual([new FilterData(find, sameId)]);
     });
 
-    it('does not change what a node returns when a node with no edge is added after it', () => {
-      const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }));
-
-      graph.add(deleteUsers());
-
-      expect(returned(graph, update)).toEqual([]);
-    });
-  });
-
-  describe('addPayloadDataEdge', () => {
-    it('puts a PayloadData edge into the payload slot of the target and widens the source', () => {
-      const graph = newGraph();
-      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
-      const post = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
-
-      graph.addPayloadDataEdge(user, post, idToUserId);
-
-      expect(graph.inputsOf(post)['payload']).toEqual([new PayloadData(user, idToUserId)]);
-      expect(returned(graph, user)).toEqual(['id']);
-    });
-  });
-
-  describe('addRowsEdge', () => {
-    it('puts a Rows edge into a list slot, in the order they are added', () => {
-      const graph = newGraph();
-      const first = graph.add(findUsers());
-      const second = graph.add(findUsers());
-      const union = graph.add(new UnionAll());
-
-      graph.addRowsEdge(first, union, 'rows', sameId);
-      graph.addRowsEdge(second, union, 'rows', sameId);
-
-      expect(graph.inputsOf(union)).toEqual({
-        rows: [new Rows(first, sameId), new Rows(second, sameId)],
-      });
-    });
-
-    it('puts a Rows edge into a slot that holds one edge', () => {
-      const graph = newGraph();
-      const left = graph.add(findUsers());
-      const right = graph.add(findUsers());
-      const join = graph.add(new CrossJoin());
-
-      graph.addRowsEdge(left, join, 'left', sameId);
-      graph.addRowsEdge(right, join, 'right', sameId);
-
-      expect(graph.inputsOf(join)).toEqual({
-        left: new Rows(left, sameId),
-        right: new Rows(right, sameId),
-      });
-    });
-
-    it('widens a source that runs a statement and leaves one that runs none as it was', () => {
+    it('puts Rows edges into a list slot in their order, and widens only a source that runs a statement', () => {
       const graph = newGraph();
       const find = graph.add(findUsers([], ['email']));
+      const second = graph.add(findUsers());
       const union = new UnionAll();
-      const unionId = graph.add(union);
+      const unionId = graph.add(union, {
+        rows: [new Rows(find, sameId), new Rows(second, sameId)],
+      });
 
-      graph.addRowsEdge(find, unionId, 'rows', sameId);
-      graph.addFilterDataEdge(unionId, graph.add(updateUsers({ name: 'Ada' })), sameId);
+      graph.add(updateUsers({ name: 'Ada' }), { filter: [new FilterData(unionId, sameId)] });
 
-      expect(graph.nodes().find(([id]) => id === unionId)?.[1]).toBe(union);
+      expect(graph.inputsOf(unionId)).toEqual({
+        rows: [new Rows(find, sameId), new Rows(second, sameId)],
+      });
+      expect(graph.nodeAt(unionId)).toBe(union);
       expect(returned(graph, find)).toEqual(['email', 'id']);
     });
-  });
 
-  describe('addRequiresEdge', () => {
     it('puts a Requires edge into the requires slot and leaves what the source returns as it was', () => {
       const graph = newGraph();
       const find = graph.add(findUsers([], ['email']));
-      const update = graph.add(updateUsers({ name: 'Ada' }));
 
-      graph.addRequiresEdge(find, update);
+      const update = graph.add(updateUsers({ name: 'Ada' }), { requires: [new Requires(find)] });
 
       expect(graph.inputsOf(update)['requires']).toEqual([new Requires(find)]);
       expect(returned(graph, find)).toEqual(['email']);
@@ -353,25 +216,22 @@ describe('Graph', () => {
     it('gives the columns every edge from the node reads, in the order the edges were added', () => {
       const graph = newGraph();
       const find = graph.add(findUsers());
-      const union = graph.add(new UnionAll());
-
-      graph.addFilterDataEdge(find, graph.add(deletePosts()), emailToTitle);
-      graph.addRowsEdge(find, union, 'rows', sameId);
+      graph.add(deletePosts(), { filter: [new FilterData(find, emailToTitle)] });
+      const union = graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
 
       expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['email', 'id']);
       expect(graph.columnsReadFrom(union)).toEqual([]);
     });
 
     it('leaves out the columns of an edge whose reader was removed', () => {
-      const graph = newGraph();
+      const graph = newGraphWithoutReturning();
       const find = graph.add(findUsers());
-      const removed = graph.add(new UnionAll());
-      graph.addRowsEdge(find, removed, 'rows', emailToTitle);
-      graph.addRowsEdge(find, graph.add(new UnionAll()), 'rows', sameId);
+      graph.add(findUsers(), { filter: [new FilterData(find, sameId)] });
+      graph.add(deletePosts(), { filter: [new FilterData(find, emailToTitle)] });
 
-      graph.remove(removed);
+      removeUnreadFinds(graph);
 
-      expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['id']);
+      expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['email']);
     });
   });
 
@@ -379,10 +239,10 @@ describe('Graph', () => {
     it('gives, for a position, each edge that reads from it with the position of its reader', () => {
       const graph = newGraph();
       const find = graph.add(findUsers());
-      const update = graph.add(updateUsers({ name: 'Ada' }));
-      const del = graph.add(deletePosts());
-      graph.addFilterDataEdge(find, update, sameId);
-      graph.addFilterDataEdge(find, del, idToUserId);
+      const update = graph.add(updateUsers({ name: 'Ada' }), {
+        filter: [new FilterData(find, sameId)],
+      });
+      const del = graph.add(deletePosts(), { filter: [new FilterData(find, idToUserId)] });
 
       expect(graph.readersOf(find)).toEqual([
         { reader: update, edge: new FilterData(find, sameId) },
@@ -417,10 +277,10 @@ describe('Graph', () => {
     it('touches no edge in either direction', () => {
       const graph = newGraph();
       const find = graph.add(findUsers());
-      const update = graph.add(updateUsers({ name: 'Ada' }, undefined, ['id']));
-      graph.addFilterDataEdge(find, update, sameId);
-      const del = graph.add(deletePosts());
-      graph.addFilterDataEdge(update, del, idToUserId);
+      const update = graph.add(updateUsers({ name: 'Ada' }, undefined, ['id']), {
+        filter: [new FilterData(find, sameId)],
+      });
+      graph.add(deletePosts(), { filter: [new FilterData(update, idToUserId)] });
       const into = graph.inputsOf(update);
       const outOf = graph.readersOf(update);
 
@@ -428,70 +288,6 @@ describe('Graph', () => {
 
       expect(graph.inputsOf(update)).toBe(into);
       expect(graph.readersOf(update)).toBe(outOf);
-    });
-  });
-
-  describe('remove', () => {
-    it('empties the position, and nodes skips it and keeps the other positions', () => {
-      const graph = newGraph();
-      const first = new UnionAll();
-      const third = new UnionAll();
-      const firstId = graph.add(first);
-      const second = graph.add(new UnionAll());
-      const thirdId = graph.add(third);
-
-      graph.remove(second);
-
-      expect(graph.nodes()).toEqual([
-        [firstId, first],
-        [thirdId, third],
-      ]);
-      expect([firstId, thirdId]).toEqual([0, 2]);
-    });
-
-    it('takes the edges of a node that is both a source and a reader out of both sides', () => {
-      const graph = newGraph();
-      const find = graph.add(findUsers());
-      const union = graph.add(new UnionAll());
-      graph.addRowsEdge(find, union, 'rows', sameId);
-      const other = graph.add(new UnionAll());
-      graph.addRowsEdge(find, other, 'rows', idToUserId);
-      graph.addRowsEdge(union, other, 'rows', sameId);
-
-      graph.remove(union);
-
-      expect(graph.inputsOf(union)).toEqual({});
-      expect(graph.readersOf(union)).toEqual([]);
-      expect(graph.readersOf(find)).toEqual([{ reader: other, edge: new Rows(find, idToUserId) }]);
-      expect(graph.inputsOf(other)).toEqual({ rows: [new Rows(find, idToUserId)] });
-    });
-
-    it('keeps a slot that holds one edge when the source of that edge is removed', () => {
-      const graph = newGraph();
-      const left = graph.add(new UnionAll());
-      const right = graph.add(new UnionAll());
-      const join = graph.add(new CrossJoin());
-      graph.addRowsEdge(left, join, 'left', sameId);
-      graph.addRowsEdge(right, join, 'right', sameId);
-
-      graph.remove(right);
-
-      expect(graph.inputsOf(join)).toEqual({
-        left: new Rows(left, sameId),
-        right: new Rows(right, sameId),
-      });
-      expect(graph.readersOf(left)).toEqual([{ reader: join, edge: new Rows(left, sameId) }]);
-    });
-
-    it('gives the next node the next position, not the emptied one', () => {
-      const graph = newGraph();
-      const first = graph.add(new UnionAll());
-      graph.remove(first);
-
-      const next = graph.add(new UnionAll());
-
-      expect(next).not.toBe(first);
-      expect(graph.nodes().map(([id]) => id)).toEqual([next]);
     });
   });
 
@@ -511,35 +307,6 @@ describe('Graph', () => {
 
       expect(graph.inputsOf(del)['filter']).toEqual([new FilterData(to, idToUserId)]);
       expect(graph.readersOf(to)).toEqual([{ reader: del, edge: new FilterData(to, idToUserId) }]);
-    });
-
-    it('resolves both ends of an edge an edge method adds', () => {
-      const { graph, from, to } = forwarded();
-      const del = graph.add(deletePosts());
-      const union = graph.add(new UnionAll());
-
-      graph.addFilterDataEdge(from, del, idToUserId);
-      graph.addRowsEdge(from, union, 'rows', sameId);
-      graph.addRequiresEdge(del, from);
-
-      expect({
-        del: graph.inputsOf(del)['filter'],
-        union: graph.inputsOf(union)['rows'],
-        to: graph.inputsOf(to)['requires'],
-      }).toEqual({
-        del: [new FilterData(to, idToUserId)],
-        union: [new Rows(to, sameId)],
-        to: [new Requires(del)],
-      });
-    });
-
-    it('resolves a PayloadData edge source', () => {
-      const { graph, from, to } = forwarded();
-      const post = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
-
-      graph.addPayloadDataEdge(from, post, idToUserId);
-
-      expect(graph.inputsOf(post)['payload']).toEqual([new PayloadData(to, idToUserId)]);
     });
 
     it('sets the node the id stands for as the result', () => {
@@ -567,30 +334,13 @@ describe('Graph', () => {
       });
     });
 
-    it('compares the state of the node the id stands for', () => {
-      const graph = newGraph();
-      const from = addWithState(graph, findUsers());
-      graph.add(updateUsers({ name: 'Ada' }));
-      const to = addWithState(graph, findUsers());
-      const other = addWithState(graph, findUsers());
-      graph.forward(from, to);
-
-      expect(graph.sameState(from, other, users)).toBe(true);
-    });
-
-    it('replaces, removes and moves the readers of the node the id stands for', () => {
+    it('replaces the node the id stands for', () => {
       const { graph, from, to } = forwarded();
-      const other = graph.add(findUsers());
-      graph.add(deletePosts(), { filter: [new FilterData(to, idToUserId)] });
       const replacement = findUsers([], ['name']);
 
       graph.replace(from, replacement);
-      graph.moveReaders(from, other);
 
       expect(graph.nodeAt(to)).toBe(replacement);
-      expect(graph.readersOf(to)).toEqual([]);
-      graph.remove(from);
-      expect(graph.nodes().map(([id]) => id)).not.toContain(to);
     });
 
     it('follows a forwarded id to the last node it stands for', () => {

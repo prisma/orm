@@ -1,9 +1,7 @@
 import { InsertOnConflict } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import { Insert } from '../../src/mutation-graph/insert';
 import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
-import { UnionAll } from '../../src/mutation-graph/union-all';
 import { printGraph } from './print-graph';
 import {
   addFiltered,
@@ -151,42 +149,6 @@ describe('printGraph', () => {
 
       expect(printGraph(graph)).toBe(
         ['n1 InsertChunked users (2 statements)', 'result: n1'].join('\n'),
-      );
-    });
-
-    it('prints the chain of a variant create: Insert, Insert with PayloadData, CrossJoin, UnionAll', () => {
-      const graph = newGraph();
-      const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
-      const sameUserId = columnMappings('users', 'users', [['id', 'id']]);
-      const samePostId = columnMappings('posts', 'posts', [['id', 'id']]);
-      const joins = [1, 2].map(() => {
-        const base = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
-        const variant = graph.add(
-          new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner),
-        );
-        graph.addPayloadDataEdge(base, variant, idToUserId);
-        const join = graph.add(new CrossJoin());
-        graph.addRowsEdge(base, join, 'left', sameUserId);
-        graph.addRowsEdge(variant, join, 'right', samePostId);
-        return join;
-      });
-      const union = graph.add(new UnionAll());
-      for (const join of joins) {
-        graph.addRowsEdge(join, union, 'rows', sameUserId);
-      }
-      graph.setResult(union);
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Insert users',
-          'n2 Insert posts <- PayloadData n1 (id->user_id)',
-          'n3 CrossJoin <- Rows n1, Rows n2',
-          'n4 Insert users',
-          'n5 Insert posts <- PayloadData n4 (id->user_id)',
-          'n6 CrossJoin <- Rows n4, Rows n5',
-          'n7 UnionAll <- Rows n3, Rows n6',
-          'result: n7',
-        ].join('\n'),
       );
     });
   });

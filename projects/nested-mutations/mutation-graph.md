@@ -114,7 +114,7 @@ Every version of a table is a `State` node. The graph creates them; the builder 
 - adds an edge from the current `State` of every table its statement reads (every table in its AST) to the node;
 - if the node writes, adds a new `State` for its target and for every table a foreign-key action can change from there (`changedBy`, derived once from the contract: tables whose foreign keys point at a changed table with `CASCADE`, `SET NULL` or `SET DEFAULT`, followed transitively over the contract's tables), each with an edge from the write.
 
-State edges are ordinary edges in an input slot of the node, resolved by the runner like any other; a `State` has no statement and produces no rows, and a node that has no use for its state inputs ignores them. `sameState(a, b, table)` compares the `State` sources of the two nodes' state edges for that table: a lookup on each side and one comparison, no traversal.
+State edges are ordinary edges in an input slot of the node, resolved by the runner like any other; a `State` has no statement and produces no rows, and a node that has no use for its state inputs ignores them. Two nodes read the same state of a table when their state edges for it come from the same `State`: a lookup on each side and one comparison, no traversal.
 
 - **Why.** An optimisation such as merging two identical lookups needs to know, without walking the nodes between them, that no write to the looked-up tables happened in between. Edges are the one way the graph states a dependency; a version number per table, kept in the graph or stamped on nodes, would be a second one. Making state edges ordinary inputs instead of a special kind of edge keeps one resolution path in the runner. The first version of this decision had the builder create state nodes and covered only the junction table (D5); `changedBy` covers every table a write can change through foreign keys.
 - **Assumes.** State edges always point from an earlier position to a later one, so nodes still run in the order they were added (D3). Triggers are invisible. A write does not yet depend on the reads of the state it replaces: no rule reorders nodes; that edge is added with the first one that does.
@@ -177,7 +177,7 @@ Nodes sit in numbered slots; a node is referred to by its position, which `add` 
 
 ### D10b. A replaced node's id is forwarded
 
-The graph keeps a table from the id of a node a rule replaced to the node that stands for it. Every id the graph is given (edge sources in `add` and the `add*Edge` methods, `setResult`, `readersOf`, `inputsOf`, `nodeAt`, `sameState`, `columnsReadFrom`, `replace`, `remove`, `moveReaders`) is resolved through it, following chains. `moveReaders` points every edge from one node at another.
+The graph keeps a table from the id of a node a rule replaced to the node that stands for it. Every id the graph is given (edge sources in `add`, `setResult`, `readersOf`, `inputsOf`, `nodeAt`, `columnsReadFrom`, `replace`) is resolved through it, following chains. Edges are added only with the node that reads them, through `add`.
 
 - **Why.** The delete rule makes a `Delete` stand for the `Find` before it after the builder already holds the `Find`'s id: a reader added later from that id, and a result set to it, read from the `Delete`. The `Delete`'s own edge from the `Find` was added before the forward and still reads the `Find`.
 - **Assumes.** Only the runner and the removal step need the forwarded node itself, and they read positions through `entries()`.

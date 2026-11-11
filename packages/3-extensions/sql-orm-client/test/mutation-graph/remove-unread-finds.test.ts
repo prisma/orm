@@ -70,19 +70,6 @@ describe('removeUnreadFinds', () => {
     expect(printGraph(graph)).toBe(["n1 Update users set name = 'Ada'", 'result: none'].join('\n'));
   });
 
-  it('removes a Find whose only reader is a removed Find at an earlier position', () => {
-    const graph = newGraphWithoutReturning();
-    const first = graph.add(findUsers([nameIsAda]));
-    graph.add(findUsers(), { filter: [new FilterData(first, sameId)] });
-    const third = graph.add(findUsers());
-    graph.moveReaders(first, third);
-    graph.add(updateUsers({ name: 'Ada' }));
-
-    removeUnreadFinds(graph);
-
-    expect(printGraph(graph)).toBe(["n1 Update users set name = 'Ada'", 'result: none'].join('\n'));
-  });
-
   it('keeps a write that no node reads', () => {
     const graph = newGraphWithoutReturning();
     graph.add(updateUsers({ name: 'Ada' }));

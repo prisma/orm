@@ -51,6 +51,7 @@ import {
   type Translation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
+import { Rows } from './rows';
 import {
   createRowOf,
   createRowsOf,
@@ -280,10 +281,10 @@ export function createAllVariantGraph(
       payload: [new PayloadData(base, keyMappings)],
       state: graph.stateEdgesFor(variantInsert),
     });
-    const join = graph.add(new CrossJoin());
-    graph.addRowsEdge(base, join, 'left', sameColumns(baseColumns));
-    graph.addRowsEdge(variant, join, 'right', sameColumns(variantColumns));
-    return join;
+    return graph.add(new CrossJoin(), {
+      left: new Rows(base, sameColumns(baseColumns)),
+      right: new Rows(variant, sameColumns(variantColumns)),
+    });
   });
 
   const [only, ...others] = joins;
@@ -291,11 +292,9 @@ export function createAllVariantGraph(
     graph.setResult(only);
   } else if (only !== undefined) {
     const joined = sameColumns([...baseColumns, ...variantColumns]);
-    const union = graph.add(new UnionAll());
-    for (const join of joins) {
-      graph.addRowsEdge(join, union, 'rows', joined);
-    }
-    graph.setResult(union);
+    graph.setResult(
+      graph.add(new UnionAll(), { rows: joins.map((join) => new Rows(join, joined)) }),
+    );
   }
   return graph;
 }

@@ -9,11 +9,7 @@ import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
-import { FilterData } from './filter-data';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
-import { PayloadData } from './payload-data';
-import { Requires } from './requires';
-import { Rows } from './rows';
 import { type Rule, rulesFor } from './rules';
 import { State, StateEdge } from './state';
 import { StatementNode } from './statement-node';
@@ -98,62 +94,8 @@ export class Graph {
     return tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table));
   }
 
-  addFilterDataEdge(
-    from: NodeId,
-    to: NodeId<{ filter: FilterData[] }>,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(this.#resolve(to), 'filter', new FilterData(this.#resolve(from), columns));
-  }
-
-  addPayloadDataEdge(
-    from: NodeId,
-    to: NodeId<{ payload: PayloadData[] }>,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(this.#resolve(to), 'payload', new PayloadData(this.#resolve(from), columns));
-  }
-
-  addRowsEdge<Name extends string>(
-    from: NodeId,
-    to: NodeId<{ [Slot in Name]: Rows | Rows[] }>,
-    slot: Name,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(this.#resolve(to), slot, new Rows(this.#resolve(from), columns));
-  }
-
-  addRequiresEdge(from: NodeId, to: NodeId<{ requires: Requires[] }>): void {
-    this.#addEdge(this.#resolve(to), 'requires', new Requires(this.#resolve(from)));
-  }
-
-  moveReaders(from: NodeId, to: NodeId): void {
-    const source = this.#resolve(from);
-    const target = this.#resolve(to);
-    for (const { reader, edge } of this.#readersAt(source)) {
-      const moved = edge.withFrom(target);
-      const swap = (other: Edge<unknown>) => (other === edge ? moved : other);
-      this.#inputs[reader] = Object.fromEntries(
-        Object.entries(this.#inputsAt(reader)).map(([name, slot]) => [
-          name,
-          Array.isArray(slot) ? slot.map(swap) : swap(slot),
-        ]),
-      );
-      if (moved instanceof DataEdge) {
-        this.#read(target, moved.columns);
-      }
-      this.#readers[target]?.push({ reader, edge: moved });
-    }
-    this.#readers[source] = [];
-  }
-
   nodeAt(id: NodeId): Node | undefined {
     return this.#nodes[this.#resolve(id)];
-  }
-
-  sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
-    const stateA = this.#stateEdgeOf(this.#resolve(a), table);
-    return stateA !== undefined && stateA.from === this.#stateEdgeOf(this.#resolve(b), table)?.from;
   }
 
   columnsReadFrom(id: NodeId): readonly ProjectionItem[] {
@@ -164,10 +106,6 @@ export class Graph {
 
   replace(id: NodeId, next: Node): void {
     this.#nodes[this.#resolve(id)] = next;
-  }
-
-  remove(id: NodeId): void {
-    this.#removeAt(this.#resolve(id));
   }
 
   removeUnread(kind: (node: Node) => boolean): void {
@@ -232,14 +170,6 @@ export class Graph {
   #removeAt(id: NodeId): void {
     for (const edge of edgesIn(this.#inputsAt(id))) {
       this.#readers[edge.from] = this.#readersAt(edge.from).filter((entry) => entry.edge !== edge);
-    }
-    for (const { reader, edge } of this.#readersAt(id)) {
-      this.#inputs[reader] = Object.fromEntries(
-        Object.entries(this.#inputsAt(reader)).map(([name, slot]) => [
-          name,
-          Array.isArray(slot) ? slot.filter((other) => other !== edge) : slot,
-        ]),
-      );
     }
     this.#nodes[id] = undefined;
     this.#inputs[id] = {};
@@ -307,15 +237,6 @@ export class Graph {
     const initial = this.#append(new State(table));
     this.#states.set(tableKey(table), initial);
     return initial;
-  }
-
-  #stateEdgeOf(id: NodeId, table: TableStorageCoordinate): StateEdge | undefined {
-    return edgesIn(this.#inputsAt(id)).find(
-      (edge): edge is StateEdge =>
-        edge instanceof StateEdge &&
-        edge.table.namespaceId === table.namespaceId &&
-        edge.table.tableName === table.tableName,
-    );
   }
 
   #tablesWrittenBy(statements: readonly StatementAst[]): readonly TableStorageCoordinate[] {
