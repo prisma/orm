@@ -43,12 +43,14 @@ describe.each(Object.entries(GUIDES))(
         mongo: matches(config('@prisma/orm-mongo/config', './prisma/schema.prisma')),
         mongoOtherExtension: matches(config('@prisma/orm-mongo/config', './schema.psl')),
         mongoFolder: matches(config('@prisma/orm-mongo/config', './schema')),
+        mongoGlob: matches(config('@prisma/orm-mongo/config', './schema/**/*.psl')),
         mongoTypeScript: matches(config('@prisma/orm-mongo/config', './prisma/contract.ts')),
         postgres: matches(config('@prisma/orm-postgres/config', './prisma/schema.prisma')),
       }).toEqual({
         mongo: true,
         mongoOtherExtension: true,
         mongoFolder: true,
+        mongoGlob: true,
         mongoTypeScript: false,
         postgres: false,
       });

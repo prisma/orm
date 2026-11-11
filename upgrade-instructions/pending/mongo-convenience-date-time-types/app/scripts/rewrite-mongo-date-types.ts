@@ -37,6 +37,30 @@ function filesUnder(path: string): string[] {
   });
 }
 
+/** Whether a file is `path`, or one a glob `path` names, as the CLI expands a `contract` glob: `*` and `?` within a folder, `**` across folders, `{a,b}` for either. */
+function pathMatcher(path: string): (file: string) => boolean {
+  if (!/[*?{]/.test(path)) return (file) => file === path;
+  const glob = path.split(sep).join('/');
+  let source = '';
+  for (let index = 0; index < glob.length; index += 1) {
+    const char = glob[index] ?? '';
+    if (glob.startsWith('**/', index)) {
+      source += '(?:.*/)?';
+      index += 2;
+    } else if (glob.startsWith('**', index)) {
+      source += '.*';
+      index += 1;
+    } else if (char === '*') source += '[^/]*';
+    else if (char === '?') source += '[^/]';
+    else if (char === '{') source += '(?:';
+    else if (char === '}') source += ')';
+    else if (char === ',') source += '|';
+    else source += char.replace(/[.+^$()|[\]\\]/g, '\\$&');
+  }
+  const pattern = new RegExp(`^${source}$`);
+  return (file) => pattern.test(file.split(sep).join('/'));
+}
+
 interface Config {
   readonly dir: string;
   readonly mongo: boolean;
@@ -44,11 +68,14 @@ interface Config {
 
 function readConfigs(root: string): {
   readonly configs: readonly Config[];
-  readonly named: ReadonlyMap<string, string>;
+  readonly named: ReadonlyArray<{
+    readonly matches: (file: string) => boolean;
+    readonly dir: string;
+  }>;
   readonly prisma6: ReadonlySet<string>;
 } {
   const configs: Config[] = [];
-  const named = new Map<string, string>();
+  const named: { matches: (file: string) => boolean; dir: string }[] = [];
   const prisma6 = new Set<string>();
   for (const file of filesUnder(root)) {
     if (!CONFIG_FILE.test(file.split(sep).at(-1) ?? '')) continue;
@@ -57,7 +84,9 @@ function readConfigs(root: string): {
     const mongo = MONGO_CONFIG_IMPORT.test(text);
     configs.push({ dir, mongo });
     if (!mongo) continue;
-    for (const [, path = ''] of text.matchAll(CONTRACT_PATH)) named.set(resolve(dir, path), dir);
+    for (const [, path = ''] of text.matchAll(CONTRACT_PATH)) {
+      named.push({ matches: pathMatcher(resolve(dir, path)), dir });
+    }
     for (const [, path = ''] of text.matchAll(PRISMA6_SCHEMA_PATH)) prisma6.add(resolve(dir, path));
   }
   return { configs, named, prisma6 };
@@ -70,8 +99,8 @@ function isInside(file: string, dir: string): boolean {
 /** The folder of the MongoDB config whose schema `file` is part of, or `undefined` when it is no MongoDB schema. A schema's files share it, so a model one file declares is seen from every other. */
 function mongoSchemaOf(file: string, configs: ReturnType<typeof readConfigs>): string | undefined {
   if (configs.prisma6.has(file)) return undefined;
-  const namedBy = configs.named.get(file);
-  if (namedBy !== undefined) return namedBy;
+  const namedBy = configs.named.find((entry) => entry.matches(file));
+  if (namedBy !== undefined) return namedBy.dir;
   const nearest = configs.configs
     .filter((config) => isInside(file, config.dir))
     .sort((a, b) => b.dir.length - a.dir.length)[0];
@@ -161,7 +190,8 @@ function rewriteContract(text: string): Rewrite {
 
 const root = process.cwd();
 const configs = readConfigs(root);
-const isSchemaFile = (file: string) => file.endsWith('.prisma') || configs.named.has(file);
+const isSchemaFile = (file: string) =>
+  file.endsWith('.prisma') || configs.named.some((entry) => entry.matches(file));
 const declarations = dateDeclarations(filesUnder(root).filter(isSchemaFile), configs);
 const paths = process.argv.slice(2);
 const files = (paths.length === 0 ? [root] : paths.map((path) => resolve(root, path))).flatMap(
