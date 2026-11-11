@@ -28,7 +28,7 @@ The `main` ruleset requires conversation resolution. A PR with auto-merge enable
 
 ## Auto-merge on is not the same as queued
 
-After turning auto-merge on, confirm the PR enters the queue (`mergeQueueEntry` is set) and that the head has a `CI (PR)` run. A push while the PR is queued gets no PR CI, and a conflict with `main` keeps it out silently. See [`failure-modes.md § F54`](../calibration/failure-modes.md#f54-auto-merge-is-on-and-the-pr-never-enters-the-merge-queue).
+After turning auto-merge on, confirm the PR enters the queue (`mergeQueueEntry` is set) and that the head has a `CI (PR)` run. A push while the PR is queued gets no PR CI, and a conflict with `main` keeps it out silently. A review thread opened while the PR is queued does not stop the merge, so list unresolved threads again after it merges and answer each one. See [`failure-modes.md § F54`](../calibration/failure-modes.md#f54-auto-merge-is-on-and-the-pr-never-enters-the-merge-queue).
 
 ## PR title convention
 
