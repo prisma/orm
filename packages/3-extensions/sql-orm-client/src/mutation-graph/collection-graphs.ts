@@ -269,12 +269,12 @@ export function createAllVariantGraph(
   const owner = { operation: 'createAll', modelName };
   const joins = rows.map((row) => {
     const baseInsert = new Insert(
-      insertAst(contract, root, [row.base], undefined).withReturning(baseColumns),
+      [insertAst(contract, root, [row.base], undefined).withReturning(baseColumns)],
       owner,
     );
     const base = graph.add(baseInsert, { state: graph.stateEdgesFor(baseInsert) });
     const variantInsert = new Insert(
-      insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns),
+      [insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns)],
       { operation: 'createAll', modelName: variantModelName },
     );
     const variant = graph.add(variantInsert, {
@@ -334,7 +334,7 @@ export function upsertGraph(
         );
   const owner = { operation: 'upsert', modelName: collection.modelName };
   const upsert = new Insert(
-    upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet),
+    [upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet)],
     owner,
   );
   const upserted = b.graph.add(upsert, { state: b.graph.stateEdgesFor(upsert) });

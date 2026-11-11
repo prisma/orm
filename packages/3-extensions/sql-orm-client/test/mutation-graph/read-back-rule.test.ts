@@ -15,7 +15,6 @@ import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { createCollectionFor } from '../collection-fixtures';
@@ -66,11 +65,11 @@ function usersWithPosts() {
 }
 
 describe('the read-back rule, on a contract with returning', () => {
-  it('collapses a FindByKeys of the rows an InsertChunked wrote into it', () => {
+  it('collapses a FindByKeys of the rows an Insert of several statements wrote into it', () => {
     const graph = newGraph();
     const inserted = addWithState(
       graph,
-      new InsertChunked(
+      new Insert(
         [
           insertInto('users', [{ name: 'Ada' }]),
           insertInto('users', [{ name: 'Bob', email: 'bob@example.com' }]),
@@ -84,9 +83,7 @@ describe('the read-back rule, on a contract with returning', () => {
     });
 
     expect(read).toBe(inserted);
-    expect(printGraph(graph)).toBe(
-      ['n1 InsertChunked users (2 statements)', 'result: none'].join('\n'),
-    );
+    expect(printGraph(graph)).toBe(['n1 Insert users (2 statements)', 'result: none'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual(['id', 'email']);
   });
 
@@ -194,7 +191,7 @@ describe('the read-back rule, on a contract with returning', () => {
     const graph = newGraph();
     const insert = addWithState(
       graph,
-      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+      new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner),
     );
     addWithState(graph, updateUsers({ name: 'Bob' }));
 
@@ -244,7 +241,7 @@ describe('the read-back rule, on a contract with returning', () => {
     const graph = newGraph();
     const insert = addWithState(
       graph,
-      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+      new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner),
     );
 
     graph.add(readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
@@ -259,7 +256,7 @@ describe('the read-back rule, on a contract with returning', () => {
   it('collapses a read-back of an Insert that skips conflicting rows, which returns only the rows it inserted', () => {
     const graph = newGraph();
     const ast = insertInto('users', [{ name: 'Ada' }]).withOnConflict(InsertOnConflict.doNothing());
-    const insert = addWithState(graph, new Insert(ast, insertOwner));
+    const insert = addWithState(graph, new Insert([ast], insertOwner));
 
     addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
@@ -280,7 +277,7 @@ describe('the rules, on a contract without returning', () => {
     });
     const insert = addWithState(
       graph,
-      new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
+      new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner),
     );
     addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
     const first = addWithState(

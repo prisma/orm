@@ -90,7 +90,7 @@ describe('table state in the graph', () => {
 
   it('adds a State only for the target of an insert', () => {
     const graph = newGraph();
-    addWithState(graph, new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
+    addWithState(graph, new Insert([insertInto('posts', [{ title: 'Hello' }])], insertOwner));
 
     expect(printGraph(graph, withState)).toBe(
       [

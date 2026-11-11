@@ -17,7 +17,7 @@ describe('graph.add', () => {
     const users = { namespaceId: 'public', tableName: 'users' };
 
     graph.add(findUsers(), { filter: [new FilterData(find, sameId)] });
-    graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner), {
+    graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner), {
       payload: [new PayloadData(find, sameId)],
     });
     graph.add(new CrossJoin(), { left: new Rows(find, sameId) });

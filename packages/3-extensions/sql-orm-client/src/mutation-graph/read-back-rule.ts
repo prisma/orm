@@ -8,14 +8,13 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { Insert } from './insert';
-import { InsertChunked } from './insert-chunked';
 import type { Node } from './node';
 import { Rows } from './rows';
 import { conditionOnlyReadOf, readsByKey, sameTable, stateEdgeOf } from './rule-patterns';
 import type { Rule } from './rules';
 import { Update } from './update';
 
-type Write = Insert | InsertChunked | Update | Delete;
+type Write = Insert | Update | Delete;
 
 export function readBackRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
@@ -57,10 +56,7 @@ function readsStateWrittenBy(
 
 function isWriteTo(node: Node | undefined, table: TableSource): node is Write {
   return (
-    (node instanceof Insert ||
-      node instanceof InsertChunked ||
-      node instanceof Update ||
-      node instanceof Delete) &&
+    (node instanceof Insert || node instanceof Update || node instanceof Delete) &&
     node.statements.every((ast) => ast.kind !== 'select' && sameTable(ast.table, table))
   );
 }

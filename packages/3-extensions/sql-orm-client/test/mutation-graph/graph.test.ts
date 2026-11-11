@@ -138,10 +138,10 @@ describe('Graph', () => {
 
     it('makes each source of a data edge return the columns the edge reads', () => {
       const graph = newGraph();
-      const user = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
+      const user = graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner));
       const find = graph.add(findUsers([], ['name']));
 
-      graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner), {
+      graph.add(new Insert([insertInto('posts', [{ title: 'Hello' }])], insertOwner), {
         payload: [new PayloadData(user, idToUserId)],
         requires: [new Requires(find)],
       });

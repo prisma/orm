@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createCollectionTables } from '../../src/collection-tables';
 import { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
 import { projectTableColumns } from '../../src/mutation-statements';
 import { getTestContext } from '../helpers';
@@ -48,14 +47,16 @@ function runWithoutReturning(affectedRows: number, insertId?: string) {
 describe('Insert on a contract without returning', () => {
   it('runs without RETURNING and gives the columns read from it from the values of its rows', async () => {
     const insert = new Insert(
-      insertInto(
-        'users',
-        [
-          { id: 1, name: 'Ada' },
-          { id: 2, name: 'Grace' },
-        ],
-        ['id', 'name'],
-      ),
+      [
+        insertInto(
+          'users',
+          [
+            { id: 1, name: 'Ada' },
+            { id: 2, name: 'Grace' },
+          ],
+          ['id', 'name'],
+        ),
+      ],
       insertOwner,
     );
     const run = runWithoutReturning(2);
@@ -71,7 +72,7 @@ describe('Insert on a contract without returning', () => {
 
   it('gives the values the PayloadData edges give', async () => {
     const insert = new Insert(
-      insertInto('posts', [{ id: 10, title: 'Hello' }], ['id', 'user_id']),
+      [insertInto('posts', [{ id: 10, title: 'Hello' }], ['id', 'user_id'])],
       insertOwner,
     );
 
@@ -88,7 +89,7 @@ describe('Insert on a contract without returning', () => {
   });
 
   it('gives the key the database generated for a one-row insert, decoded from its insert id', async () => {
-    const insert = new Insert(insertCounters([{ label: 'a' }], ['id', 'label']), createCounter);
+    const insert = new Insert([insertCounters([{ label: 'a' }], ['id', 'label'])], createCounter);
 
     expect(await insert.execute(noInputs, recordingRun([], 1, '42', generatedContext))).toEqual([
       { id: 42, label: 'a' },
@@ -96,7 +97,7 @@ describe('Insert on a contract without returning', () => {
   });
 
   it('fails with ORM.MUTATION_ROW_MISSING when the insert reports no insert id', async () => {
-    const insert = new Insert(insertCounters([{ label: 'a' }], ['id']), createCounter);
+    const insert = new Insert([insertCounters([{ label: 'a' }], ['id'])], createCounter);
 
     await expect(
       insert.execute(noInputs, recordingRun([], 1, undefined, generatedContext)),
@@ -109,15 +110,15 @@ describe('Insert on a contract without returning', () => {
   });
 
   it('gives the affected row count when nothing reads from it', async () => {
-    const insert = new Insert(insertInto('users', [{ id: 1 }, { id: 2 }]), insertOwner);
+    const insert = new Insert([insertInto('users', [{ id: 1 }, { id: 2 }])], insertOwner);
 
     expect(await insert.execute(noInputs, runWithoutReturning(2))).toEqual({ affectedRows: 2 });
   });
 });
 
-describe('InsertChunked on a contract without returning', () => {
+describe('Insert of several statements on a contract without returning', () => {
   it('gives the columns read from it from the rows of every statement, in their order', async () => {
-    const chunked = new InsertChunked(
+    const chunked = new Insert(
       [
         insertInto('users', [{ id: 1 }, { id: 2 }], ['id']),
         insertInto('users', [{ id: 3, email: 'e@d.nl' }], ['id']),
@@ -131,22 +132,13 @@ describe('InsertChunked on a contract without returning', () => {
       { id: 3 },
     ]);
   });
-
-  it('gives the sum of the affected row counts when nothing reads from it', async () => {
-    const chunked = new InsertChunked(
-      [insertInto('users', [{ id: 1 }]), insertInto('users', [{ id: 2, email: 'e@d.nl' }])],
-      insertOwner,
-    );
-
-    expect(await chunked.execute(noInputs, runWithoutReturning(1))).toEqual({ affectedRows: 2 });
-  });
 });
 
 describe('the check of an insert', () => {
   it('refuses an insert of several rows that is read from and whose key the database generates', () => {
     const graph = new Graph(generatedContext.contract);
     const insert = new Insert(
-      insertCounters([{ label: 'a' }, { label: 'b' }], ['id']),
+      [insertCounters([{ label: 'a' }, { label: 'b' }], ['id'])],
       createCounters,
     );
     const id = graph.add(insert);
@@ -163,7 +155,7 @@ describe('the check of an insert', () => {
 
   it('refuses an insert read from for a column its rows give no value and the database does not number', () => {
     const graph = newGraphWithoutReturning();
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
+    const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
     const id = graph.add(insert);
 
     expect(() => insert.check(graph, id, contextWithoutReturning)).toThrow(
@@ -178,7 +170,7 @@ describe('the check of an insert', () => {
     const graph = newGraphWithoutReturning();
     const find = graph.add(findUsers());
     const insert = new Insert(
-      insertInto('posts', [{ id: 10, title: 'Hello' }], ['id', 'user_id']),
+      [insertInto('posts', [{ id: 10, title: 'Hello' }], ['id', 'user_id'])],
       insertOwner,
     );
     const id = graph.add(insert, { payload: [new PayloadData(find, idToUserId)] });
@@ -188,7 +180,10 @@ describe('the check of an insert', () => {
 
   it('accepts an insert that nothing reads from, whatever its rows', () => {
     const graph = new Graph(generatedContext.contract);
-    const insert = new Insert(insertCounters([{ label: 'a' }, { label: 'b' }], []), createCounters);
+    const insert = new Insert(
+      [insertCounters([{ label: 'a' }, { label: 'b' }], [])],
+      createCounters,
+    );
     const id = graph.add(insert);
 
     expect(() => insert.check(graph, id, generatedContext)).not.toThrow();
@@ -196,25 +191,9 @@ describe('the check of an insert', () => {
 
   it('accepts any insert on a contract with returning', () => {
     const graph = newGraph();
-    const insert = new Insert(insertInto('posts', [{ title: 'Hello' }], ['id']), insertOwner);
+    const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
     const id = graph.add(insert);
 
     expect(() => insert.check(graph, id, getTestContext())).not.toThrow();
-  });
-
-  it('refuses an InsertChunked of several rows read from for a generated key', () => {
-    const graph = new Graph(generatedContext.contract);
-    const chunked = new InsertChunked(
-      [
-        insertCounters([{ label: 'a' }], ['id']),
-        insertCounters([{ label: 'b', slug: 'b' }], ['id']),
-      ],
-      createCounters,
-    );
-    const id = graph.add(chunked);
-
-    expect(() => chunked.check(graph, id, generatedContext)).toThrow(
-      expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
-    );
   });
 });

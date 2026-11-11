@@ -1,7 +1,6 @@
 import type {
   AnyExpression,
   DeleteAst,
-  InsertAst,
   LimitOffsetValue,
   SelectAst,
   UpdateAst,
@@ -17,7 +16,6 @@ import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import type { Node } from '../../src/mutation-graph/node';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -80,7 +78,14 @@ function printDelete(ast: DeleteAst): string {
   return `Delete ${ast.table.name}${printWhere(ast.where, ast.table.name)}`;
 }
 
-function printInsert(ast: InsertAst): string {
+function printInsert({ asts }: Insert): string {
+  const [ast, ...others] = asts;
+  if (ast === undefined) {
+    return 'Insert nothing';
+  }
+  if (others.length > 0) {
+    return `Insert ${ast.table.name} (${asts.length} statements)`;
+  }
   const rows = ast.rows.length === 1 ? '' : ` ${ast.rows.length} rows`;
   const conflict = ast.onConflict;
   if (conflict === undefined) {
@@ -111,11 +116,7 @@ function printNode(node: Node): string {
     return printUpdate(node.ast);
   }
   if (node instanceof Insert) {
-    return printInsert(node.ast);
-  }
-  if (node instanceof InsertChunked) {
-    const count = node.asts.length;
-    return `InsertChunked ${node.asts[0]?.table.name} (${count} ${count === 1 ? 'statement' : 'statements'})`;
+    return printInsert(node);
   }
   if (node instanceof State) {
     return `State ${node.table.tableName}`;

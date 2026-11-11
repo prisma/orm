@@ -22,7 +22,6 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { Insert } from './insert';
-import { InsertChunked } from './insert-chunked';
 import type { JunctionWrite } from './junction-write';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -74,15 +73,12 @@ export function addInsert(
   { conflict, keys, junction, requires, owner }: InsertWrite,
 ): NodeId {
   const { contract } = context;
-  const inserted = supportsDefaultInInsert(contract)
-    ? new Insert(insertAst(contract, table, rows, conflict), owner, junction)
-    : new InsertChunked(
-        groupRowsByColumnSignature(rows).map((group) =>
-          insertAst(contract, table, group, conflict),
-        ),
-        owner,
-        junction,
-      );
+  const groups = supportsDefaultInInsert(contract) ? [rows] : groupRowsByColumnSignature(rows);
+  const inserted = new Insert(
+    groups.map((group) => insertAst(contract, table, group, conflict)),
+    owner,
+    junction,
+  );
   return graph.add(inserted, {
     payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
     state: graph.stateEdgesFor(inserted),

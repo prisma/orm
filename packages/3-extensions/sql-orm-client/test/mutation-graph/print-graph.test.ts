@@ -1,7 +1,6 @@
 import { InsertOnConflict } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
 import { printGraph } from './print-graph';
 import {
   addFiltered,
@@ -89,11 +88,11 @@ describe('printGraph', () => {
   describe('inserts', () => {
     it('prints an Insert of one row and of several rows', () => {
       const graph = newGraph();
-      graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
+      graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner));
       graph.setResult(
         graph.add(
           new Insert(
-            insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }]),
+            [insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }])],
             insertOwner,
           ),
         ),
@@ -110,21 +109,23 @@ describe('printGraph', () => {
       const graph = newGraph();
       graph.add(
         new Insert(
-          ast.withOnConflict(
-            InsertOnConflict.on([users.column('email')]).doUpdateSet({
-              email: users.column('email'),
-            }),
-          ),
+          [
+            ast.withOnConflict(
+              InsertOnConflict.on([users.column('email')]).doUpdateSet({
+                email: users.column('email'),
+              }),
+            ),
+          ],
           insertOwner,
         ),
       );
       graph.add(
         new Insert(
-          ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing()),
+          [ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing())],
           insertOwner,
         ),
       );
-      graph.add(new Insert(ast.withOnConflict(InsertOnConflict.doNothing()), insertOwner));
+      graph.add(new Insert([ast.withOnConflict(InsertOnConflict.doNothing())], insertOwner));
 
       expect(printGraph(graph)).toBe(
         [
@@ -136,9 +137,9 @@ describe('printGraph', () => {
       );
     });
 
-    it('prints an InsertChunked with the number of its statements', () => {
+    it('prints an Insert of several statements with their number', () => {
       const graph = newGraph();
-      const chunked = new InsertChunked(
+      const chunked = new Insert(
         [
           insertInto('users', [{ name: 'Ada' }]),
           insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
@@ -147,9 +148,7 @@ describe('printGraph', () => {
       );
       graph.setResult(graph.add(chunked));
 
-      expect(printGraph(graph)).toBe(
-        ['n1 InsertChunked users (2 statements)', 'result: n1'].join('\n'),
-      );
+      expect(printGraph(graph)).toBe(['n1 Insert users (2 statements)', 'result: n1'].join('\n'));
     });
   });
 });

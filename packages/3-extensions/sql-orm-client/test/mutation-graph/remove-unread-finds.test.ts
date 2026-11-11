@@ -34,7 +34,7 @@ describe('removeUnreadFinds', () => {
 
   it('removes a FindByKeys that no node reads', () => {
     const graph = newGraphWithoutReturning();
-    const insert = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner));
+    const insert = graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner));
     graph.add(new FindByKeys(findUsers().ast, sameId, create), { keys: new Rows(insert, sameId) });
 
     removeUnreadFinds(graph);

@@ -1,7 +1,13 @@
-import type { InsertAst, ParamRef, ProjectionItem } from '@internal/sql-relational-core/ast';
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type {
+  InsertAst,
+  ParamRef,
+  ProjectionItem,
+  SqlStatementStats,
+} from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { WrittenRowOwner } from '../written-keys';
-import type { NodeId } from './edge';
+import type { NodeId, StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
 import type { Graph } from './graph';
 import { assertOneValuePerColumn, type JunctionWrite } from './junction-write';
@@ -19,62 +25,76 @@ type Payload = Readonly<Record<string, ParamRef>>;
 
 export class Insert extends StatementNode<Payloads> {
   readonly slots = { payload: 'list', state: 'list', requires: 'list' } as const;
-  readonly ast: InsertAst;
+  readonly asts: readonly InsertAst[];
   readonly owner: WrittenRowOwner;
   readonly junction: JunctionWrite | undefined;
 
-  constructor(ast: InsertAst, owner: WrittenRowOwner, junction?: JunctionWrite) {
+  constructor(asts: readonly InsertAst[], owner: WrittenRowOwner, junction?: JunctionWrite) {
     super();
-    this.ast = ast;
+    this.asts = Object.freeze([...asts]);
     this.owner = owner;
     this.junction = junction;
     Object.freeze(this);
   }
 
   get statements(): readonly StatementAst[] {
-    return [this.ast];
+    return this.asts;
   }
 
   get returns(): readonly ProjectionItem[] {
-    return this.ast.returning ?? [];
+    return this.asts[0]?.returning ?? [];
   }
 
   override execute(inputs: OutputsOf<Payloads>, run: Run): Executed {
     if (requirementUnmet(inputs.requires)) {
       return rowsResult([]);
     }
-    // No PayloadData edge reaches this insert, so it runs with the values it was built with.
-    if (inputs.payload === null) {
-      return this.#run(this.ast, run);
-    }
-    // A PayloadData source produced no rows, so there are no values to insert with: nothing is inserted and the statement is not run.
-    if (inputs.payload.some((records) => records.length === 0)) {
+    if (inputs.payload?.some((records) => records.length === 0)) {
       return rowsResult([]);
     }
-    return this.#run(withPayload(this.ast, payloadOf(inputs.payload, this.junction)), run);
+    const payload = inputs.payload === null ? undefined : payloadOf(inputs.payload, this.junction);
+    const asts =
+      payload === undefined ? this.asts : this.asts.map((ast) => withPayload(ast, payload));
+    const [only, ...others] = asts;
+    if (givesOwnValues(run.context, this.returns)) {
+      return insertGivingOwnValues(asts, this.returns, this.owner, run);
+    }
+    if (only !== undefined && others.length === 0) {
+      return executeStatement(only, run);
+    }
+    if (this.returns.length === 0) {
+      return sumOfCounts(asts, run);
+    }
+    const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
+      for (const ast of asts) {
+        yield* run.query(ast);
+      }
+    };
+    return new AsyncIterableResult(generator());
   }
 
   override check(graph: Graph, id: NodeId, context: ExecutionContext): void {
-    checkOwnValues(graph, id, context, [this.ast], this.returns, this.owner);
+    checkOwnValues(graph, id, context, this.asts, this.returns, this.owner);
   }
 
   override withReturning(columns: readonly ProjectionItem[]): Insert {
     return new Insert(
-      this.ast.withReturning(withColumns(this.returns, columns)),
+      this.asts.map((ast) => ast.withReturning(withColumns(ast.returning ?? [], columns))),
       this.owner,
       this.junction,
     );
   }
-
-  #run(ast: InsertAst, run: Run): Executed {
-    return givesOwnValues(run.context, this.returns)
-      ? insertGivingOwnValues([ast], this.returns, this.owner, run)
-      : executeStatement(ast, run);
-  }
 }
 
-/** The values the `PayloadData` edges give every row, each edge's first record. */
-export function payloadOf(
+async function sumOfCounts(asts: readonly InsertAst[], run: Run): Promise<SqlStatementStats> {
+  let affectedRows = 0;
+  for (const ast of asts) {
+    affectedRows += (await run.execute(ast)).affectedRows;
+  }
+  return { affectedRows };
+}
+
+function payloadOf(
   payload: readonly (readonly Payload[])[],
   junction: JunctionWrite | undefined,
 ): Payload {
@@ -90,6 +110,6 @@ export function payloadOf(
   return Object.assign({}, ...records);
 }
 
-export function withPayload(ast: InsertAst, payload: Payload): InsertAst {
+function withPayload(ast: InsertAst, payload: Payload): InsertAst {
   return ast.withRows(ast.rows.map((row) => ({ ...row, ...payload })));
 }
