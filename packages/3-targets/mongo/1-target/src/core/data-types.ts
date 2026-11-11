@@ -125,6 +125,7 @@ export function mongoDurationText(text: string): string {
 export const mongoString = mongoDataType('mongo/string', {
   read: (json) => readJsonString('mongo/string', json),
   bsonTypes: ['string'],
+  temporaryValue: { expression: { $literal: '' }, text: '""' },
 });
 
 /** What `stored` writes for `text`, or `undefined` when it refuses it. */
@@ -161,10 +162,12 @@ function storedStringDataType(
 export const mongoInt32 = mongoDataType('mongo/int32', {
   read: (json) => readInt32Json('mongo/int32', json),
   bsonTypes: ['int'],
+  temporaryValue: { expression: 0, text: '0' },
 });
 export const mongoInt64 = mongoDataType('mongo/int64', {
   read: (json) => readInt64Json('mongo/int64', json),
   bsonTypes: ['long'],
+  temporaryValue: { expression: { $toLong: 0 }, text: '0' },
   casts: { [mongoInt32.id]: asNumeralText },
 });
 export const mongoDecimal128 = mongoDataType('mongo/decimal128', {
@@ -172,6 +175,7 @@ export const mongoDecimal128 = mongoDataType('mongo/decimal128', {
   spell: spellDecimal128Json,
   equalityKey: decimalTextEqualityKey,
   bsonTypes: ['decimal'],
+  temporaryValue: { expression: { $toDecimal: '0' }, text: '0' },
   casts: { [mongoInt32.id]: asNumeralText, [mongoInt64.id]: castUnchanged },
 });
 export const mongoDouble = mongoDataType('mongo/double', {
@@ -180,6 +184,7 @@ export const mongoDouble = mongoDataType('mongo/double', {
     return json;
   },
   bsonTypes: ['double'],
+  temporaryValue: { expression: { $toDouble: 0 }, text: '0' },
   casts: { [mongoInt32.id]: asFloat, [mongoInt64.id]: asFloat, [mongoDecimal128.id]: asFloat },
 });
 export const mongoObjectId = mongoDataType('mongo/objectid', {
@@ -191,6 +196,7 @@ export const mongoObjectId = mongoDataType('mongo/objectid', {
 export const mongoBool = mongoDataType('mongo/bool', {
   read: (json) => readJsonBoolean('mongo/bool', json),
   bsonTypes: ['bool'],
+  temporaryValue: { expression: false, text: 'false' },
 });
 export const mongoDate = mongoDataType('mongo/date', {
   read: (json) => readDateJson('mongo/date', json),

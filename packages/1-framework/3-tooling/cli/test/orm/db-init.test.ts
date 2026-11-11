@@ -559,7 +559,7 @@ describe('db init', () => {
     });
   }
 
-  it('shows the planner`s warnings when the apply succeeds', async () => {
+  it('shows the planner`s warnings as warnings when the apply succeeds', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init'], {
@@ -568,12 +568,23 @@ describe('db init', () => {
     });
     const blocks = run.presented?.presentation.human ?? [];
 
-    expect(run.exitCode).toBe(0);
-    expect(blocks).toContainEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
-    expect(blocks).toContainEqual({ kind: 'list', items: [WARNING.summary] });
+    expect({
+      exitCode: run.exitCode,
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      warnings: blocks.filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
+      ),
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      warnings: [{ kind: 'summary', status: 'warn', text: WARNING.summary }],
+    });
   });
 
-  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
+  it('lists the planner`s warnings in the --json result of a successful apply as plannerWarnings', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -582,9 +593,16 @@ describe('db init', () => {
     expect({
       exitCode: run.exitCode,
       messages: frames.filter((frame) => frame['kind'] === 'message'),
-      warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
-        .warnings,
-    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+      result: (frames.at(-1) as { envelope: { result: Record<string, unknown> } }).envelope.result,
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      result: expect.not.objectContaining({ warnings: expect.anything() }),
+    });
+    expect(
+      (frames.at(-1) as { envelope: { result: { plannerWarnings: unknown } } }).envelope.result
+        .plannerWarnings,
+    ).toEqual([WARNING]);
   });
 
   it('shows the planner`s warnings when the apply fails', async () => {
