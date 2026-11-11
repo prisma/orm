@@ -4,13 +4,15 @@ import type {
   InsertAst,
   InsertValue,
   ProjectionItem,
+  TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';
 import {
-  type GeneratedKey,
   generatedKey,
+  generatedKeyColumn,
+  type InsertedRows,
   reportedInsertId,
   rowIdentity,
   type WrittenRowOwner,
@@ -58,7 +60,7 @@ export function checkOwnValues(
   for (const ast of asts) {
     refuseUpsertOfColumnsReadBack(ast, returns, owner);
   }
-  generatedKeyOf(context, asts, returns, owner, given);
+  generatedKeyColumn(insertedRowsOf(context, first.table, asts, returns, owner, given));
 }
 
 function refuseUpsertOfColumnsReadBack(
@@ -100,7 +102,11 @@ export function insertGivingOwnValues(
   owner: WrittenRowOwner,
   run: Run,
 ): AsyncIterableResult<StorageRow> {
-  const generated = generatedKeyOf(run.context, asts, returns, owner, []);
+  const [first] = asts;
+  const generated =
+    first === undefined
+      ? undefined
+      : generatedKey(insertedRowsOf(run.context, first.table, asts, returns, owner, []));
   const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
     for (const ast of asts) {
       const stats = await run.execute(ast.withReturning(undefined));
@@ -118,26 +124,23 @@ export function insertGivingOwnValues(
   return new AsyncIterableResult(generator());
 }
 
-function generatedKeyOf(
+function insertedRowsOf(
   context: ExecutionContext,
+  table: TableSource,
   asts: readonly InsertAst[],
   returns: readonly ProjectionItem[],
   owner: WrittenRowOwner,
   given: readonly ProjectionItem[],
-): GeneratedKey | undefined {
-  const [first] = asts;
-  if (first === undefined) {
-    return undefined;
-  }
+): InsertedRows {
   const givenValues = Object.fromEntries(given.map((column) => [column.alias, true]));
-  return generatedKey({
+  return {
     context,
-    ...storageOf(first.table),
+    ...storageOf(table),
     modelName: owner.modelName,
     method: `${owner.operation}()`,
     rows: asts.flatMap((ast) => ast.rows.map((row) => ({ ...valuesOf(row), ...givenValues }))),
     columns: returns.map((column) => column.alias),
-  });
+  };
 }
 
 export function columnsOf(returns: readonly ProjectionItem[], values: StorageRow): StorageRow {

@@ -11,7 +11,7 @@ export interface GeneratedKey {
   decode(insertId: string): Promise<unknown>;
 }
 
-export function generatedKey(options: {
+export interface InsertedRows {
   readonly context: ExecutionContext<Contract<SqlStorage>>;
   readonly namespaceId: string;
   readonly tableName: string;
@@ -19,7 +19,9 @@ export function generatedKey(options: {
   readonly rows: readonly Readonly<Record<string, unknown>>[];
   readonly method: string;
   readonly columns: readonly string[];
-}): GeneratedKey | undefined {
+}
+
+export function generatedKeyColumn(options: InsertedRows): string | undefined {
   const { context, namespaceId, tableName, modelName, rows, method, columns } = options;
   const [column, ...others] = columns.filter((key) => !rows.every((row) => row[key] !== undefined));
   if (column === undefined) {
@@ -42,6 +44,15 @@ export function generatedKey(options: {
       `cannot return the rows it inserts: their key column "${column}" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.`,
     );
   }
+  return column;
+}
+
+export function generatedKey(options: InsertedRows): GeneratedKey | undefined {
+  const column = generatedKeyColumn(options);
+  if (column === undefined) {
+    return undefined;
+  }
+  const { context, namespaceId, tableName } = options;
   const codec = context.contractCodecs.forColumn(namespaceId, tableName, column);
   return {
     column,
