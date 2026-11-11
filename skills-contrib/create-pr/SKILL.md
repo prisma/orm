@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Creates a GitHub PR with a Linear-ticket-prefixed title and a decision-led, narrative description for Prisma 8. Use when the user wants to create a pull request, open a PR, or submit changes for review.
+description: Creates a GitHub PR with a conventional-commit title and a decision-led, narrative description for Prisma 8. Use when the user wants to create a pull request, open a PR, or submit changes for review.
 ---
 
 # Create PR Skill
@@ -41,27 +41,27 @@ Only ask the user if **all three** sources fail to yield an identifier. In that 
 
 ### Step 3: Compose the PR Title
 
-Format:
+Format, the same one [CONTRIBUTING.md](../../CONTRIBUTING.md#pull-request-expectations) asks of every contributor:
 
 ```text
-$TICKET_ID: <concise title in sentence case>
+type(scope): concise lowercase description
 ```
 
 Rules:
-- Always start with the Linear ticket ID followed by `:` then a single space.
-- Sentence case after the colon (capital first letter; rest lowercase except proper nouns, package names, types, etc.).
-- No period at the end.
+- `type` is one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`.
+- `scope` is the primary affected package or layer (`sql-runtime`, `postgres-adapter`, `cli`, `mongo-orm`, etc.). If the change spans several, name the one most central to it. Secondary scopes belong in the body.
+- Lowercase after the colon, except proper nouns, package names and types. No period at the end.
+- The Linear ticket does not go in the title. It goes in `## Linked issue` (Step 4), which is what links the PR to the ticket.
 - Aim for under 70 characters total. Optimise for **information density**, not raw character count — a slightly longer title that names the concrete deliverable is better than a short abstract one.
-- The title must convey **what concrete thing changed**, not just an abstract scope. A teammate scanning a list of PR titles should be able to tell what this PR delivers without opening it.
-  - Bad: `TML-2375: expand pgvector type and operator surface` (abstract)
-  - Good: `TML-2375: 5 new pgvector operator descriptors + HNSW index support` (concrete)
-- If the change spans multiple packages or layers, name the headline package or capability, not all of them. Secondary scopes belong in the body.
+- The title must convey **what concrete thing changed**, in words a user of the package would understand. Someone scanning a list of PR titles should be able to tell what this PR delivers without opening it.
+  - Bad: `feat(pgvector): expand type and operator surface` (abstract)
+  - Good: `feat(pgvector): 5 new operator descriptors + HNSW index support` (concrete)
 
 Examples:
-- `TML-1859: add text codec support to sql-runtime`
-- `TML-2104: handle null in jsonb columns (postgres adapter)`
-- `TML-2375: 5 new pgvector operator descriptors + HNSW index support`
-- `TML-2456: split contract emission into two phases`
+- `feat(sql-runtime): add text codec support`
+- `fix(postgres-adapter): handle null in jsonb columns`
+- `feat(pgvector): 5 new operator descriptors + HNSW index support`
+- `refactor(emitter): split contract emission into two phases`
 
 ### Step 4: Compose the PR Description
 
@@ -113,7 +113,7 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 
 10. **`## Alternatives considered`** — final section. Each bullet names an alternative we genuinely weighed and why we didn't take it. Pull alternatives forward from any ADRs or design discussions so the reader doesn't have to click through. Frame as alternatives (decisions we made), not as "non-goals" (scope statements).
 
-11. **`## Checklist`** — the template's checklist, with each item marked `[x]` only if true. Common items: DCO sign-off, CONTRIBUTING.md read, tests updated, title in the prevailing convention.
+11. **`## Checklist`** — the template's checklist, with each item marked `[x]` only if true. Today: DCO sign-off, tests updated, Skill update section filled in.
 
 #### Forbidden / discouraged patterns
 
@@ -171,7 +171,7 @@ Open the PR directly — **do not ask the user to confirm the title or body firs
 3. Create the PR using the body file:
 
    ```bash
-   gh pr create --title "$TICKET_ID: <title>" --body-file wip/pr-<num>-body.md
+   gh pr create --title "<type>(<scope>): <description>" --body-file wip/pr-<num>-body.md
    ```
 
    (Use `--body-file` rather than a heredoc to avoid quoting/escaping pitfalls with backticks and code samples. Stage the body file under `wip/` — gitignored — so the live PR matches what the user reviewed.)
@@ -187,7 +187,7 @@ Open the PR directly — **do not ask the user to confirm the title or body firs
 5. Don't end the description with "non-goals" — end with `## Alternatives considered`, framed as decisions you weighed.
 6. Don't ask the user to confirm the PR title or body — open the PR. They can ask you to edit it after.
 7. Don't ask the user for the Linear ticket — infer it from the branch name, conversation, or recent commits per Step 2. Only ask if all three sources genuinely fail.
-8. Don't use the conventional-commit `type(scope):` title format — that's the old format. The current format is `$TICKET_ID: <title>`.
+8. Don't put the Linear ticket ID in the title. The title is in conventional-commit `type(scope):` form; the ticket goes in `## Linked issue`.
 9. Don't presuppose the spec. Avoid raw `AC-NN` / `FR-NN` IDs, "the spec calls out", "as the spec promises", and similar phrasings — a fresh reader doesn't have the spec to hand. Either rephrase to plain language or link to the spec the first time the term appears.
 10. Don't put alternatives anywhere but `## Alternatives considered`. "We did X to avoid Y" rationale is alternatives content; it adds cognitive load when it appears before the reader has seen what we built.
 11. Don't push without checking DCO sign-off (Step 6.1). Catching it after the PR is open creates a noisy force-push and a churn cycle on the DCO check.

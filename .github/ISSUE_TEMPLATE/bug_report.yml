@@ -17,7 +17,7 @@ body:
     attributes:
       label: Package and version
       description: Which `@prisma/*` package (or the `prisma` CLI) and version are you using? Prisma 7 versions are welcome.
-      placeholder: "e.g. @internal/postgres@0.5.2, or prisma@7.10.0"
+      placeholder: "e.g. @prisma/orm-postgres@8.0.0-rc.1, or prisma@7.10.0"
     validations:
       required: true
 
