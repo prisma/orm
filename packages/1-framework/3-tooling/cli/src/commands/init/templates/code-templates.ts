@@ -363,7 +363,7 @@ export function dbFile(
   return `import 'dotenv/config';
 import ${factory} from '${runtime}';
 import { contractFromJson } from '${staticEntry}';
-import type { Contract } from './contract.d';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
