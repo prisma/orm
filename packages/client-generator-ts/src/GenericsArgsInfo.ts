@@ -24,9 +24,15 @@ export class GenericArgsInfo {
   typeNeedsGenericModelArg(topLevelType: DMMF.InputType): boolean {
     return this._cache.getOrCreate(topLevelType, () => {
       const toVisit: ToVisitItem[] = [{ type: topLevelType }]
+      // Every type that has ever been put in `toVisit`. A type that many fields point to is
+      // queued only once, so the queue grows with the number of types, not with the number of
+      // fields that reference them. This also stops the search from going round in loops.
+      const queued = new Set<DMMF.InputType>([topLevelType])
       const visited = new Set<DMMF.InputType>()
-      let item: ToVisitItem | undefined
-      while ((item = toVisit.shift())) {
+      // Walk the queue by index instead of `toVisit.shift()`: shifting a large array copies it,
+      // which made this search quadratic in the queue length on big schemas.
+      for (let index = 0; index < toVisit.length; index++) {
+        const item = toVisit[index]
         const { type: currentType } = item
         const cached = this._cache.get(currentType)
         if (cached === true) {
@@ -34,10 +40,6 @@ export class GenericArgsInfo {
           return true
         }
         if (cached === false) {
-          continue
-        }
-        if (visited.has(currentType)) {
-          // if we have a loop, outcome is determined by other keys
           continue
         }
         if (currentType.meta?.source) {
@@ -53,7 +55,8 @@ export class GenericArgsInfo {
               return true
             }
             const inputObject = this._dmmf.resolveInputObjectType(fieldType)
-            if (inputObject) {
+            if (inputObject && !queued.has(inputObject)) {
+              queued.add(inputObject)
               toVisit.push({ type: inputObject, parent: item })
             }
           }
