@@ -72,12 +72,13 @@ Every later stage 2 slice adds rows to the translation that build inserts, updat
 | `createAll()` of several rows with a generated key, without `RETURNING` | Refused with the same `ORM.CAPABILITY_MISSING` error before any statement runs, now as a rejection of the result, as `create()` reports it, instead of a throw at the call (decided 2026-11-10). The integration test "refuses createAll() of several rows whose ids the database generates, before running, and counts them with createAndCount()" changes from `toThrow` to `rejects`. |
 | A nested child-held create whose key a database default other than auto-increment fills, without `RETURNING` | Succeeds: nothing reads the child row, so the insert is a count write and its check does not ask for keys. On main the whole call was refused before running. The integration test "refuses a nested create before running when a child key column gets a database default other than auto-increment" changes to assert the rows written (decided 2026-11-11). A child create with nested creates of its own is still read from and still refused. |
 | A write that returns rows through a polymorphic base model with a variant stored in its own table | Returns the full row of each variant, as a read of the base model does and as its row type says: the read-back is the collection read with the variant joins, which the read-back rule does not merge, so with `returning` it runs one `SELECT` more than on main, and rows gain the variant fields main left out with `RETURNING` (decided 2026-11-11). Count calls, models without such variants and writes through a variant collection are unchanged. |
+| `createAll()` with `onConflict: 'skip'`, without `RETURNING` | Refused with main's `ORM.CAPABILITY_MISSING` error before any statement, by the `Insert`'s check (no `returning`, conflicts skipped, something reads rows from it), as a rejection instead of a throw; `createAndCount()` with `skip` is allowed. The integration test "createAll() with onConflict "skip" … needs returning to return rows" changes from `toThrow` to `rejects` (decided 2026-11-11). No capability check remains outside the graph's nodes and rules. |
 | `upsert()` without `RETURNING` | Reads its row back by the create's values for the conflict columns, with main's refusals. |
 
 ## Slice-specific done conditions
 
 - [ ] No builder reads the `returning` capability; `readsBack` and `Translation.readsBack` do not exist.
-- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the five order assertions, the `createAll()` refusal (SQLite and its MySQL counterpart) and the nested child create above.
+- [ ] Every integration test passes on Postgres, SQLite and MySQL, unedited except for the five order assertions, the `createAll()` refusals (SQLite and the MySQL counterpart) and the nested child create above.
 - [ ] Tests assert effects and printed graphs, never generated SQL.
 
 ## Open questions
