@@ -1,9 +1,10 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { ProjectionItem, UpdateAst } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { blindCast } from '@internal/utils/casts';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';
-import type { WrittenRowOwner } from '../written-keys';
+import { readBackIdentity, type WrittenRowOwner } from '../written-keys';
 import type { NodeId, StorageRow } from './edge';
 import { executeFiltered, type Filtered, filteredWhere, withColumns } from './filtered-statement';
 import type { Graph } from './graph';
@@ -54,6 +55,20 @@ export class Update extends StatementNode<Inputs> {
     if (hasContractCapability(context.contract, 'returning')) {
       return;
     }
+    const action = `${this.owner.operation}()`;
+    if (this.returns.length > 0 && [graph.inputsOf(id)['filter'] ?? []].flat().length === 0) {
+      const { table } = this.ast;
+      readBackIdentity(
+        context.contract,
+        blindCast<
+          string,
+          'The ORM builds every table source with tableSourceForContract, which sets the namespace'
+        >(table.namespaceId),
+        table.name,
+        this.owner.modelName,
+        action,
+      );
+    }
     const read = new Set(graph.columnsReadFrom(id).map((column) => column.alias));
     const [column] = Object.entries(this.ast.set)
       .filter(([name, value]) => read.has(name) && value.kind !== 'param-ref')
@@ -61,7 +76,6 @@ export class Update extends StatementNode<Inputs> {
     if (column === undefined) {
       return;
     }
-    const action = `${this.owner.operation}()`;
     throw ormError(
       'ORM.CAPABILITY_MISSING',
       `${action} on model "${this.owner.modelName}" cannot read back the rows it updates: it sets key column "${column}" by an expression, and without capability "returning" the database does not report the value it wrote.`,

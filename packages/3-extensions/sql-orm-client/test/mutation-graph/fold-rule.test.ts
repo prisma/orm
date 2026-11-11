@@ -1,5 +1,7 @@
+import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { FilterData } from '../../src/mutation-graph/filter-data';
+import type { Find } from '../../src/mutation-graph/find';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { createCollectionFor } from '../collection-fixtures';
@@ -23,12 +25,17 @@ function printAsRun(graph: Graph): string {
   return printGraph(graph);
 }
 
-describe('the fold rule, on a contract with returning', () => {
-  it('gives an Update filtered by key by a Find with only a condition that condition as its WHERE', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda]));
+function updateWithConditionOf(find: Find) {
+  return updateUsers({ name: 'Grace' }, find.ast.where);
+}
 
-    const update = addWithState(graph, updateUsers({ name: 'Grace' }), {
+describe('the fold rule, on a contract with returning', () => {
+  it('drops the key edge from a Find with only a condition when the Update has that same condition', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+
+    const update = addWithState(graph, updateWithConditionOf(found), {
       filter: [new FilterData(find, sameId)],
     });
     graph.setResult(update);
@@ -39,75 +46,14 @@ describe('the fold rule, on a contract with returning', () => {
     );
   });
 
-  it('leaves an Update filtered by a Find with a limit as it is', () => {
+  it('leaves an Update whose condition is another object than the condition of the Find as it is', () => {
     const graph = newGraph();
-    const find = addWithState(
-      graph,
-      findUsersWith({ filters: [nameIsAda], limit: 1, selectedFields: ['id'] }),
-    );
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+    const alsoAda = BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'));
 
     graph.setResult(
-      addWithState(graph, updateUsers({ name: 'Grace' }), {
-        filter: [new FilterData(find, sameId)],
-      }),
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada' limit 1",
-        "n2 Update users set name = 'Grace' <- FilterData n1 (id->id)",
-        'result: n2',
-      ].join('\n'),
-    );
-  });
-
-  it('leaves an Update filtered by a Find with includes as it is', () => {
-    const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
-    const graph = newGraph();
-    const find = addWithState(graph, findUsersWith({ includes, tables, filters: [nameIsAda] }));
-
-    graph.setResult(
-      addWithState(graph, updateUsers({ name: 'Grace' }), {
-        filter: [new FilterData(find, sameId)],
-      }),
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada'",
-        "n2 Update users set name = 'Grace' <- FilterData n1 (id->id)",
-        'result: n2',
-      ].join('\n'),
-    );
-  });
-
-  it('leaves an Update as it is when a write to the table comes between it and the Find', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda]));
-    addWithState(graph, updateUsers({ email: 'x' }));
-
-    graph.setResult(
-      addWithState(graph, updateUsers({ name: 'Grace' }), {
-        filter: [new FilterData(find, sameId)],
-      }),
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada'",
-        "n2 Update users set email = 'x'",
-        "n3 Update users set name = 'Grace' <- FilterData n1 (id->id)",
-        'result: n3',
-      ].join('\n'),
-    );
-  });
-
-  it('leaves an Update with a condition of its own as it is', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda]));
-
-    graph.setResult(
-      addWithState(graph, updateUsers({ name: 'Grace' }, nameIsAda), {
+      addWithState(graph, updateUsers({ name: 'Grace' }, alsoAda), {
         filter: [new FilterData(find, sameId)],
       }),
     );
@@ -121,29 +67,8 @@ describe('the fold rule, on a contract with returning', () => {
     );
   });
 
-  it('leaves an Update filtered by columns that are not a key as it is', () => {
+  it('leaves an Update without a condition as it is', () => {
     const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda], ['name']));
-
-    graph.setResult(
-      addWithState(graph, updateUsers({ name: 'Grace' }), {
-        filter: [new FilterData(find, sameName)],
-      }),
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada'",
-        "n2 Update users set name = 'Grace' <- FilterData n1 (name->name)",
-        'result: n2',
-      ].join('\n'),
-    );
-  });
-});
-
-describe('the fold rule, on a contract without returning', () => {
-  it('does not run', () => {
-    const graph = newGraphWithoutReturning();
     const find = addWithState(graph, findUsers([nameIsAda]));
 
     graph.setResult(
@@ -156,6 +81,111 @@ describe('the fold rule, on a contract without returning', () => {
       [
         "n1 Find users where name = 'Ada'",
         "n2 Update users set name = 'Grace' <- FilterData n1 (id->id)",
+        'result: n2',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves an Update filtered by a Find with a limit as it is', () => {
+    const graph = newGraph();
+    const found = findUsersWith({ filters: [nameIsAda], limit: 1, selectedFields: ['id'] });
+    const find = addWithState(graph, found);
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada' limit 1",
+        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n2',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves an Update filtered by a Find with includes as it is', () => {
+    const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
+    const graph = newGraph();
+    const found = findUsersWith({ includes, tables, filters: [nameIsAda] });
+    const find = addWithState(graph, found);
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n2',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves an Update as it is when a write to the table comes between it and the Find', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+    addWithState(graph, updateUsers({ email: 'x' }));
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Update users set email = 'x'",
+        "n3 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves an Update filtered by columns that are not a key as it is', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda], ['name']);
+    const find = addWithState(graph, found);
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameName)],
+      }),
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (name->name)",
+        'result: n2',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('the fold rule, on a contract without returning', () => {
+  it('does not run', () => {
+    const graph = newGraphWithoutReturning();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n2',
       ].join('\n'),
     );

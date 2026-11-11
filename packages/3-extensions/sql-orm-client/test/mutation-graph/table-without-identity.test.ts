@@ -1,4 +1,6 @@
 import { textColumn } from '@internal/adapter-postgres/column-types';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { defineContract, field, model } from '../contract-builder';
@@ -13,9 +15,15 @@ const refusal = expect.objectContaining({
     'update()/delete() on model "Log" requires the table to have a primary key or unique constraint',
 });
 
-function logs() {
+const withReturning: Contract<SqlStorage> = {
+  ...contract,
+  capabilities: { sql: { returning: true } },
+};
+const withoutReturning: Contract<SqlStorage> = { ...contract, capabilities: {} };
+
+function logs(of: Contract<SqlStorage> = contract) {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(contract);
+  const context = { ...buildTestContextFromContract(contract), contract: of };
   const collection = new Collection({ runtime, context }, 'Log', { namespaceId: 'public' });
   return { runtime, collection: collection.where({ message: 'hello' }) };
 }
@@ -41,5 +49,33 @@ describe('a table with no primary key and no unique constraint', () => {
 
     await expect(collection.delete()).rejects.toThrow(refusal);
     expect(runtime.executions).toEqual([]);
+  });
+
+  it('updateAll returns the rows its Update returns with returning', async () => {
+    const { collection, runtime } = logs(withReturning);
+    runtime.setNextResults([[{ message: 'bye' }]]);
+
+    expect(await collection.updateAll({ message: 'bye' })).toEqual([{ message: 'bye' }]);
+  });
+
+  it('updateAll is refused before any statement without returning', async () => {
+    const { collection, runtime } = logs(withoutReturning);
+
+    await expect(collection.updateAll({ message: 'bye' })).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.ROW_IDENTITY_MISSING',
+        message: expect.stringContaining(
+          'updateAll() on model "Log" reads the rows it wrote back by key, since the contract does not report capability "returning"',
+        ),
+      }),
+    );
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('updateAndCount counts the rows without returning', async () => {
+    const { collection, runtime } = logs(withoutReturning);
+    runtime.setNextStats([{ affectedRows: 2 }]);
+
+    expect(await collection.updateAndCount({ message: 'bye' })).toBe(2);
   });
 });

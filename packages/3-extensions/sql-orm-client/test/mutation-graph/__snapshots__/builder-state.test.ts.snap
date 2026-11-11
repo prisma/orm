@@ -173,7 +173,7 @@ result: n3"
 exports[`state edges of the graphs builders build, without returning > updateAllGraph 1`] = `
 "n1 State users
 n2 Find users where name = 'Ada' <- state n1
-n3 Update users set name = 'Grace' <- FilterData n2 (id->id), state n1
+n3 Update users set name = 'Grace' where name = 'Ada' <- FilterData n2 (id->id), state n1
 n4 State users <- state n3
 n5 State posts
 n6 Find users <- FilterData n3 (id->id), state n4, state n5

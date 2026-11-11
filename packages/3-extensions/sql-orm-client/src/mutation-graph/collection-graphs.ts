@@ -85,10 +85,24 @@ export function updateAllGraph(
     return graph;
   }
   requireIdentityColumnsForIncludes(collection);
-  requireIdentityColumns(collection);
-  const found = addFind(graph, selectIdentityAst(collection, { ...state, orderBy: undefined }));
+  const where = whereOf(collection);
+  if (identityColumnsOf(collection).length === 0) {
+    graph.setResult(
+      addUpdateRows(graph, context.contract, state.tables, set, {
+        where,
+        filters: [],
+        payloads: [],
+        owner,
+      }),
+    );
+    return graph;
+  }
+  const found = addFind(
+    graph,
+    selectIdentityAst(collection, { ...state, orderBy: undefined }).withWhere(where),
+  );
   const updated = addUpdateRows(graph, context.contract, state.tables, set, {
-    where: undefined,
+    where,
     filters: [{ from: found, columns: sameRowColumns(collection) }],
     payloads: [],
     owner,

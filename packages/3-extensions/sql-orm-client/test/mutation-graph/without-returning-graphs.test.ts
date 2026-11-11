@@ -147,11 +147,11 @@ describe('write graphs on a contract without capability "returning"', () => {
     );
   });
 
-  it('updateAllGraph finds the keys, updates the rows with them, then reads the rows back by the keys the Update gives', () => {
+  it('updateAllGraph finds the keys, updates the rows with the caller filter and the keys, then reads the rows back by the keys the Update gives', () => {
     expect(printGraph(updateAllGraph(target, { name: 'Pioneer' }, 'rows'))).toBe(
       [
         "n1 Find users where name = 'Ada'",
-        "n2 Update users set name = 'Pioneer' <- FilterData n1 (id->id)",
+        "n2 Update users set name = 'Pioneer' where name = 'Ada' <- FilterData n1 (id->id)",
         'n3 Find users <- FilterData n2 (id->id)',
         'result: n3',
       ].join('\n'),

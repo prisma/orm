@@ -9,48 +9,41 @@ import { conditionOnlyReadOf, readsByKey, sameTable, stateEdgeOf } from './rule-
 import type { Rule } from './rules';
 import { Update } from './update';
 
-interface Folded {
-  readonly where: AnyExpression | undefined;
-}
-
 export function foldRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
-    if (!(node instanceof Update) || node.ast.where !== undefined) {
+    if (
+      !(node instanceof Update) ||
+      !filteredByFindOfCondition(graph, contract, node.ast.table, node.ast.where, inputs)
+    ) {
       return undefined;
     }
-    const folded = foldedFind(graph, contract, node.ast.table, inputs);
-    if (folded === undefined) {
-      return undefined;
-    }
-    return graph.add(new Update(node.ast.withWhere(folded.where), node.owner), {
-      ...inputs,
-      filter: [],
-    });
+    return graph.add(node, { ...inputs, filter: [] });
   };
 }
 
-function foldedFind(
+function filteredByFindOfCondition(
   graph: Graph,
   contract: Contract<SqlStorage>,
   table: TableSource,
+  where: AnyExpression | undefined,
   inputs: InputEdges<Slots>,
-): Folded | undefined {
+): boolean {
   const [edge, ...others] = [inputs['filter'] ?? []].flat();
   if (!(edge instanceof FilterData) || others.length > 0) {
-    return undefined;
+    return false;
   }
   const find = graph.nodeAt(edge.from);
-  if (!(find instanceof Find)) {
-    return undefined;
+  if (!(find instanceof Find) || find.ast.where !== where) {
+    return false;
   }
   const read = conditionOnlyReadOf(find.ast);
   if (read === undefined || !sameTable(read, table) || !readsByKey(contract, table, edge.columns)) {
-    return undefined;
+    return false;
   }
   const own = stateEdgeOf([inputs['state'] ?? []].flat(), table);
   const found = stateEdgeOf([graph.inputsOf(edge.from)['state'] ?? []].flat(), table);
   if (own === undefined || found === undefined || own.from !== found.from) {
-    return undefined;
+    return false;
   }
-  return { where: find.ast.where };
+  return true;
 }
