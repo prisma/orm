@@ -48,7 +48,11 @@ import { mysqlClientError } from '../errors';
 import { validateMysqlContract } from '../static/contract-from-json';
 import { buildMysqlStaticContext, type MysqlStaticContext } from '../static/mysql-static';
 import { resolveMysqlBinding, resolveOptionalMysqlBinding } from './binding';
-import { validateStreamOption } from './mysql-options';
+import {
+  type MysqlTransactionOptions,
+  validateStreamOption,
+  validateTransactionOptions,
+} from './mysql-options';
 import { MysqlRuntimeImpl } from './mysql-runtime';
 
 export type MysqlTargetId = 'mysql';
@@ -121,6 +125,7 @@ export interface MysqlClient<
   runtime(): Runtime;
   transaction<R>(
     fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    options?: MysqlTransactionOptions,
   ): Promise<R>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -186,6 +191,7 @@ export interface MysqlOptionsBase extends SqlExecutionOptions<MysqlTargetId> {
    */
   readonly stream?: boolean;
   readonly poolOptions?: MysqlPoolOptions;
+  readonly transactionOptions?: MysqlTransactionOptions | undefined;
 }
 
 export type MysqlOptions<
@@ -219,6 +225,7 @@ export default function mysql<
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(options: MysqlOptions<TContract, TCollections>): MysqlClient<TContract, TCollections> {
   const stream = validateStreamOption(options.stream);
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validateMysqlContract(options.contract);
   let binding = resolveOptionalMysqlBinding(options);
 
@@ -316,6 +323,7 @@ export default function mysql<
       context,
       ...ifDefined('collections', options.collections),
       runtime: workRuntime,
+      implicitTransactionOptions: { isolationLevel: 'ReadCommitted' },
     }),
   );
 
@@ -392,27 +400,37 @@ export default function mysql<
     },
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      localOptions?: MysqlTransactionOptions,
     ): Promise<R> {
-      return withTransaction(workRuntime, (txCtx) => {
-        const tx: MysqlTransactionContext<TContract, TCollections> = withTransactionMembers(
-          txCtx,
-          buildMysqlTransactionMembers<TContract, TCollections>(
-            {
-              context,
-              collections: options.collections,
-              rawCodecInferer: stack.adapter.rawCodecInferer,
-              enums,
-              toSql,
-              prepareRuntime: workRuntime,
-            },
+      const local = validateTransactionOptions(localOptions);
+      const isolationLevel =
+        local?.isolationLevel !== undefined
+          ? local.isolationLevel
+          : transactionOptions?.isolationLevel;
+      return withTransaction(
+        workRuntime,
+        (txCtx) => {
+          const tx: MysqlTransactionContext<TContract, TCollections> = withTransactionMembers(
             txCtx,
-          ),
-        );
+            buildMysqlTransactionMembers<TContract, TCollections>(
+              {
+                context,
+                collections: options.collections,
+                rawCodecInferer: stack.adapter.rawCodecInferer,
+                enums,
+                toSql,
+                prepareRuntime: workRuntime,
+              },
+              txCtx,
+            ),
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        },
+        { isolationLevel },
+      );
     },
 
     close(): Promise<void> {

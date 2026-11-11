@@ -76,7 +76,7 @@ async function runAllNodes<Row>(
 ): Promise<Outcome<Row>> {
   const { runtime } = ctx;
   if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
-    return runInTransaction(await runtime.transaction(), (scope) =>
+    return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
   }

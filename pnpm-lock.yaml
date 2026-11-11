@@ -3105,9 +3105,6 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
     devDependencies:
-      '@internal/driver-postgres':
-        specifier: workspace:8.0.0-rc.23
-        version: link:../../3-targets/postgres/3-driver
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.23
         version: link:../../1-framework/2-authoring/psl-printer
@@ -4790,6 +4787,9 @@ importers:
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../2-sql-family/4-lanes/relational-core
+      '@internal/target-postgres':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../1-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../1-framework/0-foundation/utils
@@ -5064,9 +5064,6 @@ importers:
         specifier: 1.0.1
         version: 1.0.1
     devDependencies:
-      '@internal/driver-sqlite':
-        specifier: workspace:8.0.0-rc.23
-        version: link:../3-driver
       '@internal/publish-surface':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../0-shared/publish-surface
@@ -5200,6 +5197,9 @@ importers:
       '@internal/sql-relational-core':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../2-sql-family/4-lanes/relational-core
+      '@internal/target-sqlite':
+        specifier: workspace:8.0.0-rc.23
+        version: link:../1-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.23
         version: link:../../../1-framework/0-foundation/utils

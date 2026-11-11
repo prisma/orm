@@ -246,19 +246,22 @@ describe('running a graph', () => {
       expect(runtime.executions).toEqual([]);
     });
 
-    it('runs in one transaction that it commits', async () => {
-      const transactional = withTransaction(createMockRuntime());
+    it.each([undefined, { isolationLevel: 'ReadCommitted' }])(
+      'runs in one transaction with policy %j that it commits',
+      async (implicitTransactionOptions) => {
+        const transactional = withTransaction(createMockRuntime());
 
-      await queryGraph(
-        findThenDeleteUsers(),
-        contextOf(transactional.runtime),
-        rowsOfUsers({ selectedFields: ['id', 'name'] }),
-      );
+        await queryGraph(
+          findThenDeleteUsers(),
+          { ...contextOf(transactional.runtime), implicitTransactionOptions },
+          rowsOfUsers({ selectedFields: ['id', 'name'] }),
+        );
 
-      expect(transactional.open).toHaveBeenCalledTimes(1);
-      expect(transactional.commit).toHaveBeenCalledTimes(1);
-      expect(transactional.rollback).not.toHaveBeenCalled();
-    });
+        expect(transactional.open).toHaveBeenCalledExactlyOnceWith(implicitTransactionOptions);
+        expect(transactional.commit).toHaveBeenCalledTimes(1);
+        expect(transactional.rollback).not.toHaveBeenCalled();
+      },
+    );
 
     it('rolls the transaction back when a statement fails', async () => {
       const transactional = withTransaction(createMockRuntime());
