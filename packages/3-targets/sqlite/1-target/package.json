@@ -30,7 +30,7 @@
     "@internal/type-implementations": "workspace:8.0.0-rc.23",
     "@internal/utils": "workspace:8.0.0-rc.23",
     "@standard-schema/spec": "1.1.0",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.9",
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
@@ -39,13 +39,13 @@
     "@repo/test-utils": "workspace:8.0.0-rc.23",
     "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@repo/tsdown": "workspace:8.0.0-rc.23",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
