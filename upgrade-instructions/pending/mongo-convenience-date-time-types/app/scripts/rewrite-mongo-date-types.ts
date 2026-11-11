@@ -2,7 +2,7 @@
 /**
  * Rewrites `Date` to `DateTime` in MongoDB schemas and `type.Date()` to `type.DateTime()` in MongoDB TypeScript contracts. On MongoDB, `Date` was an instant read as a JavaScript `Date`; it is now a calendar date, and `DateTime` with no arguments is what `Date` was, so the contract does not change.
  *
- * A `.prisma` file is a MongoDB schema when the nearest `prisma.config.*` at or above its folder imports `@prisma/orm-mongo`, or when such a config names it as its `contract`. A schema with a `datasource` block, which is a Prisma 6 or Prisma 7 schema, and one a config reads with `prisma6Schema(...)` are left alone. A TypeScript or JavaScript file is a MongoDB contract when it imports a MongoDB contract builder entry; in it, a call of `Date` on `type`, or on a name `type` is imported or destructured as, becomes `DateTime`.
+ * A `.prisma` file is a MongoDB schema when the nearest `prisma.config.*` at or above its folder imports `@prisma/orm-mongo`. So is any file such a config names as its `contract`, whatever its extension, except a `.ts` contract. A schema with a `datasource` block, which is a Prisma 6 or Prisma 7 schema, and one a config reads with `prisma6Schema(...)` are left alone. A TypeScript or JavaScript file is a MongoDB contract when it imports a MongoDB contract builder entry; in it, a call of `Date` on `type`, or on a name `type` is imported or destructured as, becomes `DateTime`.
  *
  * A schema that declares a model, type or enum named `Date`, in any of its files, is left as it is, because `Date` there names that declaration. The script prints one line per file it changes, and one line per place it leaves for a person: a schema that declares its own `Date`, and a call of `Date` on a name it cannot tell is the `type` of a MongoDB contract builder.
  *
@@ -17,7 +17,7 @@ const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'dist', 'build']);
 const CONFIG_FILE = /^prisma\.config\.(?:[cm]?ts|[cm]?js)$/;
 const SOURCE_FILE = /\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/;
 const MONGO_CONFIG_IMPORT = /['"]@prisma\/orm-mongo(?:\/[\w/-]*)?['"]/;
-const CONTRACT_PATH = /\bcontract\s*:\s*['"]([^'"]+\.prisma)['"]/g;
+const CONTRACT_PATH = /\bcontract\s*:\s*['"]([^'"]+?)(?<!\.ts)['"]/g;
 const PRISMA6_SCHEMA_PATH = /\bprisma6Schema\s*\(\s*['"]([^'"]+)['"]/g;
 const DATASOURCE_BLOCK = /(?:^|\n)[ \t]*datasource[ \t]+\w+[ \t]*\{/;
 const FIELD_OR_ALIAS_OF_TYPE_DATE = /^([ \t]+[A-Za-z_]\w*[ \t]+(?:=[ \t]*)?)Date(?![\w$])/gm;
@@ -161,10 +161,8 @@ function rewriteContract(text: string): Rewrite {
 
 const root = process.cwd();
 const configs = readConfigs(root);
-const declarations = dateDeclarations(
-  filesUnder(root).filter((file) => file.endsWith('.prisma')),
-  configs,
-);
+const isSchemaFile = (file: string) => file.endsWith('.prisma') || configs.named.has(file);
+const declarations = dateDeclarations(filesUnder(root).filter(isSchemaFile), configs);
 const paths = process.argv.slice(2);
 const files = (paths.length === 0 ? [root] : paths.map((path) => resolve(root, path))).flatMap(
   filesUnder,
@@ -172,7 +170,7 @@ const files = (paths.length === 0 ? [root] : paths.map((path) => resolve(root, p
 
 let changed = 0;
 for (const file of [...new Set(files)].sort()) {
-  const isSchema = file.endsWith('.prisma');
+  const isSchema = isSchemaFile(file);
   if (!isSchema && !SOURCE_FILE.test(file)) continue;
   const schema = isSchema ? mongoSchemaOf(file, configs) : undefined;
   if (isSchema && schema === undefined) continue;

@@ -24,12 +24,13 @@ const SCRIPT_PATHS = {
 const EXPECTED_STDOUT = [
   "bookings/schema/booking.prisma: line 6: Date names the Date declared in bookings/schema/date.prisma line 1, not MongoDB's date; the script leaves this schema as it is.",
   'migrations/app/20260101T0000_initial/contract.prisma: rewrote 6 field types.',
+  'psl/schema.psl: rewrote 1 field type.',
   'src/contract.prisma: rewrote 6 field types.',
   'src/contract.ts: rewrote 2 type.Date() calls.',
   'src/namespaced.ts: rewrote 1 type.Date() call.',
   'src/published.ts: rewrote 1 type.Date() call.',
   'src/unknown.ts: line 4: types.Date(): the script cannot tell this is the type of a MongoDB contract builder; if it is, write DateTime.',
-  'Changed 5 files.',
+  'Changed 6 files.',
   '',
 ].join('\n');
 

@@ -36,14 +36,22 @@ describe.each(Object.entries(GUIDES))(
       ).toBe(true);
     });
 
-    it('matches a MongoDB config whose contract is a schema, so the script finds every MongoDB schema', () => {
+    it('matches a MongoDB config whose contract is a schema file or folder, so the script finds every MongoDB schema', () => {
       const config = (entry: string, contract: string) =>
         `import { defineConfig } from '${entry}';\nexport default defineConfig({ contract: '${contract}' });\n`;
       expect({
         mongo: matches(config('@prisma/orm-mongo/config', './prisma/schema.prisma')),
+        mongoOtherExtension: matches(config('@prisma/orm-mongo/config', './schema.psl')),
+        mongoFolder: matches(config('@prisma/orm-mongo/config', './schema')),
         mongoTypeScript: matches(config('@prisma/orm-mongo/config', './prisma/contract.ts')),
         postgres: matches(config('@prisma/orm-postgres/config', './prisma/schema.prisma')),
-      }).toEqual({ mongo: true, mongoTypeScript: false, postgres: false });
+      }).toEqual({
+        mongo: true,
+        mongoOtherExtension: true,
+        mongoFolder: true,
+        mongoTypeScript: false,
+        postgres: false,
+      });
     });
 
     it('does not match a rewritten source, a SQL or Prisma 6 schema, or new Date()', () => {
