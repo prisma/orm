@@ -67,7 +67,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const CLI_ROOT = resolve(__dirname, '..');
-const CLI_BIN = resolve(CLI_ROOT, 'dist', 'bin.mjs');
+const CLI_BIN = resolve(CLI_ROOT, 'dist', 'cli.js');
 const RECORDINGS_DIR = resolve(CLI_ROOT, 'recordings');
 const FIXTURES_DIR = join(RECORDINGS_DIR, 'fixtures');
 const TAPES_DIR = join(RECORDINGS_DIR, 'tapes');
@@ -373,19 +373,6 @@ function setupWorkspace(workspaceDir: string, contractFile: string, connStr: str
   mkdirSync(workspaceDir, { recursive: true });
 
   copyFileSync(join(FIXTURES_DIR, contractFile), join(workspaceDir, 'contract.ts'));
-  writeFileSync(
-    join(workspaceDir, 'package.json'),
-    `${JSON.stringify(
-      {
-        name: 'recording-workspace',
-        private: true,
-        type: 'module',
-        dependencies: { '@prisma/orm-postgres': 'workspace:*' },
-      },
-      null,
-      2,
-    )}\n`,
-  );
 
   const configTemplate = readFileSync(join(FIXTURES_DIR, 'prisma.config.ts'), 'utf-8');
   writeFileSync(
