@@ -24,7 +24,7 @@ The ratified floor table:
 Additional constraints (documented, no enforcement overhead needed):
 
 - **Module system**: ESM-only. No CommonJS entry points are published.
-- **Consumer `tsconfig`**: `strict: true` is required, with `moduleResolution: "bundler"`, `"nodenext"` or `"node16"` (each paired with a `module` value TypeScript accepts; Node 18 and Node 20 projects use `"node16"` resolution). The `prisma orm init` CLI configures these automatically.
+- **Consumer `tsconfig`**: `strict: true` is required, with `moduleResolution: "bundler"`, or `"nodenext"` or `"node16"` in a package whose `package.json` sets `"type": "module"` (each paired with a `module` value TypeScript accepts; Node 18 and Node 20 projects use `"node16"` resolution). The `prisma orm init` CLI configures these automatically.
 
 ---
 
