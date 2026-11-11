@@ -162,7 +162,7 @@ Round 2 re-checks every row that was FAIL or WEAK, and adds a row for each decis
 | R14 | `db sign`'s refusal repeats `--config` | PASS | `DbSignOptions.invocation`; test "hands the control client the invocation". |
 | R15 | `db migrate --show` previews a policy refusal | PASS | `migrate-show.ts` runs `checkRunPolicies` after the off-graph check; two tests, refusal and consent. |
 | R16 | MySQL and MongoDB run the `--to <ref>` journeys and the failed-run case | PASS | Both e2e files call `definePolicyMigrateJourneys`. The weak assertion is counted under D1d. |
-| R17 | ADR 307 and the Migration System doc describe the policies | PASS | ADR 307 status note points at ADR 314; subsystem doc mentions `meta.policies`. |
+| R17 | ADR 307 and the Migration System doc describe the policies | PASS | ADR 307 status note points at ADR 319; subsystem doc mentions `meta.policies`. |
 
 ### Summary
 

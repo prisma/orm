@@ -188,18 +188,18 @@ Re-reviewed at `6d00fb7146`, after the rebase onto `main` and the fixes recorded
 
 | ID | Verdict | Evidence |
 |---|---|---|
-| A01 | Fixed | The record is `docs/architecture docs/adrs/ADR 314 - Databases record a change policy and a data protection policy.md`. No reference to the old ADR 309 is left; the remaining "ADR 309" links point at the value-objects record on `main`. |
+| A01 | Fixed | The record is `docs/architecture docs/adrs/ADR 319 - Databases record a change policy and a data protection policy.md`. No reference to the old ADR 309 is left; the remaining "ADR 309" links point at the value-objects record on `main`. |
 | A02 | Fixed | `NamedRef` (required `name`) is used by the resolver, `MigrateOptions.ref` and `DbUpdateOptions.ref` (`cli/src/control-api/types.ts` lines 250 and 661). `migrate` has a separate `targetHash` (line 667). `dbUpdate` refuses a ref whose hash differs from its contract (`db-run.ts` lines 240-244). `TargetRef` is gone. One gap remains: A15. |
-| A03 | Fixed | ADR 314 line 27 says the policies are the database's, stored on the application space's marker, and govern every space. `databasePoliciesInForce` reads the application space's marker only (`cli/src/control-api/operations/database-policies.ts` lines 25-35). How the runner re-checks them is A14. |
+| A03 | Fixed | ADR 319 line 27 says the policies are the database's, stored on the application space's marker, and govern every space. `databasePoliciesInForce` reads the application space's marker only (`cli/src/control-api/operations/database-policies.ts` lines 25-35). How the runner re-checks them is A14. |
 | A04 | Fixed | `databasePoliciesOf` returns a `Result` (`framework-components/src/control/database-policies.ts` lines 112-124). The CLI raises `errorMarkerRowCorrupt` once (`database-policies.ts` line 32). No catch by code is left. |
 | A05 | Partly fixed, by decision | The internal names now say "database policies": `databasePoliciesOf`, `databasePolicyDifferences`, `DatabasePolicyDifference`, `DEFAULT_DATABASE_POLICIES`, `databasePoliciesUpdated`. The public codes `MIGRATION.POLICY_MISMATCH` and `MIGRATION.CHANGE_POLICY_FORBIDS` stay, as the spec's decision table records. |
-| A06 | Partly fixed | Code fixed: the framework exports `DATABASE_POLICIES_META_KEY` and `storedDatabasePolicies`, and all four adapters use them. ADR 314 line 48 still says marker writes preserve "the `meta` keys it does not own" without saying who owns `meta.policies`. Suggestion: add "The framework owns `meta.policies`: its key and stored form; adapters write it as given." |
+| A06 | Partly fixed | Code fixed: the framework exports `DATABASE_POLICIES_META_KEY` and `storedDatabasePolicies`, and all four adapters use them. ADR 319 line 48 still says marker writes preserve "the `meta` keys it does not own" without saying who owns `meta.policies`. Suggestion: add "The framework owns `meta.policies`: its key and stored form; adapters write it as given." |
 | A07 | Fixed | `withDeclaredDatabasePolicies` is in the framework module (lines 88-101). The CLI calls it (`database-policies.ts` line 77). There is one normalisation, `sortedStrategies`. |
 | A08 | Fixed | `MarkerDestination` (`marker-destination.ts`) is used by the SQL and MongoDB family adapters, the SQL family instance and the four target adapters. The SQL and MongoDB runner options take `Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies' \| 'expectedDatabasePolicies'>` (`2-sql-family/9-family/src/core/migrations/types.ts` line 380; `mongo-runner.ts` line 96). One local copy remains, in the control API's `RunMigrationInputs` (`run-migration.ts` lines 211-214); it could use the same `Pick`. |
 | A09 | Fixed | `checkRunPolicies` is called only in the control API (`migrate.ts`, `db-run.ts`, `db-sign.ts`, `migrate-show.ts`). `orm/migrate.ts` reads the policies only to give the off-graph advice. |
 | A10 | Fixed | Each list is one `const` array (`database-policies.ts` lines 10-20). Types and both schemas derive from the arrays. A type test ties each schema to its interface. The CLI JSON schema uses the same arrays (`cli/src/commands/json/schemas.ts` lines 120-134). |
 | A11 | Fixed | `DatabasePolicyDifference.setting` is the ref file's key path (`database-policies.ts` lines 132-147). |
-| A12 | Fixed | ADR 307 has a status line pointing to ADR 314. Its steering-list line ends "the database's change policy (ADR 314) says which". |
+| A12 | Fixed | ADR 307 has a status line pointing to ADR 319. Its steering-list line ends "the database's change policy (ADR 319) says which". |
 | A13 | Fixed | `7. Migration System.md` has a "Database policies" section (line 370). The ref example mentions `policies` (line 444). |
 
 ### New findings
@@ -208,12 +208,12 @@ Re-reviewed at `6d00fb7146`, after the rebase onto `main` and the fixes recorded
 
 Location: `framework-components/src/control/control-migration-types.ts` lines 772-779 (`expectedDatabasePolicies` on `MigrationRunnerPerSpaceOptions`); `framework-components/src/control/control-operation-results.ts` lines 121-130 (`SpaceToSign.expectedDatabasePolicies`); `cli/src/control-api/operations/run-migration.ts` lines 277-283; `cli/src/control-api/operations/db-sign.ts` line 212; `3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts` lines 275-291; `run-migration.ts` line 196 (apply order: extensions first, application space last).
 
-Issue: ADR 314 now says the policies belong to the database. The runner re-check under its lock is still modelled as a per-space option, though. Each caller has to remember to set it on the application space only (`space.spaceId === appSpaceId ? …`). The application space runs last, so the check runs after every extension space has applied.
+Issue: ADR 319 now says the policies belong to the database. The runner re-check under its lock is still modelled as a per-space option, though. Each caller has to remember to set it on the application space only (`space.spaceId === appSpaceId ? …`). The application space runs last, so the check runs after every extension space has applied.
 - On Postgres, SQLite and MySQL, the shared transaction rolls the extensions back, so the run is only wasted.
 - On MongoDB, which has no cross-space transaction, the extension migrations stay applied when the check then fails.
 - `signSpaces` has the same shape: extension markers are written before the application marker is compared.
 
-So "a concurrent policy change fails the run instead of being overridden" (ADR 314 line 29) holds for the application space, but not for the run as a whole.
+So "a concurrent policy change fails the run instead of being overridden" (ADR 319 line 29) holds for the application space, but not for the run as a whole.
 
 Suggestion: make the expected policies a parameter of the whole run, beside `perSpaceOptions` on `MigrationRunner.execute` and beside `spaces` on `signSpaces`. The runner compares them with the application space's marker under its lock before the first space. `databasePolicies`, which the application space's marker update writes, can stay per space.
 
@@ -256,7 +256,7 @@ Re-reviewed at `a85fdf669b`, after the round 2 fixes and a merge of `main`. New 
 
 | ID | Verdict | Evidence |
 |---|---|---|
-| A06 (ADR part) | Fixed | ADR 314 line 48: "The framework owns that key: it exports the key, the stored form, the parser and the comparison, and the targets write the value it gives them without interpreting it." |
+| A06 (ADR part) | Fixed | ADR 319 line 48: "The framework owns that key: it exports the key, the stored form, the parser and the comparison, and the targets write the value it gives them without interpreting it." |
 | A08 (leftover) | Fixed | `RunMigrationInputs` takes `databasePolicies` and `expectedDatabasePolicies` through `Pick` of the framework types (`cli/src/control-api/operations/run-migration.ts` lines 185-186). |
 | A14 | Fixed | `expectedDatabasePolicies` is a parameter of the whole run on `MigrationRunner.execute` (`framework-components/src/control/control-migration-types.ts` lines 822-827) and on `signSpaces` (`control-instances.ts` lines 66-72), and is gone from the per-space options and `SpaceToSign`. Every runner compares it with the application space's marker before the first space: Postgres `executeSpaces` (`postgres/1-target/src/core/migrations/runner.ts` lines 314-317), SQLite (lines 225-233), MySQL inside `withMarkerLock` (lines 113-118), MongoDB in `control-target.ts` lines 107-116. Both SQL and MongoDB `signSpaces` compare before writing any marker. Each target has a test with an extension space scheduled first that asserts no operation started. |
 | A15 | Fixed | `MigrateOptions.target` is one discriminated `MigrateTarget` (`cli/src/control-api/types.ts` lines 655-670). |
@@ -277,9 +277,9 @@ Issue: `DatabasePolicyDifference` has `declared` (what a ref declares) and `inFo
 
 Suggestion: drop `differences` from the `moved` arm. Let `movedDatabasePoliciesWhy(actor, checked, found)` compute the settings that moved and print them as "from … to …". If a list is still wanted, give it its own shape, `{ setting, checked, found }`, rather than reusing the ref-versus-database type.
 
-#### A19 — ADR 314 and the Migration System doc describe the runner's re-check as "under its lock, as it compares the hash" (low)
+#### A19 — ADR 319 and the Migration System doc describe the runner's re-check as "under its lock, as it compares the hash" (low)
 
-Location: `docs/architecture docs/adrs/ADR 314 - Databases record a change policy and a data protection policy.md` line 29; `docs/architecture docs/subsystems/7. Migration System.md` line 374; slice `spec.md` line 209.
+Location: `docs/architecture docs/adrs/ADR 319 - Databases record a change policy and a data protection policy.md` line 29; `docs/architecture docs/subsystems/7. Migration System.md` line 374; slice `spec.md` line 209.
 
 Issue: The code now compares the policies once, before the first space, and that order is the property that keeps extension spaces from applying under a policy that moved. The hash comparison, by contrast, is the compare-and-swap at the end. MongoDB has no lock: it compares before the first space and again in the application marker's compare-and-swap. The error reference entry for `MIGRATION.MARKER_CAS_FAILURE` already says this correctly. The ADR and the subsystem doc say neither "before the first space" nor how MongoDB differs.
 
@@ -305,7 +305,7 @@ Suggestion: put one function in the SQL family's migrations code, for example `c
 
 Location: `packages/1-framework/3-tooling/cli/src/utils/marker-mismatch.ts` line 32 ("The space's change policy in force"); `docs/reference/error-reference.md`, `MIGRATION.MARKER_MISMATCH` payload ("`change`, the space's change strategies in force"); slice `spec.md` line 66 (`policiesOf`, `DEFAULT_POLICIES`, `policyDifferences`, and "the CLI raises the error", although the runners raise it too now); `docs/glossary.md` "Change Policy" (lists the refusal of `db update` and `db sign`, but not of `db migrate` on a database whose policy is `reconcile` alone).
 
-Issue: ADR 314 says the policies are the database's. These places still say "the space's", use names that were renamed, or describe only half of the enforcement.
+Issue: ADR 319 says the policies are the database's. These places still say "the space's", use names that were renamed, or describe only half of the enforcement.
 
 Suggestion: say "the database's change policy" in the doc comment and the payload description; update spec line 66 to the current names and say that the CLI raises the error on the first read and the runners raise it on the re-check; add `db migrate` needing `migrate` to the glossary entry.
 
@@ -338,7 +338,7 @@ Re-reviewed at `6f6e6c1200`, covering `8693a70269...HEAD` (five commits). New co
 | ID | Verdict | Evidence |
 |---|---|---|
 | A18 | Fixed | The `moved` arm is `{ kind: 'moved'; found }` (`framework-components/src/control/database-policies.ts` line 180). `movedDatabasePoliciesWhy(actor, checked, found)` and `databasePoliciesMovedFailure(checked, found)` compute the settings that moved themselves (lines 203-243). `SpaceDatabasePoliciesConflict` no longer carries `differences` or `contract`. |
-| A19 | Fixed | ADR 314 line 29, `7. Migration System.md` line 374 and slice spec line 209 now say the runner compares before the first space, under its lock (SQLite: its exclusive transaction), and that MongoDB compares first and then guards the application marker's write. |
+| A19 | Fixed | ADR 319 line 29, `7. Migration System.md` line 374 and slice spec line 209 now say the runner compares before the first space, under its lock (SQLite: its exclusive transaction), and that MongoDB compares first and then guards the application marker's write. |
 | A20 | Fixed | One record, `CheckedMarkerPolicies { checked; raw }`, in the MongoDB family (`control-adapter.ts` lines 20-31), used by the runner and `signSpaces`. The raw value is `RawStoredPolicies`. The CLI's `CheckedDatabasePolicies` no longer has a namesake. |
 | A21 | Fixed | The three SQL runners call `checkDatabasePoliciesHeld(family, driver, checked)` (Postgres `runner.ts` line 313, SQLite line 230, MySQL line 113). The check has its own family test (`2-sql-family/9-family/test/database-policies-check.test.ts`). |
 | A22 | Fixed | `marker-mismatch.ts` line 32 and the `MIGRATION.MARKER_MISMATCH` payload say "the database's"; spec line 66 uses the current names and says who raises the error; the glossary's Change Policy entry names the `db migrate` refusal. |
@@ -390,15 +390,15 @@ Re-reviewed at `21b10444b4`, covering `4fa51b5430...HEAD` (two commits). MongoDB
 
 ### New findings
 
-#### A28 — MongoDB's adapter now has its own reading of `meta.policies`, which ADR 314 says targets do not do, and it accepts markers the framework parser rejects (medium-low)
+#### A28 — MongoDB's adapter now has its own reading of `meta.policies`, which ADR 319 says targets do not do, and it accepts markers the framework parser rejects (medium-low)
 
-Location: `packages/3-targets/mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts` lines 55-113 (`policiesHoldExpr` and helpers); `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 66-74 (`PartialDatabasePoliciesSchema`, `'+': 'reject'`); ADR 314 line 48; `packages/3-targets/mongo/2-adapter/test/marker-policies.test.ts` lines 128-175.
+Location: `packages/3-targets/mongo/2-adapter/src/core/migrations/mongo-control-adapter.ts` lines 55-113 (`policiesHoldExpr` and helpers); `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 66-74 (`PartialDatabasePoliciesSchema`, `'+': 'reject'`); ADR 319 line 48; `packages/3-targets/mongo/2-adapter/test/marker-policies.test.ts` lines 128-175.
 
-Issue: `policiesHoldExpr` decides in the database whether a marker records the given policies. To do that it repeats the framework's rules: an absent setting means its default, `change` is compared as a set, and each setting is compared by value. ADR 314 line 48 says the framework owns the parser and the comparison, and that targets write the value "without interpreting it". For MongoDB that is no longer true. The two readings also differ: the framework schema rejects unknown keys at both levels, while the predicate only checks that `policies` and `dataProtection` are objects. A marker storing `{ change: ['migrate'], …, extra: 1 }` is unreadable to `databasePoliciesOf`, but the predicate says it holds the checked policies, and the write goes ahead. No test covers an unknown key, so only reading the code shows that the two have drifted apart.
+Issue: `policiesHoldExpr` decides in the database whether a marker records the given policies. To do that it repeats the framework's rules: an absent setting means its default, `change` is compared as a set, and each setting is compared by value. ADR 319 line 48 says the framework owns the parser and the comparison, and that targets write the value "without interpreting it". For MongoDB that is no longer true. The two readings also differ: the framework schema rejects unknown keys at both levels, while the predicate only checks that `policies` and `dataProtection` are objects. A marker storing `{ change: ['migrate'], …, extra: 1 }` is unreadable to `databasePoliciesOf`, but the predicate says it holds the checked policies, and the write goes ahead. No test covers an unknown key, so only reading the code shows that the two have drifted apart.
 
 The predicate may well be the right mechanism. MongoDB has no lock, and the write has to be guarded by the meaning of the settings, not their form. But it is a second implementation of a framework rule, and that should be stated and kept narrow.
 
-Suggestion: make the predicate reject unknown keys in `policies` and `dataProtection`, as the schema does. Build its key list from the framework's exports instead of literals, and add the unknown-key case to the adapter's test table. Change ADR 314 line 48 to say that MongoDB, which has no lock, also expresses the comparison as a query predicate on the marker write, built from the framework's key, value lists and defaults.
+Suggestion: make the predicate reject unknown keys in `policies` and `dataProtection`, as the schema does. Build its key list from the framework's exports instead of literals, and add the unknown-key case to the adapter's test table. Change ADR 319 line 48 to say that MongoDB, which has no lock, also expresses the comparison as a query predicate on the marker write, built from the framework's key, value lists and defaults.
 
 #### A29 — A marker changed and then restored is reported as a moved storage hash, although the hash did not move (low)
 
@@ -424,7 +424,7 @@ Re-reviewed at `fba225c8d5`, covering `f9d12b2dc7...HEAD`. The fourth-round fixe
 
 | ID | Verdict | Evidence |
 |---|---|---|
-| A28 | Fixed | The framework exports `DATABASE_POLICIES_KEYS` and `DATA_PROTECTION_KEYS` (`framework-components/src/control/database-policies.ts` lines 48-58). MongoDB's predicate requires the keys of `meta.policies` and of `dataProtection` to be among them, and checks the settings by iterating them. The adapter test covers the extra-key cases. ADR 314 line 48 now says MongoDB also expresses the comparison as a query predicate built from the framework's key lists, value lists and defaults. A list is type `array`, not `object`, for MongoDB's `$type`, so the predicate also rejects the list form the framework schema now rejects. |
+| A28 | Fixed | The framework exports `DATABASE_POLICIES_KEYS` and `DATA_PROTECTION_KEYS` (`framework-components/src/control/database-policies.ts` lines 48-58). MongoDB's predicate requires the keys of `meta.policies` and of `dataProtection` to be among them, and checks the settings by iterating them. The adapter test covers the extra-key cases. ADR 319 line 48 now says MongoDB also expresses the comparison as a query predicate built from the framework's key lists, value lists and defaults. A list is type `array`, not `object`, for MongoDB's `$type`, so the predicate also rejects the list form the framework schema now rejects. |
 | A29 | Fixed | `MarkerSwapFailure` has a `markerChanged` arm (`2-mongo-family/9-family/src/core/marker-policies.ts`). The runner reports it as `MIGRATION.MARKER_CAS_FAILURE` with `reason: 'markerChanged'` and its own `why`. The error reference lists it as "The marker changed and changed back". |
 | A30 | Fixed | The adapter's parameter and `markerSwapFailure`'s are `checkedPolicies`, the same name the runner uses. The `policiesMoved` and `policiesUnreadable` arms no longer repeat `checked`. |
 
@@ -434,7 +434,7 @@ Re-reviewed at `fba225c8d5`, covering `f9d12b2dc7...HEAD`. The fourth-round fixe
 
 Location: `docs/reference/error-reference.md` line 1743 (`MIGRATION.MARKER_NOT_IN_HISTORY`) and line 502 (`CONTRACT.MARKER_ROW_CORRUPT`); `skills/prisma-8/references/migration-review.md` line 61; code: `packages/1-framework/3-tooling/cli/src/orm/migration/status-findings.ts` lines 43-76, `.../orm/migration/status.ts` lines 486-494.
 
-Issue: `migration status` now follows the change policy. On a database that permits only migrations, the finding's hint and its one next action say to author migrations back onto the graph. The finding's `meta` also carries `change`. The error reference entry still says "Hints suggest `db sign` … or `db update`" and lists no payload. The skill's migration-review table recommends `db sign` or `db update` without a condition, which would send an agent to a command that the policy refuses with `CHANGE_POLICY_FORBIDS`. That is the kind of wrong advice ADR 314 was written to prevent. Also, `migration status` now reads the policies whenever a marker is off the graph, so it can raise `CONTRACT.MARKER_ROW_CORRUPT` without `--to`. The `MARKER_ROW_CORRUPT` entry still lists only `migration status --to <ref>`.
+Issue: `migration status` now follows the change policy. On a database that permits only migrations, the finding's hint and its one next action say to author migrations back onto the graph. The finding's `meta` also carries `change`. The error reference entry still says "Hints suggest `db sign` … or `db update`" and lists no payload. The skill's migration-review table recommends `db sign` or `db update` without a condition, which would send an agent to a command that the policy refuses with `CHANGE_POLICY_FORBIDS`. That is the kind of wrong advice ADR 319 was written to prevent. Also, `migration status` now reads the policies whenever a marker is off the graph, so it can raise `CONTRACT.MARKER_ROW_CORRUPT` without `--to`. The `MARKER_ROW_CORRUPT` entry still lists only `migration status --to <ref>`.
 
 Suggestion: in the error reference, say the advice follows the database's change policy (`db sign` and `db update` when it includes `reconcile`, otherwise author migrations), and give the payload as `space` and `change`. Make the same condition explicit in the skill row. In the `MARKER_ROW_CORRUPT` entry, write "`migration status` (with `--to <ref>`, or when a marker is outside the graph)".
 
