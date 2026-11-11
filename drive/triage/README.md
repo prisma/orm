@@ -34,7 +34,7 @@ _(Add patterns as they emerge from operator experience.)_
 - Linear project for orphan-slice "umbrella": _<project-key or note "none — orphan slices have no Linear Project">_
 - Issue identifier prefix: _<e.g. TML->_
 - Branch-name convention for issue link: _e.g. `tml-NNNN-short-slug`_
-- PR-title convention: _e.g. include `Refs: TML-NNNN` in the description to let GH integration auto-close on merge_
+- PR-title convention: _e.g. include `Fixes TML-NNNN` in the description to let GH integration auto-close on merge_
 
 ## Promote / demote ceremony notes
 

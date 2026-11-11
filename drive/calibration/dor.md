@@ -20,7 +20,7 @@ In addition to the canonical slice DoR:
 ### Tracker / branch / linkage items
 
 - [ ] Linear issue created and linked from the slice spec (issue description carries a link back to `projects/<x>/slices/<s>/`).
-- [ ] Slice's PR-to-be will carry a `Refs: <issue-id>` line in its description.
+- [ ] Slice's PR-to-be will carry a `Fixes <issue-id>` line in its description (`Part of <issue-id>` if it does not complete the issue).
 - [ ] Slice's parent branch is the project's working branch (or `main` for orphan slices).
 
 ### Plan-side items
