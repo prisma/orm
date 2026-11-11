@@ -7,7 +7,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
-import { changedBy, tableKey, type WriteKind } from './changed-by';
+import { changedBy, storageOf, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
 import { type Rule, rulesFor } from './rules';
@@ -257,16 +257,6 @@ function edgesIn(slots: Slots): readonly Edge<unknown>[] {
 
 function tablesReadBy(statements: readonly StatementAst[]): readonly TableStorageCoordinate[] {
   return uniqueTables(statements.flatMap((ast) => collectTableSources(ast).map(storageOf)));
-}
-
-function storageOf(source: TableSource): TableStorageCoordinate {
-  return {
-    namespaceId: blindCast<
-      string,
-      'The ORM builds every table source with tableSourceForContract, which sets the namespace'
-    >(source.namespaceId),
-    tableName: source.name,
-  };
 }
 
 function uniqueTables(

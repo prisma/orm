@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
+import type { TableSource } from '@internal/sql-relational-core/ast';
 import { Delete } from './delete';
 import type { Edge, NodeId } from './edge';
 import { FilterData } from './filter-data';
@@ -22,7 +22,7 @@ export function readBackRule(contract: Contract<SqlStorage>): Rule {
     if (!(node instanceof Find || node instanceof FindByKeys)) {
       return undefined;
     }
-    const table = plainReadOf(node.ast);
+    const table = node.ast.where === undefined ? conditionOnlyReadOf(node.ast) : undefined;
     const { state, ...data } = inputs;
     const [edge, ...others] = Object.values(data).flatMap((slot) => [slot ?? []].flat());
     if (
@@ -53,10 +53,6 @@ function readsStateWrittenBy(
     read !== undefined &&
     [graph.inputsOf(read.from)['write'] ?? []].flat().some((edge) => edge.from === write)
   );
-}
-
-function plainReadOf(ast: SelectAst): TableSource | undefined {
-  return ast.where === undefined ? conditionOnlyReadOf(ast) : undefined;
 }
 
 function isWriteTo(node: Node | undefined, table: TableSource): node is Write {

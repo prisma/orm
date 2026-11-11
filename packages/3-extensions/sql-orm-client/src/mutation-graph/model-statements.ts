@@ -96,12 +96,7 @@ export interface RowsRead {
   readonly afterWrite: ((written: NodeId) => void) | undefined;
 }
 
-export interface InsertRows extends RowsRead {
-  readonly conflict: InsertConflictSkip | undefined;
-  readonly keys: readonly KeySource[];
-  readonly requires: readonly Requires[];
-  readonly owner: WrittenRowOwner;
-}
+export interface InsertRows extends RowsRead, Omit<InsertWrite, 'junction'> {}
 
 export function insertRows(
   b: Builder,
@@ -120,9 +115,12 @@ export function insertRows(
   return readBackRows(b, model, inserted, { returns, shape, by: 'keys', owner });
 }
 
-export interface UpdateRows extends RowsRead {
+export interface DeleteRows {
   readonly where: AnyExpression | undefined;
   readonly filters: readonly KeySource[];
+}
+
+export interface UpdateRows extends RowsRead, DeleteRows {
   readonly payloads: readonly KeySource[];
   readonly owner: WrittenRowOwner;
 }
@@ -142,11 +140,6 @@ export function updateRows(
   });
   afterWrite?.(updated);
   return readBackRows(b, model, updated, { returns, shape, by: 'filter', owner });
-}
-
-export interface DeleteRows {
-  readonly where: AnyExpression | undefined;
-  readonly filters: readonly KeySource[];
 }
 
 export function deleteRows(
@@ -185,9 +178,8 @@ export function readBack(
 ): NodeId {
   const { graph, context } = b;
   const { contract } = context;
-  const { root } = model.tables;
+  const { root, variants } = model.tables;
   const { selectedFields, includes, variantValue } = shape;
-  const { variants } = model.tables;
   const variantJoins = variantValue === undefined ? variants.size > 0 : variants.has(variantValue);
   const ast =
     includes.length === 0 && !variantJoins

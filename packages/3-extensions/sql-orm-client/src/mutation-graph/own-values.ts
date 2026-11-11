@@ -1,12 +1,11 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type {
+  AnyExpression,
   InsertAst,
   InsertValue,
   ProjectionItem,
-  TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { blindCast } from '@internal/utils/casts';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';
 import {
@@ -16,6 +15,7 @@ import {
   rowIdentity,
   type WrittenRowOwner,
 } from '../written-keys';
+import { storageOf } from './changed-by';
 import { DataEdge, type NodeId, type StorageRow } from './edge';
 import type { Graph } from './graph';
 import type { Run } from './node';
@@ -111,8 +111,7 @@ export function insertGivingOwnValues(
               [generated.column]: await generated.decode(reportedInsertId(stats, generated, owner)),
             };
       for (const row of ast.rows) {
-        const values = { ...valuesOf(row), ...generatedValues };
-        yield Object.fromEntries(returns.map((column) => [column.alias, values[column.alias]]));
+        yield columnsOf(returns, { ...valuesOf(row), ...generatedValues });
       }
     }
   };
@@ -141,20 +140,14 @@ function generatedKeyOf(
   });
 }
 
-function valuesOf(row: Readonly<Record<string, InsertValue>>): StorageRow {
+export function columnsOf(returns: readonly ProjectionItem[], values: StorageRow): StorageRow {
+  return Object.fromEntries(returns.map((column) => [column.alias, values[column.alias]]));
+}
+
+export function valuesOf(row: Readonly<Record<string, InsertValue | AnyExpression>>): StorageRow {
   return Object.fromEntries(
     Object.entries(row).flatMap(([column, value]) =>
       value.kind === 'param-ref' ? [[column, value.value]] : [],
     ),
   );
-}
-
-function storageOf(table: TableSource): { namespaceId: string; tableName: string } {
-  return {
-    namespaceId: blindCast<
-      string,
-      'The ORM builds every table source with tableSourceForContract, which sets the namespace'
-    >(table.namespaceId),
-    tableName: table.name,
-  };
 }

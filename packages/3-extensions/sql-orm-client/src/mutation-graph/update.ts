@@ -1,15 +1,15 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { ProjectionItem, UpdateAst } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { blindCast } from '@internal/utils/casts';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';
 import { rowIdentity, type WrittenRowOwner } from '../written-keys';
+import { storageOf } from './changed-by';
 import type { NodeId, StorageRow } from './edge';
 import { executeFiltered, type Filtered, filteredWhere, withColumns } from './filtered-statement';
 import type { Graph } from './graph';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
-import { givesOwnValues } from './own-values';
+import { columnsOf, givesOwnValues, valuesOf } from './own-values';
 import type { PayloadData } from './payload-data';
 import { requirementUnmet } from './requires';
 import { rowsResult } from './run-statement';
@@ -57,17 +57,8 @@ export class Update extends StatementNode<Inputs> {
     }
     const action = `${this.owner.operation}()`;
     if (this.returns.length > 0 && [graph.inputsOf(id)['filter'] ?? []].flat().length === 0) {
-      const { table } = this.ast;
-      rowIdentity(
-        context.contract,
-        blindCast<
-          string,
-          'The ORM builds every table source with tableSourceForContract, which sets the namespace'
-        >(table.namespaceId),
-        table.name,
-        this.owner.modelName,
-        action,
-      );
+      const { namespaceId, tableName } = storageOf(this.ast.table);
+      rowIdentity(context.contract, namespaceId, tableName, this.owner.modelName, action);
     }
     const read = new Set(graph.columnsReadFrom(id).map((column) => column.alias));
     const [column] = Object.entries(this.ast.set)
@@ -98,18 +89,13 @@ export class Update extends StatementNode<Inputs> {
     const statement = ast
       .withWhere(filter === null ? ast.where : filteredWhere(ast.where, filter))
       .withReturning(undefined);
-    const set = Object.fromEntries(
-      Object.entries(ast.set).flatMap(([column, value]) =>
-        value.kind === 'param-ref' ? [[column, value.value]] : [],
-      ),
-    );
+    const set = valuesOf(ast.set);
     const keys = (filter ?? []).flat().map(({ key }) => key);
     const { returns } = this;
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       await run.execute(statement);
       for (const key of keys) {
-        const values: StorageRow = { ...key, ...set };
-        yield Object.fromEntries(returns.map((column) => [column.alias, values[column.alias]]));
+        yield columnsOf(returns, { ...key, ...set });
       }
     };
     return new AsyncIterableResult(generator());

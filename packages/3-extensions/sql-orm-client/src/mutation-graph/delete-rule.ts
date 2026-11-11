@@ -1,11 +1,10 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Delete } from './delete';
-import type { NodeId } from './edge';
 import { Find } from './find';
 import type { Graph } from './graph';
 import type { InputEdges, Slots } from './node';
-import { keyEdgeFromFind, oneTableReadOf, readsSameState, sameTable } from './rule-patterns';
+import { type FindAt, keyEdgeFromFind, oneTableReadOf, readsTableAsFound } from './rule-patterns';
 import type { Rule } from './rules';
 
 export function deleteRule(contract: Contract<SqlStorage>): Rule {
@@ -16,15 +15,10 @@ export function deleteRule(contract: Contract<SqlStorage>): Rule {
     const { table } = node.ast;
     const read =
       keyEdgeFromFind(graph, contract, table, inputs) ?? findOfCondition(graph, node, inputs);
-    if (read === undefined) {
-      return undefined;
-    }
-    const readTable = oneTableReadOf(read.find.ast);
     if (
-      readTable === undefined ||
-      !sameTable(readTable, table) ||
+      read === undefined ||
       graph.readersOf(read.id).length > 0 ||
-      !readsSameState(graph, inputs, read.id, table)
+      !readsTableAsFound(graph, inputs, read, table, oneTableReadOf)
     ) {
       return undefined;
     }
@@ -36,7 +30,7 @@ function findOfCondition(
   graph: Graph,
   node: Delete,
   inputs: InputEdges<Slots>,
-): { readonly id: NodeId; readonly find: Find } | undefined {
+): FindAt | undefined {
   const { where } = node.ast;
   if (where === undefined || [inputs['filter'] ?? []].flat().length > 0) {
     return undefined;

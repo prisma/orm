@@ -1,8 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
-import { blindCast } from '@internal/utils/casts';
 import { resolveUniqueKeyColumnSets } from '../collection-contract';
+import { storageOf } from './changed-by';
 import type { ColumnMapping, Edge, NodeId } from './edge';
 import { FilterData } from './filter-data';
 import { Find } from './find';
@@ -22,7 +22,7 @@ export function stateEdgeOf(
   );
 }
 
-export interface KeyEdgeFromFind {
+export interface FindAt {
   readonly id: NodeId;
   readonly find: Find;
 }
@@ -32,7 +32,7 @@ export function keyEdgeFromFind(
   contract: Contract<SqlStorage>,
   table: TableSource,
   inputs: InputEdges<Slots>,
-): KeyEdgeFromFind | undefined {
+): FindAt | undefined {
   const [edge, ...others] = [inputs['filter'] ?? []].flat();
   if (!(edge instanceof FilterData) || others.length > 0) {
     return undefined;
@@ -43,15 +43,19 @@ export function keyEdgeFromFind(
     : undefined;
 }
 
-export function readsSameState(
+export function readsTableAsFound(
   graph: Graph,
   inputs: InputEdges<Slots>,
-  find: NodeId,
+  { id, find }: FindAt,
   table: TableSource,
+  readOf: (ast: SelectAst) => TableSource | undefined,
 ): boolean {
+  const read = readOf(find.ast);
   const own = stateEdgeOf([inputs['state'] ?? []].flat(), table);
-  const found = stateEdgeOf([graph.inputsOf(find)['state'] ?? []].flat(), table);
-  return own !== undefined && own.from === found?.from;
+  const found = stateEdgeOf([graph.inputsOf(id)['state'] ?? []].flat(), table);
+  return (
+    read !== undefined && sameTable(read, table) && own !== undefined && own.from === found?.from
+  );
 }
 
 export function oneTableReadOf(ast: SelectAst): TableSource | undefined {
@@ -100,11 +104,8 @@ export function readsByKey(
   if (read.size !== columns.length) {
     return false;
   }
-  const namespaceId = blindCast<
-    string,
-    'The ORM builds every table source with tableSourceForContract, which sets the namespace'
-  >(table.namespaceId);
-  return resolveUniqueKeyColumnSets(contract, namespaceId, table.name).some((key) =>
+  const { namespaceId, tableName } = storageOf(table);
+  return resolveUniqueKeyColumnSets(contract, namespaceId, tableName).some((key) =>
     key.every((column) => read.has(column)),
   );
 }
