@@ -42,6 +42,17 @@ import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
 import { convertKeepsEveryValue, isConvertTarget } from './bson-convert';
 import type { CollModMeta } from './op-factory-call';
+import {
+  documentsWithObject,
+  type Expression,
+  holdsKey,
+  keyOf,
+  keysOf,
+  lacksKey,
+  objectsRewritePipeline,
+  type StoredKeyPath,
+  storedKeyPath,
+} from './stored-key-path';
 
 type StringField = { readonly codecId: 'mongo/string@1'; readonly nullable: false };
 type DocField = { readonly codecId: 'mongo/document@1'; readonly nullable: false };
@@ -163,25 +174,31 @@ function documentsHolding(fields: readonly string[], filter: Document | undefine
   return conditions.length === 1 && only !== undefined ? only : { $and: conditions };
 }
 
-const UNREWRITABLE_FIELD_NAMES: ReadonlyArray<{
-  readonly matches: (field: string) => boolean;
+const UNREWRITABLE_KEYS: ReadonlyArray<{
+  readonly matches: (key: string) => boolean;
   readonly reason: string;
 }> = [
-  { matches: (field) => field === '', reason: 'it is empty' },
-  { matches: (field) => field === '_id', reason: 'MongoDB does not let a document change its _id' },
+  { matches: (key) => key === '', reason: 'it is empty' },
   {
-    matches: (field) => field.includes('.'),
+    matches: (key) => key.includes('.'),
     reason: 'MongoDB reads a name containing "." as a path into embedded documents',
   },
   {
-    matches: (field) => field.startsWith('$'),
+    matches: (key) => key.startsWith('$'),
     reason: 'MongoDB reads a name starting with "$" as an operator',
   },
 ];
 
+/** Why a key of a document or of an object inside one cannot be rewritten, if it cannot. */
+export function unrewritableKeyReason(key: string): string | undefined {
+  return UNREWRITABLE_KEYS.find((rule) => rule.matches(key))?.reason;
+}
+
 /** Why `renameField` and `unsetField` cannot rewrite a field of this name, if they cannot. */
 export function unrewritableFieldNameReason(field: string): string | undefined {
-  return UNREWRITABLE_FIELD_NAMES.find((rule) => rule.matches(field))?.reason;
+  return field === '_id'
+    ? 'MongoDB does not let a document change its _id'
+    : unrewritableKeyReason(field);
 }
 
 /** The plan meta of the raw queries a migration's operations run and check with. */
@@ -490,6 +507,250 @@ export function fillField(options: FillFieldOptions): MongoDmlOperation {
         filter: MATCH_ALL_FILTER,
         expect: 'notExists',
       },
+    ],
+  };
+}
+
+export interface StoredKeyOptions {
+  readonly collection: string;
+  /** The stored name of the root field whose value holds the key. */
+  readonly field: string;
+  /** A JSONPath from the field's value to the key, such as `$[*].street`. */
+  readonly path: string;
+  readonly filter?: Document;
+}
+
+export interface RenameStoredKeyOptions extends StoredKeyOptions {
+  readonly to: string;
+}
+
+export interface FillStoredKeyOptions extends StoredKeyOptions {
+  /** An aggregation expression for the value, so it is stored with its BSON type: `{ $toLong: 0 }` stores a long. */
+  readonly value: JsonValue;
+}
+
+function keyPlace(options: StoredKeyOptions): string {
+  return `at path ${JSON.stringify(options.path)} in field ${options.field} of collection ${options.collection}`;
+}
+
+function assertRewritableKey(options: StoredKeyOptions, key: string): void {
+  const reason = unrewritableKeyReason(key);
+  if (reason === undefined) return;
+  throw mongoTargetError(
+    'MIGRATION.FIELD_NAME_UNSUPPORTED',
+    `Key ${JSON.stringify(key)} ${keyPlace(options)} cannot be rewritten: ${reason}.`,
+    {
+      meta: {
+        collection: options.collection,
+        field: options.field,
+        path: options.path,
+        key,
+        reason,
+      },
+    },
+  );
+}
+
+/** The key path of a stored key operation, refusing a root field or a key MongoDB cannot rewrite. */
+function rewritableKeyPath(factory: string, options: StoredKeyOptions): StoredKeyPath {
+  assertRewritableField(options.collection, options.field);
+  const keyPath = storedKeyPath(options.field, options.path);
+  if (!keyPath.ok) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `${factory} cannot act ${keyPlace(options)}: ${keyPath.failure}.`,
+      {
+        meta: {
+          context: factory,
+          collection: options.collection,
+          field: options.field,
+          path: options.path,
+          reason: keyPath.failure,
+        },
+      },
+    );
+  }
+  for (const key of keysOf(keyPath.value)) assertRewritableKey(options, key);
+  return keyPath.value;
+}
+
+function withFilter(filter: Document | undefined, condition: Document): Document {
+  return filter === undefined ? condition : { $and: [filter, condition] };
+}
+
+function storedKeyId(options: StoredKeyOptions, action: string): string {
+  return `storedKey.${options.collection}.${options.field}.${options.path}.${action}${idSuffix(options.filter)}`;
+}
+
+function noDocumentMatches(
+  collectionName: string,
+  match: Document,
+  description: string,
+): MongoDmlCheck {
+  return {
+    description,
+    source: rawAggregate(collectionName, [{ $match: match }, { $limit: 1 }]),
+    filter: MATCH_ALL_FILTER,
+    expect: 'notExists',
+  };
+}
+
+function storedKeyRewrite(
+  options: StoredKeyOptions,
+  toRewrite: Document,
+  keyPath: StoredKeyPath,
+  rewrite: (object: Expression) => Document,
+): MongoQueryPlan {
+  return rawUpdateMany(options.collection, toRewrite, objectsRewritePipeline(keyPath, rewrite), {
+    bypassDocumentValidation: true,
+  });
+}
+
+function literal(key: string): Document {
+  return { $literal: key };
+}
+
+/**
+ * Renames the last key of `path` to `to` in every object at the path inside root field `field`,
+ * skipping document validation. The precheck stops when an object holds both names.
+ */
+export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('renameStoredKey', options);
+  const { collection: collectionName, field, path, to, filter } = options;
+  assertRewritableKey(options, to);
+  const { key } = keyPath;
+  if (key === to) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `renameStoredKey renames key ${JSON.stringify(key)} ${keyPlace(options)} to its own name.`,
+      {
+        meta: {
+          context: 'renameStoredKey',
+          collection: collectionName,
+          field,
+          path,
+          reason: 'the new name is the old name',
+        },
+      },
+    );
+  }
+  const place = keyPlace(options);
+  const holdingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => holdsKey(object, key)),
+  );
+  const holdingBoth = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => ({
+      $and: [holdsKey(object, key), holdsKey(object, to)],
+    })),
+  );
+  const id = storedKeyId(options, `rename(${to})`);
+  return {
+    id,
+    meta: { storedKey: { kind: 'rename', collection: collectionName, field, path, to } },
+    label: `Rename key ${JSON.stringify(key)} at path ${JSON.stringify(path)} to ${JSON.stringify(to)} in field ${field} of collection ${collectionName}${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingBoth,
+        `no object ${place} holds both key ${JSON.stringify(key)} and key ${JSON.stringify(to)}; remove one of the two keys from those objects`,
+      ),
+    ],
+    run: [
+      storedKeyRewrite(options, holdingKey, keyPath, (object) => ({
+        $cond: [
+          holdsKey(object, key),
+          {
+            $setField: {
+              field: literal(to),
+              input: { $unsetField: { field: literal(key), input: object } },
+              value: keyOf(object, key),
+            },
+          },
+          object,
+        ],
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingKey,
+        `no object ${place} holds key ${JSON.stringify(key)}`,
+      ),
+    ],
+  };
+}
+
+/** Removes the last key of `path` from every object at the path inside root field `field`, skipping document validation. */
+export function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('removeStoredKey', options);
+  const { collection: collectionName, field, path, filter } = options;
+  const { key } = keyPath;
+  const holdingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => holdsKey(object, key)),
+  );
+  const id = storedKeyId(options, 'remove');
+  return {
+    id,
+    meta: { storedKey: { kind: 'remove', collection: collectionName, field, path } },
+    label: `Remove key ${JSON.stringify(key)} ${keyPlace(options)}${labelSuffix(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck: [],
+    run: [
+      storedKeyRewrite(options, holdingKey, keyPath, (object) => ({
+        $unsetField: { field: literal(key), input: object },
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingKey,
+        `no object ${keyPlace(options)} holds key ${JSON.stringify(key)}`,
+      ),
+    ],
+  };
+}
+
+/**
+ * Sets the last key of `path` to `value` in every object at the path inside root field `field`
+ * where it is missing or `null`, skipping document validation.
+ */
+export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('fillStoredKey', options);
+  const { collection: collectionName, field, path, value, filter } = options;
+  const { key } = keyPath;
+  const lackingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => lacksKey(object, key)),
+  );
+  const id = storedKeyId(options, 'fill');
+  return {
+    id,
+    meta: { storedKey: { kind: 'fill', collection: collectionName, field, path } },
+    label: `Fill key ${JSON.stringify(key)} ${keyPlace(options)} where it is missing or null${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      storedKeyRewrite(options, lackingKey, keyPath, (object) => ({
+        $cond: [
+          lacksKey(object, key),
+          { $setField: { field: literal(key), input: object, value } },
+          object,
+        ],
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        lackingKey,
+        `no object ${keyPlace(options)} lacks key ${JSON.stringify(key)} or holds null there`,
+      ),
     ],
   };
 }

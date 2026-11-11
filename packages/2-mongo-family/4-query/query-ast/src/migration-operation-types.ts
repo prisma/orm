@@ -49,12 +49,30 @@ export type MongoFieldRewriteMeta =
     }
   | { readonly kind: 'fill'; readonly collection: string; readonly field: string };
 
+/** A key inside a root field's value that an operation renames, removes or fills, at a JSONPath from the field's value. */
+export type MongoStoredKeyMeta =
+  | {
+      readonly kind: 'rename';
+      readonly collection: string;
+      readonly field: string;
+      readonly path: string;
+      /** The key's new name. */
+      readonly to: string;
+    }
+  | {
+      readonly kind: 'remove' | 'fill';
+      readonly collection: string;
+      readonly field: string;
+      readonly path: string;
+    };
+
 /**
  * What an operation is, as the factory that builds it writes it into `ops.json`, so the runner reads
  * it rather than working it out from the operation's commands.
  */
 export interface MongoOperationMeta {
   readonly rewrite?: MongoFieldRewriteMeta;
+  readonly storedKey?: MongoStoredKeyMeta;
 }
 
 export interface MongoMigrationPlanOperation extends MigrationPlanOperation {

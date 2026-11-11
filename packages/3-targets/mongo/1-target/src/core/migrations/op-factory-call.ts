@@ -50,9 +50,15 @@ import {
   dropCollection,
   dropIndex,
   type FillFieldOptions,
+  type FillStoredKeyOptions,
   fillField,
+  fillStoredKey,
+  type RenameStoredKeyOptions,
+  removeStoredKey,
   renameCollection,
   renameField,
+  renameStoredKey,
+  type StoredKeyOptions,
   unsetField,
 } from './migration-factories';
 
@@ -397,6 +403,72 @@ export class FillFieldCall extends OpFactoryCallNode {
   }
 }
 
+export class RenameStoredKeyCall extends OpFactoryCallNode {
+  readonly factoryName = 'renameStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: RenameStoredKeyOptions;
+  readonly label: string;
+
+  constructor(options: RenameStoredKeyOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return renameStoredKey(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `renameStoredKey(${jsonToTsSource(this.options)})`;
+  }
+}
+
+export class RemoveStoredKeyCall extends OpFactoryCallNode {
+  readonly factoryName = 'removeStoredKey' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly options: StoredKeyOptions;
+  readonly label: string;
+
+  constructor(options: StoredKeyOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return removeStoredKey(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `removeStoredKey(${jsonToTsSource(this.options)})`;
+  }
+}
+
+export class FillStoredKeyCall extends OpFactoryCallNode {
+  readonly factoryName = 'fillStoredKey' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: FillStoredKeyOptions;
+  readonly label: string;
+
+  constructor(options: FillStoredKeyOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return fillStoredKey(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `fillStoredKey(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -437,6 +509,9 @@ export type OpFactoryCall =
   | CastFieldCall
   | DataTransformCall
   | FillFieldCall
+  | RenameStoredKeyCall
+  | RemoveStoredKeyCall
+  | FillStoredKeyCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {

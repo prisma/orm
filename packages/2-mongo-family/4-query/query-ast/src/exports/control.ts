@@ -36,6 +36,7 @@ export type {
   MongoMigrationPlanOperation,
   MongoMigrationStep,
   MongoOperationMeta,
+  MongoStoredKeyMeta,
 } from '../migration-operation-types';
 export {
   isInspectionCheckSource,
