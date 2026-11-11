@@ -529,16 +529,21 @@ export interface FillStoredKeyOptions extends StoredKeyOptions {
   readonly value: JsonValue;
 }
 
-function keyPlace(options: StoredKeyOptions): string {
-  return `at path ${JSON.stringify(options.path)} in field ${options.field} of collection ${options.collection}`;
+/** Where the objects that hold a key are: the path to them, and the root field and collection. */
+function placeAt(options: StoredKeyOptions, path: string): string {
+  return `at path ${JSON.stringify(path)} in field ${options.field} of collection ${options.collection}`;
 }
 
-function assertRewritableKey(options: StoredKeyOptions, key: string): void {
+function keyPlace(options: StoredKeyOptions, keyPath: StoredKeyPath): string {
+  return placeAt(options, keyPath.objectsText);
+}
+
+function assertRewritableKey(options: StoredKeyOptions, keyPath: StoredKeyPath, key: string): void {
   const reason = unrewritableKeyReason(key);
   if (reason === undefined) return;
   throw mongoTargetError(
     'MIGRATION.FIELD_NAME_UNSUPPORTED',
-    `Key ${JSON.stringify(key)} ${keyPlace(options)} cannot be rewritten: ${reason}.`,
+    `Key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} cannot be rewritten: ${reason}.`,
     {
       meta: {
         collection: options.collection,
@@ -558,7 +563,7 @@ function rewritableKeyPath(factory: string, options: StoredKeyOptions): StoredKe
   if (!keyPath.ok) {
     throw mongoTargetError(
       'MIGRATION.INVALID_OPERATION_ENTRY',
-      `${factory} cannot act ${keyPlace(options)}: ${keyPath.failure}.`,
+      `${factory} cannot act ${placeAt(options, options.path)}: ${keyPath.failure}.`,
       {
         meta: {
           context: factory,
@@ -570,7 +575,7 @@ function rewritableKeyPath(factory: string, options: StoredKeyOptions): StoredKe
       },
     );
   }
-  for (const key of keysOf(keyPath.value)) assertRewritableKey(options, key);
+  for (const key of keysOf(keyPath.value)) assertRewritableKey(options, keyPath.value, key);
   return keyPath.value;
 }
 
@@ -617,12 +622,12 @@ function literal(key: string): Document {
 export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperation {
   const keyPath = rewritableKeyPath('renameStoredKey', options);
   const { collection: collectionName, field, path, to, filter } = options;
-  assertRewritableKey(options, to);
+  assertRewritableKey(options, keyPath, to);
   const { key } = keyPath;
   if (key === to) {
     throw mongoTargetError(
       'MIGRATION.INVALID_OPERATION_ENTRY',
-      `renameStoredKey renames key ${JSON.stringify(key)} ${keyPlace(options)} to its own name.`,
+      `renameStoredKey renames key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} to its own name.`,
       {
         meta: {
           context: 'renameStoredKey',
@@ -634,7 +639,7 @@ export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperat
       },
     );
   }
-  const place = keyPlace(options);
+  const place = keyPlace(options, keyPath);
   const holdingKey = withFilter(
     filter,
     documentsWithObject(keyPath, (object) => holdsKey(object, key)),
@@ -649,7 +654,7 @@ export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperat
   return {
     id,
     meta: { rewrite: { kind: 'renameStoredKey', collection: collectionName, field, path, to } },
-    label: `Rename key ${JSON.stringify(key)} at path ${JSON.stringify(path)} to ${JSON.stringify(to)} in field ${field} of collection ${collectionName}${labelSuffix(filter)}`,
+    label: `Rename key ${JSON.stringify(key)} to ${JSON.stringify(to)} ${place}${labelSuffix(filter)}`,
     operationClass: 'widening',
     name: id,
     precheck: [
@@ -697,7 +702,7 @@ export function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation {
   return {
     id,
     meta: { rewrite: { kind: 'removeStoredKey', collection: collectionName, field, path } },
-    label: `Remove key ${JSON.stringify(key)} ${keyPlace(options)}${labelSuffix(filter)}`,
+    label: `Remove key ${JSON.stringify(key)} ${keyPlace(options, keyPath)}${labelSuffix(filter)}`,
     operationClass: 'destructive',
     name: id,
     precheck: [],
@@ -710,7 +715,7 @@ export function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation {
       noDocumentMatches(
         collectionName,
         holdingKey,
-        `no object ${keyPlace(options)} holds key ${JSON.stringify(key)}`,
+        `no object ${keyPlace(options, keyPath)} holds key ${JSON.stringify(key)}`,
       ),
     ],
   };
@@ -732,7 +737,7 @@ export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation 
   return {
     id,
     meta: { rewrite: { kind: 'fillStoredKey', collection: collectionName, field, path } },
-    label: `Fill key ${JSON.stringify(key)} ${keyPlace(options)} where it is missing or null${labelSuffix(filter)}`,
+    label: `Fill key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} where it is missing or null${labelSuffix(filter)}`,
     operationClass: 'widening',
     name: id,
     precheck: [],
@@ -749,7 +754,7 @@ export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation 
       noDocumentMatches(
         collectionName,
         lackingKey,
-        `no object ${keyPlace(options)} lacks key ${JSON.stringify(key)} or holds null there`,
+        `no object ${keyPlace(options, keyPath)} lacks key ${JSON.stringify(key)} or holds null there`,
       ),
     ],
   };

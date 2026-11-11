@@ -88,13 +88,12 @@ describe('renameStoredKey', () => {
           to: 'line1',
         },
       },
-      label:
-        'Rename key "street" at path "$[*].street" to "line1" in field addresses of collection users',
+      label: 'Rename key "street" to "line1" at path "$[*]" in field addresses of collection users',
       operationClass: 'widening',
       name: 'storedKey.users.addresses.$[*].street.rename(line1)',
       precheck: [
         check(
-          'no object at path "$[*].street" in field addresses of collection users holds both key "street" and key "line1"; remove one of the two keys from those objects',
+          'no object at path "$[*]" in field addresses of collection users holds both key "street" and key "line1"; remove one of the two keys from those objects',
           documentsWithObject(streets, (object) => ({
             $and: [holdsKey(object, 'street'), holdsKey(object, 'line1')],
           })),
@@ -103,7 +102,7 @@ describe('renameStoredKey', () => {
       run: [update(holdsStreet, objectsRewritePipeline(streets, renamed))],
       postcheck: [
         check(
-          'no object at path "$[*].street" in field addresses of collection users holds key "street"',
+          'no object at path "$[*]" in field addresses of collection users holds key "street"',
           holdsStreet,
         ),
       ],
@@ -119,7 +118,7 @@ describe('renameStoredKey', () => {
         to: 'street',
       }),
     ).toThrow(
-      'renameStoredKey renames key "street" at path "$[*].street" in field addresses of collection users to its own name.',
+      'renameStoredKey renames key "street" at path "$[*]" in field addresses of collection users to its own name.',
     );
   });
 });
@@ -138,7 +137,7 @@ describe('removeStoredKey', () => {
           path: '$[*].street',
         },
       },
-      label: 'Remove key "street" at path "$[*].street" in field addresses of collection users',
+      label: 'Remove key "street" at path "$[*]" in field addresses of collection users',
       operationClass: 'destructive',
       name: 'storedKey.users.addresses.$[*].street.remove',
       precheck: [],
@@ -152,7 +151,7 @@ describe('removeStoredKey', () => {
       ],
       postcheck: [
         check(
-          'no object at path "$[*].street" in field addresses of collection users holds key "street"',
+          'no object at path "$[*]" in field addresses of collection users holds key "street"',
           holdsStreet,
         ),
       ],
@@ -182,7 +181,7 @@ describe('fillStoredKey', () => {
         },
       },
       label:
-        'Fill key "street" at path "$[*].street" in field addresses of collection users where it is missing or null',
+        'Fill key "street" at path "$[*]" in field addresses of collection users where it is missing or null',
       operationClass: 'widening',
       name: 'storedKey.users.addresses.$[*].street.fill',
       precheck: [],
@@ -206,7 +205,7 @@ describe('fillStoredKey', () => {
       ],
       postcheck: [
         check(
-          'no object at path "$[*].street" in field addresses of collection users lacks key "street" or holds null there',
+          'no object at path "$[*]" in field addresses of collection users lacks key "street" or holds null there',
           lacksStreet,
         ),
       ],
@@ -231,7 +230,7 @@ describe('a stored key operation with a filter', () => {
     }).toMatchObject({
       id: 'storedKey.users.addresses.$[*].street.remove.where({"kind":"admin"})',
       label:
-        'Remove key "street" at path "$[*].street" in field addresses of collection users in documents whose kind is "admin"',
+        'Remove key "street" at path "$[*]" in field addresses of collection users in documents whose kind is "admin"',
       filter: { filter: { $and: [{ kind: 'admin' }, holdsStreet] } },
       postcheck: {
         pipeline: [{ $match: { $and: [{ kind: 'admin' }, holdsStreet] } }, { $limit: 1 }],
@@ -261,7 +260,7 @@ describe('stored key refusals', () => {
 
   it('refuses a new name starting with "$"', () => {
     expect(() => renameStoredKey({ ...base, path: '$[*].street', to: '$line1' })).toThrow(
-      'Key "$line1" at path "$[*].street" in field addresses of collection users cannot be rewritten: MongoDB reads a name starting with "$" as an operator.',
+      'Key "$line1" at path "$[*]" in field addresses of collection users cannot be rewritten: MongoDB reads a name starting with "$" as an operator.',
     );
   });
 

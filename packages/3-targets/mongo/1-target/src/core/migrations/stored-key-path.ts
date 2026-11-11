@@ -144,7 +144,31 @@ export interface StoredKeyPath {
   readonly field: string;
   readonly path: JsonPath;
   readonly objects: readonly JsonPathStep[];
+  /** The path to the objects as it was written: the path's text without its last selector. */
+  readonly objectsText: string;
   readonly key: string;
+}
+
+/** The steps as a JSONPath: a member name in shorthand when it is an identifier, else in brackets. */
+function jsonPathText(steps: readonly JsonPathStep[]): string {
+  return `$${steps
+    .map((step) => {
+      if (step.kind === 'wildcard') return '[*]';
+      return /^[A-Za-z_][A-Za-z0-9_]*$/.test(step.name)
+        ? `.${step.name}`
+        : `[${JSON.stringify(step.name)}]`;
+    })
+    .join('')}`;
+}
+
+/** The longest start of `path`'s text that is a path of `steps` selectors, without trailing blanks. */
+function writtenPrefix(path: JsonPath, steps: number): string {
+  for (let end = path.text.length - 1; end > 0; end -= 1) {
+    const prefix = path.text.slice(0, end).trimEnd();
+    const parsed = parseJsonPath(prefix);
+    if (parsed.ok && parsed.value.steps.length === steps) return prefix;
+  }
+  return jsonPathText(path.steps.slice(0, steps));
 }
 
 /** The key path of `path` inside root field `field`, when the path ends at a member name. */
@@ -159,6 +183,7 @@ export function storedKeyPath(field: string, path: string): Result<StoredKeyPath
     field,
     path: parsed.value,
     objects: parsed.value.steps.slice(0, -1),
+    objectsText: writtenPrefix(parsed.value, parsed.value.steps.length - 1),
     key: last.name,
   });
 }

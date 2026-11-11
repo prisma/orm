@@ -228,7 +228,7 @@ function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
   const to = JSON.stringify(rewrite.to);
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
-    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(rewrite.path)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
+    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(keyPath.value.objectsText)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
     {
       why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },

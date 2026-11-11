@@ -55,8 +55,17 @@ describe('storedKeyPath', () => {
         steps: [{ kind: 'wildcard' }, { kind: 'member', name: 'street' }],
       },
       objects: [{ kind: 'wildcard' }],
+      objectsText: '$[*]',
       key: 'street',
     });
+  });
+
+  it('writes the path to the objects as the path was written', () => {
+    expect(
+      ['$.street', "$['home address'] .street", '$.lines[*]["sku"]'].map(
+        (path) => storedKeyPath('orders', path).assertOk().objectsText,
+      ),
+    ).toEqual(['$', "$['home address']", '$.lines[*]']);
   });
 
   it('refuses a path that does not end at a key', () => {
