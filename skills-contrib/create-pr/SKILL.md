@@ -73,7 +73,7 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 
 #### Required structure (in this order)
 
-1. **`## Linked issue`** — the template header, used instead of a bare close-line. The template asks for a GitHub issue here; a maintainer PR puts the Linear ticket in the same place: a single plain-text `Fixes $TICKET_ID` line when the PR completes the ticket, so Linear closes it on merge (`Part of $TICKET_ID` when more PRs will follow, which links without closing), plus `Fixes #N` as well when a GitHub issue exists, plus links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
+1. **`## Linked issue`** — the template header, used instead of a bare close-line. The template asks for a GitHub issue here; a maintainer PR puts the Linear ticket in the same place: a single `Fixes $TICKET_ID ([Linear](https://linear.app/...))` line when the PR completes the ticket, so Linear closes it on merge (`Part of $TICKET_ID ([Linear](...))` when more PRs will follow, which links without closing). Keep the ticket ID as plain text straight after the keyword, because that is what Linear matches; the link after it is for reviewers. Add `Fixes #N` as well when a GitHub issue exists, plus links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
 
    **`## Skill update`** — name the agent skill the change teaches. Reserve `n/a — internal only` for changes that are purely internal or a refactor with no user-visible delta; a user-facing change that teaches no existing skill still needs a sentence saying why no update is required. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
 
