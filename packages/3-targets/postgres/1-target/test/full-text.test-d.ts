@@ -108,6 +108,15 @@ test('ilike and fullTextMatches take a nullable textual column, rank and headlin
   expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });
 
+test('ilike and fullTextMatches refuse a bare null, which has no column to read', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type SelfOf<Name extends 'ilike' | 'fullTextMatches'> = Parameters<Ops[Name]['impl']>[0];
+
+  expectTypeOf<null>().not.toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<null>().not.toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<string>().toExtend<SelfOf<'ilike'>>();
+});
+
 test('fullTextMatches and fullTextRank search a full-text index, a column or a fullTextDocument', () => {
   type Ops = QueryOperationTypes<CodecTypes>;
   type Bool = Expression<{ codecId: 'pg/bool@1'; nullable: false }>;

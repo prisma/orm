@@ -24,11 +24,7 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
-type NullableTextualSelf<CT extends CodecTypesBase> = TraitExpression<
-  readonly ['textual'],
-  boolean,
-  CT
->;
+type NullableTextualSelf<CT extends CodecTypesBase> = TextualSelf<CT> | FullTextColumn<CT>;
 
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
