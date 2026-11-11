@@ -13,6 +13,7 @@ import {
 import { TransactionManager } from './transaction-manager'
 import {
   InvalidTransactionIsolationLevelError,
+  NestedTransactionRolledBackError,
   TransactionClosedError,
   TransactionExecutionTimeoutError,
   TransactionManagerError,
@@ -317,7 +318,7 @@ test('missing rollbackToSavepoint fails nested rollback', async () => {
   await expect(transactionManager.rollbackTransaction(id)).rejects.toThrow('rollbackToSavepoint is not implemented')
 
   await expect(nested.executeRaw({ sql: 'INSERT', args: [], argTypes: [] })).rejects.toEqual(
-    new TransactionRolledBackError('query'),
+    new NestedTransactionRolledBackError('query'),
   )
   expect(driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)).toEqual([
     expect.stringMatching(/^SAVEPOINT /),

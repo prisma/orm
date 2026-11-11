@@ -11,6 +11,7 @@ import { once } from '../web-platform'
 import { Options, TransactionInfo } from './transaction'
 import {
   InvalidTransactionIsolationLevelError,
+  NestedTransactionRolledBackError,
   TransactionClosedError,
   TransactionExecutionTimeoutError,
   TransactionInternalConsistencyError,
@@ -39,21 +40,29 @@ type ClosingReason = 'committed' | 'rolled_back' | 'timed_out'
 
 type InterruptReason = Exclude<ClosingReason, 'committed'>
 
+type ScopeClosingReason = ClosingReason | 'nested_rolled_back'
+
 /**
  * One level of a transaction: the outermost transaction, or a nested transaction on top of it.
  * Handles from {@link TransactionManager.getTransaction} belong to the scope that was innermost
- * when they were issued. A committed nested transaction's scope is merged into its parent, and
- * its handles carry on there.
+ * when they were issued. A committed nested transaction's scope is merged into its parent: its
+ * running statements move there and its handles carry on there. A rolled back nested
+ * transaction's scope stays closed; its running statements are counted in its parent until they
+ * settle.
  */
 type Scope = {
   savepoint: string | undefined
-  closingReason?: ClosingReason
+  closingReason?: ScopeClosingReason
   runningStatements: Set<Promise<void>>
   mergedInto?: Scope
 }
 
 function createScope(savepoint: string | undefined): Scope {
   return { savepoint, closingReason: undefined, runningStatements: new Set() }
+}
+
+function isNested(scope: Scope): scope is Scope & { savepoint: string } {
+  return scope.savepoint !== undefined
 }
 
 function currentScope(scope: Scope): Scope {
@@ -330,7 +339,7 @@ export class TransactionManager {
     return await this.tracingHelper.runInChildSpan('commit_transaction', async () => {
       await this.#withActiveTransactionLock(transactionId, 'commit', async (txw) => {
         const scope = innermostScope(txw)
-        if (scope.savepoint !== undefined) {
+        if (isNested(scope)) {
           if (!txw.transaction) throw new TransactionNotFoundError()
           const outcome = await statementsSettledOrCommitInterrupted(txw, [...scope.runningStatements])
           if (outcome !== 'committed') {
@@ -354,9 +363,9 @@ export class TransactionManager {
     return await this.tracingHelper.runInChildSpan('rollback_transaction', async () => {
       await this.#withActiveTransactionLock(transactionId, 'rollback', async (txw) => {
         const scope = innermostScope(txw)
-        if (scope.savepoint !== undefined) {
+        if (isNested(scope)) {
           try {
-            await this.#closeScopes(txw, [scope], 'rolled_back')
+            await this.#closeScopes(txw, [scope], 'nested_rolled_back')
             if (!txw.transaction) throw new TransactionNotFoundError()
             await this.#requiredRollbackToSavepoint(txw.transaction)(scope.savepoint)
             await this.#releaseSavepoint(txw.transaction, scope.savepoint)
@@ -427,16 +436,23 @@ export class TransactionManager {
    * rollback. A rollback waits at most {@link ROLLBACK_GRACE_MS}. Resolves with how the
    * transaction is to be closed.
    */
-  async #closeScopes(tx: TransactionWrapper, scopes: Scope[], reason: ClosingReason): Promise<ClosingReason> {
+  async #closeScopes<R extends ScopeClosingReason>(
+    tx: TransactionWrapper,
+    scopes: Scope[],
+    reason: R,
+  ): Promise<R | ClosingReason> {
     markClosing(scopes, reason)
 
     const running = scopes.flatMap((scope) => [...scope.runningStatements])
     if (running.length === 0) return reason
 
-    const outcome = reason === 'committed' ? await statementsSettledOrCommitInterrupted(tx, running) : reason
-    if (outcome === 'committed') return outcome
+    let outcome: R | ClosingReason = reason
+    if (reason === 'committed') {
+      outcome = await statementsSettledOrCommitInterrupted(tx, running)
+      if (outcome === 'committed') return outcome
+      markClosing(scopes, outcome)
+    }
 
-    markClosing(scopes, outcome)
     const allSettled = Promise.all(running).then(() => {})
     await settleWithin(allSettled, ROLLBACK_GRACE_MS)
     return outcome
@@ -603,10 +619,10 @@ export class TransactionManager {
     }
   }
 
-  /** Resolves with how the transaction was closed, which differs from `status` for an interrupted commit. */
-  async #closeTransaction(tx: TransactionWrapper, status: ClosingReason): Promise<ClosingReason> {
+  /** Resolves with how the transaction was closed, which differs from `requested` for an interrupted commit. */
+  async #closeTransaction(tx: TransactionWrapper, requested: ClosingReason): Promise<ClosingReason> {
     const createClosingPromise = async (scopesClosed: Promise<ClosingReason>) => {
-      debug('Closing transaction.', { transactionId: tx.id, status })
+      debug('Closing transaction.', { transactionId: tx.id, requested })
       const outcome = await scopesClosed
       try {
         if (tx.transaction && outcome === 'committed') {
@@ -654,10 +670,10 @@ export class TransactionManager {
     if (tx.status === 'closing') {
       await tx.closing
       // Fetch again to ensure proper error propagation after it's been closed.
-      this.#getActiveOrClosingTransaction(tx.id, status === 'committed' ? 'commit' : 'rollback')
-      return status
+      this.#getActiveOrClosingTransaction(tx.id, requested === 'committed' ? 'commit' : 'rollback')
+      throw new TransactionInternalConsistencyError('Transaction still active after it was closed.')
     }
-    const scopesClosed = this.#closeScopes(tx, tx.scopes, status)
+    const scopesClosed = this.#closeScopes(tx, tx.scopes, requested)
     return await Object.assign(tx, {
       status: 'closing',
       closing: createClosingPromise(scopesClosed),
@@ -694,29 +710,31 @@ function innermostScope(tx: TransactionWrapper): Scope {
   return tx.scopes[tx.scopes.length - 1]
 }
 
-function mergeInnermostScope(tx: TransactionWrapper): void {
+function popInnermostScope(tx: TransactionWrapper): { child: Scope; parent: Scope; moved: Promise<void>[] } {
   const child = innermostScope(tx)
   tx.scopes.pop()
   const parent = innermostScope(tx)
-  for (const statement of child.runningStatements) {
+  const moved = [...child.runningStatements]
+  for (const statement of moved) {
     parent.runningStatements.add(statement)
   }
   child.runningStatements.clear()
+  return { child, parent, moved }
+}
+
+function mergeInnermostScope(tx: TransactionWrapper): void {
+  const { child, parent } = popInnermostScope(tx)
   child.mergedInto = parent
 }
 
 function popRolledBackScope(tx: TransactionWrapper): void {
-  const child = innermostScope(tx)
-  tx.scopes.pop()
-  const parent = innermostScope(tx)
-  for (const statement of child.runningStatements) {
-    parent.runningStatements.add(statement)
+  const { parent, moved } = popInnermostScope(tx)
+  for (const statement of moved) {
     void statement.then(() => currentScope(parent).runningStatements.delete(statement))
   }
-  child.runningStatements.clear()
 }
 
-function markClosing(scopes: Scope[], reason: ClosingReason): void {
+function markClosing(scopes: Scope[], reason: ScopeClosingReason): void {
   for (const scope of scopes) {
     scope.closingReason = reason
   }
@@ -732,7 +750,7 @@ async function statementsSettledOrCommitInterrupted(
 
 function closedTransactionError(
   tx: TransactionWrapper,
-  reason: ClosingReason,
+  reason: ScopeClosingReason,
   operation: string,
 ): TransactionManagerError {
   switch (reason) {
@@ -740,6 +758,8 @@ function closedTransactionError(
       return new TransactionClosedError(operation)
     case 'rolled_back':
       return new TransactionRolledBackError(operation)
+    case 'nested_rolled_back':
+      return new NestedTransactionRolledBackError(operation)
     case 'timed_out':
       return new TransactionExecutionTimeoutError(operation, {
         timeout: tx.timeout!,

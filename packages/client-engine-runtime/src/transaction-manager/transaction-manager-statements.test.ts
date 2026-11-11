@@ -1,4 +1,4 @@
-import type { SqlQuery } from '@prisma/driver-adapter-utils'
+import type { SqlQuery, Transaction } from '@prisma/driver-adapter-utils'
 import { describe, expect, test, vi } from 'vitest'
 
 import { noopTracingHelper } from '../tracing'
@@ -12,9 +12,11 @@ import {
 } from './test-utils'
 import { TransactionManager } from './transaction-manager'
 import {
+  NestedTransactionRolledBackError,
   TransactionClosedError,
   TransactionExecutionTimeoutError,
   TransactionRolledBackError,
+  TransactionStartTimeoutError,
 } from './transaction-manager-error'
 
 vi.useFakeTimers()
@@ -361,13 +363,62 @@ describe('nested transactions', () => {
 
     await transactionManager.rollbackTransaction(id)
 
-    await expect(inner.executeRaw(INSERT)).rejects.toEqual(new TransactionRolledBackError('query'))
+    await expect(inner.executeRaw(INSERT)).rejects.toEqual(new NestedTransactionRolledBackError('query'))
     await expect(outer.executeRaw(UPDATE)).resolves.toBe(1)
     expect(sentSql(driverAdapter)).toEqual([
       expect.stringMatching(/^ROLLBACK TO SAVEPOINT /),
       expect.stringMatching(/^RELEASE SAVEPOINT /),
       'UPDATE',
     ])
+  })
+
+  test('a handle from an open nested transaction reports the whole transaction rolled back on disconnect', async () => {
+    const { transactionManager, inner } = await startNested()
+
+    await transactionManager.cancelAllTransactions()
+
+    await expect(inner.executeRaw(INSERT)).rejects.toEqual(new TransactionRolledBackError('query'))
+  })
+
+  test('getTransaction is refused while a nested rollback waits for a running statement', async () => {
+    const { driverAdapter, transactionManager, id } = await startNested()
+    const inner = await transactionManager.getTransaction({ id }, 'query')
+    holdInserts(driverAdapter)
+
+    void inner.executeRaw(INSERT)
+    const rollingBack = transactionManager.rollbackTransaction(id)
+    await flush()
+
+    await expect(transactionManager.getTransaction({ id }, 'query')).rejects.toEqual(
+      new NestedTransactionRolledBackError('query'),
+    )
+    expect(sentSql(driverAdapter)).toEqual(['INSERT'])
+
+    await vi.advanceTimersByTimeAsync(ROLLBACK_GRACE_MS)
+    await rollingBack
+  })
+
+  test('a commit queued behind a nested rollback when the timeout fires still commits if no statement is running', async () => {
+    const { driverAdapter, transactionManager, id } = await startNested({ timeout: TRANSACTION_EXECUTION_TIMEOUT })
+    const rollbackToSavepoint = deferred<number>()
+    driverAdapter.executeRawMock.mockImplementation((query) =>
+      query.sql.startsWith('ROLLBACK TO SAVEPOINT') ? rollbackToSavepoint.promise : Promise.resolve(1),
+    )
+
+    const rollingBack = transactionManager.rollbackTransaction(id)
+    const committing = transactionManager.commitTransaction(id)
+    await vi.advanceTimersByTimeAsync(TRANSACTION_EXECUTION_TIMEOUT)
+    rollbackToSavepoint.resolve(1)
+
+    await rollingBack
+    await expect(committing).resolves.toBeUndefined()
+    expect(sentSql(driverAdapter)).toEqual([
+      expect.stringMatching(/^ROLLBACK TO SAVEPOINT /),
+      expect.stringMatching(/^RELEASE SAVEPOINT /),
+      'COMMIT',
+    ])
+    expect(driverAdapter.commitMock).toHaveBeenCalledTimes(1)
+    expect(driverAdapter.rollbackMock).not.toHaveBeenCalled()
   })
 
   test('a handle from a committed nested transaction keeps working in the outer transaction', async () => {
@@ -555,7 +606,7 @@ describe('nested transactions', () => {
     const rollingBack = trackSettled(transactionManager.rollbackTransaction(id))
 
     await vi.advanceTimersByTimeAsync(ROLLBACK_GRACE_MS - 1)
-    await expect(inner.executeRaw(UPDATE)).rejects.toEqual(new TransactionRolledBackError('query'))
+    await expect(inner.executeRaw(UPDATE)).rejects.toEqual(new NestedTransactionRolledBackError('query'))
     expect(sentSql(driverAdapter)).toEqual(['INSERT'])
 
     await vi.advanceTimersByTimeAsync(1)
@@ -578,7 +629,7 @@ describe('nested transactions', () => {
 
     const committing = transactionManager.commitTransaction(id)
     await vi.advanceTimersByTimeAsync(ROLLBACK_GRACE_MS * 5)
-    await expect(inner.executeRaw(UPDATE)).rejects.toEqual(new TransactionRolledBackError('query'))
+    await expect(inner.executeRaw(UPDATE)).rejects.toEqual(new NestedTransactionRolledBackError('query'))
     expect(driverAdapter.commitMock).not.toHaveBeenCalled()
 
     insert.resolve(1)
@@ -658,24 +709,74 @@ test('a close completes when the adapter throws synchronously', async () => {
   expect(driverAdapter.commitMock).toHaveBeenCalledTimes(1)
 })
 
-test('the adapter transaction is closed once when commit, rollback, timeout and disconnect race', async () => {
+describe.each([
+  { first: 'commit', delayBeforeClosing: 0, commitError: TransactionRolledBackError },
+  {
+    first: 'the timeout',
+    delayBeforeClosing: TRANSACTION_EXECUTION_TIMEOUT,
+    commitError: TransactionExecutionTimeoutError,
+  },
+])('when $first comes first', ({ delayBeforeClosing, commitError }) => {
+  test('the adapter transaction is closed once when commit, rollback, timeout and disconnect race', async () => {
+    const { driverAdapter, transactionManager } = setup()
+    const id = await startTransaction(transactionManager)
+    const handle = await transactionManager.getTransaction({ id }, 'query')
+    const insert = holdInserts(driverAdapter)
+
+    void handle.executeRaw(INSERT).catch(() => {})
+    await vi.advanceTimersByTimeAsync(delayBeforeClosing)
+    const closes = Promise.allSettled([
+      transactionManager.commitTransaction(id),
+      transactionManager.rollbackTransaction(id),
+      transactionManager.cancelAllTransactions(),
+    ])
+
+    await vi.advanceTimersByTimeAsync(TRANSACTION_EXECUTION_TIMEOUT + ROLLBACK_GRACE_MS)
+    insert.resolve(1)
+    await vi.advanceTimersByTimeAsync(ROLLBACK_GRACE_MS)
+    const [commitOutcome] = await closes
+
+    expect(commitOutcome).toMatchObject({ status: 'rejected', reason: expect.any(commitError) })
+    expect(driverAdapter.commitMock.mock.calls.length + driverAdapter.rollbackMock.mock.calls.length).toBe(1)
+    expect(sentSql(driverAdapter)).toEqual(['INSERT', 'ROLLBACK'])
+  })
+})
+
+test('disconnect rolls back a starting, a running and a commit-waiting transaction, closing each once', async () => {
   const { driverAdapter, transactionManager } = setup()
-  const id = await startTransaction(transactionManager)
-  const handle = await transactionManager.getTransaction({ id }, 'query')
-  const insert = holdInserts(driverAdapter)
+  const startedTransactions: Transaction[] = []
+  const startAdapterTransaction = driverAdapter.startTransaction.bind(driverAdapter)
+  const startAdapterTransactionSpy = vi.spyOn(driverAdapter, 'startTransaction').mockImplementation(async () => {
+    const transaction = await startAdapterTransaction()
+    startedTransactions.push(transaction)
+    return transaction
+  })
 
-  void handle.executeRaw(INSERT).catch(() => {})
-  const closes = Promise.allSettled([
-    transactionManager.commitTransaction(id),
-    transactionManager.rollbackTransaction(id),
-    transactionManager.cancelAllTransactions(),
-  ])
+  const running = await startTransaction(transactionManager, { timeout: LONG_TIMEOUT })
+  const committingId = await startTransaction(transactionManager, { timeout: LONG_TIMEOUT })
+  const handle = await transactionManager.getTransaction({ id: committingId }, 'query')
+  holdInserts(driverAdapter)
+  void handle.executeRaw(INSERT)
+  const committing = transactionManager.commitTransaction(committingId)
+  const starting = transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, timeout: LONG_TIMEOUT })
+  await flush()
+  expect(startAdapterTransactionSpy).toHaveBeenCalledTimes(3)
 
-  await vi.advanceTimersByTimeAsync(TRANSACTION_EXECUTION_TIMEOUT + ROLLBACK_GRACE_MS)
-  insert.resolve(1)
+  const cancelling = transactionManager.cancelAllTransactions()
+  const outcomes = Promise.allSettled([committing, starting])
   await vi.advanceTimersByTimeAsync(ROLLBACK_GRACE_MS)
-  await closes
 
-  expect(driverAdapter.commitMock.mock.calls.length + driverAdapter.rollbackMock.mock.calls.length).toBe(1)
-  expect(sentSql(driverAdapter)).toEqual(['INSERT', 'ROLLBACK'])
+  await expect(cancelling).resolves.toBeUndefined()
+  expect(await outcomes).toEqual([
+    { status: 'rejected', reason: new TransactionRolledBackError('commit') },
+    { status: 'rejected', reason: new TransactionStartTimeoutError() },
+  ])
+  await expect(transactionManager.commitTransaction(running)).rejects.toEqual(new TransactionRolledBackError('commit'))
+  expect(startedTransactions).toHaveLength(3)
+  expect(
+    startedTransactions.map((transaction) =>
+      driverAdapter.rollbackMock.mock.contexts.filter((context) => context === transaction),
+    ),
+  ).toEqual(startedTransactions.map((transaction) => [transaction]))
+  expect(driverAdapter.commitMock).not.toHaveBeenCalled()
 })
