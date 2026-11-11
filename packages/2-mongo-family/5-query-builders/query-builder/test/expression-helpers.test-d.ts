@@ -105,3 +105,32 @@ describe('literal type inference', () => {
     expectTypeOf(custom).toEqualTypeOf<TypedAggExpr<CustomField>>();
   });
 });
+
+describe('date helpers on every codec stored as a BSON date', () => {
+  const field = <CodecId extends string>(codecId: CodecId) =>
+    ({ _field: { codecId, nullable: false } }) as TypedAggExpr<{
+      readonly codecId: CodecId;
+      readonly nullable: false;
+    }>;
+
+  it('take an instant or a calendar date field in any representation', () => {
+    for (const date of [
+      field('mongo/date@1'),
+      field('mongo/date-instant@1'),
+      field('mongo/date-instant-string@1'),
+      field('mongo/date-string@1'),
+      field('mongo/date-temporal@1'),
+    ]) {
+      expectTypeOf(fn.dateTrunc({ date, unit: s })).toEqualTypeOf<TypedAggExpr<DateField>>();
+      expectTypeOf(fn.dateDiff({ startDate: date, endDate: dt, unit: s })).toEqualTypeOf<
+        TypedAggExpr<NumericField>
+      >();
+      expectTypeOf(fn.dateToString({ date })).toEqualTypeOf<TypedAggExpr<StringField>>();
+    }
+  });
+
+  it('refuse a field stored as a BSON string', () => {
+    // @ts-expect-error a time of day is stored as a BSON string, not a BSON date
+    fn.dateTrunc({ date: field('mongo/time-string@1'), unit: s });
+  });
+});

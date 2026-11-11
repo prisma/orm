@@ -23,7 +23,7 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
     ['temporal.updatedAt', 'field.scalar(type.temporal.UpdatedAt())'],
     [
       'temporal.timestamp',
-      'field.scalar(type.Date()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
+      'field.scalar(type.DateTime()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
     ],
   ])('refuses the removed preset field.%s with its rewrite', (path, rewrite) => {
     expect(refusalOf(path)).toMatchObject({
@@ -39,7 +39,7 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
     ['double', 'field.scalar(type.Double())'],
     ['int32', 'field.scalar(type.Int32())'],
     ['bool', 'field.scalar(type.Bool())'],
-    ['date', 'field.scalar(type.Date())'],
+    ['date', 'field.scalar(type.DateTime())'],
     ['int64', 'field.scalar(type.Int64())'],
     ['int64Number', 'field.scalar(type.Int64Number())'],
     ['decimal128', 'field.scalar(type.Decimal128())'],
@@ -106,7 +106,7 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
 
   it('keeps every helper the builder has', () => {
     expect({
-      scalar: field.scalar(type.Date()).__type,
+      scalar: field.scalar(type.DateTime()).__type,
       helpers: Object.keys(field).sort(),
     }).toEqual({
       scalar: { kind: 'scalar', codecId: 'mongo/date@1' },

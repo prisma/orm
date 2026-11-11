@@ -24,7 +24,7 @@ const REPRESENTATIVE_SCHEMA = `model sample {
   count     Int32
   active    Bool
   ratio     Double
-  createdAt Date
+  createdAt DateTime
   parentRef ObjectId
 }
 `;
@@ -68,7 +68,6 @@ describe('mongo scalar types derived from the unified namespace', () => {
       String: { codecId: 'mongo/string@1' },
       Int32: { codecId: 'mongo/int32@1' },
       Bool: { codecId: 'mongo/bool@1' },
-      Date: { codecId: 'mongo/date@1' },
       ObjectId: { codecId: 'mongo/objectId@1' },
       Double: { codecId: 'mongo/double@1' },
       Int64: { codecId: 'mongo/int64@1' },
@@ -81,7 +80,18 @@ describe('mongo scalar types derived from the unified namespace', () => {
       Int: { codecId: 'mongo/int32@1' },
       Float: { codecId: 'mongo/double@1' },
       Boolean: { codecId: 'mongo/bool@1' },
+      DateJsDate: { codecId: 'mongo/date@1' },
+      DateInstant: { codecId: 'mongo/date-instant@1' },
+      DateInstantString: { codecId: 'mongo/date-instant-string@1' },
+      DateString: { codecId: 'mongo/date-string@1' },
+      DateTemporal: { codecId: 'mongo/date-temporal@1' },
+      TimeString: { codecId: 'mongo/time-string@1' },
+      TimeTemporal: { codecId: 'mongo/time-temporal@1' },
+      DurationString: { codecId: 'mongo/duration-string@1' },
       DateTime: { codecId: 'mongo/date@1' },
+      Date: { codecId: 'mongo/date-string@1' },
+      Time: { codecId: 'mongo/time-string@1' },
+      Duration: { codecId: 'mongo/duration-string@1' },
     });
   });
 
@@ -92,9 +102,16 @@ describe('mongo scalar types derived from the unified namespace', () => {
       'Boolean',
       'Bson',
       'Date',
+      'DateInstant',
+      'DateInstantString',
+      'DateJsDate',
+      'DateString',
+      'DateTemporal',
       'DateTime',
       'Decimal128',
       'Double',
+      'Duration',
+      'DurationString',
       'Float',
       'Int',
       'Int32',
@@ -103,6 +120,9 @@ describe('mongo scalar types derived from the unified namespace', () => {
       'Json',
       'ObjectId',
       'String',
+      'Time',
+      'TimeString',
+      'TimeTemporal',
       'Vector',
     ]);
   });
@@ -258,14 +278,12 @@ describe('deprecated Mongo scalar names through the PSL contract source', () => 
     const deprecated = interpretWith(
       REPRESENTATIVE_SCHEMA.replace('Int32', 'Int')
         .replace('Bool', 'Boolean')
-        .replace('Double', 'Float')
-        .replace('Date', 'DateTime'),
+        .replace('Double', 'Float'),
     );
 
     expect(deprecated.json).toBe(current.json);
     expect(current.warnings).toEqual([]);
     expect(deprecated.warnings.map((warning) => [warning.code, warning.severity])).toEqual([
-      ['PSL_DEPRECATED_SCALAR_NAME', 'warning'],
       ['PSL_DEPRECATED_SCALAR_NAME', 'warning'],
       ['PSL_DEPRECATED_SCALAR_NAME', 'warning'],
       ['PSL_DEPRECATED_SCALAR_NAME', 'warning'],

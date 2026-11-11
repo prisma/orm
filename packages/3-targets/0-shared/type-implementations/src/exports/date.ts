@@ -4,4 +4,6 @@ export {
   isDate,
   isValidDate,
   utcIsoTextOf,
+  withoutZerosBelowAMillisecond,
+  withThreeFractionDigits,
 } from '../date';

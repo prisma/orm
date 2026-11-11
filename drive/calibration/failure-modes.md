@@ -855,7 +855,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Root cause.** Each stacked branch merges its base's branch history, and every review round and `main` merge adds commits. The squash merge of the base hides that shared history from git, and the DCO app reads at most 250 commits through the REST API.
 
-**Mitigation.** Build each slice from `main` after the previous slice merges, not on the previous slice's branch. When a stacked PR must catch up with a squash-merged base, merge the base branch's final commit first (shared history, few conflicts), then `main`. If a PR passes 250 commits anyway, ask the operator before reducing it: the fix is a rebase onto `main` as one commit and a force-push, which only the operator can authorize.
+**Mitigation.** Build each slice from `main` after the previous slice merges, not on the previous slice's branch. When a stacked PR must catch up with a squash-merged base, merge the base branch's final commit first (shared history, few conflicts), then `main`. For each file that still conflicts with `main`, check whether `main` changed it after the base's squash merge (`git diff <base's final commit> <main> -- <file>`). If not, the stacked branch's side is right, because it already holds the base's final version; resolve by hand only the files `main` changed since. (Added 2026-11, convenience types on other targets: 43 conflicts after a squash merge, only one of which `main` had changed.) If a PR passes 250 commits anyway, ask the operator before reducing it: the fix is a rebase onto `main` as one commit and a force-push, which only the operator can authorize.
 
 **Reference incident.** 2026-10-08 and 09, SQL expression literals slice 3 (prisma/orm#30558): stacked on 2b, it conflicted in 154 files after 2b's squash merge and reached 300 commits. DCO failed on every push until the operator had the branch rebased onto `main` as one commit.
 
@@ -946,3 +946,25 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** When a name changes meaning, grep every PSL and TypeScript source under `test/` and `examples/` for the name, rewrite each one that relied on the old meaning, and run the integration file that emits it before enabling auto-merge.
 
 **Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): `cli.emit-command.test.ts` emits `fixtures/emit-command/schema.parity.psl`, which still wrote bare `DateTime` beside a TypeScript side written with the Temporal type; the queue dropped the PR on the hash mismatch.
+
+### F54. Auto-merge is on and the PR never enters the merge queue
+
+**Symptom.** An approved PR with auto-merge on sits for hours or days. `mergeQueueEntry` stays empty and nothing reports a failure.
+
+**Root cause.** Two states hold a PR out of the queue without failing anything. (1) A commit pushed while the PR is in the queue starts no PR CI; after the queue drops the PR, its head has no required checks, so `mergeStateStatus` is `BLOCKED` and auto-merge waits for checks that never start. (2) `main` moves and the PR conflicts (`mergeStateStatus: DIRTY`). A watch that waits only for "queued", "merged" or "failed" stays silent in both.
+
+**Detection signal.** `gh pr view <n> --json mergeStateStatus,statusCheckRollup` shows `BLOCKED` with no pending checks and no `CI (PR)` run on the head, or shows `DIRTY`.
+
+**Mitigation.** After turning auto-merge on, confirm within minutes that the head's `CI (PR)` run exists and is running, and later that `mergeQueueEntry` is set. A watch on an approved PR ends on `DIRTY`, `CONFLICTING`, and `BLOCKED` with no pending checks, as well as on queued, merged and failed. If the PR is `DIRTY`, merge `main` and resolve the conflict first: GitHub runs no PR workflows while a conflict exists. Push an empty signed commit only if the head still has no PR CI run after that. Do not push to a PR while it is queued; wait for it to merge or leave the queue.
+
+**Reference incident.** Convenience types on other targets, 2026-11: prisma/orm#30959 sat four days at `BLOCKED` after a fix pushed while queued, holding back the fix for a test that broke `main`; prisma/orm#30989 sat a day at `DIRTY` while a watch looked only for queued, merged or failed.
+
+### F55. A test reads every entry of a file other PRs change, and breaks `main` when one adds an entry of a kind it does not handle
+
+**Symptom.** After an unrelated PR or a release merges, a test in a folder your branch never touched fails in the merge queue for every PR, on `main` itself. Here: `Change temporal-polyfill-is-a-peer-dependency-of-mysql has no detection pattern`.
+
+**Root cause.** A test iterated every change in the compiled release upgrade guide and assumed each one used regular-expression detection (`matches`). The guide is written by many PRs and by the release; a MySQL change that detects with `contains` reached it only when the release compiled the pending notes. PR CI skips integration tests, so neither PR saw it.
+
+**Mitigation.** A test that reads every entry of a shared or generated file filters to the entries it is about, by the property it needs, instead of assuming every entry has it. When writing an entry of a new kind into such a file, grep the tests that read the whole file.
+
+**Reference incident.** Convenience types on other targets, 2026-11-06: the 8.0.0-rc.23 release compiled the guides, and `mongo-checks-required-extensions/detection.test.ts` failed on `main` for four days until prisma/orm#30959 filtered to changes with `matches`.

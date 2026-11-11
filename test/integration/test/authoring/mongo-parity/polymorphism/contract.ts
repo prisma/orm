@@ -28,6 +28,6 @@ export const contract = defineContract({
       fields: { priority: field.scalar(type.Int32()) },
       indexes: [index({ priority: 1 }, { partialFilterExpression: { type: 'feature' } })],
     }),
-    Chore: model('Chore', { base: Task, fields: { dueOn: field.scalar(type.Date()) } }),
+    Chore: model('Chore', { base: Task, fields: { dueOn: field.scalar(type.DateTime()) } }),
   },
 });

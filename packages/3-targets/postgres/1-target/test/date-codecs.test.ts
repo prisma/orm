@@ -17,6 +17,7 @@ describe('pg/timestamptz-date@1', () => {
       await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
         code: 'RUNTIME.DATE_STYLE_NOT_ISO',
         meta: { codecId: 'pg/timestamptz-date@1', received: wire },
+        why: expect.stringContaining('already committed'),
       });
     },
   );
