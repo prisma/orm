@@ -356,8 +356,35 @@ export function documentsMissingOrNull(field: string): Document {
   return { $expr: { $in: [{ $type: `$${field}` }, ['missing', 'null']] } };
 }
 
+const NUMBER_TYPES: readonly string[] = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * The documents whose field holds a value of one of the BSON types `types`, or, for a list, an
+ * element of one of them. A single value is read with `$expr`, since a query's `$type` looks at the
+ * elements of a list.
+ */
+function documentsOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  if (shape.list) return { [field]: { $elemMatch: { $type: [...shape.types] } } };
+  return { $expr: { $in: [{ $type: `$${field}` }, [...shape.types]] } };
+}
+
+/**
+ * The documents the cast changes: those holding a value of a type it is planned from, other than
+ * `to`. A value of any other type is left as it is, for the validator change's document check to
+ * name. A cast planned from no type casts every value that is not of type `to`.
+ */
 function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
-  const condition = documentsNotOfType(field, { types: [to], list: options.list === true });
+  const list = options.list === true;
+  const from = [
+    ...new Set(options.from.flatMap((type) => (type === 'number' ? NUMBER_TYPES : [type]))),
+  ].filter((type) => type !== to);
+  const condition =
+    options.from.length === 0
+      ? documentsNotOfType(field, { types: [to], list })
+      : documentsOfType(field, { types: from, list });
   return options.filter === undefined ? condition : { $and: [options.filter, condition] };
 }
 
@@ -414,7 +441,7 @@ export function castField(options: CastFieldOptions): MongoDmlOperation {
     ],
     postcheck: [
       {
-        description: `no document in ${collectionName} holds ${field} as another type than ${to}`,
+        description: `no document in ${collectionName} holds ${field} as ${options.from.length === 0 ? `another type than ${to}` : `a type it is cast from, ${options.from.join(', ')}`}`,
         source: rewritePlan(
           collectionName,
           new RawAggregateCommand(collectionName, [{ $match: toCast }, { $limit: 1 }]),

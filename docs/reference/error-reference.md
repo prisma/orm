@@ -1637,7 +1637,7 @@ A migration object's `endContract`/`startContract` accessor was read, but the in
 
 ### MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY
 
-MongoDB only: a migration check, such as a data transform's precheck or postcheck or a validator change's document check, reads with a command that writes, such as an update, so running the check could change the database. The runner refuses the check before sending it (`Migration check rejected: command kind "rawUpdateMany" is not read-only`). Write the check's source as an `aggregate` or `rawAggregate` pipeline. Payload: `checkDescription`, `commandKind`, `collection`.
+MongoDB only: a migration check, such as a data transform's precheck or postcheck or a validator change's document check, reads with a command that writes, such as an update, so running the check could change the database. The runner refuses the check before sending it (`Migration check rejected: command kind "rawUpdateMany" is not read-only`). Write the check's source as an `aggregate` or `rawAggregate` pipeline. An aggregate whose pipeline has a `$out` or `$merge` stage writes too, and is refused the same way (`Migration check rejected: stage "$out" is not read-only`); remove that stage. Payload: `checkDescription`, `collection`, and `commandKind` or `stage`.
 
 ### MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH
 

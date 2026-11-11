@@ -57,7 +57,7 @@ function postcheckPipeline(operation: ReturnType<typeof castField>): readonly un
 
 describe('the documents a MongoDB rewrite selects', () => {
   it(
-    'a single value of the new type selects every list and every value of another type',
+    'a single value cast selects only the values of the types it is cast from',
     async () => {
       expect(
         await selected(
@@ -65,21 +65,13 @@ describe('the documents a MongoDB rewrite selects', () => {
             castField({ collection: 'users', field: 'age', from: ['string'], to: 'int' }),
           ),
         ),
-      ).toEqual(
-        [
-          'empty list',
-          'list of an int and a string',
-          'list of ints',
-          'list with a null',
-          'string',
-        ].sort(),
-      );
+      ).toEqual(['string']);
     },
     timeouts.spinUpMongoMemoryServer,
   );
 
   it(
-    'a list of the new type selects every list with an element of another type',
+    'a list cast selects every list with an element of a type it is cast from',
     async () => {
       expect(
         await selected(

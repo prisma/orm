@@ -8,7 +8,7 @@ const PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' };
 
 describe('castField', () => {
   it('casts a field to its new BSON type where it holds another one, skipping validation', () => {
-    const toCast = { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'long']] } } };
+    const toCast = { $expr: { $in: [{ $type: '$age' }, ['int']] } };
 
     expect(castField({ collection: 'users', field: 'age', from: ['int'], to: 'long' })).toEqual({
       id: 'field.users.age.cast(long)',
@@ -31,7 +31,7 @@ describe('castField', () => {
       ],
       postcheck: [
         {
-          description: 'no document in users holds age as another type than long',
+          description: 'no document in users holds age as a type it is cast from, int',
           source: {
             collection: 'users',
             command: new RawAggregateCommand('users', [{ $match: toCast }, { $limit: 1 }]),
@@ -67,7 +67,7 @@ describe('castField', () => {
 
     expect(command).toBeInstanceOf(RawUpdateManyCommand);
     expect(command).toMatchObject({
-      filter: { scores: { $elemMatch: { $ne: null, $not: { $type: ['double'] } } } },
+      filter: { scores: { $elemMatch: { $type: ['int'] } } },
       update: [
         {
           $set: {
@@ -100,12 +100,23 @@ describe('castField', () => {
     });
     expect(op.run[0]?.command).toMatchObject({
       filter: {
-        $and: [
-          { kind: 'box' },
-          { $expr: { $not: { $in: [{ $type: '$size' }, ['missing', 'null', 'long']] } } },
-        ],
+        $and: [{ kind: 'box' }, { $expr: { $in: [{ $type: '$size' }, ['int']] } }],
       },
     });
+  });
+
+  it('casts only values of the types it is planned from, reading number as every numeric type', () => {
+    expect(
+      [
+        castField({ collection: 'users', field: 'age', from: ['int', 'bool'], to: 'long' }),
+        castField({ collection: 'users', field: 'age', from: ['number'], to: 'long' }),
+        castField({ collection: 'users', field: 'age', from: [], to: 'long' }),
+      ].map((op) => op.run[0]?.command),
+    ).toMatchObject([
+      { filter: { $expr: { $in: [{ $type: '$age' }, ['int', 'bool']] } } },
+      { filter: { $expr: { $in: [{ $type: '$age' }, ['int', 'double', 'decimal']] } } },
+      { filter: { $expr: { $not: { $in: [{ $type: '$age' }, ['missing', 'null', 'long']] } } } },
+    ]);
   });
 
   it('refuses a BSON type $convert cannot cast to', () => {

@@ -34,6 +34,7 @@ import {
   MongoLimitStage,
   MongoMatchStage,
   type MongoQueryPlan,
+  RawAggregateCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -454,6 +455,30 @@ describe('MongoMigrationRunner.executeDmlOperation', () => {
     expect((thrown as Error).message).toContain('rawUpdateMany');
     expect(harness.driver.executeCalls).toEqual([]);
   });
+
+  it.each(['$out', '$merge'])(
+    'rejects a check whose aggregate writes with %s before invoking driver.execute',
+    async (stage) => {
+      const harness = makeHarness();
+      const op = dataTransform('backfill-status', {
+        check: {
+          source: () => ({
+            collection: RUN_COLLECTION,
+            command: new RawAggregateCommand(RUN_COLLECTION, [{ $match: {} }, { [stage]: 'copy' }]),
+            meta: PLAN_META,
+          }),
+        },
+        run: () => makeRunPlan(),
+      });
+
+      await expect(execute(harness, [op], { idempotencyChecks: false })).rejects.toMatchObject({
+        code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+        message: `Migration check rejected: stage "${stage}" is not read-only`,
+        meta: { stage, collection: RUN_COLLECTION },
+      });
+      expect(harness.driver.executeCalls).toEqual([]);
+    },
+  );
 
   it('dispatches DDL ops through executeDdl seam and data ops through adapter.lower + driver.execute, in plan order', async () => {
     const harness = makeHarness();

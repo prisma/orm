@@ -58,6 +58,7 @@ import {
   RenameCollectionCommand,
 } from '@internal/mongo-query-ast/control';
 import {
+  AggregateCommand,
   type MongoQueryPlan,
   RawAggregateCommand,
   RawUpdateManyCommand,
@@ -73,6 +74,23 @@ import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
+
+const WRITING_STAGES: readonly string[] = ['$out', '$merge'];
+
+/** The stage of an aggregate's pipeline that writes, `$out` or `$merge`, if it has one. */
+function writingStageOf(command: MongoQueryPlan['command']): string | undefined {
+  if (command instanceof RawAggregateCommand) {
+    return command.pipeline
+      .flatMap((stage) => WRITING_STAGES.filter((name) => Object.hasOwn(stage, name)))
+      .at(0);
+  }
+  if (command instanceof AggregateCommand) {
+    return command.pipeline
+      .map((stage) => `$${stage.kind}`)
+      .find((name) => WRITING_STAGES.includes(name));
+  }
+  return undefined;
+}
 
 const CHANGED_DOCUMENT_COUNTS = [
   'insertedCount',
@@ -1351,6 +1369,18 @@ export class MongoMigrationRunner {
             commandKind,
             collection: source.collection,
           },
+        },
+      );
+    }
+    const stage = writingStageOf(source.command);
+    if (stage !== undefined) {
+      throw mongoTargetError(
+        'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+        `Migration check rejected: stage "${stage}" is not read-only`,
+        {
+          why: `A migration check must only read, so that running it cannot change the database; the ${stage} stage of its pipeline writes its results to a collection.`,
+          fix: `Remove the ${stage} stage from the check's pipeline.`,
+          meta: { checkDescription: check.description, stage, collection: source.collection },
         },
       );
     }
