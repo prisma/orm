@@ -444,7 +444,7 @@ for await (const post of db.Post.where(...).all()) {
 }
 ```
 
-Read and write surfaces share **one** field type-map. `MutationUpdateInput`, `CreateInput`, `UniqueConstraintCriterion`, and `ShorthandWhereFilter` accept plain `T` regardless of how the corresponding codec was authored.
+Reads take each field's type from the contract's `FieldOutputTypes` map. Where filters, unique criteria and create and update inputs take it from `FieldInputTypes`, and fall back to the read type for a field that map does not list. `MutationUpdateInput`, `CreateInput`, `UniqueConstraintCriterion`, and `ShorthandWhereFilter` accept plain `T` regardless of how the corresponding codec was authored.
 
 See [ADR 204 — Single-Path Async Codec Runtime](../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md).
 
