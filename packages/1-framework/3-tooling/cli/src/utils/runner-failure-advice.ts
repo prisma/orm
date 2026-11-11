@@ -80,7 +80,6 @@ function backfillFlags(reports: readonly RowsWithoutValueReport[]): readonly str
   ];
 }
 
-/** The way out of a failed cast for `db update`, which plans and applies in one step. */
 /** The way out of a cast that met a value it cannot cast without changing the migration: change that value, then `rerun`. */
 function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): RunnerAdvice {
   return change.by === 'cast' && change.reason === 'value'
@@ -92,6 +91,7 @@ function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): Runne
     : [];
 }
 
+/** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
   databaseStorageHash: string | undefined,
