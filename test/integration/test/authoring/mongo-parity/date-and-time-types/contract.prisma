@@ -1,0 +1,17 @@
+// use prisma-8
+
+model Event {
+  id         ObjectId                  @id @map("_id")
+  at         DateTime
+  exactAt    DateTime(as: temporal)
+  atText     DateTime(as: string)
+  day        Date
+  dayValue   Date(as: temporal)
+  opensAt    Time
+  opensValue Time(as: temporal)
+  lasts      Duration
+  createdOn  Date                      @onCreate(now())
+  updatedAt  DateTime                  @onUpdate(now())
+
+  @@map("events")
+}

@@ -67,7 +67,7 @@ model Series {
   bytes    Binary[]
   words    String[]
   flags    Bool[]
-  dates    Date[]
+  dates    DateTime[]
   points   Point[]
 
   @@map("series")

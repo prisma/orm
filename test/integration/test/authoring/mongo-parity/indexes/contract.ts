@@ -9,7 +9,7 @@ export const contract = defineContract({
         email: field.scalar(type.String()),
         tenantId: field.scalar(type.String()),
         name: field.scalar(type.String()),
-        expiresAt: field.scalar(type.Date()),
+        expiresAt: field.scalar(type.DateTime()),
         status: field.scalar(type.String()),
         metadata: field.scalar(type.Json()),
         title: field.scalar(type.String()),

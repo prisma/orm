@@ -59,7 +59,6 @@ test('a constructor PSL keeps only as a deprecated name is not a type helper', (
   expectTypeOf(type).not.toHaveProperty('Int');
   expectTypeOf(type).not.toHaveProperty('Float');
   expectTypeOf(type).not.toHaveProperty('Boolean');
-  expectTypeOf(type).not.toHaveProperty('DateTime');
   expectTypeOf(type).toHaveProperty('Int32');
 });
 
