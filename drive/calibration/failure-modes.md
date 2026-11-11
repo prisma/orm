@@ -955,7 +955,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Detection signal.** `gh pr view <n> --json mergeStateStatus,statusCheckRollup` shows `BLOCKED` with no pending checks and no `CI (PR)` run on the head, or shows `DIRTY`.
 
-**Mitigation.** After turning auto-merge on, confirm within minutes that the head's `CI (PR)` run exists and is running, and later that `mergeQueueEntry` is set. A watch on an approved PR ends on `DIRTY`, `CONFLICTING`, and `BLOCKED` with no pending checks, as well as on queued, merged and failed. If the head has no PR CI run, push an empty signed commit. Do not push to a PR while it is queued; wait for it to merge or leave the queue.
+**Mitigation.** After turning auto-merge on, confirm within minutes that the head's `CI (PR)` run exists and is running, and later that `mergeQueueEntry` is set. A watch on an approved PR ends on `DIRTY`, `CONFLICTING`, and `BLOCKED` with no pending checks, as well as on queued, merged and failed. If the PR is `DIRTY`, merge `main` and resolve the conflict first: GitHub runs no PR workflows while a conflict exists. Push an empty signed commit only if the head still has no PR CI run after that. Do not push to a PR while it is queued; wait for it to merge or leave the queue.
 
 **Reference incident.** Convenience types on other targets, 2026-11: prisma/orm#30959 sat four days at `BLOCKED` after a fix pushed while queued, holding back the fix for a test that broke `main`; prisma/orm#30989 sat a day at `DIRTY` while a watch looked only for queued, merged or failed.
 

@@ -12,13 +12,20 @@ changes:
     script: scripts/rewrite-mongo-date-types.ts
   - id: temporal-polyfill-is-a-peer-dependency-of-mongo
     summary: |
-      `temporal-polyfill` is now a required peer dependency of `@prisma/orm-mongo` and `@prisma/orm-target-mongo`. The MongoDB control plane imports it, because `DateTime(as: temporal)`, `Date(as: temporal)` and `Time(as: temporal)` read `Temporal` values. npm, pnpm and bun install it automatically, except npm with `legacy-peer-deps` set. A project that installs with Yarn, or with npm and `legacy-peer-deps`, must add `temporal-polyfill` (`^1.0.4`) to its own dependencies.
+      `temporal-polyfill` is now a required peer dependency of `@prisma/orm-mongo` and `@prisma/orm-target-mongo`. The MongoDB control plane imports it, because `DateTime(as: temporal)`, `Date(as: temporal)` and `Time(as: temporal)` read `Temporal` values. npm, pnpm and bun install it automatically (npm with `legacy-peer-deps` set does not: see `temporal-polyfill-with-legacy-peer-deps`). A project that installs with Yarn must add `temporal-polyfill` (`^1.0.4`) to its own dependencies.
     detection:
       glob: "**/yarn.lock"
       contains:
         - "@prisma/orm-mongo@"
         - "@prisma/orm-target-mongo@"
       anyMatch: true
+  - id: temporal-polyfill-with-legacy-peer-deps
+    summary: |
+      npm does not install peer dependencies when `legacy-peer-deps` is set, so a MongoDB project that installs with npm and that setting must add `temporal-polyfill` (`^1.0.4`) to its own dependencies, as a Yarn project must. The MongoDB control plane imports it. The detection matches an `.npmrc` that sets `legacy-peer-deps`; the change applies only to a project that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`.
+    detection:
+      glob: "**/.npmrc"
+      matches:
+        - '(?:^|\n)[ \t]*legacy-peer-deps[ \t]*=[ \t]*true\b'
 ---
 
 # MongoDB: `Date` is a calendar date, and `temporal-polyfill` is a peer dependency
@@ -51,4 +58,8 @@ A field you miss still compiles. Its TypeScript type becomes `string`, and readi
 
 ## `temporal-polyfill-is-a-peer-dependency-of-mongo`
 
-For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.4"` to `dependencies` in the `package.json` that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, then reinstall. Do the same for an npm project whose `.npmrc` sets `legacy-peer-deps=true`, which `detection` does not match.
+For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.4"` to `dependencies` in the `package.json` that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, then reinstall.
+
+## `temporal-polyfill-with-legacy-peer-deps`
+
+For each project whose `.npmrc` `detection` matches and whose `package.json` depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, add `"temporal-polyfill": "^1.0.4"` to `dependencies` in that `package.json`, then reinstall. Skip a project that depends on neither.
