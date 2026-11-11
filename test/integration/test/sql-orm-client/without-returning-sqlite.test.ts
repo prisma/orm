@@ -359,7 +359,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       );
       expect({
         updated: await db.Task.where({ id: 1 }).updateAll({ title: 'Dark mode v2' }),
-        created: await db.Task.create({ title: 'Crash', type: 'bug' }),
+        created: await db.Task.create({ title: 'Crash', type: 'bug' } as never),
       }).toEqual({
         updated: [{ id: 1, title: 'Dark mode v2', type: 'feature', priority: 1 }],
         created: { id: 2, title: 'Crash', type: 'bug', severity: null },
