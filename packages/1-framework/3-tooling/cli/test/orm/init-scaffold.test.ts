@@ -113,7 +113,7 @@ describe('init scaffold', () => {
           moduleResolution: 'nodenext',
           resolveJsonModule: true,
         });
-        expect(db).toContain("from './contract.js'");
+        expect(db).toContain("from './contract.d.js'");
       },
       timeouts.coldTransformImport,
     );

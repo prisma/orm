@@ -97,7 +97,7 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + psl > dbFile is stable
 "import 'dotenv/config';
 import mongo from '@internal/mongo/runtime';
 import { contractFromJson } from '@internal/mongo/static';
-import type { Contract } from './contract.js';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -284,7 +284,7 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + typescript > dbFile is
 "import 'dotenv/config';
 import mongo from '@internal/mongo/runtime';
 import { contractFromJson } from '@internal/mongo/static';
-import type { Contract } from './contract.js';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -497,7 +497,7 @@ exports[`templates > per-cell snapshots (FR5.4) > postgres + psl > dbFile is sta
 "import 'dotenv/config';
 import postgres from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
-import type { Contract } from './contract.js';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -664,7 +664,7 @@ exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > dbFile
 "import 'dotenv/config';
 import postgres from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
-import type { Contract } from './contract.js';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);

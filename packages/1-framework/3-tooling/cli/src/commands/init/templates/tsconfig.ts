@@ -41,7 +41,7 @@ const MODULE_COMPILER_OPTIONS: readonly string[] = ['module', 'moduleResolution'
 /**
  * The `module` values that go with each resolution mode the scaffold
  * already typechecks under, so a project that has picked one keeps its
- * own pair. `db.ts` spells its type import `./contract.js`, which
+ * own pair. `db.ts` spells its type import `./contract.d.js`, which
  * resolves to the emitted `contract.d.ts` under each.
  *
  * Only whole pairs count: TypeScript rejects a mismatched one (TS5110,
