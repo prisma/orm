@@ -1,122 +1,92 @@
-# Handover — MySQL proof of concept (2026-10-30)
+# Handover — MySQL proof of concept (2026-11-11)
 
-Written by `babayaga-71` when it hit its rate limit. Give this file to the next agent. It covers the whole project, not only the open slice. It replaces the handover of 2026-10-23.
+Written by `donatello-73` before a rate limit. Give this file to the next agent. It covers the whole project. It replaces the handover of 2026-10-30.
 
-## Read first
+## Start here
 
-- **This session's transcript** (readable on Will's machine; it was summarised once, near the start): `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-mysql-poc-handover-0df1b0/8a87e94d-b65f-489f-8c2e-d8a8b518fd42.jsonl`. List Will's own messages with `jq -r 'select(.type=="user" and (.message.content|type=="string")) | .message.content' <file> | grep -v '^<'`.
-- **The previous session's transcript:** `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-mysql-orm-poc-47bed5/fe43d629-f245-4e4b-9335-64412e80b75b.jsonl`.
-- **Project docs** in `projects/mysql-poc/`:
-  - `spec.md`: the project's decisions and non-goals.
-  - `design-notes.md`: the reasoning. Section 8 is the MySQL driver as built.
-  - `plan.md`: slice order.
-  - `coupling.md`: every place shared code assumes Postgres or SQLite. This register is the project's deliverable.
-  - `deferred.md`: follow-ups not done.
-  - `slices/*/spec.md`: one spec per slice.
-- **Gitignored reviews**, which a fresh worktree does not have. Copy them from this worktree, `/Users/will/Projects/prisma/orm/.claude/worktrees/mysql-poc-handover-0df1b0/`:
-  - `projects/mysql-poc/slices/mysql-writes/reviews/`: four design reviews for slice 4. Read all of them before implementing.
-  - `projects/mysql-poc/slices/mysql-driver-protocol/reviews/`: the protocol slice's code reviews.
-  - Research and probe scripts in `wip/`: `slice4-research.md`, `slice4-probes/`, `slice4-mine/`, `slice4-design-probes/`. The research has been wrong before; verify anything you use from it.
+1. **Branch:** `tml-3697-per-relation-includes`, pushed to the `bot` remote (`git@github-wmadden-electric:prisma/orm.git`). It is `main` plus the docs for slice 6b-1. No PR yet. Check out a fresh worktree on it.
+2. **Read, in order:**
+   - this file;
+   - `projects/mysql-poc/slices/mariadb-runtime/include-loading-design.md` — the approved design you build next;
+   - `projects/mysql-poc/slices/mariadb-runtime/spec.md` — slice 6b (split into 6b-1 and 6b-2);
+   - `projects/mysql-poc/{spec.md,plan.md,design-notes.md,coupling.md,deferred.md}` — the project;
+   - `projects/mysql-poc/research/` — the research and design reviews behind 6b (copied from gitignored folders so a fresh worktree has them).
+3. **Transcript of the session that wrote this** (read it for the reasoning and Will's rulings; it was summarised once near the start): `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-mysql-poc-handover-930c2f/afcd4df1-a0a9-414e-b93a-b28c379d17ed.jsonl`. List Will's own messages with `jq -r 'select(.type=="user" and (.message.content|type=="string")) | .message.content' <file> | grep -v '^<'`.
+4. **Earlier transcripts** (other macOS user `will`; Will grants read access with a `chmod +a` command if needed): `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-mysql-poc-handover-0df1b0/8a87e94d-b65f-489f-8c2e-d8a8b518fd42.jsonl` and `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-mysql-orm-poc-47bed5/fe43d629-f245-4e4b-9335-64412e80b75b.jsonl`.
 
 ## What the project is
 
-Will asked for a MySQL proof of concept in `prisma/orm` (Prisma 8, release candidate). It has three aims:
-- Be the foundation for production MySQL and MariaDB support. What is built is built properly.
-- **Find every place the framework and SQL family cannot serve a database like MySQL, and fix it.** Will (2026-10-30): "THIS IS THE ENTIRE REASON WE ARE DOING THIS PROJECT". The answers come from reading the code and probing a real server, never from assumptions.
-- Reorganise target code into one folder per database (done).
+Will asked for a MySQL proof of concept in `prisma/orm` (Prisma 8, release candidate). Three aims:
 
-It runs on the Drive process (`/drive-process`): spec, plan, slices, Opus implementer subagents, `/drive-code-review` (architect and principal-engineer passes, no walkthrough), fixes, then a PR. Linear project: "MySQL proof of concept" (team Terminal).
+- **Find every place the framework and SQL family cannot serve a database like MySQL or MariaDB, and fix it.** Will: "THIS IS THE ENTIRE REASON WE ARE DOING THIS PROJECT". `coupling.md` is the register of what was found. Answers come from reading code and probing real servers, never assumptions.
+- Be the foundation of production MySQL and MariaDB support: what is built is built properly.
+- One folder per database for target code (done).
 
-## Will's standing instructions (all still in force)
-
-- **Research before talking to Will.** Read the implementation, design docs, ADRs (in full, including Alternatives), subsystem docs and glossary, and understand the problem *before* engaging Will. Verify every claim about how code behaves in the code, with a file and line. Do not relay a subagent's or a project note's claim unverified. This session was corrected for exactly this twice.
-- **Raise to Will** any change to `packages/1-framework` or `packages/2-sql-family`, and any real ambiguity. Do not ask him implementation details.
-- **Copy the Postgres target's patterns.** No new designs where Postgres already solved the problem. A MySQL difference must be one MySQL forces, with evidence.
-- **Be skeptical of new fields, flags, options and capabilities on shared types.** Each one starts as "reject" until the ADRs show no existing concept covers it.
-- **Run an architect and principal-engineer design review before implementing a design**, not only a code review after.
-- **Our code never writes a value into SQL; the driver library may.** The MySQL driver uses `mariadb`'s own `query(sql, values)` substitution, one round trip per statement. Nothing is prepared.
-- **A driver satisfies the driver interface.** Rows come back as the server's text, bytes or null. Configure the library; never widen codecs to library types.
-- **Every slice extends the example app** `examples/prisma-8-demo-mysql`, which imports only `@prisma/orm-mysql`. A slice is done only when the example runs it in CI.
-- **Global rules in `~/.claude/CLAUDE.md`:**
-  - Name yourself, and write plain English.
-  - Commit with two sign-offs. Push via the `bot` remote (`git@github-wmadden-electric:prisma/orm.git`), never `origin`.
-  - Turn on Auto-fix on every PR, and auto-merge after approval.
-  - This repo has a merge queue. Watch a queued PR with a background loop over the GraphQL `mergeQueueEntry`; `gh pr view` has no such field.
-  - Close the Linear ticket after merge.
-- **Subagents use model `opus`.**
+It runs on the Drive process (`/drive-process`): spec, design reviews, slices built by Opus implementer subagents, `/drive-code-review` (architect and principal-engineer passes, no walkthrough), fixes, manual QA, PR. Linear project "MySQL proof of concept" (team Terminal); the open ticket is TML-3697 (MariaDB).
 
 ## Done and merged
 
-| Work | Linear | PR |
+| Slice | What | PR |
 | --- | --- | --- |
-| One folder per database | TML-3693 | prisma/orm#30829 |
-| MySQL target, control driver, emit, introspection | TML-3694 | prisma/orm#30836 |
-| MySQL migrations, `db verify`, `db sign` | TML-3704 | prisma/orm#30841 |
-| Public packages; the example migrates in CI | TML-3723 | prisma/orm#30856 |
-| ORM reads with includes (on `mysql2`) | TML-3695 (closed) | prisma/orm#30863 |
-| Drivers on `mariadb`, copying the Postgres driver's patterns | — | prisma/orm#30893 |
-| One round trip per statement, library substitutes values; driver README "Environment requirements"; ADR 155 rewritten: a driver takes SQL and parameters separately and delivers them however it chooses | — | prisma/orm#30918 |
+| 1 | One folder per database | prisma/orm#30829 |
+| 2a | MySQL target, control driver, emit, introspection | prisma/orm#30836 |
+| 2b | MySQL migrations, `db verify`, `db sign` | prisma/orm#30841 |
+| 2c | Public `@prisma/orm-mysql` packages; `examples/prisma-8-demo-mysql` migrates in CI | prisma/orm#30856 |
+| 3 | ORM reads with includes on MySQL | prisma/orm#30863, drivers on `mariadb` #30893, #30918 |
+| 4 | ORM writes without `RETURNING` on MySQL (TML-3696) | prisma/orm#30927 |
+| 6a | MariaDB control plane: `mariadb` target extending MySQL, public `@prisma/orm-mariadb` and `@prisma/orm-target-mariadb`, `examples/prisma-8-demo-mariadb` migrates/verifies/signs in CI | prisma/orm#30964 (merged 2026-11-10) |
 
-Filed, not started: **TML-3777**, a startup or deploy-time check that the database meets the driver's environment requirements. Will called it the ideal next step for the driver, but not required now.
+Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,3-driver,9-facade}`, MariaDB beside it in `packages/3-targets/mysql/2-mariadb/{1-target,2-adapter,3-driver,9-facade}`. The layering rule is one sentence (ADR 278, `Package-Layering.md`): **a package imports only from lower-numbered folders; numbers compare only between folders in the same parent.** It exists to prevent cycles between packages, adapting Clean Architecture. `scripts/lint-target-layering.mjs` enforces it.
 
-## Open: slice 4, ORM writes (TML-3696)
+6a also landed repo-wide agent guidance: `.agents/rules/running-tests.mdc` (every suite must pass, but agents run only their own packages' tests locally on the shared machine; CI runs full suites; a full `pnpm build` is fine, never partial builds), matching text in `AGENTS.md`, the Drive DoD docs and onboarding docs.
 
-**Branch:** `tml-3696-mysql-orm-writes`, from `main` after #30918, pushed to `bot`. No PR.
+## Next: slice 6b-1, loading includes with one query per relation
 
-**Spec:** `projects/mysql-poc/slices/mysql-writes/spec.md`. Its decisions are settled with Will on 2026-10-30; do not reopen them:
-1. **`insertId` on `SqlStatementStats`.** It is the generated value as decimal text, set only when exactly one row was inserted.
-   - MySQL fills it from `mariadb`'s `insertId`. SQLite fills it only when `changes` is 1. Postgres leaves it out.
-   - The ORM reads it only when it needs a key the caller did not supply, decodes it with the column's codec, and fails inside the transaction when it is absent.
-   - No framework change. Both reviews rejected a family-typed framework result: an optional value still type-checks when dropped, and ADR 271 rejected generic client result types.
-2. **New capability `sql.insertOnConflictTarget`**: a conflict clause applies only to the columns it names. Postgres and SQLite report it, MySQL does not.
-   - Without it, upsert is allowed only when no other unique key can collide.
-   - The ORM sends no conflict columns, and the MySQL renderer refuses named ones.
-   - The upsert read-back fails and rolls back if it finds no row. That covers unique indexes missing from the contract.
-3. **A row-returning `createAll` with generated keys is refused on MySQL**, decided from the contract.
-4. **No row lock.** `updateAll` and `deleteAll` write with the caller's filter, as Postgres does. Pre-selected ids are used only for the read-back, as an `IN` list.
-5. **`onConflict: 'skip'` is refused on MySQL.** Recorded in `deferred.md`.
-6. **MySQL sessions run at READ COMMITTED**, a target session setting. Transaction isolation controls are on the roadmap.
+**Why.** The ORM loads includes in one query: a correlated subquery aggregating child rows into JSON, reading from a derived table that refers to the outer row. MariaDB 10.11 cannot resolve that outer reference ("Unknown column"), so every row include fails on MariaDB. MariaDB also silently truncates `JSON_ARRAYAGG` (a cut on an element boundary is valid JSON with fewer rows), so no single-query rewrite is safe.
 
-Also from the reviews: when the `returning` capability is off, the ORM chooses its strategy per ADR 164 and reads written rows back by identity. ADR 164 already permits this.
+**Decision (approved by Will 2026-11-11, names accepted):** when the database cannot run the one-query include correctly, the ORM loads includes per relation (like ActiveRecord `preload`, Django `prefetch_related`): parents first, then one query per relation for all parents, keyed by the parents' identity, stitched in JavaScript. Everything is specified in `include-loading-design.md`; the names are final:
 
-**Committed so far** (oldest first, after the spec commits):
-- `97bbf0ab43`: the first `lastInsertId`. `e97a83de57` reworked it into `insertId` as decimal text. Check that nothing of the first version is left.
-- `a996fac826`: the `insertOnConflictTarget` capability in the Postgres and SQLite adapters. Check that the emitted fixtures and the capabilities reference were updated (`pnpm fixtures:check`).
-- `2435d669f6`: a work-in-progress MySQL renderer for insert, update, delete and upsert. Unfinished.
-- `d84bfb66a9`: READ COMMITTED session setting.
-- `b959d9ef5a`: the renderer refuses an upsert that names conflict columns. The test update for this was in progress when the session stopped.
+- capabilities `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation` (Postgres, SQLite, MySQL report both; MariaDB neither); `sql.jsonAgg` is deleted;
+- `selectIncludeStrategy(contract): 'join' | 'query'` (values follow Prisma 7's `relationLoadStrategy`);
+- `stitchKey`; chunks of at most 10 000 keys and 1 MiB of encoded keys;
+- mutation-graph node `Preload` for writes that return rows with includes;
+- `secondarySelectAnnotation` (name `'secondarySelect'`) in the SQL runtime, honoured by `budgets` and `lints`;
+- refusals use existing codes `ORM.ROW_IDENTITY_MISSING` and `ORM.CAPABILITY_MISSING`.
 
-**Still to do:**
-- Finish and test the renderer.
-- The SQLite driver's `insertId`.
-- The ORM fallback strategies, the upsert check and read-back, the `createAll` refusal and the skip refusal.
-- Tests:
-  - SQLite runs with `returning` off, using an emitted contract, not a patched one;
-  - live MySQL tests, including concurrency;
-  - a middleware that intercepts an insert.
-- The example app writes.
-- Update `coupling.md` rows 1, 2, 3, 7, 8, 18 and 19, `plan.md`, and the READMEs.
-- Run `/drive-code-review`, fix, then open the PR.
+**Plan.** 6b-1 is one PR with no MariaDB code, tested by running the existing Postgres include tests a second time with both capabilities switched off through the adapter descriptor. Build it in two dispatches:
 
-Will has not yet said whether to open new PRs while others await review. Check `gh pr list --author wmadden-electric` first.
+1. Capabilities, `selectIncludeStrategy`, the per-relation read for every include form (design section 3's table), stitching, chunking, tests. An implementer brief for this was written (`wip/briefs/slice6b1-common.md` is gitignored; its rules are in "Rules" below) and the dispatch was started and stopped before it changed anything.
+2. Writes (`Preload`), the cache key, `secondarySelectAnnotation` and the middleware change, the prepared-read refusal.
 
-## After slice 4
+Then `/drive-code-review`, fixes, a second review if fixes are substantial, manual QA, PR. Then **6b-2**: the MariaDB runtime (`mariadb()`, runtime target/adapter factories, `createMysqlClient`, a `MysqlSqlRenderer` class that MariaDB subclasses only to write `VALUES(c)` in upserts, true error messages, MySQL's ORM live tests run against both servers, the example's reads and writes). Then **close-out** (`.drive` `close-project.md`: final retro, DoD evidence, migrate long-lived decisions to ADRs, strip references to `projects/mysql-poc/`, delete it, mark the GA plan row done).
 
-- **Slice 6, MariaDB (TML-3697).**
-  - It subclasses the MySQL target.
-  - MariaDB has `RETURNING` on insert and delete but not update, so the `returning` capability will need splitting by statement kind.
-  - MariaDB writes `VALUES(c)` where MySQL writes `AS new`.
-  - The example app runs against MariaDB.
-- **Close-out.** Report what `coupling.md` found, and migrate long-lived docs.
-- **Approved but held:** one SQL-family method that locks the database marker, implemented as a transaction where possible. Errors originate in the adapter, with no table names in framework errors.
+**Rejected, do not revisit** (reasons in the design's Alternatives): a single-query MariaDB include checked for truncation via a deliberate overflow error (too fragile, 2^depth cost — Will agreed); Drizzle's no-lateral mode (still correlates inside derived tables); restoring the multi-query code removed in commit `70482700f2` as it was; redefining `jsonAgg`.
 
-## Local MySQL for tests
+## Will's standing instructions (in force)
 
-Homebrew has MySQL 9.6 only. Start your own server with a data directory under `wip/`:
+- **Execution mode:** design with Will, then execute through Drive without interrupting him; his input is the design at the start and final verification at the end. Make engineering decisions yourself. Do not end reports with open-question lists. Never use the question UI; never put a question in `wrap_up`.
+- **Research before talking to Will;** verify every claim in code or on a live server; answer from the repo, not conjecture. When asked for prior art, search for it.
+- **Never change `packages/1-framework`.** Shared-code changes in the SQL family or ORM client are fine when the design says so; do not ask Will for permission ("Shut the fuck up about my go-ahead") — explain decisions instead.
+- **No target names in shared code;** capabilities state database facts precisely (MariaDB having `JSON_ARRAYAGG` is why `jsonAgg` could not mean "the one-query include works").
+- **Never say "on every target"** — capabilities exist because nothing is expected to work everywhere.
+- **Docs and PR descriptions:** lead with the decision and a concrete example, state the design (not requirements to reverse-engineer), name the requirements it meets, alternatives last, no counts that go stale, nothing that "adds nothing meaningful". Write for a teammate without our context. Plain English, brief; never hard-wrap markdown.
+- **Don't add duplicate guidance.** When an instruction was ignored, find why (usually a conflicting doc) and fix that.
+- **Copy Postgres's patterns;** no invented names (reuse code or industry vocabulary, else leave the name to Will).
+- **Our code never writes a value into SQL;** the `mariadb` driver substitutes values.
+- **Merge at will** once Will approves: enable auto-merge, keep every review thread resolved (the merge queue needs it), fix and re-queue if the queue drops the PR (it runs integration tests that PR CI does not).
 
-```bash
-W=$PWD/wip; mkdir -p $W/logs; mysqld --initialize-insecure --datadir=$W/mysql-data
-(mysqld --datadir=$W/mysql-data --port=3362 --bind-address=127.0.0.1 --socket=$W/my.sock --pid-file=$W/my.pid --mysqlx=OFF > $W/logs/mysqld.log 2>&1 &)
-```
+## Rules for agents and subagents
 
-Then set `MYSQL_URL='mysql://root@127.0.0.1:3362/'`. Stop it with `kill $(cat wip/my.pid)`, never by name. CI runs MySQL 8.4 with `?allowPublicKeyRetrieval=true` in `MYSQL_URL`.
+- Subagents use model `opus`.
+- Run node, pnpm and commits through `mise exec --`. Use `pnpm`, never `npm`/`npx`; a shell hook blocks command lines containing the word "npm".
+- Never run whole test suites locally (`test:packages`, `test:integration`, `test:e2e`, `test:all`); run the touched test files. A full `pnpm build` at the root is fine; never build single packages. Do not run repo-wide chains after merging main; check whether the merged files touch your packages.
+- Never write to `/tmp`; use `wip/` (gitignored).
+- Commit with `git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`. No Co-Authored-By or "Generated with Claude Code" lines. Never amend, rebase or force-push. Push only to the `bot` remote.
+- PR titles: `TML-NNNN: <what a user can now do>`. PR body ends with `Agent: <name>`. Don't open PRs for small changes; they ride along in the next real PR.
+- Auto-fix cannot be enabled on PRs the bot opened; Will turns it on.
+- Live servers: Docker (OrbStack; `orb start` if it is not running). Use containers with unique names and ports, remove only those: `docker run -d --name <name> -p <port>:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`, or `mysql:8.4` with `MYSQL_ALLOW_EMPTY_PASSWORD=1` and `?allowPublicKeyRetrieval=true` in `MYSQL_URL`. Tests read `MYSQL_URL` and `MARIADB_URL`. Never kill processes by name.
+
+## Open items outside 6b
+
+- **Before the release that ships `@prisma/orm-mariadb` and `@prisma/orm-target-mariadb`:** someone must hand-publish a placeholder version of each (as `@prisma/orm-mysql` got `0.0.0-stage`) so npm trusted publishing accepts them.
+- `deferred.md` lists follow-ups: splitting `returning` by statement kind, MariaDB JSON/boolean types, `tx_isolation` deprecation on MariaDB 11.1+, `target: 'mysql'` in shared error metadata (6b-2 decides), MySQL's cut-include failure surfacing as a JSON decoding error rather than a size message, TML-3777 (startup check of the database environment).
