@@ -229,25 +229,25 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
-  it('refuses a nested create before running when a child key column gets a database default other than auto-increment', async () => {
-    await withDatabase(async ({ db, database, statements }) => {
-      await expect(
-        db.User.create({ ...ada, badges: (badges) => badges.create([{ label: 'First' }]) }),
-      ).rejects.toMatchObject({
-        code: 'ORM.CAPABILITY_MISSING',
-        message: expect.stringContaining(
-          'create() on model "Badge" cannot find the row it inserts',
-        ),
-      });
-      expect(statements).toEqual([]);
-      const { id } = await db.User.create(ada);
-      statements.length = 0;
-      await expect(
-        db.User.where({ id }).update({ badges: (badges) => badges.create([{ label: 'First' }]) }),
-      ).rejects.toMatchObject({ code: 'ORM.CAPABILITY_MISSING' });
-      expect({ statements, users: rowsOf(database, 'users').length }).toEqual({
-        statements: [],
-        users: 1,
+  it('inserts a nested child create whose key a database default other than auto-increment fills', async () => {
+    await withDatabase(async ({ db, database }) => {
+      expect(
+        await db.User.create({ ...ada, badges: (badges) => badges.create([{ label: 'First' }]) }),
+      ).toEqual({ id: 1, ...ada });
+      expect(
+        await db.User.where({ id: 1 }).update({
+          badges: (badges) => badges.create([{ label: 'Second' }]),
+        }),
+      ).toEqual({ id: 1, ...ada });
+      expect({
+        users: rowsOf(database, 'users'),
+        badges: database.prepare('select label, user_id from badges order by label').all(),
+      }).toEqual({
+        users: [{ id: 1, ...ada }],
+        badges: [
+          { label: 'First', user_id: 1 },
+          { label: 'Second', user_id: 1 },
+        ],
       });
     });
   });
@@ -352,6 +352,21 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('returns the full row of each variant from writes through the base model', async () => {
+    await withDatabase(async ({ db, database }) => {
+      database.exec(
+        "insert into tasks (id, title, type) values (1, 'Dark mode', 'feature'); insert into features (id, priority) values (1, 1)",
+      );
+      expect({
+        updated: await db.Task.where({ id: 1 }).updateAll({ title: 'Dark mode v2' }),
+        created: await db.Task.create({ title: 'Crash', type: 'bug' }),
+      }).toEqual({
+        updated: [{ id: 1, title: 'Dark mode v2', type: 'feature', priority: 1 }],
+        created: { id: 2, title: 'Crash', type: 'bug', severity: null },
+      });
+    });
+  });
+
   it('updates and deletes rows of a variant stored in its own table', async () => {
     await withDatabase(async ({ db, database }) => {
       database.exec(
@@ -431,7 +446,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
             'createAll() requires contract capability "insertOnConflictTarget". Re-emit the contract against an adapter that reports it.',
         }),
       );
-      expect(() => db.User.createAll([ada], { onConflict: 'skip' })).toThrow(
+      await expect(db.User.createAll([ada], { onConflict: 'skip' })).rejects.toThrow(
         expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
       );
       expect(await db.User.createAndCount([ada, grace], { onConflict: 'skip' })).toBe(1);

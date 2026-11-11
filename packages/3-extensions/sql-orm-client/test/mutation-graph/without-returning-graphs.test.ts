@@ -31,7 +31,7 @@ function targetOf(state: typeof users.state) {
 const target = targetOf(users.state);
 const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
 
-function generatedTarget(modelName: 'Counter' | 'Note', tableName: string) {
+function generatedTarget(modelName: 'Counter' | 'Note' | 'Owner', tableName: string) {
   return {
     context: generatedContext,
     state: emptyState(createCollectionTables(generatedContext.contract, 'public', modelName)),
@@ -118,12 +118,72 @@ describe('write graphs on a contract without capability "returning"', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('refuses createAll() that skips conflicting rows and returns them, when it is called', () => {
-    const { collection } = createCollectionFor('User', withoutReturning);
-
-    expect(() => collection.createAll([ada], { onConflict: 'skip' })).toThrow(
-      expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
+  it('inserts a child create nothing reads whose key a database default other than auto-increment fills', async () => {
+    const owners = generatedTarget('Owner', 'owners');
+    const graph = createGraph(
+      owners,
+      parseMutationInput(generatedContext.contract, 'public', 'Owner', {
+        id: 1,
+        folders: (folders: { create: (rows: unknown[]) => unknown }) =>
+          folders.create([{ name: 'docs' }]),
+      } as never),
     );
+
+    expect(printGraph(graph)).toBe(
+      [
+        'n1 Insert owners',
+        'n2 Insert folders <- PayloadData n1 (id->owner_id)',
+        'n3 FindByKeys owners by (id) for create <- Rows n1',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('refuses, before running anything, a child create whose own child creates read its database-default key', async () => {
+    const owners = generatedTarget('Owner', 'owners');
+    const runtime = createMockRuntime();
+    const graph = createGraph(
+      owners,
+      parseMutationInput(generatedContext.contract, 'public', 'Owner', {
+        id: 1,
+        folders: (folders: { create: (rows: unknown[]) => unknown }) =>
+          folders.create([
+            {
+              name: 'docs',
+              pages: (pages: { create: (rows: unknown[]) => unknown }) => pages.create([{ id: 1 }]),
+            },
+          ]),
+      } as never),
+    );
+
+    await expect(
+      queryGraph(graph, { runtime, context: generatedContext }, owners).toArray(),
+    ).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: expect.stringContaining('create() on model "Folder" cannot find the row it inserts'),
+    });
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('refuses, before running anything, createAllGraph that skips conflicting rows and returns them', async () => {
+    const runtime = createMockRuntime();
+    const graph = createAllGraph(target, [ada], { columns: [] }, 'rows');
+
+    await expect(queryGraph(graph, { runtime, context }, target).toArray()).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message:
+        'create() with onConflict "skip" on model "User" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row\'s existing match. Use createAndCount() to skip conflicting rows.',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('counts createAllGraph that skips conflicting rows', async () => {
+    const runtime = createMockRuntime();
+    runtime.setNextStats([{ affectedRows: 1 }]);
+    const graph = createAllGraph(target, [ada], { columns: [] }, 'count');
+
+    expect(await executeGraph(graph, { runtime, context })).toEqual({ affectedRows: 1 });
   });
 
   it('updateFirstGraph updates the found row, then reads it back by the key the Update gives, which it may set', () => {

@@ -47,7 +47,6 @@ import {
   columnOfCallerField,
   getModelFieldColumns,
   hasCompleteUniqueKey,
-  hasContractCapability,
   isToOneCardinality,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
@@ -2083,14 +2082,6 @@ export class CollectionBase<
         queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
     }
 
-    if (conflictSkip !== undefined && !hasContractCapability(this.contract, 'returning')) {
-      const method = rows.length === 1 ? 'create()' : 'createAll()';
-      throw ormError(
-        'ORM.CAPABILITY_MISSING',
-        `${method} with onConflict "skip" on model "${this.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
-        { meta: { capability: 'returning', action: method } },
-      );
-    }
     const graph = createAllGraph(this.#descriptionOptions(), rows, conflictSkip, 'rows');
     return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
   }

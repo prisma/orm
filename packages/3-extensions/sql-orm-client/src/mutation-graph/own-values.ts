@@ -44,6 +44,13 @@ export function checkOwnValues(
   }
   const { namespaceId, tableName } = storageOf(first.table);
   const method = `${owner.operation}()`;
+  if (asts.some((ast) => ast.onConflict?.action.kind === 'do-nothing')) {
+    throw ormError(
+      'ORM.CAPABILITY_MISSING',
+      `${method} with onConflict "skip" on model "${owner.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
+      { meta: { capability: 'returning', action: method } },
+    );
+  }
   rowIdentity(context.contract, namespaceId, tableName, owner.modelName, method);
   const given = [graph.inputsOf(id)['payload'] ?? []]
     .flat()

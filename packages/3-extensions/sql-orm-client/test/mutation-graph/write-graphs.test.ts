@@ -14,8 +14,13 @@ import type { Graph } from '../../src/mutation-graph/graph';
 import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { baseContract, createCollectionFor, withoutCapabilityKeys } from '../collection-fixtures';
-import { getTestContext } from '../helpers';
+import {
+  baseContract,
+  createCollectionFor,
+  withoutCapabilityKeys,
+  withReturningCapability,
+} from '../collection-fixtures';
+import { buildMixedPolyContract, getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
@@ -255,5 +260,22 @@ describe('write graphs as they run, on a contract without returning', () => {
       ),
       count: lines("n1 Delete users where name = 'Ada'", 'result: n1'),
     });
+  });
+});
+
+describe('write graphs of a polymorphic base model with a variant in its own table', () => {
+  const contract = withReturningCapability(buildMixedPolyContract());
+  const context = { ...getTestContext(), contract };
+  const tasks = createCollectionFor('Task' as never, contract).collection.where({ title: 'Crash' });
+  const target = { context, state: tasks.state, modelName: 'Task', namespaceId: 'public' };
+
+  it('reads the rows back with the variant joins after updateAll()', () => {
+    expect(asRun(updateAllGraph(target, { title: 'Crash!' }, 'rows'))).toBe(
+      lines(
+        "n1 Update tasks set title = 'Crash!' where title = 'Crash'",
+        'n2 Find tasks <- FilterData n1 (id->id)',
+        'result: n2',
+      ),
+    );
   });
 });

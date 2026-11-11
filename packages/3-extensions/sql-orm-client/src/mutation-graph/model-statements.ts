@@ -187,9 +187,10 @@ export function readBack(
   const { contract } = context;
   const { root } = model.tables;
   const { selectedFields, includes, variantValue } = shape;
-  const ownTable = variantValue !== undefined && model.tables.variants.has(variantValue);
+  const { variants } = model.tables;
+  const variantJoins = variantValue === undefined ? variants.size > 0 : variants.has(variantValue);
   const ast =
-    includes.length === 0 && !ownTable
+    includes.length === 0 && !variantJoins
       ? SelectAst.from(root.tableSource(contract)).withProjection(
           returningProjection(contract, model.modelName, root, selectedFields),
         )

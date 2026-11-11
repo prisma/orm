@@ -3,7 +3,7 @@ import {
   ColumnRef,
   checkLimitOffset,
   type ProjectionItem,
-  type SelectAst,
+  SelectAst,
 } from '@internal/sql-relational-core/ast';
 import {
   hasContractCapability,
@@ -71,7 +71,7 @@ export function updateAllGraph(
   set: Readonly<Record<string, unknown>>,
   returns: CallReturns,
 ): Graph {
-  const { state } = collection;
+  const { context, state } = collection;
   const b = builderOf(collection);
   if (Object.keys(set).length === 0) {
     b.graph.setResult(findRows(b, selectRowsAst(collection, state), noInputs));
@@ -87,7 +87,9 @@ export function updateAllGraph(
         {
           from: findRows(
             b,
-            selectIdentityAst(collection, { ...state, orderBy: undefined }).withWhere(where),
+            SelectAst.from(state.tables.root.tableSource(context.contract))
+              .withProjection(identityProjection(collection))
+              .withWhere(where),
             noInputs,
           ),
           columns: sameRowColumns(collection),
