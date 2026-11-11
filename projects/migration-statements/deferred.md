@@ -297,3 +297,9 @@ When rows hold an enum value `db update` removes from a member that takes no nul
 **Found:** slice 3b PR 4 review round 3, dispatch 31 (2026-10-30).
 
 `migration plan` knows when a migration it writes has unfilled placeholders, but it writes `ops.json` as `[]`, the same as a migration with no operations. So `db migrate` must read the code of `migration.ts` to find a call of `placeholder`, and it cannot find one made from a helper file that `migration.ts` imports. Recording the unfilled state in the package needs a new field on `MigrationMetadata` (`packages/1-framework/3-tooling/migration`), which changes the on-disk format and the migration hash, so this PR does not do it. `migration new` has the same gap: its `ops.json` is `[]` until the user runs `node migration.ts`, so a migration the user forgot to emit is applied as zero operations. Recommendation: add the field in its own change, so both commands write it and `db migrate` refuses on it instead of reading `migration.ts`.
+
+## The MongoDB JSONPath parser is a copy of SQL's
+
+**Found:** slice 4b PR 2 review of dispatch 1 (2026-11-11).
+
+`packages/3-targets/mongo/1-target/src/core/migrations/stored-key-path.ts` copies the parser in `packages/2-sql-family/9-family/src/core/migrations/json-path.ts` (`parseJsonPath`, `writtenPrefix`, `jsonPathText`), because the layering rules stop the MongoDB target from importing the SQL family, and the framework domain may not take it. Two copies of one grammar can drift apart. Move the parser to a shared package outside the framework domain, which both families may import, if such a package is agreed. The MongoDB walk reads a wildcard as list elements only, so the copy's grammar is wider than what MongoDB walks.

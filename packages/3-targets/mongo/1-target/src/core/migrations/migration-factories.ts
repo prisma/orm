@@ -515,7 +515,7 @@ export interface StoredKeyOptions {
   readonly collection: string;
   /** The stored name of the root field whose value holds the key. */
   readonly field: string;
-  /** A JSONPath from the field's value to the key, such as `$[*].street`. */
+  /** A JSONPath from the field's value to the key, such as `$[*].street`. A wildcard selects the elements of a list; it does not select an object's member values. */
   readonly path: string;
   readonly filter?: Document;
 }
