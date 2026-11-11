@@ -135,7 +135,7 @@ function failingQueries(runtime: MockRuntime): MockRuntime {
 
 function findThenUpdatePost(columns = idToUserId): Graph {
   const graph = newGraph();
-  const find = graph.add(findUsers([nameIsAda]));
+  const find = graph.add(findUsers([nameIsAda]), {});
   const update = updatePosts({ title: 'New' }, undefined, ['id', 'title']);
   graph.setResult(addFiltered(graph, update, [find, columns]));
   return graph;
@@ -143,8 +143,8 @@ function findThenUpdatePost(columns = idToUserId): Graph {
 
 function findThenDeleteUsers(): Graph {
   const graph = newGraph();
-  const find = graph.add(findUsers([nameIsAda], ['id', 'name']));
-  graph.add(deleteUsers(nameIsAda));
+  const find = graph.add(findUsers([nameIsAda], ['id', 'name']), {});
+  graph.add(deleteUsers(nameIsAda), {});
   graph.setResult(find);
   return graph;
 }
@@ -156,7 +156,7 @@ describe('running a graph', () => {
       runtime.setNextResults([[{ id: 1, name: 'Ada', invited_by_id: 2 }]]);
       const graph = newGraph();
       const update = updateUsers({ name: 'Ada' }, nameIsAda, allUserColumns);
-      graph.setResult(graph.add(update));
+      graph.setResult(graph.add(update, {}));
 
       const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers());
 
@@ -167,7 +167,7 @@ describe('running a graph', () => {
     it('makes a write that is the result return the selection of the caller', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+      graph.setResult(graph.add(deleteUsers(nameIsAda), {}));
 
       await queryGraph(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id', 'email'] }));
 
@@ -178,7 +178,7 @@ describe('running a graph', () => {
     it('makes it return every column of the model when the caller selected nothing', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+      graph.setResult(graph.add(deleteUsers(nameIsAda), {}));
 
       await queryGraph(graph, contextOf(runtime), rowsOfUsers());
 
@@ -188,7 +188,7 @@ describe('running a graph', () => {
     it('makes a Find that is the result also return what the caller selected', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.setResult(graph.add(findUsers([nameIsAda], ['id'])));
+      graph.setResult(graph.add(findUsers([nameIsAda], ['id']), {}));
 
       await queryGraph(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id', 'email'] }));
 
@@ -199,7 +199,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextStats([{ affectedRows: 3 }]);
       const graph = newGraph();
-      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+      graph.setResult(graph.add(deleteUsers(nameIsAda), {}));
 
       expect(await executeGraph(graph, contextOf(runtime))).toEqual({ affectedRows: 3 });
       expect(statements(runtime)).toEqual(['execute delete']);
@@ -210,7 +210,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1 }, { id: 2 }]]);
       const graph = newGraph();
-      graph.setResult(graph.add(findUsers()));
+      graph.setResult(graph.add(findUsers(), {}));
 
       expect(
         await firstRowOf(graph, contextOf(runtime), rowsOfUsers({ selectedFields: ['id'] })),
@@ -220,7 +220,7 @@ describe('running a graph', () => {
     it('does not open a transaction', async () => {
       const transactional = withTransaction(createMockRuntime());
       const graph = newGraph();
-      graph.setResult(graph.add(deleteUsers(undefined, allUserColumns)));
+      graph.setResult(graph.add(deleteUsers(undefined, allUserColumns), {}));
 
       await queryGraph(graph, contextOf(transactional.runtime), rowsOfUsers());
 
@@ -241,7 +241,7 @@ describe('running a graph', () => {
     it('still executes the writes of the graph', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.add(deleteUsers(nameIsAda));
+      graph.add(deleteUsers(nameIsAda), {});
 
       expect(await firstRowOf(graph, contextOf(runtime), rowsOfUsers())).toBeNull();
       expect(statements(runtime)).toEqual(['execute delete']);
@@ -253,8 +253,8 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 1, name: 'Ada' }]]);
       const graph = newGraph();
-      graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
-      graph.setResult(graph.add(findUsers([nameIsAda], ['id', 'name'])));
+      graph.add(updateUsers({ name: 'Ada' }, nameIsAda), {});
+      graph.setResult(graph.add(findUsers([nameIsAda], ['id', 'name']), {}));
 
       const rows = await queryGraph(
         graph,
@@ -364,7 +364,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
       const graph = newGraph();
-      const find = graph.add(findUsers([nameIsAda]));
+      const find = graph.add(findUsers([nameIsAda]), {});
       graph.setResult(addFiltered(graph, deletePosts(), [find, idToUserId]));
 
       expect(await affectedBy(graph, contextOf(runtime))).toBe(0);
@@ -375,7 +375,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[]]);
       const graph = newGraph();
-      const find = graph.add(findUsers([nameIsAda]));
+      const find = graph.add(findUsers([nameIsAda]), {});
       const update = addFiltered(graph, updatePosts({ title: 'New' }), [find, idToUserId]);
       const sameId = columnMappings('posts', 'posts', [['id', 'id']]);
       graph.setResult(addFiltered(graph, deletePosts(), [update, sameId]));
@@ -388,7 +388,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }], []]);
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda), {});
       graph.setResult(addFiltered(graph, deletePosts(undefined, ['id']), [update, idToUserId]));
 
       await queryGraph(graph, contextOf(runtime), rowsOfPosts());
@@ -404,7 +404,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7, invited_by_id: 2 }]]);
       const graph = newGraph();
-      const find = graph.add(findUsers([nameIsAda], ['id', 'invited_by_id']));
+      const find = graph.add(findUsers([nameIsAda], ['id', 'invited_by_id']), {});
       const sameId = columnMappings('users', 'users', [['id', 'id']]);
       addFiltered(graph, deleteUsers(), [find, sameId]);
       graph.setResult(find);
@@ -424,7 +424,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ name: 'Ada', id: 7 }]]);
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda, ['name']));
+      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda, ['name']), {});
       addFiltered(graph, deletePosts(), [update, idToUserId]);
       graph.setResult(update);
 
@@ -443,7 +443,7 @@ describe('running a graph', () => {
       const runtime = createMockRuntime();
       runtime.setNextResults([[{ id: 7 }, { id: 8 }]]);
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda), {});
       addFiltered(graph, deletePosts(), [update, idToUserId]);
       graph.setResult(update);
 
@@ -459,7 +459,7 @@ describe('running a graph', () => {
       const state = { ...usersWithPosts(), selectedFields: ['id', 'name'] };
       const sameId = columnMappings('users', 'users', [['id', 'id']]);
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda), {});
       graph.setResult(addFiltered(graph, findUsersWith(state), [update, sameId]));
 
       const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers(state));
@@ -476,7 +476,7 @@ describe('running a graph', () => {
       const state = { ...usersWithPosts(), selectedFields: ['id', 'name'] };
       const sameId = columnMappings('users', 'users', [['id', 'id']]);
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda));
+      const update = graph.add(updateUsers({ name: 'Ada' }, nameIsAda), {});
       graph.setResult(addFiltered(graph, findUsersWith(state), [update, sameId]));
 
       expect(await queryGraph(graph, contextOf(runtime), rowsOfUsers(state))).toEqual([]);
@@ -488,8 +488,8 @@ describe('running a graph', () => {
       runtime.setNextResults([[{ id: 1, name: 'Ada', posts: [] }]]);
       const state = { ...usersWithPosts(), selectedFields: ['id', 'name'] };
       const graph = newGraph();
-      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }));
-      graph.add(deleteUsers(nameIsAda));
+      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }), {});
+      graph.add(deleteUsers(nameIsAda), {});
       graph.setResult(find);
 
       const rows = await queryGraph(graph, contextOf(runtime), rowsOfUsers(state));
@@ -504,7 +504,7 @@ describe('running a graph', () => {
       runtime.setNextResults([[{ name: 'Ada', posts: [], id: 1 }]]);
       const state = { ...usersWithPosts(), selectedFields: ['name'] };
       const graph = newGraph();
-      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }));
+      const find = graph.add(findUsersWith({ ...state, filters: [nameIsAda] }), {});
       const sameId = columnMappings('users', 'users', [['id', 'id']]);
       addFiltered(graph, deleteUsers(), [find, sameId]);
       graph.setResult(find);
@@ -522,11 +522,11 @@ describe('running a graph', () => {
       const runtime = failingQueries(createMockRuntime());
       runtime.setNextStats([{ affectedRows: 2 }]);
       const graph = newGraph();
-      const find = graph.add(findUsers([nameIsAda]));
+      const find = graph.add(findUsers([nameIsAda]), {});
       graph.add(findUsers(), {
         filter: [new FilterData(find, columnMappings('users', 'users', [['id', 'id']]))],
       });
-      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+      graph.setResult(graph.add(deleteUsers(nameIsAda), {}));
 
       expect(await affectedBy(graph, contextOf(runtime))).toBe(2);
     });
@@ -534,8 +534,8 @@ describe('running a graph', () => {
     it('fails without running a node when a node refuses to run', async () => {
       const runtime = createMockRuntime();
       const graph = newGraph();
-      graph.add(deleteUsers(nameIsAda));
-      graph.setResult(graph.add(new RefusingFind(findUsers().ast)));
+      graph.add(deleteUsers(nameIsAda), {});
+      graph.setResult(graph.add(new RefusingFind(findUsers().ast), {}));
 
       await expect(affectedBy(graph, contextOf(runtime))).rejects.toThrow('this Find cannot run');
       await expect(queryGraph(graph, contextOf(runtime), rowsOfUsers()).toArray()).rejects.toThrow(
@@ -546,7 +546,7 @@ describe('running a graph', () => {
 
     it('fails when the only node of the graph refuses to run', async () => {
       const graph = newGraph();
-      graph.setResult(graph.add(new RefusingFind(findUsers().ast)));
+      graph.setResult(graph.add(new RefusingFind(findUsers().ast), {}));
 
       await expect(
         queryGraph(graph, contextOf(createMockRuntime()), rowsOfUsers()).toArray(),
@@ -555,8 +555,8 @@ describe('running a graph', () => {
 
     it('does not ask a Find it removed', async () => {
       const graph = newGraph();
-      graph.add(new RefusingFind(findUsers().ast));
-      graph.setResult(graph.add(deleteUsers(nameIsAda)));
+      graph.add(new RefusingFind(findUsers().ast), {});
+      graph.setResult(graph.add(deleteUsers(nameIsAda), {}));
 
       expect(await affectedBy(graph, contextOf(createMockRuntime()))).toBe(0);
     });
@@ -564,7 +564,7 @@ describe('running a graph', () => {
     it('gives each node the graph, its position and the execution context', async () => {
       const graph = newGraph();
       const checked = new Checked();
-      const id = graph.add(checked);
+      const id = graph.add(checked, {});
       graph.setResult(id);
 
       await affectedBy(graph, contextOf(createMockRuntime()));
@@ -576,7 +576,7 @@ describe('running a graph', () => {
   describe('a node', () => {
     it('reads the execution context from the run it is given', async () => {
       const graph = newGraph();
-      graph.setResult(graph.add(new ReadsTarget()));
+      graph.setResult(graph.add(new ReadsTarget(), {}));
 
       expect(await affectedBy(graph, contextOf(createMockRuntime()))).toBe(1);
     });

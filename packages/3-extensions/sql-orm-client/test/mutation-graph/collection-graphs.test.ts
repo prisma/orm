@@ -7,7 +7,6 @@ import {
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import type { CollectionState } from '../../src/types';
 import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
@@ -36,7 +35,7 @@ const tableWithNoIdentity = createStatementTables({
 const targetWithIncludes = targetOf(users.include('posts').state);
 
 function printAsRun(graph: Graph): string {
-  removeUnreadFinds(graph);
+  graph.removeUnreadFinds();
   return printGraph(graph);
 }
 

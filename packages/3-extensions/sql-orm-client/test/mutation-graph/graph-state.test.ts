@@ -130,7 +130,7 @@ describe('table state in the graph', () => {
 
   it('adds no state to a node that runs no statement', () => {
     const graph = newGraph();
-    const union = graph.add(new UnionAll());
+    const union = graph.add(new UnionAll(), {});
 
     expect(graph.inputsOf(union)).toEqual({ rows: [] });
     expect(graph.nodes()).toHaveLength(1);
@@ -162,6 +162,6 @@ describe('State', () => {
 
   it('is frozen, and so is its edge', () => {
     expect(Object.isFrozen(new State(users))).toBe(true);
-    expect(Object.isFrozen(new StateEdge(newGraph().add(new UnionAll()), users))).toBe(true);
+    expect(Object.isFrozen(new StateEdge(newGraph().add(new UnionAll(), {}), users))).toBe(true);
   });
 });

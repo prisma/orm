@@ -9,6 +9,8 @@ import { blindCast } from '@internal/utils/casts';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, storageOf, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
+import { Find } from './find';
+import { FindByKeys } from './find-by-keys';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
 import { type Rule, rulesFor } from './rules';
 import { State, StateEdge } from './state';
@@ -28,7 +30,6 @@ export interface Entry {
 export class Graph {
   readonly #contract: Contract<SqlStorage>;
   readonly #rules: readonly Rule[];
-  #ids: NodeId[] = [];
   #nodes: (Node | undefined)[] = [];
   #inputs: Record<string, Slot>[] = [];
   #readers: Reader[][] = [];
@@ -53,12 +54,7 @@ export class Graph {
     this.#forwards.set(from, this.#resolve(to));
   }
 
-  add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs>;
-  add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId;
-  add<Inputs extends Slots>(node: Node<Inputs>, inputs?: InputEdges<Inputs>): NodeId {
-    if (inputs === undefined) {
-      return this.#addNode(node);
-    }
+  add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId {
     const resolved = Object.fromEntries(
       Object.entries<Slot | undefined>(inputs).flatMap(([slot, edges]) =>
         edges === undefined ? [] : [[slot, this.#resolveSlot(edges)]],
@@ -108,23 +104,25 @@ export class Graph {
     this.#nodes[this.#resolve(id)] = next;
   }
 
-  removeUnread(kind: (node: Node) => boolean): void {
+  removeUnreadFinds(): void {
     const unread = this.nodes().filter(
-      ([id, node]) => kind(node) && id !== this.#result && this.#readersAt(id).length === 0,
+      ([id, node]) =>
+        (node instanceof Find || node instanceof FindByKeys) &&
+        id !== this.#result &&
+        this.#readersAt(id).length === 0,
     );
     for (const [id] of unread) {
       this.#removeAt(id);
     }
     if (unread.length > 0) {
-      this.removeUnread(kind);
+      this.removeUnreadFinds();
     }
   }
 
   nodes(): readonly (readonly [NodeId, Node])[] {
-    return this.#ids.flatMap((id) => {
-      const node = this.#nodes[id];
-      return node === undefined ? [] : [[id, node] as const];
-    });
+    return this.#nodes.flatMap((node, position) =>
+      node === undefined ? [] : [[idAt(position), node] as const],
+    );
   }
 
   entries(): readonly Entry[] {
@@ -190,10 +188,7 @@ export class Graph {
   }
 
   #append<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
-    const id = blindCast<NodeId<Inputs>, 'the position a node is added at is its id'>(
-      this.#nodes.length,
-    );
-    this.#ids.push(id);
+    const id = idAt<Inputs>(this.#nodes.length);
     this.#nodes.push(node);
     this.#inputs.push(
       Object.fromEntries(
@@ -249,6 +244,10 @@ export class Graph {
       }),
     );
   }
+}
+
+function idAt<Inputs extends Slots>(position: number): NodeId<Inputs> {
+  return blindCast<NodeId<Inputs>, 'the position a node is added at is its id'>(position);
 }
 
 function edgesIn(slots: Slots): readonly Edge<unknown>[] {

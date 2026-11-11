@@ -141,7 +141,7 @@ describe('the check of an insert', () => {
       [insertCounters([{ label: 'a' }, { label: 'b' }], ['id'])],
       createCounters,
     );
-    const id = graph.add(insert);
+    const id = graph.add(insert, {});
 
     expect(() => insert.check(graph, id, generatedContext)).toThrow(
       expect.objectContaining({
@@ -156,7 +156,7 @@ describe('the check of an insert', () => {
   it('refuses an insert read from for a column its rows give no value and the database does not number', () => {
     const graph = newGraphWithoutReturning();
     const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
-    const id = graph.add(insert);
+    const id = graph.add(insert, {});
 
     expect(() => insert.check(graph, id, contextWithoutReturning)).toThrow(
       expect.objectContaining({
@@ -168,7 +168,7 @@ describe('the check of an insert', () => {
 
   it('takes a column a PayloadData edge gives as given', () => {
     const graph = newGraphWithoutReturning();
-    const find = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
     const insert = new Insert(
       [insertInto('posts', [{ id: 10, title: 'Hello' }], ['id', 'user_id'])],
       insertOwner,
@@ -184,7 +184,7 @@ describe('the check of an insert', () => {
       [insertCounters([{ label: 'a' }, { label: 'b' }], [])],
       createCounters,
     );
-    const id = graph.add(insert);
+    const id = graph.add(insert, {});
 
     expect(() => insert.check(graph, id, generatedContext)).not.toThrow();
   });
@@ -192,7 +192,7 @@ describe('the check of an insert', () => {
   it('accepts any insert on a contract with returning', () => {
     const graph = newGraph();
     const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
-    const id = graph.add(insert);
+    const id = graph.add(insert, {});
 
     expect(() => insert.check(graph, id, getTestContext())).not.toThrow();
   });

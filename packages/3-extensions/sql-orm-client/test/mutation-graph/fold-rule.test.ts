@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Find } from '../../src/mutation-graph/find';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { createCollectionFor } from '../collection-fixtures';
 import { printGraph } from './print-graph';
 import {
@@ -20,7 +19,7 @@ const sameId = columnMappings('users', 'users', [['id', 'id']]);
 const sameName = columnMappings('users', 'users', [['name', 'name']]);
 
 function printAsRun(graph: Graph): string {
-  removeUnreadFinds(graph);
+  graph.removeUnreadFinds();
   return printGraph(graph);
 }
 

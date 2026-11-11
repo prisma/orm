@@ -12,7 +12,6 @@ import {
   upsertGraph,
 } from '../../src/mutation-graph/collection-graphs';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { executeGraph, queryGraph } from '../../src/mutation-graph/run-graph';
 import { parseMutationInput } from '../../src/relation-mutations';
 import { emptyState, type RelationMutator } from '../../src/types';
@@ -51,7 +50,7 @@ function parsed(context: typeof withReturning, data: Record<string, unknown>) {
 }
 
 function asRun(graph: Graph, state = false): string {
-  removeUnreadFinds(graph);
+  graph.removeUnreadFinds();
   return printGraph(graph, { state });
 }
 

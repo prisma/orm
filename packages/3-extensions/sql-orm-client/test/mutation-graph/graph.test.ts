@@ -5,7 +5,6 @@ import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
-import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { State, StateEdge } from '../../src/mutation-graph/state';
@@ -49,8 +48,8 @@ describe('Graph', () => {
       const union = new UnionAll();
       const join = new CrossJoin();
 
-      const unionId = graph.add(union);
-      const joinId = graph.add(join);
+      const unionId = graph.add(union, {});
+      const joinId = graph.add(join, {});
 
       expect([unionId, joinId]).toEqual([0, 1]);
       expect(graph.nodes()).toEqual([
@@ -62,15 +61,15 @@ describe('Graph', () => {
     it('gives each list slot of the node no edge, and leaves a slot for one edge unset', () => {
       const graph = newGraph();
 
-      expect(graph.inputsOf(graph.add(new UnionAll()))).toEqual({ rows: [] });
-      expect(graph.inputsOf(graph.add(new CrossJoin()))).toEqual({});
+      expect(graph.inputsOf(graph.add(new UnionAll(), {}))).toEqual({ rows: [] });
+      expect(graph.inputsOf(graph.add(new CrossJoin(), {}))).toEqual({});
     });
   });
 
   describe('stateEdgesFor', () => {
     it('gives an edge from the current State of each table the statements of a node read', () => {
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }));
+      const update = graph.add(updateUsers({ name: 'Ada' }), {});
       const [written] = graph.readersOf(update);
 
       const edges = graph.stateEdgesFor(findUsers());
@@ -96,7 +95,7 @@ describe('Graph', () => {
   describe('add with inputs', () => {
     it('adds the node with each edge in its slot, and the source lists the node as its reader', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers([], ['id', 'email']));
+      const find = graph.add(findUsers([], ['id', 'email']), {});
 
       const del = graph.add(deletePosts(), {
         filter: [new FilterData(find, idToUserId), new FilterData(find, emailToTitle)],
@@ -117,7 +116,7 @@ describe('Graph', () => {
 
     it('adds the state edges the caller passes, and none when it passes none', () => {
       const graph = newGraph();
-      const update = graph.add(updateUsers({ name: 'Ada' }));
+      const update = graph.add(updateUsers({ name: 'Ada' }), {});
       const unread = findUsers();
       const read = findUsers();
 
@@ -138,8 +137,8 @@ describe('Graph', () => {
 
     it('makes each source of a data edge return the columns the edge reads', () => {
       const graph = newGraph();
-      const user = graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner));
-      const find = graph.add(findUsers([], ['name']));
+      const user = graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner), {});
+      const find = graph.add(findUsers([], ['name']), {});
 
       graph.add(new Insert([insertInto('posts', [{ title: 'Hello' }])], insertOwner), {
         payload: [new PayloadData(user, idToUserId)],
@@ -151,8 +150,8 @@ describe('Graph', () => {
 
     it('puts an edge into a slot that holds one edge', () => {
       const graph = newGraph();
-      const left = graph.add(findUsers());
-      const right = graph.add(findUsers());
+      const left = graph.add(findUsers(), {});
+      const right = graph.add(findUsers(), {});
 
       const join = graph.add(new CrossJoin(), {
         left: new Rows(left, sameId),
@@ -167,7 +166,7 @@ describe('Graph', () => {
 
     it('widens the source by the columns each edge reads, once each, and leaves its inputs as they were', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers());
+      const find = graph.add(findUsers(), {});
       const update = graph.add(updateUsers({ name: 'Ada' }), {
         filter: [new FilterData(find, sameId)],
       });
@@ -184,8 +183,8 @@ describe('Graph', () => {
 
     it('puts Rows edges into a list slot in their order, and widens only a source that runs a statement', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers([], ['email']));
-      const second = graph.add(findUsers());
+      const find = graph.add(findUsers([], ['email']), {});
+      const second = graph.add(findUsers(), {});
       const union = new UnionAll();
       const unionId = graph.add(union, {
         rows: [new Rows(find, sameId), new Rows(second, sameId)],
@@ -202,7 +201,7 @@ describe('Graph', () => {
 
     it('puts a Requires edge into the requires slot and leaves what the source returns as it was', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers([], ['email']));
+      const find = graph.add(findUsers([], ['email']), {});
 
       const update = graph.add(updateUsers({ name: 'Ada' }), { requires: [new Requires(find)] });
 
@@ -215,7 +214,7 @@ describe('Graph', () => {
   describe('columnsReadFrom', () => {
     it('gives the columns every edge from the node reads, in the order the edges were added', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers());
+      const find = graph.add(findUsers(), {});
       graph.add(deletePosts(), { filter: [new FilterData(find, emailToTitle)] });
       const union = graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
 
@@ -225,11 +224,11 @@ describe('Graph', () => {
 
     it('leaves out the columns of an edge whose reader was removed', () => {
       const graph = newGraphWithoutReturning();
-      const find = graph.add(findUsers());
+      const find = graph.add(findUsers(), {});
       graph.add(findUsers(), { filter: [new FilterData(find, sameId)] });
       graph.add(deletePosts(), { filter: [new FilterData(find, emailToTitle)] });
 
-      removeUnreadFinds(graph);
+      graph.removeUnreadFinds();
 
       expect(graph.columnsReadFrom(find).map((column) => column.alias)).toEqual(['email']);
     });
@@ -238,7 +237,7 @@ describe('Graph', () => {
   describe('readersOf', () => {
     it('gives, for a position, each edge that reads from it with the position of its reader', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers());
+      const find = graph.add(findUsers(), {});
       const update = graph.add(updateUsers({ name: 'Ada' }), {
         filter: [new FilterData(find, sameId)],
       });
@@ -261,9 +260,9 @@ describe('Graph', () => {
       const find = findUsers();
       const del = deletePosts();
       const otherUpdate = updateUsers({ name: 'Grace' });
-      const findId = graph.add(find);
-      const update = graph.add(updateUsers({ name: 'Ada' }));
-      const delId = graph.add(del);
+      const findId = graph.add(find, {});
+      const update = graph.add(updateUsers({ name: 'Ada' }), {});
+      const delId = graph.add(del, {});
 
       graph.replace(update, otherUpdate);
 
@@ -276,7 +275,7 @@ describe('Graph', () => {
 
     it('touches no edge in either direction', () => {
       const graph = newGraph();
-      const find = graph.add(findUsers());
+      const find = graph.add(findUsers(), {});
       const update = graph.add(updateUsers({ name: 'Ada' }, undefined, ['id']), {
         filter: [new FilterData(find, sameId)],
       });
@@ -294,8 +293,8 @@ describe('Graph', () => {
   describe('forwarding an id', () => {
     function forwarded() {
       const graph = newGraph();
-      const from = graph.add(findUsers([], ['id', 'email']));
-      const to = graph.add(findUsers([], ['id', 'email']));
+      const from = graph.add(findUsers([], ['id', 'email']), {});
+      const to = graph.add(findUsers([], ['id', 'email']), {});
       graph.forward(from, to);
       return { graph, from, to };
     }
@@ -345,7 +344,7 @@ describe('Graph', () => {
 
     it('follows a forwarded id to the last node it stands for', () => {
       const { graph, from, to } = forwarded();
-      const last = graph.add(findUsers());
+      const last = graph.add(findUsers(), {});
 
       graph.forward(to, last);
       graph.setResult(from);
@@ -371,7 +370,7 @@ describe('Graph', () => {
 
     it('names the position it is given', () => {
       const graph = newGraph();
-      const union = graph.add(new UnionAll());
+      const union = graph.add(new UnionAll(), {});
 
       graph.setResult(union);
 

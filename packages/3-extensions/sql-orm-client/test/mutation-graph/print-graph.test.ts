@@ -19,7 +19,7 @@ import {
 describe('printGraph', () => {
   it('prints one node and the result that names it', () => {
     const graph = newGraph();
-    graph.setResult(graph.add(updateUsers({ email: 'ada@example.com' }, nameIsAda)));
+    graph.setResult(graph.add(updateUsers({ email: 'ada@example.com' }, nameIsAda), {}));
 
     expect(printGraph(graph)).toBe(
       ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
@@ -28,7 +28,7 @@ describe('printGraph', () => {
 
   it('prints a FilterData edge with its column mapping', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers([nameIsAda]));
+    const find = graph.add(findUsers([nameIsAda]), {});
     const sameId = columnMappings('users', 'users', [['id', 'id']]);
     graph.setResult(addFiltered(graph, deleteUsers(), [find, sameId]));
 
@@ -43,7 +43,7 @@ describe('printGraph', () => {
 
   it('prints every column mapping of a FilterData edge', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
     const mappings = columnMappings('users', 'posts', [
       ['id', 'user_id'],
       ['name', 'title'],
@@ -61,8 +61,8 @@ describe('printGraph', () => {
 
   it('prints every input of a node', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers());
-    const other = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
+    const other = graph.add(findUsers(), {});
     const sameId = columnMappings('users', 'users', [['id', 'id']]);
     addFiltered(graph, deleteUsers(), [find, sameId], [other, sameId]);
     graph.setResult(find);
@@ -79,7 +79,7 @@ describe('printGraph', () => {
 
   it('prints none for a result with no node', () => {
     const graph = newGraph();
-    graph.add(findUsers());
+    graph.add(findUsers(), {});
 
     expect(printGraph(newGraph())).toBe('result: none');
     expect(printGraph(graph)).toBe(['n1 Find users', 'result: none'].join('\n'));
@@ -88,13 +88,14 @@ describe('printGraph', () => {
   describe('inserts', () => {
     it('prints an Insert of one row and of several rows', () => {
       const graph = newGraph();
-      graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner));
+      graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner), {});
       graph.setResult(
         graph.add(
           new Insert(
             [insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }])],
             insertOwner,
           ),
+          {},
         ),
       );
 
@@ -118,14 +119,16 @@ describe('printGraph', () => {
           ],
           insertOwner,
         ),
+        {},
       );
       graph.add(
         new Insert(
           [ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing())],
           insertOwner,
         ),
+        {},
       );
-      graph.add(new Insert([ast.withOnConflict(InsertOnConflict.doNothing())], insertOwner));
+      graph.add(new Insert([ast.withOnConflict(InsertOnConflict.doNothing())], insertOwner), {});
 
       expect(printGraph(graph)).toBe(
         [
@@ -146,7 +149,7 @@ describe('printGraph', () => {
         ],
         insertOwner,
       );
-      graph.setResult(graph.add(chunked));
+      graph.setResult(graph.add(chunked, {}));
 
       expect(printGraph(graph)).toBe(['n1 Insert users (2 statements)', 'result: n1'].join('\n'));
     });

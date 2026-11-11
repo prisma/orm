@@ -231,7 +231,11 @@ export function newGraphWithoutReturning(): Graph {
 
 export function positions(): [NodeId, NodeId, NodeId] {
   const graph = newGraph();
-  return [graph.add(new UnionAll()), graph.add(new UnionAll()), graph.add(new UnionAll())];
+  return [
+    graph.add(new UnionAll(), {}),
+    graph.add(new UnionAll(), {}),
+    graph.add(new UnionAll(), {}),
+  ];
 }
 
 export function visibleNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

@@ -13,7 +13,7 @@ const sameId = columnMappings('users', 'users', [['id', 'id']]);
 describe('graph.add', () => {
   it('add takes only edges of the kind each slot of the node holds', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
     const users = { namespaceId: 'public', tableName: 'users' };
 
     graph.add(findUsers(), { filter: [new FilterData(find, sameId)] });

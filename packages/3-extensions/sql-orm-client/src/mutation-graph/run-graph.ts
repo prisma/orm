@@ -15,7 +15,6 @@ import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
-import { removeUnreadFinds } from './remove-unread-finds';
 import { StatementNode } from './statement-node';
 
 type Context = CollectionContext<Contract<SqlStorage>>;
@@ -31,7 +30,7 @@ export function queryGraph<Row>(
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions,
 ): AsyncIterableResult<Row> {
-  removeUnreadFinds(graph);
+  graph.removeUnreadFinds();
   returnCallerColumns(graph, callerRows);
   const [only, ...others] = statementNodes(graph);
   // A graph with one statement node is one statement. It runs without a transaction and its rows
@@ -54,7 +53,7 @@ export function queryGraph<Row>(
 }
 
 export async function executeGraph(graph: Graph, ctx: Context): Promise<SqlStatementStats> {
-  removeUnreadFinds(graph);
+  graph.removeUnreadFinds();
   const outcome = await runAllNodes(graph, ctx, undefined);
   return { affectedRows: outcome.count };
 }
