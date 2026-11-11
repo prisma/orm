@@ -62,4 +62,6 @@ For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.
 
 ## `temporal-polyfill-with-legacy-peer-deps`
 
-For each project whose `.npmrc` `detection` matches and whose `package.json` depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, add `"temporal-polyfill": "^1.0.4"` to `dependencies` in that `package.json`, then reinstall. Skip a project that depends on neither.
+An `.npmrc` that `detection` matches covers the `package.json` beside it and, when that folder is the root of a workspace, every workspace package. Check each covered `package.json` on its own: where it depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, add `"temporal-polyfill": "^1.0.4"` to its `dependencies`; skip one that depends on neither. Then reinstall.
+
+`detection` reads only `.npmrc` files in the repository. If the project sets `legacy-peer-deps` another way, such as in the user's npm config, the `npm_config_legacy_peer_deps` environment variable or the `--legacy-peer-deps` flag, apply the same change.
