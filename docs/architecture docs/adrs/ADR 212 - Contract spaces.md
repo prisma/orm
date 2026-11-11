@@ -6,7 +6,7 @@ Accepted (TML-2397). Supersedes the schema-contribution half of [ADR 154 — Com
 
 ## The CipherStash example is historical
 
-This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. CipherStash's current Prisma integration, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
+This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. The CipherStash extension was built in this repository and later handed over to CipherStash, who maintain it in their own repository. Its current version, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
 
 ## At a glance
 

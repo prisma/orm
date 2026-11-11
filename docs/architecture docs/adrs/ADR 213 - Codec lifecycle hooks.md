@@ -6,7 +6,7 @@ Accepted (TML-2397). Companion mechanism to [ADR 212 — Contract spaces](./ADR%
 
 ## The CipherStash example is historical
 
-This ADR's motivating example is CipherStash on version 2 of its Encrypt Query Language (EQL v2), which registered each searchable column in the `eql_v2_configuration` table. CipherStash's current Prisma integration, `@cipherstash/stack-prisma`, uses EQL v3. It has no configuration table and uses no codec lifecycle hook.
+This ADR's motivating example is CipherStash on version 2 of its Encrypt Query Language (EQL v2), which registered each searchable column in the `eql_v2_configuration` table. The CipherStash extension was built in this repository and later handed over to CipherStash, who maintain it in their own repository. Its current version, `@cipherstash/stack-prisma`, uses EQL v3. It has no configuration table and uses no codec lifecycle hook.
 
 No codec in this repository, and no known external codec, implements `onFieldEvent` today. The hook stays: it is the seam for per-column work that depends on the application's schema, and the planners in the Postgres and SQLite targets already call it.
 
