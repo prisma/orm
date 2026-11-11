@@ -1,5 +1,6 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { Delete } from '../../src/mutation-graph/delete';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { removeUnreadFinds } from '../../src/mutation-graph/remove-unread-finds';
@@ -60,6 +61,18 @@ describe('the delete rule, on a contract with returning', () => {
 
     expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('adds the Delete it makes once, without running the rules on it again', () => {
+    const graph = newGraph();
+    const find = addWithState(graph, firstRowOfAda());
+
+    const del = addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
+
+    expect(graph.nodes().filter(([, node]) => node instanceof Delete)).toEqual([
+      [del, graph.nodeAt(del)],
+    ]);
+    expect(graph.nodeAt(find)).toBe(graph.nodeAt(del));
   });
 
   it('gives a reader added later from the id of the Find the rows of the Delete', () => {

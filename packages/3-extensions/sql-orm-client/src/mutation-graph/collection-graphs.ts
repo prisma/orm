@@ -63,13 +63,10 @@ import {
 } from './storage-rows';
 import { UnionAll } from './union-all';
 
-/** What the call returns: the written rows, as `#rowsCall` does, or their count, as `#countCall` does. */
-export type CallReturns = Returns;
-
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  returns: CallReturns,
+  returns: Returns,
 ): Graph {
   const { context, state } = collection;
   const b = builderOf(collection);
@@ -110,10 +107,7 @@ export function updateAllGraph(
   return b.graph;
 }
 
-export function deleteAllGraph(
-  collection: DescribeCollectionRowsOptions,
-  returns: CallReturns,
-): Graph {
+export function deleteAllGraph(collection: DescribeCollectionRowsOptions, returns: Returns): Graph {
   const { state } = collection;
   const b = builderOf(collection);
   const where = whereOf(collection);
@@ -201,7 +195,7 @@ export function createAllGraph(
   collection: DescribeCollectionRowsOptions,
   data: readonly Readonly<Record<string, unknown>>[],
   conflict: InsertConflictSkip | undefined,
-  returns: CallReturns,
+  returns: Returns,
 ): Graph {
   const b = builderOf(collection);
   if (data.length === 0) {

@@ -38,7 +38,6 @@ export class Graph {
   #readers: Reader[][] = [];
   #states = new Map<string, NodeId>();
   #forwards = new Map<NodeId, NodeId>();
-  #applyingRule = false;
   #result: NodeId | undefined = undefined;
 
   constructor(contract: Contract<SqlStorage>) {
@@ -69,12 +68,25 @@ export class Graph {
         edges === undefined ? [] : [[slot, this.#resolveSlot(edges)]],
       ),
     );
-    const standing = this.#applyRules(node, resolved);
-    if (standing !== undefined) {
-      return standing;
+    for (const rule of this.#rules) {
+      const standing = rule(this, node, resolved);
+      if (typeof standing === 'number') {
+        return standing;
+      }
+      if (standing !== undefined) {
+        const id = this.#addWithInputs(standing.node, standing.inputs);
+        for (const replaced of standing.standsFor) {
+          this.forward(replaced, id);
+        }
+        return id;
+      }
     }
+    return this.#addWithInputs(node, resolved);
+  }
+
+  #addWithInputs(node: Node, inputs: InputEdges<Slots>): NodeId {
     const id = this.#addNode(node);
-    for (const [slot, edges] of Object.entries(resolved)) {
+    for (const [slot, edges] of Object.entries(inputs)) {
       for (const edge of [edges ?? []].flat()) {
         this.#addEdge(id, slot, edge);
       }
@@ -196,24 +208,6 @@ export class Graph {
       : blindCast<NodeId<Inputs>, 'a node stands for a forwarded one in every use of its id'>(
           this.#resolve(to),
         );
-  }
-
-  #applyRules(node: Node, inputs: InputEdges<Slots>): NodeId | undefined {
-    if (this.#applyingRule) {
-      return undefined;
-    }
-    this.#applyingRule = true;
-    try {
-      for (const rule of this.#rules) {
-        const standing = rule(this, node, inputs);
-        if (standing !== undefined) {
-          return standing;
-        }
-      }
-      return undefined;
-    } finally {
-      this.#applyingRule = false;
-    }
   }
 
   #resolveSlot(slot: Slot): Slot {

@@ -28,9 +28,7 @@ export function deleteRule(contract: Contract<SqlStorage>): Rule {
     ) {
       return undefined;
     }
-    const id = graph.add(node.withReturning(read.find.returns), inputs);
-    graph.forward(read.id, id);
-    return id;
+    return { node: node.withReturning(read.find.returns), inputs, standsFor: [read.id] };
   };
 }
 

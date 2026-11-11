@@ -8,7 +8,17 @@ import type { Graph } from './graph';
 import type { InputEdges, Node, Slots } from './node';
 import { readBackRule } from './read-back-rule';
 
-export type Rule = (graph: Graph, node: Node, inputs: InputEdges<Slots>) => NodeId | undefined;
+export interface Replacement {
+  readonly node: Node;
+  readonly inputs: InputEdges<Slots>;
+  readonly standsFor: readonly NodeId[];
+}
+
+export type Rule = (
+  graph: Graph,
+  node: Node,
+  inputs: InputEdges<Slots>,
+) => NodeId | Replacement | undefined;
 
 export function rulesFor(contract: Contract<SqlStorage>): readonly Rule[] {
   return hasContractCapability(contract, 'returning')

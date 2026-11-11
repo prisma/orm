@@ -44,7 +44,7 @@ const Owner = OwnerBase.relations({
   folders: rel.hasMany(() => Folder, { by: 'ownerId' }),
 }).sql({ table: 'owners' });
 
-export const generatedContract: Contract<SqlStorage> = {
+const generatedContract: Contract<SqlStorage> = {
   ...defineContract({ models: { Counter, Note, Owner, Folder, Page } }),
   capabilities: { sql: { defaultInInsert: true } },
 };

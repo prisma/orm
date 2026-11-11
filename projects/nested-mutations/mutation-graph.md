@@ -108,6 +108,8 @@ A data edge can only point backwards: a node reads only from nodes already in th
 
 ### D4. Table state is nodes and edges the graph creates
 
+> As built in slice `write-builders`: state edges are inputs the caller of `add` passes in `inputs.state`, built with `graph.stateEdgesFor(node)` from the current `State` of each table the node reads. The graph no longer adds state inputs by itself; it still adds the `State` nodes a write produces and the write's edges into them. Rules read order only from state edges.
+
 Every version of a table is a `State` node. The graph creates them; the builder never does. When a node is added, the graph:
 - adds an edge from the current `State` of every table its statement reads (every table in its AST) to the node;
 - if the node writes, adds a new `State` for its target and for every table a foreign-key action can change from there (`changedBy`, derived once from the contract: tables whose foreign keys point at a changed table with `CASCADE`, `SET NULL` or `SET DEFAULT`, followed transitively over the contract's tables), each with an edge from the write.
@@ -126,12 +128,16 @@ A node whose data-edge source produced no row is skipped and is empty itself. An
 
 ### D7. Optimisation is by peephole, at construction
 
+> As built in slice `write-builders`: rules are functions the graph runs in `add(node, inputs)`, on a contract with capability `returning` only, before the node is in the graph. A rule returns nothing, an existing id (the node is not added), or a replacement node with its inputs and the ids it stands for; the graph adds a replacement without running the rules again and forwards those ids to it (D10b). Three rules exist. **Fold:** an `Update` whose only `FilterData` edge reads key columns from a condition-only `Find` of the same table, in the same `State`, whose condition is the same AST object as the `Update`'s, is added without that edge. **Delete:** a `Delete` with a key edge from a `Find`, or with the same condition object as a `Find` added before it, of the same table, where the `Find` reads one table without includes, has no reader yet and reads the same `State`, is added returning the `Find`'s columns, and the `Find`'s id is forwarded to it. **Read-back:** a `Find` or `FindByKeys` whose only data input reads key columns from a write of the same table, without includes or a condition of its own, whose state edge comes from the `State` the write produced, is not added; the write returns its columns and `add` returns the write's id.
+
 Each node class may override `peephole()`, which looks at the node and its inputs and returns the node or a replacement. `Graph.add` calls it. There are no passes and no worklist.
 
 - **Why.** A local rule owned by a node class is small and testable with a three-node graph, and rules that run as nodes are added have no order to choose. A worklist is added only when a rule can become applicable because of a later change (merging duplicate lookups would be one).
 - **Assumes.** The rules needed are local. The first is inlining (D8). Removing an `Update` that sets nothing was the first rule built and was withdrawn (D7a).
 
 ### D7a. A write with nothing to set is a `Find`, and unread nodes are removed after building
+
+> As built in slice `write-builders`: the runner removes every `Find` and `FindByKeys` that is not the result and has no reader, and repeats until none is left, before it runs anything. It works on positions, not on forwarded ids.
 
 An `Update` node always has something to set. When the caller's data sets nothing, the builder adds a `Find` on the same rows in its place: children can read from it, and it can be the result. So `update({})`, `updateAll({})` and `update({ relation: ... })` return the rows they match, as the same call with data would. `updateAndCount({})` resolves `0`: it reports affected rows, and none is affected, so its graph has no node and runs nothing. After the graph is built, one step removes every `Find` that no data edge reads and that is not the result, going from the last position to the first.
 
@@ -160,12 +166,35 @@ A peephole returns a new node and the graph rewires edges to it.
 
 ### D10a. The graph is a bidirectional adjacency list with stable positions
 
+> As built in slice `write-builders`: `add(node, inputs)` adds a node with every edge it reads. `entries()` gives each position with its node and its inputs as they are; the runner and the removal step use it.
+
 > As built in slice `graph-core`: nodes in slots, each node's input edges by slot, and for each node the list of its readers (the reader's position and the edge). An edge holds `from` and its column pairs; the reader's position is in the list, not on the edge. `replace` and `remove` exist. The graph holds nothing about a collection: its result is only which node it is, and the run functions take the runtime, the context, the annotations and the description of the caller's rows as arguments.
 
 Nodes sit in numbered slots; a node is referred to by its position, which `add` returns. An edge is one object holding `from` and `to` as positions and is listed at both of its nodes (edges in, edges out). Replacing a node writes its slot and touches no edge. A removed node leaves its slot empty; other positions do not change. Position order is dependency order.
 
 - **Why.** The operations are: append a node with its inputs, look up the edges into and out of a node, replace a node, remove a node, make a node's users read from another node. Edges that hold node objects had to be rebuilt on every replacement, and a single edge array made every lookup a scan. This is the form of Boost's `adjacency_list` with `bidirectionalS` and petgraph's `StableGraph`: parallel edges, data on edges, both directions by lookup, removal that does not invalidate other positions.
 - **Assumes.** Nodes stay frozen and edges stay separate objects (D2, D10). The form compilers use, where each node holds mutable arrays of its inputs and users (Simple, LLVM), fits peephole rules slightly better and is the one to revisit if those two decisions change.
+
+### D10b. A replaced node's id is forwarded
+
+The graph keeps a table from the id of a node a rule replaced to the node that stands for it. Every id the graph is given (edge sources in `add` and the `add*Edge` methods, `setResult`, `readersOf`, `inputsOf`, `nodeAt`, `sameState`, `columnsReadFrom`, `replace`, `remove`, `moveReaders`) is resolved through it, following chains. `moveReaders` points every edge from one node at another.
+
+- **Why.** The delete rule makes a `Delete` stand for the `Find` before it after the builder already holds the `Find`'s id: a reader added later from that id, and a result set to it, read from the `Delete`. The `Delete`'s own edge from the `Find` was added before the forward and still reads the `Find`.
+- **Assumes.** Only the runner and the removal step need the forwarded node itself, and they read positions through `entries()`.
+
+### D18. Every write builder adds its own read-back; `returns` is what the caller asked for
+
+One builder per kind of statement for a model: insert, update and delete rows, and find rows. A builder takes `returns: 'rows' | 'count'`. A rows builder adds the read-back of the rows it writes: an insert is followed by a `FindByKeys` of its keys read from the `Insert`; an update keeps the caller's condition, is filtered by key by a `Find` of the rows it changes, and is followed by a `Find` that reads the keys from the `Update`; a delete is preceded by a `Find` that the result and later nodes read. A count builder adds only the write. Nodes that read the write, such as nested child operations, read from the write itself and are added before the read-back, so the read-back and its includes see what they wrote. Builders do not read the `returning` capability: with it, the rules merge the read-back and the `Find` into the write, as on main; without it, the graph runs as built. A table with no primary key or unique constraint gets no read-back. The read-back has no order. Writes through a polymorphic base model with a variant in its own table read back with the variant joins.
+
+- **Why.** One path per write for every database removes the branches on `RETURNING` from each builder, and the rules make the same graph cost what main costs where `RETURNING` exists.
+- **Assumes.** The rules' patterns stay local: each one sees a node with its inputs and the state edges the caller passed.
+
+### D19. Writes without `RETURNING` give the columns read from them from their own values, and nodes check before anything runs
+
+On a contract without `returning`, an `Insert` or `InsertChunked` that something reads runs without `RETURNING` and gives the columns read from it from the values of its rows, the values its `PayloadData` edges give, and, for a one-row insert, the auto-increment key decoded from the reported insert id. An `Update` gives the keys of the rows its `FilterData` edges gave it with the values it sets. A node nobody reads returns its count. Before the first node runs, after the removal step, the runner calls each node's `check`: an insert refuses when its rows cannot give the columns read from it (the errors `writtenKeys` gave on main), when it skips conflicts, or when an upsert updates or leaves out a conflict column; an update refuses when it sets a column read from it by an expression; either refuses on a table with no row identity. `Run` carries the execution context.
+
+- **Why.** The read-back finds the written rows by key on every database, and the keys come from the write itself, so the refusals that depended on the capability move from the builders into the nodes that need the keys.
+- **Assumes.** A write that gives keys from its own values reads them from parameters in its AST; a column set by an expression or filled by a database default other than auto-increment cannot be given.
 
 ### D11. The caller's `select` is returned by the write; `include` is loaded afterwards by the existing read code
 
