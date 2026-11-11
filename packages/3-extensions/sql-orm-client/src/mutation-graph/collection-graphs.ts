@@ -117,14 +117,14 @@ export function deleteAllGraph(
 ): Graph {
   const { context, state } = collection;
   const graph = new Graph(context.contract);
-  const del = { where: whereOf(collection), filters: [] };
-  if (state.includes.length === 0 && !readsBack(collection, returns)) {
-    graph.setResult(addDeleteRows(graph, context.contract, state.tables, del));
+  const where = whereOf(collection);
+  if (returns === 'count') {
+    graph.setResult(addDeleteRows(graph, context.contract, state.tables, { where, filters: [] }));
     return graph;
   }
-
-  graph.setResult(addFind(graph, selectRowsAst(collection, state)));
-  addDeleteRows(graph, context.contract, state.tables, del);
+  const find = addFind(graph, selectRowsAst(collection, state).withWhere(where));
+  addDeleteRows(graph, context.contract, state.tables, { where, filters: [] });
+  graph.setResult(find);
   return graph;
 }
 
@@ -178,23 +178,17 @@ export function updateFirstGraph(
 
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
   const { context, state } = collection;
-  const readsRowsFirst = state.includes.length > 0 || readsBack(collection, 'rows');
   const graph = new Graph(context.contract);
   requireIdentityColumns(collection);
-  const find = addFindOfFirstRow(
-    graph,
-    collection,
-    readsRowsFirst ? selectRowsAst : selectIdentityAst,
-  );
+  const find = addFindOfFirstRow(graph, collection, selectRowsAst);
   if (find === undefined) {
     return graph;
   }
-
-  const deleted = addDeleteRows(graph, context.contract, state.tables, {
+  addDeleteRows(graph, context.contract, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
   });
-  graph.setResult(readsRowsFirst ? find : deleted);
+  graph.setResult(find);
   return graph;
 }
 

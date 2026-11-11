@@ -156,10 +156,9 @@ export interface PrintOptions {
 }
 
 export function printGraph(graph: Graph, options: PrintOptions = { state: false }): string {
-  const nodes = graph.nodes().filter(([, node]) => options.state || !(node instanceof State));
-  const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
-  const lines = nodes.map(([id, node]) => {
-    const slots = graph.inputsOf(id);
+  const nodes = graph.entries().filter(({ node }) => options.state || !(node instanceof State));
+  const names: NodeNames = new Map(nodes.map(({ id }, index) => [id, `n${index + 1}`]));
+  const lines = nodes.map(({ id, node, inputs: slots }) => {
     const inputs = Object.keys(node.slots)
       .flatMap((name) => [slots[name] ?? []].flat())
       .filter((edge) => options.state || !(edge instanceof StateEdge));

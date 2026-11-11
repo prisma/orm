@@ -23,6 +23,12 @@ export interface Reader {
   readonly edge: Edge<unknown>;
 }
 
+export interface Entry {
+  readonly id: NodeId;
+  readonly node: Node;
+  readonly inputs: Slots;
+}
+
 export class Graph {
   readonly #contract: Contract<SqlStorage>;
   readonly #rules: readonly Rule[];
@@ -31,6 +37,8 @@ export class Graph {
   #inputs: Record<string, Slot>[] = [];
   #readers: Reader[][] = [];
   #states = new Map<string, NodeId>();
+  #forwards = new Map<NodeId, NodeId>();
+  #applyingRule = false;
   #result: NodeId | undefined = undefined;
 
   constructor(contract: Contract<SqlStorage>) {
@@ -43,7 +51,11 @@ export class Graph {
   }
 
   setResult(node: NodeId): void {
-    this.#result = node;
+    this.#result = this.#resolve(node);
+  }
+
+  forward(from: NodeId, to: NodeId): void {
+    this.#forwards.set(from, this.#resolve(to));
   }
 
   add<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs>;
@@ -52,14 +64,17 @@ export class Graph {
     if (inputs === undefined) {
       return this.#addNode(node);
     }
-    for (const rule of this.#rules) {
-      const standing = rule(this, node, inputs);
-      if (standing !== undefined) {
-        return standing;
-      }
+    const resolved = Object.fromEntries(
+      Object.entries<Slot | undefined>(inputs).flatMap(([slot, edges]) =>
+        edges === undefined ? [] : [[slot, this.#resolveSlot(edges)]],
+      ),
+    );
+    const standing = this.#applyRules(node, resolved);
+    if (standing !== undefined) {
+      return standing;
     }
     const id = this.#addNode(node);
-    for (const [slot, edges] of Object.entries<Slot | undefined>(inputs)) {
+    for (const [slot, edges] of Object.entries(resolved)) {
       for (const edge of [edges ?? []].flat()) {
         this.#addEdge(id, slot, edge);
       }
@@ -69,6 +84,172 @@ export class Graph {
 
   stateEdgesFor(node: StatementNode): StateEdge[] {
     return tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table));
+  }
+
+  addFilterDataEdge(
+    from: NodeId,
+    to: NodeId<{ filter: FilterData[] }>,
+    columns: readonly ColumnMapping[],
+  ): void {
+    this.#addEdge(this.#resolve(to), 'filter', new FilterData(this.#resolve(from), columns));
+  }
+
+  addPayloadDataEdge(
+    from: NodeId,
+    to: NodeId<{ payload: PayloadData[] }>,
+    columns: readonly ColumnMapping[],
+  ): void {
+    this.#addEdge(this.#resolve(to), 'payload', new PayloadData(this.#resolve(from), columns));
+  }
+
+  addRowsEdge<Name extends string>(
+    from: NodeId,
+    to: NodeId<{ [Slot in Name]: Rows | Rows[] }>,
+    slot: Name,
+    columns: readonly ColumnMapping[],
+  ): void {
+    this.#addEdge(this.#resolve(to), slot, new Rows(this.#resolve(from), columns));
+  }
+
+  addRequiresEdge(from: NodeId, to: NodeId<{ requires: Requires[] }>): void {
+    this.#addEdge(this.#resolve(to), 'requires', new Requires(this.#resolve(from)));
+  }
+
+  moveReaders(from: NodeId, to: NodeId): void {
+    const source = this.#resolve(from);
+    const target = this.#resolve(to);
+    for (const { reader, edge } of this.#readersAt(source)) {
+      const moved = edge.withFrom(target);
+      const swap = (other: Edge<unknown>) => (other === edge ? moved : other);
+      this.#inputs[reader] = Object.fromEntries(
+        Object.entries(this.#inputsAt(reader)).map(([name, slot]) => [
+          name,
+          Array.isArray(slot) ? slot.map(swap) : swap(slot),
+        ]),
+      );
+      if (moved instanceof DataEdge) {
+        this.#read(target, moved.columns);
+      }
+      this.#readers[target]?.push({ reader, edge: moved });
+    }
+    this.#readers[source] = [];
+  }
+
+  nodeAt(id: NodeId): Node | undefined {
+    return this.#nodes[this.#resolve(id)];
+  }
+
+  sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
+    const stateA = this.#stateEdgeOf(this.#resolve(a), table);
+    return stateA !== undefined && stateA.from === this.#stateEdgeOf(this.#resolve(b), table)?.from;
+  }
+
+  columnsReadFrom(id: NodeId): readonly ProjectionItem[] {
+    return this.#readersAt(this.#resolve(id)).flatMap(({ edge }) =>
+      edge instanceof DataEdge ? edge.columns.map(([source]) => source) : [],
+    );
+  }
+
+  replace(id: NodeId, next: Node): void {
+    this.#nodes[this.#resolve(id)] = next;
+  }
+
+  remove(id: NodeId): void {
+    this.#removeAt(this.#resolve(id));
+  }
+
+  removeUnread(kind: (node: Node) => boolean): void {
+    const unread = this.nodes().filter(
+      ([id, node]) => kind(node) && id !== this.#result && this.#readersAt(id).length === 0,
+    );
+    for (const [id] of unread) {
+      this.#removeAt(id);
+    }
+    if (unread.length > 0) {
+      this.removeUnread(kind);
+    }
+  }
+
+  nodes(): readonly (readonly [NodeId, Node])[] {
+    return this.#ids.flatMap((id) => {
+      const node = this.#nodes[id];
+      return node === undefined ? [] : [[id, node] as const];
+    });
+  }
+
+  entries(): readonly Entry[] {
+    return this.nodes().map(([id, node]) => ({ id, node, inputs: this.#inputsAt(id) }));
+  }
+
+  inputsOf(id: NodeId): Slots {
+    return this.#inputsAt(this.#resolve(id));
+  }
+
+  readersOf(id: NodeId): readonly Reader[] {
+    return this.#readersAt(this.#resolve(id));
+  }
+
+  #resolve<Inputs extends Slots>(id: NodeId<Inputs>): NodeId<Inputs> {
+    const to = this.#forwards.get(id);
+    return to === undefined
+      ? id
+      : blindCast<NodeId<Inputs>, 'a node stands for a forwarded one in every use of its id'>(
+          this.#resolve(to),
+        );
+  }
+
+  #applyRules(node: Node, inputs: InputEdges<Slots>): NodeId | undefined {
+    if (this.#applyingRule) {
+      return undefined;
+    }
+    this.#applyingRule = true;
+    try {
+      for (const rule of this.#rules) {
+        const standing = rule(this, node, inputs);
+        if (standing !== undefined) {
+          return standing;
+        }
+      }
+      return undefined;
+    } finally {
+      this.#applyingRule = false;
+    }
+  }
+
+  #resolveSlot(slot: Slot): Slot {
+    return Array.isArray(slot)
+      ? slot.map((edge) => this.#resolveEdge(edge))
+      : this.#resolveEdge(slot);
+  }
+
+  #resolveEdge(edge: Edge<unknown>): Edge<unknown> {
+    const from = this.#resolve(edge.from);
+    return from === edge.from ? edge : edge.withFrom(from);
+  }
+
+  #inputsAt(id: NodeId): Slots {
+    return this.#inputs[id] ?? {};
+  }
+
+  #readersAt(id: NodeId): readonly Reader[] {
+    return this.#readers[id] ?? [];
+  }
+
+  #removeAt(id: NodeId): void {
+    for (const edge of edgesIn(this.#inputsAt(id))) {
+      this.#readers[edge.from] = this.#readersAt(edge.from).filter((entry) => entry.edge !== edge);
+    }
+    for (const { reader, edge } of this.#readersAt(id)) {
+      this.#inputs[reader] = Object.fromEntries(
+        Object.entries(this.#inputsAt(reader)).map(([name, slot]) => [
+          name,
+          Array.isArray(slot) ? slot.filter((other) => other !== edge) : slot,
+        ]),
+      );
+    }
+    this.#nodes[id] = undefined;
+    this.#inputs[id] = {};
+    this.#readers[id] = [];
   }
 
   #addNode<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
@@ -82,104 +263,6 @@ export class Graph {
       this.#states.set(tableKey(table), state);
     }
     return id;
-  }
-
-  addFilterDataEdge(
-    from: NodeId,
-    to: NodeId<{ filter: FilterData[] }>,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(to, 'filter', new FilterData(from, columns));
-  }
-
-  addPayloadDataEdge(
-    from: NodeId,
-    to: NodeId<{ payload: PayloadData[] }>,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(to, 'payload', new PayloadData(from, columns));
-  }
-
-  addRowsEdge<Name extends string>(
-    from: NodeId,
-    to: NodeId<{ [Slot in Name]: Rows | Rows[] }>,
-    slot: Name,
-    columns: readonly ColumnMapping[],
-  ): void {
-    this.#addEdge(to, slot, new Rows(from, columns));
-  }
-
-  addRequiresEdge(from: NodeId, to: NodeId<{ requires: Requires[] }>): void {
-    this.#addEdge(to, 'requires', new Requires(from));
-  }
-
-  moveReaders(from: NodeId, to: NodeId): void {
-    for (const { reader, edge } of this.readersOf(from)) {
-      const moved = edge.withFrom(to);
-      const swap = (other: Edge<unknown>) => (other === edge ? moved : other);
-      this.#inputs[reader] = Object.fromEntries(
-        Object.entries(this.inputsOf(reader)).map(([name, slot]) => [
-          name,
-          Array.isArray(slot) ? slot.map(swap) : swap(slot),
-        ]),
-      );
-      if (moved instanceof DataEdge) {
-        this.#read(to, moved.columns);
-      }
-      this.#readers[to]?.push({ reader, edge: moved });
-    }
-    this.#readers[from] = [];
-  }
-
-  nodeAt(id: NodeId): Node | undefined {
-    return this.#nodes[id];
-  }
-
-  sameState(a: NodeId, b: NodeId, table: TableStorageCoordinate): boolean {
-    const stateA = this.#stateEdgeOf(a, table);
-    return stateA !== undefined && stateA.from === this.#stateEdgeOf(b, table)?.from;
-  }
-
-  columnsReadFrom(id: NodeId): readonly ProjectionItem[] {
-    return this.readersOf(id).flatMap(({ edge }) =>
-      edge instanceof DataEdge ? edge.columns.map(([source]) => source) : [],
-    );
-  }
-
-  replace(id: NodeId, next: Node): void {
-    this.#nodes[id] = next;
-  }
-
-  remove(id: NodeId): void {
-    for (const edge of edgesIn(this.inputsOf(id))) {
-      this.#readers[edge.from] = this.readersOf(edge.from).filter((entry) => entry.edge !== edge);
-    }
-    for (const { reader, edge } of this.readersOf(id)) {
-      this.#inputs[reader] = Object.fromEntries(
-        Object.entries(this.inputsOf(reader)).map(([name, slot]) => [
-          name,
-          Array.isArray(slot) ? slot.filter((other) => other !== edge) : slot,
-        ]),
-      );
-    }
-    this.#nodes[id] = undefined;
-    this.#inputs[id] = {};
-    this.#readers[id] = [];
-  }
-
-  nodes(): readonly (readonly [NodeId, Node])[] {
-    return this.#ids.flatMap((id) => {
-      const node = this.#nodes[id];
-      return node === undefined ? [] : [[id, node] as const];
-    });
-  }
-
-  inputsOf(id: NodeId): Slots {
-    return this.#inputs[id] ?? {};
-  }
-
-  readersOf(id: NodeId): readonly Reader[] {
-    return this.#readers[id] ?? [];
   }
 
   #append<Inputs extends Slots>(node: Node<Inputs>): NodeId<Inputs> {
@@ -207,9 +290,9 @@ export class Graph {
   }
 
   #connect(to: NodeId, slot: string, edge: Edge<unknown>): void {
-    const current = this.inputsOf(to)[slot];
+    const current = this.#inputsAt(to)[slot];
     this.#inputs[to] = {
-      ...this.inputsOf(to),
+      ...this.#inputsAt(to),
       [slot]: Array.isArray(current) ? [...current, edge] : edge,
     };
     this.#readers[edge.from]?.push({ reader: to, edge });
@@ -233,7 +316,7 @@ export class Graph {
   }
 
   #stateEdgeOf(id: NodeId, table: TableStorageCoordinate): StateEdge | undefined {
-    return edgesIn(this.inputsOf(id)).find(
+    return edgesIn(this.#inputsAt(id)).find(
       (edge): edge is StateEdge =>
         edge instanceof StateEdge &&
         edge.table.namespaceId === table.namespaceId &&

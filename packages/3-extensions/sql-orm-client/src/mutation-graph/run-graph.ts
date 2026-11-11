@@ -42,7 +42,7 @@ export function queryGraph<Row>(
     const [id, node] = only;
     const run = runOn(ctx, ctx.runtime);
     const storageRows = afterChecks(graph, ctx, () =>
-      rowStream(node.execute(inputsOf(graph, id, []), run)),
+      rowStream(node.execute(outputsOf(graph.inputsOf(id), []), run)),
     );
     return shapeRows<Row>(graph, id, storageRows, callerRows);
   }
@@ -121,8 +121,8 @@ async function runNodesInOrder<Row>(
   let rows: readonly Row[] = [];
   let count = 0;
 
-  for (const [id, node] of graph.nodes()) {
-    const executed = await node.execute(inputsOf(graph, id, collected), run);
+  for (const { id, node, inputs } of graph.entries()) {
+    const executed = await node.execute(outputsOf(inputs, collected), run);
     collected[id] = executed;
     if (id !== graph.result) {
       continue;
@@ -137,11 +137,11 @@ async function runNodesInOrder<Row>(
   return { rows, count };
 }
 
-function inputsOf(graph: Graph, id: NodeId, collected: Collected): OutputsOf<Slots> {
+function outputsOf(inputs: Slots, collected: Collected): OutputsOf<Slots> {
   const outputs: Record<string, OutputsOf<Slots>[string]> = {};
   const outputOf = (edge: Edge<unknown>) =>
     rowsOf(collected[edge.from]).map((row) => edge.output(row));
-  for (const [name, slot] of Object.entries(graph.inputsOf(id))) {
+  for (const [name, slot] of Object.entries(inputs)) {
     if (!Array.isArray(slot)) {
       outputs[name] = outputOf(slot);
     } else {

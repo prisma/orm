@@ -12,6 +12,7 @@ import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { printGraph } from './print-graph';
 import {
+  addWithState,
   columnMappings,
   deletePosts,
   deleteUsers,
@@ -491,6 +492,125 @@ describe('Graph', () => {
 
       expect(next).not.toBe(first);
       expect(graph.nodes().map(([id]) => id)).toEqual([next]);
+    });
+  });
+
+  describe('forwarding an id', () => {
+    function forwarded() {
+      const graph = newGraph();
+      const from = graph.add(findUsers([], ['id', 'email']));
+      const to = graph.add(findUsers([], ['id', 'email']));
+      graph.forward(from, to);
+      return { graph, from, to };
+    }
+
+    it('gives an edge added with the inputs of a node the node the id stands for as its source', () => {
+      const { graph, from, to } = forwarded();
+
+      const del = graph.add(deletePosts(), { filter: [new FilterData(from, idToUserId)] });
+
+      expect(graph.inputsOf(del)['filter']).toEqual([new FilterData(to, idToUserId)]);
+      expect(graph.readersOf(to)).toEqual([{ reader: del, edge: new FilterData(to, idToUserId) }]);
+    });
+
+    it('resolves both ends of an edge an edge method adds', () => {
+      const { graph, from, to } = forwarded();
+      const del = graph.add(deletePosts());
+      const union = graph.add(new UnionAll());
+
+      graph.addFilterDataEdge(from, del, idToUserId);
+      graph.addRowsEdge(from, union, 'rows', sameId);
+      graph.addRequiresEdge(del, from);
+
+      expect({
+        del: graph.inputsOf(del)['filter'],
+        union: graph.inputsOf(union)['rows'],
+        to: graph.inputsOf(to)['requires'],
+      }).toEqual({
+        del: [new FilterData(to, idToUserId)],
+        union: [new Rows(to, sameId)],
+        to: [new Requires(del)],
+      });
+    });
+
+    it('resolves a PayloadData edge source', () => {
+      const { graph, from, to } = forwarded();
+      const post = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }]), insertOwner));
+
+      graph.addPayloadDataEdge(from, post, idToUserId);
+
+      expect(graph.inputsOf(post)['payload']).toEqual([new PayloadData(to, idToUserId)]);
+    });
+
+    it('sets the node the id stands for as the result', () => {
+      const { graph, from, to } = forwarded();
+
+      graph.setResult(from);
+
+      expect(graph.result).toBe(to);
+    });
+
+    it('gives the readers, the inputs, the node and the columns read of the node the id stands for', () => {
+      const { graph, from, to } = forwarded();
+      graph.add(deletePosts(), { filter: [new FilterData(to, idToUserId)] });
+
+      expect({
+        readers: graph.readersOf(from),
+        inputs: graph.inputsOf(from),
+        node: graph.nodeAt(from),
+        columns: graph.columnsReadFrom(from),
+      }).toEqual({
+        readers: graph.readersOf(to),
+        inputs: graph.inputsOf(to),
+        node: graph.nodeAt(to),
+        columns: graph.columnsReadFrom(to),
+      });
+    });
+
+    it('compares the state of the node the id stands for', () => {
+      const graph = newGraph();
+      const from = addWithState(graph, findUsers());
+      graph.add(updateUsers({ name: 'Ada' }));
+      const to = addWithState(graph, findUsers());
+      const other = addWithState(graph, findUsers());
+      graph.forward(from, to);
+
+      expect(graph.sameState(from, other, users)).toBe(true);
+    });
+
+    it('replaces, removes and moves the readers of the node the id stands for', () => {
+      const { graph, from, to } = forwarded();
+      const other = graph.add(findUsers());
+      graph.add(deletePosts(), { filter: [new FilterData(to, idToUserId)] });
+      const replacement = findUsers([], ['name']);
+
+      graph.replace(from, replacement);
+      graph.moveReaders(from, other);
+
+      expect(graph.nodeAt(to)).toBe(replacement);
+      expect(graph.readersOf(to)).toEqual([]);
+      graph.remove(from);
+      expect(graph.nodes().map(([id]) => id)).not.toContain(to);
+    });
+
+    it('follows a forwarded id to the last node it stands for', () => {
+      const { graph, from, to } = forwarded();
+      const last = graph.add(findUsers());
+
+      graph.forward(to, last);
+      graph.setResult(from);
+
+      expect(graph.result).toBe(last);
+    });
+
+    it('gives each position its own node and inputs in entries', () => {
+      const { graph, from } = forwarded();
+
+      expect(graph.entries().find(({ id }) => id === from)).toEqual({
+        id: from,
+        node: graph.nodes().find(([id]) => id === from)?.[1],
+        inputs: { filter: [], state: [], requires: [] },
+      });
     });
   });
 

@@ -102,10 +102,17 @@ describe('updateAllGraph', () => {
 });
 
 describe('deleteAllGraph', () => {
-  it('builds one Delete as the result, returning nothing yet', () => {
+  it('builds one Delete that returns the columns of the Find it stands for, as the result', () => {
     const graph = deleteAllGraph(target, 'rows');
 
-    expect(printGraph(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
+    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('builds one Delete that returns nothing for a count', () => {
+    const graph = deleteAllGraph(target, 'count');
+
+    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual([]);
   });
 
@@ -218,16 +225,17 @@ describe('updateFirstGraph', () => {
 });
 
 describe('deleteFirstGraph', () => {
-  it('builds a Find of the first row and a Delete of the row it finds', () => {
+  it('builds a Find of the first row and a Delete of the row it finds, which returns its columns and is the result', () => {
     const graph = deleteFirstGraph(target);
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
         'result: n2',
       ].join('\n'),
     );
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('makes the Find carry the includes and be the result when there are includes', () => {
