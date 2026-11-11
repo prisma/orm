@@ -27,16 +27,23 @@ import { ormError } from '../orm-errors';
 import { variantReturning } from '../query-plan-source';
 import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mutations';
 import type { AliasedTable } from '../table-scope';
-import { type CollectionState, emptyState } from '../types';
-import { type WrittenRowOwner, writtenKeys } from '../written-keys';
+import type { CollectionState } from '../types';
+import { rowIdentity } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
-import { FilterData } from './filter-data';
-import { Find } from './find';
-import { FindByKeys } from './find-by-keys';
 import { Graph } from './graph';
 import { Insert } from './insert';
-import { addDeleteRows, addInsertRows, addUpdateRows, selectAstOf } from './model-statements';
+import {
+  type Builder,
+  deleteRows,
+  findRows,
+  insertRows,
+  type Returns,
+  readBack,
+  type Shape,
+  selectAstOf,
+  updateRows,
+} from './model-statements';
 import {
   addAfterWrite,
   addBeforeWrite,
@@ -44,7 +51,6 @@ import {
   type Translation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
-import { Rows } from './rows';
 import {
   createRowOf,
   createRowsOf,
@@ -58,74 +64,64 @@ import {
 import { UnionAll } from './union-all';
 
 /** What the call returns: the written rows, as `#rowsCall` does, or their count, as `#countCall` does. */
-export type CallReturns = 'rows' | 'count';
+export type CallReturns = Returns;
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
   returns: CallReturns,
 ): Graph {
-  const { context, state } = collection;
-  const graph = new Graph(context.contract);
+  const { state } = collection;
+  const b = builderOf(collection);
   if (Object.keys(set).length === 0) {
-    graph.setResult(addFind(graph, selectRowsAst(collection, state)));
-    return graph;
+    b.graph.setResult(findRows(b, selectRowsAst(collection, state), noInputs));
+    return b.graph;
   }
-
-  const owner = { operation: 'updateAll', modelName: collection.modelName };
-  if (returns === 'count') {
-    graph.setResult(
-      addUpdateRows(graph, context.contract, state.tables, set, {
-        where: whereOf(collection),
-        filters: [],
-        payloads: [],
-        owner,
-      }),
-    );
-    return graph;
+  if (returns === 'rows') {
+    requireIdentityColumnsForIncludes(collection);
   }
-  requireIdentityColumnsForIncludes(collection);
   const where = whereOf(collection);
-  if (identityColumnsOf(collection).length === 0) {
-    graph.setResult(
-      addUpdateRows(graph, context.contract, state.tables, set, {
-        where,
-        filters: [],
-        payloads: [],
-        owner,
-      }),
-    );
-    return graph;
-  }
-  const found = addFind(
-    graph,
-    selectIdentityAst(collection, { ...state, orderBy: undefined }).withWhere(where),
+  const readsKeys = returns === 'rows' && identityColumnsOf(collection).length > 0;
+  const filters = readsKeys
+    ? [
+        {
+          from: findRows(
+            b,
+            selectIdentityAst(collection, { ...state, orderBy: undefined }).withWhere(where),
+            noInputs,
+          ),
+          columns: sameRowColumns(collection),
+        },
+      ]
+    : [];
+  b.graph.setResult(
+    updateRows(b, modelOf(collection), set, {
+      where,
+      filters,
+      payloads: [],
+      owner: { operation: 'updateAll', modelName: collection.modelName },
+      returns,
+      shape: shapeOf(collection),
+      afterWrite: undefined,
+    }),
   );
-  const updated = addUpdateRows(graph, context.contract, state.tables, set, {
-    where,
-    filters: [{ from: found, columns: sameRowColumns(collection) }],
-    payloads: [],
-    owner,
-  });
-  graph.setResult(addReadBack(graph, collection, updated, state.includes));
-  return graph;
+  return b.graph;
 }
 
 export function deleteAllGraph(
   collection: DescribeCollectionRowsOptions,
   returns: CallReturns,
 ): Graph {
-  const { context, state } = collection;
-  const graph = new Graph(context.contract);
+  const { state } = collection;
+  const b = builderOf(collection);
   const where = whereOf(collection);
-  if (returns === 'count') {
-    graph.setResult(addDeleteRows(graph, context.contract, state.tables, { where, filters: [] }));
-    return graph;
-  }
-  const find = addFind(graph, selectRowsAst(collection, state).withWhere(where));
-  addDeleteRows(graph, context.contract, state.tables, { where, filters: [] });
-  graph.setResult(find);
-  return graph;
+  const find =
+    returns === 'rows'
+      ? findRows(b, selectRowsAst(collection, state).withWhere(where), noInputs)
+      : undefined;
+  const deleted = deleteRows(b, state.tables, { where, filters: [] });
+  b.graph.setResult(find ?? deleted);
+  return b.graph;
 }
 
 export function updateFirstGraph(
@@ -133,63 +129,70 @@ export function updateFirstGraph(
   data: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
-  const { context, state } = collection;
-  const graph = new Graph(context.contract);
+  const { state } = collection;
+  const b = builderOf(collection);
   const set = mappedUpdateRow(collection, data);
   const bare = Object.keys(set).length === 0 && relationMutations.length === 0;
   if (!bare) {
-    requireIdentityColumns(collection);
+    requireIdentityColumns(collection, 'update()');
     requireIdentityColumnsForIncludes(collection);
   }
-  const find = addFindOfFirstRow(graph, collection, bare ? selectRowsAst : selectIdentityAst);
+  const find = addFindOfFirstRow(b, collection, bare ? selectRowsAst : selectIdentityAst);
   if (find === undefined) {
-    return graph;
+    return b.graph;
   }
   if (bare) {
-    graph.setResult(find);
-    return graph;
+    b.graph.setResult(find);
+    return b.graph;
   }
 
   const model = modelOf(collection);
-  const t: Translation = {
-    graph,
-    context,
-    parentRow: find,
-    readsBack: readsBack(collection, 'rows'),
-  };
+  const t: Translation = { ...b, parentRow: find };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
+  const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
     addAfterWrite(t, model, find, relationMutations);
-    graph.setResult(addWithIncludes(graph, collection, find));
-    return graph;
+    b.graph.setResult(
+      state.includes.length === 0
+        ? find
+        : readBack(b, model, find, identityColumnsOf(collection), {
+            shape: shapeOf(collection),
+            by: 'filter',
+            owner,
+          }),
+    );
+    return b.graph;
   }
 
-  const updated = addUpdateRows(graph, context.contract, state.tables, values, {
-    where: undefined,
-    filters: [{ from: find, columns: sameRowColumns(collection) }],
-    payloads: before.keys,
-    owner: { operation: 'update', modelName: collection.modelName },
-  });
-  addAfterWrite(t, model, updated, relationMutations);
-  graph.setResult(addReadBack(graph, collection, updated, state.includes));
-  return graph;
+  b.graph.setResult(
+    updateRows(b, model, values, {
+      where: undefined,
+      filters: [{ from: find, columns: sameRowColumns(collection) }],
+      payloads: before.keys,
+      owner,
+      returns: 'rows',
+      shape: shapeOf(collection),
+      afterWrite: (updated) => addAfterWrite(t, model, updated, relationMutations),
+    }),
+  );
+  return b.graph;
 }
 
 export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Graph {
-  const { context, state } = collection;
-  const graph = new Graph(context.contract);
-  requireIdentityColumns(collection);
-  const find = addFindOfFirstRow(graph, collection, selectRowsAst);
+  const { state } = collection;
+  const b = builderOf(collection);
+  requireIdentityColumns(collection, 'delete()');
+  const find = addFindOfFirstRow(b, collection, selectRowsAst);
   if (find === undefined) {
-    return graph;
+    return b.graph;
   }
-  addDeleteRows(graph, context.contract, state.tables, {
+  deleteRows(b, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
   });
-  graph.setResult(find);
-  return graph;
+  b.graph.setResult(find);
+  return b.graph;
 }
 
 export function createAllGraph(
@@ -198,68 +201,46 @@ export function createAllGraph(
   conflict: InsertConflictSkip | undefined,
   returns: CallReturns,
 ): Graph {
-  const { context, state } = collection;
-  const graph = new Graph(context.contract);
+  const b = builderOf(collection);
   if (data.length === 0) {
-    return graph;
+    return b.graph;
   }
   const rows = createRowsOf(collection, data);
-  requireIdentityColumnsForIncludes(collection);
-  const { contract } = context;
-  const { root } = state.tables;
-  const owner = {
-    operation: rows.length === 1 ? 'create' : 'createAll',
-    modelName: collection.modelName,
-  };
-  if (readsBack(collection, returns)) {
-    const method = `${owner.operation}()`;
-    refuseSkipWithReadBack(collection, conflict, method);
-    writtenKeys({
-      context,
-      namespaceId: root.storage.namespaceId,
-      tableName: root.storage.tableName,
-      modelName: collection.modelName,
-      rows,
-      method,
-    });
-    const inserted = addInsertRows(graph, contract, root, rows, {
-      conflict: undefined,
-      keys: [],
-      junction: undefined,
-      requires: [],
-      owner,
-    });
-    graph.setResult(
-      addFindOfWrittenRows(graph, collection, inserted, identityProjection(collection), owner),
-    );
-    return graph;
+  if (returns === 'rows') {
+    requireIdentityColumnsForIncludes(collection);
   }
-  const inserted = addInsertRows(graph, contract, root, rows, {
-    conflict,
-    keys: [],
-    junction: undefined,
-    requires: [],
-    owner,
-  });
-  graph.setResult(addWithIncludes(graph, collection, inserted));
-  return graph;
+  b.graph.setResult(
+    insertRows(b, modelOf(collection), rows, {
+      conflict,
+      keys: [],
+      requires: [],
+      owner: {
+        operation: rows.length === 1 ? 'create' : 'createAll',
+        modelName: collection.modelName,
+      },
+      returns,
+      shape: shapeOf(collection),
+      afterWrite: undefined,
+    }),
+  );
+  return b.graph;
 }
 
 export function createGraph(
   collection: DescribeCollectionRowsOptions,
   parsed: ParsedMutationInput,
 ): Graph {
-  const { context } = collection;
-  const graph = new Graph(context.contract);
+  const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
-  const created = addCreateWithRelations(
-    { graph, context, parentRow: undefined, readsBack: readsBack(collection, 'rows') },
-    modelOf(collection),
-    parsed,
-    [],
+  b.graph.setResult(
+    addCreateWithRelations({ ...b, parentRow: undefined }, modelOf(collection), parsed, {
+      keysFromParent: [],
+      returns: 'rows',
+      shape: shapeOf(collection),
+      variantValue: collection.state.variantValue,
+    }),
   );
-  graph.setResult(addWithIncludes(graph, collection, created));
-  return graph;
+  return b.graph;
 }
 
 export function createAllVariantGraph(
@@ -344,7 +325,7 @@ export function upsertGraph(
   const update = updateValuesOf(collection, updateData);
   const { contract } = context;
   const { root } = state.tables;
-  const graph = new Graph(context.contract);
+  const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
   const targeted = hasContractCapability(contract, 'insertOnConflictTarget');
   if (!targeted) {
@@ -356,107 +337,36 @@ export function upsertGraph(
       : Object.fromEntries(
           conflictColumns.slice(0, 1).map((column) => [column, ColumnRef.of('excluded', column)]),
         );
-  const upsert = upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet);
-  const upsertOwner = { operation: 'upsert', modelName: collection.modelName };
-  const upsertInsert = new Insert(upsert, upsertOwner);
-  if (readsBack(collection, 'rows')) {
-    requireUpsertConflictValues(collection, create, update, conflictColumns);
-    const upserted = graph.add(upsertInsert, { state: graph.stateEdgesFor(upsertInsert) });
-    graph.setResult(
-      addFindOfWrittenRows(
-        graph,
-        collection,
-        upserted,
-        projectTableColumns(contract, root, conflictColumns),
-        upsertOwner,
-      ),
-    );
-    return graph;
-  }
-  const upserted = graph.add(upsertInsert, { state: graph.stateEdgesFor(upsertInsert) });
-  graph.setResult(addWithIncludes(graph, collection, upserted));
-  return graph;
+  const owner = { operation: 'upsert', modelName: collection.modelName };
+  const upsert = new Insert(
+    upsertAst(contract, root, create, targeted ? conflictColumns : [], updateSet),
+    owner,
+  );
+  const upserted = b.graph.add(upsert, { state: b.graph.stateEdgesFor(upsert) });
+  b.graph.setResult(
+    readBack(b, modelOf(collection), upserted, conflictColumns, {
+      shape: shapeOf(collection),
+      by: 'keys',
+      owner,
+    }),
+  );
+  return b.graph;
 }
 
-function addWithIncludes(
-  graph: Graph,
-  collection: DescribeCollectionRowsOptions,
-  written: NodeId,
-): NodeId {
-  if (collection.state.includes.length === 0) {
-    return written;
-  }
-  return addFind(graph, readBackAst(collection, collection.state.includes), [
-    new FilterData(written, sameRowColumns(collection)),
-  ]);
+const noInputs = { filter: [], requires: [] };
+
+function builderOf(collection: DescribeCollectionRowsOptions): Builder {
+  return { graph: new Graph(collection.context.contract), context: collection.context };
 }
 
-function readBackAst(
-  collection: DescribeCollectionRowsOptions,
-  includes: CollectionState['includes'],
-): SelectAst {
-  const { state } = collection;
-  return selectRowsAst(collection, {
-    ...emptyState(state.tables),
-    selectedFields: state.selectedFields,
-    includes,
-  });
-}
-
-/**
- * Without `RETURNING`, a write that returns rows runs as the write, then a select of the rows by key, chosen from the contract before anything runs.
- */
-function readsBack(collection: DescribeCollectionRowsOptions, returns: CallReturns): boolean {
-  return returns === 'rows' && !hasContractCapability(collection.context.contract, 'returning');
-}
-
-function addReadBack(
-  graph: Graph,
-  collection: DescribeCollectionRowsOptions,
-  written: NodeId,
-  includes: CollectionState['includes'],
-): NodeId {
-  return addFind(graph, readBackAst(collection, includes), [
-    new FilterData(written, sameRowColumns(collection)),
-  ]);
-}
-
-function addFindOfWrittenRows(
-  graph: Graph,
-  collection: DescribeCollectionRowsOptions,
-  inserted: NodeId,
-  keyColumns: readonly ProjectionItem[],
-  owner: WrittenRowOwner,
-): NodeId {
-  const mappings = sameColumns(keyColumns);
-  const found = new FindByKeys(readBackAst(collection, collection.state.includes), mappings, owner);
-  return graph.add(found, {
-    keys: new Rows(inserted, mappings),
-    state: graph.stateEdgesFor(found),
-  });
-}
-
-function addFind(graph: Graph, ast: SelectAst, filter: FilterData[] = []): NodeId {
-  const find = new Find(ast);
-  return graph.add(find, { filter, state: graph.stateEdgesFor(find) });
+function shapeOf(collection: DescribeCollectionRowsOptions): Shape {
+  const { selectedFields, includes, variantValue } = collection.state;
+  return { selectedFields, includes, variantValue };
 }
 
 function identityProjection(collection: DescribeCollectionRowsOptions): readonly ProjectionItem[] {
   const { context, state } = collection;
   return projectTableColumns(context.contract, state.tables.root, identityColumnsOf(collection));
-}
-
-function refuseSkipWithReadBack(
-  collection: DescribeCollectionRowsOptions,
-  conflict: InsertConflictSkip | undefined,
-  method: string,
-): void {
-  if (conflict === undefined) return;
-  throw ormError(
-    'ORM.CAPABILITY_MISSING',
-    `${method} with onConflict "skip" on model "${collection.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
-    { meta: { capability: 'returning', action: method } },
-  );
 }
 
 /**
@@ -487,29 +397,6 @@ function requireOnlyCollidingKey(
   );
 }
 
-function requireUpsertConflictValues(
-  collection: DescribeCollectionRowsOptions,
-  create: Readonly<Record<string, unknown>>,
-  update: Readonly<Record<string, unknown>>,
-  conflictColumns: readonly string[],
-): void {
-  const { modelName } = collection;
-  const refused = (problem: string) =>
-    ormError(
-      'ORM.CAPABILITY_MISSING',
-      `upsert() on model "${modelName}" ${problem}; without capability "returning" the row is read back by the create's values for the conflict columns.`,
-      { meta: { capability: 'returning', action: 'upsert()' } },
-    );
-  const updated = conflictColumns.filter((column) => Object.hasOwn(update, column));
-  if (updated.length > 0) {
-    throw refused(`updates conflict column "${updated.join('", "')}"`);
-  }
-  const absent = conflictColumns.filter((column) => create[column] === undefined);
-  if (absent.length > 0) {
-    throw refused(`gives conflict column "${absent.join('", "')}" no create value`);
-  }
-}
-
 function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {
   const { modelName, state } = collection;
   const { tableName } = state.tables.root.storage;
@@ -523,7 +410,7 @@ function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOpt
 }
 
 function addFindOfFirstRow(
-  graph: Graph,
+  b: Builder,
   collection: DescribeCollectionRowsOptions,
   select: typeof selectIdentityAst,
 ): NodeId | undefined {
@@ -532,19 +419,13 @@ function addFindOfFirstRow(
   if (state.limit === 0) {
     return undefined;
   }
-  return addFind(graph, select(collection, { ...state, limit: 1 }));
+  return findRows(b, select(collection, { ...state, limit: 1 }), noInputs);
 }
 
-function requireIdentityColumns(collection: DescribeCollectionRowsOptions): void {
-  const { modelName, state } = collection;
-  const { tableName } = state.tables.root.storage;
-  if (identityColumnsOf(collection).length === 0) {
-    throw ormError(
-      'ORM.ROW_IDENTITY_MISSING',
-      `update()/delete() on model "${modelName}" requires the table to have a primary key or unique constraint`,
-      { meta: { model: modelName, table: tableName } },
-    );
-  }
+function requireIdentityColumns(collection: DescribeCollectionRowsOptions, method: string): void {
+  const { context, modelName, state } = collection;
+  const { namespaceId, tableName } = state.tables.root.storage;
+  rowIdentity(context.contract, namespaceId, tableName, modelName, method);
 }
 
 function selectIdentityAst(

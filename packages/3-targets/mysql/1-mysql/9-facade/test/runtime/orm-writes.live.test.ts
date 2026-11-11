@@ -59,7 +59,7 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
         { email: 'a@example.com', role: 'USER' },
         { email: 'b@example.com', role: 'ADMIN' },
       ] as const;
-      expect(() => db.orm.User.createAll(rows)).toThrow(
+      await expect(db.orm.User.createAll(rows)).rejects.toThrow(
         expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
       );
       expect({

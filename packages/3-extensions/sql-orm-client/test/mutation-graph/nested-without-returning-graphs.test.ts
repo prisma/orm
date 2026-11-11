@@ -60,7 +60,7 @@ describe('nested write graphs on a contract without capability "returning"', () 
     );
   });
 
-  it('inserts children no node reads in one Insert with the key of the parent', () => {
+  it('inserts children no node reads in one Insert with the key of the parent, then reads the parent back', () => {
     const graph = graphOf(
       {
         ...targetOf('User'),
@@ -75,9 +75,9 @@ describe('nested write graphs on a contract without capability "returning"', () 
     expect(printGraph(graph)).toBe(
       [
         'n1 Insert users',
-        'n2 FindByKeys users by (id) for create <- Rows n1',
-        'n3 Insert posts 2 rows <- PayloadData n2 (id->user_id)',
-        'result: n2',
+        'n2 Insert posts 2 rows <- PayloadData n1 (id->user_id)',
+        'n3 FindByKeys users by (id) for create <- Rows n1',
+        'result: n3',
       ].join('\n'),
     );
   });

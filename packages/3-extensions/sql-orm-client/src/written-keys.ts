@@ -11,32 +11,6 @@ export interface GeneratedKey {
   decode(insertId: string): Promise<unknown>;
 }
 
-export interface WrittenKeys {
-  readonly keys: readonly Record<string, unknown>[];
-  readonly generated: GeneratedKey | undefined;
-}
-
-/**
- * The key of each row an insert writes, for reading the rows back without `RETURNING`: the values the client supplies, and at most one auto-increment column, whose value the database reports only for a one-row insert. Refuses, before anything runs, an insert whose rows cannot be found this way.
- */
-export function writtenKeys(options: {
-  readonly context: ExecutionContext<Contract<SqlStorage>>;
-  readonly namespaceId: string;
-  readonly tableName: string;
-  readonly modelName: string;
-  readonly rows: readonly Readonly<Record<string, unknown>>[];
-  readonly method: string;
-}): WrittenKeys {
-  const { context, namespaceId, tableName, modelName, rows, method } = options;
-  const identity = readBackIdentity(context.contract, namespaceId, tableName, modelName, method);
-  const generated = generatedKey({ ...options, columns: identity });
-  const supplied = identity.filter((column) => column !== generated?.column);
-  const keys = rows.map((row) =>
-    Object.fromEntries(supplied.map((column) => [column, row[column]])),
-  );
-  return { keys, generated };
-}
-
 export function generatedKey(options: {
   readonly context: ExecutionContext<Contract<SqlStorage>>;
   readonly namespaceId: string;
@@ -78,8 +52,7 @@ export function generatedKey(options: {
   };
 }
 
-/** The columns a write without `RETURNING` reads its rows back by: the table's row identity, which it must have. */
-export function readBackIdentity(
+export function rowIdentity(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
@@ -90,7 +63,7 @@ export function readBackIdentity(
   if (identity.length > 0) return identity;
   throw ormError(
     'ORM.ROW_IDENTITY_MISSING',
-    `${method} on model "${modelName}" reads the rows it wrote back by key, since the contract does not report capability "returning", so table "${tableName}" needs a primary key or unique constraint`,
+    `${method} on model "${modelName}" requires the table to have a primary key or unique constraint`,
     { meta: { model: modelName, table: tableName } },
   );
 }

@@ -9,11 +9,12 @@ import { buildTestContextFromContract, createMockRuntime } from '../helpers';
 const contract = defineContract({
   models: { Log: model('Log', { fields: { message: field.column(textColumn) } }) },
 });
-const refusal = expect.objectContaining({
-  code: 'ORM.ROW_IDENTITY_MISSING',
-  message:
-    'update()/delete() on model "Log" requires the table to have a primary key or unique constraint',
-});
+function refusal(method: string) {
+  return expect.objectContaining({
+    code: 'ORM.ROW_IDENTITY_MISSING',
+    message: `${method} on model "Log" requires the table to have a primary key or unique constraint`,
+  });
+}
 
 const withReturning: Contract<SqlStorage> = {
   ...contract,
@@ -40,14 +41,14 @@ describe('a table with no primary key and no unique constraint', () => {
   it('update that sets a value is refused before any statement', async () => {
     const { collection, runtime } = logs();
 
-    await expect(collection.update({ message: 'bye' })).rejects.toThrow(refusal);
+    await expect(collection.update({ message: 'bye' })).rejects.toThrow(refusal('update()'));
     expect(runtime.executions).toEqual([]);
   });
 
   it('delete is refused before any statement', async () => {
     const { collection, runtime } = logs();
 
-    await expect(collection.delete()).rejects.toThrow(refusal);
+    await expect(collection.delete()).rejects.toThrow(refusal('delete()'));
     expect(runtime.executions).toEqual([]);
   });
 
@@ -61,14 +62,7 @@ describe('a table with no primary key and no unique constraint', () => {
   it('updateAll is refused before any statement without returning', async () => {
     const { collection, runtime } = logs(withoutReturning);
 
-    await expect(collection.updateAll({ message: 'bye' })).rejects.toThrow(
-      expect.objectContaining({
-        code: 'ORM.ROW_IDENTITY_MISSING',
-        message: expect.stringContaining(
-          'updateAll() on model "Log" reads the rows it wrote back by key, since the contract does not report capability "returning"',
-        ),
-      }),
-    );
+    await expect(collection.updateAll({ message: 'bye' })).rejects.toThrow(refusal('updateAll()'));
     expect(runtime.executions).toEqual([]);
   });
 
@@ -77,5 +71,21 @@ describe('a table with no primary key and no unique constraint', () => {
     runtime.setNextStats([{ affectedRows: 2 }]);
 
     expect(await collection.updateAndCount({ message: 'bye' })).toBe(2);
+  });
+
+  it('createAll returns the rows its Insert returns with returning', async () => {
+    const { collection, runtime } = logs(withReturning);
+    runtime.setNextResults([[{ message: 'hi' }]]);
+
+    expect(await collection.createAll([{ message: 'hi' }])).toEqual([{ message: 'hi' }]);
+  });
+
+  it('createAll is refused before any statement without returning, and createAndCount counts', async () => {
+    const { collection, runtime } = logs(withoutReturning);
+
+    await expect(collection.createAll([{ message: 'hi' }])).rejects.toThrow(refusal('create()'));
+    expect(runtime.executions).toEqual([]);
+    runtime.setNextStats([{ affectedRows: 1 }]);
+    expect(await collection.createAndCount([{ message: 'hi' }])).toBe(1);
   });
 });

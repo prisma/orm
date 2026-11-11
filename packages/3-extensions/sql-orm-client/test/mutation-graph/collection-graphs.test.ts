@@ -217,7 +217,7 @@ describe('updateFirstGraph', () => {
       expect.objectContaining({
         code: 'ORM.ROW_IDENTITY_MISSING',
         message:
-          'update()/delete() on model "User" requires the table to have a primary key or unique constraint',
+          'update() on model "User" requires the table to have a primary key or unique constraint',
         meta: { model: 'User', table: 'no_such_table' },
       }),
     );

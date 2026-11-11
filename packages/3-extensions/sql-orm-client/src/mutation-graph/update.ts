@@ -4,7 +4,7 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import { blindCast } from '@internal/utils/casts';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';
-import { readBackIdentity, type WrittenRowOwner } from '../written-keys';
+import { rowIdentity, type WrittenRowOwner } from '../written-keys';
 import type { NodeId, StorageRow } from './edge';
 import { executeFiltered, type Filtered, filteredWhere, withColumns } from './filtered-statement';
 import type { Graph } from './graph';
@@ -58,7 +58,7 @@ export class Update extends StatementNode<Inputs> {
     const action = `${this.owner.operation}()`;
     if (this.returns.length > 0 && [graph.inputsOf(id)['filter'] ?? []].flat().length === 0) {
       const { table } = this.ast;
-      readBackIdentity(
+      rowIdentity(
         context.contract,
         blindCast<
           string,

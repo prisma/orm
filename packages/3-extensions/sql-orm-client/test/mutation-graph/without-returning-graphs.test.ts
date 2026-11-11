@@ -56,20 +56,18 @@ describe('write graphs on a contract without capability "returning"', () => {
     );
   });
 
-  it('refuses createAllGraph of several rows whose keys the database generates', () => {
-    expect(() =>
-      createAllGraph(
-        generatedTarget('Counter', 'counters'),
-        [{ label: 'a' }, { label: 'b' }],
-        undefined,
-        'rows',
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ORM.CAPABILITY_MISSING',
-        meta: expect.objectContaining({ action: 'createAll()' }),
-      }),
-    );
+  it('refuses, before running anything, createAllGraph of several rows whose keys the database generates', async () => {
+    const counters = generatedTarget('Counter', 'counters');
+    const runtime = createMockRuntime();
+    const graph = createAllGraph(counters, [{ label: 'a' }, { label: 'b' }], undefined, 'rows');
+
+    await expect(
+      queryGraph(graph, { runtime, context: generatedContext }, counters).toArray(),
+    ).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      meta: { capability: 'returning', action: 'createAll()' },
+    });
+    expect(runtime.executions).toEqual([]);
   });
 
   it('counts the rows of createAllGraph for a count whose keys the database generates', async () => {
@@ -87,15 +85,20 @@ describe('write graphs on a contract without capability "returning"', () => {
     });
   });
 
-  it('refuses createAllGraph when a key column gets a database default that is not auto-increment', () => {
-    expect(() =>
-      createAllGraph(generatedTarget('Note', 'notes'), [{ body: 'a' }], undefined, 'rows'),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ORM.CAPABILITY_MISSING',
-        meta: expect.objectContaining({ action: 'create()' }),
-      }),
-    );
+  it('refuses, before running anything, createAllGraph when a key column gets a database default that is not auto-increment', async () => {
+    const notes = generatedTarget('Note', 'notes');
+    const graph = createAllGraph(notes, [{ body: 'a' }], undefined, 'rows');
+
+    await expect(
+      queryGraph(
+        graph,
+        { runtime: createMockRuntime(), context: generatedContext },
+        notes,
+      ).toArray(),
+    ).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      meta: { capability: 'returning', action: 'create()' },
+    });
   });
 
   it('refuses, before running anything, a nested create whose key column gets a database default that is not auto-increment', async () => {
@@ -115,24 +118,11 @@ describe('write graphs on a contract without capability "returning"', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('refuses createAllGraph that skips conflicting rows and returns them', () => {
-    expect(() => createAllGraph(target, [ada], { columns: [] }, 'rows')).toThrow(
+  it('refuses createAll() that skips conflicting rows and returns them, when it is called', () => {
+    const { collection } = createCollectionFor('User', withoutReturning);
+
+    expect(() => collection.createAll([ada], { onConflict: 'skip' })).toThrow(
       expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
-    );
-  });
-
-  it('refuses createAllGraph on a table with no row identity', () => {
-    const tables = createCollectionTables(withoutReturning, 'public', 'User');
-    const noIdentity = targetOf({
-      ...users.state,
-      tables: {
-        ...tables,
-        root: tables.scope.aliasTable({ namespaceId: 'public', tableName: 'no_such_table' }),
-      },
-    });
-
-    expect(() => createAllGraph(noIdentity, [ada], undefined, 'rows')).toThrow(
-      expect.objectContaining({ code: 'ORM.ROW_IDENTITY_MISSING' }),
     );
   });
 
@@ -207,14 +197,17 @@ describe('write graphs on a contract without capability "returning"', () => {
   it.each([
     ['updates a conflict column', { label: 'a', slug: 'a' }, { slug: 'b' }],
     ['gives a conflict column no create value', { label: 'a' }, { label: 'b' }],
-  ])('refuses upsertGraph that %s', (_case, create, update) => {
-    expect(() =>
-      upsertGraph(generatedTarget('Counter', 'counters'), create, update, ['slug']),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ORM.CAPABILITY_MISSING',
-        meta: expect.objectContaining({ capability: 'returning' }),
-      }),
-    );
+  ])('refuses, before running anything, upsertGraph that %s', async (_case, create, update) => {
+    const counters = generatedTarget('Counter', 'counters');
+    const runtime = createMockRuntime();
+    const graph = upsertGraph(counters, create, update, ['slug']);
+
+    await expect(
+      queryGraph(graph, { runtime, context: generatedContext }, counters).toArray(),
+    ).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      meta: { capability: 'returning', action: 'upsert()' },
+    });
+    expect(runtime.executions).toEqual([]);
   });
 });

@@ -259,7 +259,7 @@ describe('createGraph', () => {
         [
           'n1 Insert users',
           'n2 Insert posts <- PayloadData n1 (id->user_id)',
-          'n3 Find users <- FilterData n1 (id->id)',
+          'n3 FindByKeys users by (id) for create <- Rows n1',
           'result: n3',
         ].join('\n'),
       );

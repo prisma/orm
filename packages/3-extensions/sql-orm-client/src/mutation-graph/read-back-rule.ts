@@ -65,11 +65,6 @@ function isWriteTo(node: Node | undefined, table: TableSource): node is Write {
       node instanceof InsertChunked ||
       node instanceof Update ||
       node instanceof Delete) &&
-    node.statements.every(
-      (ast) =>
-        ast.kind !== 'select' &&
-        sameTable(ast.table, table) &&
-        !(ast.kind === 'insert' && ast.onConflict?.action.kind === 'do-nothing'),
-    )
+    node.statements.every((ast) => ast.kind !== 'select' && sameTable(ast.table, table))
   );
 }

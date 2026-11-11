@@ -8,10 +8,12 @@ import type {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { hasContractCapability } from '../collection-contract';
+import { ormError } from '../orm-errors';
 import {
   type GeneratedKey,
   generatedKey,
   reportedInsertId,
+  rowIdentity,
   type WrittenRowOwner,
 } from '../written-keys';
 import { DataEdge, type NodeId, type StorageRow } from './edge';
@@ -36,10 +38,53 @@ export function checkOwnValues(
   if (!givesOwnValues(context, returns)) {
     return;
   }
+  const [first] = asts;
+  if (first === undefined) {
+    return;
+  }
+  const { namespaceId, tableName } = storageOf(first.table);
+  const method = `${owner.operation}()`;
+  rowIdentity(context.contract, namespaceId, tableName, owner.modelName, method);
   const given = [graph.inputsOf(id)['payload'] ?? []]
     .flat()
     .flatMap((edge) => (edge instanceof DataEdge ? edge.columns.map(([, target]) => target) : []));
+  for (const ast of asts) {
+    refuseUpsertOfColumnsReadBack(ast, returns, owner);
+  }
   generatedKeyOf(context, asts, returns, owner, given);
+}
+
+function refuseUpsertOfColumnsReadBack(
+  ast: InsertAst,
+  returns: readonly ProjectionItem[],
+  owner: WrittenRowOwner,
+): void {
+  const action = ast.onConflict?.action;
+  if (action?.kind !== 'do-update-set') {
+    return;
+  }
+  const method = `${owner.operation}()`;
+  const refused = (problem: string) =>
+    ormError(
+      'ORM.CAPABILITY_MISSING',
+      `${method} on model "${owner.modelName}" ${problem}; without capability "returning" the row is read back by the create's values for the conflict columns.`,
+      { meta: { capability: 'returning', action: method } },
+    );
+  const read = returns.map((column) => column.alias);
+  const updated = read.filter((column) => {
+    const value = action.set[column];
+    return (
+      value !== undefined &&
+      !(value.kind === 'column-ref' && value.table === 'excluded' && value.column === column)
+    );
+  });
+  if (updated.length > 0) {
+    throw refused(`updates conflict column "${updated.join('", "')}"`);
+  }
+  const absent = read.filter((column) => ast.rows.some((row) => row[column]?.kind !== 'param-ref'));
+  if (absent.length > 0) {
+    throw refused(`gives conflict column "${absent.join('", "')}" no create value`);
+  }
 }
 
 export function insertGivingOwnValues(

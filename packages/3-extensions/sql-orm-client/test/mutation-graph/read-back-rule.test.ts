@@ -283,7 +283,7 @@ describe('the read-back rule, on a contract with returning', () => {
     );
   });
 
-  it('adds a read-back of an Insert that skips conflicting rows as it is', () => {
+  it('collapses a read-back of an Insert that skips conflicting rows, which returns only the rows it inserted', () => {
     const graph = newGraph();
     const ast = insertInto('users', [{ name: 'Ada' }]).withOnConflict(InsertOnConflict.doNothing());
     const insert = addWithState(graph, new Insert(ast, insertOwner));
@@ -291,11 +291,7 @@ describe('the read-back rule, on a contract with returning', () => {
     addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
 
     expect(printGraph(graph)).toBe(
-      [
-        'n1 Insert users on conflict do nothing',
-        'n2 FindByKeys users by (id) for create <- Rows n1',
-        'result: none',
-      ].join('\n'),
+      ['n1 Insert users on conflict do nothing', 'result: none'].join('\n'),
     );
   });
 });

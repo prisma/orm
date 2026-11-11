@@ -22,7 +22,7 @@ exports[`state edges of the graphs builders build, with returning > createAllGra
 n2 Insert users <- state n1
 n3 State users <- state n2
 n4 State posts
-n5 Find users <- FilterData n2 (id->id), state n3, state n4
+n5 FindByKeys users by (id) for create <- Rows n2, state n3, state n4
 result: n5"
 `;
 
@@ -41,7 +41,7 @@ n11 State tags <- state n10
 n12 State user_tags
 n13 Insert user_tags <- PayloadData n4 (id->user_id), PayloadData n10 (id->tag_id), state n12
 n14 State user_tags <- state n13
-n15 Find users <- FilterData n4 (id->id), state n5, state n8
+n15 FindByKeys users by (id) for create <- Rows n4, state n5, state n8
 result: n15"
 `;
 
@@ -130,19 +130,18 @@ n3 State users <- state n2
 n4 FindByKeys users by (id) for create <- Rows n2, state n3
 n5 Insert users <- PayloadData n4 (id->invited_by_id), state n3
 n6 State users <- state n5
-n7 FindByKeys users by (id) for create <- Rows n5, state n6
-n8 State posts
-n9 Insert posts <- PayloadData n7 (id->user_id), state n8
-n10 State posts <- state n9
-n11 State tags
-n12 Insert tags <- state n11
-n13 State tags <- state n12
-n14 FindByKeys tags by (id) for create <- Rows n12, state n13
-n15 State user_tags
-n16 Insert user_tags <- PayloadData n7 (id->user_id), PayloadData n14 (id->tag_id), state n15
-n17 State user_tags <- state n16
-n18 Find users <- FilterData n7 (id->id), state n6, state n10
-result: n18"
+n7 State posts
+n8 Insert posts <- PayloadData n5 (id->user_id), state n7
+n9 State posts <- state n8
+n10 State tags
+n11 Insert tags <- state n10
+n12 State tags <- state n11
+n13 FindByKeys tags by (id) for create <- Rows n11, state n12
+n14 State user_tags
+n15 Insert user_tags <- PayloadData n5 (id->user_id), PayloadData n13 (id->tag_id), state n14
+n16 State user_tags <- state n15
+n17 FindByKeys users by (id) for create <- Rows n5, state n6, state n9
+result: n17"
 `;
 
 exports[`state edges of the graphs builders build, without returning > deleteAllGraph 1`] = `

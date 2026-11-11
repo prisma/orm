@@ -198,7 +198,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
 
   it('refuses createAll() of several rows whose ids the database generates, before running, and counts them with createAndCount()', async () => {
     await withDatabase(async ({ db, database, statements }) => {
-      expect(() => db.User.createAll([ada, grace])).toThrow(
+      await expect(db.User.createAll([ada, grace])).rejects.toThrow(
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:

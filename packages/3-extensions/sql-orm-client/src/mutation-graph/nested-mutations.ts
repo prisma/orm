@@ -10,14 +10,8 @@ import {
 } from '../collection-contract';
 import { createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
-import {
-  type InsertConflictSkip,
-  insertAst,
-  projectTableColumn,
-  projectTableColumns,
-} from '../mutation-statements';
+import { type InsertConflictSkip, projectTableColumn } from '../mutation-statements';
 import { ormError } from '../orm-errors';
-import { collectionSelectAst } from '../query-plan-select';
 import {
   assertJunctionMetadataShape,
   assertJunctionPayloadWritable,
@@ -32,22 +26,22 @@ import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
-import { readBackIdentity, writtenKeys } from '../written-keys';
 import { Assert } from './assert';
 import type { ColumnMapping, NodeId } from './edge';
-import { Find } from './find';
-import { FindByKeys } from './find-by-keys';
-import type { Graph } from './graph';
-import { Insert } from './insert';
 import {
-  addDeleteRows,
-  addInsertRows,
-  addUpdateRows,
+  addInsert,
+  allColumns,
+  type Builder,
+  deleteRows,
+  findRows,
+  insertRows,
   type KeySource,
   type Model,
+  type Returns,
+  type Shape,
   selectAstOf,
+  updateRows,
 } from './model-statements';
-import { PayloadData } from './payload-data';
 import { Requires } from './requires';
 import { Rows } from './rows';
 import { createRowOf, withCreateDefaults } from './storage-rows';
@@ -55,11 +49,15 @@ import { createRowOf, withCreateDefaults } from './storage-rows';
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
 type CreateOrConnect = Exclude<Mutation, { kind: 'disconnect' }>;
 
-export interface Translation {
-  readonly graph: Graph;
-  readonly context: ExecutionContext;
+export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
-  readonly readsBack: boolean;
+}
+
+export interface CreateOf {
+  readonly keysFromParent: readonly KeySource[];
+  readonly returns: Returns;
+  readonly shape: Shape;
+  readonly variantValue: string | undefined;
 }
 
 export interface BeforeWrite {
@@ -71,86 +69,36 @@ export function addCreateWithRelations(
   t: Translation,
   model: Model,
   parsed: ParsedMutationInput,
-  keysFromParent: readonly KeySource[],
-  requiresParentRow = false,
+  { keysFromParent, returns, shape, variantValue }: CreateOf,
 ): NodeId {
   for (const relationMutation of parsed.relationMutations) {
     rejectDisconnect(relationMutation);
   }
   const before = addBeforeWrite(t, model, parsed.relationMutations);
-  const keys = [...keysFromParent, ...before.keys];
-  const row = createRowOf(t.context, model, undefined, parsed.scalarData, undefined);
-  const parent = t.readsBack
-    ? addInsertAndReadBack(t, model, row, keys, requiresParentRow)
-    : addParentInsert(t, model, row, keys, requiresParentRow);
-  addAfterWrite(t, model, parent, parsed.relationMutations);
-  return parent;
-}
-
-function addParentInsert(
-  t: Translation,
-  model: Model,
-  row: Record<string, unknown>,
-  keys: readonly KeySource[],
-  requiresParentRow: boolean,
-): NodeId {
-  return addInsertRows(t.graph, t.context.contract, model.tables.root, [row], {
+  const row = createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
+  return insertRows(t, model, [row], {
     conflict: undefined,
-    keys,
-    junction: undefined,
-    requires: requiresParentRow ? parentRowRequired(t) : [],
+    keys: [...keysFromParent, ...before.keys],
+    requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
     owner: { operation: 'create', modelName: model.modelName },
+    returns,
+    shape,
+    afterWrite: (inserted) => addAfterWrite(t, model, inserted, parsed.relationMutations),
   });
 }
 
-function addInsertAndReadBack(
+function nestedCreate(
   t: Translation,
   model: Model,
-  row: Record<string, unknown>,
-  keys: readonly KeySource[],
-  requiresParentRow: boolean,
+  parsed: ParsedMutationInput,
+  keysFromParent: readonly KeySource[],
+  returns: Returns,
 ): NodeId {
-  const { graph, context } = t;
-  const { contract } = context;
-  const { root } = model.tables;
-  const { namespaceId, tableName } = root.storage;
-  const owner = { operation: 'create', modelName: model.modelName };
-  const inserted = new Insert(insertAst(contract, root, [row], undefined), owner);
-  const insert = graph.add(inserted, {
-    payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
-    state: graph.stateEdgesFor(inserted),
-    requires: requiresParentRow ? parentRowRequired(t) : [],
-  });
-  const identity = readBackIdentity(contract, namespaceId, tableName, model.modelName, 'create()');
-  const identityMappings = projectTableColumns(contract, root, identity).map(
-    (column): ColumnMapping => [column, column],
-  );
-  const read = new FindByKeys(
-    collectionSelectAst(contract, model.modelName, emptyState(model.tables)),
-    identityMappings,
-    owner,
-  );
-  return graph.add(read, {
-    keys: new Rows(insert, identityMappings),
-    state: graph.stateEdgesFor(read),
-  });
-}
-
-function writtenKeysOf(
-  t: Translation,
-  model: Model,
-  row: Readonly<Record<string, unknown>>,
-  keys: readonly KeySource[],
-) {
-  const { namespaceId, tableName } = model.tables.root.storage;
-  const fromEdges = keys.flatMap(({ columns }) => columns.map(([, target]) => target.alias));
-  return writtenKeys({
-    context: t.context,
-    namespaceId,
-    tableName,
-    modelName: model.modelName,
-    rows: [{ ...Object.fromEntries(fromEdges.map((column) => [column, true])), ...row }],
-    method: 'create()',
+  return addCreateWithRelations(t, model, parsed, {
+    keysFromParent,
+    returns,
+    shape: allColumns,
+    variantValue: undefined,
   });
 }
 
@@ -229,7 +177,7 @@ function addParentOwned(
       );
     }
     return {
-      from: addCreateWithRelations(t, related, parseCreateInput(t, related, row), [], true),
+      from: nestedCreate(t, related, parseCreateInput(t, related, row), [], 'rows'),
       columns,
     };
   }
@@ -250,7 +198,7 @@ function addChildOwned(
   parent: NodeId,
   { name, relation, mutation }: ParsedRelationMutation,
 ): void {
-  const { graph, context } = t;
+  const { context } = t;
   const { contract } = context;
   const related = relatedModel(contract, relation);
   const targetColumns = resolveRelationTargetColumns(contract, relation);
@@ -266,7 +214,7 @@ function addChildOwned(
     const rows = mutation.data.map((row) => parseCreateInput(t, related, row));
     if (rows.some((row) => row.relationMutations.length > 0)) {
       for (const row of rows) {
-        addCreateWithRelations(t, related, row, keys);
+        nestedCreate(t, related, row, keys, 'count');
       }
       return;
     }
@@ -280,16 +228,18 @@ function addChildOwned(
   }
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
-      addUpdateRows(
-        graph,
-        context.contract,
-        related.tables,
+      updateRows(
+        t,
+        related,
         {},
         {
           where: requiredCriterion(context, related, name, 'connect', criterion),
           filters: [],
           payloads: [{ from: parent, columns: fromParent }],
           owner: { operation: 'update', modelName: related.modelName },
+          returns: 'count',
+          shape: allColumns,
+          afterWrite: undefined,
         },
       );
     }
@@ -304,11 +254,14 @@ function addChildOwned(
           requiredCriterion(context, related, name, 'disconnect', criterion),
         );
   for (const where of wheres) {
-    addUpdateRows(graph, context.contract, related.tables, unlink, {
+    updateRows(t, related, unlink, {
       where,
       filters: [{ from: parent, columns: fromParent }],
       payloads: [],
       owner: { operation: 'update', modelName: related.modelName },
+      returns: 'count',
+      shape: allColumns,
+      afterWrite: undefined,
     });
   }
 }
@@ -319,7 +272,7 @@ function addJunctionOwned(
   parent: NodeId,
   { name, relation, mutation }: JunctionRelationMutation,
 ): void {
-  const { graph, context } = t;
+  const { context } = t;
   const { contract } = context;
   const { through } = relation;
   const related = relatedModel(contract, relation);
@@ -343,7 +296,7 @@ function addJunctionOwned(
   );
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
     const values = withCreateDefaults(context, through.namespaceId, through.table, {}, undefined);
-    addInsertRows(graph, contract, junction.root, [values], {
+    addInsert(t, junction.root, [values], {
       conflict,
       keys: [
         { from: parent, columns: fromParent },
@@ -357,10 +310,7 @@ function addJunctionOwned(
 
   if (mutation.kind === 'create') {
     for (const row of mutation.data) {
-      addLink(
-        addCreateWithRelations(t, related, parseCreateInput(t, related, row), [], true),
-        undefined,
-      );
+      addLink(nestedCreate(t, related, parseCreateInput(t, related, row), [], 'rows'), undefined);
     }
     return;
   }
@@ -381,7 +331,7 @@ function addJunctionOwned(
   }
   for (const criterion of criteria) {
     const target = addFindAndAssert(t, related, name, 'disconnect', criterion, fromTarget);
-    addDeleteRows(graph, contract, junction, {
+    deleteRows(t, junction, {
       where: undefined,
       filters: [
         { from: parent, columns: fromParent },
@@ -398,17 +348,14 @@ function addChildInserts(
   keys: readonly KeySource[],
 ): void {
   const values = rows.map((row) => createRowOf(t.context, model, undefined, row, undefined));
-  if (t.readsBack) {
-    for (const row of values) {
-      writtenKeysOf(t, model, row, keys);
-    }
-  }
-  addInsertRows(t.graph, t.context.contract, model.tables.root, values, {
+  insertRows(t, model, values, {
     conflict: undefined,
     keys,
-    junction: undefined,
     requires: [],
     owner: { operation: 'create', modelName: model.modelName },
+    returns: 'count',
+    shape: allColumns,
+    afterWrite: undefined,
   });
 }
 
@@ -422,18 +369,16 @@ function addFindAndAssert(
 ): NodeId {
   const { graph, context } = t;
   const where = requiredCriterion(context, related, name, kind, criterion);
-  const found = new Find(
+  const find = findRows(
+    t,
     selectAstOf(
       context,
       related,
       { ...emptyState(related.tables), filters: [where], limit: 1 },
       'selection',
     ),
+    { filter: [], requires: parentRowRequired(t) },
   );
-  const find = graph.add(found, {
-    state: graph.stateEdgesFor(found),
-    requires: parentRowRequired(t),
-  });
   graph.add(
     new Assert(
       ormError(

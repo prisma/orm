@@ -47,6 +47,7 @@ import {
   columnOfCallerField,
   getModelFieldColumns,
   hasCompleteUniqueKey,
+  hasContractCapability,
   isToOneCardinality,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
@@ -1950,31 +1951,20 @@ export class CollectionBase<
         'create overload inputs are model-field records whose relation fields are callbacks'
       >(data),
     );
-    if (parsed.relationMutations.length > 0) {
-      const graph = createGraph(this.#descriptionOptions(), parsed);
-      const [created] = await queryGraph<Row>(
-        graph,
-        this.#on(queryable),
-        this.#descriptionOptions(),
-      ).toArray();
-      if (created === undefined) {
-        throw ormError(
-          'ORM.MUTATION_ROW_MISSING',
-          `create() for model "${this.modelName}" did not return a row`,
-          { meta: { operation: 'create', model: this.modelName } },
-        );
-      }
-      return created;
-    }
-
-    const rows = await this.#createAllRows([
-      blindCast<
-        ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-        'absence of nested callbacks selects the scalar create overload input'
-      >(data),
-    ])(queryable);
-    const created = rows[0];
-    if (created) {
+    const [created] =
+      mtiCreateContextOf(this.#descriptionOptions()) === undefined
+        ? await queryGraph<Row>(
+            createGraph(this.#descriptionOptions(), parsed),
+            this.#on(queryable),
+            this.#descriptionOptions(),
+          ).toArray()
+        : await this.#createAllRows([
+            blindCast<
+              ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
+              'a create on an MTI variant has no nested callbacks, which createAll() refuses'
+            >(data),
+          ])(queryable);
+    if (created !== undefined) {
       return created;
     }
 
@@ -2093,6 +2083,14 @@ export class CollectionBase<
         queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
     }
 
+    if (conflictSkip !== undefined && !hasContractCapability(this.contract, 'returning')) {
+      const method = rows.length === 1 ? 'create()' : 'createAll()';
+      throw ormError(
+        'ORM.CAPABILITY_MISSING',
+        `${method} with onConflict "skip" on model "${this.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
+        { meta: { capability: 'returning', action: method } },
+      );
+    }
     const graph = createAllGraph(this.#descriptionOptions(), rows, conflictSkip, 'rows');
     return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
   }
