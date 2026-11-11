@@ -9,7 +9,7 @@ describeTemporalFallbackEntries({
   publishedPackages: ['@prisma/orm-target-mysql', '@prisma/orm-mysql'],
   internalTarget: {
     name: '@internal/target-mysql',
-    dir: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-target'),
+    dir: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-mysql/1-target'),
     minimumEntries: 15,
   },
   expectedApplicationEntries: [
@@ -22,6 +22,7 @@ describeTemporalFallbackEntries({
     '@prisma/orm-mysql ./contract-builder',
   ],
   entriesThatLoadThePolyfill: [
+    '@prisma/orm-target-mysql ./target',
     '@prisma/orm-target-mysql ./target/control',
     '@prisma/orm-mysql ./config',
     '@prisma/orm-mysql ./control',

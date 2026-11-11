@@ -6,8 +6,17 @@ import type { SqlLoweringSpec } from '@internal/sql-operations';
 import { invariant } from '@internal/utils/assertions';
 import type { CodecRef } from './ast/codec-types';
 import type { SqlStatementStats } from './ast/driver-types';
-import type { AnyExpression as AstExpression, RawQueryColumn, RawSqlLiteral } from './ast/types';
+import type {
+  AnyExpression as AstExpression,
+  DeleteAst,
+  InsertAst,
+  RawPart,
+  RawQueryColumn,
+  RawSqlLiteral,
+  UpdateAst,
+} from './ast/types';
 import { OperationExpr, ParamRef, RawExpr, RawQueryAst } from './ast/types';
+import type { Subquery } from './functions';
 import { planFromAst, type SqlQueryPlan } from './plan';
 
 export type ScopeField = {
@@ -333,16 +342,31 @@ export type RawSqlStatementTag = (
 /** Interpolations that occupy a single position in the parts list. */
 type RawExprInterpolation = Expression<ScopeField> | ParamRef | RawSqlLiteral;
 
-/** Interpolations a raw template accepts; a {@link RawRowQuery} splices its own parts in. */
-export type RawSqlInterpolation = RawExprInterpolation | RawRowQuery;
+export declare const RowReturningStatementMarker: unique symbol;
 
-function resolveInterpolation(
-  adapter: RawCodecInferer,
-  value: RawExprInterpolation,
-): AstExpression | ParamRef {
-  if (isExpression(value)) {
-    return value.buildAst();
-  }
+export type RowReturningStatement<RowType extends Record<string, ScopeField>> = {
+  readonly [RowReturningStatementMarker]?: RowType;
+  buildAst(): InsertAst | UpdateAst | DeleteAst;
+};
+
+/**
+ * Interpolations a raw template accepts. A {@link RawRowQuery} splices its own
+ * parts in; a builder query or a row-returning builder mutation lands as one
+ * statement AST part.
+ */
+export type RawSqlInterpolation =
+  | RawExprInterpolation
+  | RawRowQuery
+  | Subquery<Record<string, ScopeField>>
+  | RowReturningStatement<Record<string, ScopeField>>;
+
+type BuildableInterpolation = Exclude<RawSqlInterpolation, ParamRef | RawSqlLiteral>;
+
+function isBuildable(value: RawSqlInterpolation): value is BuildableInterpolation {
+  return isExpression(value);
+}
+
+function resolveInterpolation(adapter: RawCodecInferer, value: ParamRef | RawSqlLiteral): ParamRef {
   if (value instanceof ParamRef) {
     return value;
   }
@@ -363,30 +387,36 @@ function resolveInterpolation(
   );
 }
 
-function isRawRowQuery(value: unknown): value is RawRowQuery {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'buildAst' in value &&
-    typeof value.buildAst === 'function' &&
-    'build' in value &&
-    typeof value.build === 'function'
-  );
+function templatePart(adapter: RawCodecInferer, value: RawSqlInterpolation): RawPart[] {
+  if (!isBuildable(value)) {
+    return [resolveInterpolation(adapter, value)];
+  }
+  const ast = value.buildAst();
+  if (ast instanceof RawQueryAst) {
+    return [...ast.parts];
+  }
+  if (isMutationAst(ast) && (ast.returning?.length ?? 0) === 0) {
+    throw runtimeError(
+      'RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION',
+      `an embedded ${ast.kind} must return rows: call \`.returning(...)\` on the builder before interpolating it`,
+      { kind: ast.kind },
+    );
+  }
+  return [ast];
+}
+
+function isMutationAst(ast: { readonly kind: string }): ast is InsertAst | UpdateAst | DeleteAst {
+  return ast.kind === 'insert' || ast.kind === 'update' || ast.kind === 'delete';
 }
 
 function templateParts(
   adapter: RawCodecInferer,
   strings: TemplateStringsArray,
   values: readonly RawSqlInterpolation[],
-): Array<string | AstExpression> {
-  const parts: Array<string | AstExpression> = [strings[0] ?? ''];
+): RawPart[] {
+  const parts: RawPart[] = [strings[0] ?? ''];
   values.forEach((value, i) => {
-    if (isRawRowQuery(value)) {
-      parts.push(...value.buildAst().parts);
-    } else {
-      parts.push(resolveInterpolation(adapter, value));
-    }
-    parts.push(strings[i + 1] ?? '');
+    parts.push(...templatePart(adapter, value), strings[i + 1] ?? '');
   });
   return parts;
 }
@@ -410,7 +440,7 @@ function resolveRowSpec(spec: RawRowSpec): Record<string, RawQueryColumn> {
 }
 
 /**
- * Create a tagged-template builder for raw SQL. The returned tag accepts SQL string fragments interleaved with typed {@link Expression}, {@link ParamRef}, row-returning {@link RawRowQuery}, or bare {@link RawSqlLiteral} interpolations. Call `.returns(spec)` on the result to obtain a typed {@link Expression} whose AST is a {@link RawExpr}.
+ * Create a tagged-template builder for raw SQL. The returned tag accepts SQL string fragments interleaved with typed {@link Expression}, {@link ParamRef}, row-returning {@link RawRowQuery}, builder query ({@link Subquery}), row-returning builder mutation ({@link RowReturningStatement}), or bare {@link RawSqlLiteral} interpolations. Call `.returns(spec)` on the result to obtain a typed {@link Expression} whose AST is a {@link RawExpr}.
  *
  * Supplied with a {@link RawPlanContext}, the tag also terminates in statement position: `.returnsRow(spec)` and `.affectedCount()` mint a {@link SqlQueryPlan} whose AST is a {@link RawQueryAst}. The context is stated once, here, so authoring sites carry nothing but the template and its terminator.
  *
@@ -431,7 +461,7 @@ export function createRawSql(adapter: RawCodecInferer, planContext?: RawPlanCont
 }
 
 class RawSqlBuilderImpl implements RawSqlBuilder {
-  constructor(protected readonly parts: readonly (string | AstExpression | ParamRef)[]) {}
+  constructor(protected readonly parts: readonly RawPart[]) {}
 
   returns<S extends string>(spec: S): Expression<{ codecId: S; nullable: false }>;
   returns<S extends string, N extends boolean = false>(spec: {
@@ -454,7 +484,7 @@ class RawSqlBuilderImpl implements RawSqlBuilder {
 
 class RawSqlStatementBuilderImpl extends RawSqlBuilderImpl implements RawSqlStatementBuilder {
   constructor(
-    parts: readonly (string | AstExpression | ParamRef)[],
+    parts: readonly RawPart[],
     private readonly planContext: RawPlanContext,
   ) {
     super(parts);

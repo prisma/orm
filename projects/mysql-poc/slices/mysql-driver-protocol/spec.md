@@ -56,7 +56,7 @@ Our code never writes a value into SQL. The driver library does that. This is Wi
 
 ## Coherence rationale
 
-One reviewer reads this as "the MySQL driver sends each statement once". It touches only `packages/3-targets/mysql/3-driver`, its tests and docs, and the design notes. The adapter, codecs, runtime and everything above it are unchanged, because the driver still takes SQL with `?N` placeholders and codec-encoded values, and returns text, bytes or null.
+One reviewer reads this as "the MySQL driver sends each statement once". It touches only `packages/3-targets/mysql/1-mysql/3-driver`, its tests and docs, and the design notes. The adapter, codecs, runtime and everything above it are unchanged, because the driver still takes SQL with `?N` placeholders and codec-encoded values, and returns text, bytes or null.
 
 ## Scope
 
