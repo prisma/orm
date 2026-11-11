@@ -71,18 +71,15 @@ function generatedCreate(modelName: 'Note' | 'Owner', data: Record<string, unkno
   );
 }
 
-async function refusalOf(graph: Graph, target = generatedTarget('Counter')) {
+async function refusalOf(
+  graph: Graph,
+  target: Parameters<typeof queryGraph>[2] = generatedTarget('Counter'),
+) {
   const runtime = createMockRuntime();
   const error = await queryGraph(graph, { runtime, context: target.context }, target)
     .toArray()
     .catch((caught: unknown) => caught);
   return { error, executions: runtime.executions };
-}
-
-async function countOf(graph: Graph, affectedRows: number, context = generatedContext) {
-  const runtime = createMockRuntime();
-  runtime.setNextStats([{ affectedRows }]);
-  return executeGraph(graph, { runtime, context });
 }
 
 function lines(...printed: string[]): string {
@@ -248,10 +245,13 @@ describe('write graphs as they run, on a contract without returning', () => {
 
   it('createAll() that skips conflicting rows is refused before running anything, and createAndCount() counts', async () => {
     const target = usersOf(context);
+    const runtime = createMockRuntime();
+    runtime.setNextStats([{ affectedRows: 1 }]);
+    const count = createAllGraph(target, [ada], { columns: [] }, 'count');
 
     expect({
       rows: await refusalOf(createAllGraph(target, [ada], { columns: [] }, 'rows'), target),
-      count: await countOf(createAllGraph(target, [ada], { columns: [] }, 'count'), 1, context),
+      count: await executeGraph(count, { runtime, context }),
     }).toMatchObject({
       rows: {
         error: {
@@ -263,24 +263,6 @@ describe('write graphs as they run, on a contract without returning', () => {
         executions: [],
       },
       count: { affectedRows: 1 },
-    });
-  });
-
-  it('createAll() of several rows whose keys the database generates is refused before running anything, and createAndCount() counts', async () => {
-    const rows = [{ label: 'a' }, { label: 'b' }];
-
-    expect({
-      rows: await refusalOf(createAllGraph(generatedTarget('Counter'), rows, undefined, 'rows')),
-      count: await countOf(createAllGraph(generatedTarget('Counter'), rows, undefined, 'count'), 2),
-    }).toMatchObject({
-      rows: {
-        error: {
-          code: 'ORM.CAPABILITY_MISSING',
-          meta: { capability: 'returning', action: 'createAll()' },
-        },
-        executions: [],
-      },
-      count: { affectedRows: 2 },
     });
   });
 

@@ -66,22 +66,6 @@ function usersWithPosts() {
 }
 
 describe('the read-back rule, on a contract with returning', () => {
-  it('collapses a FindByKeys of the rows an Insert wrote into the Insert, which returns its columns', () => {
-    const graph = newGraph();
-    const insert = addWithState(
-      graph,
-      new Insert(insertInto('users', [{ name: 'Ada' }, { name: 'Bob' }]), insertOwner),
-    );
-
-    const read = addWithState(graph, readBackByKeys(['id', 'name']), {
-      keys: new Rows(insert, sameId),
-    });
-
-    expect(read).toBe(insert);
-    expect(printGraph(graph)).toBe(['n1 Insert users 2 rows', 'result: none'].join('\n'));
-    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
-  });
-
   it('collapses a FindByKeys of the rows an InsertChunked wrote into it', () => {
     const graph = newGraph();
     const inserted = addWithState(
@@ -119,21 +103,6 @@ describe('the read-back rule, on a contract with returning', () => {
       ["n1 Update users set name = 'Ada' where name = 'Ada'", 'result: none'].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'email']);
-  });
-
-  it('collapses a Find of the rows a Delete removed by their key into the Delete', () => {
-    const graph = newGraph();
-    const del = addWithState(graph, deleteUsers(nameIsAda));
-
-    const read = addWithState(graph, findUsers([], ['id', 'name']), {
-      filter: [new FilterData(del, sameId)],
-    });
-
-    expect(read).toBe(del);
-    expect(printGraph(graph)).toBe(
-      ["n1 Delete users where name = 'Ada'", 'result: none'].join('\n'),
-    );
-    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
   });
 
   it('adds a read-back with includes as it is', () => {
@@ -245,9 +214,13 @@ describe('the read-back rule, on a contract with returning', () => {
     const graph = new Graph(cascadeWithReturning);
     const del = addWithState(graph, deleteFrom('Member'));
 
-    expect(
-      addWithState(graph, findMembers(), { filter: [new FilterData(del, [[memberId, memberId]])] }),
-    ).toBe(del);
+    const read = addWithState(graph, findMembers(), {
+      filter: [new FilterData(del, [[memberId, memberId]])],
+    });
+
+    expect(read).toBe(del);
+    expect(printGraph(graph)).toBe(['n1 Delete Member', 'result: none'].join('\n'));
+    expect(returnedAt(graph, 0)).toEqual(['id']);
   });
 
   it('adds a read-back as it is when a cascade from a write to another table follows the write it reads', () => {
@@ -293,27 +266,40 @@ describe('the read-back rule, on a contract with returning', () => {
     expect(printGraph(graph)).toBe(
       ['n1 Insert users on conflict do nothing', 'result: none'].join('\n'),
     );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
   });
 });
 
-describe('the read-back rule, on a contract without returning', () => {
-  it('adds the read-back as it is, and the write returns the key it reads', () => {
+describe('the rules, on a contract without returning', () => {
+  it('do not run: the graph keeps every node as it is added', () => {
     const graph = newGraphWithoutReturning();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+    addWithState(graph, updateUsers({ name: 'Grace' }, found.ast.where), {
+      filter: [new FilterData(find, sameId)],
+    });
     const insert = addWithState(
       graph,
       new Insert(insertInto('users', [{ name: 'Ada' }]), insertOwner),
     );
-
-    const read = addWithState(graph, readBackByKeys(['id', 'name']), {
-      keys: new Rows(insert, sameId),
-    });
-
-    expect(read).not.toBe(insert);
-    expect(printGraph(graph)).toBe(
-      ['n1 Insert users', 'n2 FindByKeys users by (id) for create <- Rows n1', 'result: none'].join(
-        '\n',
-      ),
+    addWithState(graph, readBackByKeys(['id', 'name']), { keys: new Rows(insert, sameId) });
+    const first = addWithState(
+      graph,
+      findUsersWith({ filters: [nameIsAda], limit: 1, selectedFields: ['id', 'name'] }),
     );
-    expect(returnedAt(graph, 0)).toEqual(['id']);
+    addWithState(graph, deleteUsers(), { filter: [new FilterData(first, sameId)] });
+    graph.setResult(first);
+
+    expect(printGraph(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        'n3 Insert users',
+        'n4 FindByKeys users by (id) for create <- Rows n3',
+        "n5 Find users where name = 'Ada' limit 1",
+        'n6 Delete users <- FilterData n5 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
   });
 });

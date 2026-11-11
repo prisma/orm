@@ -13,7 +13,6 @@ import {
   findUsersWith,
   nameIsAda,
   newGraph,
-  newGraphWithoutReturning,
   updateUsers,
 } from './statements';
 
@@ -164,28 +163,6 @@ describe('the fold rule, on a contract with returning', () => {
       [
         "n1 Find users where name = 'Ada'",
         "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (name->name)",
-        'result: n2',
-      ].join('\n'),
-    );
-  });
-});
-
-describe('the fold rule, on a contract without returning', () => {
-  it('does not run', () => {
-    const graph = newGraphWithoutReturning();
-    const found = findUsers([nameIsAda]);
-    const find = addWithState(graph, found);
-
-    graph.setResult(
-      addWithState(graph, updateWithConditionOf(found), {
-        filter: [new FilterData(find, sameId)],
-      }),
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada'",
-        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n2',
       ].join('\n'),
     );

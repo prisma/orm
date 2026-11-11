@@ -16,7 +16,6 @@ import {
   findUsersWith,
   nameIsAda,
   newGraph,
-  newGraphWithoutReturning,
   returnedAt,
   updateUsers,
 } from './statements';
@@ -130,18 +129,6 @@ describe('the delete rule, on a contract with returning', () => {
       graph,
       deleteUsers(BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'))),
     );
-
-    graph.setResult(find);
-
-    expect(graph.result).toBe(find);
-  });
-});
-
-describe('the delete rule, on a contract without returning', () => {
-  it('does not run', () => {
-    const graph = newGraphWithoutReturning();
-    const find = addWithState(graph, firstRowOfAda());
-    addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
 
     graph.setResult(find);
 
