@@ -96,7 +96,7 @@ describe('sqlite transaction isolation options', () => {
     const acquire = vi.spyOn(db.runtime(), 'connection');
     const callback = vi.fn(async () => 42);
     try {
-      await expect(async () =>
+      await expect(
         db.transaction(callback, value as SqliteTransactionOptions),
       ).rejects.toMatchObject({
         code: 'RUNTIME.ARGUMENT_INVALID',

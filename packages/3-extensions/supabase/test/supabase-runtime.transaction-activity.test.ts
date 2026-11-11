@@ -44,7 +44,7 @@ function createRecordingSetup() {
 describe.each(['session', 'activity', 'held-activity'] as const)(
   'isolation through %s role ownership',
   (route) => {
-    it.each([undefined, undefined, { isolationLevel: 'Serializable' }] as const)(
+    it.each([undefined, { isolationLevel: 'Serializable' }] as const)(
       'forwards %j without changing role ownership',
       async (start) => {
         const { runtime, driver } = createTestSetup();

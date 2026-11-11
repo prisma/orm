@@ -198,7 +198,7 @@ export function buildPostgresRuntimeBoundMembers<
 
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: PostgresTransactionOptions,
     ): Promise<R> {

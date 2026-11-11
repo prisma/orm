@@ -400,7 +400,7 @@ export default function mysql<
     },
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: MysqlTransactionOptions,
     ): Promise<R> {

@@ -160,7 +160,6 @@ describe('per-transaction isolation setup', () => {
     [undefined, undefined],
     [{}, undefined],
     [{ isolationLevel: undefined }, undefined],
-    [{ isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
     [{ isolationLevel: 'ReadUncommitted' }, 'READ UNCOMMITTED'],
     [{ isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
     [{ isolationLevel: 'RepeatableRead' }, 'REPEATABLE READ'],

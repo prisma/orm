@@ -475,7 +475,7 @@ export default async function supabase<
       execute: role.execute,
       [preparedStatementQuery]: role[preparedStatementQuery],
       [preparedStatementExecute]: role[preparedStatementExecute],
-      transaction<R>(
+      async transaction<R>(
         fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
         localOptions?: PostgresTransactionOptions,
       ): Promise<R> {

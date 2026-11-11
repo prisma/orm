@@ -150,7 +150,7 @@ describe.each(['anon', 'service_role'] as const)('isolation options under %s', (
     });
     const bound = role === 'anon' ? db.asAnon() : db.asServiceRole();
     const callback = vi.fn(async () => 42);
-    await expect(async () =>
+    await expect(
       bound.transaction(callback, value as PostgresTransactionOptions),
     ).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
     expect(recorded.connections).toBe(0);

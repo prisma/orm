@@ -386,7 +386,7 @@ export default function sqlite<
     },
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: SqliteTransactionOptions,
     ): Promise<R> {
