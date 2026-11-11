@@ -26,6 +26,10 @@ A PR open against the wrong branch is recoverable but visible; this gate costs n
 
 The `main` ruleset requires conversation resolution. A PR with auto-merge enabled and every check green still sits at `BLOCKED` while any review thread is unresolved, including CodeRabbit's. Before enabling auto-merge, list the unresolved threads. `reviewThreads` takes no `isResolved` filter, so page through every thread and keep the unresolved ones: `gh api graphql --paginate -F number=<PR number> -f query='query($number:Int!,$endCursor:String){repository(owner:"prisma",name:"orm"){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved path}}}}}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved==false)|"\(.id) \(.path)"'`. It prints nothing when every thread is resolved. Reply to each open thread with the fix commit or the reason for no change, and resolve it. Seen on #30350 and #30380 (2026-09-22/23).
 
+## Auto-merge on is not the same as queued
+
+After turning auto-merge on, confirm the PR enters the queue (`mergeQueueEntry` is set) and that the head has a `CI (PR)` run. A push while the PR is queued gets no PR CI, and a conflict with `main` keeps it out silently. A review thread opened while the PR is queued does not stop the merge, so list unresolved threads again after it merges and answer each one. See [`failure-modes.md § F54`](../calibration/failure-modes.md#f54-auto-merge-is-on-and-the-pr-never-enters-the-merge-queue).
+
 ## PR title convention
 
 - Conventional-commit prefix: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `test:` / `build:` / `ci:`.

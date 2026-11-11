@@ -12,12 +12,21 @@ changes:
     script: scripts/rewrite-mongo-date-types.ts
   - id: temporal-polyfill-is-a-peer-dependency-of-mongo
     summary: |
-      `temporal-polyfill` is now a required peer dependency of `@prisma/orm-mongo` and `@prisma/orm-target-mongo`. The MongoDB control plane imports it, because `DateTime(as: temporal)`, `Date(as: temporal)` and `Time(as: temporal)` read `Temporal` values. npm, pnpm and bun install it automatically. An extension package that installs with Yarn and loads the target's control entry in its tests or tooling must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`.
+      `temporal-polyfill` is now a required peer dependency of `@prisma/orm-mongo` and `@prisma/orm-target-mongo`. The MongoDB control plane imports it, because `DateTime(as: temporal)`, `Date(as: temporal)` and `Time(as: temporal)` read `Temporal` values. npm, pnpm and bun install it automatically (npm with `legacy-peer-deps` set does not: see `temporal-polyfill-with-legacy-peer-deps`). An extension package that installs with Yarn and loads the target's control entry in its tests or tooling must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`.
     detection:
       glob: "**/yarn.lock"
       contains:
         - "@prisma/orm-mongo@"
         - "@prisma/orm-target-mongo@"
+      anyMatch: true
+  - id: temporal-polyfill-with-legacy-peer-deps
+    summary: |
+      npm does not install peer dependencies when `legacy-peer-deps` is set, so an extension package that installs with npm and that setting, and loads the MongoDB target's control entry in its tests or tooling, must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`, as a Yarn package must. The setting can come from an `.npmrc`, the user's npm config or the environment, which no file shows, so the detection matches every `package.json` that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, and the step checks the setting npm uses.
+    detection:
+      glob: "**/package.json"
+      contains:
+        - '"@prisma/orm-mongo"'
+        - '"@prisma/orm-target-mongo"'
       anyMatch: true
 ---
 
@@ -36,3 +45,7 @@ Pass files or directories to limit it.
 ## `temporal-polyfill-is-a-peer-dependency-of-mongo`
 
 For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.4"` to `devDependencies` in the `package.json` that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, then reinstall.
+
+## `temporal-polyfill-with-legacy-peer-deps`
+
+Skip this if the package installs with Yarn (see `temporal-polyfill-is-a-peer-dependency-of-mongo`), pnpm or bun. For a package that installs with npm, run `npm config get legacy-peer-deps` in the folder of each `package.json` that `detection` matches. It reports the setting npm uses there, from any `.npmrc`, the user's npm config or the `npm_config_legacy_peer_deps` environment variable. Where it prints `true`, or the install command passes `--legacy-peer-deps`, add `"temporal-polyfill": "^1.0.4"` to that `package.json`'s `devDependencies`, then reinstall.
