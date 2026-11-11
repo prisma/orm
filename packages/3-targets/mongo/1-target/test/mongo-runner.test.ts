@@ -1275,3 +1275,35 @@ describe('MongoMigrationRunner, an index check that finds an index of the same k
     );
   });
 });
+
+describe('MongoMigrationRunner, a DDL command that fails for a reason other than a unique index build', () => {
+  it('surfaces its own error without reading the collection', async () => {
+    const ddlError = new Error('collection create refused');
+    const inspectionExecutor = new StubInspectionExecutor();
+    inspectionExecutor.listCollections = async () => {
+      throw new Error('listCollections failed');
+    };
+    const runner = new MongoMigrationRunner({
+      inspectionExecutor,
+      adapter: new StubMongoAdapter(),
+      driver: new StubMongoDriver(),
+      executeDdl: async () => {
+        throw ddlError;
+      },
+      markerOps: NOOP_MARKER_OPS,
+      introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
+    });
+    const plan = makePlan([createCollection('orders')]);
+
+    await expect(
+      runner.execute({
+        plan,
+        migrationEdges: synthEdges(plan),
+        destinationContract: makeContract('dest'),
+        policy: ALL_POLICY,
+        frameworkComponents: [],
+        executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+      }),
+    ).rejects.toBe(ddlError);
+  });
+});

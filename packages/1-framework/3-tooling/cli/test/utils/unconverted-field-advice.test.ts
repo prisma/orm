@@ -153,6 +153,13 @@ describe('the advice for a type change whose cast failed', () => {
     ]);
   });
 
+  it('re-runs db update as the user typed it in the general advice', () => {
+    const invocation = { ...FROM_PROJECT, rerunArgs: ['--to', 'production'] };
+    expect(dbUpdateError({ ...runnerFailed, conflicts: undefined }, invocation).fix).toBe(
+      'Resolve the cause the failure names, then re-run `{bin} db update --to production`.',
+    );
+  });
+
   it('re-runs db migrate as the user typed it in the general advice', () => {
     const invocation = { ...FROM_PROJECT, rerunArgs: ['--to', 'production'] };
     expect(migrateError(runnerFailed, invocation).fix).toBe(

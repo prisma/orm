@@ -27,14 +27,11 @@ export function dbUpdateRunnerFailureError(
   },
 ): CliStructuredError {
   const { databaseStorageHash, invocation } = context;
-  const update = cliCommand(invocation, 'db update');
+  const update = cliCommand(invocation, 'db update', invocation.rerunArgs ?? []);
   const { blockingObjects } = failure.meta;
   const advice =
     blockingObjects !== undefined
-      ? blockingObjectsAdvice(
-          blockingObjects,
-          cliCommand(invocation, 'db update', invocation.rerunArgs ?? []),
-        )
+      ? blockingObjectsAdvice(blockingObjects, update)
       : facts.failedTypeChange !== undefined
         ? dbUpdateFailedTypeChangeAdvice(facts.failedTypeChange, databaseStorageHash, invocation)
         : facts.rowsWithoutValue !== undefined

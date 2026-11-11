@@ -41,7 +41,6 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
-  AnyMongoDdlCommand,
   AnyMongoMigrationOperation,
   MongoDmlCheck,
   MongoDmlOperation,
@@ -574,16 +573,20 @@ function nullKeyFields(error: object): readonly string[] {
     : [];
 }
 
+function isDuplicateKeyError(error: unknown): error is object {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Reflect.get(error, 'code') === MONGO_DUPLICATE_KEY
+  );
+}
+
 function indexBuildFailure(
   op: MongoMigrationPlanOperation,
-  command: AnyMongoDdlCommand,
-  error: unknown,
+  command: CreateIndexCommand,
+  error: object,
   backfill: (fields: readonly string[]) => readonly string[],
-): MongoMigrationRunnerResult | undefined {
-  if (!(command instanceof CreateIndexCommand) || typeof error !== 'object' || error === null) {
-    return undefined;
-  }
-  if (Reflect.get(error, 'code') !== MONGO_DUPLICATE_KEY) return undefined;
+): MongoMigrationRunnerResult {
   const reason = mongoErrorText(error);
   const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
   const index = command.name ?? defaultMongoIndexName(command.keys);
@@ -808,17 +811,19 @@ export class MongoMigrationRunner {
           try {
             await executeDdl(step.command);
           } catch (error) {
-            const inPlace = await this.collectionInPlace(step.command.collection);
-            const failure = indexBuildFailure(operation, step.command, error, (fields) =>
+            const { command } = step;
+            if (!(command instanceof CreateIndexCommand) || !isDuplicateKeyError(error)) {
+              throw error;
+            }
+            const inPlace = await this.collectionInPlace(command.collection);
+            return indexBuildFailure(operation, command, error, (fields) =>
               backfillStatements(
                 options.destinationContract,
-                step.command.collection,
+                command.collection,
                 fields,
                 inPlace.rewrite,
               ).map(({ statement }) => `--backfill ${statement}`),
             );
-            if (failure === undefined) throw error;
-            return failure;
           }
           wrote();
         }
