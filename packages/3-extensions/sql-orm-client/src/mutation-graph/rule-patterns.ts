@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
+import type { AnyExpression, SelectAst, TableSource } from '@internal/sql-relational-core/ast';
 import { resolveUniqueKeyColumnSets } from '../collection-contract';
 import { storageOf } from './changed-by';
 import type { ColumnMapping, Edge, NodeId } from './edge';
@@ -48,9 +48,8 @@ export function readsTableAsFound(
   inputs: InputEdges<Slots>,
   { id, find }: FindAt,
   table: TableSource,
-  readOf: (ast: SelectAst) => TableSource | undefined,
 ): boolean {
-  const read = readOf(find.ast);
+  const read = oneTableReadOf(find.ast);
   const own = stateEdgeOf([inputs['state'] ?? []].flat(), table);
   const found = stateEdgeOf([graph.inputsOf(id)['state'] ?? []].flat(), table);
   return (
@@ -58,7 +57,11 @@ export function readsTableAsFound(
   );
 }
 
-export function oneTableReadOf(ast: SelectAst): TableSource | undefined {
+export function foldsIntoCondition({ find }: FindAt, where: AnyExpression | undefined): boolean {
+  return find.ast.where === where && rowsOfConditionReadOf(find.ast) !== undefined;
+}
+
+function oneTableReadOf(ast: SelectAst): TableSource | undefined {
   const { from } = ast;
   return from?.kind === 'table-source' &&
     ast.joins === undefined &&
@@ -68,9 +71,12 @@ export function oneTableReadOf(ast: SelectAst): TableSource | undefined {
 }
 
 export function conditionOnlyReadOf(ast: SelectAst): TableSource | undefined {
+  return ast.orderBy === undefined ? rowsOfConditionReadOf(ast) : undefined;
+}
+
+function rowsOfConditionReadOf(ast: SelectAst): TableSource | undefined {
   const from = oneTableReadOf(ast);
   const clauses = [
-    ast.orderBy,
     ast.distinct,
     ast.distinctOn,
     ast.groupBy,

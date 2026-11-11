@@ -52,6 +52,20 @@ describe('a table with no primary key and no unique constraint', () => {
     expect(runtime.executions).toEqual([]);
   });
 
+  it.each([
+    ['with', withReturning],
+    ['without', withoutReturning],
+  ])(
+    'deleteAll reads the rows by the caller condition, then deletes by it, %s returning',
+    async (_, of) => {
+      const { collection, runtime } = logs(of);
+      runtime.setNextResults([[{ message: 'hello' }], []]);
+
+      expect(await collection.deleteAll()).toEqual([{ message: 'hello' }]);
+      expect(runtime.executions.map(({ plan }) => plan.ast.kind)).toEqual(['select', 'delete']);
+    },
+  );
+
   it('updateAll returns the rows its Update returns with returning', async () => {
     const { collection, runtime } = logs(withReturning);
     runtime.setNextResults([[{ message: 'bye' }]]);

@@ -404,7 +404,7 @@ describe('write graphs as they run, on a contract without returning', () => {
     );
   });
 
-  it('deleteAll() and delete() read the rows before deleting them, and deleteAndCount() only deletes', () => {
+  it('deleteAll() and delete() read the rows before deleting the rows they found by key, and deleteAndCount() only deletes', () => {
     expect({
       all: asRun(deleteAllGraph(usersOf(context, true), 'rows'), true),
       first: asRun(deleteFirstGraph(usersOf(context)), true),
@@ -414,7 +414,7 @@ describe('write graphs as they run, on a contract without returning', () => {
         'n1 State users',
         'n2 State posts',
         "n3 Find users where name = 'Ada' <- state n1, state n2",
-        "n4 Delete users where name = 'Ada' <- state n1",
+        "n4 Delete users where name = 'Ada' <- FilterData n3 (id->id), state n1",
         'n5 State users <- state n4',
         'result: n3',
       ),

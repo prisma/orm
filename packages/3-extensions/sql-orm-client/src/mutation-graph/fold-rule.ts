@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { conditionOnlyReadOf, keyEdgeFromFind, readsTableAsFound } from './rule-patterns';
+import { foldsIntoCondition, keyEdgeFromFind, readsTableAsFound } from './rule-patterns';
 import type { Rule } from './rules';
 import { Update } from './update';
 
@@ -13,8 +13,8 @@ export function foldRule(contract: Contract<SqlStorage>): Rule {
     const read = keyEdgeFromFind(graph, contract, table, inputs);
     if (
       read === undefined ||
-      read.find.ast.where !== where ||
-      !readsTableAsFound(graph, inputs, read, table, conditionOnlyReadOf)
+      !foldsIntoCondition(read, where) ||
+      !readsTableAsFound(graph, inputs, read, table)
     ) {
       return undefined;
     }

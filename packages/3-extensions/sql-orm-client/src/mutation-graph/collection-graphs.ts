@@ -116,7 +116,11 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     returns === 'rows'
       ? findRows(b, selectRowsAst(collection, state).withWhere(where), noInputs)
       : undefined;
-  const deleted = deleteRows(b, state.tables, { where, filters: [] });
+  const filters =
+    find !== undefined && identityColumnsOf(collection).length > 0
+      ? [{ from: find, columns: sameRowColumns(collection) }]
+      : [];
+  const deleted = deleteRows(b, state.tables, { where, filters });
   b.graph.setResult(find ?? deleted);
   return b.graph;
 }

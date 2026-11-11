@@ -50,7 +50,19 @@ describe('the delete rule, on a contract with returning', () => {
     expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
-  it('makes a Delete with the condition of a Find added before it return its columns, and the Find is removed', () => {
+  it('drops the key edge of a Delete with the condition of the Find with only a condition it reads, and the Find is removed', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda], ['id', 'name']);
+    const find = addWithState(graph, found);
+    addWithState(graph, deleteUsers(found.ast.where), { filter: [new FilterData(find, sameId)] });
+
+    graph.setResult(find);
+
+    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('leaves a Delete with the condition of a Find but no edge from it as it is', () => {
     const graph = newGraph();
     const found = findUsers([nameIsAda], ['id', 'name']);
     const find = addWithState(graph, found);
@@ -58,8 +70,7 @@ describe('the delete rule, on a contract with returning', () => {
 
     graph.setResult(find);
 
-    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
-    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+    expect(graph.result).toBe(find);
   });
 
   it('adds the Delete it makes once, without running the rules on it again', () => {
@@ -122,16 +133,23 @@ describe('the delete rule, on a contract with returning', () => {
     expect(graph.result).toBe(find);
   });
 
-  it('leaves a Delete whose condition is another object than the condition of the Find as it is', () => {
+  it('keeps the key edge of a Delete whose condition is another object than the condition of the Find', () => {
     const graph = newGraph();
     const find = addWithState(graph, findUsers([nameIsAda], ['id', 'name']));
     addWithState(
       graph,
       deleteUsers(BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'))),
+      { filter: [new FilterData(find, sameId)] },
     );
 
     graph.setResult(find);
 
-    expect(graph.result).toBe(find);
+    expect(printAsRun(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n2',
+      ].join('\n'),
+    );
   });
 });
