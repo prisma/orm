@@ -126,12 +126,6 @@ A SQLite table rebuild renders as a 40-line `recreateTable` call full of interna
 
 The re-run advice has a second gap of the same kind, found in the slice 3b PR 1 second system-design review (2026-10-22), S05. `CliInvocation.rerunArgs` holds one command's arguments (`db update`'s `--to`, `--advance-ref` and statements, and `db migrate`'s `--to` and `--advance-ref`) on the invocation that every printed command uses, and only the advice after a blocked drop reads it (`blockingObjectsFix` through `db-update-failure.ts` and `migrateFix`). The other re-run advice of the same failures still prints the command without them. Name it as the command that ran, for example `CliInvocation.command: { name, args }`, with a `rerunCommand(invocation)` helper that every "re-run the same command" advice uses.
 
-## The shared-collection reach check reads the discriminator value back out of a filter
-
-**Found:** slice 4p review, PR 2 rounds 4 and 5 (2026-10-19).
-
-`otherModelsReached` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts` learns which variant a field removal selects by reading the discriminator value back out of the removal call's MongoDB filter (`discriminatorValueOf`). It is safe today, because a filter it cannot read is treated as reaching every model. Carry the selection as a typed value, the discriminator field and value, on `FieldRemoval` and on the statement outcome, and write the filter from it at the end. Do it with the next PR, which changes the discriminator to a stored key, so the filter changes shape anyway.
-
 ## The enum refusal walks the models a second time
 
 **Found:** slice 4p review, PR 2 round 5 (2026-10-19).

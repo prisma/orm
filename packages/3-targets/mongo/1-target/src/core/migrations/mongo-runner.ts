@@ -35,9 +35,9 @@ import {
   type MongoContract,
   modelFieldStoredAs,
   propertyBsonTypesOf,
+  selectedVariantOf,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
-  variantFilterOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -416,7 +416,7 @@ function backfillStatements(
         kind: 'backfill',
         collection,
         field: stored,
-        filter: variantFilterOf(contract.domain, model),
+        variant: selectedVariantOf(contract.domain, model),
         model,
       },
       contract,

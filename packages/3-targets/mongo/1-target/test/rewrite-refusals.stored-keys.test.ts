@@ -6,7 +6,7 @@ const noModels = { domain: { namespaces: {} } } as unknown as ContractWithDomain
 
 function timeSeriesRefusal(kind: 'renameStoredKey' | 'removeStoredKey' | 'fillStoredKey') {
   return rewriteRefusals(
-    { kind, collection: 'readings', field: 'sensor', filter: undefined, model: undefined },
+    { kind, collection: 'readings', field: 'sensor', variant: undefined, model: undefined },
     noModels,
     { timeSeries: true, validator: undefined },
   );

@@ -34,8 +34,11 @@ import {
   ownEmbedStoredNamesOf,
   ownStoredNameOf,
   ownStoredNamesOf,
+  type SelectedVariant,
+  selectedVariantOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,
+  variantFilter,
   variantFilterOf,
 } from '@internal/mongo-contract';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -531,7 +534,7 @@ function planFieldStatement(
   }
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, collection);
   if (policyRefusal !== undefined) return policyRefusal;
-  const variant = variantFilterOf(input.fromContract.domain, statement.from);
+  const variant = selectedVariantOf(input.fromContract.domain, statement.from);
   const renamedTogether = new Set(
     input.statements.flatMap((other) =>
       other.entity === 'field' &&
@@ -555,7 +558,10 @@ function planFieldStatement(
       `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${SEPARATE_THE_MODELS}.`,
     );
   }
-  const filter = variant ?? rootDocumentsLosing(input.contract, statement.to, fromStored)?.filter;
+  const filter =
+    variant === undefined
+      ? rootDocumentsLosing(input.contract, statement.to, fromStored)?.filter
+      : variantFilter(variant);
   return {
     kind: 'renameField',
     call: new RenameFieldCall(collection, fromStored, toStored, filter),
@@ -592,6 +598,8 @@ export function keepCollectionByHandAdvice(
 export interface FieldRemoval {
   readonly call: UnsetFieldCall;
   readonly subject: MigrationSubject;
+  /** The variant whose documents lose the field; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
 }
 
 export function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
@@ -764,12 +772,12 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
     if (destination === undefined) return [];
     const model = modelAt(input.fromContract, origin);
     if (model === undefined) return [];
-    const variant = variantFilterOf(input.fromContract.domain, origin);
+    const variant = selectedVariantOf(input.fromContract.domain, origin);
     const losing = (storedName: string): { readonly filter: Document | undefined } | undefined => {
       if (variant !== undefined) {
         return storedFieldsOf(input.contract, destination).has(storedName)
           ? undefined
-          : { filter: variant };
+          : { filter: variantFilter(variant) };
       }
       return rootDocumentsLosing(input.contract, destination, storedName);
     };
@@ -788,6 +796,7 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
               {
                 call: new UnsetFieldCall(collection, storedName, lost.filter),
                 subject: { kind: 'field' as const, ...origin, field },
+                variant,
               },
             ];
       });
@@ -819,6 +828,7 @@ export function planValidatorFieldRemovals(input: {
       .map((field) => ({
         call: new UnsetFieldCall(originCollection.name, field),
         subject: { kind: 'storage' as const, name: `${originCollection.name}.${field}` },
+        variant: undefined,
       }));
   });
 }

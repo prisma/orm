@@ -11,8 +11,10 @@ import {
   collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
+  type SelectedVariant,
+  selectedVariantOf,
   validatorDocumentShapesOf,
-  variantFilterOf,
+  variantFilter,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import {
@@ -68,8 +70,8 @@ function refuse(
   };
 }
 
-function withFilter(filter: Document | undefined, condition: Document): Document {
-  return filter === undefined ? condition : { $and: [filter, condition] };
+function withVariant(variant: SelectedVariant | undefined, condition: Document): Document {
+  return variant === undefined ? condition : { $and: [variantFilter(variant), condition] };
 }
 
 /** Why the plan cannot rewrite a field of the destination contract, if it cannot. */
@@ -116,13 +118,13 @@ export function convertTransform(
     call: new DataTransformCall(
       fieldStatementText(contracts.contract, statement.field),
       change.collection,
-      withFilter(change.filter, notOfType),
+      withVariant(change.variant, notOfType),
     ),
     rewrite: {
       kind: 'conversion',
       collection: change.collection,
       field: change.field,
-      filter: change.filter,
+      variant: change.variant,
       model: change.destination,
     },
   };
@@ -220,19 +222,19 @@ export function backfillTransform(
       contracts,
     );
   }
-  const variant = variantFilterOf(input.contract.domain, statement.field);
+  const variant = selectedVariantOf(input.contract.domain, statement.field);
   return {
     kind: 'transform',
     call: new DataTransformCall(
       fieldStatementText(input.contract, statement.field),
       collection,
-      withFilter(variant, documentsMissingOrNull(storedName)),
+      withVariant(variant, documentsMissingOrNull(storedName)),
     ),
     rewrite: {
       kind: 'backfill',
       collection,
       field: storedName,
-      filter: variant,
+      variant,
       model: statement.field,
     },
   };

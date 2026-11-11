@@ -3,10 +3,12 @@ import type {
   MigrationPlannerConflict,
   ModelCoordinate,
 } from '@internal/framework-components/control';
-import { otherModelsReached, validatorRootShapesOf } from '@internal/mongo-contract';
+import {
+  otherModelsReached,
+  type SelectedVariant,
+  validatorRootShapesOf,
+} from '@internal/mongo-contract';
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
-
-type Document = Record<string, unknown>;
 
 export const SEPARATE_THE_MODELS =
   'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
@@ -32,8 +34,8 @@ export interface PlannedRewrite {
   readonly collection: string;
   /** The stored name of the field the rewrite changes. */
   readonly field: string;
-  /** The documents it selects, such as a variant's discriminator value; `undefined` for all of them. */
-  readonly filter: Document | undefined;
+  /** The variant whose documents it selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
   /** The model whose documents it changes; `undefined` when no origin contract names it. */
   readonly model: ModelCoordinate | undefined;
 }
@@ -181,7 +183,7 @@ function sharedCollectionRefusal(
     contract.domain,
     model,
     collection,
-    rewrite.filter,
+    rewrite.variant,
     words.reaches === 'holding' ? field : undefined,
   );
   if (others.length === 0) return undefined;

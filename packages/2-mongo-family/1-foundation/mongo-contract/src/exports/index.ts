@@ -123,7 +123,13 @@ export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
 export type { MongoModelReference } from '../model-collections';
 export { collectionOfModel, embeddingModelOf, modelFieldStoredAs } from '../model-collections';
-export { otherModelsReached, variantFilterOf } from '../model-documents';
+export type { SelectedVariant } from '../model-documents';
+export {
+  otherModelsReached,
+  selectedVariantOf,
+  variantFilter,
+  variantFilterOf,
+} from '../model-documents';
 export { mongoValueSetsOf } from '../mongo-enum';
 export { modelAndBasesOf, mongoModelsOf } from '../mongo-models';
 export type {
@@ -131,6 +137,7 @@ export type {
   PolymorphicIndexScope,
 } from '../polymorphic-index-scope';
 export { applyPolymorphicScopeToMongoIndex } from '../polymorphic-index-scope';
+export { modelKey, recursiveGroupsOf, valueObjectKey } from '../recursive-groups';
 export type { MongoToOneRelationFields } from '../relation-fields';
 export { isEmbedRelation, resolveMongoToOneRelationFields } from '../relation-fields';
 export {

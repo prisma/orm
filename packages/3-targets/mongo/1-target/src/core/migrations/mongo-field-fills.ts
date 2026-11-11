@@ -9,8 +9,10 @@ import {
   collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
+  type SelectedVariant,
+  selectedVariantOf,
   validatorFieldNamesOf,
-  variantFilterOf,
+  variantFilter,
 } from '@internal/mongo-contract';
 import {
   type MongoTemporaryValue,
@@ -38,6 +40,8 @@ export interface FieldFill {
   /** The field, as the destination contract names it. */
   readonly subject: MigrationSubject;
   readonly text: string;
+  /** The variant whose documents the fill selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
 }
 
 function temporaryValueOf(
@@ -136,17 +140,18 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         if (underUniqueIndex(input.destination, collection, storedName)) return [];
         const value = temporaryValueOf(contractField, input.lookups);
         if (value === undefined) return [];
-        const filter = variantFilterOf(input.contract.domain, model);
+        const variant = selectedVariantOf(input.contract.domain, model);
         return [
           {
             call: new FillFieldCall({
               collection,
               field: storedName,
               value: value.expression,
-              ...(filter === undefined ? {} : { filter }),
+              ...(variant === undefined ? {} : { filter: variantFilter(variant) }),
             }),
             subject: { kind: 'field', ...coordinate },
             text: value.text,
+            variant,
           },
         ];
       });

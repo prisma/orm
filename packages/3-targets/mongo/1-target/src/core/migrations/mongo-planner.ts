@@ -679,11 +679,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     });
     const rewrites: readonly PlannedRewrite[] = [
       ...removals.map(
-        ({ call, subject }): PlannedRewrite => ({
+        ({ call, subject, variant }): PlannedRewrite => ({
           kind: 'removal',
           collection: call.collection,
           field: call.field,
-          filter: call.filter,
+          variant,
           model: subject.kind === 'field' ? subject : undefined,
         }),
       ),
@@ -692,7 +692,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           kind: 'cast',
           collection: change.collection,
           field: change.field,
-          filter: change.filter,
+          variant: change.variant,
           model: change.destination,
         }),
       ),
@@ -700,11 +700,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         outcome.kind === 'transform' ? [outcome.rewrite] : [],
       ),
       ...fills.map(
-        ({ call, subject }): PlannedRewrite => ({
+        ({ call, subject, variant }): PlannedRewrite => ({
           kind: 'fill',
           collection: call.options.collection,
           field: call.options.field,
-          filter: call.options.filter,
+          variant,
           model: subject.kind === 'field' ? subject : undefined,
         }),
       ),
