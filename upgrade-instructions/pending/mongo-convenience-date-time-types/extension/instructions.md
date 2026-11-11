@@ -21,11 +21,13 @@ changes:
       anyMatch: true
   - id: temporal-polyfill-with-legacy-peer-deps
     summary: |
-      npm does not install peer dependencies when `legacy-peer-deps` is set, so an extension package that installs with npm and that setting, and loads the MongoDB target's control entry in its tests or tooling, must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`, as a Yarn package must. The detection matches an `.npmrc` that sets `legacy-peer-deps`; the change applies only to a package that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`.
+      npm does not install peer dependencies when `legacy-peer-deps` is set, so an extension package that installs with npm and that setting, and loads the MongoDB target's control entry in its tests or tooling, must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`, as a Yarn package must. The setting can come from an `.npmrc`, the user's npm config or the environment, which no file shows, so the detection matches every `package.json` that depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, and the step checks the setting npm uses.
     detection:
-      glob: "**/.npmrc"
-      matches:
-        - '(?:^|\n)[ \t]*legacy-peer-deps[ \t]*=[ \t]*true\b'
+      glob: "**/package.json"
+      contains:
+        - '"@prisma/orm-mongo"'
+        - '"@prisma/orm-target-mongo"'
+      anyMatch: true
 ---
 
 # MongoDB: `Date` is a calendar date, and `temporal-polyfill` is a peer dependency
@@ -46,6 +48,4 @@ For each Yarn project that `detection` matches, add `"temporal-polyfill": "^1.0.
 
 ## `temporal-polyfill-with-legacy-peer-deps`
 
-An `.npmrc` that `detection` matches covers the `package.json` beside it and, when that folder is the root of a workspace, every workspace package. Check each covered `package.json` on its own: where it depends on `@prisma/orm-mongo` or `@prisma/orm-target-mongo`, add `"temporal-polyfill": "^1.0.4"` to its `devDependencies`; skip one that depends on neither. Then reinstall.
-
-`detection` reads only `.npmrc` files in the repository. If the package sets `legacy-peer-deps` another way, such as in the user's npm config, the `npm_config_legacy_peer_deps` environment variable or the `--legacy-peer-deps` flag, apply the same change.
+Skip this if the package installs with Yarn (see `temporal-polyfill-is-a-peer-dependency-of-mongo`), pnpm or bun. For a package that installs with npm, run `npm config get legacy-peer-deps` in the folder of each `package.json` that `detection` matches. It reports the setting npm uses there, from any `.npmrc`, the user's npm config or the `npm_config_legacy_peer_deps` environment variable. Where it prints `true`, or the install command passes `--legacy-peer-deps`, add `"temporal-polyfill": "^1.0.4"` to that `package.json`'s `devDependencies`, then reinstall.

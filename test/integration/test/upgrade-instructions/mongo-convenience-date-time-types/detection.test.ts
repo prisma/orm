@@ -71,22 +71,3 @@ describe.each(Object.entries(GUIDES))(
     });
   },
 );
-
-describe.each(Object.entries(GUIDES))(
-  'the %s temporal-polyfill-with-legacy-peer-deps detection',
-  (_, guide) => {
-    const matches = (content: string) =>
-      detectionPatterns(guide, 'temporal-polyfill-with-legacy-peer-deps').some((pattern) =>
-        pattern.test(content),
-      );
-
-    it('matches an .npmrc that sets legacy-peer-deps, and no other setting', () => {
-      expect({
-        set: matches('legacy-peer-deps=true\n'),
-        spaced: matches('registry=https://registry.example\n  legacy-peer-deps = true\n'),
-        unset: matches('legacy-peer-deps=false\n'),
-        other: matches('strict-peer-deps=true\n'),
-      }).toEqual({ set: true, spaced: true, unset: false, other: false });
-    });
-  },
-);
