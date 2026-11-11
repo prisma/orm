@@ -19,20 +19,24 @@ function findPlaceholder(value: unknown): MongoPreparedParamRef | undefined {
 }
 
 /**
- * Wraps a value the ORM sends as a parameter. Every ORM value goes through it, so a prepared placeholder anywhere in the value is refused with `ORM.ARGUMENT_INVALID`: ORM writes run at once, and value-object literals are built with the query, so neither can take one.
+ * Refuses a prepared placeholder anywhere in a value with `ORM.ARGUMENT_INVALID`. A placeholder stands for one scalar value in a read: a scalar field in a `where`, a `limit` or an `offset`. ORM writes run at once, and value-object values are built with the query, so neither can take one.
  */
+export function rejectPlaceholder(value: unknown, path: string): void {
+  const placeholder = findPlaceholder(value);
+  if (placeholder === undefined) return;
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `The prepared parameter '${placeholder.name}' cannot be used for '${path}'. A prepared parameter stands for one scalar value in a read: a scalar field in a where, a limit or an offset. ORM writes run at once, and value objects are built with the query, so neither can take one.`,
+    { meta: { name: placeholder.name, field: path } },
+  );
+}
+
+/** Wraps a value the ORM sends as a parameter. Every ORM value goes through it, so a prepared placeholder in it is refused. */
 export function ormParam(
   value: unknown,
   path: string,
   options?: MongoParamRefOptions,
 ): MongoParamRef {
-  const placeholder = findPlaceholder(value);
-  if (placeholder !== undefined) {
-    throw ormError(
-      'ORM.ARGUMENT_INVALID',
-      `The prepared parameter '${placeholder.name}' cannot be used for '${path}'. ORM writes run at once, and value-object literals are built with the query, so neither can take a prepared parameter.`,
-      { meta: { name: placeholder.name, field: path } },
-    );
-  }
+  rejectPlaceholder(value, path);
   return new MongoParamRef(value, options);
 }

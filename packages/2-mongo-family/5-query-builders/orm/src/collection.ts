@@ -33,6 +33,7 @@ import type {
   MongoExecutionContext,
   MongoFieldShape,
   MongoFilterExpr,
+  MongoPreparable,
   MongoQueryExecutor,
   MongoQueryPlan,
   MongoResultShape,
@@ -56,9 +57,10 @@ import {
 import {
   contractFieldToMongoFieldShape,
   contractModelToMongoResultShape,
+  type PagingCount,
 } from '@internal/mongo-query-builder';
 import type { MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import { isMongoPreparedParamRef, MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -83,7 +85,8 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
-import { ormParam } from './orm-param';
+import { ormParam, rejectPlaceholder } from './orm-param';
+import type { MongoPreparedCollection } from './prepared-collection';
 import type {
   DiscriminatorValues,
   IncludedRow,
@@ -140,14 +143,18 @@ export interface MongoCollection<
     spec: Partial<Record<ModelFieldKeys<TContract, ModelName>, 1 | -1>>,
   ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Limits the number of results. Returns a new immutable collection. */
-  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
+  limit(n: PagingCount<TContract>): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Offsets the results by `n`. Returns a new immutable collection. */
-  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
+  offset(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Executes the query and returns all matching rows as an async iterable. */
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
   first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null>;
   firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
+  /** The reads `prepare` can take. A placeholder goes in a scalar field of a `where`, in `limit` and in `offset`. */
+  readonly prepared: MongoPreparedCollection<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Inserts the document and returns it as stored, decoded like a read, without reading it back. */
   create(
     data: ResolvedCreateInput<TContract, ModelName, TVariantValue>,
@@ -484,11 +491,13 @@ export class MongoCollectionImpl<
     return this.#clone({ orderBy: merged });
   }
 
-  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
+  limit(n: PagingCount<TContract>): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
     return this.#clone({ limit: n });
   }
 
-  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
+  offset(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
     return this.#clone({ offset: n });
   }
 
@@ -496,13 +505,15 @@ export class MongoCollectionImpl<
     return this.#query();
   }
 
-  async first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
-    const limited = this.#clone({ limit: 1 });
-    const result = limited.#query();
-    for await (const row of result) {
-      return row;
-    }
-    return null;
+  first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
+    return this.#run(this.#describeFirst());
+  }
+
+  get prepared(): MongoPreparedCollection<IncludedRow<TContract, ModelName, TIncludes>> {
+    return {
+      all: () => this.#describeRows(),
+      first: () => this.#describeFirst(),
+    };
   }
 
   async firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -851,18 +862,48 @@ export class MongoCollectionImpl<
   }
 
   #query(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
-    const plan = this.#compile();
-    const documents = this.#executor.query(plan);
+    return this.#run(this.#describeRows());
+  }
+
+  #run<Result>(read: MongoPreparable<Record<string, unknown>, Result>): Result {
+    return read.consume(this.#executor.query(read.plan));
+  }
+
+  #describeRows(): MongoPreparable<
+    Record<string, unknown>,
+    AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>
+  > {
     const rowOf = this.#rowMapper();
-    async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
-      for await (const document of documents) {
-        yield blindCast<
-          IncludedRow<TContract, ModelName, TIncludes>,
-          'a document of the model read as its fields is a row of the model'
-        >(rowOf(document));
-      }
-    }
-    return new AsyncIterableResult(rows());
+    return {
+      plan: this.#compile<Record<string, unknown>>(),
+      consume: (documents) => {
+        async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
+          for await (const document of documents) {
+            yield blindCast<
+              IncludedRow<TContract, ModelName, TIncludes>,
+              'a document of the model read as its fields is a row of the model'
+            >(rowOf(document));
+          }
+        }
+        return new AsyncIterableResult(rows());
+      },
+    };
+  }
+
+  #describeFirst(): MongoPreparable<
+    Record<string, unknown>,
+    Promise<IncludedRow<TContract, ModelName, TIncludes> | null>
+  > {
+    const rows = this.#clone({ limit: 1 }).#describeRows();
+    return {
+      plan: rows.plan,
+      consume: async (documents) => {
+        for await (const row of rows.consume(documents)) {
+          return row;
+        }
+        return null;
+      },
+    };
   }
 
   #rowMapper(): (document: unknown) => unknown {
@@ -912,14 +953,14 @@ export class MongoCollectionImpl<
     }
   }
 
-  #compile(): MongoQueryPlan<IncludedRow<TContract, ModelName, TIncludes>> {
+  #compile<Row = IncludedRow<TContract, ModelName, TIncludes>>(): MongoQueryPlan<Row> {
     const model = this.#modelWithVariantFields();
     if (!model) {
       throw ormError('ORM.MODEL_UNKNOWN', `Unknown model: "${this.#modelName}".`, {
         meta: { model: this.#modelName },
       });
     }
-    return compileMongoQuery<IncludedRow<TContract, ModelName, TIncludes>>(
+    return compileMongoQuery<Row>(
       this.#collectionName,
       this.#state,
       this.#contract.storage.storageHash,
@@ -1025,9 +1066,11 @@ export class MongoCollectionImpl<
       if (value === undefined) continue;
       const storedName = storedNameOfCallerField(this.#storedNames(), key);
       const field = fields[key];
-      filters.push(
-        whereEquality(storedName, field, this.#wrapFieldValue(value, field, key, 'filter')),
-      );
+      const compared =
+        isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
+          ? value
+          : this.#wrapFieldValue(value, field, key, 'filter');
+      filters.push(whereEquality(storedName, field, compared));
     }
     return filters;
   }
@@ -1039,12 +1082,13 @@ export class MongoCollectionImpl<
     const storedPath = this.#storedPath(filter.field);
     const field = this.#fieldAtPath(filter.field);
     if (field?.type.kind !== 'scalar') {
+      rejectPlaceholder(filter.value, filter.field);
       return storedPath === filter.field
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
     }
     const encode = (value: MongoValue): MongoValue => {
-      if (value === null) return null;
+      if (value === null || isMongoPreparedParamRef(value)) return value;
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
           ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
@@ -1101,6 +1145,7 @@ export class MongoCollectionImpl<
     }
 
     if (field.type.kind === 'valueObject') {
+      rejectPlaceholder(value, path);
       const voDef = this.#valueObjectAt(field.type);
       if (!voDef) return ormParam(value, path);
 

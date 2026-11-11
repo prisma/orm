@@ -1,4 +1,4 @@
-import type { QueryPlan } from '@internal/framework-components/runtime';
+import type { AsyncIterableResult, QueryPlan } from '@internal/framework-components/runtime';
 import type { AnyMongoCommand } from './commands';
 import type { MongoResultShape } from './result-shape';
 
@@ -18,4 +18,10 @@ export interface MongoQueryPlan<Row = unknown, Command extends AnyMongoCommand =
   readonly command: Command;
   readonly resultShape?: MongoResultShape;
   readonly [__mongoQueryPlanRow]?: Row;
+}
+
+/** A read that `prepare` can take: the plan it sends, and how each run's rows become its result. */
+export interface MongoPreparable<Row, Result> {
+  readonly plan: MongoQueryPlan<Row>;
+  consume(rows: AsyncIterableResult<Row>): Result;
 }

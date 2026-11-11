@@ -80,6 +80,18 @@ describe('a prepared placeholder in the Mongo ORM', () => {
 
   const newUser = { name: 'Ann', email: 'a@b.c', loginCount: 0, tags: [], homeAddress: null };
 
+  it('is refused as a whole value object in a write, and nothing is sent', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = createMongoCollection(collectionContext(contract, executor), 'User');
+    const homeAddress = placeholder as unknown as { city: string; country: string };
+
+    await expect(users.create({ ...newUser, homeAddress })).rejects.toMatchObject(refused);
+    await expect(users.where({ email: 'a@b.c' }).update({ homeAddress })).rejects.toMatchObject(
+      refused,
+    );
+    expect(plans).toEqual([]);
+  });
+
   it('is refused in an embedded row, and nothing is sent', async () => {
     const { executor, plans } = recordingExecutor();
     const tasks = createMongoCollection(collectionContext(contract, executor), 'Task');

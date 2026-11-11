@@ -10,6 +10,7 @@ import type {
   MongoUnboundFieldOutputTypes,
   OwnFieldStoredAs,
 } from '@internal/mongo-contract';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 
 type Simplify<T> = T extends unknown ? { [K in keyof T]: T[K] } : never;
 
@@ -218,16 +219,27 @@ export type MongoWhereFilter<
   }
     ? WhereScalarValue<
         MongoModelsMap<TContract>[ModelName]['fields'][K],
-        TCodecTypes[CId]['output']
+        TCodecTypes[CId]['output'],
+        CId
       >
     : unknown;
 };
 
-type WhereScalarValue<Field, Element> =
+type WhereScalarValue<Field, Element, CodecId extends string> =
   | (Field extends { readonly many: { readonly elementNullable: infer ElementNullable } }
       ? Element | readonly (ElementNullable extends true ? Element | null : Element)[]
       : Element)
-  | (Field extends { readonly nullable: true } ? null : never);
+  | (Field extends { readonly nullable: true } ? null : never)
+  | MongoPreparedParamRef<CodecId, WherePlaceholderNullable<Field>>;
+
+/**
+ * A placeholder on a list field stands for one item, which is never `null`: a `null` there means the field is not a list, which a placeholder cannot say.
+ */
+type WherePlaceholderNullable<Field> = Field extends { readonly many: { readonly elementNullable: boolean } }
+  ? false
+  : Field extends { readonly nullable: true }
+    ? boolean
+    : false;
 
 export type MongoIncludeSpec<
   TContract extends MongoContract,
