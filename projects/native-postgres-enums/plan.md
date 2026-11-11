@@ -26,7 +26,7 @@ The complete external-enum vertical — represent → type → cast → runtime 
 
 ### Generic namespace-`entries` serialization — shipped, [TML-2981]
 
-- **Outcome:** the SQL contract serializer emits a namespace's entity kinds by iterating `entries` (symmetric with the already-generic hydrate path), so an extension-contributed kind round-trips with no serializer edit; byte-identical emitted output. Merged: [PR #931](https://github.com/prisma/prisma-next/pull/931).
+- **Outcome:** the SQL contract serializer emits a namespace's entity kinds by iterating `entries` (symmetric with the already-generic hydrate path), so an extension-contributed kind round-trips with no serializer edit; byte-identical emitted output. Merged: PR #931.
 - **The work:** lift generic entries serialization into `SqlContractSerializerBase`; rewire the Postgres + SQLite serializers to delegate; `native_enum` stays excluded via non-enumerability. Slice spec: [`slices/generic-namespace-entries-serialization/spec.md`](slices/generic-namespace-entries-serialization/spec.md).
 - **Origin:** review point O1 on PR #906.
 

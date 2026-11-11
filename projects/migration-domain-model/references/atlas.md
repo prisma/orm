@@ -101,7 +101,7 @@ Atlas documents a **hybrid** cadence: developers iterate locally with **`atlas s
 - **Multi-tenant URL expansion**: `for_each` on `env` blocks combined with `urlsetpath` / `urlqueryset` functions encodes how tenant identity maps into distinct targets without new CLI verbs.
 - **Docker dev URLs**: encode engine image, logical database name, and sometimes `search_path` to signal single-schema vs multi-schema diff behavior.
 
-**Note on canonical URLs in this memo:** user-facing docs referenced `https://atlasgo.io/reference` (HTTP 404) and `https://atlasgo.io/versioned/status` (HTTP 404) at fetch time; equivalent material appeared under `https://atlasgo.io/cli-reference` and within `https://atlasgo.io/versioned/apply` plus `https://atlasgo.io/versioned/troubleshoot` for `atlas migrate status`.
+**Note on canonical URLs in this memo:** user-facing docs referenced `https://atlasgo.io/docs` (HTTP 404) and `` (HTTP 404) at fetch time; equivalent material appeared under `https://atlasgo.io/cli-reference` and within `https://atlasgo.io/versioned/apply` plus `https://atlasgo.io/versioned/troubleshoot` for `atlas migrate status`.
 
 ## CLI command surface
 
