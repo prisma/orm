@@ -19,11 +19,17 @@ import {
 import {
   documentsWithObject,
   type Expression,
-  holdsKey,
-  lacksKey,
   objectsRewritePipeline,
   storedKeyPath,
 } from '../src/core/migrations/stored-key-path';
+
+const holdsKey = (object: Expression, key: string) => ({
+  $ne: [{ $type: { $getField: { field: { $literal: key }, input: object } } }, 'missing'],
+});
+
+const lacksKey = (object: Expression, key: string) => ({
+  $in: [{ $type: { $getField: { field: { $literal: key }, input: object } } }, ['missing', 'null']],
+});
 
 const RAW_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' };
 

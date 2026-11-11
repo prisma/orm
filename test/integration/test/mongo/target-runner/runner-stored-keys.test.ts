@@ -124,6 +124,7 @@ const users = [
   { name: 'Bo', address: null, addresses: [], profile: { addresses: [] } },
   { name: 'Cy' },
   { name: 'Dee', address: { line1: 'done' }, addresses: [{ line1: 'done' }], profile: null },
+  { name: 'Eve', address: 'x', addresses: 'x', profile: 'x' },
 ];
 
 const renames = [
@@ -156,6 +157,7 @@ describe('MongoMigrationRunner, renameStoredKey', () => {
         { name: 'Bo', address: null, addresses: [], profile: { addresses: [] } },
         { name: 'Cy' },
         { name: 'Dee', address: { line1: 'done' }, addresses: [{ line1: 'done' }], profile: null },
+        { name: 'Eve', address: 'x', addresses: 'x', profile: 'x' },
       ]);
     },
     timeouts.spinUpMongoMemoryServer,
@@ -187,6 +189,33 @@ describe('MongoMigrationRunner, renameStoredKey', () => {
           orders: [{ lines: [{ code: 'a' }, null] }, {}, { lines: null }, { lines: [] }],
         },
       ]);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'renames only in the documents its filter selects, and its postcheck reads only those',
+    async () => {
+      await db.collection('users').insertMany([
+        { name: 'Ada', addresses: [{ street: 'a' }] },
+        { name: 'Bo', addresses: [{ street: 'b' }] },
+      ]);
+      const filtered = [
+        renameStoredKey({
+          collection: 'users',
+          field: 'addresses',
+          path: '$[*].street',
+          to: 'line1',
+          filter: { name: 'Ada' },
+        }),
+      ];
+
+      expect(executed(await run(filtered))).toBe(1);
+      expect(await documents()).toEqual([
+        { name: 'Ada', addresses: [{ line1: 'a' }] },
+        { name: 'Bo', addresses: [{ street: 'b' }] },
+      ]);
+      expect(executed(await runAgain(filtered))).toBe(0);
     },
     timeouts.spinUpMongoMemoryServer,
   );
@@ -269,6 +298,7 @@ describe('MongoMigrationRunner, removeStoredKey', () => {
         { name: 'Bo', address: null, addresses: [], profile: { addresses: [] } },
         { name: 'Cy' },
         { name: 'Dee', address: { line1: 'done' }, addresses: [{ line1: 'done' }], profile: null },
+        { name: 'Eve', address: 'x', addresses: 'x', profile: 'x' },
       ]);
       const again = await runAgain([
         removeStoredKey({ collection: 'users', field: 'addresses', path: '$[*].zip' }),
@@ -285,7 +315,7 @@ describe('MongoMigrationRunner, fillStoredKey', () => {
     async () => {
       await db.collection('users').insertMany(users);
 
-      const result = await run([
+      const fills = [
         fillStoredKey({
           collection: 'users',
           field: 'address',
@@ -304,7 +334,8 @@ describe('MongoMigrationRunner, fillStoredKey', () => {
           path: '$.addresses[*].city',
           value: { $literal: '' },
         }),
-      ]);
+      ];
+      const result = await run(fills);
 
       expect(executed(result)).toBe(3);
       expect(await documents()).toEqual([
@@ -327,6 +358,7 @@ describe('MongoMigrationRunner, fillStoredKey', () => {
           addresses: [{ line1: 'done', zip: '$none' }],
           profile: null,
         },
+        { name: 'Eve', address: 'x', addresses: 'x', profile: 'x' },
       ]);
       expect(
         await db
@@ -341,6 +373,7 @@ describe('MongoMigrationRunner, fillStoredKey', () => {
         { name: 'Ada', type: 'long' },
         { name: 'Dee', type: 'long' },
       ]);
+      expect(executed(await runAgain(fills))).toBe(0);
     },
     timeouts.spinUpMongoMemoryServer,
   );
