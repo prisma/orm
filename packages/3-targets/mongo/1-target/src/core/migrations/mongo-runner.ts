@@ -72,6 +72,7 @@ import { FilterEvaluator } from './filter-evaluator';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
+import { storedKeyPath } from './stored-key-path';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -180,6 +181,16 @@ function runnerFailure(
   return notOk(migrationRunnerFailure(code, summary, options));
 }
 
+/** The mongosh query that finds the documents a DML operation's first precheck matches. */
+function precheckFind(op: MongoDmlOperation, collection: string): string {
+  const source = op.precheck[0]?.source.command;
+  const match: unknown =
+    source instanceof RawAggregateCommand
+      ? Reflect.get(source.pipeline[0] ?? {}, '$match')
+      : undefined;
+  return `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(match ?? {})})`;
+}
+
 /**
  * The failure when a field rename's before-check finds documents that already hold the new name,
  * which `$rename` would overwrite: what to look for and fix, and that the plan resumes.
@@ -193,18 +204,33 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
       ? Reflect.get(renames, rewrite.field)
       : undefined;
   if (typeof to !== 'string') return undefined;
-  const [check] = op.precheck;
-  const source = check?.source.command;
-  const match: unknown =
-    source instanceof RawAggregateCommand
-      ? Reflect.get(source.pipeline[0] ?? {}, '$match')
-      : undefined;
-  const find = `db.getCollection(${JSON.stringify(rewrite.collection)}).find(${JSON.stringify(match ?? {})})`;
+  const find = precheckFind(op, rewrite.collection);
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some documents in collection ${rewrite.collection} already hold ${to} as well as ${rewrite.field}`,
     {
       why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      meta: { operationId: op.id, name: op.name },
+    },
+  );
+}
+
+/**
+ * The failure when a key rename's before-check finds objects that already hold the new key, which
+ * the rename would overwrite: how to find them, and that the plan resumes.
+ */
+function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResult | undefined {
+  const storedKey = op.meta?.storedKey;
+  if (storedKey?.kind !== 'rename') return undefined;
+  const keyPath = storedKeyPath(storedKey.field, storedKey.path);
+  if (!keyPath.ok) return undefined;
+  const from = JSON.stringify(keyPath.value.key);
+  const to = JSON.stringify(storedKey.to);
+  return runnerFailure(
+    'MIGRATION.PRECHECK_FAILED',
+    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(storedKey.path)} in field ${storedKey.field} of collection ${storedKey.collection} already hold key ${to} as well as key ${from}`,
+    {
+      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, storedKey.collection)} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -1011,6 +1037,7 @@ export class MongoMigrationRunner {
           executed: false,
           failure:
             renameOverwriteRefusal(op) ??
+            storedKeyRenameRefusal(op) ??
             runnerFailure(
               'MIGRATION.PRECHECK_FAILED',
               `Operation ${op.id} failed during precheck`,
