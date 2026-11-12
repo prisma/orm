@@ -216,6 +216,14 @@ describe('mongoDateCodec', () => {
     expect(await mongoDateCodec.toWire(d, {})).toBe(d);
   });
 
+  it('encodes a Date from another realm with its own string tag as one the driver serializes as a date', async () => {
+    const d: Date = runInNewContext(
+      'Object.defineProperty(new Date(0), Symbol.toStringTag, { value: "Tagged" })',
+    );
+    const wire = await mongoDateCodec.toWire(d, {});
+    expect(BSON.deserialize(BSON.serialize({ at: wire }))).toEqual({ at: new Date(0) });
+  });
+
   it('encodes a Date created in another realm', async () => {
     const d: Date = runInNewContext('new Date("2024-01-02T03:04:05.000Z")');
     expect({

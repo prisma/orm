@@ -11,7 +11,7 @@ import {
   MongoParamRef,
   type MongoPreparedParamRef,
 } from '@internal/mongo-value';
-import { isDate } from '@internal/type-implementations/date';
+import { dateOfThisRealm, isDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
@@ -99,6 +99,7 @@ export async function resolveValue(
     }
     return value.value;
   }
+  if (isDate(value)) return dateOfThisRealm(value);
   if (value === null || typeof value !== 'object' || isWireScalar(value)) {
     return value;
   }
@@ -134,6 +135,7 @@ async function resolveDraftSlot(
   if (value instanceof MongoParamRef || isMongoPreparedParamRef(value)) {
     return resolveValue(value, codecs, ctx);
   }
+  if (isDate(value)) return dateOfThisRealm(value);
   if (value === null || typeof value !== 'object' || isWireScalar(value)) return value;
   if (Array.isArray(value)) {
     const tasks = Promise.all(value.map((v: unknown) => resolveDraftSlot(v, codecs, ctx)));

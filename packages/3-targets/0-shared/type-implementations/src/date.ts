@@ -5,6 +5,12 @@ export function isDate(value: unknown): value is Date {
   return types.isDate(value);
 }
 
+/** The same instant as a `Date` of this realm, which a driver that checks `instanceof Date` or the string tag recognises. */
+export function dateOfThisRealm(date: Date): Date {
+  const instant = date.getTime();
+  return date instanceof Date ? date : new Date(instant);
+}
+
 /** Whether `value` is a `Date` that holds an instant, not an Invalid Date. */
 export function isValidDate(value: unknown): value is Date {
   return isDate(value) && Number.isFinite(value.getTime());

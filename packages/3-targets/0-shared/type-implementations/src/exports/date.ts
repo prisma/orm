@@ -1,4 +1,5 @@
 export {
+  dateOfThisRealm,
   hasDigitsBelow,
   hasDigitsBelowAMillisecond,
   isDate,

@@ -1,6 +1,7 @@
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import {
+  dateOfThisRealm,
   hasDigitsBelow,
   hasDigitsBelowAMillisecond,
   isDate,
@@ -110,5 +111,21 @@ describe('withThreeFractionDigits', () => {
     ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.000Z'],
   ])('%s is %s', (text, expected) => {
     expect(withThreeFractionDigits(text)).toBe(expected);
+  });
+});
+
+describe('dateOfThisRealm', () => {
+  it('returns a Date of this realm unchanged', () => {
+    const date = new Date(0);
+    expect(dateOfThisRealm(date)).toBe(date);
+  });
+
+  it('copies a Date from another realm into this one, keeping its instant', () => {
+    const date: Date = runInNewContext('new Date(86400000)');
+    const copy = dateOfThisRealm(date);
+    expect({ local: copy instanceof Date, time: copy.getTime() }).toEqual({
+      local: true,
+      time: 86400000,
+    });
   });
 });

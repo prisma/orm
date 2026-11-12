@@ -10,7 +10,7 @@ import {
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
-import { isDate, isValidDate } from '@internal/type-implementations/date';
+import { dateOfThisRealm, isDate, isValidDate } from '@internal/type-implementations/date';
 import { counted } from '@internal/utils/text';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
@@ -95,7 +95,7 @@ export function dateEncode(codecId: string, value: Date): Date {
   if (!isValidDate(value)) {
     refuseType(codecId, 'a valid Date', value);
   }
-  return value;
+  return dateOfThisRealm(value);
 }
 
 const OBJECT_ID_TEXT = /^[0-9a-fA-F]{24}$/;
