@@ -64,8 +64,8 @@ export interface PrismaPromise<TResult, TSpec extends PrismaOperationSpec<unknow
   finally(onfinally?: (() => void) | undefined | null, transaction?: PrismaPromiseTransaction): Promise<TResult>
 
   /**
-   * Called when executing a batch of regular tx
-   * @param transaction transaction options for batch tx
+   * Called when executing the request as part of a batch or interactive transaction
+   * @param transaction transaction options for the batch or interactive tx
    */
-  requestTransaction?(transaction: PrismaPromiseBatchTransaction): PromiseLike<unknown>
+  requestTransaction?(transaction: PrismaPromiseTransaction): PromiseLike<unknown>
 }
