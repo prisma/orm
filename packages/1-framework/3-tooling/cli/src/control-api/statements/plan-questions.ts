@@ -106,6 +106,8 @@ export interface PlannedQuestions {
   readonly accessChanges: readonly PlannedAccessChange[];
   /** The namespaces the planner removes and adds; absent when it reports none. */
   readonly namespaces?: MigrationPlanNamespaces;
+  /** The fields the plan gives a temporary value, as a statement names each; absent when the command does not say. */
+  readonly temporaryValues?: readonly { readonly field: string }[];
 }
 
 /** The contracts a statement names things in, and the statements the plan carries out so far. */
@@ -547,6 +549,8 @@ type DataLossContracts = StatementContracts & {
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions that carry edits that keep their data. */
   readonly keptSubjects?: readonly string[];
+  /** The fields the plan gives a temporary value, as a statement names each; absent when the command does not say, and then every one gets one where the command cannot convert. */
+  readonly temporaryValues?: readonly { readonly field: string }[];
 };
 
 /** What a command says of keeping a subject's data: why its answer loses it, if anything, and each way to keep it. */
@@ -599,9 +603,9 @@ function changedVariant(
 }
 
 /**
- * What `--delete` of a value object field leaves in the required fields the value object gained:
- * `migration plan` needs a backfill statement for each the run does not backfill, and `db update`
- * fills a temporary value.
+ * What `--delete` of a value object field leaves in the required fields the value object gained
+ * that the run does not backfill: the plan fills each with a temporary value, or the field needs a
+ * backfill statement, which only `migration plan` takes.
  */
 function newRequiredFieldNote(
   subject: MigrationSubject,
@@ -629,19 +633,36 @@ function newRequiredFieldNote(
   );
   if (unfilled.length === 0) return [];
   const parent = text.slice(0, text.lastIndexOf('.'));
-  const added = unfilled.map((name) => `${parent}.${name}`);
-  const named = `${added.length === 1 ? 'field' : 'fields'} ${quotedList(added)}`;
   const deleted = statementFlag({ verb: 'delete', text });
-  if (!contracts.canConvert) {
-    return [
-      `With ${deleted}, the existing objects get a temporary value in the new required ${named}.`,
-    ];
-  }
-  const backfills = added.map((each) => statementFlag({ verb: 'backfill', text: each })).join(' ');
+  const added = unfilled.map((name) => `${parent}.${name}`);
+  const filled = (each: string) =>
+    contracts.temporaryValues === undefined
+      ? !contracts.canConvert
+      : contracts.temporaryValues.some((value) => value.field === each);
+  const temporary = added.filter(filled);
+  const needed = added.filter((each) => !filled(each));
+  const named = (fields: readonly string[]) =>
+    `${fields.length === 1 ? 'field' : 'fields'} ${quotedList(fields)}`;
+  const backfills = needed.map((each) => statementFlag({ verb: 'backfill', text: each })).join(' ');
   return [
-    added.length === 1
-      ? `With ${deleted}, the new required ${named} still needs a value: add ${backfills} to write it in migration.ts.`
-      : `With ${deleted}, the new required ${named} still need a value: add ${backfills} to write them in migration.ts.`,
+    ...(temporary.length === 0
+      ? []
+      : [
+          `With ${deleted}, the existing objects get a temporary value in the new required ${named(temporary)}.`,
+        ]),
+    ...(needed.length === 0
+      ? []
+      : !contracts.canConvert
+        ? [
+            `With ${deleted}, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
+          ]
+        : needed.length === 1
+          ? [
+              `With ${deleted}, the new required ${named(needed)} still needs a value: add ${backfills} to write it in migration.ts.`,
+            ]
+          : [
+              `With ${deleted}, the new required ${named(needed)} still need a value: add ${backfills} to write them in migration.ts.`,
+            ]),
   ];
 }
 
@@ -992,6 +1013,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       canConvert: input.canConvert,
       statements,
       ...ifDefined('keepDataEditAdvice', input.keepDataEditAdvice),
+      ...ifDefined('temporaryValues', plan.temporaryValues),
     };
     const pending = <TEntry extends PlannedSubject>(
       verb: ConsentVerb,

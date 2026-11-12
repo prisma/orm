@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   askPlanQuestions,
   consentDescription,
+  type PlannedQuestions,
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
 import { contractOf } from './statement-fixtures';
@@ -20,9 +21,11 @@ async function questionsOf(input: {
   readonly canConvert?: boolean;
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
+  /** The fields the plan gives a temporary value; left out, the command does not say. */
+  readonly temporaryValues?: readonly string[];
 }) {
   const asked: PlanQuestion[] = [];
-  const result = await askPlanQuestions({
+  const result = await askPlanQuestions<PlannedQuestions, never>({
     plan: {
       dataLoss: (input.labels ?? ['Remove key']).map((label, operationIndex) => ({
         operationIndex,
@@ -32,6 +35,9 @@ async function questionsOf(input: {
         ...(input.keepDataAdvice === undefined ? {} : { keepDataAdvice: input.keepDataAdvice }),
       })),
       accessChanges: [],
+      ...(input.temporaryValues === undefined
+        ? {}
+        : { temporaryValues: input.temporaryValues.map((field) => ({ field, value: '""' })) }),
     },
     askAccess: false,
     canConvert: input.canConvert ?? false,
@@ -81,6 +87,25 @@ describe('a question about a value object field', () => {
     expect(asked).toEqual([
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.',
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+    ]);
+  });
+
+  it('says what --delete leaves in the new required field as the plan fills it, whatever the command', async () => {
+    const asked = await Promise.all(
+      [
+        { canConvert: true, temporaryValues: ['GeoPoint.latitude'] },
+        { canConvert: false, temporaryValues: [] },
+      ].map(async ({ canConvert, temporaryValues }) => {
+        const {
+          asked: [question],
+        } = await questionsOf({ origin, destination, subject: lat, canConvert, temporaryValues });
+        return question?.question;
+      }),
+    );
+
+    expect(asked).toEqual([
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.',
     ]);
   });
 
