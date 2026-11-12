@@ -100,7 +100,7 @@ describe('the check of an Update', () => {
     const id = addWithState(graph, update);
     addWithState(graph, findUsers(), { filter: [new FilterData(id, sameId)] });
 
-    expect(() => update.check(graph, id, contextWithoutReturning)).toThrow(
+    expect(() => update.checkIfCanRun(graph, id, contextWithoutReturning)).toThrow(
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:
@@ -116,7 +116,7 @@ describe('the check of an Update', () => {
     const id = addWithState(graph, update);
     addWithState(graph, findUsers(), { filter: [new FilterData(id, sameId)] });
 
-    expect(() => update.check(graph, id, contextWithoutReturning)).not.toThrow();
+    expect(() => update.checkIfCanRun(graph, id, contextWithoutReturning)).not.toThrow();
   });
 
   it('accepts an Update that sets a key by an expression when nothing reads from it', () => {
@@ -124,7 +124,7 @@ describe('the check of an Update', () => {
     const update = setByExpression('id');
     const id = addWithState(graph, update);
 
-    expect(() => update.check(graph, id, contextWithoutReturning)).not.toThrow();
+    expect(() => update.checkIfCanRun(graph, id, contextWithoutReturning)).not.toThrow();
   });
 
   it('accepts any Update on a contract with returning', () => {
@@ -133,6 +133,6 @@ describe('the check of an Update', () => {
     const id = addWithState(graph, update);
     addWithState(graph, findUsers(), { filter: [new FilterData(id, sameId)] });
 
-    expect(() => update.check(graph, id, getTestContext())).not.toThrow();
+    expect(() => update.checkIfCanRun(graph, id, getTestContext())).not.toThrow();
   });
 });

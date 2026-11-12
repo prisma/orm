@@ -152,7 +152,7 @@ function outputsOf(inputs: Slots, collected: Collected): OutputsOf<Slots> {
 
 function checkNodes(graph: Graph, ctx: Context): void {
   for (const [id, node] of graph.nodes()) {
-    node.check(graph, id, ctx.context);
+    node.checkIfCanRun(graph, id, ctx.context);
   }
 }
 

@@ -51,7 +51,7 @@ export class Update extends StatementNode<Inputs> {
     return this.#run(this.ast.withSet({ ...this.ast.set, ...payload }), inputs, run);
   }
 
-  override check(graph: Graph, id: NodeId, context: ExecutionContext): void {
+  override checkIfCanRun(graph: Graph, id: NodeId, context: ExecutionContext): void {
     if (hasContractCapability(context.contract, 'returning')) {
       return;
     }

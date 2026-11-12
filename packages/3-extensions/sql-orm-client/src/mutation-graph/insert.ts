@@ -73,7 +73,7 @@ export class Insert extends StatementNode<Payloads> {
     return new AsyncIterableResult(generator());
   }
 
-  override check(graph: Graph, id: NodeId, context: ExecutionContext): void {
+  override checkIfCanRun(graph: Graph, id: NodeId, context: ExecutionContext): void {
     checkOwnValues(graph, id, context, this.asts, this.returns, this.owner);
   }
 

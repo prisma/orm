@@ -143,7 +143,7 @@ describe('the check of an insert', () => {
     );
     const id = graph.add(insert, {});
 
-    expect(() => insert.check(graph, id, generatedContext)).toThrow(
+    expect(() => insert.checkIfCanRun(graph, id, generatedContext)).toThrow(
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:
@@ -158,7 +158,7 @@ describe('the check of an insert', () => {
     const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
     const id = graph.add(insert, {});
 
-    expect(() => insert.check(graph, id, contextWithoutReturning)).toThrow(
+    expect(() => insert.checkIfCanRun(graph, id, contextWithoutReturning)).toThrow(
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         meta: { capability: 'returning', action: 'create()' },
@@ -175,7 +175,7 @@ describe('the check of an insert', () => {
     );
     const id = graph.add(insert, { payload: [new PayloadData(find, idToUserId)] });
 
-    expect(() => insert.check(graph, id, contextWithoutReturning)).not.toThrow();
+    expect(() => insert.checkIfCanRun(graph, id, contextWithoutReturning)).not.toThrow();
   });
 
   it('accepts an insert that nothing reads from, whatever its rows', () => {
@@ -186,7 +186,7 @@ describe('the check of an insert', () => {
     );
     const id = graph.add(insert, {});
 
-    expect(() => insert.check(graph, id, generatedContext)).not.toThrow();
+    expect(() => insert.checkIfCanRun(graph, id, generatedContext)).not.toThrow();
   });
 
   it('accepts any insert on a contract with returning', () => {
@@ -194,6 +194,6 @@ describe('the check of an insert', () => {
     const insert = new Insert([insertInto('posts', [{ title: 'Hello' }], ['id'])], insertOwner);
     const id = graph.add(insert, {});
 
-    expect(() => insert.check(graph, id, getTestContext())).not.toThrow();
+    expect(() => insert.checkIfCanRun(graph, id, getTestContext())).not.toThrow();
   });
 });

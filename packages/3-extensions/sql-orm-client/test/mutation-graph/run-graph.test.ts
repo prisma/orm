@@ -95,7 +95,7 @@ const idAndName = columnMappings('users', 'posts', [
 ]);
 
 class RefusingFind extends Find {
-  override check(): void {
+  override checkIfCanRun(): void {
     throw new Error('this Find cannot run');
   }
 
@@ -116,7 +116,7 @@ class Checked extends Node<Record<string, never>> {
   readonly slots = {};
   readonly checked: (readonly [NodeId, unknown])[] = [];
 
-  override check(graph: Graph, id: NodeId, context: unknown): void {
+  override checkIfCanRun(graph: Graph, id: NodeId, context: unknown): void {
     this.checked.push([id, context === getTestContext() && graph.result === id]);
   }
 

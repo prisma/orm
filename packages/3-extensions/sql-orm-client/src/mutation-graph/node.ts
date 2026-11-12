@@ -51,5 +51,5 @@ export abstract class Node<Inputs extends Slots = Slots> {
 
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 
-  check(_graph: Graph, _id: NodeId, _context: ExecutionContext): void {}
+  checkIfCanRun(_graph: Graph, _id: NodeId, _context: ExecutionContext): void {}
 }
