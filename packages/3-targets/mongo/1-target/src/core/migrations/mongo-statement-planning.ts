@@ -39,7 +39,6 @@ import {
   validatorFieldNamesOf,
   validatorRootShapesOf,
   variantFilter,
-  variantFilterOf,
 } from '@internal/mongo-contract';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { InternalError } from '@internal/utils/internal-error';
@@ -363,13 +362,13 @@ function discriminatorValueChange(
   statement: ResolvedModelRenameStatement,
   input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): readonly [reason: string, why: string] | undefined {
-  const before = variantFilterOf(input.fromContract.domain, statement.from);
-  const after = variantFilterOf(input.contract.domain, statement.to);
+  const before = selectedVariantOf(input.fromContract.domain, statement.from);
+  const after = selectedVariantOf(input.contract.domain, statement.to);
   const base = modelAt(input.contract, statement.to)?.base;
   if (before === undefined || after === undefined || base === undefined) return undefined;
-  const [field, oldValue] = Object.entries(before)[0] ?? [];
-  const newValue = Object.values(after)[0];
-  if (field === undefined || oldValue === newValue) return undefined;
+  const { field, value: oldValue } = before;
+  const newValue = after.value;
+  if (oldValue === newValue) return undefined;
   const fromName = modelDisplayName(statement.from);
   const toName = modelDisplayName(statement.to);
   return [
@@ -635,15 +634,19 @@ export function destinationModelOf(
   const originCollection = collectionOfModel(input.fromContract.domain, origin);
   if (originCollection === undefined) return undefined;
   const collection = input.collectionAfterRenames(originCollection);
-  const filter = JSON.stringify(variantFilterOf(input.fromContract.domain, origin) ?? null);
+  const variant = selectedVariantOf(input.fromContract.domain, origin);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
       embeddingModelOf(input.contract.domain, candidate) === undefined &&
       collectionOfModel(input.contract.domain, candidate) === collection &&
-      JSON.stringify(variantFilterOf(input.contract.domain, candidate) ?? null) === filter,
+      sameVariant(selectedVariantOf(input.contract.domain, candidate), variant),
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
+}
+
+function sameVariant(a: SelectedVariant | undefined, b: SelectedVariant | undefined): boolean {
+  return a === undefined || b === undefined ? a === b : a.field === b.field && a.value === b.value;
 }
 
 /** What finding a model or field of one contract in the other reads: the renames, both contracts, and the collection each origin collection becomes. */

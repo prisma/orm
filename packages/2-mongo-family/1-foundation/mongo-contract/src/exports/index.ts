@@ -128,7 +128,6 @@ export {
   otherModelsReached,
   selectedVariantOf,
   variantFilter,
-  variantFilterOf,
 } from '../model-documents';
 export { mongoValueSetsOf } from '../mongo-enum';
 export { modelAndBasesOf, mongoModelsOf } from '../mongo-models';

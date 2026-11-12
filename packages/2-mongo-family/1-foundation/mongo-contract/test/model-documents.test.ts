@@ -1,6 +1,6 @@
 import type { ApplicationDomain } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { otherModelsReached, selectedVariantOf, variantFilterOf } from '../src/model-documents';
+import { otherModelsReached, selectedVariantOf, variantFilter } from '../src/model-documents';
 
 const field = (stored: string) => ({ field: stored });
 
@@ -31,12 +31,9 @@ const domain = {
   },
 } as unknown as ApplicationDomain;
 
-describe('variantFilterOf', () => {
-  it("selects a variant's documents by the base's stored discriminator, and none for a root model", () => {
-    expect([
-      variantFilterOf(domain, { namespaceId: 'app', model: 'Bug' }),
-      variantFilterOf(domain, { namespaceId: 'app', model: 'Task' }),
-    ]).toEqual([{ kind: 'bug' }, undefined]);
+describe('variantFilter', () => {
+  it("selects a variant's documents by its discriminator's stored name and value", () => {
+    expect(variantFilter({ field: 'kind', value: 'bug' })).toEqual({ kind: 'bug' });
   });
 });
 

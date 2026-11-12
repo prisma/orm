@@ -44,15 +44,6 @@ export function variantFilter(variant: SelectedVariant): Document {
   return { [variant.field]: variant.value };
 }
 
-/** The filter that selects a variant's documents in its collection. `undefined` for a root model. */
-export function variantFilterOf(
-  domain: ApplicationDomain,
-  reference: MongoModelReference,
-): Document | undefined {
-  const variant = selectedVariantOf(domain, reference);
-  return variant === undefined ? undefined : variantFilter(variant);
-}
-
 /** Whether one of `model`'s own fields or embed relations is stored under `storedName`. */
 function ownStores(model: ContractModel<MongoModelStorage>, storedName: string): boolean {
   return (
