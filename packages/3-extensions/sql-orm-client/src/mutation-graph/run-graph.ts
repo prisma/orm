@@ -32,12 +32,8 @@ export function queryGraph<Row>(
 ): AsyncIterableResult<Row> {
   graph.removeUnreadFinds();
   returnCallerColumns(graph, callerRows);
-  const [only, ...others] = statementNodes(graph);
-  // A graph with one statement node is one statement. It runs without a transaction and its rows
-  // are handed to the caller as they arrive. A graph with several statement nodes runs inside the
-  // mutation scope, whose transaction ends when its callback returns, so its result is collected
-  // there and yielded afterwards.
-  if (only !== undefined && others.length === 0 && only[0] === graph.result) {
+  const [only] = statementNodes(graph);
+  if (only !== undefined && statementCount(graph) === 1 && only[0] === graph.result) {
     const [id, node] = only;
     const run = runOn(ctx, ctx.runtime);
     const storageRows = afterChecks(graph, ctx, () =>
@@ -80,7 +76,7 @@ async function runAllNodes<Row>(
 ): Promise<Outcome<Row>> {
   checkNodes(graph, ctx);
   const { runtime } = ctx;
-  if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
+  if (statementCount(graph) > 1 && runtime.transaction !== undefined) {
     return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
@@ -203,6 +199,15 @@ function shapeRows<Row>(
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {
   return graph.nodes().filter(([, node]) => node instanceof StatementNode);
+}
+
+function statementCount(graph: Graph): number {
+  return graph
+    .nodes()
+    .reduce(
+      (count, [, node]) => count + (node instanceof StatementNode ? node.statements.length : 0),
+      0,
+    );
 }
 
 function rowsOf(

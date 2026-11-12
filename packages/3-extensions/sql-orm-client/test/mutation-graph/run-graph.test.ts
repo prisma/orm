@@ -4,6 +4,7 @@ import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import type { Graph } from '../../src/mutation-graph/graph';
+import { Insert } from '../../src/mutation-graph/insert';
 import { type Executed, Node, type Run } from '../../src/mutation-graph/node';
 import { executeGraph, queryGraph } from '../../src/mutation-graph/run-graph';
 import { createCollectionFor } from '../collection-fixtures';
@@ -22,6 +23,8 @@ import {
   deleteUsers,
   findUsers,
   findUsersWith,
+  insertInto,
+  insertOwner,
   nameIsAda,
   newGraph,
   rowsOfPosts,
@@ -325,6 +328,63 @@ describe('running a graph', () => {
           rowsOfUsers({ selectedFields: ['id', 'name'] }),
         ),
       ).rejects.toThrow('delete failed');
+      expect(transactional.rollback).toHaveBeenCalledTimes(1);
+      expect(transactional.commit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('with one Insert of two statements', () => {
+    function insertOfTwoStatements(): Graph {
+      const graph = newGraph();
+      graph.setResult(
+        graph.add(
+          new Insert(
+            [
+              insertInto('users', [{ name: 'Ada' }]),
+              insertInto('users', [{ name: 'Grace', email: 'grace@example.com' }]),
+            ],
+            insertOwner,
+          ),
+          {},
+        ),
+      );
+      return graph;
+    }
+
+    it('runs them in one transaction that it commits, for rows and for a count', async () => {
+      const rows = withTransaction(createMockRuntime());
+      const counted = withTransaction(createMockRuntime());
+
+      await queryGraph(insertOfTwoStatements(), contextOf(rows.runtime), rowsOfUsers()).toArray();
+      await executeGraph(insertOfTwoStatements(), contextOf(counted.runtime));
+
+      expect(
+        [rows, counted].map(({ open, commit, rollback }) => [
+          open.mock.calls.length,
+          commit.mock.calls.length,
+          rollback.mock.calls.length,
+        ]),
+      ).toEqual([
+        [1, 1, 0],
+        [1, 1, 0],
+      ]);
+    });
+
+    it('rolls the transaction back when the second statement fails', async () => {
+      const transactional = withTransaction(createMockRuntime());
+      const execute = transactional.runtime.execute.bind(transactional.runtime);
+      let calls = 0;
+      transactional.runtime.execute = async (...args) => {
+        calls += 1;
+        if (calls === 2) {
+          throw new Error('second insert failed');
+        }
+        return execute(...args);
+      };
+
+      await expect(
+        executeGraph(insertOfTwoStatements(), contextOf(transactional.runtime)),
+      ).rejects.toThrow('second insert failed');
       expect(transactional.rollback).toHaveBeenCalledTimes(1);
       expect(transactional.commit).not.toHaveBeenCalled();
     });

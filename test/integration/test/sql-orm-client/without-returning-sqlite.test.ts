@@ -196,6 +196,15 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('createAndCount() of rows with two column sets inserts them in one transaction, so a failing second statement leaves no row', async () => {
+    await withDatabase(async ({ db, database }) => {
+      await expect(
+        db.User.createAndCount([ada, { id: 5, email: ada.email, name: 'Ada again' }]),
+      ).rejects.toThrow();
+      expect(rowsOf(database, 'users')).toEqual([]);
+    });
+  });
+
   it('refuses createAll() of several rows whose ids the database generates, before running, and counts them with createAndCount()', async () => {
     await withDatabase(async ({ db, database, statements }) => {
       await expect(db.User.createAll([ada, grace])).rejects.toThrow(
