@@ -41,15 +41,19 @@ export type JoinSource<Row extends ScopeTable, Alias extends string> = {
   buildAst(): AnyFromSource;
 };
 
-export type DefaultScope<Name extends string, Table extends StorageTable> = {
-  topLevel: StorageTableToScopeTable<Table>;
+export type DefaultScope<Name extends string, Table extends StorageTable, ColumnInputs = never> = {
+  topLevel: StorageTableToScopeTable<Table, ColumnInputs>;
   namespaces: {
-    [K in Name]: StorageTableToScopeTable<Table>;
+    [K in Name]: StorageTableToScopeTable<Table, ColumnInputs>;
   };
 };
 
-export type StorageTableToScopeTable<T extends StorageTable> = {
-  [K in keyof T['columns']]: StorageColumnScopeField<T['columns'][K]>;
+/** The table's columns as scope fields, each carrying its resolved input type from `ColumnInputs` when the contract provides one. */
+export type StorageTableToScopeTable<T extends StorageTable, ColumnInputs = never> = {
+  [K in keyof T['columns']]: StorageColumnScopeField<
+    T['columns'][K],
+    [ColumnInputs] extends [never] ? never : K extends keyof ColumnInputs ? ColumnInputs[K] : never
+  >;
 };
 
 export type MergeScopes<A extends Scope, B extends Scope> = {

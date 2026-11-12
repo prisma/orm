@@ -168,3 +168,51 @@ test('sql-builder insert: in-union literal is accepted', () => {
   db.__unbound__.User.insert([{ role: 'user', status: 'active' }]);
   db.__unbound__.User.insert([{ role: 'user', status: null }]);
 });
+
+// ---------------------------------------------------------------------------
+// Where comparisons: a raw value compared with an enum column uses its input type
+// ---------------------------------------------------------------------------
+
+test('sql-builder where: eq and ne reject an out-of-union literal on either side', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.eq(f.role, 'nope'));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.eq('nope', f.role));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.ne(f.role, 'nope'));
+  // @ts-expect-error 'nope' is not in the 'active' | 'inactive' union
+  users.where((f, fns) => fns.eq(f.status, 'nope'));
+});
+
+test('sql-builder where: in and notIn reject an out-of-union literal', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.in(f.role, ['user', 'nope']));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.notIn(f.role, ['nope']));
+});
+
+test('sql-builder where: in-union literals, null and column operands are accepted', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  users.where((f, fns) => fns.eq(f.role, 'admin'));
+  users.where((f, fns) => fns.eq('admin', f.role));
+  users.where((f, fns) => fns.ne(f.role, 'user'));
+  users.where((f, fns) => fns.eq(f.status, null));
+  users.where((f, fns) => fns.eq(f.role, f.status));
+  users.where((f, fns) => fns.in(f.role, ['user', 'admin']));
+  users.where((f, fns) => fns.notIn(f.status, ['inactive']));
+});
+
+test('sql-builder where: a raw SQL operand keeps the codec input type', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  users.where((_f, fns) => fns.eq(fns.raw`lower(role)`.returns('pg/text@1'), 'nope'));
+});
