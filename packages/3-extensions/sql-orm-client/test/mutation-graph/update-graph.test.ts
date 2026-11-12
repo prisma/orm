@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor } from '../collection-fixtures';
+import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -18,7 +18,13 @@ function printUpdate(
   const users = createCollectionFor('User').collection.where({ id: 1 });
   const state = withPosts ? users.include('posts').state : users.state;
   const context = getTestContext();
-  const parsed = parseMutationInput(context.contract, 'public', 'User', input as never);
+  const parsed = parseMutationInput(
+    context.contract,
+    'public',
+    'User',
+    input as never,
+    relatedCollectionOf(context),
+  );
   return printGraph(
     updateFirstGraph(
       { context, state, modelName: 'User', namespaceId: 'public' },
@@ -202,9 +208,13 @@ describe('updateFirstGraph with relation operations', () => {
 
   it('builds a graph with no node after limit(0)', () => {
     const context = getTestContext();
-    const parsed = parseMutationInput(context.contract, 'public', 'User', {
-      posts: (posts: Mutator) => posts.connect({ id: 10 }),
-    } as never);
+    const parsed = parseMutationInput(
+      context.contract,
+      'public',
+      'User',
+      { posts: (posts: Mutator) => posts.connect({ id: 10 }) } as never,
+      relatedCollectionOf(context),
+    );
     const state = createCollectionFor('User').collection.where({ id: 1 }).limit(0).state;
 
     expect(

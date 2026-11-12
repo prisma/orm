@@ -38,6 +38,7 @@ import {
   deleteRows,
   findRows,
   insertRows,
+  type KeySource,
   type Returns,
   readBack,
   type Shape,
@@ -80,7 +81,7 @@ export function updateAllGraph(
   }
   const where = whereOf(collection);
   const readsKeys = returns === 'rows' && identityColumnsOf(collection).length > 0;
-  const filters = readsKeys
+  const keys = readsKeys
     ? [
         {
           from: findRows(
@@ -94,40 +95,57 @@ export function updateAllGraph(
         },
       ]
     : [];
-  b.graph.setResult(
-    updateRows(b, modelOf(collection), set, {
-      where,
-      filters,
-      payloads: [],
-      owner: { operation: 'updateAll', modelName: collection.modelName },
-      returns,
-      shape: shapeOf(collection),
-      afterWrite: undefined,
-    }),
-  );
+  b.graph.setResult(addUpdateAll(b, collection, set, keys, returns));
   return b.graph;
+}
+
+export function addUpdateAll(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  keys: readonly KeySource[],
+  returns: Returns,
+): NodeId {
+  return updateRows(b, modelOf(collection), set, {
+    where: whereOf(collection),
+    filters: keys,
+    payloads: [],
+    owner: { operation: 'updateAll', modelName: collection.modelName },
+    returns,
+    shape: shapeOf(collection),
+    afterWrite: undefined,
+  });
 }
 
 export function deleteAllGraph(collection: DescribeCollectionRowsOptions, returns: Returns): Graph {
   const { state } = collection;
   const b = builderOf(collection);
-  const where = whereOf(collection);
-  const find =
-    returns === 'rows'
-      ? findRows(b, selectRowsAst(collection, state).withWhere(where), noInputs)
-      : undefined;
-  const filters =
-    find !== undefined && identityColumnsOf(collection).length > 0
+  if (returns === 'count') {
+    b.graph.setResult(addDeleteAll(b, collection, []));
+    return b.graph;
+  }
+  const find = findRows(
+    b,
+    selectRowsAst(collection, state).withWhere(whereOf(collection)),
+    noInputs,
+  );
+  b.graph.setResult(find);
+  addDeleteAll(
+    b,
+    collection,
+    identityColumnsOf(collection).length > 0
       ? [{ from: find, columns: sameRowColumns(collection) }]
-      : [];
-  if (find !== undefined) {
-    b.graph.setResult(find);
-  }
-  const deleted = deleteRows(b, state.tables, { where, filters });
-  if (find === undefined) {
-    b.graph.setResult(deleted);
-  }
+      : [],
+  );
   return b.graph;
+}
+
+export function addDeleteAll(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  keys: readonly KeySource[],
+): NodeId {
+  return deleteRows(b, collection.state.tables, { where: whereOf(collection), filters: keys });
 }
 
 export function updateFirstGraph(

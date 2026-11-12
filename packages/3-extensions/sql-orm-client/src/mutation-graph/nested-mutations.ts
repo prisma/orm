@@ -21,12 +21,14 @@ import {
   type ParsedRelationMutation,
   parseMutationInput,
   partitionByOwnership,
+  type RelatedCollection,
 } from '../relation-mutations';
 import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
 import { Assert } from './assert';
+import { addDeleteAll, addUpdateAll } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -44,10 +46,11 @@ import {
 } from './model-statements';
 import { Requires } from './requires';
 import { Rows } from './rows';
-import { createRowOf, withCreateDefaults } from './storage-rows';
+import { createRowOf, updateValuesOf, withCreateDefaults } from './storage-rows';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
-type CreateOrConnect = Exclude<Mutation, { kind: 'disconnect' }>;
+type CreateOrConnect = Extract<Mutation, { kind: 'create' | 'connect' }>;
+type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' }>;
 
 export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
@@ -72,7 +75,7 @@ export function addCreateWithRelations(
   { keysFromParent, returns, shape, variantValue }: CreateOf,
 ): NodeId {
   for (const relationMutation of parsed.relationMutations) {
-    rejectDisconnect(relationMutation);
+    rejectUpdateOnly(relationMutation);
   }
   const before = addBeforeWrite(t, model, parsed.relationMutations);
   const row = createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
@@ -114,8 +117,14 @@ export function addBeforeWrite(
   }
   const keys: KeySource[] = [];
   const nullColumns: Record<string, null> = {};
+  for (const relationMutation of relationMutations) {
+    rejectFilteredWriteOnToOne(relationMutation);
+  }
   for (const relationMutation of parentOwned) {
     for (const mutation of relationMutation.mutations) {
+      if (isFilteredWrite(mutation)) {
+        continue;
+      }
       if (mutation.kind === 'disconnect') {
         for (const column of localColumnsOf(t.context.contract, model, relationMutation.relation)) {
           nullColumns[column] = null;
@@ -147,12 +156,32 @@ export function addAfterWrite(
   }
 }
 
-function rejectDisconnect({ name, mutations }: ParsedRelationMutation): void {
-  if (mutations.some(({ kind }) => kind === 'disconnect')) {
+function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
+  for (const { kind } of mutations) {
+    if (kind === 'disconnect' || kind === 'updateAll' || kind === 'deleteAll') {
+      throw ormError(
+        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        `${kind}() is only supported in update() nested mutations`,
+        { meta: { kind, relation: name } },
+      );
+    }
+  }
+}
+
+function isFilteredWrite(mutation: Mutation): mutation is FilteredWrite {
+  return mutation.kind === 'updateAll' || mutation.kind === 'deleteAll';
+}
+
+function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelationMutation): void {
+  const filtered = mutations.find(isFilteredWrite);
+  if (
+    filtered !== undefined &&
+    (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
+  ) {
     throw ormError(
       'ORM.RELATION_MUTATION_UNSUPPORTED',
-      'disconnect() is only supported in update() nested mutations',
-      { meta: { kind: 'disconnect', relation: name } },
+      `${filtered.kind}() nested mutation for relation "${name}" is only supported on to-many relations`,
+      { meta: { kind: filtered.kind, relation: name, reason: 'to-one-relation' } },
     );
   }
 }
@@ -160,7 +189,7 @@ function rejectDisconnect({ name, mutations }: ParsedRelationMutation): void {
 function addParentOwned(
   t: Translation,
   model: Model,
-  { name, relation }: ParsedRelationMutation,
+  { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: CreateOrConnect,
 ): KeySource {
   const { contract } = t.context;
@@ -182,7 +211,13 @@ function addParentOwned(
       );
     }
     return {
-      from: nestedCreate(t, related, parseCreateInput(t, related, row), [], 'rows'),
+      from: nestedCreate(
+        t,
+        related,
+        parseCreateInput(t, related, row, relatedCollection),
+        [],
+        'rows',
+      ),
       columns,
     };
   }
@@ -201,7 +236,7 @@ function addChildOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation }: ParsedRelationMutation,
+  { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: Mutation,
 ): void {
   const { context } = t;
@@ -215,9 +250,13 @@ function addChildOwned(
     related.tables.root,
     targetColumns,
   );
+  if (isFilteredWrite(mutation)) {
+    addFilteredWrite(t, model, parent, name, relation, mutation);
+    return;
+  }
   if (mutation.kind === 'create') {
     const keys = [{ from: parent, columns: fromParent }];
-    const rows = mutation.data.map((row) => parseCreateInput(t, related, row));
+    const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
     if (rows.some((row) => row.relationMutations.length > 0)) {
       for (const row of rows) {
         nestedCreate(t, related, row, keys, 'count');
@@ -276,7 +315,7 @@ function addJunctionOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation }: JunctionRelationMutation,
+  { name, relation, relatedCollection }: JunctionRelationMutation,
   mutation: Mutation,
 ): void {
   const { context } = t;
@@ -301,6 +340,13 @@ function addJunctionOwned(
     junction.root,
     through.childColumns,
   );
+  if (isFilteredWrite(mutation)) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      `${mutation.kind}() nested mutation for relation "${name}" is not supported on a many-to-many relation yet`,
+      { meta: { kind: mutation.kind, relation: name, reason: 'many-to-many-relation' } },
+    );
+  }
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
     const values = withCreateDefaults(context, through.namespaceId, through.table, {}, undefined);
     addInsert(t, junction.root, [values], {
@@ -317,7 +363,10 @@ function addJunctionOwned(
 
   if (mutation.kind === 'create') {
     for (const row of mutation.data) {
-      addLink(nestedCreate(t, related, parseCreateInput(t, related, row), [], 'rows'), undefined);
+      addLink(
+        nestedCreate(t, related, parseCreateInput(t, related, row, relatedCollection), [], 'rows'),
+        undefined,
+      );
     }
     return;
   }
@@ -345,6 +394,53 @@ function addJunctionOwned(
         { from: target, columns: fromTarget },
       ],
     });
+  }
+}
+
+function addFilteredWrite(
+  t: Translation,
+  model: Model,
+  parent: NodeId,
+  name: string,
+  relation: ResolvedRelation,
+  mutation: FilteredWrite,
+): void {
+  const { contract } = t.context;
+  const related = {
+    context: t.context,
+    state: mutation.state,
+    modelName: relation.to,
+    namespaceId: relation.toNamespace,
+  };
+  const parents = [
+    {
+      from: parent,
+      columns: columnMappings(
+        contract,
+        model.tables.root,
+        localColumnsOf(contract, model, relation),
+        related.state.tables.root,
+        resolveRelationTargetColumns(contract, relation),
+      ),
+    },
+  ];
+  if (mutation.kind === 'deleteAll') {
+    addDeleteAll(t, related, parents);
+    return;
+  }
+  const linking = relation.on.targetFields.filter((field) => Object.hasOwn(mutation.data, field));
+  if (linking.length > 0) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `updateAll() nested mutation for relation "${name}" cannot set ${linking.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
+      {
+        meta: { kind: 'updateAll', relation: name, problem: 'parent-link-column', fields: linking },
+      },
+    );
+  }
+  const set = updateValuesOf(related, mutation.data);
+  if (Object.keys(set).length > 0) {
+    addUpdateAll(t, related, set, parents, 'count');
   }
 }
 
@@ -484,8 +580,15 @@ function parseCreateInput(
   t: Translation,
   model: Model,
   row: MutationCreateInput<Contract<SqlStorage>, string>,
+  relatedCollection: RelatedCollection,
 ): ParsedMutationInput {
-  return parseMutationInput(t.context.contract, model.namespaceId, model.modelName, row);
+  return parseMutationInput(
+    t.context.contract,
+    model.namespaceId,
+    model.modelName,
+    row,
+    relatedCollection,
+  );
 }
 
 function columnMappings(

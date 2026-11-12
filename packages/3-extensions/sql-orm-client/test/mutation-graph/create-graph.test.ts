@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { createGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor, withoutDefaultInInsert } from '../collection-fixtures';
+import {
+  createCollectionFor,
+  relatedCollectionOf,
+  withoutDefaultInInsert,
+} from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -22,6 +26,7 @@ function graphOf(
       target.namespaceId,
       target.modelName,
       data as never,
+      relatedCollectionOf(target.context),
     ),
   );
 }

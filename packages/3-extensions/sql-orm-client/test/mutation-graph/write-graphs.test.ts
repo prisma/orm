@@ -18,6 +18,7 @@ import { emptyState, type RelationMutator } from '../../src/types';
 import {
   baseContract,
   createCollectionFor,
+  relatedCollectionOf,
   withoutCapabilityKeys,
   withReturningCapability,
 } from '../collection-fixtures';
@@ -46,7 +47,13 @@ function usersOf(context: typeof withReturning, includePosts = false) {
 }
 
 function parsed(context: typeof withReturning, data: Record<string, unknown>) {
-  return parseMutationInput(context.contract, 'public', 'User', data as never);
+  return parseMutationInput(
+    context.contract,
+    'public',
+    'User',
+    data as never,
+    relatedCollectionOf(context),
+  );
 }
 
 function asRun(graph: Graph, state = false): string {
@@ -66,7 +73,13 @@ function generatedTarget(modelName: 'Counter' | 'Note' | 'Owner') {
 function generatedCreate(modelName: 'Note' | 'Owner', data: Record<string, unknown>) {
   return createGraph(
     generatedTarget(modelName),
-    parseMutationInput(generatedContext.contract, 'public', modelName, data as never),
+    parseMutationInput(
+      generatedContext.contract,
+      'public',
+      modelName,
+      data as never,
+      relatedCollectionOf(generatedContext),
+    ),
   );
 }
 

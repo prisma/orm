@@ -6,7 +6,7 @@ import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { Collection } from '@internal/sql-orm-client';
+import { Collection, or } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
@@ -322,6 +322,88 @@ describe('integration/nested-mutations on SQLite: update()', () => {
             { id: 30, title: 'Created', userId: 1 },
           ],
         });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  async function seedTwoParents({ users }: Collections): Promise<void> {
+    await users.create({
+      id: 1,
+      name: 'Alice',
+      posts: (posts) =>
+        posts.create([
+          { id: 10, title: 'Draft' },
+          { id: 11, title: 'Kept' },
+        ]),
+    });
+    await users.create({
+      id: 2,
+      name: 'Bob',
+      posts: (posts) => posts.create([{ id: 20, title: 'Draft' }]),
+    });
+  }
+
+  const postRowsSql = 'select id, title, user_id from posts order by id';
+
+  it(
+    'where(or(...)).updateAll() leaves a post of another parent that matches a later branch unchanged',
+    async () => {
+      await withDatabase(async (collections) => {
+        await seedTwoParents(collections);
+        const { users, rows } = collections;
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title').orderBy((post) => post['id']!.asc()),
+          )
+          .update({
+            posts: (posts) =>
+              posts
+                .where((post) => or(post['title']!.eq('Kept'), post['title']!.eq('Draft')))
+                .updateAll({ title: 'Changed' }),
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 10, title: 'Changed' },
+            { id: 11, title: 'Changed' },
+          ],
+        });
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Changed', user_id: 1 },
+          { id: 11, title: 'Changed', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'where(or(...)).deleteAll() leaves a post of another parent that matches a later branch unchanged',
+    async () => {
+      await withDatabase(async (collections) => {
+        await seedTwoParents(collections);
+        const { users, rows } = collections;
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .update({
+            posts: (posts) =>
+              posts
+                .where((post) => or(post['title']!.eq('Kept'), post['title']!.eq('Draft')))
+                .deleteAll(),
+          });
+
+        expect(updated).toEqual({ id: 1, name: 'Alice', posts: [] });
+        expect(rows(postRowsSql)).toEqual([{ id: 20, title: 'Draft', user_id: 2 }]);
       });
     },
     timeouts.databaseOperation,
