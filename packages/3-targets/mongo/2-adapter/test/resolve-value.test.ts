@@ -173,6 +173,16 @@ describe('resolveValue', () => {
     });
   });
 
+  it('gives the driver a Date of this realm when a codec-less param ref holds a tagged Date from another realm', async () => {
+    const d: Date = runInNewContext(
+      'Object.defineProperty(new Date(0), Symbol.toStringTag, { value: "Tagged" })',
+    );
+    const resolved = await resolveValue({ at: new MongoParamRef(d) }, emptyRegistry(), noCtx);
+    expect(BSON.deserialize(BSON.serialize(resolved as BSON.Document))).toEqual({
+      at: new Date(0),
+    });
+  });
+
   describe('async dispatch — codec encode + concurrent encoding', () => {
     it('returns a Promise', () => {
       const result = resolveValue(new MongoParamRef('x'), emptyRegistry(), noCtx);
