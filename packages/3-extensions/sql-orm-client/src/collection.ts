@@ -1950,19 +1950,20 @@ export class CollectionBase<
         'create overload inputs are model-field records whose relation fields are callbacks'
       >(data),
     );
-    const [created] =
+    const rows =
       mtiCreateContextOf(this.#descriptionOptions()) === undefined
-        ? await queryGraph<Row>(
+        ? queryGraph<Row>(
             createGraph(this.#descriptionOptions(), parsed),
             this.#on(queryable),
             this.#descriptionOptions(),
           ).toArray()
-        : await this.#createAllRows([
+        : this.#createAllRows([
             blindCast<
               ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
               'a create on an MTI variant has no nested callbacks, which createAll() refuses'
             >(data),
           ])(queryable);
+    const [created] = await rows;
     if (created !== undefined) {
       return created;
     }
