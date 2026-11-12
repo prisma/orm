@@ -280,7 +280,7 @@ describe('write terminals run as one orm-call', () => {
 
   it('upsert() and delete() end with the row', async () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
-    recorded.runtime.setNextResults([[aliceRow], [{ id: 1 }], [aliceRow]]);
+    recorded.runtime.setNextResults([[aliceRow], [aliceRow], []]);
 
     await recorded.collection.upsert(
       { create: alice, update: { name: 'Alice' }, conflictOn: { id: 1 } },

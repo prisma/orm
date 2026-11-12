@@ -224,17 +224,17 @@ describe('updateFirstGraph', () => {
 });
 
 describe('deleteFirstGraph', () => {
-  it('builds a Find of the first row and a Delete of the row it finds, which returns its columns and is the result', () => {
+  it('builds a Find of the first row as the result and a Delete of the row it finds, which returns nothing', () => {
     const graph = deleteFirstGraph(target);
 
     expect(printAsRun(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n2',
+        'result: n1',
       ].join('\n'),
     );
-    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
+    expect(returnedAt(graph, 1)).toEqual([]);
   });
 
   it('makes the Find carry the includes and be the result when there are includes', () => {

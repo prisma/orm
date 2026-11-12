@@ -1,3 +1,4 @@
+import { textColumn } from '@internal/adapter-postgres/column-types';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,13 @@ import {
   withoutCapabilityKeys,
   withReturningCapability,
 } from '../collection-fixtures';
-import { buildMixedPolyContract, createMockRuntime, getTestContext } from '../helpers';
+import { defineContract, field, model } from '../contract-builder';
+import {
+  buildMixedPolyContract,
+  buildTestContextFromContract,
+  createMockRuntime,
+  getTestContext,
+} from '../helpers';
 import { generatedContext } from './generated-keys-contract';
 import { printGraph } from './print-graph';
 
@@ -190,14 +197,42 @@ describe('write graphs as they run, on a contract with returning', () => {
     });
   });
 
-  it('delete() finds the row and deletes it, and the Delete returns it', () => {
+  it('delete() finds the row, which is the result, and deletes it', () => {
     expect(asRun(deleteFirstGraph(usersOf(context)))).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n2',
+        'result: n1',
       ),
     );
+  });
+});
+
+describe('the ids a rule forwarded', () => {
+  const logs = defineContract({
+    models: { Log: model('Log', { fields: { message: field.column(textColumn) } }) },
+  });
+  const keyless: Contract<SqlStorage> = { ...logs, capabilities: { sql: { returning: true } } };
+  const keylessContext = { ...buildTestContextFromContract(keyless), contract: keyless };
+  const keylessLogs = {
+    context: keylessContext,
+    state: emptyState(createCollectionTables(keyless, 'public', 'Log')),
+    modelName: 'Log',
+    namespaceId: 'public',
+  };
+
+  it.each([
+    ['delete()', () => deleteFirstGraph(usersOf(withReturning))],
+    ['deleteAll()', () => deleteAllGraph(usersOf(withReturning), 'rows')],
+    ['deleteAll() on a table with no key', () => deleteAllGraph(keylessLogs, 'rows')],
+    ['update()', () => updateFirstGraph(usersOf(withReturning), { name: 'Grace' })],
+    ['updateAll()', () => updateAllGraph(usersOf(withReturning), { name: 'Grace' }, 'rows')],
+    ['create()', () => createGraph(usersOf(withReturning), parsed(withReturning, nestedCreate))],
+  ])('refer to no node that stays in the graph of %s', (_, build) => {
+    const graph = build();
+    graph.removeUnreadFinds();
+
+    expect(graph.nodes().filter(([id, node]) => graph.nodeAt(id) !== node)).toEqual([]);
   });
 });
 

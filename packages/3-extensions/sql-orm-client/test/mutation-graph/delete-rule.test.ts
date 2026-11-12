@@ -1,6 +1,5 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { Delete } from '../../src/mutation-graph/delete';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -31,24 +30,6 @@ function firstRowOfAda() {
 }
 
 describe('the delete rule, on a contract with returning', () => {
-  it('makes a Delete filtered by key by a Find return its columns and stand for it', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, firstRowOfAda());
-    const del = addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
-
-    graph.setResult(find);
-
-    expect(graph.result).toBe(del);
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada' limit 1",
-        'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n2',
-      ].join('\n'),
-    );
-    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
-  });
-
   it.each([
     ['a condition', [nameIsAda], "n1 Delete users where name = 'Ada'"],
     ['no condition', [], 'n1 Delete users'],
@@ -110,6 +91,14 @@ describe('the delete rule, on a contract with returning', () => {
       },
     ],
     [
+      'the Find of the same condition has includes',
+      (graph: Graph) => {
+        const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
+        const found = findUsersWith({ includes, tables, filters: [nameIsAda] });
+        return { find: addWithState(graph, found), where: found.ast.where };
+      },
+    ],
+    [
       'a node already reads the Find',
       (graph: Graph) => {
         const found = findUsers([nameIsAda], ['id', 'name']);
@@ -128,87 +117,35 @@ describe('the delete rule, on a contract with returning', () => {
     expect(graph.result).toBe(find);
   });
 
-  it('leaves a Delete that already returns columns as it is', () => {
+  it.each([
+    ['a Find with a limit', firstRowOfAda()],
+    [
+      'a Find whose condition is another object than its own',
+      findUsers([BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'))], ['id', 'name']),
+    ],
+  ])('leaves a Delete with a key edge from %s as it is', (_, found) => {
     const graph = newGraph();
-    const find = addWithState(graph, firstRowOfAda());
-    const del = addWithState(graph, deleteUsers(undefined, ['id']), {
+    const find = addWithState(graph, found);
+    const del = addWithState(graph, deleteUsers(nameIsAda), {
       filter: [new FilterData(find, sameId)],
     });
 
     graph.setResult(find);
 
     expect(graph.result).toBe(find);
-    expect(graph.nodes().filter(([, node]) => node instanceof Delete)).toEqual([
-      [del, graph.nodeAt(del)],
-    ]);
-    expect(returnedAt(graph, 1)).toEqual(['id']);
-  });
-
-  it('gives a reader added later from the id of the Find the rows of the Delete', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, firstRowOfAda());
-    const del = addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
-
-    const union = graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
-
-    expect(graph.inputsOf(union)).toEqual({ rows: [new Rows(del, sameId)] });
     expect(graph.inputsOf(del)['filter']).toEqual([new FilterData(find, sameId)]);
-  });
-
-  it('leaves a Delete filtered by a Find with includes as it is', () => {
-    const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
-    const graph = newGraph();
-    const find = addWithState(
-      graph,
-      findUsersWith({ includes, tables, filters: [nameIsAda], limit: 1 }),
-    );
-    addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
-
-    graph.setResult(find);
-
-    expect(graph.result).toBe(find);
     expect(returnedAt(graph, 1)).toEqual([]);
   });
 
-  it('leaves a Delete as it is when a node already reads the Find', () => {
+  it('leaves a Delete that already returns columns as it is', () => {
     const graph = newGraph();
-    const find = addWithState(graph, firstRowOfAda());
-    graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
-    addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
+    const found = findUsers([nameIsAda], ['id', 'name']);
+    const find = addWithState(graph, found);
+    addWithState(graph, deleteUsers(found.ast.where, ['id']));
 
     graph.setResult(find);
 
     expect(graph.result).toBe(find);
-  });
-
-  it('leaves a Delete as it is when a write to the table comes between it and the Find', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, firstRowOfAda());
-    addWithState(graph, updateUsers({ email: 'x' }));
-    addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
-
-    graph.setResult(find);
-
-    expect(graph.result).toBe(find);
-  });
-
-  it('keeps the key edge of a Delete whose condition is another object than the condition of the Find', () => {
-    const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda], ['id', 'name']));
-    addWithState(
-      graph,
-      deleteUsers(BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'))),
-      { filter: [new FilterData(find, sameId)] },
-    );
-
-    graph.setResult(find);
-
-    expect(printAsRun(graph)).toBe(
-      [
-        "n1 Find users where name = 'Ada'",
-        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
-        'result: n2',
-      ].join('\n'),
-    );
+    expect(returnedAt(graph, 1)).toEqual(['id']);
   });
 });

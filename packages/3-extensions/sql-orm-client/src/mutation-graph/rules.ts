@@ -22,6 +22,6 @@ export type Rule = (
 
 export function rulesFor(contract: Contract<SqlStorage>): readonly Rule[] {
   return hasContractCapability(contract, 'returning')
-    ? [foldRule(contract), deleteRule(contract), readBackRule(contract)]
+    ? [foldRule(contract), deleteRule, readBackRule(contract)]
     : [];
 }
