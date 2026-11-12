@@ -69,7 +69,13 @@ const db = postgres({
 
 ## Resolved transaction options
 
-`withTransaction(runtime, callback, resolvedOptions?)` and connection/activity `transaction(options?)` methods forward `SqlTransactionOptions` unchanged. Facades own validated callback defaults; ORM factories separately configure `implicitTransactionOptions` for ORM-owned transactions. Targets own allowed levels and drivers own SQL setup, with no implicit/explicit discriminator. Wrappers must preserve start/refusal/settlement metadata. Release only known-clean connections; destroy uncertain starts or rollbacks, including a failed MySQL BEGIN after SET. See the [start SPI and isolation reference](../../../docs/reference/transaction-isolation.md#driver-and-runtime-start-spi).
+`withTransaction(runtime, callback, resolvedOptions?)` separates callback timeout from isolation-only `SqlTransactionOptions`. Connection/activity `transaction(options?)` methods continue to receive only database options. Facades own validated callback defaults; ORM factories separately configure `implicitTransactionOptions` for ORM-owned transactions. Targets own allowed levels and drivers own SQL setup, with no implicit/explicit discriminator. Wrappers must preserve start/refusal/settlement metadata. Release only known-clean connections; destroy uncertain starts or rollbacks, including a failed MySQL BEGIN after SET. See the [start SPI and isolation reference](../../../docs/reference/transaction-isolation.md#driver-and-runtime-start-spi).
+
+## Internal callback deadlines
+
+`withTransaction` accepts an optional `timeout` integer in `1..2147483647` milliseconds; omission, `undefined`, and `null` disable it. Invalid values reject before acquisition. The clock starts through the synchronous successful-BEGIN lifetime notification, includes post-BEGIN setup, and stops at synchronous commit admission. Monotonic admission checks prevent a delayed timer from admitting a late commit. Expiry invalidates the transaction first and rejects with `RUNTIME.TRANSACTION_TIMEOUT` after the existing rollback/disposal path, without awaiting arbitrary callback JavaScript. Late callback rejections are observed. Rollback failure and hook error precedence remain unchanged. Connection wrappers must forward the separate lifetime argument; ignoring it fails closed for timed callbacks.
+
+This is not a bound on cleanup time or JavaScript execution. Running transport work may delay rollback, and a blocked event loop, including synchronous SQLite work, delays deadline observation. Facade timeout configuration is not exposed yet.
 
 ## Exports
 

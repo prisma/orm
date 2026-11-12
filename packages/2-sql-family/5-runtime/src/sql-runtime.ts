@@ -112,6 +112,11 @@ import type {
 } from './runtime-spi';
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
+import {
+  type CallbackTransactionOptions,
+  createTransactionDeadline,
+  validateTransactionTimeout,
+} from './transaction-deadline';
 import { containTransaction, type TransactionLifetime } from './transaction-lifetime';
 import {
   createTransactionStart,
@@ -1850,14 +1855,41 @@ export function withTransactionMembers<TMembers extends object>(
 export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
-  options?: SqlTransactionOptions,
+  options?: CallbackTransactionOptions,
   lifetime?: TransactionLifetime,
 ): Promise<R> {
+  const { timeout: duration, ...start } = options ?? {};
+  const timeout = validateTransactionTimeout(duration);
+  let invalidated = false;
+  const deadline =
+    timeout === undefined
+      ? undefined
+      : createTransactionDeadline(timeout, () => {
+          invalidated = true;
+        });
+  const observedLifetime: TransactionLifetime | undefined =
+    deadline === undefined
+      ? lifetime
+      : {
+          started(control) {
+            deadline.started(control);
+            try {
+              lifetime?.started(control);
+            } catch (error) {
+              deadline.stop();
+              throw error;
+            }
+          },
+        };
   const connection = await runtime.connection();
   let transaction: RuntimeTransaction;
   try {
-    transaction = await connection.transaction(options, lifetime);
+    transaction = await connection.transaction(
+      options === undefined ? undefined : start,
+      observedLifetime,
+    );
   } catch (error) {
+    deadline?.stop();
     // A teardown error would mask the start error.
     if (wasRefusedBeforeBegin(connection)) {
       await connection.release().catch(() => undefined);
@@ -1866,8 +1898,6 @@ export async function withTransaction<R>(
     }
     throw error;
   }
-
-  let invalidated = false;
 
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
@@ -1972,7 +2002,9 @@ export async function withTransaction<R>(
   try {
     let result: R;
     try {
-      result = await fn(txContext);
+      result =
+        deadline === undefined ? await fn(txContext) : await deadline.run(() => fn(txContext));
+      deadline?.admitCommit();
     } catch (error) {
       try {
         await transaction.rollback();
@@ -2021,6 +2053,7 @@ export async function withTransaction<R>(
     }
     return result;
   } finally {
+    deadline?.stop();
     if (!connectionDisposed) {
       await connection.release();
     }
