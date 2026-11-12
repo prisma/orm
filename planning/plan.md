@@ -23,8 +23,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 8 of 11 (73%) | `███████░░░` | 2 | 1 |
 | Docs and the new user's first hour | 1 of 5 (20%) | `██░░░░░░░░` | 3 | 1 |
-| Work found along the way | 4 of 6 (67%) | `███████░░░` | 1 | 1 |
-| **All streams** | **29 of 43 (67%)** | `███████░░░` | **9** | **5** |
+| Work found along the way | 4 of 7 (57%) | `██████░░░░` | 1 | 2 |
+| **All streams** | **29 of 44 (66%)** | `███████░░░` | **9** | **6** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -117,7 +117,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 4 of 6 Must projects done (67%). 1 in progress, 1 not started.
+**GA readiness:** 4 of 7 Must projects done (57%). 1 in progress, 2 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -131,6 +131,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 5 | 🔄 1/5 | Database change policies: a database records whether `db update` may change it and whether a change may lose data, and the commands obey it | Must | Will | Started 2026-10-27. Slice 1 merged. Slice 3, the policy recorded in the database and obeyed by `db migrate`, `db update` and `db sign`, is in review. Left: slice 4 and two Composer slices | Review slice 3 (TML-3727) |
 | 6 | ✅ 4/4 | Convenience date and time types (`DateTime`, `Date`, `Time`, `Duration`) on SQLite, MySQL and MongoDB, as PostgreSQL has them | Must | Will | Done 2026-11-11. SQLite merged 2026-11-02, MySQL 2026-11-06, MongoDB fields typed with `type.X()` 2026-11-10, and the MongoDB convenience types, with `Date` becoming a calendar date, 2026-11-11. The close-out merged 2026-11-11 |  |
 | 7 | ✅ 2/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Done 2026-11-06. Dropping the plan to deprecate these names merged 2026-11-05, and the convenience types merged 2026-11-06. Not in this row: `Json` (TML-3789, approved) and the other databases (TML-3790, backlog) |  |
+| 8 | ⏳ | Complete or remove the `budgets` and `lints` middleware of the SQL runtime. Both check one statement at a time, so they flag any `SELECT` without a `LIMIT`, including ones the ORM client sends itself | Must | Will | Added 2026-11-13. Not started. Will leans to removing them | Decide: complete or remove |
 
 ## Databases
 
