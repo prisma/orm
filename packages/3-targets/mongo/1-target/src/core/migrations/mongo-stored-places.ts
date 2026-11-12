@@ -71,7 +71,7 @@ interface Member {
 }
 
 /** A type a document holds below its top level: its name, and its members. */
-interface Node {
+interface StoredTypeShape {
   readonly name: string;
   readonly members: readonly Member[];
 }
@@ -141,7 +141,7 @@ type Paths = Result<readonly (readonly JsonPathStep[])[], UnlistedReach>;
 
 /** The walk over one namespace's models and the value objects their documents hold. */
 class PlaceWalk {
-  readonly #nodes = new Map<string, Node>();
+  readonly #nodes = new Map<string, StoredTypeShape>();
   readonly #groups: ReadonlyMap<string, number>;
   readonly #target: string;
 

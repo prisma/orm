@@ -68,7 +68,7 @@ export interface StoredKeyRewrites {
   readonly removals: readonly StoredKeyRewrite[];
 }
 
-export interface StoredKeyInput {
+interface StoredKeyInput {
   readonly statements: readonly ResolvedRenameStatement[];
   readonly fromContract: ContractWithDomain | null;
   readonly contract: MongoContract;

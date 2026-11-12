@@ -46,7 +46,7 @@ interface RewriteWords {
   readonly conflictKind: string;
   readonly verb: string;
   /** The verb for a key a rewrite names, as in "rename value object field "Address.street" inside". */
-  readonly keyVerb?: string;
+  readonly keyVerb: string | undefined;
   readonly preposition: string;
   /** Whether the rewrite reaches only the documents that hold the field, or every document its filter selects. */
   readonly reaches: 'holding' | 'selected';
@@ -57,6 +57,7 @@ interface RewriteWords {
 
 const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   removal: {
+    keyVerb: undefined,
     conflictKind: 'fieldRemovalRefused',
     verb: 'remove',
     preposition: 'from',
@@ -67,6 +68,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
   },
   cast: {
+    keyVerb: undefined,
     conflictKind: 'typeChangeRefused',
     verb: 'cast',
     preposition: 'in',
@@ -77,6 +79,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To change it in ${model} documents only`,
   },
   conversion: {
+    keyVerb: undefined,
     conflictKind: 'typeChangeRefused',
     verb: 'convert',
     preposition: 'in',
@@ -87,6 +90,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To change it in ${model} documents only`,
   },
   fill: {
+    keyVerb: undefined,
     conflictKind: 'fieldFillRefused',
     verb: 'fill',
     preposition: 'in',
@@ -97,6 +101,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To fill it in ${model} documents only`,
   },
   backfill: {
+    keyVerb: undefined,
     conflictKind: 'fieldFillRefused',
     verb: 'backfill',
     preposition: 'in',
