@@ -42,29 +42,8 @@ ${fields}
 `;
 }
 
-/** A TypeScript contract whose `User` documents embed a list of `Line`, with `lineFields` as its fields. */
-function linesContract(lineFields: string): string {
-  return `import { defineContract, field, model, rel, type } from '@internal/mongo/contract-builder';
-
-const User = model('User', {
-  collection: 'users',
-  fields: {
-    _id: field.scalar(type.ObjectId()),
-    email: field.scalar(type.String()),
-  },
-  relations: { lines: rel.hasMany('Line') },
-});
-
-const Line = model('Line', {
-  owner: User,
-  fields: { ${lineFields} },
-});
-
-export const contract = defineContract({ models: { User, Line } });
-`;
-}
-
-type Source = { readonly psl: string } | { readonly typescript: string };
+/** A contract: PSL source, or the name of a TypeScript contract fixture. */
+type Source = { readonly psl: string } | { readonly typescriptFixture: string };
 
 interface Journey {
   readonly before: Source;
@@ -145,7 +124,7 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
     if ('psl' in source) {
       writeFileSync(join(ctx.testDir, 'contract.prisma'), source.psl, 'utf-8');
     } else {
-      writeFileSync(join(ctx.testDir, 'contract.ts'), source.typescript, 'utf-8');
+      copyFileSync(join(FIXTURES_DIR, source.typescriptFixture), join(ctx.testDir, 'contract.ts'));
     }
     const emitted = await runContractEmit(ctx);
     expect(emitted.exitCode, `${label}: emit: ${emitted.stdout}\n${emitted.stderr}`).toBe(0);
@@ -329,8 +308,8 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
 
   it('O3: --rename renames a key of an embedded model in a one-to-many embed, with both commands', async () => {
     const journey: Journey = {
-      before: { typescript: linesContract('sku: field.scalar(type.String())') },
-      after: { typescript: linesContract('code: field.scalar(type.String())') },
+      before: { typescriptFixture: 'contract-lines-sku.ts' },
+      after: { typescriptFixture: 'contract-lines-code.ts' },
       documents: [
         { email: 'a@example.com', lines: [{ sku: 'A-1' }, { sku: 'B-2' }] },
         { email: 'b@example.com', lines: [] },
