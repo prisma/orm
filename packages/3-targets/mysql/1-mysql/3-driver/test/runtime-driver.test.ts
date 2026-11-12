@@ -67,6 +67,7 @@ class FakeConnection extends EventEmitter {
   readonly threadId = 1;
   readonly release = vi.fn(async () => {});
   readonly destroy = vi.fn();
+  readonly ping = vi.fn(async () => {});
   readonly beginTransaction = vi.fn(async () => {});
   readonly commit = vi.fn(async () => {});
   readonly rollback = vi.fn(async () => {});
@@ -780,6 +781,166 @@ describe('MySQL runtime driver and its pool', () => {
       destroyed: connection.destroy.mock.calls.length,
       released: connection.release.mock.calls.length,
     }).toEqual({ destroyed: 1, released: 0 });
+  });
+
+  it('preserves arbitrary statement rejection values', async () => {
+    const driver = await connected();
+    const failure = Symbol('statement failure');
+    connection.query.mockRejectedValueOnce(failure);
+    await expect(driver.execute({ sql: 'failed' })).rejects.toBe(failure);
+    await driver.close();
+  });
+
+  it('refuses a settled transaction without affecting a later transaction on the same connection', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const tx = await held.beginTransaction();
+    await tx.commit();
+    const next = await held.beginTransaction();
+    await expect(tx.execute({ sql: 'late' })).rejects.toMatchObject({
+      code: 'DRIVER.NOT_CONNECTED',
+    });
+    await expect(tx.commit()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    await next.rollback();
+    expect(connection.commit).toHaveBeenCalledTimes(1);
+    await held.release();
+    await driver.close();
+  });
+
+  it('settles a transaction with a parked stream and refuses queued work without consumer advancement', async () => {
+    const driver = await connected(streaming);
+    const held = await driver.acquireConnection();
+    const tx = await held.beginTransaction();
+    const rows = tx.query(valued)[Symbol.asyncIterator]();
+    await rows.next();
+    const rollingBack = tx.rollback();
+    const queued = tx.execute({ sql: 'late' });
+    const rejected = expect(queued).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    await rollingBack;
+    await rejected;
+    expect(connection.streamClosed).toHaveBeenCalledTimes(1);
+    const next = await held.beginTransaction();
+    await next.rollback();
+    await expect(rows.next()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    await held.release();
+    expect(connection.streamClosed).toHaveBeenCalledTimes(1);
+    await driver.close();
+  });
+
+  it('preserves statements admitted before settlement in their original order', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const tx = await held.beginTransaction();
+    const executed = tx.execute({ sql: 'before rollback' });
+    const rolledBack = tx.rollback();
+    await Promise.all([executed, rolledBack]);
+    expect(connection.query.mock.calls).toEqual([['before rollback', undefined]]);
+    expect(connection.query.mock.invocationCallOrder[0]).toBeLessThan(
+      connection.rollback.mock.invocationCallOrder[0]!,
+    );
+    await held.release();
+    await driver.close();
+  });
+
+  it('refuses a stream admitted but not opened when settlement starts', async () => {
+    const driver = await connected(streaming);
+    const held = await driver.acquireConnection();
+    const tx = await held.beginTransaction();
+    const pending = tx.query(valued)[Symbol.asyncIterator]().next();
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    await Promise.all([tx.rollback(), rejected]);
+    expect(connection.queryStream).not.toHaveBeenCalled();
+    await held.release();
+    await driver.close();
+  });
+
+  it('does not send BEGIN after release during isolation setup', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    let entered = () => {};
+    const entering = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let finish = () => {};
+    const setup = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    connection.query.mockImplementationOnce(async () => {
+      entered();
+      await setup;
+      return [];
+    });
+    const beginning = held.beginTransaction({ isolationLevel: 'Serializable' });
+    const rejected = expect(beginning).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    await entering;
+    const releasing = held.release();
+    finish();
+    await Promise.all([rejected, releasing]);
+    expect(connection.beginTransaction).not.toHaveBeenCalled();
+    await driver.close();
+  });
+
+  it('drains and unregisters an abandoned stream even when closing it throws', async () => {
+    const driver = await connected(streaming);
+    const held = await driver.acquireConnection();
+    const tx = await held.beginTransaction();
+    const rows = tx.query(valued)[Symbol.asyncIterator]();
+    await rows.next();
+    const stream = connection.queryStream.mock.results[0]?.value as Readable;
+    Object.assign(stream, {
+      close: () => {
+        throw new Error('close failed');
+      },
+    });
+    await expect(tx.rollback()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+    expect(stream.readableEnded).toBe(true);
+    await held.release();
+    expect(state.cancels).toHaveLength(1);
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
+    await driver.close();
+  });
+
+  it('upgrades a pending release to destruction and shares completion', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    let started = () => {};
+    const entering = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let finish = () => {};
+    const running = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    connection.query.mockImplementationOnce(async () => {
+      started();
+      await running;
+      return [];
+    });
+    state.beforeKillReply = finish;
+    const query = held.execute({ sql: 'blocked' });
+    await entering;
+    const releasing = held.release();
+    const destroying = held.destroy();
+    await Promise.all([query, releasing, destroying]);
+    await held.destroy();
+    expect(connection.release).not.toHaveBeenCalled();
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
+    expect(state.cancels).toHaveLength(1);
+    await driver.close();
+  });
+
+  it('allows disposal retry after failed release without allowing further work', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const failure = new Error('release failed');
+    connection.release.mockRejectedValueOnce(failure);
+    await expect(held.release()).rejects.toBe(failure);
+    await expect(held.execute({ sql: 'late' })).rejects.toMatchObject({
+      code: 'DRIVER.NOT_CONNECTED',
+    });
+    await held.destroy();
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
+    await driver.close();
   });
 
   it('runs a transaction with the package transaction calls on the held connection, and returns it to the pool on release', async () => {

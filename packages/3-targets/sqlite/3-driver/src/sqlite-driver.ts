@@ -12,6 +12,7 @@ import type {
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { closeDatabase, wasClosedByDriver } from './database-state';
 import { normalizeSqliteError } from './normalize-error';
@@ -33,7 +34,7 @@ function driverError(
   message: string,
   details?: Record<string, unknown>,
 ): DriverRuntimeError {
-  const error = new Error(message) as DriverRuntimeError;
+  const error = new Error(message);
   Object.defineProperty(error, 'name', {
     value: 'RuntimeError',
     configurable: true,
@@ -43,7 +44,7 @@ function driverError(
     category: 'DRIVER' as const,
     severity: 'error' as const,
     message,
-    details,
+    ...(details === undefined ? {} : { details }),
   });
 }
 
@@ -63,18 +64,81 @@ function openConnection(path: string): DatabaseSync {
   }
 }
 
+class SqliteScope {
+  #active = true;
+  readonly #closers = new Set<() => void>();
+
+  constructor(readonly parent?: SqliteScope) {}
+
+  assertActive(): void {
+    this.parent?.assertActive();
+    if (!this.#active)
+      throw driverError('DRIVER.NOT_CONNECTED', 'SQLite execution scope has ended.');
+  }
+
+  register(close: () => void): () => void {
+    this.assertActive();
+    const unregisterParent = this.parent?.register(close);
+    this.#closers.add(close);
+    return () => {
+      this.#closers.delete(close);
+      unregisterParent?.();
+    };
+  }
+
+  close(): void {
+    this.#active = false;
+    let failure: { error: unknown } | undefined;
+    for (const close of this.#closers) {
+      try {
+        close();
+      } catch (error) {
+        failure ??= { error };
+      }
+    }
+    if (failure !== undefined) throw failure.error;
+  }
+}
+
+interface SqliteTransactionState {
+  current: SqliteScope | undefined;
+}
+
 abstract class SqliteQueryable implements SqlQueryable {
   protected readonly db: DatabaseSync;
 
-  constructor(db: DatabaseSync) {
+  constructor(
+    db: DatabaseSync,
+    protected readonly scope = new SqliteScope(),
+  ) {
     this.db = db;
   }
 
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     try {
+      this.scope.assertActive();
       const stmt = this.db.prepare(request.sql);
-      for (const row of stmt.iterate(...sqliteParams(request.params))) {
-        yield row as Row;
+      const iterator = stmt.iterate(...sqliteParams(request.params));
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          iterator.return?.();
+        } finally {
+          unregister();
+        }
+      };
+      const unregister = this.scope.register(close);
+      try {
+        while (true) {
+          this.scope.assertActive();
+          const next = iterator.next();
+          if (next.done) break;
+          yield blindCast<Row, 'SQLite rows follow the caller query shape'>(next.value);
+        }
+      } finally {
+        close();
       }
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -83,6 +147,7 @@ abstract class SqliteQueryable implements SqlQueryable {
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
     try {
+      this.scope.assertActive();
       const stmt = this.db.prepare(request.sql);
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
@@ -99,10 +164,9 @@ abstract class SqliteQueryable implements SqlQueryable {
 
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
+      this.scope.assertActive();
       const stmt = this.db.prepare(`EXPLAIN QUERY PLAN ${request.sql}`);
-      const rows = stmt.all(...sqliteParams(request.params)) as ReadonlyArray<
-        Record<string, unknown>
-      >;
+      const rows = stmt.all(...sqliteParams(request.params));
       return { rows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -111,13 +175,17 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
+  readonly #transactions: SqliteTransactionState = { current: undefined };
   async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
     if (start?.isolationLevel !== undefined) {
       validateSqliteIsolationLevel(start.isolationLevel);
     }
     try {
+      this.scope.assertActive();
       this.db.exec('BEGIN');
-      return new SqliteTransactionImpl(this.db);
+      const scope = new SqliteScope(this.scope);
+      this.#transactions.current = scope;
+      return new SqliteTransactionImpl(this.db, scope, this.#transactions);
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
@@ -129,7 +197,8 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 
   async destroy(_reason?: unknown): Promise<void> {
     try {
-      closeDatabase(this.db);
+      this.scope.close();
+      if (!wasClosedByDriver(this.db)) closeDatabase(this.db);
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
@@ -137,17 +206,36 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 }
 
 class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
+  #completed = false;
+
+  constructor(
+    db: DatabaseSync,
+    scope: SqliteScope,
+    private readonly transactions: SqliteTransactionState,
+  ) {
+    super(db, scope);
+  }
+
   async commit(): Promise<void> {
     try {
+      this.scope.assertActive();
+      this.scope.close();
       this.db.exec('COMMIT');
+      this.#completed = true;
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
   async rollback(): Promise<void> {
+    if (this.#completed) return;
     try {
+      this.scope.parent?.assertActive();
+      if (this.transactions.current !== this.scope)
+        throw driverError('DRIVER.NOT_CONNECTED', 'SQLite transaction has been replaced.');
+      this.scope.close();
       this.db.exec('ROLLBACK');
+      this.#completed = true;
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }

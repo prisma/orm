@@ -59,6 +59,12 @@ The driver does not check the database at startup or deploy time for these requi
 
 `beginTransaction(options?)` accepts a resolved `isolationLevel`, validated by the MySQL target and mapped to fixed `SET TRANSACTION ISOLATION LEVEL ...` statements. An absent level uses plain BEGIN and leaves the server/session default unchanged. The MySQL facade configures its ORM factory to request ReadCommitted for ORM-owned transactions; the driver has no implicit/explicit discriminator or ORM policy. SET and BEGIN share one connection query lock. A transaction owner must destroy the connection after uncertain setup failure, because a successful SET followed by failed BEGIN can leave a pending next-transaction setting.
 
+## Scope cleanup
+
+Settlement stops accepting new transaction work and closes parked streams without requiring their consumers to resume. Previously admitted non-streaming statements retain their position before the transaction boundary. Closed streams unregister and release their query locks independently of the outer iterator; a pending cancellation completes before the lock admits another statement. Ended transaction handles cannot issue statements or commit a subsequent transaction on the same connection.
+
+Connection disposal immediately refuses queued work. Concurrent disposal calls share cleanup, and destruction can upgrade a release while the driver is draining work, before handoff to the pool. Failed disposal remains retryable without making the handle usable again. Unconfirmed cancellation or failed stream draining requires destruction rather than pool reuse. Waiting for running statements or transport draining is not time-bounded.
+
 ## Exports
 
 - `./runtime`: the runtime driver descriptor, `createMysqlRuntimeDriverDescriptor`, which builds it for a target that extends MySQL, such as MariaDB, under that target's id, and the `MysqlBinding`, `MysqlDriverCreateOptions` and `MysqlPoolOptions` types
