@@ -30,6 +30,8 @@ An omitted or `undefined` local level inherits the factory default; without eith
 
 ORM-owned transactions use ReadCommitted. ORM operations inside an explicit transaction participate in that transaction without changing its isolation or starting another transaction. Isolation settings apply only to the next transaction; the session default is not changed. UTC session setup remains enabled.
 
+Callback options also accept `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. Implicit ORM and manual transactions remain untimed. See [callback timeouts](../../../../../docs/reference/transaction-timeouts.md).
+
 ## Environment requirements
 
 `mysql(...)` hands each value to the `mariadb` package, which writes it into the statement as a quoted, escaped literal. A value stays inside its literal only while these hold. Prisma's own SQL meets them; raw SQL, stored procedures and triggers must too. The [driver's README](../3-driver/README.md#environment-requirements) gives the detail.

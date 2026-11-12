@@ -4,6 +4,8 @@ One-package Postgres setup for Prisma 8. Install this single package to get conf
 
 Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-isolation.md) for precedence, validation and explicit-only defaults.
 
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-timeouts.md) for bounds, cleanup and timing limitations.
+
 Two runtime entry points create three kinds of object:
 
 - `@internal/postgres/runtime` — `postgres()` returns a **client** for a long-lived Node process, with closure-cached `runtime()`, `orm`, `query()`, `execute()`, `toSql()` and `transaction()`.

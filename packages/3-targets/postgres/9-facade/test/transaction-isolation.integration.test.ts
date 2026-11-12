@@ -13,6 +13,50 @@ describe.each(['pooled', 'serverless'] as const)(
   '%s callback isolation on the database',
   (transport) => {
     it(
+      'rolls back timed callback writes and reuses the connection while refusing late work',
+      async () => {
+        const database = await createDevDatabase();
+        const pool = new pg.Pool({ connectionString: database.connectionString, max: 1 });
+        const options = {
+          contract,
+          verifyMarker: false as const,
+          transactionOptions: { timeout: 100 },
+        };
+        const db =
+          transport === 'pooled'
+            ? postgres({ ...options, pg: pool })
+            : await postgresServerless(options).connect({ url: database.connectionString });
+        try {
+          await db.execute(
+            db.raw.sql`CREATE TABLE timeout_rows (id INTEGER)`.affectedCount().build(),
+          );
+          const rows = db.raw.sql`SELECT id FROM timeout_rows`
+            .returnsRow({ id: 'pg/int4@1' })
+            .build();
+          let late: (() => Promise<unknown>) | undefined;
+          await expect(
+            db.transaction(async (tx) => {
+              late = async () => tx.query(rows).toArray();
+              await tx.execute(
+                tx.raw.sql`INSERT INTO timeout_rows VALUES (1)`.affectedCount().build(),
+              );
+              await new Promise<void>(() => {});
+            }),
+          ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
+          expect(await db.query(rows).toArray()).toEqual([]);
+          expect(late).toBeDefined();
+          await expect(late?.()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+          await expect(db.transaction(async () => 42, { timeout: null })).resolves.toBe(42);
+        } finally {
+          await db.close();
+          await pool.end();
+          await database.close();
+        }
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'applies defaults and overrides while manual starts keep the session baseline',
       async () => {
         const database = await createDevDatabase();

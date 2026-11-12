@@ -97,6 +97,38 @@ describe('a sqlite transaction', () => {
 });
 
 describe('a selected SQLite transaction that rolls back', () => {
+  it('rolls back expired callback ORM writes and refuses late work', async () => {
+    const db = sqlite({
+      contract,
+      path,
+      verifyMarker: false,
+      transactionOptions: { isolationLevel: 'Serializable', timeout: 100 },
+    });
+    try {
+      const before = await db.orm.Post.select('id', 'views').all();
+      let written = false;
+      let late: (() => Promise<unknown>) | undefined;
+      await expect(
+        db.transaction(async (tx) => {
+          await tx.orm.Post.where({ id: 1 }).select('id', 'views').update({ views: 42 });
+          written = true;
+          late = async () => tx.orm.Post.select('id', 'views').all();
+          await new Promise<void>(() => {});
+        }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT', details: { timeout: 100 } });
+      expect(written).toBe(true);
+      expect(await db.orm.Post.select('id', 'views').all()).toEqual(before);
+      if (late === undefined) throw new Error('Missing late ORM operation');
+      await expect(late()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+      expect(
+        await db.transaction(async (tx) => tx.orm.Post.select('id', 'views').all(), {
+          timeout: null,
+        }),
+      ).toEqual(before);
+    } finally {
+      await db.close();
+    }
+  });
   it('preserves stored rows and allows the next transaction to commit', async () => {
     const db = sqlite({ contract, path, verifyMarker: false });
     const failure = new Error('callback failed');

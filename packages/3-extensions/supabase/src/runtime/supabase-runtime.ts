@@ -155,8 +155,11 @@ export class SupabaseRuntimeImpl<
         return self.runPreparedExecuteAgainstRoleQueryable(prepared, params, conn, options);
       },
 
-      async transaction(start?: SqlTransactionOptions): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(conn, session, undefined, start);
+      async transaction(
+        start?: SqlTransactionOptions,
+        lifetime?: Parameters<RuntimeConnection['transaction']>[1],
+      ): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(conn, session, undefined, start, lifetime);
       },
 
       /**
