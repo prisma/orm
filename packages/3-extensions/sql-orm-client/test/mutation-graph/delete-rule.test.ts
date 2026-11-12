@@ -49,23 +49,74 @@ describe('the delete rule, on a contract with returning', () => {
     expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
-  it('drops the key edge of a Delete with the condition of the Find with only a condition it reads, and the Find is removed', () => {
+  it.each([
+    ['a condition', [nameIsAda], "n1 Delete users where name = 'Ada'"],
+    ['no condition', [], 'n1 Delete users'],
+  ])(
+    'drops the key edge of a Delete with %s, the same as the Find with only a condition it reads, and the Find is removed',
+    (_, filters, printed) => {
+      const graph = newGraph();
+      const found = findUsers(filters, ['id', 'name']);
+      const find = addWithState(graph, found);
+      addWithState(graph, deleteUsers(found.ast.where), {
+        filter: [new FilterData(find, sameId)],
+      });
+
+      graph.setResult(find);
+
+      expect(printAsRun(graph)).toBe([printed, 'result: n1'].join('\n'));
+      expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+    },
+  );
+
+  it.each([
+    ['a condition', [nameIsAda], "n1 Delete users where name = 'Ada'"],
+    ['no condition', [], 'n1 Delete users'],
+  ])(
+    'makes a Delete with %s and no key edge return the columns of the Find of the same condition that reads its State, and the Find is removed',
+    (_, filters, printed) => {
+      const graph = newGraph();
+      const found = findUsers(filters, ['id', 'name']);
+      const find = addWithState(graph, found);
+      addWithState(graph, deleteUsers(found.ast.where));
+
+      graph.setResult(find);
+
+      expect(printAsRun(graph)).toBe([printed, 'result: n1'].join('\n'));
+      expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+    },
+  );
+
+  it.each([
+    [
+      'a write to the table comes between it and the Find',
+      (graph: Graph) => {
+        const found = findUsers([nameIsAda], ['id', 'name']);
+        const find = addWithState(graph, found);
+        addWithState(graph, updateUsers({ email: 'x' }));
+        return { find, where: found.ast.where };
+      },
+    ],
+    [
+      'the Find of the same condition has a limit',
+      (graph: Graph) => {
+        const found = firstRowOfAda();
+        return { find: addWithState(graph, found), where: found.ast.where };
+      },
+    ],
+    [
+      'a node already reads the Find',
+      (graph: Graph) => {
+        const found = findUsers([nameIsAda], ['id', 'name']);
+        const find = addWithState(graph, found);
+        graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
+        return { find, where: found.ast.where };
+      },
+    ],
+  ])('leaves a Delete with no key edge as it is when %s', (_, build) => {
     const graph = newGraph();
-    const found = findUsers([nameIsAda], ['id', 'name']);
-    const find = addWithState(graph, found);
-    addWithState(graph, deleteUsers(found.ast.where), { filter: [new FilterData(find, sameId)] });
-
-    graph.setResult(find);
-
-    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
-    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
-  });
-
-  it('leaves a Delete with the condition of a Find but no edge from it as it is', () => {
-    const graph = newGraph();
-    const found = findUsers([nameIsAda], ['id', 'name']);
-    const find = addWithState(graph, found);
-    addWithState(graph, deleteUsers(found.ast.where));
+    const { find, where } = build(graph);
+    addWithState(graph, deleteUsers(where));
 
     graph.setResult(find);
 

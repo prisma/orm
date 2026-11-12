@@ -52,19 +52,21 @@ describe('a table with no primary key and no unique constraint', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it.each([
-    ['with', withReturning],
-    ['without', withoutReturning],
-  ])(
-    'deleteAll reads the rows by the caller condition, then deletes by it, %s returning',
-    async (_, of) => {
-      const { collection, runtime } = logs(of);
-      runtime.setNextResults([[{ message: 'hello' }], []]);
+  it('deleteAll is one Delete that returns the rows with returning', async () => {
+    const { collection, runtime } = logs(withReturning);
+    runtime.setNextResults([[{ message: 'hello' }]]);
 
-      expect(await collection.deleteAll()).toEqual([{ message: 'hello' }]);
-      expect(runtime.executions.map(({ plan }) => plan.ast.kind)).toEqual(['select', 'delete']);
-    },
-  );
+    expect(await collection.deleteAll()).toEqual([{ message: 'hello' }]);
+    expect(runtime.executions.map(({ plan }) => plan.ast.kind)).toEqual(['delete']);
+  });
+
+  it('deleteAll reads the rows by the caller condition, then deletes by it, without returning', async () => {
+    const { collection, runtime } = logs(withoutReturning);
+    runtime.setNextResults([[{ message: 'hello' }], []]);
+
+    expect(await collection.deleteAll()).toEqual([{ message: 'hello' }]);
+    expect(runtime.executions.map(({ plan }) => plan.ast.kind)).toEqual(['select', 'delete']);
+  });
 
   it('updateAll returns the rows its Update returns with returning', async () => {
     const { collection, runtime } = logs(withReturning);
