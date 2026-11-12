@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import type { NodeId } from '../../src/mutation-graph/edge';
@@ -12,11 +13,14 @@ import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { printGraph } from './print-graph';
 import {
+  addWithState,
   columnMappings,
   deletePosts,
+  deleteUsers,
   findUsers,
   insertInto,
   insertOwner,
+  nameIsAda,
   newGraph,
   newGraphWithoutReturning,
   updateUsers,
@@ -290,76 +294,41 @@ describe('Graph', () => {
     });
   });
 
-  describe('forwarding an id', () => {
-    function forwarded() {
+  describe('a node a rule replaces', () => {
+    function replaced() {
       const graph = newGraph();
-      const from = graph.add(findUsers([], ['id', 'email']), {});
-      const to = graph.add(findUsers([], ['id', 'email']), {});
-      graph.forward(from, to);
-      return { graph, from, to };
+      const found = findUsers([nameIsAda], ['id', 'name']);
+      const find = addWithState(graph, found);
+      graph.setResult(find);
+      const del = addWithState(graph, deleteUsers(found.ast.where));
+      return { graph, find, del };
     }
 
-    it('gives an edge added with the inputs of a node the node the id stands for as its source', () => {
-      const { graph, from, to } = forwarded();
+    it('gives its result to the replacement and is removed', () => {
+      const { graph, find, del } = replaced();
 
-      const del = graph.add(deletePosts(), { filter: [new FilterData(from, idToUserId)] });
-
-      expect(graph.inputsOf(del)['filter']).toEqual([new FilterData(to, idToUserId)]);
-      expect(graph.readersOf(to)).toEqual([{ reader: del, edge: new FilterData(to, idToUserId) }]);
+      expect(graph.result).toBe(del);
+      expect(graph.nodes().map(([id]) => id)).not.toContain(find);
+      expect(printGraph(graph)).toBe(
+        ["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'),
+      );
     });
 
-    it('sets the node the id stands for as the result', () => {
-      const { graph, from, to } = forwarded();
+    it.each([
+      ['setResult', (graph: Graph, id: NodeId) => graph.setResult(id)],
+      [
+        'add, as the source of an edge',
+        (graph: Graph, id: NodeId) => graph.add(new UnionAll(), { rows: [new Rows(id, sameId)] }),
+      ],
+      ['nodeAt', (graph: Graph, id: NodeId) => graph.nodeAt(id)],
+      ['inputsOf', (graph: Graph, id: NodeId) => graph.inputsOf(id)],
+      ['readersOf', (graph: Graph, id: NodeId) => graph.readersOf(id)],
+      ['columnsReadFrom', (graph: Graph, id: NodeId) => graph.columnsReadFrom(id)],
+      ['replace', (graph: Graph, id: NodeId) => graph.replace(id, findUsers())],
+    ])('has its id refused by %s', (_, use) => {
+      const { graph, find } = replaced();
 
-      graph.setResult(from);
-
-      expect(graph.result).toBe(to);
-    });
-
-    it('gives the readers, the inputs, the node and the columns read of the node the id stands for', () => {
-      const { graph, from, to } = forwarded();
-      graph.add(deletePosts(), { filter: [new FilterData(to, idToUserId)] });
-
-      expect({
-        readers: graph.readersOf(from),
-        inputs: graph.inputsOf(from),
-        node: graph.nodeAt(from),
-        columns: graph.columnsReadFrom(from),
-      }).toEqual({
-        readers: graph.readersOf(to),
-        inputs: graph.inputsOf(to),
-        node: graph.nodeAt(to),
-        columns: graph.columnsReadFrom(to),
-      });
-    });
-
-    it('replaces the node the id stands for', () => {
-      const { graph, from, to } = forwarded();
-      const replacement = findUsers([], ['name']);
-
-      graph.replace(from, replacement);
-
-      expect(graph.nodeAt(to)).toBe(replacement);
-    });
-
-    it('follows a forwarded id to the last node it stands for', () => {
-      const { graph, from, to } = forwarded();
-      const last = graph.add(findUsers(), {});
-
-      graph.forward(to, last);
-      graph.setResult(from);
-
-      expect(graph.result).toBe(last);
-    });
-
-    it('gives each position its own node and inputs in entries', () => {
-      const { graph, from } = forwarded();
-
-      expect(graph.entries().find(({ id }) => id === from)).toEqual({
-        id: from,
-        node: graph.nodes().find(([id]) => id === from)?.[1],
-        inputs: { filter: [], state: [], requires: [] },
-      });
+      expect(() => use(graph, find)).toThrow(InternalError);
     });
   });
 

@@ -39,19 +39,15 @@ describe('the delete rule, on a contract with returning', () => {
       const graph = newGraph();
       const found = findUsers(filters, ['id', 'name']);
       const find = addWithState(graph, found);
+      graph.setResult(find);
       const del = addWithState(graph, deleteUsers(found.ast.where), {
         filter: [new FilterData(find, sameId)],
       });
 
-      graph.setResult(find);
-      const union = graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
-
       expect(graph.result).toBe(del);
-      expect(graph.inputsOf(union)).toEqual({ rows: [new Rows(del, sameId)] });
       expect(graph.inputsOf(del)['filter']).toEqual([]);
-      expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
-      graph.removeUnreadFinds();
-      expect(printGraph(graph)).toBe([printed, 'n2 UnionAll <- Rows n1', 'result: n1'].join('\n'));
+      expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+      expect(printGraph(graph)).toBe([printed, 'result: n1'].join('\n'));
     },
   );
 
@@ -64,9 +60,8 @@ describe('the delete rule, on a contract with returning', () => {
       const graph = newGraph();
       const found = findUsers(filters, ['id', 'name']);
       const find = addWithState(graph, found);
-      addWithState(graph, deleteUsers(found.ast.where));
-
       graph.setResult(find);
+      addWithState(graph, deleteUsers(found.ast.where));
 
       expect(printAsRun(graph)).toBe([printed, 'result: n1'].join('\n'));
       expect(returnedAt(graph, 0)).toEqual(['id', 'name']);

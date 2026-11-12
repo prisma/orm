@@ -120,8 +120,13 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     find !== undefined && identityColumnsOf(collection).length > 0
       ? [{ from: find, columns: sameRowColumns(collection) }]
       : [];
+  if (find !== undefined) {
+    b.graph.setResult(find);
+  }
   const deleted = deleteRows(b, state.tables, { where, filters });
-  b.graph.setResult(find ?? deleted);
+  if (find === undefined) {
+    b.graph.setResult(deleted);
+  }
   return b.graph;
 }
 

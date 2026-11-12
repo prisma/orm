@@ -6,6 +6,7 @@ import {
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import type { TableStorageCoordinate } from '../table-scope';
 import { changedBy, storageOf, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
@@ -34,7 +35,6 @@ export class Graph {
   #inputs: Record<string, Slot>[] = [];
   #readers: Reader[][] = [];
   #states = new Map<string, NodeId>();
-  #forwards = new Map<NodeId, NodeId>();
   #result: NodeId | undefined = undefined;
 
   constructor(contract: Contract<SqlStorage>) {
@@ -47,20 +47,16 @@ export class Graph {
   }
 
   setResult(node: NodeId): void {
-    this.#result = this.#resolve(node);
-  }
-
-  forward(from: NodeId, to: NodeId): void {
-    this.#forwards.set(from, this.#resolve(to));
+    this.#result = this.#present(node);
   }
 
   add<Inputs extends Slots>(node: Node<Inputs>, inputs: NoInfer<InputEdges<Inputs>>): NodeId {
-    const resolved = Object.fromEntries(
-      Object.entries<Slot | undefined>(inputs).flatMap(([slot, edges]) =>
-        edges === undefined ? [] : [[slot, this.#resolveSlot(edges)]],
-      ),
-    );
-    let current: Replacement = { node, inputs: resolved, standsFor: [] };
+    for (const slot of Object.values<Slot | undefined>(inputs)) {
+      for (const edge of [slot ?? []].flat()) {
+        this.#present(edge.from);
+      }
+    }
+    let current: Replacement = { node, inputs, standsFor: [] };
     let standing = this.#applyRules(current);
     while (typeof standing !== 'number' && standing !== undefined) {
       current = { ...standing, standsFor: [...current.standsFor, ...standing.standsFor] };
@@ -68,9 +64,19 @@ export class Graph {
     }
     const id = standing ?? this.#addWithInputs(current.node, current.inputs);
     for (const replaced of current.standsFor) {
-      this.forward(replaced, id);
+      this.#takeOver(replaced, id);
     }
     return id;
+  }
+
+  #takeOver(replaced: NodeId, by: NodeId): void {
+    if (this.#readersAt(replaced).length > 0) {
+      throw new InternalError(`node ${replaced} is replaced while a node still reads it`);
+    }
+    if (this.#result === replaced) {
+      this.#result = by;
+    }
+    this.#removeAt(replaced);
   }
 
   #applyRules({ node, inputs }: Replacement): NodeId | Replacement | undefined {
@@ -98,17 +104,17 @@ export class Graph {
   }
 
   nodeAt(id: NodeId): Node | undefined {
-    return this.#nodes[this.#resolve(id)];
+    return this.#nodes[this.#present(id)];
   }
 
   columnsReadFrom(id: NodeId): readonly ProjectionItem[] {
-    return this.#readersAt(this.#resolve(id)).flatMap(({ edge }) =>
+    return this.#readersAt(this.#present(id)).flatMap(({ edge }) =>
       edge instanceof DataEdge ? edge.columns.map(([source]) => source) : [],
     );
   }
 
   replace(id: NodeId, next: Node): void {
-    this.#nodes[this.#resolve(id)] = next;
+    this.#nodes[this.#present(id)] = next;
   }
 
   removeUnreadFinds(): void {
@@ -137,31 +143,18 @@ export class Graph {
   }
 
   inputsOf(id: NodeId): Slots {
-    return this.#inputsAt(this.#resolve(id));
+    return this.#inputsAt(this.#present(id));
   }
 
   readersOf(id: NodeId): readonly Reader[] {
-    return this.#readersAt(this.#resolve(id));
+    return this.#readersAt(this.#present(id));
   }
 
-  #resolve<Inputs extends Slots>(id: NodeId<Inputs>): NodeId<Inputs> {
-    const to = this.#forwards.get(id);
-    return to === undefined
-      ? id
-      : blindCast<NodeId<Inputs>, 'a node stands for a forwarded one in every use of its id'>(
-          this.#resolve(to),
-        );
-  }
-
-  #resolveSlot(slot: Slot): Slot {
-    return Array.isArray(slot)
-      ? slot.map((edge) => this.#resolveEdge(edge))
-      : this.#resolveEdge(slot);
-  }
-
-  #resolveEdge(edge: Edge<unknown>): Edge<unknown> {
-    const from = this.#resolve(edge.from);
-    return from === edge.from ? edge : edge.withFrom(from);
+  #present(id: NodeId): NodeId {
+    if (this.#nodes[id] === undefined) {
+      throw new InternalError(`node ${id} is not in the graph`);
+    }
+    return id;
   }
 
   #inputsAt(id: NodeId): Slots {

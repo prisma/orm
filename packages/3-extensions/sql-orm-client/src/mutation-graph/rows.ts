@@ -11,8 +11,4 @@ export class Rows extends DataEdge<StorageRow> {
       this.columns.map(([source]) => [source.alias, sourceRow[source.alias]]),
     );
   }
-
-  override withFrom(from: NodeId): Rows {
-    return new Rows(from, this.columns);
-  }
 }

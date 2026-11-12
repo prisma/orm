@@ -45,8 +45,4 @@ export class FilterData extends DataEdge<KeyMatch> {
       ),
     };
   }
-
-  override withFrom(from: NodeId): FilterData {
-    return new FilterData(from, this.columns);
-  }
 }

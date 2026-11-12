@@ -19,8 +19,6 @@ export abstract class Edge<Output> {
   }
 
   abstract output(sourceRow: StorageRow): Output;
-
-  abstract withFrom(from: NodeId): Edge<Output>;
 }
 
 export abstract class DataEdge<Output> extends Edge<Output> {

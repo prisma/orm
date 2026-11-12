@@ -9,10 +9,6 @@ export class Requires extends Edge<undefined> {
   override output(): undefined {
     return undefined;
   }
-
-  override withFrom(from: NodeId): Requires {
-    return new Requires(from);
-  }
 }
 
 export type RequiresSlot = { requires: Requires[] };
