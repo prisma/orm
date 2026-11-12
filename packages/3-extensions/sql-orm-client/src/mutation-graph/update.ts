@@ -6,7 +6,7 @@ import { ormError } from '../orm-errors';
 import { rowIdentity, type WrittenRowOwner } from '../written-keys';
 import { storageOf } from './changed-by';
 import type { NodeId, StorageRow } from './edge';
-import { executeFiltered, type Filtered, filteredWhere, withColumns } from './filtered-statement';
+import { executeFiltered, filteredWhere, type Linked, withColumns } from './filtered-statement';
 import type { Graph } from './graph';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import { columnsOf, givesOwnValues, valuesOf } from './own-values';
@@ -15,10 +15,16 @@ import { requirementUnmet } from './requires';
 import { rowsResult } from './run-statement';
 import { StatementNode } from './statement-node';
 
-type Inputs = Filtered & { payload: PayloadData[] };
+type Inputs = Linked & { payload: PayloadData[] };
 
 export class Update extends StatementNode<Inputs> {
-  readonly slots = { filter: 'list', payload: 'list', state: 'list', requires: 'list' } as const;
+  readonly slots = {
+    filter: 'list',
+    link: 'list',
+    payload: 'list',
+    state: 'list',
+    requires: 'list',
+  } as const;
   readonly ast: UpdateAst;
   readonly owner: WrittenRowOwner;
 
@@ -82,15 +88,17 @@ export class Update extends StatementNode<Inputs> {
     if (!givesOwnValues(run.context, this.returns)) {
       return executeFiltered(ast, inputs, run);
     }
-    const { filter } = inputs;
-    if (requirementUnmet(inputs.requires) || filter?.some((matches) => matches.length === 0)) {
+    const filter = inputs.filter ?? [];
+    const link = inputs.link ?? [];
+    if (
+      requirementUnmet(inputs.requires) ||
+      [...filter, ...link].some((matches) => matches.length === 0)
+    ) {
       return rowsResult([]);
     }
-    const statement = ast
-      .withWhere(filter === null ? ast.where : filteredWhere(ast.where, filter))
-      .withReturning(undefined);
+    const statement = ast.withWhere(filteredWhere(ast, filter, link)).withReturning(undefined);
     const set = valuesOf(ast.set);
-    const keys = (filter ?? []).flat().map(({ key }) => key);
+    const keys = filter.flat().map(({ key }) => key);
     const { returns } = this;
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       await run.execute(statement);

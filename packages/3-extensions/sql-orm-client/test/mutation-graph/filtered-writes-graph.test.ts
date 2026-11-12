@@ -16,6 +16,7 @@ function graphOf(
   input: Record<string, unknown>,
   modelName: 'User' | 'Post' = 'User',
   context: Context = getTestContext(),
+  state = false,
 ) {
   const relationMutations = parseMutationInput(
     context.contract,
@@ -30,7 +31,7 @@ function graphOf(
     modelName,
     namespaceId: 'public',
   };
-  return printGraph(updateFirstGraph(target, {}, relationMutations));
+  return printGraph(updateFirstGraph(target, {}, relationMutations), { state });
 }
 
 function updateOf(...writes: string[]): string {
@@ -129,13 +130,6 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
       { kind: 'updateAll', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
     [
-      'on a many-to-many relation',
-      () => graphOf({ tags: (tags: Mutator) => tags.deleteAll() }),
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
-      'deleteAll() nested mutation for relation "tags" is not supported on a many-to-many relation yet',
-      { kind: 'deleteAll', relation: 'tags', reason: 'many-to-many-relation' },
-    ],
-    [
       'in create()',
       () => {
         const context = getTestContext();
@@ -168,5 +162,42 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
     ],
   ] as const)('rejects a filtered write %s', (_, build, code, message, meta) => {
     expect(build).toThrow(expect.objectContaining({ code, message, meta }));
+  });
+});
+
+describe('updateAll and deleteAll on a many-to-many relation in update()', () => {
+  it('writes the targets linked to the parent that the filter matches, through a link edge over the junction', () => {
+    expect(
+      graphOf({
+        tags: (tags: Mutator) => tags.where({ name: 'Rust' }).updateAll({ name: 'Rust 2' }),
+      }),
+    ).toBe(
+      updateOf(
+        "n2 Update tags set name = 'Rust 2' where name = 'Rust' <- JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+      ),
+    );
+  });
+
+  it('orders the write after a junction insert of a connect earlier in the array', () => {
+    const tags = (mutator: Mutator) => [
+      mutator.connect({ name: 'Go' }),
+      mutator.updateAll({ name: 'Golang' }),
+    ];
+
+    expect(graphOf({ tags }, 'User', getTestContext(), true)).toBe(
+      [
+        'n1 State users',
+        'n2 Find users where id = 1 limit 1 <- state n1',
+        'n3 State tags',
+        "n4 Find tags where name = 'Go' limit 1 <- state n3, Requires n2",
+        'n5 Assert <- Rows n4, Requires n2',
+        'n6 State user_tags',
+        'n7 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n2 (id->user_id), PayloadData n4 (id->tag_id), state n6',
+        'n8 State user_tags <- state n7',
+        "n9 Update tags set name = 'Golang' <- JunctionFilterData n2 (id->user_id; user_tags tag_id->id), state n3, state n8",
+        'n10 State tags <- state n9',
+        'result: n2',
+      ].join('\n'),
+    );
   });
 });

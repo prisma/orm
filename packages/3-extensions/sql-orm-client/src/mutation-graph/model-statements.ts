@@ -1,4 +1,4 @@
-import { type AnyExpression, SelectAst } from '@internal/sql-relational-core/ast';
+import { type AnyExpression, SelectAst, type TableSource } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { resolveRowIdentityColumns, supportsDefaultInInsert } from '../collection-contract';
 import type { CollectionTables } from '../collection-tables';
@@ -22,6 +22,7 @@ import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
 import { Insert } from './insert';
+import { JunctionFilterData } from './junction-filter-data';
 import type { JunctionWrite } from './junction-write';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -37,6 +38,16 @@ export interface Model {
 export interface KeySource {
   readonly from: NodeId;
   readonly columns: readonly ColumnMapping[];
+}
+
+export interface LinkSource extends KeySource {
+  readonly junction: TableSource;
+  readonly targets: readonly ColumnMapping[];
+}
+
+export interface Sources {
+  readonly filters: readonly KeySource[];
+  readonly links: readonly LinkSource[];
 }
 
 export interface Builder {
@@ -111,9 +122,8 @@ export function insertRows(
   return readBackRows(b, model, inserted, { returns, shape, by: 'keys', owner });
 }
 
-export interface DeleteRows {
+export interface DeleteRows extends Sources {
   readonly where: AnyExpression | undefined;
-  readonly filters: readonly KeySource[];
 }
 
 export interface UpdateRows extends RowsRead, DeleteRows {
@@ -125,14 +135,16 @@ export function updateRows(
   b: Builder,
   model: Model,
   values: Readonly<Record<string, unknown>>,
-  { where, filters, payloads, owner, returns, shape, afterWrite }: UpdateRows,
+  { where, filters, links, payloads, owner, returns, shape, afterWrite }: UpdateRows,
 ): NodeId {
   const { graph, context } = b;
   const update = new Update(updateAst(context.contract, model.tables, values, where), owner);
+  const link = links.map(linkEdge);
   const updated = graph.add(update, {
     filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
+    link,
     payload: payloads.map(({ from, columns }) => new PayloadData(from, columns)),
-    state: graph.stateEdgesFor(update),
+    state: graph.stateEdgesFor(update, link),
   });
   afterWrite?.(updated);
   return readBackRows(b, model, updated, { returns, shape, by: 'filter', owner });
@@ -141,13 +153,19 @@ export function updateRows(
 export function deleteRows(
   { graph, context }: Builder,
   tables: CollectionTables,
-  { where, filters }: DeleteRows,
+  { where, filters, links }: DeleteRows,
 ): NodeId {
   const deleted = new Delete(deleteAst(context.contract, tables, where));
+  const link = links.map(linkEdge);
   return graph.add(deleted, {
     filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
-    state: graph.stateEdgesFor(deleted),
+    link,
+    state: graph.stateEdgesFor(deleted, link),
   });
+}
+
+function linkEdge({ from, columns, junction, targets }: LinkSource): JunctionFilterData {
+  return new JunctionFilterData(from, columns, junction, targets);
 }
 
 export function findRows(

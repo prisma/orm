@@ -16,6 +16,7 @@ import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
+import { JunctionFilterData } from '../../src/mutation-graph/junction-filter-data';
 import type { Node } from '../../src/mutation-graph/node';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -124,6 +125,10 @@ function printNode(node: Node): string {
   return node instanceof Delete ? printDelete(node.ast) : node.constructor.name;
 }
 
+function printMappings(columns: readonly ColumnMapping[]): string {
+  return columns.map(([source, target]) => `${source.alias}->${target.alias}`).join(', ');
+}
+
 function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (edge instanceof Rows) {
     return `Rows ${names.get(edge.from)}`;
@@ -134,10 +139,11 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (!(edge instanceof DataEdge)) {
     return `state ${names.get(edge.from)}`;
   }
-  const mappings = edge.columns.map(
-    ([source, target]: ColumnMapping) => `${source.alias}->${target.alias}`,
-  );
-  return `${edge.constructor.name} ${names.get(edge.from)} (${mappings.join(', ')})`;
+  const through =
+    edge instanceof JunctionFilterData
+      ? `; ${edge.junction.name} ${printMappings(edge.targets)}`
+      : '';
+  return `${edge.constructor.name} ${names.get(edge.from)} (${printMappings(edge.columns)}${through})`;
 }
 
 function printInputs(names: NodeNames, inputs: readonly Edge<unknown>[]): string {
