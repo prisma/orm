@@ -56,15 +56,19 @@ export class Graph {
         this.#present(edge.from);
       }
     }
-    let current: Replacement = { node, inputs, standsFor: [] };
+    let current: Replacement = { node, inputs, standsFor: undefined };
+    const replaced: NodeId[] = [];
     let standing = this.#applyRules(current);
     while (typeof standing !== 'number' && standing !== undefined) {
-      current = { ...standing, standsFor: [...current.standsFor, ...standing.standsFor] };
+      current = standing;
+      if (standing.standsFor !== undefined) {
+        replaced.push(standing.standsFor);
+      }
       standing = this.#applyRules(current);
     }
     const id = standing ?? this.#addWithInputs(current.node, current.inputs);
-    for (const replaced of current.standsFor) {
-      this.#takeOver(replaced, id);
+    for (const node of replaced) {
+      this.#takeOver(node, id);
     }
     return id;
   }

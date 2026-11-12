@@ -23,7 +23,7 @@ export const deleteRule: Rule = (graph, node, inputs) => {
   ) {
     return undefined;
   }
-  return { node: node.withReturning(read.find.returns), inputs, standsFor: [read.id] };
+  return { node: node.withReturning(read.find.returns), inputs, standsFor: read.id };
 };
 
 function findOfSameCondition(

@@ -19,6 +19,6 @@ export function foldRule(contract: Contract<SqlStorage>): Rule {
     ) {
       return undefined;
     }
-    return { node, inputs: { ...inputs, filter: [] }, standsFor: [] };
+    return { node, inputs: { ...inputs, filter: [] }, standsFor: undefined };
   };
 }

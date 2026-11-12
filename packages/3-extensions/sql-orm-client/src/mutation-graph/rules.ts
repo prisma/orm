@@ -11,7 +11,7 @@ import { readBackRule } from './read-back-rule';
 export interface Replacement {
   readonly node: Node;
   readonly inputs: InputEdges<Slots>;
-  readonly standsFor: readonly NodeId[];
+  readonly standsFor: NodeId | undefined;
 }
 
 export type Rule = (
