@@ -1483,7 +1483,7 @@ Rolling back after callback failure or timeout itself failed; the connection is 
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 
-The explicit callback transaction exceeded its application deadline before commit admission. Transaction access is invalidated and rejection waits for safe rollback or destruction, not arbitrary callback settlement. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-timeouts.md).
+The explicit callback transaction exceeded its application deadline before commit admission. Transaction access is invalidated and rejection waits for safe rollback or destruction, not arbitrary callback settlement. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-isolation.md#timeout).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 

@@ -6,7 +6,7 @@ Callback isolation is configured with factory `transactionOptions` and `transact
 
 Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip, independently of the always-run dev-database cases.
 
-Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-timeouts.md) for bounds, cleanup and timing limitations.
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-isolation.md#timeout) for bounds, cleanup and timing limitations.
 
 Two runtime entry points create three kinds of object:
 

@@ -1,11 +1,11 @@
-# SQL callback transaction isolation
+# SQL callback transaction options
 
 PostgreSQL (pooled and serverless), SQLite, MySQL, and Supabase role-bound clients support `transaction(callback, options?)`. Factory `transactionOptions` provides defaults for explicit callbacks only.
 
 ```typescript
 import postgres, { IsolationLevel } from '@prisma/orm-postgres/runtime';
 
-const db = postgres({ contract, url, transactionOptions: { isolationLevel: IsolationLevel.RepeatableRead } });
+const db = postgres({ contract, url, transactionOptions: { isolationLevel: IsolationLevel.RepeatableRead, timeout: 5000 } });
 const rows = await db.transaction(
   (tx) => tx.orm.public.User.select('id').all(),
   { isolationLevel: IsolationLevel.Serializable },
@@ -31,6 +31,12 @@ Defaults remain in facade closures, not shared runtime/driver state. Manual runt
 
 Supabase's `.supabase` secondary root still has no callback transaction API. Its implicit activity transactions retain role sessions, without app callback defaults.
 
+## Timeout
+
+Factory `transactionOptions` and per-call options accept `timeout` as integer milliseconds in `1..2147483647`, with no finite default. Global omission, `undefined` or `null` disables it; local omission/`undefined` inherits and local `null` disables it independently of isolation (`isolationLevel: null` remains invalid). These defaults apply only to explicit callbacks.
+
+The clock starts after successful BEGIN, includes post-BEGIN setup, and stops when commit starts. Expiry invalidates transaction access and rejects with `RUNTIME.TRANSACTION_TIMEOUT` after safe cleanup, without awaiting a hung callback. Acquisition/BEGIN and commit duration are excluded. This is not wire cancellation, JavaScript termination or a hard rejection-time bound: blocked JavaScript and safe cleanup can delay rejection.
+
 ## Driver and runtime start SPI
 
 `SqlConnection.beginTransaction(options?)`, runtime connection `transaction(options?)`, and activity transaction routes carry resolved `SqlTransactionOptions`:
@@ -41,7 +47,7 @@ interface SqlTransactionOptions {
 }
 ```
 
-Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. That helper strips callback timeout before passing isolation options to the connection. Runtime role/session wrappers adopting timed callbacks also forward the separate optional lifetime observer; see [wrapper adoption](transaction-timeouts.md#wrapper-and-driver-adoption). They retain refusal/settlement metadata.
+Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. That helper strips callback timeout before passing isolation options to the connection. Runtime role/session wrappers adopting timed callbacks also forward the separate optional lifetime observer; see [runtime wrapper contract](../../packages/2-sql-family/5-runtime/README.md#internal-callback-deadlines). They retain refusal/settlement metadata.
 
 ORM factories separately accept `implicitTransactionOptions`, retained in collection configuration and used only when the ORM opens a transaction. The MySQL facade supplies `{ isolationLevel: 'ReadCommitted' }` to its root ORM factory. Standalone ORM instances may opt into this policy; without it they request the database default. Namespace collections, nested writes and activity-bound execution preserve the configured options. An ORM already bound to a transaction does not open another transaction or change its isolation. Drivers receive no implicit/explicit discriminator and never choose ORM policy.
 
@@ -49,6 +55,6 @@ Drivers validate supplied levels against their target, then select fixed SQL. My
 
 ## Deliberately unsupported
 
-Callback [timeouts](transaction-timeouts.md) are supported independently of isolation, with local `null` disabling an inherited timeout; `isolationLevel: null` remains invalid. Neither option adds batch transactions, maxWait, P2028 behavior, retries, nested transactions/savepoints, or Mongo transaction support.
+Batch transactions, maxWait, P2028 behavior, retries, nested transactions/savepoints and Mongo transaction support remain unsupported.
 
 See the [transaction scorecard](../../scorecard/14-transactions.md) for per-database evidence and the [runtime subsystem](../architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md#transactions) for lifecycle semantics.
