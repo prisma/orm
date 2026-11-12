@@ -6,9 +6,9 @@ import type { Rule } from './rules';
 import { Update } from './update';
 
 /**
- * Looks for an `Update` or `Delete` filtered by key from a `Find` that selects rows by the same condition as the write, with no other write to the table between them.
+ * `updateAll()` and `deleteAll()` returning rows first find the rows matching the caller's condition and then limit the write to their keys, so that on a database without `RETURNING` the write changes exactly the rows the call reports.
  *
- * Drops the key filter, so the write runs on its condition alone and the `Find` is no longer needed: `updateAll()` becomes one `UPDATE … RETURNING`.
+ * With `RETURNING` the write reports the rows it changed itself, so the keys are not needed: the write runs on the caller's condition alone.
  */
 export function foldRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {

@@ -17,9 +17,9 @@ import { Update } from './update';
 type Write = Insert | Update | Delete;
 
 /**
- * Looks for a `Find` or `FindByKeys` that reads back, by key and without includes, the rows a write just wrote, with no other write to the table between them.
+ * Writes that return rows (`create()`, `createAll()`, `update()`, `updateAll()`, `upsert()`) read the rows back after writing them, because on a database without `RETURNING` a write does not report what it wrote.
  *
- * Makes the write return those columns and uses it in place of the read, so the read-back `SELECT` is not run: `create()` and `upsert()` become one `INSERT … RETURNING`, and `update()` reads its row from `UPDATE … RETURNING`.
+ * With `RETURNING` the write reports those rows itself, so the read-back is not needed. A read-back that loads includes stays, since `RETURNING` cannot load related rows.
  */
 export function readBackRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {

@@ -7,9 +7,9 @@ import { type FindAt, foldsIntoCondition, readsTableAsFound, stateEdgeOf } from 
 import type { Rule } from './rules';
 
 /**
- * Looks for a `Delete` with no key filter, preceded by a `Find` that selects the rows by the same condition, with no other write to the table between them and nothing reading the `Find` yet.
+ * `deleteAll()` returning rows reads the rows before deleting them, because on a database without `RETURNING` they cannot be read afterwards.
  *
- * Makes the `Delete` return the `Find`'s columns and replaces the `Find` with it: `deleteAll()` becomes one `DELETE … RETURNING`.
+ * With `RETURNING` the delete reports the rows it removed, so it takes the place of that read and the call is a single statement.
  */
 export const deleteRule: Rule = (graph, node, inputs) => {
   if (
