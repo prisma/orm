@@ -53,19 +53,24 @@ describe('the delete rule, on a contract with returning', () => {
     ['a condition', [nameIsAda], "n1 Delete users where name = 'Ada'"],
     ['no condition', [], 'n1 Delete users'],
   ])(
-    'drops the key edge of a Delete with %s, the same as the Find with only a condition it reads, and the Find is removed',
+    'makes a Delete with %s and a key edge from the Find with only that condition, which the fold rule drops, return the columns of the Find and stand for it',
     (_, filters, printed) => {
       const graph = newGraph();
       const found = findUsers(filters, ['id', 'name']);
       const find = addWithState(graph, found);
-      addWithState(graph, deleteUsers(found.ast.where), {
+      const del = addWithState(graph, deleteUsers(found.ast.where), {
         filter: [new FilterData(find, sameId)],
       });
 
       graph.setResult(find);
+      const union = graph.add(new UnionAll(), { rows: [new Rows(find, sameId)] });
 
-      expect(printAsRun(graph)).toBe([printed, 'result: n1'].join('\n'));
-      expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+      expect(graph.result).toBe(del);
+      expect(graph.inputsOf(union)).toEqual({ rows: [new Rows(del, sameId)] });
+      expect(graph.inputsOf(del)['filter']).toEqual([]);
+      expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
+      graph.removeUnreadFinds();
+      expect(printGraph(graph)).toBe([printed, 'n2 UnionAll <- Rows n1', 'result: n1'].join('\n'));
     },
   );
 
@@ -123,16 +128,20 @@ describe('the delete rule, on a contract with returning', () => {
     expect(graph.result).toBe(find);
   });
 
-  it('adds the Delete it makes once, without running the rules on it again', () => {
+  it('leaves a Delete that already returns columns as it is', () => {
     const graph = newGraph();
     const find = addWithState(graph, firstRowOfAda());
+    const del = addWithState(graph, deleteUsers(undefined, ['id']), {
+      filter: [new FilterData(find, sameId)],
+    });
 
-    const del = addWithState(graph, deleteUsers(), { filter: [new FilterData(find, sameId)] });
+    graph.setResult(find);
 
+    expect(graph.result).toBe(find);
     expect(graph.nodes().filter(([, node]) => node instanceof Delete)).toEqual([
       [del, graph.nodeAt(del)],
     ]);
-    expect(graph.nodeAt(find)).toBe(graph.nodeAt(del));
+    expect(returnedAt(graph, 1)).toEqual(['id']);
   });
 
   it('gives a reader added later from the id of the Find the rows of the Delete', () => {

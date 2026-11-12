@@ -12,7 +12,7 @@ import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
-import { type Rule, rulesFor } from './rules';
+import { type Replacement, type Rule, rulesFor } from './rules';
 import { State, StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
@@ -60,20 +60,27 @@ export class Graph {
         edges === undefined ? [] : [[slot, this.#resolveSlot(edges)]],
       ),
     );
+    let current: Replacement = { node, inputs: resolved, standsFor: [] };
+    let standing = this.#applyRules(current);
+    while (typeof standing !== 'number' && standing !== undefined) {
+      current = { ...standing, standsFor: [...current.standsFor, ...standing.standsFor] };
+      standing = this.#applyRules(current);
+    }
+    const id = standing ?? this.#addWithInputs(current.node, current.inputs);
+    for (const replaced of current.standsFor) {
+      this.forward(replaced, id);
+    }
+    return id;
+  }
+
+  #applyRules({ node, inputs }: Replacement): NodeId | Replacement | undefined {
     for (const rule of this.#rules) {
-      const standing = rule(this, node, resolved);
-      if (typeof standing === 'number') {
+      const standing = rule(this, node, inputs);
+      if (standing !== undefined) {
         return standing;
       }
-      if (standing !== undefined) {
-        const id = this.#addWithInputs(standing.node, standing.inputs);
-        for (const replaced of standing.standsFor) {
-          this.forward(replaced, id);
-        }
-        return id;
-      }
     }
-    return this.#addWithInputs(node, resolved);
+    return undefined;
   }
 
   #addWithInputs(node: Node, inputs: InputEdges<Slots>): NodeId {

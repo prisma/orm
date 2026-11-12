@@ -8,6 +8,7 @@ import { printGraph } from './print-graph';
 import {
   addWithState,
   columnMappings,
+  deleteUsers,
   findUsers,
   findUsersWith,
   nameIsAda,
@@ -41,6 +42,25 @@ describe('the fold rule, on a contract with returning', () => {
     expect(graph.readersOf(find)).toEqual([]);
     expect(printAsRun(graph)).toBe(
       ["n1 Update users set name = 'Grace' where name = 'Ada'", 'result: n1'].join('\n'),
+    );
+  });
+
+  it('drops the key edge from a Find with only a condition when a Delete has that same condition', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+
+    addWithState(graph, deleteUsers(found.ast.where, ['id']), {
+      filter: [new FilterData(find, sameId)],
+    });
+
+    expect(graph.readersOf(find)).toEqual([]);
+    expect(printGraph(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        "n2 Delete users where name = 'Ada'",
+        'result: none',
+      ].join('\n'),
     );
   });
 

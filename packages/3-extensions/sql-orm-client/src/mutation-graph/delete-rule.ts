@@ -16,7 +16,7 @@ import type { Rule } from './rules';
 
 export function deleteRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
-    if (!(node instanceof Delete)) {
+    if (!(node instanceof Delete) || node.returns.length > 0) {
       return undefined;
     }
     const { table, where } = node.ast;
@@ -30,11 +30,7 @@ export function deleteRule(contract: Contract<SqlStorage>): Rule {
     ) {
       return undefined;
     }
-    return {
-      node: node.withReturning(read.find.returns),
-      inputs: foldsIntoCondition(read, where) ? { ...inputs, filter: [] } : inputs,
-      standsFor: [read.id],
-    };
+    return { node: node.withReturning(read.find.returns), inputs, standsFor: [read.id] };
   };
 }
 
