@@ -30,22 +30,23 @@ await db.User.where({ id: 1 }).update({
 
 ### Descriptors
 
-Two operations join the existing `create` / `connect` / `disconnect` union, as `updateAll` (filters and data) and `deleteAll` (filters). The descriptor check in `relation-mutator.ts` and the parser in `mutation-executor.ts` (`parseMutationInput`) accept them and accept an array of descriptors.
-
-The mutator is created today with no knowledge of the relation (`createRelationMutator()` takes no arguments). The callback form of `where` needs the related model's accessor, so the mutator must be given the relation's target model, or `where` must store its input for the executor to resolve. Either is acceptable; the filter forms accepted must match the collection's.
+Two operations join the existing `create` / `connect` / `disconnect` union, as `updateAll` (filters and data) and `deleteAll` (filters). `where` stores its input on the narrowed mutator; the translation resolves it against the related model, so every filter form the collection's `where()` accepts is accepted (as in PR #30634). The descriptor check in `relation-mutator.ts` and `parseMutationInput` in `relation-mutations.ts` accept the two new kinds and an array of descriptors.
 
 ### Execution
 
-All statements run in the scope the nested update already opens.
+Built on the mutation graph (`src/mutation-graph/nested-mutations.ts`), after slice `write-builders`. Nested `updateAll` and `deleteAll` are count writes: nothing reads them, so no rule applies and nothing changes between databases with and without `RETURNING`. Updated 2026-11-12 for the graph; the executor design this section replaced built the same statements.
 
 | Relation layout | `updateAll` | `deleteAll` |
 | --- | --- | --- |
-| Child holds the key (1:N) | one `UPDATE` on the child table where the foreign key equals the parent's key and the filter holds | one `DELETE` with the same condition |
-| Junction (M:N) | one `UPDATE` on the target table for rows that have a junction row to this parent and match the filter | one `DELETE` on the target table with the same condition; junction rows are not touched by the ORM |
+| Child holds the key (1:N) | one `Update` on the child table with the caller's filter, and a `FilterData` edge from the parent's node to the child's foreign key columns: `UPDATE child SET … WHERE <filter> AND child.fk = <parent key>` | one `Delete` with the same condition and edge |
+| Junction (M:N) | one `Update` on the target table whose condition is the caller's filter and `target.key IN (SELECT j.target_fk FROM junction j)`, with a `FilterData` edge from the parent's node to `j.parent_fk` | one `Delete` with the same condition and edge; junction rows are not touched by the ORM, the database's foreign-key action decides |
 
-- `updateAll` applies the related model's update defaults, as the collection's `updateAll` does. An `updateAll` whose data is empty issues no statement.
-- Operations on one relation run in array order. The executor's order across relations is unchanged: parent-owned relations before the parent row is written, child-owned and junction relations after.
+- **Edges reach a subquery by alias (decided 2026-11-12, option B).** A `FilterData` edge's condition goes into the `SELECT` whose `FROM` alias is the alias of the edge's target column: the outer statement's `WHERE` for an outer alias, as every edge does today, and the subquery's `WHERE` for the junction alias. The translation builds the junction subquery itself; there is no junction `Find` node and no inlining rule. This replaces the inlining step of design record D8 (a junction `Find` inlined by a peephole); D8's statement form, `IN (SELECT …)`, and its reason, a statement that does not grow with the relation, stand. A later slice that needs the junction rows as a node adds a junction `Find` then.
+- **Composite keys use row-value `IN`**: `(t.k1, t.k2) IN (SELECT j.k1, j.k2 FROM …)`. The form is added to the SQL AST and rendered by the Postgres, SQLite and MySQL adapters.
+- `updateAll` applies the related model's update defaults, as the collection's `updateAll` does. An `updateAll` whose data is empty adds no node.
+- Operations on one relation are added in array order; table state orders operations on the same table, including a junction `connect`/`disconnect` before a many-to-many `updateAll`/`deleteAll` in the same array (the write reads the junction's state through its subquery). The order across relations is unchanged: parent-held relations before the parent row is written, child-held and junction relations after.
 - Zero matching rows is not an error.
+- Nested input is parsed and rejected while the graph is built, before any statement runs, so an `update()` whose filter matches no row still rejects unsupported nested input.
 
 ### Rejections
 
@@ -62,7 +63,8 @@ Everything here is one change to the relation mutator and the executor's dispatc
 ## Scope
 
 **In:**
-- `packages/3-extensions/sql-orm-client`: `RelationMutator` and descriptor types, `relation-mutator.ts`, `mutation-executor.ts`, unit and type tests.
+- `packages/3-extensions/sql-orm-client`: `RelationMutator` and descriptor types, `relation-mutator.ts`, `relation-mutations.ts`, the translation in `mutation-graph/nested-mutations.ts`, the alias-routed conditions in `mutation-graph/filtered-statement.ts`, unit, graph and type tests.
+- The row-value form of `IN` in `packages/2-sql-family/4-lanes/relational-core` (SQL AST) and its rendering in the Postgres, SQLite and MySQL adapters.
 - Integration tests under `test/integration/test/sql-orm-client/`, on Postgres and SQLite, including for each operation a test where an unrelated row matches the filter and is left unchanged.
 - Ports into `test/integration/test/ports/engines/`, with their fixtures:
   - `writes/nested_mutations/already_converted/nested_update_many_inside_update.rs` (8)
@@ -113,4 +115,5 @@ None.
 - Parent project: `projects/nested-mutations/spec.md`, `projects/nested-mutations/plan.md`
 - Upstream sources: `prisma/prisma-engines` at `e922089b7d7502aff4249d5da3420f6fa55fc6ad`, under `query-engine/connector-test-kit-rs/query-engine-tests/tests/`
 - Port corpus rules: `test/integration/test/ports/README.md`
-- Code: `packages/3-extensions/sql-orm-client/src/relation-mutator.ts`, `src/mutation-executor.ts` (`parseMutationInput`, `updateFirstGraph`, `createGraph`), `src/types.ts` (`RelationMutator`, `RelationMutation`); existing tests `test/relation-mutator.test.ts`, `test/mutation-executor.test.ts`, `test/integration/test/sql-orm-client/nested-mutations.test.ts`, `mn-nested-write.test.ts`
+- Code: `packages/3-extensions/sql-orm-client/src/relation-mutator.ts`, `src/relation-mutations.ts` (`parseMutationInput`), `src/mutation-graph/nested-mutations.ts` (`addChildOwned`, `addJunctionOwned`), `src/mutation-graph/filtered-statement.ts`, `src/types.ts` (`RelationMutator`, `RelationMutation`); existing tests `test/relation-mutator.test.ts`, `test/mutation-graph/*`, `test/integration/test/sql-orm-client/nested-mutations.test.ts`, `mn-nested-write.test.ts`
+- Reused work: PR #30634 (branch `nested-mutations`: mutator types, type tests, integration tests, README and error-reference text, upgrade entry) and PR #30642 (branch `nested-mutations-ports`: the ports), both built on the executor; their source changes are not reused
