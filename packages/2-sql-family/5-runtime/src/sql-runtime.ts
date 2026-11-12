@@ -112,6 +112,7 @@ import type {
 } from './runtime-spi';
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
+import { containTransaction, type TransactionLifetime } from './transaction-lifetime';
 import {
   createTransactionStart,
   type SettledTransactionTarget,
@@ -170,7 +171,10 @@ export interface Runtime extends RuntimeQueryable {
 }
 
 export interface RuntimeConnection extends RuntimeQueryable {
-  transaction(start?: SqlTransactionOptions): Promise<RuntimeTransaction>;
+  transaction(
+    start?: SqlTransactionOptions,
+    lifetime?: TransactionLifetime,
+  ): Promise<RuntimeTransaction>;
   /**
    * Returns the connection to the pool for reuse. Only call this when the connection is known to be in a clean state. If a transaction commit/rollback failed or the connection is otherwise suspect, call `destroy(reason)` instead.
    */
@@ -1349,8 +1353,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       [transactionStart]: createTransactionStart(),
-      transaction(start?: SqlTransactionOptions): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, start);
+      transaction(
+        start?: SqlTransactionOptions,
+        lifetime?: TransactionLifetime,
+      ): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, start, lifetime);
       },
       [activitySource]: self.connectionActivitySource(driverConn, () => wrappedConnection),
       release: () => driverConn.release(),
@@ -1416,6 +1423,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     owner: TransactionStartTarget,
     parent: ActivityParent | undefined,
     start?: SqlTransactionOptions,
+    lifetime?: TransactionLifetime,
   ): Promise<RuntimeTransaction> {
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
@@ -1442,15 +1450,41 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       throw error;
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
-    return this.wrapTransaction(driverTx, connection, activity, endTransactionWork);
+    const containment =
+      lifetime === undefined
+        ? undefined
+        : containTransaction(
+            driverTx,
+            () => activity.stopAcceptingChildren(),
+            transactionClosedError(),
+          );
+    const transaction = this.wrapTransaction(
+      driverTx,
+      connection,
+      activity,
+      endTransactionWork,
+      containment,
+    );
+    try {
+      if (containment !== undefined) lifetime?.started(containment.control);
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+    return transaction;
   }
 
   private wrapTransaction(
-    driverTx: SqlTransaction,
+    originalDriverTx: SqlTransaction,
     connection: SqlConnection,
     activity: TransactionActivityRun<SqlMiddlewareContext>,
     endTransactionWork: () => void,
+    containment?: ReturnType<typeof containTransaction>,
   ): RuntimeTransaction {
+    const driverTx = containment?.queryable ?? originalDriverTx;
+    if (containment !== undefined) {
+      if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
+    }
     this.#openTransactions.set(driverTx, activity);
     this.#openTransactions.set(connection, activity);
     // A statement sent after commit() or rollback() is called reaches the database after the COMMIT or ROLLBACK (see SqlTransaction), so it is no longer the transaction's child.
@@ -1483,6 +1517,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementExecuteTarget = {
       [transactionSettlement]: settlement,
       async commit(): Promise<void> {
+        containment?.admitCommit();
         commitAttempted = true;
         stopAcceptingChildren();
         try {
@@ -1501,6 +1536,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         }
       },
       async rollback(): Promise<void> {
+        containment?.control.invalidate(transactionClosedError());
         stopAcceptingChildren();
         if (settlement.committed) {
           await commitEnding?.catch(() => undefined);
@@ -1585,6 +1621,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         );
       },
     };
+    if (containment !== undefined) {
+      const rollback = wrappedTransaction.rollback;
+      let rollbackEnding: Promise<void> | undefined;
+      wrappedTransaction.rollback = () => (rollbackEnding ??= rollback());
+    }
     return wrappedTransaction;
   }
 
@@ -1811,11 +1852,12 @@ export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
   options?: SqlTransactionOptions,
+  lifetime?: TransactionLifetime,
 ): Promise<R> {
   const connection = await runtime.connection();
   let transaction: RuntimeTransaction;
   try {
-    transaction = await connection.transaction(options);
+    transaction = await connection.transaction(options, lifetime);
   } catch (error) {
     // A teardown error would mask the start error.
     if (wasRefusedBeforeBegin(connection)) {
