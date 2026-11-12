@@ -112,12 +112,7 @@ import type {
 } from './runtime-spi';
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
-import {
-  type CallbackTransactionOptions,
-  createTransactionDeadline,
-  validateTransactionTimeout,
-} from './transaction-deadline';
-import { containTransaction, type TransactionLifetime } from './transaction-lifetime';
+import { containTransaction, validateTransactionTimeout } from './transaction-deadline';
 import {
   createTransactionStart,
   type SettledTransactionTarget,
@@ -175,11 +170,12 @@ export interface Runtime extends RuntimeQueryable {
   ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
 }
 
+export interface RuntimeTransactionOptions extends SqlTransactionOptions {
+  readonly timeout?: number | null | undefined;
+}
+
 export interface RuntimeConnection extends RuntimeQueryable {
-  transaction(
-    start?: SqlTransactionOptions,
-    lifetime?: TransactionLifetime,
-  ): Promise<RuntimeTransaction>;
+  transaction(start?: RuntimeTransactionOptions): Promise<RuntimeTransaction>;
   /**
    * Returns the connection to the pool for reuse. Only call this when the connection is known to be in a clean state. If a transaction commit/rollback failed or the connection is otherwise suspect, call `destroy(reason)` instead.
    */
@@ -195,6 +191,7 @@ export interface RuntimeConnection extends RuntimeQueryable {
 }
 
 export interface RuntimeTransaction extends RuntimeQueryable {
+  readonly signal: AbortSignal;
   commit(): Promise<void>;
   rollback(): Promise<void>;
 }
@@ -237,7 +234,7 @@ export interface ActivityRoute {
   ): Promise<SqlStatementStats>;
   /** Begins a transaction beneath `parent`; absent where the route is a transaction. */
   readonly transaction:
-    | ((parent: ActivityParent, start?: SqlTransactionOptions) => Promise<RuntimeTransaction>)
+    | ((parent: ActivityParent, start?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>)
     | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
@@ -630,7 +627,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent,
-    start?: SqlTransactionOptions,
+    start?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
     const openTransaction = this.#openTransactions.get(connection);
     if (openTransaction !== undefined) {
@@ -749,8 +746,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const beginTransaction = route.transaction;
     if (beginTransaction === undefined) return handle;
     return Object.assign(handle, {
-      transaction: async (start?: SqlTransactionOptions): Promise<RuntimeTransaction> => {
+      transaction: async (start?: RuntimeTransactionOptions): Promise<RuntimeTransaction> => {
         run.assertAcceptsChildren();
+        validateTransactionTimeout(start?.timeout);
         return beginTransaction(run, start);
       },
     });
@@ -759,8 +757,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // A transaction beneath an activity on the runtime takes a connection of its own and gives it back when it settles.
   private async beginOwnedTransactionBeneath(
     parent: ActivityParent,
-    start?: SqlTransactionOptions,
+    start?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
+    validateTransactionTimeout(start?.timeout);
     const { driverConnection, connection } = await this.openConnection({ activityParent: parent });
     return this.ownTransaction(connection, () =>
       this.beginTransactionOn(driverConnection, connection, parent, start),
@@ -1358,11 +1357,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       [transactionStart]: createTransactionStart(),
-      transaction(
-        start?: SqlTransactionOptions,
-        lifetime?: TransactionLifetime,
-      ): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, start, lifetime);
+      transaction(start?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, start);
       },
       [activitySource]: self.connectionActivitySource(driverConn, () => wrappedConnection),
       release: () => driverConn.release(),
@@ -1427,9 +1423,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent | undefined,
-    start?: SqlTransactionOptions,
-    lifetime?: TransactionLifetime,
+    start?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
+    owner[transactionStart].refusedBeforeBegin = true;
+    const timeout = validateTransactionTimeout(start?.timeout);
+    const { timeout: _timeout, ...driverOptions } = start ?? {};
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
     this.#transactionWorkOn.set(connection, endTransactionWork);
@@ -1448,7 +1446,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
     let driverTx: SqlTransaction;
     try {
-      driverTx = await connection.beginTransaction(start);
+      driverTx = await connection.beginTransaction(start === undefined ? undefined : driverOptions);
     } catch (error) {
       endTransactionWork();
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
@@ -1456,27 +1454,19 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
     const containment =
-      lifetime === undefined
+      timeout === undefined
         ? undefined
         : containTransaction(
             driverTx,
             () => activity.stopAcceptingChildren(),
             transactionClosedError(),
+            timeout,
           );
-    const transaction = this.wrapTransaction(
-      driverTx,
-      connection,
-      activity,
-      endTransactionWork,
-      containment,
-    );
-    try {
-      if (containment !== undefined) lifetime?.started(containment.control);
-    } catch (error) {
-      await transaction.rollback().catch(() => undefined);
-      throw error;
-    }
-    return transaction;
+    this.#transactionWorkOn.set(connection, () => {
+      containment?.close();
+      endTransactionWork();
+    });
+    return this.wrapTransaction(driverTx, connection, activity, endTransactionWork, containment);
   }
 
   private wrapTransaction(
@@ -1520,6 +1510,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       [transactionSettlement]: settlement,
+      signal: containment?.signal ?? new AbortController().signal,
       async commit(): Promise<void> {
         containment?.admitCommit();
         commitAttempted = true;
@@ -1540,7 +1531,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         }
       },
       async rollback(): Promise<void> {
-        containment?.control.invalidate(transactionClosedError());
+        containment?.close();
         stopAcceptingChildren();
         if (settlement.committed) {
           await commitEnding?.catch(() => undefined);
@@ -1855,41 +1846,15 @@ export function withTransactionMembers<TMembers extends object>(
 export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
-  options?: CallbackTransactionOptions,
-  lifetime?: TransactionLifetime,
+  options?: RuntimeTransactionOptions,
 ): Promise<R> {
-  const { timeout: duration, ...start } = options ?? {};
-  const timeout = validateTransactionTimeout(duration);
+  validateTransactionTimeout(options?.timeout);
   let invalidated = false;
-  const deadline =
-    timeout === undefined
-      ? undefined
-      : createTransactionDeadline(timeout, () => {
-          invalidated = true;
-        });
-  const observedLifetime: TransactionLifetime | undefined =
-    deadline === undefined
-      ? lifetime
-      : {
-          started(control) {
-            deadline.started(control);
-            try {
-              lifetime?.started(control);
-            } catch (error) {
-              deadline.stop();
-              throw error;
-            }
-          },
-        };
   const connection = await runtime.connection();
   let transaction: RuntimeTransaction;
   try {
-    transaction = await connection.transaction(
-      options === undefined ? undefined : start,
-      observedLifetime,
-    );
+    transaction = await connection.transaction(options);
   } catch (error) {
-    deadline?.stop();
     // A teardown error would mask the start error.
     if (wasRefusedBeforeBegin(connection)) {
       await connection.release().catch(() => undefined);
@@ -1898,6 +1863,19 @@ export async function withTransaction<R>(
     }
     throw error;
   }
+
+  const signal = transaction.signal;
+  let rejectAbort = (_reason: unknown) => {};
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  void aborted.catch(() => undefined);
+  const onAbort = () => {
+    invalidated = true;
+    rejectAbort(signal.reason);
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) onAbort();
 
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
@@ -1999,21 +1977,24 @@ export async function withTransaction<R>(
     await connection.destroy(reason).catch(() => undefined);
   };
 
+  let commitRequested = false;
   try {
-    let result: R;
-    try {
-      result =
-        deadline === undefined ? await fn(txContext) : await deadline.run(() => fn(txContext));
-      deadline?.admitCommit();
-    } catch (error) {
+    signal.throwIfAborted();
+    const result = await Promise.race([Promise.resolve(fn(txContext)), aborted]);
+    invalidated = true;
+    commitRequested = true;
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    if (!commitRequested || signal.aborted) {
+      const selected: unknown = signal.aborted ? signal.reason : error;
       try {
         await transaction.rollback();
       } catch (rollbackError) {
-        // The ROLLBACK landed and an activityEnded hook threw after it: the callback's error is the one to report, and the connection is clean.
         const settlement = settlementOf(transaction);
         if (settlement?.rolledBack === true) {
           settlement.logDroppedError(rollbackError);
-          throw error;
+          throw selected;
         }
         await destroyConnection(rollbackError);
         const wrapped = runtimeError(
@@ -2021,39 +2002,27 @@ export async function withTransaction<R>(
           'Transaction rollback failed after callback error',
           { rollbackError },
         );
-        wrapped.cause = error;
+        wrapped.cause = selected;
         throw wrapped;
       }
-      throw error;
-    } finally {
-      invalidated = true;
+      throw selected;
     }
-
+    if (settlementOf(transaction)?.committed === true) throw error;
     try {
-      await transaction.commit();
-    } catch (commitError) {
-      if (settlementOf(transaction)?.committed === true) throw commitError;
-      // After a failed COMMIT the server-side transaction may be: (a) already committed (error on response path), (b) already rolled back (deferred constraint / serialization failure), or (c) still open (COMMIT never reached the server). Attempt a best-effort rollback to cover (c) and confirm the protocol is healthy.
-      //
-      // If rollback succeeds, the server is definitely no longer in a transaction (no-op in (a)/(b), real cleanup in (c)) and we've just proved the connection round-trips correctly — it's safe to return to the pool. If rollback fails, the connection state is ambiguous (broken socket, protocol desync, etc.) and we must destroy it.
-      try {
-        await transaction.rollback();
-      } catch (rollbackError) {
-        const settlement = settlementOf(transaction);
-        if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
-        else await destroyConnection(commitError);
-      }
-      const wrapped = runtimeError(
-        'RUNTIME.TRANSACTION_COMMIT_FAILED',
-        'Transaction commit failed',
-        { commitError },
-      );
-      wrapped.cause = commitError;
-      throw wrapped;
+      await transaction.rollback();
+    } catch (rollbackError) {
+      const settlement = settlementOf(transaction);
+      if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
+      else await destroyConnection(error);
     }
-    return result;
+    const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
+      commitError: error,
+    });
+    wrapped.cause = error;
+    throw wrapped;
   } finally {
-    deadline?.stop();
+    invalidated = true;
+    signal.removeEventListener('abort', onAbort);
     if (!connectionDisposed) {
       await connection.release();
     }

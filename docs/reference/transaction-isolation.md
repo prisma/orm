@@ -39,7 +39,7 @@ The clock starts after successful BEGIN, includes post-BEGIN setup, and stops wh
 
 ## Driver and runtime start SPI
 
-`SqlConnection.beginTransaction(options?)`, runtime connection `transaction(options?)`, and activity transaction routes carry resolved `SqlTransactionOptions`:
+Driver `SqlConnection.beginTransaction(options?)` receives isolation-only `SqlTransactionOptions`:
 
 ```typescript
 interface SqlTransactionOptions {
@@ -47,7 +47,7 @@ interface SqlTransactionOptions {
 }
 ```
 
-Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. That helper strips callback timeout before passing isolation options to the connection. Runtime role/session wrappers adopting timed callbacks also forward the separate optional lifetime observer; see [runtime wrapper contract](../../packages/2-sql-family/5-runtime/README.md#internal-callback-deadlines). They retain refusal/settlement metadata.
+Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. Runtime connection/activity starts accept `RuntimeTransactionOptions`, including timeout; the runtime strips timeout before driver BEGIN. The returned transaction owns its deadline and exposes a readonly AbortSignal, which `withTransaction` observes for expiry. Role/session wrappers forward runtime options and preserve that signal; see [runtime wrapper contract](../../packages/2-sql-family/5-runtime/README.md#internal-callback-deadlines). They retain refusal/settlement metadata.
 
 ORM factories separately accept `implicitTransactionOptions`, retained in collection configuration and used only when the ORM opens a transaction. The MySQL facade supplies `{ isolationLevel: 'ReadCommitted' }` to its root ORM factory. Standalone ORM instances may opt into this policy; without it they request the database default. Namespace collections, nested writes and activity-bound execution preserve the configured options. An ORM already bound to a transaction does not open another transaction or change its isolation. Drivers receive no implicit/explicit discriminator and never choose ORM policy.
 

@@ -1,8 +1,7 @@
 import { ParamRef, RawQueryAst } from '@internal/sql-relational-core/ast';
 import { planFromAst } from '@internal/sql-relational-core/plan';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { withTransaction } from '../src/sql-runtime';
-import type { TransactionLifetimeControl } from '../src/transaction-lifetime';
 import { deferred } from './closed-runtime-stub';
 import {
   createSetup,
@@ -13,14 +12,16 @@ import {
   testContract,
 } from './transaction-activity-fixtures';
 
-it('notifies after BEGIN and refuses work and commit after invalidation', async () => {
+beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] }));
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+it('arms after BEGIN, aborts once, and refuses work and commit after expiry', async () => {
   const { runtime, driver, events } = createSetup();
   const connection = await runtime.connection();
-  let control: TransactionLifetimeControl | undefined;
-  const started = vi.fn((value: TransactionLifetimeControl) => {
-    expect(names(events)).toContain('begin');
-    control = value;
-  });
+  const aborted = vi.fn();
   const entered = deferred();
   const resume = deferred();
   const driverConnection = await driver.acquireConnection();
@@ -33,15 +34,20 @@ it('notifies after BEGIN and refuses work and commit after invalidation', async 
       await resume.promise;
       return begin(options);
     });
-  const starting = connection.transaction(undefined, { started });
+  const starting = connection.transaction({ timeout: 10 });
   await entered.promise;
-  expect(started).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(vi.getTimerCount()).toBe(0);
   resume.resolve();
   const tx = await starting;
-  expect(beginSpy).toHaveBeenCalledExactlyOnceWith(undefined);
-  const failure = new Error('expired');
-  expect(control?.invalidate(failure)).toBe(true);
-  expect(control?.invalidate(new Error('late'))).toBe(false);
+  expect(beginSpy).toHaveBeenCalledExactlyOnceWith({});
+  expect(tx.signal.aborted).toBe(false);
+  tx.signal.addEventListener('abort', aborted);
+  await vi.advanceTimersByTimeAsync(10);
+  const failure = tx.signal.reason;
+  expect(failure).toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT', details: { timeout: 10 } });
+  await vi.advanceTimersByTimeAsync(100);
+  expect(aborted).toHaveBeenCalledTimes(1);
   await expect(tx.execute(rawPlan('update t set x = 1'))).rejects.toMatchObject({
     code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
   });
@@ -87,12 +93,7 @@ it.each(['execute', 'query', 'prepared', 'intercept'] as const)(
       ],
     });
     const connection = await runtime.connection();
-    let control: TransactionLifetimeControl | undefined;
-    const tx = await connection.transaction(undefined, {
-      started(value) {
-        control = value;
-      },
-    });
+    const tx = await connection.transaction({ timeout: 10 });
     const prepared = await runtime.prepare({}, () => failingDecodePlan());
     const pending =
       operation === 'execute' || operation === 'intercept'
@@ -100,10 +101,9 @@ it.each(['execute', 'query', 'prepared', 'intercept'] as const)(
         : operation === 'query'
           ? tx.query(rawPlan('select id from t')).toArray()
           : prepared.query(tx, {}).toArray();
-    const failure = new Error('expired');
-    const rejected = expect(pending).rejects.toBe(failure);
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
     await entered.promise;
-    control?.invalidate(failure);
+    await vi.advanceTimersByTimeAsync(10);
     await tx.rollback();
     await connection.release();
     resume.resolve();
@@ -127,12 +127,7 @@ it('contains an execution suspended in an asynchronous codec', async () => {
   });
   const { runtime, driver } = createSetup();
   const connection = await runtime.connection();
-  let control: TransactionLifetimeControl | undefined;
-  const tx = await connection.transaction(undefined, {
-    started(value) {
-      control = value;
-    },
-  });
+  const tx = await connection.transaction({ timeout: 10 });
   try {
     const plan = planFromAst(
       RawQueryAst.affectedCount([
@@ -142,10 +137,9 @@ it('contains an execution suspended in an asynchronous codec', async () => {
       testContract,
     );
     const pending = tx.execute(plan);
-    const failure = new Error('expired');
-    const rejected = expect(pending).rejects.toBe(failure);
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
     await entered.promise;
-    control?.invalidate(failure);
+    await vi.advanceTimersByTimeAsync(10);
     await tx.rollback();
     resume.resolve();
     await rejected;
@@ -157,30 +151,17 @@ it('contains an execution suspended in an asynchronous codec', async () => {
   }
 });
 
-it('preserves callback cleanup ownership after invalidation and failed rollback', async () => {
+it('preserves callback cleanup ownership after expiry and failed rollback', async () => {
   const rollbackError = new Error('rollback failed');
-  const failure = new Error('expired');
   const { runtime, events } = createSetup({ failures: { rollback: rollbackError } });
-  let control: TransactionLifetimeControl | undefined;
-  await expect(
-    withTransaction(
-      runtime,
-      async () => {
-        expect(control?.invalidate(failure)).toBe(true);
-        throw failure;
-      },
-      undefined,
-      {
-        started(value) {
-          control = value;
-        },
-      },
-    ),
-  ).rejects.toMatchObject({
+  const run = withTransaction(runtime, async () => new Promise<void>(() => {}), { timeout: 10 });
+  const rejected = expect(run).rejects.toMatchObject({
     code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
-    cause: failure,
+    cause: { code: 'RUNTIME.TRANSACTION_TIMEOUT' },
     details: { rollbackError },
   });
+  await vi.advanceTimersByTimeAsync(10);
+  await rejected;
   expect(
     names(events).filter((name) => name === 'rollback' || name === 'destroy' || name === 'release'),
   ).toEqual(['rollback', 'destroy']);
@@ -190,30 +171,48 @@ it('preserves callback cleanup ownership after invalidation and failed rollback'
   await runtime.close();
 });
 
-it('does not notify when BEGIN fails', async () => {
+it('does not arm when BEGIN fails', async () => {
   const failure = new Error('begin failed');
   const { runtime } = createSetup({ failures: { begin: failure } });
   const connection = await runtime.connection();
-  const started = vi.fn();
-  await expect(connection.transaction(undefined, { started })).rejects.toBe(failure);
-  expect(started).not.toHaveBeenCalled();
+  await expect(connection.transaction({ timeout: 10 })).rejects.toBe(failure);
+  expect(vi.getTimerCount()).toBe(0);
   await connection.destroy(failure);
   await runtime.close();
 });
 
-it('rolls back if the post-BEGIN observer fails', async () => {
+it('rejects invalid runtime timeout before BEGIN', async () => {
   const { runtime, events } = createSetup();
   const connection = await runtime.connection();
-  const error = new Error('observer failed');
-  await expect(
-    connection.transaction(undefined, {
-      started() {
-        throw error;
-      },
-    }),
-  ).rejects.toBe(error);
-  expect(names(events).filter((name) => name === 'rollback')).toHaveLength(1);
-  expect(names(events)).toContain('finalized:transaction:rolled-back');
+  await expect(connection.transaction({ timeout: 0 })).rejects.toMatchObject({
+    code: 'RUNTIME.INVALID_TRANSACTION_TIMEOUT',
+  });
+  expect(names(events)).not.toContain('begin');
+  expect(vi.getTimerCount()).toBe(0);
+  await connection.release();
+  await runtime.close();
+});
+
+it('stops a manual deadline on rollback without reporting timeout', async () => {
+  const { runtime } = createSetup();
+  const connection = await runtime.connection();
+  const tx = await connection.transaction({ timeout: 10 });
+  await tx.rollback();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(tx.signal.aborted).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+  await connection.release();
+  await runtime.close();
+});
+
+it('keeps an unconfigured manual transaction untimed', async () => {
+  const { runtime } = createSetup();
+  const connection = await runtime.connection();
+  const tx = await connection.transaction();
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(tx.signal.aborted).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+  await tx.rollback();
   await connection.release();
   await runtime.close();
 });
@@ -222,14 +221,11 @@ it('cannot invalidate once commit is admitted', async () => {
   const settled = deferred();
   const { runtime, events } = createSetup({ failures: { commitHeldUntil: settled.promise } });
   const connection = await runtime.connection();
-  let control: TransactionLifetimeControl | undefined;
-  const tx = await connection.transaction(undefined, {
-    started(value) {
-      control = value;
-    },
-  });
+  const tx = await connection.transaction({ timeout: 10 });
   const committing = tx.commit();
-  expect(control?.invalidate(new Error('too late'))).toBe(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(tx.signal.aborted).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
   settled.resolve();
   await committing;
   expect(names(events)).toContain('finalized:transaction:committed');

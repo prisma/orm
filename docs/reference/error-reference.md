@@ -1473,17 +1473,13 @@ Transaction work or a lazy result was used after callback completion or deadline
 
 Committing a transaction failed; the runtime attempts a cleanup rollback and destroys the connection if that also fails. The driver's commit error is attached as `cause`. Payload: `commitError`.
 
-### RUNTIME.TRANSACTION_LIFETIME_UNAVAILABLE
-
-A timed callback's connection wrapper did not forward the successful-BEGIN lifetime notification. The callback is refused and the transaction cleaned up rather than silently running without its timeout. A wrapper adopting timed callbacks must forward the separate optional lifetime argument through `RuntimeConnection.transaction` to `beginTransactionOn`. Untimed callers need no migration.
-
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
 Rolling back after callback failure or timeout itself failed; the connection is destroyed rather than returned to the pool. The selected callback error or timeout is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. A hook failure after successful rollback is instead logged while preserving the selected callback error or timeout.
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 
-The explicit callback transaction exceeded its application deadline before commit admission. Transaction access is invalidated and rejection waits for safe rollback or destruction, not arbitrary callback settlement. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-isolation.md#timeout).
+The runtime transaction exceeded its configured deadline before commit admission. Transaction access is invalidated and its signal aborts with this error. The callback helper rejects after safe rollback or destruction, not arbitrary callback settlement; a manual runtime transaction's caller owns cleanup. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-isolation.md#timeout).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 

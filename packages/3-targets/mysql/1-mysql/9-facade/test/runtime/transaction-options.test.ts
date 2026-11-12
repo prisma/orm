@@ -33,7 +33,9 @@ describe('MySQL callback isolation options', () => {
         contract,
         transactionOptions: { isolationLevel: 'RepeatableRead', timeout: global },
       });
+      const controller = new AbortController();
       const tx = {
+        signal: controller.signal,
         query: () => new AsyncIterableResult((async function* () {})()),
         execute: async () => ({ affectedRows: 0 }),
         commit: vi.fn(async () => {}),
@@ -41,10 +43,7 @@ describe('MySQL callback isolation options', () => {
       };
       const connection = {
         ...tx,
-        transaction: vi.fn(async (...args: Parameters<RuntimeConnection['transaction']>) => {
-          args[1]?.started({ invalidate: () => true });
-          return tx;
-        }),
+        transaction: vi.fn(async (_options: Parameters<RuntimeConnection['transaction']>[0]) => tx),
         release: vi.fn(async () => {}),
         destroy: vi.fn(async () => {}),
       };
@@ -65,9 +64,13 @@ describe('MySQL callback isolation options', () => {
         : expect(run).resolves.toBe(42);
       await entered.promise;
       await vi.advanceTimersByTimeAsync(20);
+      if (expires) controller.abort({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
       resume.resolve();
       await outcome;
-      expect(connection.transaction.mock.calls[0]?.[0]).toEqual({ isolationLevel: 'Serializable' });
+      expect(connection.transaction.mock.calls[0]?.[0]).toEqual({
+        isolationLevel: 'Serializable',
+        timeout: local === undefined ? global : local,
+      });
       expect(tx.rollback).toHaveBeenCalledTimes(expires ? 1 : 0);
       expect(tx.commit).toHaveBeenCalledTimes(expires ? 0 : 1);
       expect(connection.release).toHaveBeenCalledTimes(1);
@@ -88,6 +91,7 @@ describe('MySQL callback isolation options', () => {
   ] as const)('resolves global %j and local %j', async (global, local, isolationLevel) => {
     const db = mysql({ contract, transactionOptions: global });
     const transaction = {
+      signal: new AbortController().signal,
       query: () => new AsyncIterableResult((async function* () {})()),
       execute: async () => ({ affectedRows: 0 }),
       commit: vi.fn(async () => undefined),
@@ -102,7 +106,10 @@ describe('MySQL callback isolation options', () => {
     vi.spyOn(db.runtime(), 'connection').mockResolvedValue(connection);
     try {
       expect(await db.transaction(async () => 42, local)).toBe(42);
-      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({ isolationLevel }, undefined);
+      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({
+        isolationLevel,
+        timeout: undefined,
+      });
     } finally {
       await db.close();
     }

@@ -1,10 +1,5 @@
 import { runtimeError } from '@internal/framework-components/runtime';
-import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
-import type { TransactionLifetimeControl } from './transaction-lifetime';
-
-export interface CallbackTransactionOptions extends SqlTransactionOptions {
-  readonly timeout?: number | null | undefined;
-}
+import type { SqlTransaction } from '@internal/sql-relational-core/ast';
 
 export function validateTransactionTimeout(timeout: number | null | undefined): number | undefined {
   if (timeout === undefined || timeout === null) return undefined;
@@ -18,81 +13,84 @@ export function validateTransactionTimeout(timeout: number | null | undefined): 
   return timeout;
 }
 
-export function createTransactionDeadline(timeout: number, invalidate: () => void) {
-  let control: TransactionLifetimeControl | undefined;
-  let invalidateContext: (() => void) | undefined = invalidate;
-  let deadline: number | undefined;
+export function containTransaction(
+  transaction: SqlTransaction,
+  stopChildren: () => void,
+  closedError: Error,
+  timeout: number,
+): {
+  readonly queryable: SqlTransaction;
+  readonly signal: AbortSignal;
+  admitCommit(): void;
+  close(): void;
+} {
+  const controller = new AbortController();
+  const deadline = performance.now() + timeout;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let stopped = false;
-  let expired: ReturnType<typeof runtimeError> | undefined;
-  let rejectExpiration = (_reason: unknown) => {};
-  const expiration = new Promise<never>((_, reject) => {
-    rejectExpiration = reject;
-  });
-  void expiration.catch(() => undefined);
-
-  const stop = () => {
-    stopped = true;
+  let invalidation: { reason: unknown } | undefined;
+  let committing = false;
+  const stopTimer = () => {
     clearTimeout(timer);
     timer = undefined;
-    control = undefined;
-    invalidateContext = undefined;
   };
   const expire = () => {
-    if (stopped) return;
-    const error = runtimeError(
+    if (committing || invalidation !== undefined) return;
+    const reason = runtimeError(
       'RUNTIME.TRANSACTION_TIMEOUT',
       'Transaction callback exceeded its timeout',
       { timeout },
     );
-    control?.invalidate(error);
-    invalidateContext?.();
-    expired = error;
-    stop();
-    rejectExpiration(error);
+    invalidation = { reason };
+    stopChildren();
+    stopTimer();
+    controller.abort(reason);
   };
-  const check = () => {
-    if (deadline === undefined) {
-      throw runtimeError(
-        'RUNTIME.TRANSACTION_LIFETIME_UNAVAILABLE',
-        'Transaction connection did not notify successful BEGIN',
-      );
-    }
+  const assertActive = () => {
     if (performance.now() >= deadline) expire();
-    if (expired !== undefined) throw expired;
+    if (invalidation !== undefined) throw invalidation.reason;
+    if (committing) throw closedError;
   };
   const tick = () => {
-    if (stopped || deadline === undefined) return;
     const remaining = deadline - performance.now();
     if (remaining > 0) timer = setTimeout(tick, Math.ceil(remaining));
     else expire();
   };
-
-  return {
-    started(value: TransactionLifetimeControl): void {
-      control = value;
-      deadline = performance.now() + timeout;
-      timer = setTimeout(tick, timeout);
-    },
-    async run<T>(callback: () => PromiseLike<T>): Promise<T> {
-      check();
+  timer = setTimeout(tick, timeout);
+  const queryable: SqlTransaction = {
+    async *query<Row>(request: Parameters<SqlTransaction['query']>[0]) {
+      assertActive();
+      const rows = transaction.query<Row>(request)[Symbol.asyncIterator]();
       try {
-        const result = Promise.resolve(callback()).catch((error: unknown) => {
-          check();
-          stop();
-          throw error;
-        });
-        return await Promise.race([result, expiration]);
-      } catch (error) {
-        check();
-        stop();
-        throw error;
+        while (true) {
+          assertActive();
+          const next = await rows.next();
+          assertActive();
+          if (next.done) return;
+          yield next.value;
+        }
+      } finally {
+        await rows.return?.();
       }
     },
-    admitCommit(): void {
-      check();
-      stop();
+    async execute(request) {
+      assertActive();
+      return transaction.execute(request);
     },
-    stop,
+    commit: () => transaction.commit(),
+    rollback: () => transaction.rollback(),
+  };
+  return {
+    queryable,
+    signal: controller.signal,
+    admitCommit() {
+      assertActive();
+      committing = true;
+      stopTimer();
+    },
+    close() {
+      stopTimer();
+      invalidation ??= { reason: closedError };
+      stopChildren();
+    },
   };
 }

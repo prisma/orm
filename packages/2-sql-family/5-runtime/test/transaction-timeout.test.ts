@@ -94,23 +94,34 @@ it.each(['resolve', 'reject'] as const)(
   },
 );
 
-it('fails closed if a connection wrapper drops the BEGIN lifetime notification', async () => {
-  const { runtime, events } = createSetup();
-  const connection = await runtime.connection();
-  const transaction = connection.transaction.bind(connection);
-  vi.spyOn(connection, 'transaction').mockImplementation((options) => transaction(options));
-  const callback = vi.fn(async () => {});
-  await expect(
-    withTransaction({ connection: async () => connection }, callback, { timeout: 10 }),
-  ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_LIFETIME_UNAVAILABLE' });
-  expect(callback).not.toHaveBeenCalled();
-  expect(names(events).filter((name) => ['commit', 'rollback', 'release'].includes(name))).toEqual([
-    'rollback',
-    'release',
-  ]);
-  expect(vi.getTimerCount()).toBe(0);
-  await runtime.close();
-});
+it.each(['success', 'failure', 'timeout'] as const)(
+  'removes the transaction abort listener after %s',
+  async (outcome) => {
+    const { runtime } = createSetup();
+    const connection = await runtime.connection();
+    const tx = await connection.transaction({ timeout: 10 });
+    const add = vi.spyOn(tx.signal, 'addEventListener');
+    const remove = vi.spyOn(tx.signal, 'removeEventListener');
+    vi.spyOn(connection, 'transaction').mockResolvedValue(tx);
+    const run = withTransaction(
+      { connection: async () => connection },
+      async () => {
+        if (outcome === 'failure') throw new Error('callback');
+        if (outcome === 'timeout') await new Promise<void>(() => {});
+        return 42;
+      },
+      { timeout: 10 },
+    );
+    const checked =
+      outcome === 'success' ? expect(run).resolves.toBe(42) : expect(run).rejects.toBeDefined();
+    await vi.advanceTimersByTimeAsync(10);
+    await checked;
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledWith('abort', add.mock.calls[0]?.[1]);
+    expect(vi.getTimerCount()).toBe(0);
+    await runtime.close();
+  },
+);
 
 it('checks monotonic time before commit even when the timer has not run', async () => {
   const entered = deferred();
@@ -329,21 +340,32 @@ it('passes isolation alone to BEGIN and preserves a failed COMMIT outcome withou
   await runtime.close();
 });
 
-it.each(['begin', 'observer'] as const)('clears timers on %s startup failure', async (point) => {
-  const failure = new Error('startup failed');
-  const { runtime } = createSetup(point === 'begin' ? { failures: { begin: failure } } : {});
+it('clears the runtime timer when a wrapper fails after BEGIN', async () => {
+  const { runtime, events } = createSetup();
+  const connection = await runtime.connection();
+  const begin = connection.transaction.bind(connection);
+  const failure = new Error('wrapper setup failed');
+  vi.spyOn(connection, 'transaction').mockImplementation(async (options) => {
+    await begin(options);
+    throw failure;
+  });
+  const callback = vi.fn(async () => {});
   await expect(
-    withTransaction(
-      runtime,
-      async () => {},
-      { timeout: 10 },
-      {
-        started() {
-          throw failure;
-        },
-      },
-    ),
+    withTransaction({ connection: async () => connection }, callback, { timeout: 10 }),
   ).rejects.toBe(failure);
+  expect(callback).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+  expect(names(events).filter((name) => ['begin', 'destroy', 'release'].includes(name))).toEqual([
+    'begin',
+    'destroy',
+  ]);
+  await runtime.close();
+});
+
+it('clears timers on BEGIN failure', async () => {
+  const failure = new Error('startup failed');
+  const { runtime } = createSetup({ failures: { begin: failure } });
+  await expect(withTransaction(runtime, async () => {}, { timeout: 10 })).rejects.toBe(failure);
   expect(vi.getTimerCount()).toBe(0);
   await runtime.close();
 });
