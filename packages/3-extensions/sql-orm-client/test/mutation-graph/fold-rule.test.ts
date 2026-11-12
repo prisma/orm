@@ -1,8 +1,10 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Find } from '../../src/mutation-graph/find';
 import type { Graph } from '../../src/mutation-graph/graph';
+import { Requires } from '../../src/mutation-graph/requires';
 import { createCollectionFor } from '../collection-fixtures';
 import { printGraph } from './print-graph';
 import {
@@ -186,4 +188,25 @@ describe('the fold rule, on a contract with returning', () => {
       ].join('\n'),
     );
   });
+
+  it.each([
+    [
+      'a FilterData input from another node',
+      (parent: NodeId) => ({ filter: [new FilterData(parent, sameId)] }),
+    ],
+    ['a Requires input', (parent: NodeId) => ({ requires: [new Requires(parent)] })],
+  ])(
+    'leaves the key edge of an Update without a condition when the Find without a condition has %s',
+    (_, inputsOf) => {
+      const graph = newGraph();
+      const parent = addWithState(graph, findUsers([nameIsAda]));
+      const find = addWithState(graph, findUsers(), inputsOf(parent));
+
+      const update = addWithState(graph, updateUsers({ name: 'Grace' }), {
+        filter: [new FilterData(find, sameId)],
+      });
+
+      expect(graph.inputsOf(update)['filter']).toEqual([new FilterData(find, sameId)]);
+    },
+  );
 });

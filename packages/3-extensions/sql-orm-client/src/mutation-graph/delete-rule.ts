@@ -45,7 +45,7 @@ function findOfSameCondition(
     .readersOf(state.from)
     .flatMap(({ reader }): FindAt[] => {
       const find = graph.nodeAt(reader);
-      return find instanceof Find && foldsIntoCondition({ id: reader, find }, where)
+      return find instanceof Find && foldsIntoCondition(graph, { id: reader, find }, where)
         ? [{ id: reader, find }]
         : [];
     })

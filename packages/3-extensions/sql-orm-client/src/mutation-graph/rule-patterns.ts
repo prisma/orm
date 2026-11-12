@@ -57,8 +57,17 @@ export function readsTableAsFound(
   );
 }
 
-export function foldsIntoCondition({ find }: FindAt, where: AnyExpression | undefined): boolean {
-  return find.ast.where === where && rowsOfConditionReadOf(find.ast) !== undefined;
+export function foldsIntoCondition(
+  graph: Graph,
+  { id, find }: FindAt,
+  where: AnyExpression | undefined,
+): boolean {
+  const { filter, requires } = graph.inputsOf(id);
+  return (
+    find.ast.where === where &&
+    rowsOfConditionReadOf(find.ast) !== undefined &&
+    [filter ?? [], requires ?? []].flat().length === 0
+  );
 }
 
 function oneTableReadOf(ast: SelectAst): TableSource | undefined {

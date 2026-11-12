@@ -1,7 +1,9 @@
 import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
+import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { createCollectionFor } from '../collection-fixtures';
@@ -143,4 +145,25 @@ describe('the delete rule, on a contract with returning', () => {
     expect(graph.result).toBe(find);
     expect(returnedAt(graph, 1)).toEqual(['id']);
   });
+
+  it.each([
+    [
+      'a FilterData input from another node',
+      (parent: NodeId) => ({ filter: [new FilterData(parent, sameId)] }),
+    ],
+    ['a Requires input', (parent: NodeId) => ({ requires: [new Requires(parent)] })],
+  ])(
+    'leaves a Delete without a condition as it is when the Find without a condition has %s',
+    (_, inputsOf) => {
+      const graph = newGraph();
+      const parent = addWithState(graph, findUsers([nameIsAda]));
+      const find = addWithState(graph, findUsers([], ['id', 'name']), inputsOf(parent));
+      graph.setResult(find);
+
+      const del = addWithState(graph, deleteUsers());
+
+      expect(graph.result).toBe(find);
+      expect(graph.nodeAt(del)).toEqual(deleteUsers());
+    },
+  );
 });

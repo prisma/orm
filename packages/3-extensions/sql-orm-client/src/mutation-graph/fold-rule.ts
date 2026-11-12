@@ -19,7 +19,7 @@ export function foldRule(contract: Contract<SqlStorage>): Rule {
     const read = keyEdgeFromFind(graph, contract, table, inputs);
     if (
       read === undefined ||
-      !foldsIntoCondition(read, where) ||
+      !foldsIntoCondition(graph, read, where) ||
       !readsTableAsFound(graph, inputs, read, table)
     ) {
       return undefined;
