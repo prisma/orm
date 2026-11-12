@@ -57,7 +57,7 @@ The driver does not check the database at startup or deploy time for these requi
 
 ## Transaction starts
 
-`beginTransaction(options?)` accepts a resolved `isolationLevel`, validated by the MySQL target and mapped to fixed `SET TRANSACTION ISOLATION LEVEL ...` statements. An absent level uses plain BEGIN and leaves the server/session default unchanged. The MySQL facade configures its ORM factory to request ReadCommitted for ORM-owned transactions; the driver has no implicit/explicit discriminator or ORM policy. SET and BEGIN share one connection query lock. A transaction owner must destroy the connection after uncertain setup failure, because a successful SET followed by failed BEGIN can leave a pending next-transaction setting.
+`beginTransaction(options?)` accepts a resolved `isolationLevel`, validated by the MySQL target and mapped to fixed `SET TRANSACTION ISOLATION LEVEL ...` statements. An absent level uses plain BEGIN and leaves the server/session default unchanged. The MySQL facade configures its ORM factory to request ReadCommitted for ORM-owned transactions; the driver has no implicit/explicit discriminator or ORM policy. SET and BEGIN share one connection query lock. The connection records pending isolation setup before sending SET and clears it only after successful BEGIN. Release destroys a connection with unconsumed or uncertain setup instead of returning it to the pool; an idle ROLLBACK does not clear a pending next-transaction setting.
 
 ## Scope cleanup
 

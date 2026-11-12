@@ -877,8 +877,26 @@ describe('MySQL runtime driver and its pool', () => {
     finish();
     await Promise.all([rejected, releasing]);
     expect(connection.beginTransaction).not.toHaveBeenCalled();
+    expect(connection.release).not.toHaveBeenCalled();
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
     await driver.close();
   });
+
+  it.for(['set', 'begin'] as const)(
+    'destroys pending isolation setup after %s failure on ordinary release',
+    async (point) => {
+      const driver = await connected();
+      const held = await driver.acquireConnection();
+      const failure = new Error('setup failed');
+      if (point === 'set') connection.query.mockRejectedValueOnce(failure);
+      else connection.beginTransaction.mockRejectedValueOnce(failure);
+      await expect(held.beginTransaction({ isolationLevel: 'Serializable' })).rejects.toBe(failure);
+      await held.release();
+      expect(connection.release).not.toHaveBeenCalled();
+      expect(connection.destroy).toHaveBeenCalledTimes(1);
+      await driver.close();
+    },
+  );
 
   it('drains and unregisters an abandoned stream even when closing it throws', async () => {
     const driver = await connected(streaming);

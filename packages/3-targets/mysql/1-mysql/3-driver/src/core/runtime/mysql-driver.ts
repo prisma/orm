@@ -465,6 +465,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   #disposal: Promise<void> | undefined;
   #destroyRequested = false;
   #disposed = false;
+  #isolationPending = false;
 
   constructor(
     client: PoolConnection,
@@ -506,9 +507,13 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
       Serializable: 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
     };
     await this.underLock(async () => {
-      if (isolationLevel !== undefined) await this.client.query(statements[isolationLevel]);
+      if (isolationLevel !== undefined) {
+        this.#isolationPending = true;
+        await this.client.query(statements[isolationLevel]);
+      }
       this.assertUsable();
       await this.client.beginTransaction();
+      this.#isolationPending = false;
     });
     this.held.generation++;
     return new MysqlTransactionImpl(this.client, this.held, this.streams);
@@ -548,7 +553,8 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     }
     await this.#runningSettled();
     if (this.held.cancelling !== undefined) await this.held.cancelling;
-    if (this.#destroyRequested || this.held.cancelUnconfirmed) await this.#close();
+    if (this.#destroyRequested || this.held.cancelUnconfirmed || this.#isolationPending)
+      await this.#close();
     else await this.client.release();
     this.#disposed = true;
     this.#released();
