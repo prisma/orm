@@ -572,6 +572,30 @@ testMatrix.setupTestSuite(
       },
     )
 
+    testIf(provider !== Providers.MONGODB)(
+      'sql: failed nested array transaction can be caught and the outer transaction commits',
+      async () => {
+        const outerEmail = `user_${copycat.uuid(905)}@website.com`
+        const nestedEmail = `user_${copycat.uuid(906)}@website.com`
+
+        await prisma.$transaction(async (tx) => {
+          await tx.user.create({ data: { email: outerEmail } })
+
+          await expect(
+            tx.$transaction([
+              tx.user.create({ data: { email: nestedEmail } }),
+              tx.user.create({ data: { email: outerEmail } }),
+            ]),
+          ).rejects.toMatchObject({ code: 'P2002' })
+        })
+
+        const users = await prisma.user.findMany({
+          where: { email: { in: [outerEmail, nestedEmail] } },
+        })
+        expect(users.map((u) => u.email)).toEqual([outerEmail])
+      },
+    )
+
     testIf(provider === Providers.POSTGRESQL)(
       'postgresql: nested array transaction is not committed before the outer transaction',
       async () => {

@@ -809,12 +809,6 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
     }
 
     /**
-     * Perform a long-running transaction
-     * @param callback
-     * @param options
-     * @returns
-     */
-    /**
      * Run the queries of an array-form `$transaction` that was called on an
      * interactive-transaction client. They run one after another in a nested
      * transaction (a savepoint) on the outer transaction's connection, so they
@@ -854,6 +848,12 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
       })
     }
 
+    /**
+     * Perform a long-running transaction
+     * @param callback
+     * @param options
+     * @returns
+     */
     async _transactionWithCallback({
       callback,
       options = {},
