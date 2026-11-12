@@ -370,7 +370,7 @@ describe('stored key calls', () => {
         source:
           'fillStoredKey({collection:"users",field:"addresses",path:"$[*].city",value:{$literal:""}})',
         operationClass: 'widening',
-        label: fill.toOp().label,
+        label: fill.label,
         op: fillStoredKey({
           collection: 'users',
           field: 'addresses',

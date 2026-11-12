@@ -27,6 +27,7 @@ import {
 import {
   canonicalize,
   collectionOfModel,
+  embeddingModelOf,
   indexLookupKey,
   type MongoContract,
   validatorDocumentShapesOf,
@@ -59,6 +60,7 @@ import {
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
+import { planStoredKeyFills } from './mongo-stored-key-fills';
 import { planStoredKeyRewrites } from './mongo-stored-key-planning';
 import {
   castFieldCallOf,
@@ -584,7 +586,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         !(
           (statement.kind === 'convert' || statement.kind === 'backfill') &&
           statement.entity === 'field'
-        ),
+        ) &&
+        !(statement.kind === 'backfill' && statement.entity === 'valueObjectField'),
     );
     if (unsupported !== undefined) {
       return {
@@ -661,7 +664,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         if (change !== undefined) converted.push(change);
         return [{ statement, outcome: convertTransform(statement, change, contracts) }];
       }
-      if (statement.kind === 'backfill' && statement.entity === 'field') {
+      if (
+        statement.kind === 'backfill' &&
+        statement.entity === 'field' &&
+        embeddingModelOf(contract.domain, statement.field) === undefined
+      ) {
         return [
           {
             statement,
@@ -687,6 +694,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       destination: destinationIR,
       statements: options.statements,
     });
+    const storedKeyFills = planStoredKeyFills({
+      statements: options.statements,
+      fromContract,
+      contract,
+      lookups,
+      schema,
+      destination: destinationIR,
+    });
+    if (!storedKeyFills.ok) return { kind: 'failure', conflicts: [...storedKeyFills.failure] };
     const rewrites: readonly PlannedRewrite[] = [
       ...removals.map(
         ({ call, subject, variant }): PlannedRewrite => ({
@@ -750,6 +766,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ? ([statement, [outcome.call]] as const)
           : ([statement, []] as const),
       ),
+      ...options.statements.flatMap((statement) => {
+        const calls = storedKeyFills.value.flatMap((fill) =>
+          fill.statement === statement ? [fill.call] : [],
+        );
+        return calls.length === 0 ? [] : [[statement, calls] as const];
+      }),
     ]);
     const transformCalls = (kind: 'convert' | 'backfill') =>
       transforms.flatMap(({ statement, outcome }) =>
@@ -766,6 +788,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...castCalls,
           ...transformCalls('convert'),
           ...fills.map((fill) => fill.call),
+          ...storedKeyFills.value.map((fill) => fill.call),
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
           ...storedKeys.value.removals.map((rewrite) => rewrite.call),
@@ -826,11 +849,16 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ...fieldLoss,
       ].sort((a, b) => a.operationIndex - b.operationIndex),
       accessChanges: [],
-      temporaryValues: fills.map((fill) => ({
-        operationIndex: calls.indexOf(fill.call),
-        subject: fill.subject,
-        value: fill.text,
-      })),
+      temporaryValues: [
+        ...fills.map((fill) => ({
+          operationIndex: calls.indexOf(fill.call),
+          subject: fill.subject,
+          value: fill.text,
+        })),
+        ...storedKeyFills.value.flatMap(({ call, subject, text }) =>
+          text === undefined ? [] : [{ operationIndex: calls.indexOf(call), subject, value: text }],
+        ),
+      ],
       ...(allWarnings.length > 0 ? { warnings: allWarnings } : {}),
     };
   }

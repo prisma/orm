@@ -440,7 +440,7 @@ describe('migration file E2E', () => {
       const result = await runFile('migration.ts');
       expect(result.exitCode).toBe(0);
       expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
-        JSON.parse(serializeMongoOps(calls.map((call) => call.toOp()))),
+        JSON.parse(serializeMongoOps(await Promise.all(calls.map((call) => call.toOp())))),
       );
     });
 

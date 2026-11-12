@@ -17,6 +17,7 @@
  * interface and the `OpFactoryCall` union.
  */
 
+import type { JsonValue } from '@internal/contract/types';
 import { CliStructuredError } from '@internal/errors/control';
 import { errorUnfilledPlaceholder } from '@internal/errors/migration';
 import type {
@@ -39,7 +40,12 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import type { Document } from '@internal/mongo-value';
-import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  TsExpression,
+  tsObjectSource,
+} from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type CastFieldOptions,
@@ -50,7 +56,6 @@ import {
   dropCollection,
   dropIndex,
   type FillFieldOptions,
-  type FillStoredKeyOptions,
   fillField,
   fillStoredKey,
   type RenameStoredKeyOptions,
@@ -61,6 +66,7 @@ import {
   type StoredKeyOptions,
   unsetField,
 } from './migration-factories';
+import { UnfilledValue } from './unfilled-value';
 
 export interface CollModMeta {
   readonly id?: string;
@@ -312,6 +318,34 @@ export class CastFieldCall extends OpFactoryCallNode {
 }
 
 /**
+ * The operation of a call whose value is an unfilled placeholder: a promise that rejects with
+ * `MIGRATION.UNFILLED_PLACEHOLDER`, whose meta names the operation it stands for, so that a plan can
+ * list it before the user fills the value.
+ */
+function unfilledOperation(
+  slot: string,
+  standsFor: Pick<AnyMongoMigrationOperation, 'id' | 'label' | 'operationClass'>,
+): Promise<never> {
+  const unfilled = errorUnfilledPlaceholder(slot);
+  const operation = Promise.reject(
+    new CliStructuredError(unfilled.code, unfilled.message, {
+      ...ifDefined('why', unfilled.why),
+      ...ifDefined('fix', unfilled.fix),
+      meta: {
+        slot,
+        operation: {
+          id: standsFor.id,
+          label: standsFor.label,
+          operationClass: standsFor.operationClass,
+        },
+      },
+    }),
+  );
+  operation.catch(() => undefined);
+  return operation;
+}
+
+/**
  * A data transform the planner scaffolds for a field: its check and its run's filter select the
  * documents still to change, and its update is a placeholder the user fills in `migration.ts`.
  * Until then `toOp()` rejects with `MIGRATION.UNFILLED_PLACEHOLDER`, naming the operation it stands
@@ -339,23 +373,11 @@ export class DataTransformCall extends OpFactoryCallNode {
   }
 
   toOp(): Promise<never> {
-    const unfilled = errorUnfilledPlaceholder(this.slot);
-    const operation = Promise.reject(
-      new CliStructuredError(unfilled.code, unfilled.message, {
-        ...ifDefined('why', unfilled.why),
-        ...ifDefined('fix', unfilled.fix),
-        meta: {
-          slot: this.slot,
-          operation: {
-            id: `data_transform.${this.name}`,
-            label: this.label,
-            operationClass: this.operationClass,
-          },
-        },
-      }),
-    );
-    operation.catch(() => undefined);
-    return operation;
+    return unfilledOperation(this.slot, {
+      id: `data_transform.${this.name}`,
+      label: this.label,
+      operationClass: this.operationClass,
+    });
   }
 
   renderTypeScript(): string {
@@ -447,25 +469,57 @@ export class RemoveStoredKeyCall extends OpFactoryCallNode {
   }
 }
 
+/** The options of a `fillStoredKey` call, whose value may be a placeholder the user fills in `migration.ts`. */
+export interface FillStoredKeyCallOptions extends StoredKeyOptions {
+  readonly value: JsonValue | UnfilledValue;
+}
+
+/**
+ * Sets a key inside a field's value where it is missing or `null`. An unfilled value is a placeholder
+ * the user fills in `migration.ts`; until then `toOp()` rejects with `MIGRATION.UNFILLED_PLACEHOLDER`.
+ */
 export class FillStoredKeyCall extends OpFactoryCallNode {
   readonly factoryName = 'fillStoredKey' as const;
   readonly operationClass = 'widening' as const;
-  readonly options: FillStoredKeyOptions;
+  readonly options: FillStoredKeyCallOptions;
   readonly label: string;
 
-  constructor(options: FillStoredKeyOptions) {
+  constructor(options: FillStoredKeyCallOptions) {
     super();
     this.options = options;
-    this.label = this.toOp().label;
+    this.label = fillStoredKey({ ...options, value: null }).label;
     this.freeze();
   }
 
-  toOp(): MongoDmlOperation {
-    return fillStoredKey(this.options);
+  toOp(): MongoDmlOperation | Promise<never> {
+    const { value, ...at } = this.options;
+    if (value instanceof UnfilledValue) {
+      return unfilledOperation(value.slot, fillStoredKey({ ...at, value: null }));
+    }
+    return fillStoredKey({ ...at, value });
   }
 
   renderTypeScript(): string {
-    return `fillStoredKey(${jsonToTsSource(this.options)})`;
+    return `fillStoredKey(${tsObjectSource(
+      Object.entries(this.options).map(
+        ([key, value]) =>
+          [
+            key,
+            value instanceof UnfilledValue
+              ? `placeholder(${jsonToTsSource(value.slot)})`
+              : jsonToTsSource(value),
+          ] as const,
+      ),
+    )})`;
+  }
+
+  override importRequirements(): readonly ImportRequirement[] {
+    return [
+      ...super.importRequirements(),
+      ...(this.options.value instanceof UnfilledValue
+        ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+        : []),
+    ];
   }
 }
 

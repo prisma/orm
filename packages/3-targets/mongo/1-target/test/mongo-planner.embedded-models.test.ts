@@ -120,7 +120,9 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     });
   });
 
-  it('plans no fill for a new required field or an optional field made required, and warns', async () => {
+  it('fills a new required field and an optional field made required, and does not warn', async () => {
+    const fill = (key: string) =>
+      `Fill key "${key}" at path "$[*]" in field addresses of collection users where it is missing or null`;
     expect(
       await outcome(
         plan({
@@ -129,37 +131,12 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           schema: live,
         }),
       ),
-    ).toEqual({
-      operations: [],
-      dataLoss: [],
-      warnings: [
-        {
-          kind: 'documentsNotRewritten',
-          why: NOT_A_STATEMENT,
-          summary: 'Field "Address.city" of embedded model "Address" becomes required',
-        },
-        {
-          kind: 'documentsNotRewritten',
-          why: NOT_A_STATEMENT,
-          summary: 'Field "Address.country" of embedded model "Address" is new and required',
-        },
-      ],
-    });
+    ).toEqual({ operations: [fill('city'), fill('country')], dataLoss: [], warnings: [] });
   });
 
-  it('refuses a convert and a backfill of the field', () => {
-    const why =
-      'Fields of an embedded model are not rewritten in this release. Leave out this statement.';
-    expect([
-      refusal(
-        plan({
-          from: users('from', { zip: STRING }),
-          to: users('to', { zip: INT }),
-          schema: live,
-          statements: [addressStatement('convert', 'zip')],
-        }),
-      ),
-      refusal(
+  it('plans a backfill of the field as a fill whose value is a placeholder', async () => {
+    expect(
+      await outcome(
         plan({
           from: users('from', { city: OPTIONAL_STRING }),
           to: users('to', { city: STRING }),
@@ -167,24 +144,13 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           statements: [addressStatement('backfill', 'city')],
         }),
       ),
-    ]).toEqual([
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot convert field "Address.zip": model "Address" is embedded in the documents of model "User"',
-          why,
-        },
+    ).toEqual({
+      operations: [
+        'Fill key "city" at path "$[*]" in field addresses of collection users where it is missing or null',
       ],
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot backfill field "Address.city": model "Address" is embedded in the documents of model "User"',
-          why,
-        },
-      ],
-    ]);
+      dataLoss: [],
+      warnings: [],
+    });
   });
 
   it('refuses a rename of the embedded model', () => {

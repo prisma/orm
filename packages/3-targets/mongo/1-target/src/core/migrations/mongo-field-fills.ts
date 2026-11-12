@@ -1,4 +1,4 @@
-import type { ContractField } from '@internal/contract/types';
+import type { ContractField, ContractValueObjectField } from '@internal/contract/types';
 import type { TypeLookups } from '@internal/framework-components/codec';
 import type {
   FieldCoordinate,
@@ -7,6 +7,7 @@ import type {
 } from '@internal/framework-components/control';
 import {
   collectionOfModel,
+  embeddingModelOf,
   type MongoContract,
   ownStoredNameOf,
   type SelectedVariant,
@@ -22,7 +23,6 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
-  embeddedModelReason,
   type ModelMatchInput,
   modelAt,
   modelCoordinates,
@@ -44,8 +44,9 @@ export interface FieldFill {
   readonly variant: SelectedVariant | undefined;
 }
 
-function temporaryValueOf(
-  field: ContractField,
+/** The temporary value of a field's type: an empty list for any list, and for a scalar the one its codec declares. A value object, an enum or a dictionary has none. */
+export function temporaryValueOf(
+  field: ContractField | ContractValueObjectField,
   lookups: TypeLookups,
 ): MongoTemporaryValue | undefined {
   if (field.many !== undefined && field.many !== false) return EMPTY_LIST;
@@ -121,7 +122,7 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
     if (
       definition === undefined ||
       collection === undefined ||
-      embeddedModelReason(input.contract, model) !== undefined
+      embeddingModelOf(input.contract.domain, model) !== undefined
     ) {
       return [];
     }

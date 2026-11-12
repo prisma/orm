@@ -25,7 +25,6 @@ import {
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   collectionControlPolicy,
-  EMBEDDED_MODEL_WHY,
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
@@ -70,6 +69,9 @@ function refuse(
   };
 }
 
+const NESTED_CONVERT_WHY =
+  'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values in a dataTransform operation of migration.ts, and leave out this statement.';
+
 function withVariant(variant: SelectedVariant | undefined, condition: Document): Document {
   return variant === undefined ? condition : { $and: [variantFilter(variant), condition] };
 }
@@ -101,7 +103,7 @@ export function convertTransform(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementTransform {
   const embedded = embeddedModelReason(contracts.contract, statement.field);
-  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
+  if (embedded !== undefined) return refuse(statement, embedded, NESTED_CONVERT_WHY, contracts);
   const unrewritable = unrewritableReason(contracts.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
@@ -191,8 +193,6 @@ export function backfillTransform(
       contracts,
     );
   }
-  const embedded = embeddedModelReason(input.contract, statement.field);
-  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
   const unrewritable = unrewritableReason(input.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);

@@ -291,7 +291,7 @@ function policyRefusal(
   );
 }
 
-function rewriteCollectionOf(schema: MongoSchemaIR, name: string): RewriteCollection {
+export function rewriteCollectionOf(schema: MongoSchemaIR, name: string): RewriteCollection {
   const collection = schema.collection(name);
   return {
     timeSeries: collection?.options?.timeseries !== undefined,

@@ -67,23 +67,9 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it('refuses backfilling a value object field and converting a variant, one refusal each', () => {
+  it('refuses converting a variant', () => {
     const app = asNamespaceId('app');
-    expect([
-      refusal(
-        plan({
-          from: profiles,
-          to: profiles,
-          schema: profilesSchema,
-          statements: [
-            {
-              kind: 'backfill',
-              entity: 'valueObjectField',
-              field: { namespaceId: app, valueObject: 'GeoPoint', field: 'country' },
-            },
-          ],
-        }),
-      ),
+    expect(
       refusal(
         plan({
           from: profiles,
@@ -94,23 +80,13 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
           ],
         }),
       ),
-    ]).toEqual([
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'MongoDB does not apply backfill statements in this release, so nothing was planned: backfill value object field "GeoPoint.country"',
-          why: 'MongoDB cannot carry out backfill statements in this release. Leave out the statement.',
-        },
-      ],
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Bug"',
-          why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
-        },
-      ],
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Bug"',
+        why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
+      },
     ]);
   });
 

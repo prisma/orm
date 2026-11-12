@@ -53,6 +53,7 @@ import {
   type CastFieldCall,
   type DataTransformCall,
   type FillFieldCall,
+  type FillStoredKeyCall,
   type OpFactoryCall,
   type RemoveStoredKeyCall,
   RenameCollectionCall,
@@ -73,9 +74,6 @@ export function embeddedModelReason(
     ? undefined
     : `model "${modelDisplayName(coordinate)}" is embedded in the documents of model "${owner}"`;
 }
-
-export const EMBEDDED_MODEL_WHY =
-  'Fields of an embedded model are not rewritten in this release. Leave out this statement.';
 
 /** Why a statement on `model` cannot be planned when no collection holds its documents. */
 export function noCollectionReason(model: ModelCoordinate): string {
@@ -203,6 +201,7 @@ export interface StatementCalls {
     | UnsetFieldCall
     | RenameStoredKeyCall
     | RemoveStoredKeyCall
+    | FillStoredKeyCall
   )[];
 }
 
