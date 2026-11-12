@@ -72,7 +72,9 @@ type MembershipTest<CT extends Record<string, { readonly input: unknown }>> = {
   ): Expression<BooleanCodecType>;
   <CodecId extends string, Input = CodecInput<CodecId, CT>>(
     expr: Expression<{ codecId: CodecId; nullable: boolean; input?: Input }>,
-    values: Array<ComparisonOperand<CodecId, boolean, Input>>,
+    values: Array<
+      Expression<{ codecId: CodecId; nullable: boolean; many?: never }> | NoInfer<Input> | null
+    >,
   ): Expression<BooleanCodecType>;
 };
 

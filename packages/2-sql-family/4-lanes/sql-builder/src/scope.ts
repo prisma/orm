@@ -69,7 +69,9 @@ export type RebindScope<S extends Scope, OldKey extends string, NewKey extends s
 };
 
 export type NullableScopeTable<S extends ScopeTable> = {
-  [K in keyof S]: { codecId: S[K]['codecId']; nullable: true };
+  [K in keyof S]: { codecId: S[K]['codecId']; nullable: true } & ('input' extends keyof S[K]
+    ? { input?: Exclude<S[K]['input'], undefined> | null }
+    : Record<never, never>);
 };
 
 export type NullableScope<S extends Scope> = {

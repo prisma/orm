@@ -216,3 +216,24 @@ test('sql-builder where: a raw SQL operand keeps the codec input type', () => {
 
   users.where((_f, fns) => fns.eq(fns.raw`lower(role)`.returns('pg/text@1'), 'nope'));
 });
+
+test('sql-builder where: a column in an in-list does not widen the tested column’s values', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'inactive' is a status member, not a role member
+  users.where((f, fns) => fns.in(f.role, [f.status, 'inactive']));
+  users.where((f, fns) => fns.in(f.role, [f.status, 'admin']));
+});
+
+test('sql-builder where: an enum column of a left-joined table keeps its values', () => {
+  const db = null as unknown as EnumDb;
+  const joined = db.__unbound__.User.as('a')
+    .outerLeftJoin(db.__unbound__.User.as('b'), (f, fns) => fns.eq(f.a.role, f.b.role))
+    .select('r', (f) => f.a.role);
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  joined.where((f, fns) => fns.eq(f.b.role, 'nope'));
+  joined.where((f, fns) => fns.eq(f.b.role, 'admin'));
+  joined.where((f, fns) => fns.eq(f.b.role, null));
+});
