@@ -29,10 +29,10 @@ export function applyAllResultExtensions({
   globalOmit,
 }: ApplyAllResultExtensionsParams) {
   // We return the result directly (not applying result extensions) if
-  // - there is no extension to apply
+  // - no extension has a `result` component, so nothing can change the result
   // - result is `null`
   // - result is not an object (e.g. `.count()`)
-  if (extensions.isEmpty() || result == null || typeof result !== 'object') {
+  if (!extensions.hasResultExtension() || result == null || typeof result !== 'object') {
     return result
   }
   const model = runtimeDataModel.models[modelName]

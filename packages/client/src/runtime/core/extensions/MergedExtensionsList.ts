@@ -30,10 +30,18 @@ class MergedExtensionsListNode {
     return previous.concat(newCb)
   })
 
+  private resultExtensionPresent = lazyProperty(
+    () => Boolean(this.extension.result) || (this.previous?.hasResultExtension() ?? false),
+  )
+
   constructor(
     public extension: ExtensionArgs,
     public previous?: MergedExtensionsListNode,
   ) {}
+
+  hasResultExtension(): boolean {
+    return this.resultExtensionPresent.get()
+  }
 
   getAllComputedFields(dmmfModelName: string): ComputedFieldsMap | undefined {
     return this.computedFieldsCache.getOrCreate(dmmfModelName, () => {
@@ -137,6 +145,14 @@ export class MergedExtensionsList {
 
   isEmpty(): boolean {
     return this.head === undefined
+  }
+
+  /**
+   * Whether any extension in the list has a `result` component, i.e. whether
+   * applying result extensions to a query result can change it at all.
+   */
+  hasResultExtension(): boolean {
+    return this.head?.hasResultExtension() ?? false
   }
 
   append(extension: ExtensionArgs) {
