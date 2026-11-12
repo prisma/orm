@@ -121,7 +121,7 @@ We do not ask whether a PR was AI-assisted. We do verify the result. If you used
 
 ## Working with agents
 
-If you use an LLM-based agent (Claude, Cursor, Codex, etc.) to author or review your contribution, the [`contrib-pr` skill](./.agents/skills/contrib-pr/SKILL.md) encodes the contribution flow as an agent-runnable workflow: scope the change, write tests, run the right suites, sign off the commit, fill the PR template, link the issue. Pointing your agent at this skill is the easiest way to keep the contribution shape consistent without you having to coach the agent through this document. (For Claude users, the same file is also reachable as `.claude/skills/contrib-pr/SKILL.md` via a workspace symlink.)
+If you use an LLM-based agent (Claude, Cursor, Codex, etc.) to author or review your contribution, the [`contrib-pr` skill](./skills-contrib/contrib-pr/SKILL.md) encodes the contribution flow as an agent-runnable workflow: scope the change, write tests, run the right suites, sign off the commit, fill the PR template, link the issue. Pointing your agent at this skill is the easiest way to keep the contribution shape consistent without you having to coach the agent through this document. (For Claude users, the same file is also reachable as `.claude/skills/contrib-pr/SKILL.md` via a workspace symlink.)
 
 The skill is intentionally a "pit of success", not a gate — there is no enforcement in CI that you used it. We rely on the result (passing tests, scoped change, well-formed PR) to do the verification.
 
