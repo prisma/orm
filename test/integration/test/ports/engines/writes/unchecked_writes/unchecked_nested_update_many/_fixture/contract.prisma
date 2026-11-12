@@ -1,0 +1,16 @@
+// use prisma-8
+
+model ModelA {
+  id   Int    @id
+  b_id Int
+  b    ModelB @relation(fields: [b_id], references: [id])
+
+  @@map("ModelA")
+}
+
+model ModelB {
+  id Int      @id
+  a  ModelA[]
+
+  @@map("ModelB")
+}
