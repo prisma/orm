@@ -141,11 +141,11 @@ function connectionOptions(
   connectTimeoutMs: number | undefined,
 ): ConnectionConfig {
   return {
-    host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
+    host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1') || undefined,
     ...ifDefined('port', parsed.port === '' ? undefined : Number(parsed.port)),
-    user: decodeURIComponent(parsed.username),
-    password: decodeURIComponent(parsed.password),
-    database: decodeURIComponent(parsed.pathname.slice(1)),
+    user: decodeURIComponent(parsed.username) || undefined,
+    password: decodeURIComponent(parsed.password) || undefined,
+    database: decodeURIComponent(parsed.pathname.slice(1)) || undefined,
     ...ifDefined('ssl', tlsOptions(parameters)),
     allowPublicKeyRetrieval: parameters.allowPublicKeyRetrieval ?? false,
     connectTimeout: connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
