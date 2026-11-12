@@ -160,6 +160,67 @@ it('evicts a lease released while BEGIN is still running', async () => {
   await expect(tx.commit()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
 });
 
+it.each([false, true])(
+  'upgrades release of a direct parked driver cursor, owned %s',
+  async (ownedByDriver) => {
+    const { client, close } = setup(true);
+    const directClient = {
+      connect: client.connect,
+      end: client.end,
+      on: client.on,
+      query: client.query,
+    };
+    const driver = createBoundDriverFromBinding(
+      { kind: 'pgClient', client: directClient as unknown as Client, ownedByDriver },
+      { batchSize: 2 },
+    );
+    const rows = driver.query({ sql: 'select id' })[Symbol.asyncIterator]();
+    await rows.next();
+    const connection = await driver.acquireConnection();
+    const releasing = connection.release();
+    await Promise.all([releasing, connection.destroy(new Error('unsafe'))]);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(client.end).toHaveBeenCalledTimes(ownedByDriver ? 1 : 0);
+    expect(driver.state).toBe('closed');
+  },
+);
+
+it.each([false, true])(
+  'unregisters abandoned cursor cleanup when close fails %s',
+  async (fails) => {
+    const { driver, close } = setup(true);
+    if (fails) close.mockImplementation((done) => done(new Error('close failed')));
+    const added: { set: Set<unknown>; value: unknown }[] = [];
+    const add = Set.prototype.add;
+    const spy = vi.spyOn(Set.prototype, 'add').mockImplementation(function (
+      this: Set<unknown>,
+      value: unknown,
+    ) {
+      added.push({ set: this, value });
+      return add.call(this, value);
+    });
+    try {
+      for (let index = 0; index < 3; index++) {
+        added.length = 0;
+        const connection = await driver.acquireConnection();
+        const rows = connection.query({ sql: 'select id' })[Symbol.asyncIterator]();
+        await rows.next();
+        const registrations = added.filter(
+          ({ value }) =>
+            typeof value === 'function' &&
+            added.filter((entry) => entry.value === value).length === 2,
+        );
+        expect(registrations).toHaveLength(2);
+        await connection.release();
+        expect(registrations.map(({ set, value }) => set.has(value))).toEqual([false, false]);
+      }
+      expect(close).toHaveBeenCalledTimes(3);
+    } finally {
+      spy.mockRestore();
+    }
+  },
+);
+
 it('destroys a direct socket with a parked driver-level cursor', async () => {
   const { client, close } = setup(true);
   const directClient = {

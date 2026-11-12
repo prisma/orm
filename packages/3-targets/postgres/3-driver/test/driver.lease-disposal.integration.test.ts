@@ -46,6 +46,34 @@ it.each([false, true])(
 );
 
 it.each([false, true])(
+  'upgrades a pending direct release while a driver cursor is parked, owned %s',
+  async (ownedByDriver) => {
+    const db = await database();
+    const client = new Client({ connectionString: db.connectionString });
+    const driver = descriptor.create({ cursor: { batchSize: 1 } });
+    let held: SqlConnection | undefined;
+    try {
+      await driver.connect({ kind: 'pgClient', client, ownedByDriver });
+      const rows = driver
+        .query({ sql: 'SELECT generate_series(1, 5) AS id' })
+        [Symbol.asyncIterator]();
+      await rows.next();
+      held = await driver.acquireConnection();
+      const releasing = held.release();
+      await Promise.all([releasing, held.destroy(new Error('abandoned'))]);
+      expect(driver.state).toBe('closed');
+      await expect(rows.next()).rejects.toMatchObject({ kind: 'sql_connection' });
+    } finally {
+      await held?.destroy();
+      await driver.close();
+      if (!ownedByDriver) await client.end();
+      await db.close();
+    }
+  },
+  timeouts.spinUpPpgDev,
+);
+
+it.each([false, true])(
   'disconnects a destroyed direct binding and accepts a fresh client, driver owned %s',
   async (ownedByDriver) => {
     const db = await database();

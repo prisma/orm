@@ -411,18 +411,20 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
           ended = resolve;
         });
         const forgetEnd = observeClientEnd(client, ended);
+        let unregister: (() => void) | undefined;
+        let unregisterClient: (() => void) | undefined;
         let closing: Promise<void> | undefined;
         const close = (): Promise<void> =>
           (closing ??= (async () => {
             try {
               await Promise.race([stream.return?.(), termination]);
             } finally {
+              unregister?.();
+              unregisterClient?.();
               releaseLock();
               forgetEnd();
             }
           })());
-        let unregister: (() => void) | undefined;
-        let unregisterClient: (() => void) | undefined;
         try {
           this.assertUsable(client);
           unregister = this.lease?.register(close);
@@ -708,7 +710,10 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
       this.#destruction ??= destroy;
       this.#onInvalidated?.();
     }
-    if (this.#disposal !== undefined) return this.#disposal;
+    if (this.#disposal !== undefined) {
+      if (destroy !== undefined) void drainClientStreams(this.#connection).catch(() => undefined);
+      return this.#disposal;
+    }
     this.#lease.active = false;
     this.#disposal = this.#drainAndDispose(destroy).catch((error) => {
       this.#disposal = undefined;
