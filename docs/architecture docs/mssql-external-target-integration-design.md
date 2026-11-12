@@ -127,7 +127,7 @@ interface ExternalTargetRegistrationV1 {
 - `label`: nonempty display text; does not grant capabilities.
 - `imports`: exact emitted source specifier to facade export subpath, as below.
 - `schema` and `db`: nonempty UTF-8 TypeScript source strings owned by the facade.
-- `env`: an environment-file example with placeholders, never real credentials.
+- `env`: an environment-file example that defines `DATABASE_URL` using placeholders, never real credentials. The shared config template reads `process.env['DATABASE_URL']`; an example defining only another variable does not satisfy this contract.
 - `quickReference`: package-owned getting-started Markdown.
 - The facade identity is derived from the application's declared dependency and verified against the installed package's `name`; it is not supplied twice in registration metadata.
 
@@ -149,7 +149,7 @@ For example, within a registered facade named `@example/orm-example`:
 
 The resolver joins the verified facade name and declared subpath. The first entry therefore resolves to `@example/orm-example/contract/types`.
 
-These keys identify references already produced by Prisma's emitters or package contributions; **they do not authorize an application to import `@internal/*`.** They must not be interpreted as a stability promise for private module names. An external package remains compatible only with the public SDK versions it supports. Existing public contribution specifiers should be used directly where possible, without adding a mapping.
+These keys identify references already produced by Prisma's emitters or package contributions; **they do not authorize an application to import `@internal/*`.** They must not be interpreted as a stability promise for private module names. An external package remains compatible only with the public SDK versions it supports. Existing public contribution specifiers remain unchanged; recognized internal extension contributions retain the existing public-package resolution described in section 5.2 without requiring a facade mapping.
 
 This private-source-key exposure is an explicit design tradeoff for review. If maintainers prefer stable public emission identities, agree on those before implementation; do not silently make private names a supported extension API.
 
@@ -220,7 +220,8 @@ The additional registration validation and direct-import audit below apply only 
 - The installed package name must match the declared dependency key. npm aliases that disagree with that identity are rejected in this increment.
 - Mapping keys must be exact source specifiers in the supported emitted-internal namespace. Values must be explicit safe `./subpath` keys in the facade's exports. Reject wildcards, absolute paths, traversal, backslashes, fragments, and URLs.
 - Null or disabled export targets are invalid. Conditional exports must expose the applicable Node ESM/type surfaces; declaration presence alone is not proof that a packed package resolves. Verify resolution in consumer tests.
-- Registered roots rewrite only explicitly mapped internal references. An unmapped internal reference fails; it is not guessed, preserved, or routed through PostgreSQL.
+- Recognized extension-pack contribution specifiers retain the existing shared resolver's mapping to the extension's own public package and export. They do not require an explicit facade mapping or facade re-export. That public package must be directly declared by the application; the external-root artifact audit rejects a missing direct dependency. This rule does not permit guessing a package for an unrecognized internal specifier.
+- For remaining internal references, registered roots rewrite only explicit facade mappings. An unmapped internal reference fails; it is not guessed, preserved, or routed through PostgreSQL.
 - Already-public and relative specifiers retain their existing resolution. Separately, the external-root artifact audit rejects references to packages not directly declared by the application, with the established exemptions for relative imports and Node builtins. Do not apply this broader audit to legacy roots or reject a previously accepted third-party import there.
 - Use the same immutable project resolver for contract declarations, migrations, and snapshot declarations. Do not add independent per-writer mapping tables.
 - Changing import roots must not change contract content, hashes, SQL, or query semantics.
@@ -329,7 +330,7 @@ The implementation must add tests at the actual boundaries, not only unit tests 
 | R04 | Missing/unknown/reserved selection or selected facade conflict | Deterministic error; zero writes, installs, probes, or module evaluation; unselected external IDs do not conflict |
 | R05 | Selected version/type/name/export/map invalidity | Fail malformed selection/metadata, disabled exports, traversal, wildcard and undeclared mappings; verify conditional ESM/type exports; no legacy-root fallback |
 | R06 | Unsupported external modes and option combinations | Selected external PSL/probe/adoption refused at preflight; external authoring prompt only offers supported choices; existing built-in modes unchanged |
-| R07 | External import root | Exact mappings work; absent internal mapping fails; public imports remain unchanged; undeclared scoped/unscoped imports fail artifact audit |
+| R07 | External import root | Exact facade mappings work; unmapped internal references other than recognized extension contributions fail; public imports remain unchanged; undeclared scoped/unscoped imports fail artifact audit |
 | R08 | Existing root modes without external opt-in | Internal, built-in facade, decomposed public-package behavior and audit unchanged; no process-global registration leakage |
 | R09 | Artifact propagation | Contract emission, migration rendering, and snapshot declarations use the selected external resolver, including codec/operation contributions |
 | R10 | Artifact semantics | Same contract/hash inputs produce identical hashes/content apart from expected import specifiers; no SQL or query change |
@@ -342,6 +343,8 @@ The implementation must add tests at the actual boundaries, not only unit tests 
 | R17 | Legacy roots with unselected external packages | Test valid metadata, invalid JSON, unreadable manifests, unsupported versions, reserved/duplicate IDs, and missing installs; PostgreSQL facade/platform/internal roots, emitted imports, and existing import-audit results match the baseline; no unselected manifest reads |
 | R18 | Persistent, project-local external selection | A fresh process uses the same selected package for contract/migration/snapshot emission; only that package is inspected; other external registrations cannot redirect it; no selector means legacy root rules |
 | R19 | Selected failure, config consistency, and explicit opt-out | Invalid selected metadata never falls back; normal config target mismatch fails without stack substitution; selected built-in-facade conflict fails; opted-in built-in/default init explains opt-out before effects; removing the selector restores legacy naming, not an automatic config/database migration |
+| R20 | Environment example and generated config | The example defines `DATABASE_URL`; replace its placeholder with a test value, load the scaffolded config, and assert `db.connection` receives that value. A registration defining only `SQLSERVER_URL` fails external preflight before effects; no database connection is required |
+| R21 | Extension contribution resolution | A recognized internal extension contribution resolves to its own directly installed public package without a facade mapping or re-export; already-public contributions remain unchanged. Missing direct extension dependencies fail the external audit, and other unmapped internal references still fail |
 
 Use a purpose-built functioning test facade for R13; an empty contract object and successful file writes alone are not end-to-end integration evidence. Package fixtures must obey the same public-export rules expected of contributors.
 
