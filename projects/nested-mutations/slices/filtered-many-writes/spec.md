@@ -26,7 +26,7 @@ await db.User.where({ id: 1 }).update({
 - `r.where(input)` accepts every form the collection's `where()` accepts for the related model: a callback over the related model's accessor, a shorthand object, or a direct expression. It returns a narrowed mutator that has only `where`, `updateAll` and `deleteAll`. Chained `where` calls combine with AND, as on a collection.
 - `r.updateAll(data)` and `r.deleteAll()` are also callable on the mutator directly, with no `where`. They then apply to every row related to the parent. This differs from the collection, where both require a preceding `where`; the parent already limits the rows.
 - `updateAll` data is the related model's scalar fields, as in the collection's `updateAll`. It takes no relation callbacks.
-- A relation callback returns one operation or a readonly array of operations. An empty array is a no-op. Arrays do not nest.
+- A relation callback returns one operation or a readonly array of operations. An empty array is a no-op. Arrays do not nest. A to-one relation takes at most one operation; an array of more than one is rejected (decided 2026-11-12).
 
 ### Descriptors
 
@@ -55,6 +55,7 @@ Each is rejected at runtime. Each is also rejected by the types, with one limit:
 - `where`, `updateAll`, `deleteAll` inside `create()`: `ORM.RELATION_MUTATION_UNSUPPORTED`, the code `disconnect` in `create()` uses today.
 - `where`, `updateAll`, `deleteAll` on a to-one relation (`N:1` and `1:1`): `ORM.RELATION_MUTATION_UNSUPPORTED`.
 - `updateAll` data that sets a column linking the child to this parent: `ORM.RELATION_MUTATION_INVALID`, the code for malformed nested input.
+- An array of more than one operation on a to-one relation (`N:1` and `1:1`): `ORM.RELATION_MUTATION_UNSUPPORTED`, while the graph is built, before any statement. A to-one relation takes at most one operation; a one-element array and an empty array are accepted. In the types, a to-one relation's callback returns one operation, `readonly []` or `readonly [operation]`, with the cardinality limit above (decided 2026-11-12).
 
 ## Coherence rationale
 

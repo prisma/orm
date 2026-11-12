@@ -115,13 +115,14 @@ export function addBeforeWrite(
   const keys: KeySource[] = [];
   const nullColumns: Record<string, null> = {};
   for (const relationMutation of parentOwned) {
-    const { relation, mutation } = relationMutation;
-    if (mutation.kind === 'disconnect') {
-      for (const column of localColumnsOf(t.context.contract, model, relation)) {
-        nullColumns[column] = null;
+    for (const mutation of relationMutation.mutations) {
+      if (mutation.kind === 'disconnect') {
+        for (const column of localColumnsOf(t.context.contract, model, relationMutation.relation)) {
+          nullColumns[column] = null;
+        }
+      } else {
+        keys.push(addParentOwned(t, model, relationMutation, mutation));
       }
-    } else {
-      keys.push(addParentOwned(t, model, relationMutation, mutation));
     }
   }
   return { keys, nullColumns };
@@ -135,15 +136,19 @@ export function addAfterWrite(
 ): void {
   const { childOwned, junctionOwned } = partitionByOwnership(relationMutations);
   for (const relationMutation of childOwned) {
-    addChildOwned(t, model, parent, relationMutation);
+    for (const mutation of relationMutation.mutations) {
+      addChildOwned(t, model, parent, relationMutation, mutation);
+    }
   }
   for (const relationMutation of junctionOwned) {
-    addJunctionOwned(t, model, parent, relationMutation);
+    for (const mutation of relationMutation.mutations) {
+      addJunctionOwned(t, model, parent, relationMutation, mutation);
+    }
   }
 }
 
-function rejectDisconnect({ name, mutation }: ParsedRelationMutation): void {
-  if (mutation.kind === 'disconnect') {
+function rejectDisconnect({ name, mutations }: ParsedRelationMutation): void {
+  if (mutations.some(({ kind }) => kind === 'disconnect')) {
     throw ormError(
       'ORM.RELATION_MUTATION_UNSUPPORTED',
       'disconnect() is only supported in update() nested mutations',
@@ -196,7 +201,8 @@ function addChildOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation, mutation }: ParsedRelationMutation,
+  { name, relation }: ParsedRelationMutation,
+  mutation: Mutation,
 ): void {
   const { context } = t;
   const { contract } = context;
@@ -270,7 +276,8 @@ function addJunctionOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation, mutation }: JunctionRelationMutation,
+  { name, relation }: JunctionRelationMutation,
+  mutation: Mutation,
 ): void {
   const { context } = t;
   const { contract } = context;

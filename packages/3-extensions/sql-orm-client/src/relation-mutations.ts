@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import {
   type ResolvedRelation,
@@ -25,7 +26,7 @@ export function hasThrough(relation: ResolvedRelation): relation is JunctionRela
 export interface ParsedRelationMutation {
   readonly name: string;
   readonly relation: ResolvedRelation;
-  readonly mutation: RelationMutation<Contract<SqlStorage>, string>;
+  readonly mutations: readonly RelationMutation<Contract<SqlStorage>, string>[];
 }
 
 export interface ParsedMutationInput {
@@ -64,23 +65,62 @@ export function parseMutationInput(
       );
     }
 
-    const mutator = createRelationMutator<Contract<SqlStorage>, string>();
-    const mutation = value(mutator);
-    if (!isRelationMutationDescriptor(mutation)) {
+    const result: unknown = value(createRelationMutator<Contract<SqlStorage>, string>());
+    const elements: readonly unknown[] = Array.isArray(result) ? result : [result];
+    const mutations = elements.map((element, index) => {
+      const at = Array.isArray(result) ? index : undefined;
+      if (Array.isArray(element) || !isRelationMutationDescriptor(element)) {
+        throw invalidRelationField(fieldName, modelName, Array.isArray(element), at);
+      }
+      return element;
+    });
+    if (
+      mutations.length > 1 &&
+      (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
+    ) {
       throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
-        `Relation field "${fieldName}" on model "${modelName}" returned an invalid mutation descriptor`,
-        { meta: { relation: fieldName, model: modelName, problem: 'invalid-descriptor' } },
+        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        `Relation "${fieldName}" on model "${modelName}" is a to-one relation and takes one operation, not ${mutations.length}`,
+        {
+          meta: {
+            relation: fieldName,
+            model: modelName,
+            reason: 'to-one-relation',
+            operations: mutations.length,
+          },
+        },
       );
     }
-
-    relationMutations.push({ name: fieldName, relation, mutation });
+    if (mutations.length > 0) {
+      relationMutations.push({ name: fieldName, relation, mutations });
+    }
   }
 
   return {
     scalarData,
     relationMutations,
   };
+}
+
+function invalidRelationField(
+  fieldName: string,
+  modelName: string,
+  nested: boolean,
+  index: number | undefined,
+) {
+  const at = index === undefined ? '' : ` at index ${index}`;
+  return ormError(
+    'ORM.RELATION_MUTATION_INVALID',
+    `Relation field "${fieldName}" on model "${modelName}" ${nested ? `returned a nested array${at}; return one flat array of mutations` : `returned an invalid mutation descriptor${at}`}`,
+    {
+      meta: {
+        relation: fieldName,
+        model: modelName,
+        problem: nested ? 'nested-array' : 'invalid-descriptor',
+        ...ifDefined('index', index),
+      },
+    },
+  );
 }
 
 export interface JunctionRelationMutation extends ParsedRelationMutation {
@@ -120,13 +160,11 @@ export function partitionByOwnership(relationMutations: readonly ParsedRelationM
 export function assertJunctionPayloadWritable({
   name,
   relation,
-  mutation,
+  mutations,
 }: JunctionRelationMutation): void {
   const { through } = relation;
-  if (
-    (mutation.kind !== 'create' && mutation.kind !== 'connect') ||
-    through.requiredPayloadColumns.length === 0
-  ) {
+  const mutation = mutations.find(({ kind }) => kind === 'create' || kind === 'connect');
+  if (mutation === undefined || through.requiredPayloadColumns.length === 0) {
     return;
   }
 

@@ -2049,6 +2049,19 @@ type DisconnectMutator<
       ): RelationMutationDisconnect<TContract, ModelName>;
     };
 
+export type RelationMutationResult<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+> = RelationMutation<TContract, ModelName> | readonly RelationMutation<TContract, ModelName>[];
+
+export type ToOneRelationMutationResult<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+> =
+  | RelationMutation<TContract, ModelName>
+  | readonly []
+  | readonly [RelationMutation<TContract, ModelName>];
+
 export interface RelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -2097,7 +2110,9 @@ type RelationMutationCallback<
     HasJunctionThrough<TContract, ModelName, RelName>,
     Context extends 'create' ? true : false
   >,
-) => RelationMutation<TContract, RelatedModelName<TContract, ModelName, RelName> & string>;
+) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
+  ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>
+  : RelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>;
 
 type RelationMutationFields<
   TContract extends Contract<SqlStorage>,
