@@ -1457,21 +1457,33 @@ This error never occurs in the control plane. The CLI commands, `node migration.
 
 In the application, install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or write the column as a convenience type at its default, which needs no Temporal at all: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` and need none either.
 
+### RUNTIME.INVALID_TRANSACTION_TIMEOUT
+
+The SQL runtime callback helper received a timeout outside integer milliseconds 1..2147483647. Rejected before acquisition; omission, undefined and null disable the internal deadline. Public facades validate their options earlier with `RUNTIME.ARGUMENT_INVALID`. Payload: `timeout`.
+
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
 `transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
-A query result created inside a transaction was read after the transaction ended. Await the result or call `.toArray()` inside the transaction callback.
+Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
 Committing a transaction failed; the runtime attempts a cleanup rollback and destroys the connection if that also fails. The driver's commit error is attached as `cause`. Payload: `commitError`.
 
+### RUNTIME.TRANSACTION_LIFETIME_UNAVAILABLE
+
+A timed callback's connection wrapper did not forward the successful-BEGIN lifetime notification. The callback is refused and the transaction cleaned up rather than silently running without its timeout. A wrapper adopting timed callbacks must forward the separate optional lifetime argument through `RuntimeConnection.transaction` to `beginTransactionOn`. Untimed callers need no migration.
+
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
-Rolling back a transaction after the callback threw itself failed; the connection is destroyed rather than returned to the pool. The original callback error is attached as `cause`. Payload: `rollbackError`.
+Rolling back after callback failure or timeout itself failed; the connection is destroyed rather than returned to the pool. The selected callback error or timeout is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. A hook failure after successful rollback is instead logged while preserving the selected callback error or timeout.
+
+### RUNTIME.TRANSACTION_TIMEOUT
+
+The explicit callback transaction exceeded its application deadline before commit admission. Transaction access is invalidated and rejection waits for safe rollback or destruction, not arbitrary callback settlement. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-timeouts.md).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 

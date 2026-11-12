@@ -41,7 +41,7 @@ interface SqlTransactionOptions {
 }
 ```
 
-Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. Role/session wrappers forward that optional input unchanged while retaining refusal/settlement metadata.
+Shared runtime code forwards resolved options, not ORM ownership or database policy. Facades validate public options with target-owned schemas and pass resolved options to `withTransaction(runtime, callback, resolvedOptions)`. That helper strips callback timeout before passing isolation options to the connection. Runtime role/session wrappers adopting timed callbacks also forward the separate optional lifetime observer; see [wrapper adoption](transaction-timeouts.md#wrapper-and-driver-adoption). They retain refusal/settlement metadata.
 
 ORM factories separately accept `implicitTransactionOptions`, retained in collection configuration and used only when the ORM opens a transaction. The MySQL facade supplies `{ isolationLevel: 'ReadCommitted' }` to its root ORM factory. Standalone ORM instances may opt into this policy; without it they request the database default. Namespace collections, nested writes and activity-bound execution preserve the configured options. An ORM already bound to a transaction does not open another transaction or change its isolation. Drivers receive no implicit/explicit discriminator and never choose ORM policy.
 
@@ -49,6 +49,6 @@ Drivers validate supplied levels against their target, then select fixed SQL. My
 
 ## Deliberately unsupported
 
-This API does not add batch transactions, timeout/maxWait options, P2028 behavior, retries, nested transactions/savepoints, or Mongo transaction support. Isolation does not imply these features.
+Callback [timeouts](transaction-timeouts.md) are supported independently of isolation, with local `null` disabling an inherited timeout; `isolationLevel: null` remains invalid. Neither option adds batch transactions, maxWait, P2028 behavior, retries, nested transactions/savepoints, or Mongo transaction support.
 
 See the [transaction scorecard](../../scorecard/14-transactions.md) for per-database evidence and the [runtime subsystem](../architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md#transactions) for lifecycle semantics.

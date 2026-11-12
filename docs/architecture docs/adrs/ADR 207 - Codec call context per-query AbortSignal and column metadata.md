@@ -206,7 +206,7 @@ Encode-side `ctx.column` is intentionally always undefined. The same encode site
 
 ## What this enables
 
-- **KMS-backed codecs forward `ctx.signal` to their SDK.** `bulkEncrypt({ signal: ctx.signal })`, `fetch(url, { signal: ctx.signal })`. Aborted requests stop talking to the network service; cold-start budgets stop being consumed for results no one is waiting for; transaction deadlines propagate down to the codec's underlying IO.
+- **KMS-backed codecs forward `ctx.signal` to their SDK.** `bulkEncrypt({ signal: ctx.signal })`, `fetch(url, { signal: ctx.signal })`. Aborted requests stop talking to the network service; cold-start budgets stop being consumed for results no one is waiting for. A caller-composed deadline signal can reach the codec's underlying IO; built-in callback timeout does not supply that signal.
 - **Envelope-pattern decryption.** A codec wrapping a wire value into a return object carrying column identity can construct that envelope from `ctx.column` directly, instead of reverse-engineering column identity from JS data type.
 - **Future bulk-encrypt / bulk-decrypt at the middleware layer.** The decode-side column metadata is now plumbed end-to-end; a future middleware that walks a plan can colocate per-column codec calls into bulk SDK calls without touching the codec author surface.
 - **Prompt cancellation for both families.** Mongo callers consuming long aggregations get prompt `RUNTIME.ABORTED { phase: 'stream' }` on already-aborted entry. SQL callers get the same plus prompt `phase: 'encode'` and `phase: 'decode'` mid-flight observation.
@@ -215,7 +215,7 @@ Encode-side `ctx.column` is intentionally always undefined. The same encode site
 
 - **No concurrency cap, no rate limit, no batched dispatch.** A query that touches N rows × M codec'd cells still issues N × M concurrent codec calls. Bounding fan-out is tracked under [framework-gaps G4](../../reference/framework-gaps.md#g4--per-cell-promiseall-codec-dispatch-is-unbounded-for-network-backed-codecs). The codec author surface is forward-compatible — a future `bulkEncode` / `bulkDecode` slot lands additively.
 - **No driver-level statement cancellation.** When the runtime returns `RUNTIME.ABORTED` mid-stream, the underlying database driver's in-flight statement is not cancelled at the wire level. Iterator-close cleanup runs (cursor released, connection returned to pool); the server may keep producing rows for a moment after the runtime stops consuming. Wiring `signal` into Postgres `pg_cancel_backend` / Mongo `killCursors` is separate work.
-- **No transaction-scoped abort composition.** Each `runtime.execute` builds its own per-execute context; the transaction wrapper doesn't compose deadline / cancel-on-rollback signals automatically. Callers compose their own controllers if they need transaction-scoped timeouts.
+- **No transaction-scoped abort composition.** Each `runtime.execute` builds its own per-execute context; callback deadlines do not compose deadline / cancel-on-rollback signals into it. SQL [callback timeouts](../../reference/transaction-timeouts.md) instead invalidate transaction access and await safe driver cleanup. They start after successful BEGIN and stop at commit admission. They do not cancel codec SDK calls or database statements through `ctx.signal`; callers still compose controllers for cooperative cancellation.
 - **No structured cancellation reason taxonomy.** `cause` carries `signal.reason` verbatim; no normalization, no enrichment.
 
 ## Edge cases worth knowing
