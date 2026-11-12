@@ -1,0 +1,19 @@
+// use prisma-8
+
+model ZChild {
+  id       String  @id
+  name     String? @unique
+  test     String?
+  parentId String?
+  parent   Parent? @relation(fields: [parentId], references: [id])
+
+  @@map("ZChild")
+}
+
+model Parent {
+  id       String   @id
+  name     String?  @unique
+  children ZChild[]
+
+  @@map("Parent")
+}
