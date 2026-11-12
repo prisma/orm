@@ -6,6 +6,11 @@ import type { InputEdges, Slots } from './node';
 import { type FindAt, foldsIntoCondition, readsTableAsFound, stateEdgeOf } from './rule-patterns';
 import type { Rule } from './rules';
 
+/**
+ * Looks for a `Delete` with no key filter, preceded by a `Find` that selects the rows by the same condition, with no other write to the table between them and nothing reading the `Find` yet.
+ *
+ * Makes the `Delete` return the `Find`'s columns and replaces the `Find` with it: `deleteAll()` becomes one `DELETE … RETURNING`.
+ */
 export const deleteRule: Rule = (graph, node, inputs) => {
   if (
     !(node instanceof Delete) ||

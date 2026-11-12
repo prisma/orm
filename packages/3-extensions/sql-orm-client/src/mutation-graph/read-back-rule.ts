@@ -16,6 +16,11 @@ import { Update } from './update';
 
 type Write = Insert | Update | Delete;
 
+/**
+ * Looks for a `Find` or `FindByKeys` that reads back, by key and without includes, the rows a write just wrote, with no other write to the table between them.
+ *
+ * Makes the write return those columns and uses it in place of the read, so the read-back `SELECT` is not run: `create()` and `upsert()` become one `INSERT … RETURNING`, and `update()` reads its row from `UPDATE … RETURNING`.
+ */
 export function readBackRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
     if (!(node instanceof Find || node instanceof FindByKeys)) {

@@ -5,6 +5,11 @@ import { foldsIntoCondition, keyEdgeFromFind, readsTableAsFound } from './rule-p
 import type { Rule } from './rules';
 import { Update } from './update';
 
+/**
+ * Looks for an `Update` or `Delete` filtered by key from a `Find` that selects rows by the same condition as the write, with no other write to the table between them.
+ *
+ * Drops the key filter, so the write runs on its condition alone and the `Find` is no longer needed: `updateAll()` becomes one `UPDATE … RETURNING`.
+ */
 export function foldRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
     if (!(node instanceof Update || node instanceof Delete)) {
