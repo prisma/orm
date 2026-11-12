@@ -47,6 +47,9 @@ it('notifies after BEGIN and refuses work and commit after invalidation', async 
   });
   await expect(tx.commit()).rejects.toBe(failure);
   await Promise.all([tx.rollback(), tx.rollback()]);
+  await expect(tx.execute(rawPlan('update t set x = 2'))).rejects.toMatchObject({
+    code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
+  });
   expect(names(events).filter((name) => name === 'rollback')).toHaveLength(1);
   expect(names(events)).not.toContain('commit');
   expect(driver.execute).not.toHaveBeenCalled();

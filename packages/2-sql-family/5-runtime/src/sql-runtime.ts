@@ -1487,10 +1487,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
     this.#openTransactions.set(driverTx, activity);
     this.#openTransactions.set(connection, activity);
-    // A statement sent after commit() or rollback() is called reaches the database after the COMMIT or ROLLBACK (see SqlTransaction), so it is no longer the transaction's child.
     const stopAcceptingChildren = (): void => {
       activity.stopAcceptingChildren();
-      for (const queryable of [driverTx, connection]) {
+      for (const queryable of containment === undefined ? [driverTx, connection] : [connection]) {
         if (this.#openTransactions.get(queryable) === activity) {
           this.#openTransactions.delete(queryable);
         }
