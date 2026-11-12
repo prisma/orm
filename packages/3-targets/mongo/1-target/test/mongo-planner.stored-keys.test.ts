@@ -528,3 +528,138 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     });
   });
 });
+
+describe('MongoMigrationPlanner, keys inside fields: order, policies, names and nesting', () => {
+  it('renames an outer key before a key inside it, whatever order the value objects are declared in', () => {
+    const holders = (seed: string, hq: string, street: string) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'company'],
+            types: { _id: OBJECT_ID, company: voField('Company') },
+          },
+        },
+        { users: {} },
+        { Address: { [street]: STRING }, Company: { [hq]: voField('Address') } },
+      );
+    expect(
+      rendered(
+        plan({
+          from: holders('from', 'hq', 'street'),
+          to: holders('to', 'head', 'line1'),
+          schema: live,
+          statements: [
+            renameAddressField('street', 'line1'),
+            {
+              kind: 'rename',
+              entity: 'valueObjectField',
+              from: { namespaceId: NS, valueObject: 'Company', field: 'hq' },
+              to: { namespaceId: NS, valueObject: 'Company', field: 'head' },
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'renameStoredKey({collection:"users",field:"company",path:"$.hq",to:"head"})',
+      'renameStoredKey({collection:"users",field:"company",path:"$.head.street",to:"line1"})',
+    ]);
+  });
+
+  it('leaves out a removal in a collection whose control policy is not managed', () => {
+    expect(
+      planned(
+        plan({
+          from: users('from', { street: STRING, zip: STRING }, { control: 'tolerated' }),
+          to: users('to', { street: STRING }, { control: 'tolerated' }),
+          schema: live,
+        }),
+      ),
+    ).toEqual({ labels: [], classes: [], applied: [], dataLoss: [] });
+  });
+
+  it('refuses a rename below a stored name MongoDB cannot rewrite', () => {
+    const dotted = (seed: string, address: Record<string, FieldTypeSpec>) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'home'],
+            storedAs: { home: 'home.address' },
+            types: { _id: OBJECT_ID, home: voField('Address') },
+          },
+        },
+        { users: {} },
+        { Address: address },
+      );
+    expect(
+      refusal(
+        plan({
+          from: dotted('from', { street: STRING }),
+          to: dotted('to', { line1: STRING }),
+          schema: live,
+          statements: [renameAddressField('street', 'line1')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename value object field "Address.street" to "Address.line1": the stored name "home.address" cannot be rewritten',
+        why: 'MongoDB reads a name containing "." as a path into embedded documents, so the plan cannot rewrite the key. Rewrite it in the database yourself, or leave out this statement.',
+      },
+    ]);
+  });
+
+  const orders = (seed: string, part: Record<string, FieldTypeSpec>, storedAs = {}) =>
+    contract(
+      seed,
+      {
+        Order: {
+          collection: 'orders',
+          fields: ['_id'],
+          types: { _id: OBJECT_ID },
+          embeds: { lines: { field: 'lines', model: 'Line' } },
+        },
+        Line: {
+          owner: 'Order',
+          fields: ['name'],
+          embeds: { parts: { field: 'parts', model: 'Part' } },
+        },
+        Part: { owner: 'Line', fields: Object.keys(part), types: part, storedAs },
+      },
+      { orders: {} },
+    );
+
+  it('renames a key of an embedded model inside an embedded model', () => {
+    expect(
+      rendered(
+        plan({
+          from: orders('from', { sku: STRING }),
+          to: orders('to', { code: STRING }),
+          schema: [schemaCollection('orders')],
+          statements: [renameField('Part', 'sku', 'Part', 'code')],
+        }),
+      ),
+    ).toEqual([
+      'renameStoredKey({collection:"orders",field:"lines",path:"$[*].parts[*].sku",to:"code"})',
+    ]);
+  });
+
+  it('renames the mapped stored name of an embedded model field when the mapping changes', () => {
+    expect(
+      rendered(
+        plan({
+          from: orders('from', { sku: STRING }, { sku: 's' }),
+          to: orders('to', { code: STRING }, { code: 'c' }),
+          schema: [schemaCollection('orders')],
+          statements: [renameField('Part', 'sku', 'Part', 'code')],
+        }),
+      ),
+    ).toEqual([
+      'renameStoredKey({collection:"orders",field:"lines",path:"$[*].parts[*].s",to:"c"})',
+    ]);
+  });
+});
