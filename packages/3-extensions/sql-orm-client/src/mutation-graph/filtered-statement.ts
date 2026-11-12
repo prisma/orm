@@ -11,7 +11,7 @@ import {
   type UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { combineWhereExprs } from '../where-utils';
-import type { FilterData } from './filter-data';
+import type { FilterData, KeyMatch } from './filter-data';
 import type { Executed, OutputsOf, Run } from './node';
 import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
@@ -36,9 +36,17 @@ export function executeFiltered(
   if (filter.some((conditions) => conditions.length === 0)) {
     return rowsResult([]);
   }
-  const existing = ast.where === undefined ? [] : [ast.where];
-  const where = combineWhereExprs([...existing, ...filter.map(anyOf)]);
-  return executeStatement(ast.withWhere(where), run);
+  return executeStatement(ast.withWhere(filteredWhere(ast.where, filter)), run);
+}
+
+export function filteredWhere(
+  where: AnyExpression | undefined,
+  filter: readonly (readonly KeyMatch[])[],
+): AnyExpression | undefined {
+  return combineWhereExprs([
+    ...(where === undefined ? [] : [where]),
+    ...filter.map((matches) => anyOf(matches.map(({ condition }) => condition))),
+  ]);
 }
 
 /** Any of the conditions: an `IN` list when each compares the same column with a parameter, else an `OR`. */

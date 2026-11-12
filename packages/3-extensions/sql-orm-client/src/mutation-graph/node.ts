@@ -6,13 +6,19 @@ import type {
   SqlStatementStats,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import type { Edge, StorageRow } from './edge';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import type { Edge, NodeId, StorageRow } from './edge';
+import type { Graph } from './graph';
 
 export type StatementAst = SelectAst | InsertAst | UpdateAst | DeleteAst;
 
 export type Slot = Edge<unknown> | Edge<unknown>[];
 
 export type Slots = Record<string, Slot>;
+
+export type InputEdges<Inputs extends Slots> = {
+  readonly [Name in keyof Inputs]?: Inputs[Name];
+};
 
 type OutputOf<E> = E extends Edge<infer Output> ? Output : never;
 
@@ -27,6 +33,7 @@ export type OutputsOf<Inputs extends Slots> = {
 export type Executed = AsyncIterableResult<StorageRow> | Promise<SqlStatementStats>;
 
 export interface Run {
+  readonly context: ExecutionContext;
   query(ast: StatementAst): AsyncIterableResult<StorageRow>;
   execute(ast: StatementAst): Promise<SqlStatementStats>;
 }
@@ -43,4 +50,6 @@ export abstract class Node<Inputs extends Slots = Slots> {
   abstract readonly slots: SlotLayout<Inputs>;
 
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
+
+  checkIfCanRun(_graph: Graph, _id: NodeId, _context: ExecutionContext): void {}
 }

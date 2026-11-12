@@ -9,15 +9,17 @@ import {
   ParamRef,
   type ProjectionItem,
 } from '@internal/sql-relational-core/ast';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatch';
 import { createCollectionTables } from '../../src/collection-tables';
 import { Delete } from '../../src/mutation-graph/delete';
 import type { ColumnMapping, NodeId, StorageRow } from '../../src/mutation-graph/edge';
-import type { FilterData } from '../../src/mutation-graph/filter-data';
+import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { Graph } from '../../src/mutation-graph/graph';
-import type { Node, Run, Slots, StatementAst } from '../../src/mutation-graph/node';
-import { State } from '../../src/mutation-graph/state';
+import type { InputEdges, Node, Run, Slots, StatementAst } from '../../src/mutation-graph/node';
+import type { RequiresSlot } from '../../src/mutation-graph/requires';
+import { State, type StateSlot } from '../../src/mutation-graph/state';
 import { StatementNode } from '../../src/mutation-graph/statement-node';
 import { UnionAll } from '../../src/mutation-graph/union-all';
 import { Update } from '../../src/mutation-graph/update';
@@ -30,12 +32,22 @@ import {
   emptyState,
   type RuntimeQueryable,
 } from '../../src/types';
+import { baseContract, withoutCapabilityKeys } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 
 const { contract, aggregateDescriptors } = getTestContext();
 const usersTables = createCollectionTables(contract, 'public', 'User');
 const postsTables = createCollectionTables(contract, 'public', 'Post');
 const tablesOf = { users: usersTables, posts: postsTables };
+
+export const insertOwner = { operation: 'create', modelName: 'User' };
+
+export const updateOwner = { operation: 'updateAll', modelName: 'User' };
+
+export const contextWithoutReturning = {
+  ...getTestContext(),
+  contract: withoutCapabilityKeys(baseContract, ['returning']),
+};
 
 export const nameIsAda = BinaryExpr.eq(ColumnRef.of('users', 'name'), ParamRef.of('Ada'));
 
@@ -64,7 +76,10 @@ export function updateUsers(
   returning: readonly string[] = [],
 ): Update {
   const ast = updateAst(contract, usersTables, set, where);
-  return new Update(ast.withReturning(projectTableColumns(contract, usersTables.root, returning)));
+  return new Update(
+    ast.withReturning(projectTableColumns(contract, usersTables.root, returning)),
+    updateOwner,
+  );
 }
 
 export function updatePosts(
@@ -73,7 +88,10 @@ export function updatePosts(
   returning: readonly string[] = [],
 ): Update {
   const ast = updateAst(contract, postsTables, set, where);
-  return new Update(ast.withReturning(projectTableColumns(contract, postsTables.root, returning)));
+  return new Update(ast.withReturning(projectTableColumns(contract, postsTables.root, returning)), {
+    operation: 'updateAll',
+    modelName: 'Post',
+  });
 }
 
 export function deleteUsers(where?: AnyExpression, returning: readonly string[] = []): Delete {
@@ -161,12 +179,14 @@ export function recordingRun(
   rows: readonly StorageRow[] = [],
   affectedRows = 0,
   insertId?: string,
+  context: ExecutionContext = getTestContext(),
 ): RecordingRun {
   const queried: StatementAst[] = [];
   const executed: StatementAst[] = [];
   return {
     queried,
     executed,
+    context,
     query(ast) {
       queried.push(ast);
       const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
@@ -181,25 +201,41 @@ export function recordingRun(
   };
 }
 
-export function addFiltered<Inputs extends Slots & { filter: FilterData[] }>(
+export function addFiltered<
+  Inputs extends Slots & StateSlot & RequiresSlot & { filter: FilterData[] },
+>(
   graph: Graph,
-  node: Node<Inputs>,
+  node: StatementNode<Inputs>,
   ...sources: readonly (readonly [NodeId, readonly ColumnMapping[]])[]
-): NodeId<Inputs> {
-  const id = graph.add(node);
-  for (const [from, columns] of sources) {
-    graph.addFilterDataEdge(from, id, columns);
-  }
-  return id;
+): NodeId {
+  return addWithState(graph, node, {
+    filter: sources.map(([from, columns]) => new FilterData(from, columns)),
+  } as InputEdges<Inputs>);
+}
+
+export function addWithState<Inputs extends Slots & StateSlot & RequiresSlot>(
+  graph: Graph,
+  node: StatementNode<Inputs>,
+  inputs: InputEdges<Inputs> = {},
+): NodeId {
+  return graph.add(node, { ...inputs, state: graph.stateEdgesFor(node) } as InputEdges<Inputs>);
 }
 
 export function newGraph(): Graph {
   return new Graph(contract);
 }
 
+export function newGraphWithoutReturning(): Graph {
+  return new Graph(contextWithoutReturning.contract);
+}
+
 export function positions(): [NodeId, NodeId, NodeId] {
   const graph = newGraph();
-  return [graph.add(new UnionAll()), graph.add(new UnionAll()), graph.add(new UnionAll())];
+  return [
+    graph.add(new UnionAll(), {}),
+    graph.add(new UnionAll(), {}),
+    graph.add(new UnionAll(), {}),
+  ];
 }
 
 export function visibleNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

@@ -30,16 +30,15 @@ export function queryGraph<Row>(
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions,
 ): AsyncIterableResult<Row> {
+  graph.removeUnreadFinds();
   returnCallerColumns(graph, callerRows);
-  const [only, ...others] = statementNodes(graph);
-  // A graph with one statement node is one statement. It runs without a transaction and its rows
-  // are handed to the caller as they arrive. A graph with several statement nodes runs inside the
-  // mutation scope, whose transaction ends when its callback returns, so its result is collected
-  // there and yielded afterwards.
-  if (only !== undefined && others.length === 0 && only[0] === graph.result) {
+  const [only] = statementNodes(graph);
+  if (only !== undefined && statementCount(graph) === 1 && only[0] === graph.result) {
     const [id, node] = only;
     const run = runOn(ctx, ctx.runtime);
-    const storageRows = rowStream(node.execute(inputsOf(graph, id, []), run));
+    const storageRows = afterChecks(graph, ctx, () =>
+      rowStream(node.execute(outputsOf(graph.inputsOf(id), []), run)),
+    );
     return shapeRows<Row>(graph, id, storageRows, callerRows);
   }
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
@@ -50,6 +49,7 @@ export function queryGraph<Row>(
 }
 
 export async function executeGraph(graph: Graph, ctx: Context): Promise<SqlStatementStats> {
+  graph.removeUnreadFinds();
   const outcome = await runAllNodes(graph, ctx, undefined);
   return { affectedRows: outcome.count };
 }
@@ -74,8 +74,9 @@ async function runAllNodes<Row>(
   ctx: Context,
   callerRows: DescribeCollectionRowsOptions | undefined,
 ): Promise<Outcome<Row>> {
+  checkNodes(graph, ctx);
   const { runtime } = ctx;
-  if (statementNodes(graph).length > 1 && runtime.transaction !== undefined) {
+  if (statementCount(graph) > 1 && runtime.transaction !== undefined) {
     return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
@@ -115,8 +116,8 @@ async function runNodesInOrder<Row>(
   let rows: readonly Row[] = [];
   let count = 0;
 
-  for (const [id, node] of graph.nodes()) {
-    const executed = await node.execute(inputsOf(graph, id, collected), run);
+  for (const { id, node, inputs } of graph.entries()) {
+    const executed = await node.execute(outputsOf(inputs, collected), run);
     collected[id] = executed;
     if (id !== graph.result) {
       continue;
@@ -131,11 +132,11 @@ async function runNodesInOrder<Row>(
   return { rows, count };
 }
 
-function inputsOf(graph: Graph, id: NodeId, collected: Collected): OutputsOf<Slots> {
+function outputsOf(inputs: Slots, collected: Collected): OutputsOf<Slots> {
   const outputs: Record<string, OutputsOf<Slots>[string]> = {};
   const outputOf = (edge: Edge<unknown>) =>
     rowsOf(collected[edge.from]).map((row) => edge.output(row));
-  for (const [name, slot] of Object.entries(graph.inputsOf(id))) {
+  for (const [name, slot] of Object.entries(inputs)) {
     if (!Array.isArray(slot)) {
       outputs[name] = outputOf(slot);
     } else {
@@ -145,11 +146,30 @@ function inputsOf(graph: Graph, id: NodeId, collected: Collected): OutputsOf<Slo
   return outputs;
 }
 
+function checkNodes(graph: Graph, ctx: Context): void {
+  for (const [id, node] of graph.nodes()) {
+    node.checkIfCanRun(graph, id, ctx.context);
+  }
+}
+
+function afterChecks(
+  graph: Graph,
+  ctx: Context,
+  rows: () => AsyncIterableResult<StorageRow>,
+): AsyncIterableResult<StorageRow> {
+  const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
+    checkNodes(graph, ctx);
+    yield* rows();
+  };
+  return new AsyncIterableResult(generator());
+}
+
 function runOn(ctx: Context, scope: RuntimeScope): Run {
-  const { contract } = ctx.context;
+  const { context } = ctx;
   const planOf = (ast: StatementAst) =>
-    buildOrmQueryPlan<StorageRow>(contract, ast, deriveParamsFromAst(ast).params);
+    buildOrmQueryPlan<StorageRow>(context.contract, ast, deriveParamsFromAst(ast).params);
   return {
+    context,
     query: (ast) => queryPlanRows(scope, planOf(ast)),
     execute: (ast) => scope.execute(planOf(ast)),
   };
@@ -179,6 +199,15 @@ function shapeRows<Row>(
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {
   return graph.nodes().filter(([, node]) => node instanceof StatementNode);
+}
+
+function statementCount(graph: Graph): number {
+  return graph
+    .nodes()
+    .reduce(
+      (count, [, node]) => count + (node instanceof StatementNode ? node.statements.length : 0),
+      0,
+    );
 }
 
 function rowsOf(

@@ -1,9 +1,6 @@
 import { InsertOnConflict } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { CrossJoin } from '../../src/mutation-graph/cross-join';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
-import { UnionAll } from '../../src/mutation-graph/union-all';
 import { printGraph } from './print-graph';
 import {
   addFiltered,
@@ -13,6 +10,7 @@ import {
   deleteUsers,
   findUsers,
   insertInto,
+  insertOwner,
   nameIsAda,
   newGraph,
   updateUsers,
@@ -21,7 +19,7 @@ import {
 describe('printGraph', () => {
   it('prints one node and the result that names it', () => {
     const graph = newGraph();
-    graph.setResult(graph.add(updateUsers({ email: 'ada@example.com' }, nameIsAda)));
+    graph.setResult(graph.add(updateUsers({ email: 'ada@example.com' }, nameIsAda), {}));
 
     expect(printGraph(graph)).toBe(
       ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
@@ -30,7 +28,7 @@ describe('printGraph', () => {
 
   it('prints a FilterData edge with its column mapping', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers([nameIsAda]));
+    const find = graph.add(findUsers([nameIsAda]), {});
     const sameId = columnMappings('users', 'users', [['id', 'id']]);
     graph.setResult(addFiltered(graph, deleteUsers(), [find, sameId]));
 
@@ -45,7 +43,7 @@ describe('printGraph', () => {
 
   it('prints every column mapping of a FilterData edge', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
     const mappings = columnMappings('users', 'posts', [
       ['id', 'user_id'],
       ['name', 'title'],
@@ -63,8 +61,8 @@ describe('printGraph', () => {
 
   it('prints every input of a node', () => {
     const graph = newGraph();
-    const find = graph.add(findUsers());
-    const other = graph.add(findUsers());
+    const find = graph.add(findUsers(), {});
+    const other = graph.add(findUsers(), {});
     const sameId = columnMappings('users', 'users', [['id', 'id']]);
     addFiltered(graph, deleteUsers(), [find, sameId], [other, sameId]);
     graph.setResult(find);
@@ -81,7 +79,7 @@ describe('printGraph', () => {
 
   it('prints none for a result with no node', () => {
     const graph = newGraph();
-    graph.add(findUsers());
+    graph.add(findUsers(), {});
 
     expect(printGraph(newGraph())).toBe('result: none');
     expect(printGraph(graph)).toBe(['n1 Find users', 'result: none'].join('\n'));
@@ -90,9 +88,15 @@ describe('printGraph', () => {
   describe('inserts', () => {
     it('prints an Insert of one row and of several rows', () => {
       const graph = newGraph();
-      graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
+      graph.add(new Insert([insertInto('users', [{ name: 'Ada' }])], insertOwner), {});
       graph.setResult(
-        graph.add(new Insert(insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }]))),
+        graph.add(
+          new Insert(
+            [insertInto('users', [{ name: 'a' }, { name: 'b' }, { name: 'c' }])],
+            insertOwner,
+          ),
+          {},
+        ),
       );
 
       expect(printGraph(graph)).toBe(
@@ -106,17 +110,25 @@ describe('printGraph', () => {
       const graph = newGraph();
       graph.add(
         new Insert(
-          ast.withOnConflict(
-            InsertOnConflict.on([users.column('email')]).doUpdateSet({
-              email: users.column('email'),
-            }),
-          ),
+          [
+            ast.withOnConflict(
+              InsertOnConflict.on([users.column('email')]).doUpdateSet({
+                email: users.column('email'),
+              }),
+            ),
+          ],
+          insertOwner,
         ),
+        {},
       );
       graph.add(
-        new Insert(ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing())),
+        new Insert(
+          [ast.withOnConflict(InsertOnConflict.on([users.column('email')]).doNothing())],
+          insertOwner,
+        ),
+        {},
       );
-      graph.add(new Insert(ast.withOnConflict(InsertOnConflict.doNothing())));
+      graph.add(new Insert([ast.withOnConflict(InsertOnConflict.doNothing())], insertOwner), {});
 
       expect(printGraph(graph)).toBe(
         [
@@ -128,51 +140,18 @@ describe('printGraph', () => {
       );
     });
 
-    it('prints an InsertChunked with the number of its statements', () => {
+    it('prints an Insert of several statements with their number', () => {
       const graph = newGraph();
-      const chunked = new InsertChunked([
-        insertInto('users', [{ name: 'Ada' }]),
-        insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
-      ]);
-      graph.setResult(graph.add(chunked));
-
-      expect(printGraph(graph)).toBe(
-        ['n1 InsertChunked users (2 statements)', 'result: n1'].join('\n'),
-      );
-    });
-
-    it('prints the chain of a variant create: Insert, Insert with PayloadData, CrossJoin, UnionAll', () => {
-      const graph = newGraph();
-      const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
-      const sameUserId = columnMappings('users', 'users', [['id', 'id']]);
-      const samePostId = columnMappings('posts', 'posts', [['id', 'id']]);
-      const joins = [1, 2].map(() => {
-        const base = graph.add(new Insert(insertInto('users', [{ name: 'Ada' }])));
-        const variant = graph.add(new Insert(insertInto('posts', [{ title: 'Hello' }])));
-        graph.addPayloadDataEdge(base, variant, idToUserId);
-        const join = graph.add(new CrossJoin());
-        graph.addRowsEdge(base, join, 'left', sameUserId);
-        graph.addRowsEdge(variant, join, 'right', samePostId);
-        return join;
-      });
-      const union = graph.add(new UnionAll());
-      for (const join of joins) {
-        graph.addRowsEdge(join, union, 'rows', sameUserId);
-      }
-      graph.setResult(union);
-
-      expect(printGraph(graph)).toBe(
+      const chunked = new Insert(
         [
-          'n1 Insert users',
-          'n2 Insert posts <- PayloadData n1 (id->user_id)',
-          'n3 CrossJoin <- Rows n1, Rows n2',
-          'n4 Insert users',
-          'n5 Insert posts <- PayloadData n4 (id->user_id)',
-          'n6 CrossJoin <- Rows n4, Rows n5',
-          'n7 UnionAll <- Rows n3, Rows n6',
-          'result: n7',
-        ].join('\n'),
+          insertInto('users', [{ name: 'Ada' }]),
+          insertInto('users', [{ name: 'Grace', email: 'g@h.io' }]),
+        ],
+        insertOwner,
       );
+      graph.setResult(graph.add(chunked, {}));
+
+      expect(printGraph(graph)).toBe(['n1 Insert users (2 statements)', 'result: n1'].join('\n'));
     });
   });
 });

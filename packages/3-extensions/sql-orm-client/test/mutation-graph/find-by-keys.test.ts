@@ -45,7 +45,7 @@ describe('FindByKeys', () => {
     });
   });
 
-  it('reads the rows of several keys with an IN list, ordered by the database in the order of the keys', async () => {
+  it('reads the rows of several keys with an IN list, in no order', async () => {
     const run = recordingRun([{ id: 11 }, { id: 10 }]);
     const find = new FindByKeys(findUsers().ast, ids, create);
 
@@ -54,11 +54,11 @@ describe('FindByKeys', () => {
     ).toEqual([{ id: 11 }, { id: 10 }]);
     expect({ where: run.queried.map(whereOf), order: run.queried.map(orderOf) }).toEqual({
       where: ['id in (11, 10)'],
-      order: [['case when id = 11 then 0 when id = 10 then 1 end asc']],
+      order: [[]],
     });
   });
 
-  it('reads more keys than one statement takes in chunks of 500, each ordered by its own keys, joined in key order', async () => {
+  it('reads more keys than one statement takes in chunks of 500', async () => {
     const keys = Array.from({ length: 1200 }, (_, index) => ({ id: 1200 - index }));
     const queried: SelectAst[] = [];
     const run = {
@@ -74,8 +74,10 @@ describe('FindByKeys', () => {
     expect(await find.execute({ keys, state: null, requires: null }, run)).toEqual(keys);
     expect(
       queried.map((ast) => {
-        const [order] = ast.orderBy ?? [];
-        return order?.expr.kind === 'case' ? order.expr.branches.length : 0;
+        const where = ast.where;
+        return where?.kind === 'binary' && where.right.kind === 'list'
+          ? where.right.values.length
+          : 0;
       }),
     ).toEqual([500, 500, 200]);
   });

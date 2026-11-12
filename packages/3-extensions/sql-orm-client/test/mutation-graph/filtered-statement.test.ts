@@ -11,7 +11,10 @@ import {
   updateUsers,
 } from './statements';
 
-const idIs = (value: number) => BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value));
+const idIs = (value: number) => ({
+  condition: BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value)),
+  key: { id: value },
+});
 const emailColumn = columnMappings('users', 'users', [['email', 'email']]).map(
   ([source]) => source,
 );
@@ -60,8 +63,14 @@ describe.each([
 
   it('keeps an OR between conditions on different columns or with no value parameter', async () => {
     const run = recordingRun();
-    const emailIs = BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a'));
-    const idIsName = BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name'));
+    const emailIs = {
+      condition: BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a')),
+      key: { email: 'a' },
+    };
+    const idIsName = {
+      condition: BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name')),
+      key: {},
+    };
 
     await make().execute(
       { filter: [[idIs(7), emailIs]], payload: null, state: null, requires: null },

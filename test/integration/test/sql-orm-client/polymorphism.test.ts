@@ -134,6 +134,48 @@ describe('integration/polymorphism', () => {
   );
 
   it(
+    'writes through the base model return the full row of each variant',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await setupPolySchema(runtime);
+        await seedPolyData(runtime);
+
+        const tasks = createTaskCollection(runtime);
+        const updated = await tasks.where({ id: 3 }).updateAll({ title: 'Dark mode v2' });
+        const created = await tasks.create({
+          id: 10,
+          title: 'Crash on save',
+          type: 'bug',
+        } as never);
+
+        expect({ updated, created }).toEqual({
+          updated: [
+            {
+              id: 3,
+              title: 'Dark mode v2',
+              type: 'feature',
+              projectId: null,
+              reporterId: null,
+              priority: 1,
+              assigneeId: null,
+            },
+          ],
+          created: {
+            id: 10,
+            title: 'Crash on save',
+            type: 'bug',
+            projectId: null,
+            reporterId: null,
+            severity: null,
+            assigneeId: null,
+          },
+        });
+      }, polyContext.contract);
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'variant(Bug) query with no select returns the full default STI variant shape',
     async () => {
       await withCollectionRuntime(async (runtime) => {
