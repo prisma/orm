@@ -347,10 +347,19 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
 
     expect({
       exitCode: asked.exitCode === 0 ? 0 : 'failed',
-      question: JSON.stringify(question),
+      code: question?.code,
+      summary: question?.summary,
+      why: question?.why,
+      answers: question?.nextActions?.map(({ label }) => label),
     }).toEqual({
       exitCode: 'failed',
-      question: expect.stringContaining('--delete Address.zip'),
+      code: 'CLI.CONSENT_REQUIRED',
+      summary: '"Address.zip" needs a statement, and the session is not interactive.',
+      why: 'Remove key "zip" at path "$" in field home of collection users would lose the values of value object field "Address.zip".',
+      answers: [
+        "Run the command again with --rename 'Address.zip:Address.<new name>'",
+        'Run the command again with --delete Address.zip',
+      ],
     });
 
     const answered = await runMigrationPlan(ctx, [
