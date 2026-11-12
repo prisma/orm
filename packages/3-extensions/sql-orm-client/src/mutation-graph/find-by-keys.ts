@@ -20,7 +20,7 @@ const KEYS_PER_STATEMENT = 500;
 /**
  * Reads the rows a write wrote back by their keys, for a database without `RETURNING`, in no particular order, and fails when it finds fewer rows than keys, so the transaction rolls back. It reads at most 500 keys per statement.
  *
- * A `Find` with a `FilterData` edge cannot do this: the edge hands the `Find` conditions, not the key values, so the `Find` cannot count the keys.
+ * A `Find` with a `FilterData` edge reads the same rows, but it neither checks that every key was found nor splits the keys across statements.
  */
 export class FindByKeys extends StatementNode<Keyed> {
   readonly slots = { keys: 'one', state: 'list', requires: 'list' } as const;
