@@ -368,4 +368,43 @@ describe('integration/nested-mutations', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'update() applies an array of operations on a to-many relation in array order',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'Old', userId: 1, views: 10 },
+          { id: 12, title: 'Unowned', userId: null, views: 12 },
+        ]);
+
+        const updated = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .include('posts', (posts) =>
+            posts.select('id', 'title', 'userId').orderBy((post) => post.id.asc()),
+          )
+          .update({
+            posts: (posts) => [
+              posts.disconnect(),
+              posts.create({ id: 30, title: 'Created', views: 30 }),
+              posts.connect({ id: 12 }),
+            ],
+          });
+
+        expect(updated).toEqual({
+          id: 1,
+          name: 'Alice',
+          posts: [
+            { id: 12, title: 'Unowned', userId: 1 },
+            { id: 30, title: 'Created', userId: 1 },
+          ],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });
