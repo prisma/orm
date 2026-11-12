@@ -97,7 +97,7 @@ export async function resolveValue(
         }
       }
     }
-    return value.value;
+    return isDate(value.value) ? dateOfThisRealm(value.value) : value.value;
   }
   if (isDate(value)) return dateOfThisRealm(value);
   if (value === null || typeof value !== 'object' || isWireScalar(value)) {
