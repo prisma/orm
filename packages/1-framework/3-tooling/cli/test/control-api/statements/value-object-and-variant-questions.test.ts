@@ -325,3 +325,24 @@ describe('a question about a removed variant', () => {
     });
   });
 });
+
+describe('a question about a field removed by several operations', () => {
+  it('lists every operation that loses its values', async () => {
+    const origin = contractOf({ app: { models: { Line: { fields: ['sku', 'note'] } } } });
+    const destination = contractOf({ app: { models: { Line: { fields: ['sku'] } } } });
+    const { asked } = await questionsOf({
+      origin,
+      destination,
+      subject: { kind: 'field', namespaceId: app, model: 'Line', field: 'note' },
+      labels: [
+        'Remove key "note" at path "$[*]" in field lines of collection orders',
+        'Remove key "note" at path "$[*]" in field pastLines of collection orders',
+      ],
+    });
+    expect(asked.map(({ question }) => question)).toEqual([
+      expect.stringContaining(
+        '- Remove key "note" at path "$[*]" in field lines of collection orders\n- Remove key "note" at path "$[*]" in field pastLines of collection orders',
+      ),
+    ]);
+  });
+});
