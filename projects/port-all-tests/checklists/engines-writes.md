@@ -453,7 +453,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [ ] `writes::nested_mutations::many_nested_muts::create_then_delete` — nested create combined with update/delete of children works (on_parent=ToMany, on_child=ToMany) [connectors: exclude:cockroachdb] [matrix: relation_link]
 - [ ] `writes::nested_mutations::many_nested_muts::create_then_set` — nested create followed by set replaces child list (on_parent=ToMany, on_child=ToMany) [connectors: exclude:cockroachdb] [matrix: relation_link]
 - [ ] `writes::nested_mutations::many_nested_muts::create_then_upsert` — nested create followed by upsert (update + create branches) works (on_parent=ToMany, on_child=ToMany) [connectors: exclude:cockroachdb] [matrix: relation_link]
-- [ ] `writes::nested_mutations::many_nested_muts::create_then_disconnect` — nested create followed by disconnect detaches child (on_parent=ToMany, on_child=ToMany) [connectors: exclude:cockroachdb] [matrix: relation_link]
+- [x] `writes::nested_mutations::many_nested_muts::create_then_disconnect` — nested create followed by disconnect detaches child (on_parent=ToMany, on_child=ToMany) [connectors: exclude:cockroachdb] [matrix: relation_link] → PASS `test/integration/test/ports/engines/writes/nested_mutations/combining_different_nested_mutations/combining_different_nested_mutations.test.ts` › `a nested create followed by a disconnect detaches only the disconnected child`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/writes/nested_mutations/nested_atomic_number_ops.rs
 - [ ] `writes::nested_mutations::atomic_number_ops::update_number_ops_on_child` — updateOne with number ops on top and nested child update handles id changes (inlined child) [connectors: caps:updateableid]
