@@ -171,14 +171,78 @@ class AsyncMutex {
 // occupies the connection for its entire lifetime), which also keeps
 // concurrent streams on a shared client from interleaving their wraps.
 const clientQueryLocks = new WeakMap<object, AsyncMutex>();
+const clientStreams = new WeakMap<object, Set<() => Promise<void>>>();
+const clientEndListeners = new WeakMap<ClientBase, Set<() => void>>();
 
-function acquireClientQueryLock(client: object): Promise<() => void> {
+function clientEnded(client: ClientBase): void {
+  const listeners = clientEndListeners.get(client);
+  for (const listener of listeners ?? []) listener();
+  listeners?.clear();
+}
+
+function observeClientEnd(client: ClientBase, ended: () => void): () => void {
+  let listeners = clientEndListeners.get(client);
+  if (listeners === undefined) {
+    listeners = new Set();
+    clientEndListeners.set(client, listeners);
+    client.on('end', () => clientEnded(client));
+  }
+  listeners.add(ended);
+  return () => {
+    listeners.delete(ended);
+  };
+}
+
+function registerClientStream(client: ClientBase, close: () => Promise<void>): () => void {
+  let streams = clientStreams.get(client);
+  if (streams === undefined) {
+    streams = new Set();
+    clientStreams.set(client, streams);
+  }
+  streams.add(close);
+  return () => {
+    streams.delete(close);
+  };
+}
+
+async function drainClientStreams(client: ClientBase): Promise<void> {
+  await Promise.all([...(clientStreams.get(client) ?? [])].map((close) => close()));
+}
+
+function acquireClientQueryLock(client: ClientBase): Promise<() => void> {
   let mutex = clientQueryLocks.get(client);
   if (mutex === undefined) {
     mutex = new AsyncMutex();
     clientQueryLocks.set(client, mutex);
   }
   return mutex.lock();
+}
+
+class ConnectionLease {
+  active = true;
+  readonly #streams = new Set<() => Promise<void>>();
+
+  assertActive(): void {
+    if (!this.active)
+      throw driverError('DRIVER.NOT_CONNECTED', 'Postgres connection lease has ended.');
+  }
+
+  register(close: () => Promise<void>): () => void {
+    this.assertActive();
+    this.#streams.add(close);
+    return () => {
+      this.#streams.delete(close);
+    };
+  }
+
+  async drain(): Promise<void> {
+    this.active = false;
+    await this.closeStreams();
+  }
+
+  async closeStreams(): Promise<void> {
+    await Promise.all([...this.#streams].map((close) => close()));
+  }
 }
 
 abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Client>
@@ -189,8 +253,17 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
 
   protected readonly options: ConnectionOptions;
 
-  constructor(options: ConnectionOptions) {
+  constructor(
+    options: ConnectionOptions,
+    protected readonly lease?: ConnectionLease,
+  ) {
     this.options = options;
+  }
+
+  protected assertUsable(client: ClientBase): void {
+    this.lease?.assertActive();
+    if (hasLostConnection(client))
+      throw driverError('DRIVER.NOT_CONNECTED', 'Postgres connection is no longer usable.');
   }
 
   // runQuery and runExecute normalize every error from the client, and acquireClient throws only
@@ -288,6 +361,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     try {
       const releaseLock = await acquireClientQueryLock(client);
       try {
+        this.assertUsable(client);
         const result = await client.query({
           name,
           text: request.sql,
@@ -326,17 +400,43 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
         // on completion, stream error, and consumer abandonment — and before
         // the buffered fallback below, which takes its own per-statement lock.
         const releaseLock = await acquireClientQueryLock(client);
+        const stream = this.streamWithPortalProtection(
+          client,
+          request,
+          this.options.cursorBatchSize,
+          name,
+        )[Symbol.asyncIterator]();
+        let ended = () => {};
+        const termination = new Promise<void>((resolve) => {
+          ended = resolve;
+        });
+        const forgetEnd = observeClientEnd(client, ended);
+        let closing: Promise<void> | undefined;
+        const close = (): Promise<void> =>
+          (closing ??= (async () => {
+            try {
+              await Promise.race([stream.return?.(), termination]);
+            } finally {
+              releaseLock();
+              forgetEnd();
+            }
+          })());
+        let unregister: (() => void) | undefined;
+        let unregisterClient: (() => void) | undefined;
         try {
-          for await (const row of this.streamWithPortalProtection(
-            client,
-            request,
-            this.options.cursorBatchSize,
-            name,
-          )) {
-            yield blindCast<Row, 'postgres cursor rows are dynamically shaped'>(row);
+          this.assertUsable(client);
+          unregister = this.lease?.register(close);
+          unregisterClient = registerClientStream(client, close);
+          while (true) {
+            this.assertUsable(client);
+            const next = await stream.next();
+            this.assertUsable(client);
+            if (next.done) break;
+            yield blindCast<Row, 'postgres cursor rows are dynamically shaped'>(next.value);
           }
           return;
         } catch (cursorError) {
+          this.assertUsable(client);
           // Non-pg cursor-specific errors fall through to the buffered path;
           // real pg errors and errors from a lost connection propagate.
           if (
@@ -347,7 +447,9 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
             throw cursorError;
           }
         } finally {
-          releaseLock();
+          unregister?.();
+          unregisterClient?.();
+          await close();
         }
       }
 
@@ -370,6 +472,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     try {
       const releaseLock = await acquireClientQueryLock(client);
       try {
+        this.assertUsable(client);
         const result = await client
           .query(text, request.params === undefined ? undefined : [...request.params])
           .catch(rethrowClientError(client));
@@ -417,27 +520,18 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
       streamFailed = true;
       throw error;
     } finally {
-      // Terminating COMMIT runs on every exit — normal completion, stream
-      // error, and consumer abandonment (early `.return()`), the last of
-      // which leaves the generator right after this `finally`, so the COMMIT
-      // and its error handling must live inside it. `commitStreamSpan`
-      // surfaces a failing COMMIT unless the stream itself already threw
-      // (then that error wins).
-      await this.commitStreamSpan(client, streamFailed);
+      await this.endStreamSpan(client, streamFailed);
     }
   }
 
-  // COMMIT also terminates an aborted transaction (Postgres downgrades it to
-  // ROLLBACK), so this one terminator covers success, error, and abandonment.
-  // The throw lives here rather than lexically in the caller's `finally` both
-  // to keep that failure on every exit path and to avoid a `throw` inside a
-  // `finally` block.
-  private async commitStreamSpan(client: ClientBase, streamFailed: boolean): Promise<void> {
+  private async endStreamSpan(client: ClientBase, streamFailed: boolean): Promise<void> {
     try {
-      await client.query('COMMIT');
-    } catch (commitError) {
+      await client.query(
+        this.lease?.active === false || hasLostConnection(client) ? 'ROLLBACK' : 'COMMIT',
+      );
+    } catch (settlementError) {
       if (!streamFailed) {
-        throw commitError;
+        throw settlementError;
       }
     }
   }
@@ -496,6 +590,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     const releaseLock = await acquireClientQueryLock(client);
     let result: PgQueryResult;
     try {
+      this.assertUsable(client);
       result = await client.query(config);
     } finally {
       releaseLock();
@@ -525,6 +620,11 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
   #onRelease: (() => void) | undefined;
   #onDestroy: ((reason: unknown) => Promise<void> | void) | undefined;
   #txState: SharedTransactionState;
+  readonly #lease: ConnectionLease;
+  #disposal: Promise<void> | undefined;
+  #disposed = false;
+  #destruction: { reason: unknown } | undefined;
+  readonly #onInvalidated: (() => void) | undefined;
 
   constructor(
     connection: PoolClient | Client,
@@ -532,8 +632,12 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     onRelease?: () => void,
     onDestroy?: (reason: unknown) => Promise<void> | void,
     txState?: SharedTransactionState,
+    onInvalidated?: () => void,
   ) {
-    super(options);
+    const lease = new ConnectionLease();
+    super(options, lease);
+    this.#lease = lease;
+    this.#onInvalidated = onInvalidated;
     this.#connection = connection;
     this.#onRelease = onRelease;
     this.#onDestroy = onDestroy;
@@ -565,6 +669,8 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
         : 'BEGIN';
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      this.assertUsable(this.#connection);
+      this.#txState.unfinishedOnServer = true;
       await this.#connection.query(sql).catch(rethrowClientError(this.#connection));
     } finally {
       releaseLock();
@@ -574,6 +680,7 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     return new PostgresTransactionImpl(
       this.#connection,
       this.options,
+      this.#lease,
       () => {
         this.#txState.open = false;
       },
@@ -583,40 +690,76 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     );
   }
 
-  async release(): Promise<void> {
-    const conn = this.#connection;
-    if ('release' in conn) {
-      conn.release();
-    }
-    const onRelease = this.#onRelease;
-    this.#onRelease = undefined;
-    this.#onDestroy = undefined;
-    onRelease?.();
+  release(): Promise<void> {
+    return this.#dispose(
+      this.#txState.unfinishedOnServer
+        ? { reason: new Error('Transaction is unfinished') }
+        : undefined,
+    );
   }
 
-  async destroy(reason?: unknown): Promise<void> {
-    const onDestroy = this.#onDestroy;
-    const onRelease = this.#onRelease;
-    this.#onDestroy = undefined;
-    this.#onRelease = undefined;
+  destroy(reason?: unknown): Promise<void> {
+    return this.#dispose({ reason });
+  }
 
-    const conn = this.#connection;
-    if ('release' in conn) {
-      // Pass a truthy Error to pg's PoolClient.release so the pool evicts the
-      // client instead of returning it for reuse. A connection that reaches
-      // destroy() is in an indeterminate state (failed rollback/commit, etc.)
-      // and must not be handed back to another caller. The Error value is
-      // surfaced on pg-pool's 'release' event as advisory context; pg-pool
-      // itself only uses its truthiness for the eviction decision.
-      const releaseArg: Error =
-        reason instanceof Error ? reason : new Error('Connection destroyed');
-      conn.release(releaseArg);
+  #dispose(destroy?: { reason: unknown }): Promise<void> {
+    if (this.#disposed) return this.#disposal ?? Promise.resolve();
+    if (destroy !== undefined) {
+      this.#destruction ??= destroy;
+      this.#onInvalidated?.();
     }
+    if (this.#disposal !== undefined) return this.#disposal;
+    this.#lease.active = false;
+    this.#disposal = this.#drainAndDispose(destroy).catch((error) => {
+      this.#disposal = undefined;
+      throw error;
+    });
+    return this.#disposal;
+  }
 
-    if (onDestroy) {
-      await onDestroy(reason);
-    } else {
-      onRelease?.();
+  async #drainAndDispose(destroy: { reason: unknown } | undefined): Promise<void> {
+    if (destroy !== undefined && this.#onDestroy !== undefined) {
+      void this.#lease.drain().catch(() => undefined);
+      void drainClientStreams(this.#connection).catch(() => undefined);
+      await this.#onDestroy(destroy.reason);
+      this.#onDestroy = undefined;
+      this.#onRelease = undefined;
+      this.#disposed = true;
+      return;
+    }
+    let destruction = destroy;
+    try {
+      await this.#lease.drain();
+      if (destruction !== undefined) await drainClientStreams(this.#connection);
+    } catch (error) {
+      destruction ??= { reason: error };
+    }
+    const releaseLock = await acquireClientQueryLock(this.#connection);
+    try {
+      destruction = this.#destruction ?? destruction;
+      if (this.#txState.unfinishedOnServer)
+        destruction ??= { reason: new Error('Transaction is unfinished') };
+      if (destruction !== undefined) this.#onInvalidated?.();
+      const conn = this.#connection;
+      if ('release' in conn) {
+        if (destruction === undefined) conn.release();
+        else
+          conn.release(
+            destruction.reason instanceof Error
+              ? destruction.reason
+              : new Error('Connection destroyed'),
+          );
+      }
+      if (destruction !== undefined && this.#onDestroy !== undefined) {
+        await this.#onDestroy(destruction.reason);
+      } else {
+        this.#onRelease?.();
+      }
+      this.#onDestroy = undefined;
+      this.#onRelease = undefined;
+      this.#disposed = true;
+    } finally {
+      releaseLock();
     }
   }
 }
@@ -625,14 +768,16 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   #connection: PoolClient | Client;
   #onSettled: (() => void) | undefined;
   readonly #onEnded: () => void;
+  #ended = false;
 
   constructor(
     connection: PoolClient | Client,
     options: ConnectionOptions,
+    lease: ConnectionLease,
     onSettled: () => void,
     onEnded: () => void,
   ) {
-    super(options);
+    super(options, lease);
     this.#connection = connection;
     this.#onSettled = onSettled;
     this.#onEnded = onEnded;
@@ -650,7 +795,13 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
     return true;
   }
 
+  protected override assertUsable(client: ClientBase): void {
+    super.assertUsable(client);
+    if (this.#ended) throw driverError('DRIVER.NOT_CONNECTED', 'Postgres transaction has ended.');
+  }
+
   #settle(): void {
+    this.#ended = true;
     const onSettled = this.#onSettled;
     this.#onSettled = undefined;
     onSettled?.();
@@ -662,8 +813,12 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   // silently reopening the portal race on a connection whose transaction state
   // no longer matches reality.
   async commit(): Promise<void> {
+    this.assertUsable(this.#connection);
+    this.#ended = true;
+    await this.lease?.closeStreams();
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      this.lease?.assertActive();
       await this.#connection.query('COMMIT').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
@@ -673,8 +828,11 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   }
 
   async rollback(): Promise<void> {
+    this.#ended = true;
+    await this.lease?.closeStreams();
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      this.lease?.assertActive();
       await this.#connection.query('ROLLBACK').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
@@ -791,6 +949,11 @@ class PostgresDirectDriverImpl
     return this.#txState.open;
   }
 
+  protected override assertUsable(client: ClientBase): void {
+    super.assertUsable(client);
+    if (this.#closed) throw driverError('DRIVER.NOT_CONNECTED', 'Postgres driver is closed.');
+  }
+
   get state(): SqlDriverState {
     return this.#closed || hasLostConnection(this.directClient) ? 'closed' : 'connected';
   }
@@ -826,6 +989,7 @@ class PostgresDirectDriverImpl
           }
         },
         this.#txState,
+        () => markClientAbandoned(client),
       );
     } catch (error) {
       releaseLease();
@@ -862,6 +1026,7 @@ class PostgresDirectDriverImpl
       : () => {};
     try {
       await this.directClient.end();
+      clientEnded(this.directClient);
     } finally {
       releaseQueryLock();
     }
