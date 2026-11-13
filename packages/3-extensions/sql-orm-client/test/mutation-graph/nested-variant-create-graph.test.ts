@@ -139,7 +139,7 @@ describe('a nested create of a variant stored in the base table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find projects_tbl where id = 1 limit 1',
+          'n1 Find projects_tbl where id = 1',
           'n2 Insert tasks <- PayloadData n1 (id->project_id)',
           'result: n1',
         ].join('\n'),
@@ -154,7 +154,7 @@ describe('a nested create of a variant stored in the base table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find people where id = 1 limit 1',
+          'n1 Find people where id = 1',
           'n2 Insert tasks <- PayloadData n1 (id->reporter_id)',
           'result: n1',
         ].join('\n'),
@@ -187,9 +187,9 @@ describe('a nested create of a variant stored in the base table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find task_comments where id = 1 limit 1',
+          'n1 Find task_comments where id = 1',
           'n2 Insert tasks <- Requires n1',
-          'n3 Update task_comments set nothing <- FilterData n1 (id->id), PayloadData n2 (id->task_id)',
+          'n3 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
           'result: n3',
         ].join('\n'),
       );
@@ -224,7 +224,7 @@ describe('a nested create of a variant stored in the base table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find labels where id = 1 limit 1',
+          'n1 Find labels where id = 1',
           'n2 Insert tasks <- Requires n1',
           'n3 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
           'result: n1',
@@ -296,7 +296,7 @@ describe('a nested create of a variant stored in the base table with a relation 
 
     expect(printGraph(graph)).toBe(
       [
-        'n1 Find projects_tbl where id = 1 limit 1',
+        'n1 Find projects_tbl where id = 1',
         'n2 Insert tasks <- PayloadData n1 (id->project_id)',
         'n3 Insert task_comments <- PayloadData n2 (id->task_id)',
         'n4 Insert tasks <- PayloadData n1 (id->project_id)',
@@ -362,7 +362,7 @@ describe('a nested create of a variant stored in its own table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find projects_tbl where id = 1 limit 1',
+          'n1 Find projects_tbl where id = 1',
           'n2 Insert tasks <- PayloadData n1 (id->project_id)',
           'n3 Insert features <- PayloadData n2 (id->id)',
           'result: n1',
@@ -377,7 +377,7 @@ describe('a nested create of a variant stored in its own table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find people where id = 1 limit 1',
+          'n1 Find people where id = 1',
           'n2 Insert tasks <- PayloadData n1 (id->reporter_id)',
           'n3 Insert features <- PayloadData n2 (id->id)',
           'result: n1',
@@ -410,10 +410,10 @@ describe('a nested create of a variant stored in its own table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find task_comments where id = 1 limit 1',
+          'n1 Find task_comments where id = 1',
           'n2 Insert tasks <- Requires n1',
           'n3 Insert features <- PayloadData n2 (id->id)',
-          'n4 Update task_comments set nothing <- FilterData n1 (id->id), PayloadData n2 (id->task_id)',
+          'n4 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
           'result: n4',
         ].join('\n'),
       );
@@ -448,7 +448,7 @@ describe('a nested create of a variant stored in its own table', () => {
 
       expect(printGraph(graph)).toBe(
         [
-          'n1 Find labels where id = 1 limit 1',
+          'n1 Find labels where id = 1',
           'n2 Insert tasks <- Requires n1',
           'n3 Insert features <- PayloadData n2 (id->id)',
           'n4 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
