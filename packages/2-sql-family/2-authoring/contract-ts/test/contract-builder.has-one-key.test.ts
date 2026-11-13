@@ -35,17 +35,23 @@ function defineTestContract(models: NonNullable<ContractInput['models']>) {
   });
 }
 
-const User = model('User', {
-  fields: { id: field.column(int4Column).id() },
-  relations: { profile: rel.hasOne('Profile', { by: 'userId' }) },
-});
+type HasOne = ReturnType<typeof rel.hasOne>;
 
-const TenantUser = model('User', {
-  fields: { tenantId: field.column(int4Column), id: field.column(int4Column) },
-  relations: { profile: rel.hasOne('Profile', { by: ['tenantId', 'userId'] }) },
-}).attributes(({ fields, constraints }) => ({
-  id: constraints.id([fields.tenantId, fields.id]),
-}));
+function userWith(profile: HasOne) {
+  return model('User', {
+    fields: { id: field.column(int4Column).id() },
+    relations: { profile },
+  });
+}
+
+function tenantUserWith(profile: HasOne) {
+  return model('User', {
+    fields: { tenantId: field.column(int4Column), id: field.column(int4Column) },
+    relations: { profile },
+  }).attributes(({ fields, constraints }) => ({
+    id: constraints.id([fields.tenantId, fields.id]),
+  }));
+}
 
 function notUniqueError(fields: readonly string[]) {
   return expect.objectContaining({
@@ -78,14 +84,20 @@ describe('a hasOne relation key', () => {
     const Profile = model('Profile', {
       fields: { id: field.column(int4Column).id(), userId: field.column(int4Column) },
     });
-    expect(() => defineTestContract({ User, Profile })).toThrow(notUniqueError(['userId']));
+    expect(() =>
+      defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+    ).toThrow(notUniqueError(['userId']));
   });
 
   it('is accepted when the target field is the primary key', () => {
     const Profile = model('Profile', {
       fields: { userId: field.column(int4Column).id() },
     });
-    expect(profileRelation(defineTestContract({ User, Profile }))).toMatchObject({
+    expect(
+      profileRelation(
+        defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+      ),
+    ).toMatchObject({
       cardinality: '1:1',
       on: { localFields: ['id'], targetFields: ['userId'] },
     });
@@ -95,7 +107,11 @@ describe('a hasOne relation key', () => {
     const Profile = model('Profile', {
       fields: { id: field.column(int4Column).id(), userId: field.column(int4Column).unique() },
     });
-    expect(profileRelation(defineTestContract({ User, Profile }))).toMatchObject({
+    expect(
+      profileRelation(
+        defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+      ),
+    ).toMatchObject({
       cardinality: '1:1',
       on: { localFields: ['id'], targetFields: ['userId'] },
     });
@@ -107,7 +123,11 @@ describe('a hasOne relation key', () => {
     }).sql(({ cols, constraints }) => ({
       indexes: [constraints.index([cols.userId], { unique: true })],
     }));
-    expect(profileRelation(defineTestContract({ User, Profile }))).toMatchObject({
+    expect(
+      profileRelation(
+        defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+      ),
+    ).toMatchObject({
       cardinality: '1:1',
     });
   });
@@ -120,7 +140,9 @@ describe('a hasOne relation key', () => {
         constraints.index([cols.userId], { unique: true, where: sql`(user_id IS NOT NULL)` }),
       ],
     }));
-    expect(() => defineTestContract({ User, Profile })).toThrow(notUniqueError(['userId']));
+    expect(() =>
+      defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+    ).toThrow(notUniqueError(['userId']));
   });
 
   it('is refused when the only unique index over the target field is an expression index', () => {
@@ -131,7 +153,9 @@ describe('a hasOne relation key', () => {
         constraints.index({ expression: sql`("userId")`, unique: true, name: 'profile_user' }),
       ],
     }));
-    expect(() => defineTestContract({ User, Profile })).toThrow(notUniqueError(['userId']));
+    expect(() =>
+      defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
+    ).toThrow(notUniqueError(['userId']));
   });
 
   it('is refused when the target fields are covered only by a larger unique', () => {
@@ -144,9 +168,12 @@ describe('a hasOne relation key', () => {
     }).attributes(({ fields, constraints }) => ({
       uniques: [constraints.unique([fields.tenantId, fields.userId, fields.id])],
     }));
-    expect(() => defineTestContract({ User: TenantUser, Profile })).toThrow(
-      notUniqueError(['tenantId', 'userId']),
-    );
+    expect(() =>
+      defineTestContract({
+        User: tenantUserWith(rel.hasOne(Profile, { by: ['tenantId', 'userId'] })),
+        Profile,
+      }),
+    ).toThrow(notUniqueError(['tenantId', 'userId']));
   });
 
   it('is refused when only part of the target fields is unique', () => {
@@ -157,9 +184,12 @@ describe('a hasOne relation key', () => {
         userId: field.column(int4Column).unique(),
       },
     });
-    expect(() => defineTestContract({ User: TenantUser, Profile })).toThrow(
-      notUniqueError(['tenantId', 'userId']),
-    );
+    expect(() =>
+      defineTestContract({
+        User: tenantUserWith(rel.hasOne(Profile, { by: ['tenantId', 'userId'] })),
+        Profile,
+      }),
+    ).toThrow(notUniqueError(['tenantId', 'userId']));
   });
 
   it('is accepted when a unique lists the target fields in another order', () => {
@@ -172,16 +202,24 @@ describe('a hasOne relation key', () => {
     }).attributes(({ fields, constraints }) => ({
       uniques: [constraints.unique([fields.userId, fields.tenantId])],
     }));
-    expect(profileRelation(defineTestContract({ User: TenantUser, Profile }))).toMatchObject({
+    expect(
+      profileRelation(
+        defineTestContract({
+          User: tenantUserWith(rel.hasOne(Profile, { by: ['tenantId', 'userId'] })),
+          Profile,
+        }),
+      ),
+    ).toMatchObject({
       cardinality: '1:1',
       on: { localFields: ['tenantId', 'id'], targetFields: ['tenantId', 'userId'] },
     });
   });
 
   it('is accepted alongside a belongsTo over the same unique fields', () => {
+    const User = userWith(rel.hasOne(() => Profile, { by: 'userId' }));
     const Profile = model('Profile', {
       fields: { id: field.column(int4Column).id(), userId: field.column(int4Column).unique() },
-      relations: { user: rel.belongsTo('User', { from: 'userId', to: 'id' }) },
+      relations: { user: rel.belongsTo(User, { from: 'userId', to: 'id' }) },
     });
     const contract = defineTestContract({ User, Profile });
     expect(profileRelation(contract)).toMatchObject({ cardinality: '1:1' });
