@@ -246,6 +246,25 @@ describe('executeDbUpdate, database policies', () => {
     });
   });
 
+  it('adds the policies as a sentence of their own when the run only signed the database', async () => {
+    const execute = vi.fn().mockResolvedValue(
+      ok({
+        perSpaceResults: [{ space: 'app', value: { operationsPlanned: 0, operationsExecuted: 0 } }],
+      }),
+    );
+    const result = await update({
+      mode: 'apply',
+      markers: new Map(),
+      ref: { name: 'dev', hash: 'dummy', invariants: [], policies: { change: ['reconcile'] } },
+      permitPolicyChange: true,
+      executeSpy: execute,
+    });
+
+    expect(result.ok ? result.value.summary : result.failure).toBe(
+      'The storage the contract describes changed, but the database needs no operation for it, so none ran and the database was signed with the new contract. No storage entity changed; what changed is storage.namespaces, storage.tables. Policies updated: change: reconcile.',
+    );
+  });
+
   it('records no policies when a run gives none', async () => {
     const execute = vi.fn().mockResolvedValue(
       ok({

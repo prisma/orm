@@ -693,6 +693,49 @@ describe('db update', () => {
     ]);
   });
 
+  describe('a run that records policies', () => {
+    const updated = [
+      { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
+    ];
+
+    it('says the policies were updated when nothing else ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(
+        ok({
+          ...applySuccess(),
+          plan: { operations: [] },
+          execution: { operationsPlanned: 0, operationsExecuted: 0 },
+          databasePoliciesUpdated: updated,
+        }),
+      );
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Policies updated: change: migrate',
+      });
+    });
+
+    it('names the policies after the operations that ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(ok({ ...applySuccess(), databasePoliciesUpdated: updated }));
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Applied 2 operation(s) across 1 contract space; policies updated: change: migrate',
+      });
+    });
+  });
+
   it('heads the run with the contract and the masked database', async () => {
     const run = await harness().run(['db', 'update'], {
       cwd: projectDir,

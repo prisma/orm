@@ -614,10 +614,14 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
         : applied.value.totalOpsExecuted === 0
           ? `Database already matches contract across ${applied.value.orderedResolutions.length} space(s), signature updated`
           : `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), signature updated`;
+  const policiesText =
+    policiesToWrite === undefined ? undefined : declaredSettingsText(policiesToWrite.differences);
   const summary =
-    policiesToWrite === undefined
+    policiesText === undefined
       ? runSummary
-      : `${runSummary}; policies updated: ${declaredSettingsText(policiesToWrite.differences)}`;
+      : signedWithoutOperations
+        ? `${runSummary} Policies updated: ${policiesText}.`
+        : `${runSummary}; policies updated: ${policiesText}`;
 
   return wrapApplyResult({
     operations: aggregateOps,
