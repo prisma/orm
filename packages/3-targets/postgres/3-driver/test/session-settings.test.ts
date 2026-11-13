@@ -74,6 +74,11 @@ const URLS = [
   'postgres://u:p@localhost/db?sslnegotiation=direct&sslmode=require',
   'postgres://u:p@localhost/db?port=6000',
   'postgres://u:p@localhost/db?statement_timeout=1000&query_timeout=2000&lock_timeout=3000&idle_in_transaction_session_timeout=4000',
+  'postgresql:///db',
+  'postgres:///db',
+  'postgresql://localhost/db',
+  'postgresql://u@/db',
+  'postgresql://u:p@/db',
 ];
 
 describe('a pg client built from the settings of a URL', () => {
@@ -134,6 +139,63 @@ describe('the connection settings of a connection Prisma opens', () => {
         SETTINGS,
       ).connectionTimeoutMillis,
     ).toBe(5);
+  });
+
+  it('parses URLs with omitted user and host components for pg connection settings', () => {
+    const blankBoth = pgConnectionConfig({ connectionString: 'postgresql:///app' }, SETTINGS);
+    expect(blankBoth.user).toBeUndefined();
+    expect(blankBoth.host).toBeUndefined();
+    expect(blankBoth.database).toBe('app');
+
+    const blankUser = pgConnectionConfig(
+      { connectionString: 'postgresql://localhost/app' },
+      SETTINGS,
+    );
+    expect(blankUser.user).toBeUndefined();
+    expect(blankUser.host).toBe('localhost');
+    expect(blankUser.database).toBe('app');
+
+    const blankHost = pgConnectionConfig({ connectionString: 'postgresql://u@/app' }, SETTINGS);
+    expect(blankHost.user).toBe('u');
+    expect(blankHost.host).toBeUndefined();
+    expect(blankHost.database).toBe('app');
+  });
+
+  it('parses URLs with blank host and explicit port without setting a dummy host', () => {
+    const config = pgConnectionConfig({ connectionString: 'postgresql://:5432/app' }, SETTINGS);
+    expect(config.port).toBe('5432');
+    expect(config.database).toBe('app');
+    expect(config.host).toBeUndefined();
+
+    const withUser = pgConnectionConfig(
+      { connectionString: 'postgresql://user:pass@:5432/app' },
+      SETTINGS,
+    );
+    expect(withUser.user).toBe('user');
+    expect(withUser.password).toBe('pass');
+    expect(withUser.port).toBe('5432');
+    expect(withUser.database).toBe('app');
+    expect(withUser.host).toBeUndefined();
+  });
+
+  it('parses URLs with blank host and explicit port retaining socket host from query string', () => {
+    const config = pgConnectionConfig(
+      { connectionString: 'postgresql://:5432/app?host=/var/run/postgresql' },
+      SETTINGS,
+    );
+    expect(config.port).toBe('5432');
+    expect(config.database).toBe('app');
+    expect(config.host).toBe('/var/run/postgresql');
+
+    const withUser = pgConnectionConfig(
+      { connectionString: 'postgresql://user:pass@:5432/app?host=/var/run/postgresql' },
+      SETTINGS,
+    );
+    expect(withUser.user).toBe('user');
+    expect(withUser.password).toBe('pass');
+    expect(withUser.port).toBe('5432');
+    expect(withUser.database).toBe('app');
+    expect(withUser.host).toBe('/var/run/postgresql');
   });
 
   it('add no startup options when the target declares no settings', () => {

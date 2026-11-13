@@ -45,6 +45,41 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+/**
+ * Inserts a placeholder host into PostgreSQL URLs that omit the host component (such as `postgresql:///db` or `postgresql://:5432/db`) so the standard WHATWG `URL` parser can validate the remaining structure.
+ */
+function normalizePostgresUrlForParsing(url: string): string {
+  return url.replace(
+    /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#]*)/,
+    (_match, scheme: string, authority: string) => {
+      const atIndex = authority.lastIndexOf('@');
+      const userinfo = atIndex !== -1 ? authority.slice(0, atIndex + 1) : '';
+      let hostpart = atIndex !== -1 ? authority.slice(atIndex + 1) : authority;
+      if (!hostpart.includes(',') && (hostpart === '' || hostpart.startsWith(':'))) {
+        hostpart = `dummy-host${hostpart}`;
+      }
+      return `${scheme}${userinfo}${hostpart}`;
+    },
+  );
+}
+
+/**
+ * Checks whether a parsed PostgreSQL URL contains an unsupported comma-separated multi-host authority while permitting percent-encoded Unix domain socket directory paths (which decode to an absolute path starting with `/`).
+ */
+function isMultiHostAuthority(parsed: URL): boolean {
+  if (!parsed.host.includes(',') && !parsed.hostname.includes(',')) {
+    return false;
+  }
+  try {
+    return !decodeURIComponent(parsed.hostname).startsWith('/');
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Validates that a PostgreSQL connection string uses `postgres://` or `postgresql://` and is structurally valid, including connection strings with omitted user or host components or percent-encoded Unix socket paths.
+ */
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -57,9 +92,13 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension, reason: 'unparseable url' },
-    });
+    try {
+      parsed = new URL(normalizePostgresUrlForParsing(trimmed));
+    } catch {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
@@ -75,6 +114,17 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
         },
       },
     );
+  }
+
+  if (!/^postgres(?:ql)?:\/\//i.test(trimmed)) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
+  }
+  if (isMultiHostAuthority(parsed)) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
   }
 
   return trimmed;
