@@ -7,13 +7,13 @@ import type { PgIntegrationRuntime } from './runtime-helpers';
 const polyContext = getPolyTestContext();
 
 function collectionsOf(runtime: PgIntegrationRuntime) {
-  const collection = <ModelName extends 'Project' | 'TaskComment' | 'Label'>(
-    modelName: ModelName,
-  ) => new Collection({ runtime, context: polyContext }, modelName, { namespaceId: 'public' });
+  const context = { runtime, context: polyContext };
+  const options = { namespaceId: 'public' };
   return {
-    projects: collection('Project'),
-    comments: collection('TaskComment'),
-    labels: collection('Label'),
+    projects: new Collection(context, 'Project', options).select('id', 'name'),
+    comments: new Collection(context, 'TaskComment', options).select('id', 'body', 'taskId'),
+    labels: new Collection(context, 'Label', options).select('id', 'name'),
+    tasks: new Collection(context, 'Task', options),
   };
 }
 
@@ -119,6 +119,88 @@ describe('integration/nested-variant-creates', () => {
             { id: 1, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
             { id: 2, title: 'Hang', type: 'bug', severity: 'low', project_id: 1 },
           ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('a variant stored in the base table with a relation callback in its row', () => {
+    it(
+      'create() and update() write the row with the discriminator and the rows of a base relation',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupSchema(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          const created = await projects.create({
+            name: 'Launch',
+            tasks: (tasks) =>
+              tasks.variant('bug').create({
+                ...crash,
+                comments: (comments) => comments.create({ body: 'Seen it' }),
+              }),
+          });
+          const updated = await projects.where({ id: 1 }).update({
+            tasks: (tasks) =>
+              tasks
+                .variant('bug')
+                .create([
+                  hang,
+                  { ...crash, comments: (comments) => comments.create([{ body: 'Again' }]) },
+                ]),
+          });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Launch' },
+          ]);
+          expect(await storedTasks(runtime)).toEqual([
+            { id: 1, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
+            { id: 2, title: 'Hang', type: 'bug', severity: 'low', project_id: 1 },
+            { id: 3, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
+          ]);
+          expect(
+            await runtime.query('select id, body, task_id from task_comments order by id'),
+          ).toEqual([
+            { id: 1, body: 'Seen it', task_id: 1 },
+            { id: 2, body: 'Again', task_id: 3 },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'refuses a callback on a relation of the variant with the error of the top-level variant create',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupSchema(runtime);
+          const { projects, tasks } = collectionsOf(runtime);
+          const topLevel = await tasks
+            .variant('bug')
+            .create({ ...crash, assignee: (assignee) => assignee.create({ name: 'Ada' }) })
+            .then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+          const nested = await projects
+            .create({
+              name: 'Launch',
+              tasks: (related) =>
+                related
+                  .variant('bug')
+                  .create({ ...crash, assignee: (assignee) => assignee.create({ name: 'Ada' }) }),
+            })
+            .then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+
+          expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
+          expect(nested).toEqual(topLevel);
+          expect(await runtime.query('select id from projects_tbl')).toEqual([]);
+          expect(await storedTasks(runtime)).toEqual([]);
         }, polyContext.contract);
       },
       timeouts.spinUpPpgDev,
