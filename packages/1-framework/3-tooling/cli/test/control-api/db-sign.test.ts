@@ -279,7 +279,7 @@ describe('signContractSpaces', () => {
         {
           kind: 'user-choice',
           label:
-            'Author a migration with {bin} migration plan --config config/prisma.config.ts, then deploy it.',
+            'Author a migration with {bin} migration plan --config config/prisma.config.ts, then apply it with {bin} db migrate --config config/prisma.config.ts --db <url>.',
         },
       ],
       meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },

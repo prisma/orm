@@ -39,7 +39,8 @@ describe('errorPolicyMismatch', () => {
 
 describe('errorChangePolicyForbids', () => {
   it('refuses db update on a database that changes only through migrations', () => {
-    const recovery = 'Author a migration with {bin} migration plan, then deploy it.';
+    const recovery =
+      'Author a migration with {bin} migration plan, then apply it with {bin} db migrate --db <url>.';
 
     expect(
       errorChangePolicyForbids({

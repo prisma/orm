@@ -32,7 +32,7 @@ $ prisma db migrate --to production --permit-policy-change --db $PROD
 $ prisma db update --db $PROD
 ✖ This database's change policy permits only migrations (MIGRATION.CHANGE_POLICY_FORBIDS)
   why  The marker records change: migrate, so db update may not move it.
-  next Author a migration with prisma migration plan, then deploy it.
+  next Author a migration with prisma migration plan, then apply it with prisma db migrate --db <url>.
 ```
 
 ## Chosen design
@@ -146,7 +146,7 @@ One line per field; the terminal wraps. Every code is registered in `docs/refere
 **`MIGRATION.CHANGE_POLICY_FORBIDS`**
 - summary, when `reconcile` is refused: `This database's change policy permits only migrations`; when `migrate` is refused: `This database's change policy permits only db update`. When the refusal comes from the ref's declaration under `--permit-policy-change`, the summary names the ref: `<ref> declares a change policy that permits only migrations` (or `only db update`).
 - why: `The marker records change: <strategies>, so <command> may not move it.` When the refusal comes from the ref's declaration, `<ref> declares change: <strategies>, so <command> may not move it.`; `meta.change` is then the declared strategies.
-- next, `reconcile` refused: `user-choice`: `Author a migration with {bin} migration plan, then deploy it.` `migrate` refused: `run-command`, label `Reconcile the database`: `{bin} db update --to <target> [--db <url>]`. When the refusal comes from the ref's declaration, the command targets the ref and repeats the flag the user gave: `{bin} db update --to <ref> --permit-policy-change`, or, for `reconcile` refused, `… then apply it with {bin} db migrate --to <ref> --permit-policy-change.` The database's current policy would refuse the same command without the flag.
+- next, `reconcile` refused: `user-choice`: `Author a migration with {bin} migration plan, then apply it with {bin} db migrate [--db <url>].` `migrate` refused: `run-command`, label `Reconcile the database`: `{bin} db update --to <target> [--db <url>]`. When the refusal comes from the ref's declaration, the command targets the ref and repeats the flag the user gave: `{bin} db update --to <ref> --permit-policy-change`, or, for `reconcile` refused, `… then apply it with {bin} db migrate --to <ref> --permit-policy-change.` The database's current policy would refuse the same command without the flag.
 - meta: `spaceId`, `command` (`db update` | `db sign` | `db migrate`), `change` (the strategies in force).
 
 **`MIGRATION.MARKER_MISMATCH`** (built in `utils/marker-mismatch.ts`) now takes the policies in force. When `change` includes `reconcile`, the next actions are the two `db update` commands only; the conditional sentence "Unless this database changes only through migrations…" goes. When it does not, the single `user-choice` from the project spec: `This database's change policy permits only migrations. Author migrations that bring it back onto the graph: one from <last graph hash> to its current contract, then one from there to <target>. Commit them and deploy again.` (`from the nearest contract in the migration graph` when there is no last graph hash.) `meta` gains `change`.

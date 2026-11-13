@@ -34,7 +34,7 @@ $ prisma db migrate --to production --permit-policy-change --db $PROD
 $ prisma db update --db $PROD
 ✘ [MIGRATION.CHANGE_POLICY_FORBIDS] This database's change policy permits only migrations
   why: The marker records change: migrate, so db update may not move it.
-→ Author a migration with prisma migration plan, then deploy it.
+→ Author a migration with prisma migration plan, then apply it with prisma db migrate --db <url>.
 ```
 
 ## Decision

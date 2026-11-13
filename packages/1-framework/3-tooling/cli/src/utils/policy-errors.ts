@@ -87,11 +87,8 @@ export function errorChangePolicyForbids(args: {
       },
     );
   }
-  const apply =
-    source.kind === 'ref'
-      ? `, then apply it with ${cliCommand(invocation, 'db migrate', toTarget)}.`
-      : ', then deploy it.';
-  const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}${apply}`;
+  const migrate = cliCommand(invocation, 'db migrate', source.kind === 'ref' ? toTarget : []);
+  const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}, then apply it with ${migrate}.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,

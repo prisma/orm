@@ -154,7 +154,8 @@ function update(args: {
   });
 }
 
-const RECOVERY = 'Author a migration with {bin} migration plan, then deploy it.';
+const RECOVERY =
+  'Author a migration with {bin} migration plan, then apply it with {bin} db migrate.';
 
 describe('executeDbUpdate, database policies', () => {
   it.each(['plan', 'apply'] as const)(

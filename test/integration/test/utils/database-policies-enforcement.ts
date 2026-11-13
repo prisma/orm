@@ -36,7 +36,8 @@ export type WithPolicyProject = (
 const DOCS = 'https://docs.prisma.io/docs/orm/v8/reference/error-reference';
 
 function forbidsMigrationsOnly(command: 'db update' | 'db sign') {
-  const recovery = 'Author a migration with prisma-test migration plan, then deploy it.';
+  const recovery =
+    'Author a migration with prisma-test migration plan, then apply it with prisma-test db migrate.';
   return {
     code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
     severity: 'error',
