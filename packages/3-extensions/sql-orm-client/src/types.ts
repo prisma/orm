@@ -1747,22 +1747,33 @@ type DiscriminatorFieldName<
     ? F
     : never;
 
-export type VariantCreateInput<
+type VariantInputOver<
   TContract extends Contract<SqlStorage>,
   BaseModelName extends string,
   VariantValue extends string,
-  NsId extends string = never,
+  NsId extends string,
+  BaseInput,
 > = VariantValue extends string
-  ? Omit<
-      CreateInput<TContract, BaseModelName, NsId>,
-      DiscriminatorFieldName<TContract, BaseModelName, NsId>
-    > &
+  ? Omit<BaseInput, DiscriminatorFieldName<TContract, BaseModelName, NsId>> &
       CreateInput<
         TContract,
         VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
         VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
       >
   : never;
+
+export type VariantCreateInput<
+  TContract extends Contract<SqlStorage>,
+  BaseModelName extends string,
+  VariantValue extends string,
+  NsId extends string = never,
+> = VariantInputOver<
+  TContract,
+  BaseModelName,
+  VariantValue,
+  NsId,
+  CreateInput<TContract, BaseModelName, NsId>
+>;
 
 /**
  * An input with no keys is `Record<string, never>`, not `{}`: TypeScript accepts any object where `{}` is expected, so a model with no fields would accept any key.
@@ -2176,22 +2187,17 @@ interface RelationMutatorMethods<
     : FilteredRelationMutator<TContract, ModelName, ParentLinkFields>['deleteAll'];
 }
 
-export type NestedVariantCreateInput<
+type NestedVariantCreateInput<
   TContract extends Contract<SqlStorage>,
   BaseModelName extends string,
   VariantValue extends string,
-  NsId extends string = never,
-> = VariantValue extends string
-  ? Omit<
-      MutationCreateInput<TContract, BaseModelName, NsId>,
-      DiscriminatorFieldName<TContract, BaseModelName, NsId>
-    > &
-      CreateInput<
-        TContract,
-        VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
-        VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
-      >
-  : never;
+> = VariantInputOver<
+  TContract,
+  BaseModelName,
+  VariantValue,
+  never,
+  MutationCreateInput<TContract, BaseModelName>
+>;
 
 export interface VariantRelationMutator<
   TContract extends Contract<SqlStorage>,
@@ -2209,16 +2215,6 @@ export interface VariantRelationMutator<
       ? never
       : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue>[],
   ): RelationMutationCreate<TContract, ModelName>;
-}
-
-interface RelationMutatorVariant<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  LinkWritesDisabled extends boolean,
-> {
-  variant<V extends DiscriminatorValues<TContract, ModelName>>(
-    value: V,
-  ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
 }
 
 export type RelationMutator<
@@ -2240,7 +2236,11 @@ export type RelationMutator<
   LinkWritesDisabled extends true ? true : IsPolymorphicBase<TContract, ModelName>
 > &
   (IsPolymorphicBase<TContract, ModelName> extends true
-    ? RelationMutatorVariant<TContract, ModelName, LinkWritesDisabled>
+    ? {
+        variant<V extends DiscriminatorValues<TContract, ModelName>>(
+          value: V,
+        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
+      }
     : unknown);
 
 type RelationMutationCallback<
