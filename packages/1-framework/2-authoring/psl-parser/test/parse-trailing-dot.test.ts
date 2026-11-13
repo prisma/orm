@@ -125,6 +125,16 @@ describe('a qualified name does not continue across a newline', () => {
     ]);
   });
 
+  it('stops a value path before a dot after a block comment that spans lines', () => {
+    const result = parsed('p x {\n  target = auth /* a\n  */.other = true\n}');
+    expect(result.shapeOf('KeyValuePair')).toEqual([
+      'KeyValuePair',
+      ['Identifier', 'Ident target'],
+      'Equals =',
+      auth,
+    ]);
+  });
+
   it('stops a field type at the end of its line', () => {
     const result = parsed('model M {\n  a auth.\n  b Int\n}');
     expect(result.shapeOf('FieldDeclaration')).toEqual([
