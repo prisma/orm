@@ -1,5 +1,6 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import { MongoFieldFilter, MongoOrExpr } from '@internal/mongo-query-ast/execution';
 import { MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
@@ -154,5 +155,38 @@ describe('a prepared placeholder in the Mongo ORM', () => {
         .update((u) => [u.loginCount.inc(placeholder as unknown as number)]),
     ).rejects.toMatchObject(refused);
     expect(plans).toEqual([]);
+  });
+
+  describe('in a where followed by a write', () => {
+    const name = placeholder as unknown as string;
+    const usersOf = (executor: MongoQueryExecutor) =>
+      createMongoCollection(collectionContext(contract, executor), 'User');
+
+    it.each<[string, (users: ReturnType<typeof usersOf>) => Promise<unknown>]>([
+      ['update', (users) => users.where({ name }).update({ loginCount: 1 })],
+      ['updateAll', async (users) => users.where({ name }).updateAll({ loginCount: 1 }).toArray()],
+      ['updateAndCount', (users) => users.where({ name }).updateAndCount({ loginCount: 1 })],
+      ['delete', (users) => users.where({ name }).delete()],
+      ['deleteAll', async (users) => users.where({ name }).deleteAll().toArray()],
+      ['deleteAndCount', (users) => users.where({ name }).deleteAndCount()],
+      [
+        'upsert',
+        (users) =>
+          users.where({ name }).upsert({
+            create: { name: 'Ann', email: 'a@b.c', loginCount: 0, tags: [], homeAddress: null },
+            update: { loginCount: 1 },
+          }),
+      ],
+      [
+        'a write after a filter expression',
+        (users) =>
+          users.where(MongoOrExpr.of([MongoFieldFilter.eq('email', placeholder)])).deleteAndCount(),
+      ],
+    ])('is refused by %s when it is called, and nothing is sent', async (_label, write) => {
+      const { executor, plans } = recordingExecutor();
+
+      await expect((async () => write(usersOf(executor)))()).rejects.toMatchObject(refused);
+      expect(plans).toEqual([]);
+    });
   });
 });

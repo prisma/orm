@@ -30,6 +30,7 @@ import type {
   AnyMongoCommand,
   InsertManyResult,
   InsertOneResult,
+  MongoAggLiteral,
   MongoExecutionContext,
   MongoFieldShape,
   MongoFilterExpr,
@@ -85,7 +86,12 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
-import { ormParam, rejectPlaceholder, wherePlaceholder } from './orm-param';
+import {
+  ormParam,
+  rejectPlaceholder,
+  type WherePlaceholderTarget,
+  wherePlaceholder,
+} from './orm-param';
 import type { MongoPreparedCollection } from './prepared-collection';
 import type {
   DiscriminatorValues,
@@ -281,6 +287,24 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 
 const LIST_INDEX = /^\d+$/;
 
+function rejectLiteralPlaceholder(literal: MongoAggLiteral): MongoAggLiteral {
+  rejectPlaceholder(literal.value, '$expr');
+  return literal;
+}
+
+function rejectFilterPlaceholders(filter: MongoFilterExpr): void {
+  filter.rewrite({
+    field: (fieldFilter) => {
+      rejectPlaceholder(fieldFilter.value, fieldFilter.field);
+      return fieldFilter;
+    },
+    expr: (exprFilter) => {
+      exprFilter.aggExpr.rewrite({ literal: rejectLiteralPlaceholder });
+      return exprFilter;
+    },
+  });
+}
+
 export class MongoCollectionImpl<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
@@ -380,6 +404,7 @@ export class MongoCollectionImpl<
             exprFilter.aggExpr.rewrite({
               fieldRef: (ref) =>
                 ref.path.startsWith('$') ? ref : MongoAggFieldRef.of(this.#storedPath(ref.path)),
+              literal: rejectLiteralPlaceholder,
             }),
           ),
       });
@@ -507,7 +532,7 @@ export class MongoCollectionImpl<
     return this.#query();
   }
 
-  first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
+  async first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     return this.#run(this.#describeFirst());
   }
 
@@ -519,7 +544,7 @@ export class MongoCollectionImpl<
     };
   }
 
-  firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
+  async firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     return this.#run(this.#describeFirstOrThrow());
   }
 
@@ -855,11 +880,7 @@ export class MongoCollectionImpl<
     // re-read flow depends on it.
     const { resultShape: _rs, ...planWithoutShape } = idQuery.#compile();
     for await (const row of this.#executor.query(planWithoutShape)) {
-      const storageRow = blindCast<
-        Record<string, unknown>,
-        'Mongo id-prefetch plan without resultShape yields a raw storage row containing _id'
-      >(row);
-      ids.push(storageRow['_id']);
+      ids.push(row['_id']);
     }
     return ids;
   }
@@ -876,9 +897,10 @@ export class MongoCollectionImpl<
     Record<string, unknown>,
     AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>
   > {
+    const plan = this.#compile();
     const rowOf = this.#rowMapper();
     return {
-      plan: this.#compile<Record<string, unknown>>(),
+      plan,
       consume: (documents) => {
         async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
           for await (const document of documents) {
@@ -967,19 +989,24 @@ export class MongoCollectionImpl<
     }
   }
 
-  #compile<Row = IncludedRow<TContract, ModelName, TIncludes>>(): MongoQueryPlan<Row> {
+  #compile(): MongoQueryPlan<Record<string, unknown>> {
     const model = this.#modelWithVariantFields();
     if (!model) {
       throw ormError('ORM.MODEL_UNKNOWN', `Unknown model: "${this.#modelName}".`, {
         meta: { model: this.#modelName },
       });
     }
-    return compileMongoQuery<Row>(
-      this.#collectionName,
-      this.#state,
-      this.#contract.storage.storageHash,
-      model,
-      this.#contract.storage,
+    return blindCast<
+      MongoQueryPlan<Record<string, unknown>>,
+      'an aggregate pipeline yields documents, which the driver returns as records'
+    >(
+      compileMongoQuery(
+        this.#collectionName,
+        this.#state,
+        this.#contract.storage.storageHash,
+        model,
+        this.#contract.storage,
+      ),
     );
   }
 
@@ -1082,7 +1109,11 @@ export class MongoCollectionImpl<
       const field = fields[key];
       const compared =
         isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
-          ? wherePlaceholder(value, field, field.type.codecId, key)
+          ? wherePlaceholder(
+              value,
+              { codecId: field.type.codecId, nullable: field.nullable, list: Boolean(field.many) },
+              key,
+            )
           : this.#wrapFieldValue(value, field, key, 'filter');
       filters.push(whereEquality(storedName, field, compared));
     }
@@ -1101,12 +1132,9 @@ export class MongoCollectionImpl<
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
     }
-    const fieldCodecId = field.type.codecId;
+    const target = this.#placeholderTarget(filter.field, field, field.type.codecId);
     const encode = (value: MongoValue): MongoValue => {
       if (value === null) return null;
-      if (isMongoPreparedParamRef(value)) {
-        return wherePlaceholder(value, field, fieldCodecId, filter.field);
-      }
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
           ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
@@ -1115,19 +1143,42 @@ export class MongoCollectionImpl<
       if (field.many && Array.isArray(value)) return value.map(encode);
       return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
+    const operand = (value: MongoValue): MongoValue => {
+      if (isMongoPreparedParamRef(value)) return wherePlaceholder(value, target, filter.field);
+      rejectPlaceholder(value, filter.field);
+      return encode(value);
+    };
     if (COMPARISON_OPERATORS.has(filter.op)) {
-      return MongoFieldFilter.of(storedPath, filter.op, encode(filter.value));
+      return MongoFieldFilter.of(storedPath, filter.op, operand(filter.value));
     }
     if (MEMBERSHIP_OPERATORS.has(filter.op) && Array.isArray(filter.value)) {
       const values = filter.value;
-      const encoded = values.map(encode);
+      const encoded = values.map(operand);
       return encoded.every((value, index) => value === values[index]) && storedPath === filter.field
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, encoded);
     }
+    rejectPlaceholder(filter.value, filter.field);
     return storedPath === filter.field
       ? filter
       : MongoFieldFilter.of(storedPath, filter.op, filter.value);
+  }
+
+  /**
+   * A path that ends in a list index names one item of the list, so a placeholder there may be null exactly when the list's items may be.
+   */
+  #placeholderTarget(path: string, field: ContractField, codecId: string): WherePlaceholderTarget {
+    const segments = path.split('.');
+    const last = segments.at(-1);
+    const list =
+      last !== undefined && LIST_INDEX.test(last)
+        ? this.#fieldAtPath(segments.slice(0, -1).join('.'))?.many
+        : undefined;
+    return {
+      codecId,
+      nullable: list ? list.elementNullable : field.nullable,
+      list: Boolean(field.many),
+    };
   }
 
   #fieldAtPath(path: string): ContractField | undefined {
@@ -1460,6 +1511,7 @@ export class MongoCollectionImpl<
     return MongoAndExpr.of([...this.#state.filters]);
   }
 
+  /** Every write that uses the collection's filters starts here, so a placeholder a `where` kept is refused before the write runs. */
   #requireFilters(methodName: string): void {
     if (this.#state.filters.length === 0) {
       throw ormError(
@@ -1468,6 +1520,7 @@ export class MongoCollectionImpl<
         { meta: { method: methodName } },
       );
     }
+    for (const filter of this.#state.filters) rejectFilterPlaceholders(filter);
   }
 
   #rejectWindowing(methodName: string): void {

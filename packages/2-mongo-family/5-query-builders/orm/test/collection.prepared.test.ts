@@ -169,6 +169,23 @@ describe('.prepared reads on a Mongo ORM collection', () => {
   });
 });
 
+describe('ad-hoc first() and firstOrThrow()', () => {
+  it.each(['first', 'firstOrThrow'] as const)(
+    '%s() rejects, and does not throw, when the plan cannot be built',
+    async (method) => {
+      const { executor, plans } = recordingExecutor();
+      const users = usersOf(executor).offset(-1);
+
+      let result: Promise<unknown> | undefined;
+      expect(() => {
+        result = users[method]();
+      }).not.toThrow();
+      await expect(result).rejects.toMatchObject({ code: 'ORM.ARGUMENT_INVALID' });
+      expect(plans).toEqual([]);
+    },
+  );
+});
+
 describe('a placeholder in an object-form where', () => {
   it('is kept as it is on a scalar field', () => {
     const { executor } = recordingExecutor();
