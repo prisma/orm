@@ -76,8 +76,8 @@ const RefEntryFileSchema = type({
   return true;
 });
 
-function policiesIssueText({ path, message }: DeclaredDatabasePoliciesIssue): string {
-  return path === '' ? `policies ${message}` : `policies.${message}`;
+function policiesIssueText({ path, problem }: DeclaredDatabasePoliciesIssue): string {
+  return path === '' ? `policies ${problem}` : `policies.${path} ${problem}`;
 }
 
 /** The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. */

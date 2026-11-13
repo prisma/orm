@@ -5,7 +5,7 @@
 
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { type } from 'arktype';
+import { type ArkError, type } from 'arktype';
 import { type MigrationRunnerFailure, migrationRunnerFailure } from './control-migration-types';
 import { APP_SPACE_ID } from './control-spaces';
 
@@ -122,10 +122,18 @@ export function withDeclaredDatabasePolicies(
   };
 }
 
-/** One way a policy declaration is invalid: the key path of the field, empty for the whole declaration, and what is wrong with it, beginning with that path. */
+/** One way a policy declaration is invalid: the key path of the field, empty for the whole declaration, and what is wrong with it. */
 export interface DeclaredDatabasePoliciesIssue {
   readonly path: string;
-  readonly message: string;
+  readonly problem: string;
+}
+
+/** What is wrong with a value, without its path, which arktype puts at the start of a union's problem. */
+function problemOf(error: ArkError): string {
+  const pathPrefix = `${error.propString} `;
+  return error.propString !== '' && error.problem.startsWith(pathPrefix)
+    ? error.problem.slice(pathPrefix.length)
+    : error.problem;
 }
 
 /** Reads a policy declaration, as a ref declares it and a marker records it, rejecting any value the declaration may not hold. */
@@ -134,7 +142,7 @@ export function parseDeclaredDatabasePolicies(
 ): Result<DeclaredDatabasePolicies, readonly DeclaredDatabasePoliciesIssue[]> {
   const declared = PartialDatabasePoliciesSchema(value);
   if (declared instanceof type.errors) {
-    return notOk(declared.map((error) => ({ path: error.propString, message: error.message })));
+    return notOk(declared.map((error) => ({ path: error.propString, problem: problemOf(error) })));
   }
   return ok(declared);
 }
@@ -155,7 +163,9 @@ export function databasePoliciesOf(
   if (recorded === undefined) return ok(DEFAULT_DATABASE_POLICIES);
   const declared = parseDeclaredDatabasePolicies(recorded);
   if (!declared.ok) {
-    const issues = declared.failure.map(({ message }) => message).join('\n');
+    const issues = declared.failure
+      .map(({ path, problem }) => (path === '' ? problem : `${path} ${problem}`))
+      .join('\n');
     return notOk({
       why: `The marker's meta.${DATABASE_POLICIES_META_KEY} is not a valid policy declaration: ${issues}`,
     });

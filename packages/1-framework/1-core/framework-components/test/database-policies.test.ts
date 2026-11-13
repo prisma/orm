@@ -188,20 +188,20 @@ describe('parseDeclaredDatabasePolicies', () => {
   });
 
   it('names the path and the problem of each invalid field', () => {
-    expect(parseDeclaredDatabasePolicies({ change: ['migrat'], extra: 1 })).toMatchObject({
-      ok: false,
-      failure: [
-        { path: 'change[0]', message: 'change[0] must be "migrate" or "reconcile" (was "migrat")' },
-        { path: 'extra', message: 'extra must be removed' },
-      ],
-    });
+    const parsed = parseDeclaredDatabasePolicies({ change: ['migrat'], extra: 1 });
+
+    expect(parsed.ok ? undefined : parsed.failure).toEqual([
+      { path: 'change[0]', problem: 'must be "migrate" or "reconcile" (was "migrat")' },
+      { path: 'extra', problem: 'must be removed' },
+    ]);
   });
 
   it('gives an empty path when the whole declaration is invalid', () => {
-    expect(parseDeclaredDatabasePolicies([])).toMatchObject({
-      ok: false,
-      failure: [{ path: '', message: 'must be an object, not a list (was [])' }],
-    });
+    const parsed = parseDeclaredDatabasePolicies([]);
+
+    expect(parsed.ok ? undefined : parsed.failure).toEqual([
+      { path: '', problem: 'must be an object, not a list (was [])' },
+    ]);
   });
 });
 
