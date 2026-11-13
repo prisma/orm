@@ -30,7 +30,7 @@ const schema = `
   create table projects (id integer primary key autoincrement, name text not null);
   create table people (id integer primary key autoincrement, name text not null);
   create table tasks (id integer primary key autoincrement, title text not null, type text not null, severity text, project_id integer, pinned_by_id integer unique);
-  create table features (id integer primary key references tasks(id), priority integer not null);
+  create table features (id integer primary key references tasks(id) on delete cascade, priority integer not null);
   create table task_comments (id integer primary key autoincrement, body text not null, task_id integer);
   create table labels (id integer primary key autoincrement, name text not null);
   create table task_labels (task_id integer not null, label_id integer not null, primary key (task_id, label_id));
@@ -719,6 +719,99 @@ describe('integration/nested-variant-mutations on SQLite', () => {
             { task_id: 1, label_id: 1 },
             { task_id: 2, label_id: 1 },
             { task_id: 3, label_id: 1 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+  });
+
+  describe('updateAll and deleteAll on a variant', () => {
+    const seed = `
+      insert into projects (id, name) values (1, 'Launch'), (2, 'Polish');
+      insert into tasks (id, title, type, severity, project_id) values
+        (1, 'Crash', 'bug', 'high', 1),
+        (2, 'Hang', 'bug', 'low', 1),
+        (3, 'Dark mode', 'feature', null, 1),
+        (4, 'Search', 'feature', null, 1),
+        (5, 'Crash', 'bug', 'high', 2),
+        (6, 'Dark mode', 'feature', null, 2);
+      insert into features (id, priority) values (3, 3), (4, 1), (6, 3);
+      insert into labels (id, name) values (1, 'ui'), (2, 'api');
+      insert into task_labels (task_id, label_id) values (1, 1), (3, 1), (4, 1), (5, 2), (6, 2);
+    `;
+    const tasksOf = 'select id, title, type, project_id from tasks order by id';
+    const seeded = [
+      { id: 1, title: 'Crash', type: 'bug', project_id: 1 },
+      { id: 2, title: 'Hang', type: 'bug', project_id: 1 },
+      { id: 3, title: 'Dark mode', type: 'feature', project_id: 1 },
+      { id: 4, title: 'Search', type: 'feature', project_id: 1 },
+      { id: 5, title: 'Crash', type: 'bug', project_id: 2 },
+      { id: 6, title: 'Dark mode', type: 'feature', project_id: 2 },
+    ];
+
+    it(
+      'on 1:N, writes only the related rows of the variant on both storage layouts',
+      async () => {
+        await withDatabase(async ({ db, rows, exec }) => {
+          exec(seed);
+
+          const updated = await db.Project.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) => [
+                tasks
+                  .variant('bug')
+                  .where((bug) => bug.severity.eq('high'))
+                  .deleteAll(),
+                tasks.variant('bug').updateAll({ title: 'Seen' }),
+                tasks
+                  .variant('feature')
+                  .where((feature) => feature.priority.gt(2))
+                  .updateAll({ title: 'Later' }),
+                tasks.variant('feature').where({ title: 'Crash' }).updateAll({ title: 'Never' }),
+              ],
+            });
+
+          expect(updated).toEqual({ id: 1, name: 'Launch' });
+          expect(rows(tasksOf)).toEqual([
+            { id: 2, title: 'Seen', type: 'bug', project_id: 1 },
+            { id: 3, title: 'Later', type: 'feature', project_id: 1 },
+            ...seeded.slice(3),
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'on 1:N and M:N, deleteAll on a variant stored in its own table deletes only its rows',
+      async () => {
+        await withDatabase(async ({ db, rows, exec }) => {
+          exec(seed);
+
+          await db.Project.where({ id: 1 }).update({
+            tasks: (tasks) => tasks.variant('feature').where({ title: 'Search' }).deleteAll(),
+          });
+          const label = await db.Label.select('id', 'name')
+            .where({ id: 2 })
+            .update({
+              tasks: (tasks) => [
+                tasks.variant('bug').updateAll({ title: 'Labelled' }),
+                tasks
+                  .variant('feature')
+                  .where((feature) => feature.priority.eq(3))
+                  .deleteAll(),
+              ],
+            });
+
+          expect(label).toEqual({ id: 2, name: 'api' });
+          expect(rows(tasksOf)).toEqual([
+            ...seeded.slice(0, 3),
+            { id: 5, title: 'Labelled', type: 'bug', project_id: 2 },
+          ]);
+          expect(rows('select id, priority from features order by id')).toEqual([
+            { id: 3, priority: 3 },
           ]);
         });
       },

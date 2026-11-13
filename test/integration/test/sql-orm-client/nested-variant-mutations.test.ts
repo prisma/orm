@@ -44,7 +44,7 @@ async function setupSchema(runtime: PgIntegrationRuntime): Promise<void> {
   `);
   await runtime.query(`
     create table features (
-      id integer primary key references tasks(id),
+      id integer primary key references tasks(id) on delete cascade,
       priority integer not null,
       feature_assignee_person_id integer
     )
@@ -737,6 +737,182 @@ describe('integration/nested-variant-mutations', () => {
             { task_id: 2, label_id: 1 },
             { task_id: 3, label_id: 1 },
           ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('updateAll and deleteAll on a variant', () => {
+    async function seed(runtime: PgIntegrationRuntime): Promise<void> {
+      await setupSchema(runtime);
+      await runtime.query(
+        "insert into projects_tbl (id, name) values (1, 'Launch'), (2, 'Polish')",
+      );
+      await runtime.query(`
+        insert into tasks (id, title, type, severity, project_id) values
+          (1, 'Crash', 'bug', 'high', 1),
+          (2, 'Hang', 'bug', 'low', 1),
+          (3, 'Dark mode', 'feature', null, 1),
+          (4, 'Search', 'feature', null, 1),
+          (5, 'Crash', 'bug', 'high', 2),
+          (6, 'Dark mode', 'feature', null, 2)
+      `);
+      await runtime.query('insert into features (id, priority) values (3, 3), (4, 1), (6, 3)');
+      await runtime.query("insert into labels (id, name) values (1, 'ui'), (2, 'api')");
+      await runtime.query(
+        'insert into task_labels (task_id, label_id) values (1, 1), (3, 1), (4, 1), (5, 2), (6, 2)',
+      );
+    }
+
+    async function stored(runtime: PgIntegrationRuntime) {
+      return {
+        tasks: await runtime.query('select id, title, type, project_id from tasks order by id'),
+        features: await runtime.query('select id, priority from features order by id'),
+      };
+    }
+
+    const seeded = [
+      { id: 1, title: 'Crash', type: 'bug', project_id: 1 },
+      { id: 2, title: 'Hang', type: 'bug', project_id: 1 },
+      { id: 3, title: 'Dark mode', type: 'feature', project_id: 1 },
+      { id: 4, title: 'Search', type: 'feature', project_id: 1 },
+      { id: 5, title: 'Crash', type: 'bug', project_id: 2 },
+      { id: 6, title: 'Dark mode', type: 'feature', project_id: 2 },
+    ];
+
+    it(
+      'on 1:N, a variant stored in the base table writes only its related rows and filters by its fields',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          const updated = await projects.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks
+                .variant('bug')
+                .where((bug) => bug.severity.eq('high'))
+                .deleteAll(),
+              tasks.variant('bug').updateAll({ title: 'Seen' }),
+            ],
+          });
+
+          expect(updated).toEqual({ id: 1, name: 'Launch' });
+          expect(await stored(runtime)).toEqual({
+            tasks: [{ id: 2, title: 'Seen', type: 'bug', project_id: 1 }, ...seeded.slice(2)],
+            features: [
+              { id: 3, priority: 3 },
+              { id: 4, priority: 1 },
+              { id: 6, priority: 3 },
+            ],
+          });
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'on 1:N, a variant stored in its own table writes only its related rows and filters by its fields',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          const updated = await projects.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks
+                .variant('feature')
+                .where((feature) => feature.priority.gt(2))
+                .updateAll({ title: 'Later' }),
+              tasks.variant('feature').where({ title: 'Search' }).deleteAll(),
+              tasks.variant('feature').where({ title: 'Crash' }).updateAll({ title: 'Never' }),
+            ],
+          });
+
+          expect(updated).toEqual({ id: 1, name: 'Launch' });
+          expect(await stored(runtime)).toEqual({
+            tasks: [
+              ...seeded.slice(0, 2),
+              { id: 3, title: 'Later', type: 'feature', project_id: 1 },
+              ...seeded.slice(4),
+            ],
+            features: [
+              { id: 3, priority: 3 },
+              { id: 6, priority: 3 },
+            ],
+          });
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'on M:N, writes only the linked rows of the variant on both storage layouts',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { labels } = collectionsOf(runtime);
+
+          const updated = await labels.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks.variant('bug').updateAll({ title: 'Labelled' }),
+              tasks
+                .variant('feature')
+                .where((feature) => feature.priority.eq(1))
+                .deleteAll(),
+            ],
+          });
+
+          expect(updated).toEqual({ id: 1, name: 'ui' });
+          expect(await stored(runtime)).toEqual({
+            tasks: [
+              { id: 1, title: 'Labelled', type: 'bug', project_id: 1 },
+              seeded[1],
+              seeded[2],
+              ...seeded.slice(4),
+            ],
+            features: [
+              { id: 3, priority: 3 },
+              { id: 6, priority: 3 },
+            ],
+          });
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'refuses a field of the variant in updateAll data with the error of the variant collection',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects, tasks } = collectionsOf(runtime);
+
+          const topLevel = await rejectionShape(
+            Promise.resolve().then(() =>
+              tasks
+                .variant('bug')
+                .where({ projectId: 1 })
+                .updateAll({ severity: 'low' } as never),
+            ),
+          );
+          const nested = await rejectionShape(
+            projects.where({ id: 1 }).update({
+              tasks: (related) => related.variant('bug').updateAll({ severity: 'low' } as never),
+            }),
+          );
+
+          expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
+          expect(nested).toEqual(topLevel);
+          expect(await stored(runtime)).toEqual({
+            tasks: seeded,
+            features: [
+              { id: 3, priority: 3 },
+              { id: 4, priority: 1 },
+              { id: 6, priority: 3 },
+            ],
+          });
         }, polyContext.contract);
       },
       timeouts.spinUpPpgDev,
