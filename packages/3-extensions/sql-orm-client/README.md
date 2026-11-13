@@ -370,9 +370,13 @@ await db.User.where({ id: 1 }).update({
 
 A to-one relation takes at most one operation: an array of two or more is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'to-one-relation'`). An array that holds another array or a value that is not an operation is refused with `ORM.RELATION_MUTATION_INVALID`, with the position in `index`.
 
-### Creating rows of a polymorphic model
+### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares, as a collection's `variant()` does. `r.variant(value).create(data)` creates rows of that variant, in `create()` and `update()`, with one row or an array. The data is the base model's fields and the variant's own fields, without the discriminator, which the ORM sets. As in a nested `r.create`, the fields that link the row to the record are optional.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares, as a collection's `variant()` does. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+
+#### Creating rows
+
+`r.variant(value).create(data)` creates rows of that variant, in `create()` and `update()`, with one row or an array. The data is the base model's fields and the variant's own fields, without the discriminator, which the ORM sets. As in a nested `r.create`, the fields that link the row to the record are optional.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
@@ -387,7 +391,34 @@ A variant stored in the base table is written as one row of that table. A varian
 
 A relation callback inside the row behaves as it does in a collection's `variant(value).create(data)`. For a variant stored in the base table, a callback on a relation of the base model runs; a callback on a relation only the variant declares is refused with `ORM.FIELD_UNKNOWN`. For a variant stored in its own table, every relation callback in the row is refused with `ORM.FIELD_UNKNOWN`.
 
-`r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`. `r.variant(value)` has only `create`; a value the model does not declare is a type error and is refused with `ORM.ARGUMENT_INVALID`.
+`r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`. A value the model does not declare is a type error and is refused with `ORM.ARGUMENT_INVALID`.
+
+#### Connecting and disconnecting rows
+
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` take the same criteria as `r.connect` and `r.disconnect` and find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error, as for a missing row. `r.variant(value).disconnect()` without criteria unlinks every related row of the variant and leaves rows of other variants linked.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [tasks.variant('bug').connect({ id: 7 }), tasks.variant('feature').disconnect()],
+});
+```
+
+On a relation the record holds the key for, `disconnect` is not available on a variant: it is a type error and is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'variant-parent-owned'`). Use `r.disconnect()`.
+
+#### Updating and deleting rows of a variant
+
+`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. The `where` callback receives the fields of the base model and of the variant, as a variant collection's `where` does; the object form takes the base model's fields. `updateAll` data takes the base model's fields only, as `updateAll` on a variant collection does: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [
+    tasks.variant('bug').where((bug) => bug.severity.eq('low')).updateAll({ title: 'Later' }),
+    tasks.variant('feature').where((feature) => feature.priority.gt(3)).deleteAll(),
+  ],
+});
+```
+
+`deleteAll` on a variant stored in its own table deletes the base rows, as `deleteAll` on a variant collection does; the variant rows are removed by the foreign-key action of the variant table, so declare it with a cascading delete.
 
 ### Updating and deleting related rows
 
