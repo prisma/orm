@@ -1,3 +1,4 @@
+import type { DeclaredDatabasePoliciesIssue } from '@internal/framework-components/control';
 /**
  * Every structural problem the migration model can carry.
  *
@@ -51,6 +52,8 @@ export type IntegrityViolation =
       /** The ref file that could not be read. */
       readonly path: string;
       readonly detail: string;
+      /** The invalid keys of the ref's `policies`, when they are what is wrong. */
+      readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[];
     }
   // config/contract-dependent — produced only when the matching opt is set
   | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string }

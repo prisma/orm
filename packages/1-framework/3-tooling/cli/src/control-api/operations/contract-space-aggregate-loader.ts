@@ -184,7 +184,11 @@ export function mapIntegrityViolations(
 
   const refUnreadable = violations.find((v) => v.kind === 'refUnreadable');
   if (refUnreadable && refUnreadable.kind === 'refUnreadable') {
-    return errorInvalidRefFile(refUnreadable.path, refUnreadable.detail);
+    return errorInvalidRefFile(
+      refUnreadable.path,
+      refUnreadable.detail,
+      refUnreadable.policyIssues,
+    );
   }
 
   // Any remaining recoverable structural violation refuses as an

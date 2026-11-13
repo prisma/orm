@@ -51,19 +51,22 @@ describe('mapIntegrityViolations', () => {
           refName: 'production',
           path: 'migrations/app/refs/production.json',
           detail: 'policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
+          policyIssues: [
+            { path: 'change[0]', problem: 'must be "migrate" or "reconcile" (was "migrat")' },
+          ],
         },
       ],
       'migrations',
     );
-    expect({ code: error?.code, why: error?.why, meta: error?.meta }).toEqual({
+    expect({ code: error?.code, why: error?.why, fix: error?.fix, meta: error?.meta }).toEqual({
       code: 'MIGRATION.INVALID_REF_FILE',
+      fix: 'Set policies.change[0] to "migrate" or "reconcile".',
       why: 'Ref file at "migrations/app/refs/production.json" is invalid: policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
       meta: {
         path: 'migrations/app/refs/production.json',
         reason: 'policies.change[0] must be "migrate" or "reconcile" (was "migrat")',
       },
     });
-    expect(error?.fix).toContain('"policies"');
   });
 
   it('interpolates the configured migrations dir into layout violation text', () => {

@@ -44,6 +44,8 @@ export interface RefLoadProblem {
   /** The ref file that could not be read. */
   readonly path: string;
   readonly detail: string;
+  /** The invalid keys of the ref's `policies`, when they are what is wrong. */
+  readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[];
 }
 
 export interface TolerantRefsResult {
@@ -80,14 +82,24 @@ function policiesIssueText({ path, problem }: DeclaredDatabasePoliciesIssue): st
   return path === '' ? `policies ${problem}` : `policies.${path} ${problem}`;
 }
 
+interface RefEntryProblem {
+  readonly detail: string;
+  readonly policyIssues: readonly DeclaredDatabasePoliciesIssue[];
+}
+
 /** The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. */
-function refEntryOf(parsed: unknown): Result<RefEntry, string> {
+function refEntryOf(parsed: unknown): Result<RefEntry, RefEntryProblem> {
   const entry = RefEntryFileSchema(parsed);
-  if (entry instanceof type.errors) return notOk(entry.summary);
+  if (entry instanceof type.errors) return notOk({ detail: entry.summary, policyIssues: [] });
   const { hash, invariants, policies } = entry;
   if (policies === undefined) return ok({ hash, invariants });
   const declared = parseDeclaredDatabasePolicies(policies);
-  if (!declared.ok) return notOk(declared.failure.map(policiesIssueText).join('\n'));
+  if (!declared.ok) {
+    return notOk({
+      detail: declared.failure.map(policiesIssueText).join('\n'),
+      policyIssues: declared.failure,
+    });
+  }
   return ok({ hash, invariants, policies: declared.value });
 }
 
@@ -136,7 +148,7 @@ export async function readRef(refsDir: string, name: string): Promise<RefEntry> 
 
   const result = refEntryOf(parsed);
   if (!result.ok) {
-    throw errorInvalidRefFile(filePath, result.failure);
+    throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
   }
 
   return result.value;
@@ -186,7 +198,7 @@ export async function readRefs(refsDir: string): Promise<Refs> {
 
     const result = refEntryOf(parsed);
     if (!result.ok) {
-      throw errorInvalidRefFile(filePath, result.failure);
+      throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
     }
 
     refs[name] = result.value;
@@ -260,7 +272,12 @@ export async function readRefsTolerant(refsDir: string): Promise<TolerantRefsRes
 
     const result = refEntryOf(parsed);
     if (!result.ok) {
-      problems.push({ refName: name, path: filePath, detail: result.failure });
+      problems.push({
+        refName: name,
+        path: filePath,
+        detail: result.failure.detail,
+        policyIssues: result.failure.policyIssues,
+      });
       continue;
     }
 

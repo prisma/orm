@@ -57,25 +57,58 @@ describe('a ref that declares policies', () => {
   });
 
   it.each([
-    ['an unknown key', { change: ['migrate'], dataloss: 'data-loss-forbidden' }],
-    ['an unknown data protection key', { dataProtection: { dataloss: 'data-loss-forbidden' } }],
-    ['an unknown strategy', { change: ['deploy'] }],
-    ['an empty change policy', { change: [] }],
-    ['an unknown level', { dataProtection: { accessWidening: 'open' } }],
-    ['a list instead of an object', []],
-    ['a list as data protection', { dataProtection: [] }],
-  ])('is rejected as an invalid ref file when its policies carry %s', async (_, policies) => {
-    await writeFile(
-      join(refsDir, 'production.json'),
-      JSON.stringify({ hash: HASH_A, invariants: [], policies }),
-    );
-    await expect(readRef(refsDir, 'production')).rejects.toMatchObject({
-      code: 'MIGRATION.INVALID_REF_FILE',
-    });
-    await expect(readRefs(refsDir)).rejects.toMatchObject({
-      code: 'MIGRATION.INVALID_REF_FILE',
-    });
-  });
+    [
+      'an unknown key',
+      { change: ['migrate'], dataloss: 'data-loss-forbidden' },
+      'Remove policies.dataloss.',
+    ],
+    [
+      'an unknown data protection key',
+      { dataProtection: { dataloss: 'data-loss-forbidden' } },
+      'Remove policies.dataProtection.dataloss.',
+    ],
+    [
+      'an unknown strategy',
+      { change: ['deploy'] },
+      'Set policies.change[0] to "migrate" or "reconcile".',
+    ],
+    [
+      'an empty change policy',
+      { change: [] },
+      'Set policies.change to a non-empty list of "migrate" and "reconcile".',
+    ],
+    [
+      'an unknown level',
+      { dataProtection: { accessWidening: 'open' } },
+      'Set policies.dataProtection.accessWidening to "access-widening-forbidden", "access-widening-with-consent" or "access-widening-permitted".',
+    ],
+    [
+      'a list instead of an object',
+      [],
+      'Set policies to an object with "change" and "dataProtection", each optional.',
+    ],
+    [
+      'a list as data protection',
+      { dataProtection: [] },
+      'Set policies.dataProtection to an object with "dataLoss" and "accessWidening", each optional.',
+    ],
+  ])(
+    'is rejected as an invalid ref file, naming the key to fix, when its policies carry %s',
+    async (_, policies, fix) => {
+      await writeFile(
+        join(refsDir, 'production.json'),
+        JSON.stringify({ hash: HASH_A, invariants: [], policies }),
+      );
+      await expect(readRef(refsDir, 'production')).rejects.toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+        fix,
+      });
+      await expect(readRefs(refsDir)).rejects.toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+        fix,
+      });
+    },
+  );
 });
 
 describe('advanceRef', () => {

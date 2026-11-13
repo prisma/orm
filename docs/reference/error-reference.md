@@ -1733,7 +1733,7 @@ An operation returned by an authored migration class failed schema validation du
 
 ### MIGRATION.INVALID_REF_FILE
 
-A ref file under `migrations/<space>/refs/` is not valid JSON or does not match the expected `{ "hash": "<64 hex>", "invariants": [...], "policies": {...} }` shape, where `policies` is optional and may declare `change` and `dataProtection` (`dataLoss`, `accessWidening`). The `why` names the file and the field that is wrong. Every command that loads the project's migrations raises it, `db migrate` and `db update` among them, and the fix lists the allowed values. Payload: `path`, `reason`.
+A ref file under `migrations/<space>/refs/` is not valid JSON or does not match the expected `{ "hash": "<64 hex>", "invariants": [...], "policies": {...} }` shape, where `policies` is optional and may declare `change` and `dataProtection` (`dataLoss`, `accessWidening`). The `why` names the file and the field that is wrong. Every command that loads the project's migrations raises it, `db migrate` and `db update` among them. When a key of `policies` is wrong, the fix names it and, for a wrong value, lists the allowed values, for example `Set policies.change[0] to "migrate" or "reconcile".`; a key a declaration does not have gets `Remove policies.<key>.` Otherwise the fix gives the file's shape. Payload: `path`, `reason`.
 
 ### MIGRATION.INVALID_REF_NAME
 

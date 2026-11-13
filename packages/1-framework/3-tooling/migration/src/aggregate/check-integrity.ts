@@ -1,4 +1,5 @@
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
+import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from '../constants';
 import { MigrationToolsError } from '../errors';
 import type {
@@ -67,6 +68,7 @@ export function computeIntegrityViolations(
         refName: refProblem.refName,
         path: refProblem.path,
         detail: refProblem.detail,
+        ...ifDefined('policyIssues', refProblem.policyIssues),
       });
     }
     if (headRefProblem !== null) {

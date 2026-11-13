@@ -316,9 +316,50 @@ describe('errorContractDeserializationFailed', () => {
 });
 
 describe('errorInvalidRefFile', () => {
-  it('describes the ref file, its optional policies and their allowed values', () => {
+  it('describes the ref file when no policy is at fault', () => {
     expect(errorInvalidRefFile('/m/app/refs/prod.json', 'bad').fix).toBe(
-      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."], "policies": { "change": ["migrate" | "reconcile", ...], "dataProtection": { "dataLoss": "data-loss-forbidden" | "data-loss-with-consent" | "data-loss-permitted", "accessWidening": "access-widening-forbidden" | "access-widening-with-consent" | "access-widening-permitted" } } }. "policies" and each key inside it are optional.',
+      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
     );
+  });
+
+  it.each([
+    {
+      path: 'change[0]',
+      fix: 'Set policies.change[0] to "migrate" or "reconcile".',
+    },
+    {
+      path: 'change',
+      fix: 'Set policies.change to a non-empty list of "migrate" and "reconcile".',
+    },
+    {
+      path: 'dataProtection.dataLoss',
+      fix: 'Set policies.dataProtection.dataLoss to "data-loss-forbidden", "data-loss-with-consent" or "data-loss-permitted".',
+    },
+    {
+      path: 'dataProtection.accessWidening',
+      fix: 'Set policies.dataProtection.accessWidening to "access-widening-forbidden", "access-widening-with-consent" or "access-widening-permitted".',
+    },
+    {
+      path: 'dataProtection',
+      fix: 'Set policies.dataProtection to an object with "dataLoss" and "accessWidening", each optional.',
+    },
+    {
+      path: '',
+      fix: 'Set policies to an object with "change" and "dataProtection", each optional.',
+    },
+    { path: 'dataProtection.dataloss', fix: 'Remove policies.dataProtection.dataloss.' },
+  ])('names the policy key at fault and its allowed values: $path', ({ path, fix }) => {
+    expect(
+      errorInvalidRefFile('/m/app/refs/prod.json', 'bad', [{ path, problem: 'is wrong' }]).fix,
+    ).toBe(fix);
+  });
+
+  it('gives one sentence per policy key at fault', () => {
+    expect(
+      errorInvalidRefFile('/m/app/refs/prod.json', 'bad', [
+        { path: 'change[1]', problem: 'is wrong' },
+        { path: 'extra', problem: 'must be removed' },
+      ]).fix,
+    ).toBe('Set policies.change[1] to "migrate" or "reconcile". Remove policies.extra.');
   });
 });
