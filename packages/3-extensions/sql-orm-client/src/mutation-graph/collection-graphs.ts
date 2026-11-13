@@ -31,6 +31,7 @@ import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mu
 import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
 import { rowIdentity } from '../written-keys';
+import { conflictKeysOf, rowThatCannotConflict } from './conflict-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
 import { Graph } from './graph';
@@ -238,6 +239,9 @@ export function createAllGraph(
     return b.graph;
   }
   const rows = createRowsOf(collection, data);
+  if (conflict !== undefined) {
+    requireRowsThatCanConflict(collection, rows, conflict, returns);
+  }
   if (returns === 'rows') {
     requireIdentityColumnsForIncludes(collection);
   }
@@ -256,6 +260,25 @@ export function createAllGraph(
     }),
   );
   return b.graph;
+}
+
+function requireRowsThatCanConflict(
+  collection: DescribeCollectionRowsOptions,
+  rows: readonly Readonly<Record<string, unknown>>[],
+  conflict: InsertConflictSkip,
+  returns: Returns,
+): void {
+  const { context, modelName, state } = collection;
+  const { namespaceId, tableName } = state.tables.root.storage;
+  const keys = conflictKeysOf(context.contract, namespaceId, tableName, 'skip', conflict.columns);
+  const index = rowThatCannotConflict(rows, keys, new Set());
+  if (index === undefined) return;
+  const method = returns === 'rows' ? 'createAll()' : 'createAndCount()';
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `${method} row ${index} for model "${modelName}" gives no value for any conflict key: ${keys.map((key) => `(${key.join(', ')})`).join(', ')}`,
+    { meta: { method, model: modelName, index, conflictKeys: keys } },
+  );
 }
 
 export function createGraph(
