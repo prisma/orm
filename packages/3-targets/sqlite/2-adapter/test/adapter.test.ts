@@ -611,6 +611,60 @@ describe('SQLite adapter', () => {
       expect(sql).toContain('json_object(\'email\', "user"."email", \'count\', COUNT(*))');
     });
 
+    describe('an object wider than one json_object call takes', () => {
+      function lowerObjectOf(keys: readonly string[]): string {
+        const entries = keys.map((key, index) =>
+          JsonObjectExpr.entry(
+            key,
+            new NativeJsonValueProjection(ColumnRef.of('user', `c${index}`)),
+          ),
+        );
+        const ast = SelectAst.from(TableSource.named('user')).withProjection([
+          ProjectionItem.of('object', JsonObjectExpr.fromEntries(entries)),
+        ]);
+        return adapter.lower(ast, { contract }).sql;
+      }
+
+      const keysOf = (width: number) => Array.from({ length: width }, (_, index) => `k${index}`);
+
+      function pairs(from: number, to: number): string {
+        return Array.from({ length: to - from }, (_, offset) => {
+          const index = from + offset;
+          return `'k${index}', "user"."c${index}"`;
+        }).join(', ');
+      }
+
+      function paths(from: number, to: number): string {
+        return Array.from({ length: to - from }, (_, offset) => {
+          const index = from + offset;
+          return `'$."k${index}"', "user"."c${index}"`;
+        }).join(', ');
+      }
+
+      it('renders 63 entries as one json_object call', () => {
+        expect(lowerObjectOf(keysOf(63))).toBe(
+          `SELECT json_object(${pairs(0, 63)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('appends the entries past 63 with json_set, which keeps them in order', () => {
+        expect(lowerObjectOf(keysOf(64))).toBe(
+          `SELECT json_set(json_object(${pairs(0, 63)}), ${paths(63, 64)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('appends each further 63 entries with another json_set', () => {
+        expect(lowerObjectOf(keysOf(130))).toBe(
+          `SELECT json_set(json_set(json_object(${pairs(0, 63)}), ${paths(63, 126)}), ${paths(126, 130)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('quotes an appended key in its JSON path', () => {
+        const sql = lowerObjectOf([...keysOf(63), `it's "a\\b"`]);
+        expect(sql).toContain(`), '$."it''s \\"a\\\\b\\""', "user"."c63") AS "object"`);
+      });
+    });
+
     function selectProjecting(projection: AnyJsonValueProjection): SelectAst {
       return SelectAst.from(TableSource.named('user')).withProjection([
         ProjectionItem.of(
