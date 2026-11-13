@@ -1,8 +1,24 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { expandContractInputs, globContractInputMatching } from '../src/expand-contract-inputs';
+
+function toBackslashes(path: string): string {
+  return path.replaceAll('/', '\\');
+}
+
+function withPlatform(platform: NodeJS.Platform): void {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform');
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { ...original, value: platform });
+  });
+  afterEach(() => {
+    if (original) {
+      Object.defineProperty(process, 'platform', original);
+    }
+  });
+}
 
 describe('expandContractInputs', () => {
   const tempDirs: string[] = [];
@@ -115,6 +131,35 @@ describe('expandContractInputs', () => {
 
     expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
   });
+
+  describe('on Windows, with native backslash separators', () => {
+    withPlatform('win32');
+
+    it('expands a recursive glob', async () => {
+      const dir = await createFixtureDir();
+      await mkdir(join(dir, 'schema', 'nested'), { recursive: true });
+      const top = join(dir, 'schema', 'user.prisma');
+      const nested = join(dir, 'schema', 'nested', 'post.prisma');
+      await writeFile(top, 'model User {}\n', 'utf-8');
+      await writeFile(nested, 'model Post {}\n', 'utf-8');
+
+      expect(await expandContractInputs([toBackslashes(join(dir, 'schema/**/*.prisma'))])).toEqual([
+        nested,
+        top,
+      ]);
+    });
+
+    it('treats a single-level wildcard as a glob, not a literal file name', async () => {
+      const dir = await createFixtureDir();
+      await mkdir(join(dir, 'schema'), { recursive: true });
+      const file = join(dir, 'schema', 'user.prisma');
+      await writeFile(file, 'model User {}\n', 'utf-8');
+
+      expect(await expandContractInputs([toBackslashes(join(dir, 'schema/*.prisma'))])).toEqual([
+        file,
+      ]);
+    });
+  });
 });
 
 describe('globContractInputMatching', () => {
@@ -140,5 +185,24 @@ describe('globContractInputMatching', () => {
     expect(
       globContractInputMatching(['/app/prisma/contract.prisma'], '/app/prisma/contract.prisma'),
     ).toBeUndefined();
+  });
+
+  describe('on Windows, with native backslash separators', () => {
+    withPlatform('win32');
+
+    it('matches a glob input written with backslashes, returning it unchanged', () => {
+      const pattern = 'C:\\app\\prisma\\**\\*.prisma';
+
+      expect(globContractInputMatching([pattern], 'C:/app/prisma/contract.prisma')).toBe(pattern);
+    });
+
+    it('does not treat a backslash literal with no wildcard as a glob', () => {
+      expect(
+        globContractInputMatching(
+          ['C:\\app\\prisma\\contract.prisma'],
+          'C:/app/prisma/contract.prisma',
+        ),
+      ).toBeUndefined();
+    });
   });
 });
