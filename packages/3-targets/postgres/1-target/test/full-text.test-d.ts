@@ -96,6 +96,27 @@ test('ilike and the search operations take a textual column and refuse a native 
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });
 
+test('ilike and fullTextMatches take a nullable textual column, rank and headline do not', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type SelfOf<Name extends 'ilike' | 'fullTextMatches' | 'fullTextRank' | 'fullTextHeadline'> =
+    Parameters<Ops[Name]['impl']>[0];
+  type NullableTextColumn = Expression<{ codecId: 'pg/text@1'; nullable: true }>;
+
+  expectTypeOf<NullableTextColumn>().toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<NullableTextColumn>().toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
+  expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
+});
+
+test('ilike and fullTextMatches refuse a bare null, which has no column to read', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type SelfOf<Name extends 'ilike' | 'fullTextMatches'> = Parameters<Ops[Name]['impl']>[0];
+
+  expectTypeOf<null>().not.toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<null>().not.toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<string>().toExtend<SelfOf<'ilike'>>();
+});
+
 test('fullTextMatches and fullTextRank search a full-text index, a column or a fullTextDocument', () => {
   type Ops = QueryOperationTypes<CodecTypes>;
   type Bool = Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
