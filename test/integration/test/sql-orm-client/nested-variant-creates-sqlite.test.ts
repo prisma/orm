@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import { sqliteAdapterCapabilities } from '@internal/adapter-sqlite/adapter';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -39,18 +40,44 @@ interface Harness {
   readonly rows: (sql: string) => unknown[];
 }
 
-async function withDatabase(run: (harness: Harness) => Promise<void>): Promise<void> {
+const {
+  returning: _returning,
+  insertOnConflictTarget: _target,
+  ...capabilitiesWithoutReturning
+} = sqliteAdapterCapabilities.sql;
+
+function contractWithoutReturning(): typeof contractJson {
+  const copy = JSON.parse(JSON.stringify(contractJson));
+  delete copy.capabilities.sql.returning;
+  return copy;
+}
+
+interface Setup {
+  readonly adapter: typeof sqliteAdapter;
+  readonly contract: typeof contractJson;
+}
+
+const withReturning: Setup = { adapter: sqliteAdapter, contract: contractJson };
+const withoutReturning: Setup = {
+  adapter: { ...sqliteAdapter, capabilities: { sql: capabilitiesWithoutReturning } },
+  contract: contractWithoutReturning(),
+};
+
+async function withDatabase(
+  run: (harness: Harness) => Promise<void>,
+  setup: Setup = withReturning,
+): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'orm-nested-variant-creates-'));
   const path = join(directory, 'test.db');
   const database = new DatabaseSync(path);
   database.exec(schema);
   const stack = createSqlExecutionStack({
     target: sqliteTarget,
-    adapter: sqliteAdapter,
+    adapter: setup.adapter,
     driver: sqliteDriver,
   });
   const context = createExecutionContext({
-    contract: contractFromJson<Contract>(contractJson),
+    contract: contractFromJson<Contract>(setup.contract),
     stack,
   });
   const { adapter, driver } = instantiateExecutionStack(stack);
@@ -86,6 +113,16 @@ async function withDatabase(run: (harness: Harness) => Promise<void>): Promise<v
 
 const tasksSql =
   'select id, title, type, severity, project_id, pinned_by_id from tasks order by id';
+const featureTasksSql = 'select id, title, type, project_id, pinned_by_id from tasks order by id';
+const featuresSql = 'select id, priority from features order by id';
+const darkMode = { title: 'Dark mode', priority: 1 };
+const exportPdf = { title: 'Export to PDF', priority: 3 };
+const search = { title: 'Search', priority: 2 };
+
+function feature(id: number, title: string, links: Record<string, number> = {}) {
+  return { id, title, type: 'feature', project_id: null, pinned_by_id: null, ...links };
+}
+
 const crash = { title: 'Crash', severity: 'high' };
 const hang = { title: 'Hang', severity: 'low' };
 
@@ -315,19 +352,184 @@ describe('integration/nested-variant-creates on SQLite', () => {
     );
   });
 
-  it(
-    'refuses a variant stored in its own table and writes nothing',
-    async () => {
-      await withDatabase(async ({ db, rows }) => {
-        await expect(
-          db.Project.create({
+  describe('a variant stored in its own table', () => {
+    it(
+      'create() and update() on a relation the child holds the key for write both tables per row',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const created = await db.Project.select('id', 'name').create({
             name: 'Launch',
-            tasks: (tasks) => tasks.variant('feature').create({ title: 'Dark mode', priority: 1 }),
-          }),
-        ).rejects.toMatchObject({ code: 'ORM.OPERATION_UNSUPPORTED' });
-        expect(rows('select id from projects')).toEqual([]);
-      });
-    },
-    timeouts.databaseOperation,
-  );
+            tasks: (tasks) => tasks.variant('feature').create([darkMode, exportPdf]),
+          });
+          const updated = await db.Project.select('id', 'name')
+            .where({ id: 1 })
+            .update({ tasks: (tasks) => tasks.variant('feature').create(search) });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Launch' },
+          ]);
+          expect(rows(featureTasksSql)).toEqual([
+            feature(1, 'Dark mode', { project_id: 1 }),
+            feature(2, 'Export to PDF', { project_id: 1 }),
+            feature(3, 'Search', { project_id: 1 }),
+          ]);
+          expect(rows(featuresSql)).toEqual([
+            { id: 1, priority: 1 },
+            { id: 2, priority: 3 },
+            { id: 3, priority: 2 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'create() and update() on a to-one relation write both tables with the key of the parent',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const created = await db.Person.select('id', 'name').create({
+            name: 'Ada',
+            pinnedTask: (task) => task.variant('feature').create(darkMode),
+          });
+          await db.Person.create({ name: 'Grace' });
+          const updated = await db.Person.select('id', 'name')
+            .where({ id: 2 })
+            .update({ pinnedTask: (task) => task.variant('feature').create([exportPdf]) });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'Ada' },
+            { id: 2, name: 'Grace' },
+          ]);
+          expect(rows(featureTasksSql)).toEqual([
+            feature(1, 'Dark mode', { pinned_by_id: 1 }),
+            feature(2, 'Export to PDF', { pinned_by_id: 2 }),
+          ]);
+          expect(rows(featuresSql)).toEqual([
+            { id: 1, priority: 1 },
+            { id: 2, priority: 3 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'create() and update() on a relation the parent holds the key for write both tables and link the parent',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const created = await db.TaskComment.select('id', 'body', 'taskId').create({
+            body: 'Seen it',
+            task: (task) => task.variant('feature').create(darkMode),
+          });
+          const updated = await db.TaskComment.select('id', 'body', 'taskId')
+            .where({ id: 1 })
+            .update({ task: (task) => task.variant('feature').create([exportPdf]) });
+
+          expect([created, updated]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: 2 },
+          ]);
+          expect(rows(featureTasksSql)).toEqual([
+            feature(1, 'Dark mode'),
+            feature(2, 'Export to PDF'),
+          ]);
+          expect(rows(featuresSql)).toEqual([
+            { id: 1, priority: 1 },
+            { id: 2, priority: 3 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'create() and update() on a relation through a junction write both tables and link each row',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const created = await db.Label.select('id', 'name').create({
+            name: 'ui',
+            tasks: (tasks) => tasks.variant('feature').create([darkMode, exportPdf]),
+          });
+          const updated = await db.Label.select('id', 'name')
+            .where({ id: 1 })
+            .update({ tasks: (tasks) => tasks.variant('feature').create(search) });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'ui' },
+            { id: 1, name: 'ui' },
+          ]);
+          expect(rows(featureTasksSql)).toEqual([
+            feature(1, 'Dark mode'),
+            feature(2, 'Export to PDF'),
+            feature(3, 'Search'),
+          ]);
+          expect(rows(featuresSql)).toEqual([
+            { id: 1, priority: 1 },
+            { id: 2, priority: 3 },
+            { id: 3, priority: 2 },
+          ]);
+          expect(rows('select label_id, task_id from task_labels order by task_id')).toEqual([
+            { label_id: 1, task_id: 1 },
+            { label_id: 1, task_id: 2 },
+            { label_id: 1, task_id: 3 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'writes no row of either table when a later row of the call fails',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          await expect(
+            db.Project.create({
+              name: 'Launch',
+              tasks: (tasks) =>
+                tasks.variant('feature').create([
+                  { id: 7, ...darkMode },
+                  { id: 7, ...exportPdf },
+                ]),
+            }),
+          ).rejects.toThrow();
+
+          expect(rows('select id from projects')).toEqual([]);
+          expect(rows(featureTasksSql)).toEqual([]);
+          expect(rows(featuresSql)).toEqual([]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'is refused without returning as the top-level variant create refuses it, and writes nothing',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const topLevel = await db.Task.variant('feature')
+            .create(darkMode)
+            .then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+          const nested = await db.Project.create({
+            name: 'Launch',
+            tasks: (tasks) => tasks.variant('feature').create(darkMode),
+          }).then(
+            () => undefined,
+            (error: unknown) => error,
+          );
+
+          expect(topLevel).toMatchObject({
+            code: 'ORM.CAPABILITY_MISSING',
+            meta: { capability: 'returning', action: 'createAll()' },
+          });
+          expect(nested).toEqual(topLevel);
+          expect(rows('select id from projects')).toEqual([]);
+          expect(rows(featureTasksSql)).toEqual([]);
+        }, withoutReturning);
+      },
+      timeouts.databaseOperation,
+    );
+  });
 });
