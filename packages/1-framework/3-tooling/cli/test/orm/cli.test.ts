@@ -162,7 +162,7 @@ describe("the engine's telemetry command group", () => {
 const DOCS_URL = 'https://www.prisma.io/docs/cli';
 
 const PRISMA_7_PLAIN =
-  /\. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma\/prisma7@7` and run `prisma7 [a-z ]+`\.$/;
+  /\. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma\/prisma7@7` and run `prisma7 [^`]+`\.$/;
 
 const DOCS = { kind: 'open-url', label: 'Read the docs', url: DOCS_URL };
 
@@ -229,7 +229,7 @@ describe('a retired invocation', () => {
     },
     {
       path: 'migrate diff',
-      why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate diff`.',
+      why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate diff --from-config-datasource --to-schema <path>`.',
       nextActions: [replacement('prisma-test db update --dry-run'), help('db update')],
     },
     {
@@ -239,7 +239,7 @@ describe('a retired invocation', () => {
     },
     {
       path: 'migrate resolve',
-      why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate resolve` instead.",
+      why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate resolve --applied <migration>` instead.",
       nextActions: [replacement('prisma-test db sign <migration>'), help('db sign')],
     },
     {
@@ -291,15 +291,33 @@ describe('a retired invocation', () => {
     },
   );
 
-  it('ends every Prisma 7 reason with how to install and run the Prisma 7 CLI, never through npx', () => {
-    for (const redirect of ormCommandFamily.redirects.filter(
-      ({ code }) => code === 'CLI.V7_COMMAND',
-    )) {
-      expect(redirect.reason).toMatch(
-        new RegExp(
-          `(To keep using Prisma 7|While Prisma 7 still owns this project's migrations), install its CLI with \`npm install --save-dev @prisma/prisma7@7\` and run \`prisma7 ${redirect.from}\`( instead)?\\.$`,
-        ),
-      );
+  it('ends every Prisma 7 reason with a Prisma 7 command line that runs as written, never through npx', () => {
+    const invocations = Object.fromEntries(
+      ormCommandFamily.redirects
+        .filter(({ code }) => code === 'CLI.V7_COMMAND')
+        .map(({ from, reason }) => [
+          from,
+          reason?.match(/run `(prisma7 [^`]+)`( instead)?\.$/)?.[1],
+        ]),
+    );
+
+    expect(invocations).toEqual({
+      'migrate dev': 'prisma7 migrate dev',
+      'migrate deploy': 'prisma7 migrate deploy',
+      'migrate status': 'prisma7 migrate status',
+      'migrate diff': 'prisma7 migrate diff --from-config-datasource --to-schema <path>',
+      'migrate reset': 'prisma7 migrate reset',
+      'migrate resolve': 'prisma7 migrate resolve --applied <migration>',
+      generate: 'prisma7 generate',
+      validate: 'prisma7 validate',
+      format: 'prisma7 format',
+      studio: 'prisma7 studio',
+      'db pull': 'prisma7 db pull',
+      'db push': 'prisma7 db push',
+      'db seed': 'prisma7 db seed',
+      'db execute': 'prisma7 db execute --file <path>',
+    });
+    for (const redirect of ormCommandFamily.redirects) {
       expect(redirect.reason).not.toContain('npx');
     }
   });

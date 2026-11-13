@@ -67,12 +67,14 @@ function v7Command(
   entry: Omit<RedirectSpec, 'from' | 'flag' | 'code' | 'summary' | 'reason'> & {
     readonly reason: string;
     readonly whileMigrationsStayOnPrisma7?: boolean;
+    readonly prisma7Invocation?: string;
   },
 ): RedirectSpec {
-  const { whileMigrationsStayOnPrisma7, reason, ...rest } = entry;
+  const { whileMigrationsStayOnPrisma7, prisma7Invocation, reason, ...rest } = entry;
+  const invocation = `prisma7 ${prisma7Invocation ?? from}`;
   const prisma7 = whileMigrationsStayOnPrisma7
-    ? `While Prisma 7 still owns this project's migrations, ${PRISMA_7_INSTALL} and run \`prisma7 ${from}\` instead.`
-    : `To keep using Prisma 7, ${PRISMA_7_INSTALL} and run \`prisma7 ${from}\`.`;
+    ? `While Prisma 7 still owns this project's migrations, ${PRISMA_7_INSTALL} and run \`${invocation}\` instead.`
+    : `To keep using Prisma 7, ${PRISMA_7_INSTALL} and run \`${invocation}\`.`;
   return {
     from,
     code: 'CLI.V7_COMMAND',
@@ -144,6 +146,7 @@ const redirects: readonly RedirectSpec[] = [
     replacement: '{bin} db update --dry-run',
     reason:
       '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
+    prisma7Invocation: 'migrate diff --from-config-datasource --to-schema <path>',
     help: 'db update',
   }),
   v7Command('migrate reset', {
@@ -158,6 +161,7 @@ const redirects: readonly RedirectSpec[] = [
     reason:
       "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand.",
     whileMigrationsStayOnPrisma7: true,
+    prisma7Invocation: 'migrate resolve --applied <migration>',
     help: 'db sign',
   }),
   v7Command('generate', {
@@ -199,6 +203,7 @@ const redirects: readonly RedirectSpec[] = [
   }),
   v7Command('db execute', {
     docsUrl: CLI_DOCS_URL,
+    prisma7Invocation: 'db execute --file <path>',
     reason: 'Prisma 8 has no command that runs a script file of statements against the database.',
   }),
 ];
