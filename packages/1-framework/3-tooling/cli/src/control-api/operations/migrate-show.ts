@@ -22,6 +22,7 @@ import {
   errorRuntime,
 } from '../../utils/cli-errors';
 import { closeQuietly, resolveMigrationPaths } from '../../utils/command-helpers';
+import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
@@ -157,6 +158,10 @@ export async function executeMigrateShowPlan(
         namedRef = { name: refName, ...refEntry };
       }
     }
+  }
+
+  if (options.permitPolicyChange === true && namedRef === undefined) {
+    return notOk(errorPermitPolicyChangeNeedsRef({ command: 'db migrate', to: options.to }));
   }
 
   options.onPreflightComplete?.({

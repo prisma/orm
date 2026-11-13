@@ -290,4 +290,28 @@ describe('executeDbUpdate, database policies', () => {
       meta: { refName: 'dev', refHash: 'elsewhere' },
     });
   });
+
+  it('refuses consent without a ref before it runs anything', async () => {
+    const recovery =
+      'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+    const execute = vi.fn();
+    const result = await update({
+      mode: 'apply',
+      markers: new Map(),
+      permitPolicyChange: true,
+      executeSpy: execute,
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual({
+      ok: false,
+      code: 'CLI.INVALID_ARGUMENTS',
+      severity: 'error',
+      summary: '--permit-policy-change needs --to <ref>',
+      why: 'No ref was given, so there are no policies to write.',
+      fix: recovery,
+      nextActions: [{ kind: 'user-choice', label: recovery }],
+      meta: { command: 'db update' },
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
 });

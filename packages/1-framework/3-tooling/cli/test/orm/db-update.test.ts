@@ -554,22 +554,6 @@ describe('db update --rename', () => {
     ]);
   });
 
-  it('repeats --permit-policy-change in the apply a dry run suggests', async () => {
-    mocks.dbUpdate.mockResolvedValue(ok(planSuccess()));
-    const run = await harness().run(
-      ['db', 'update', '--dry-run', '--db', CONNECTION, '--permit-policy-change'],
-      { cwd: projectDir, isTty: { stdout: true } },
-    );
-
-    expect(run.presented?.presentation.next).toEqual([
-      {
-        kind: 'run-command',
-        label: 'Apply the planned operations',
-        command: 'prisma-test db update --permit-policy-change --db <url>',
-      },
-    ]);
-  });
-
   it('repeats --config and --db in every command a dry run prints, as a shell reads them', async () => {
     mocks.dbUpdate.mockResolvedValue(
       ok({ ...planSuccess(), temporaryValues: [{ field: 'User.email', value: "''" }] }),

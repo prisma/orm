@@ -125,6 +125,7 @@ function recordingMigrations() {
 async function migrate(args: {
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly ref?: NamedRef;
+  readonly hash?: string;
   readonly permitPolicyChange?: boolean;
 }) {
   const migrationsDir = await migrationsDirWithOneAppEdge();
@@ -143,6 +144,7 @@ async function migrate(args: {
     extensions: [],
     targetId: 'postgres',
     ...(args.ref === undefined ? {} : { target: { kind: 'ref', ref: args.ref } }),
+    ...(args.hash === undefined ? {} : { target: { kind: 'hash', hash: args.hash } }),
     ...(args.permitPolicyChange === undefined
       ? {}
       : { permitPolicyChange: args.permitPolicyChange }),
@@ -309,4 +311,32 @@ describe('executeMigrate, database policies', () => {
     expect(result.ok ? undefined : result.failure.code).toBe('MIGRATION.MARKER_MISMATCH');
     expect(runnerCalls).toEqual([]);
   });
+
+  it.each([
+    { hash: undefined, why: 'No ref was given, so there are no policies to write.' },
+    { hash: APP_HEAD, why: `${APP_HEAD} is not a ref, so it declares no policies to write.` },
+  ])(
+    'refuses consent without a ref target before it runs anything: hash $hash',
+    async ({ hash, why }) => {
+      const recovery =
+        'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+      const { result, runnerCalls } = await migrate({
+        markers: new Map(),
+        ...(hash === undefined ? {} : { hash }),
+        permitPolicyChange: true,
+      });
+
+      expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual({
+        ok: false,
+        code: 'CLI.INVALID_ARGUMENTS',
+        severity: 'error',
+        summary: '--permit-policy-change needs --to <ref>',
+        why,
+        fix: recovery,
+        nextActions: [{ kind: 'user-choice', label: recovery }],
+        meta: { command: 'db migrate', ...(hash === undefined ? {} : { to: hash }) },
+      });
+      expect(runnerCalls).toEqual([]);
+    },
+  );
 });

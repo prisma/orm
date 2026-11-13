@@ -10,6 +10,8 @@ import type {
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk } from '@internal/utils/result';
+import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
@@ -69,6 +71,9 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
 export async function executeDbUpdate<TFamilyId extends string, TTargetId extends string>(
   options: ExecuteDbUpdateOptions<TFamilyId, TTargetId>,
 ): Promise<DbUpdateResult> {
+  if (options.permitPolicyChange === true && options.ref === undefined) {
+    return notOk(errorPermitPolicyChangeNeedsRef({ command: 'db update', to: undefined }));
+  }
   return (await executeRun<TFamilyId, TTargetId>({
     driver: options.driver,
     adapter: options.adapter,

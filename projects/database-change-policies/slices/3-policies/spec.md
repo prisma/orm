@@ -131,7 +131,7 @@ The policies are the database's, not a space's: they are read from and written t
 
 `db migrate` and `db update` gain `--permit-policy-change` (boolean). The flag's help text: `Check the run against the ref's declared policies and write them into the database when it succeeds`. No error suggests it: no next action proposes it, and `POLICY_MISMATCH` never hints at it. A next action that repeats the command the user ran (for example "run db migrate again" after a failed migration) repeats the flags the user gave, including this one; it never adds it. The skill documents it.
 
-`db migrate --to <ref>` and `db update --to <ref>` resolve the ref as today and also pass the whole entry as `ref`.
+`db migrate --to <ref>` and `db update --to <ref>` resolve the ref as today and also pass the whole entry as `ref`. The flag needs a ref: given with a `--to` that names a hash, a migration, `@db` or `@empty`, or with no `--to`, `db migrate`, its `--show` and `db update` fail with `CLI.INVALID_ARGUMENTS` before they connect, and so does the control API's `permitPolicyChange` without a ref.
 
 ### Errors
 

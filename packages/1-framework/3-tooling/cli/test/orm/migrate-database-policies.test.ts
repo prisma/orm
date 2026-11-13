@@ -235,3 +235,44 @@ describe('db migrate --permit-policy-change', () => {
     expect(mocks.migrate.mock.calls[0]?.[0].invocation.rerunArgs).toEqual([]);
   });
 });
+
+describe('db migrate --permit-policy-change without a ref', () => {
+  it.each([
+    { to: C2, why: `${C2} is not a ref, so it declares no policies to write.` },
+    { to: '@db', why: '@db is not a ref, so it declares no policies to write.' },
+    { to: '@empty', why: '@empty is not a ref, so it declares no policies to write.' },
+    { to: undefined, why: 'No ref was given, so there are no policies to write.' },
+  ])('refuses the flag before it connects: --to $to', async ({ to, why }) => {
+    const cwd = await projectWithProductionRef();
+    const recovery =
+      'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+
+    const run = await harness(ormConfig(cwd)).run(
+      [
+        'db',
+        'migrate',
+        ...(to === undefined ? [] : ['--to', to]),
+        '--permit-policy-change',
+        '--json',
+      ],
+      { cwd },
+    );
+
+    expect({ exitCode: run.exitCode, connected: mocks.connect.mock.calls.length }).toEqual({
+      exitCode: 2,
+      connected: 0,
+    });
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CLI.INVALID_ARGUMENTS',
+          summary: '--permit-policy-change needs --to <ref>',
+          why,
+          nextActions: [{ kind: 'user-choice', label: recovery }],
+          meta: { command: 'db migrate', ...(to === undefined ? {} : { to }) },
+        },
+      },
+    });
+  });
+});

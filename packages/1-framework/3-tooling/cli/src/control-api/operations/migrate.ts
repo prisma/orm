@@ -43,7 +43,7 @@ import {
 } from '../../utils/cli-errors';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
-import { declaredSettingsText } from '../../utils/policy-errors';
+import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type {
   MigratePathDecision,
@@ -146,6 +146,14 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     onProgress,
   } = options;
   const ref = target?.kind === 'ref' ? target.ref : undefined;
+  if (options.permitPolicyChange === true && ref === undefined) {
+    return notOk(
+      errorPermitPolicyChangeNeedsRef({
+        command: 'db migrate',
+        to: target?.kind === 'hash' ? target.hash : undefined,
+      }),
+    );
+  }
 
   const loadInputs: BuildAggregateInputs<TFamilyId, TTargetId> = {
     targetId,

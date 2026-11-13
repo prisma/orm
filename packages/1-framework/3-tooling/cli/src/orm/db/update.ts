@@ -51,6 +51,7 @@ import type {
   MigrationCommandResult,
   RemovedNamespaceJson,
 } from '../../utils/formatters/migrations';
+import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import {
   type CliInvocation,
   cliInvocation,
@@ -344,6 +345,13 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           return notOk(normalizeError(resolved.failure));
         }
         destination = resolved.value;
+      }
+      if (args.flags.permitPolicyChange === true && destination?.ref === undefined) {
+        return notOk(
+          normalizeError(
+            errorPermitPolicyChangeNeedsRef({ command: 'db update', to: args.flags.to }),
+          ),
+        );
       }
 
       const prepared = await prepareMigrationRun({

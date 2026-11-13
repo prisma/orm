@@ -57,3 +57,28 @@ describe('db migrate --show, a ref that declares policies', () => {
     expect(run.exitCode).toBe(0);
   });
 });
+
+describe('db migrate --show --permit-policy-change without a ref', () => {
+  it('refuses the flag before it connects', async () => {
+    const cwd = await projectWithProductionRef();
+
+    const run = await harness(ormConfig(cwd)).run(
+      ['db', 'migrate', '--show', '--to', C2, '--permit-policy-change', '--json'],
+      { cwd },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CLI.INVALID_ARGUMENTS',
+          summary: '--permit-policy-change needs --to <ref>',
+          why: `${C2} is not a ref, so it declares no policies to write.`,
+          meta: { command: 'db migrate', to: C2 },
+        },
+      },
+    });
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+});

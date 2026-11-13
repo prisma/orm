@@ -199,6 +199,10 @@ Raised by the commander `orm init` (deleted in the S5 cutover). On the engine-ho
 
 `prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. On the Prisma 7 path the config rename happens before the first write, so a completed rename is listed too (`filesRenamed`, `from` and `to`); it stays in place and a re-run writes the missing files beside it. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`, `filesRenamed`.
 
+### CLI.INVALID_ARGUMENTS
+
+Raised by the CLI engine when a command's arguments cannot be parsed; the engine's entry is the reference: [CLI.INVALID_ARGUMENTS](https://docs.prisma.io/docs/cli/error-reference#CLI.INVALID_ARGUMENTS). `db migrate`, `db migrate --show` and `db update` also raise it when they are given `--permit-policy-change` and `--to` names no ref: a contract hash, a migration, `@db`, `@empty`, or no `--to` at all. Only a ref declares policies, so there is nothing the flag could write. The commands raise it before they connect to the database. The control API's `migrate` raises it for `permitPolicyChange` without a `target` of kind `ref`, and `dbUpdate` for `permitPolicyChange` without a `ref`, before anything runs. A ref that declares no policies is not refused: the flag then writes nothing. Payload: `command` (`db migrate` or `db update`), and `to`, the `--to` value, when one was given.
+
 ### CLI.INVALID_OUTPUT_FORMAT
 
 The main CLI received a `--format` value other than `pretty` or `json`. Raised during global-flag resolution, before any command logic runs. Payload: `value`, `allowed`.

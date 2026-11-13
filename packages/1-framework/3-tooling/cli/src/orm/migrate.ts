@@ -59,6 +59,7 @@ import { TONE_MIGRATION_GRAPH_PALETTE } from '../utils/formatters/migration-grap
 import { createToneMigrationListStyler } from '../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../utils/formatters/tone-markup';
 import { runCommandAction } from '../utils/next-actions';
+import { errorPermitPolicyChangeNeedsRef } from '../utils/policy-errors';
 import {
   type CliInvocation,
   cliCommand,
@@ -419,6 +420,13 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           });
       if (offlineTarget !== undefined && !offlineTarget.ok) {
         return notOk(offlineTarget.failure);
+      }
+      if (args.flags.permitPolicyChange === true && offlineTarget?.value.refName === undefined) {
+        return notOk(
+          normalizeError(
+            errorPermitPolicyChangeNeedsRef({ command: 'db migrate', to: args.flags.to }),
+          ),
+        );
       }
 
       let document: MigrateDocument;
