@@ -42,7 +42,7 @@ Built on the mutation graph (`src/mutation-graph/nested-mutations.ts`), after sl
 | Junction (M:N) | one `Update` on the target table whose condition is the caller's filter and `target.key IN (SELECT j.target_fk FROM junction j)`, with a `FilterData` edge from the parent's node to `j.parent_fk` | one `Delete` with the same condition and edge; junction rows are not touched by the ORM, the database's foreign-key action decides |
 
 - **Edges reach a subquery by alias (decided 2026-11-12, option B).** A `FilterData` edge's condition goes into the `SELECT` whose `FROM` alias is the alias of the edge's target column: the outer statement's `WHERE` for an outer alias, as every edge does today, and the subquery's `WHERE` for the junction alias. The translation builds the junction subquery itself; there is no junction `Find` node and no inlining rule. This replaces the inlining step of design record D8 (a junction `Find` inlined by a peephole); D8's statement form, `IN (SELECT …)`, and its reason, a statement that does not grow with the relation, stand. A later slice that needs the junction rows as a node adds a junction `Find` then.
-- **Composite keys use row-value `IN`**: `(t.k1, t.k2) IN (SELECT j.k1, j.k2 FROM …)`. The form is added to the SQL AST and rendered by the Postgres, SQLite and MySQL adapters.
+- **Composite keys use row-value `IN`**: `(t.k1, t.k2) IN (SELECT j.k1, j.k2 FROM …)`. The SQL AST already expresses it as a `ListExpression` of the key columns `IN` a `SubqueryExpr`; the Postgres, SQLite and MySQL adapters render a subquery of as many columns and refuse a count mismatch (decided 2026-11-12, replacing a new AST form).
 - `updateAll` applies the related model's update defaults, as the collection's `updateAll` does. An `updateAll` whose data is empty adds no node.
 - Operations on one relation are added in array order; table state orders operations on the same table, including a junction `connect`/`disconnect` before a many-to-many `updateAll`/`deleteAll` in the same array (the write reads the junction's state through its subquery). The order across relations is unchanged: parent-held relations before the parent row is written, child-held and junction relations after.
 - Zero matching rows is not an error.
@@ -65,7 +65,7 @@ Everything here is one change to the relation mutator and the executor's dispatc
 
 **In:**
 - `packages/3-extensions/sql-orm-client`: `RelationMutator` and descriptor types, `relation-mutator.ts`, `relation-mutations.ts`, the translation in `mutation-graph/nested-mutations.ts`, the alias-routed conditions in `mutation-graph/filtered-statement.ts`, unit, graph and type tests.
-- The row-value form of `IN` in `packages/2-sql-family/4-lanes/relational-core` (SQL AST) and its rendering in the Postgres, SQLite and MySQL adapters.
+- Rendering of the row-value form of `IN` (a `ListExpression` `IN` a multi-column `SubqueryExpr`) in the Postgres, SQLite and MySQL adapters.
 - Integration tests under `test/integration/test/sql-orm-client/`, on Postgres and SQLite, including for each operation a test where an unrelated row matches the filter and is left unchanged.
 - Ports into `test/integration/test/ports/engines/`, with their fixtures:
   - `writes/nested_mutations/already_converted/nested_update_many_inside_update.rs` (8)

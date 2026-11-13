@@ -38,10 +38,10 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
   type Returns,
   readBack,
   type Shape,
+  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -95,7 +95,7 @@ export function updateAllGraph(
         },
       ]
     : [];
-  b.graph.setResult(addUpdateAll(b, collection, set, keys, returns));
+  b.graph.setResult(addUpdateAll(b, collection, set, { filters: keys, links: [] }, returns));
   return b.graph;
 }
 
@@ -103,12 +103,13 @@ export function addUpdateAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  keys: readonly KeySource[],
+  { filters, links }: Sources,
   returns: Returns,
 ): NodeId {
   return updateRows(b, modelOf(collection), set, {
     where: whereOf(collection),
-    filters: keys,
+    filters,
+    links,
     payloads: [],
     owner: { operation: 'updateAll', modelName: collection.modelName },
     returns,
@@ -121,7 +122,7 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
   const { state } = collection;
   const b = builderOf(collection);
   if (returns === 'count') {
-    b.graph.setResult(addDeleteAll(b, collection, []));
+    b.graph.setResult(addDeleteAll(b, collection, { filters: [], links: [] }));
     return b.graph;
   }
   const find = findRows(
@@ -130,22 +131,22 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     noInputs,
   );
   b.graph.setResult(find);
-  addDeleteAll(
-    b,
-    collection,
-    identityColumnsOf(collection).length > 0
-      ? [{ from: find, columns: sameRowColumns(collection) }]
-      : [],
-  );
+  addDeleteAll(b, collection, {
+    filters:
+      identityColumnsOf(collection).length > 0
+        ? [{ from: find, columns: sameRowColumns(collection) }]
+        : [],
+    links: [],
+  });
   return b.graph;
 }
 
 export function addDeleteAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  keys: readonly KeySource[],
+  sources: Sources,
 ): NodeId {
-  return deleteRows(b, collection.state.tables, { where: whereOf(collection), filters: keys });
+  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...sources });
 }
 
 export function updateFirstGraph(
@@ -193,6 +194,7 @@ export function updateFirstGraph(
     updateRows(b, model, values, {
       where: undefined,
       filters: [{ from: find, columns: sameRowColumns(collection) }],
+      links: [],
       payloads: before.keys,
       owner,
       returns: 'rows',
@@ -214,6 +216,7 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   deleteRows(b, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
+    links: [],
   });
   b.graph.setResult(find);
   return b.graph;

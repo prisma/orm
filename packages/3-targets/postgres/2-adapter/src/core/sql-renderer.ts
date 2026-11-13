@@ -472,11 +472,13 @@ function renderSource(
   }
 }
 
-function assertScalarSubquery(query: SelectAst): void {
-  if (query.projection.length !== 1) {
+function assertSubqueryColumns(query: SelectAst, columns: number): void {
+  if (query.projection.length !== columns) {
     throw adapterError(
       'RUNTIME.AST_INVALID',
-      'Subquery expressions must project exactly one column',
+      columns === 1
+        ? 'Subquery expressions must project exactly one column'
+        : `A subquery compared with a row value of ${columns} columns must project ${columns} columns`,
       { meta: { node: 'subquery-expr' } },
     );
   }
@@ -486,8 +488,9 @@ function renderSubqueryExpr(
   expr: SubqueryExpr,
   contract: PostgresContract,
   pim: ParamIndexMap,
+  columns = 1,
 ): string {
-  assertScalarSubquery(expr.query);
+  assertSubqueryColumns(expr.query, columns);
   return `(${renderSelect(expr.query, contract, pim)})`;
 }
 
@@ -559,6 +562,14 @@ function renderBinary(expr: BinaryExpr, contract: PostgresContract, pim: ParamIn
   switch (rightNode.kind) {
     case 'list':
       right = renderListLiteral(rightNode, contract, pim);
+      break;
+    case 'subquery':
+      right = renderSubqueryExpr(
+        rightNode,
+        contract,
+        pim,
+        leftExpr.kind === 'list' ? leftExpr.values.length : 1,
+      );
       break;
     case 'literal':
       right = renderLiteral(rightNode);

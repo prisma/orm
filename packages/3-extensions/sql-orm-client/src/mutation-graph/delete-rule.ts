@@ -15,7 +15,7 @@ export const deleteRule: Rule = (graph, node, inputs) => {
   if (
     !(node instanceof Delete) ||
     node.returns.length > 0 ||
-    [inputs['filter'] ?? []].flat().length > 0
+    [inputs['filter'] ?? [], inputs['link'] ?? []].flat().length > 0
   ) {
     return undefined;
   }

@@ -8,7 +8,7 @@ import {
   resolveModelTableName,
   resolveRelationTargetColumns,
 } from '../collection-contract';
-import { createStatementTables } from '../collection-tables';
+import { type CollectionTables, createStatementTables } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
 import { type InsertConflictSkip, projectTableColumn } from '../mutation-statements';
 import { ormError } from '../orm-errors';
@@ -41,6 +41,7 @@ import {
   type Model,
   type Returns,
   type Shape,
+  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -280,6 +281,7 @@ function addChildOwned(
         {
           where: requiredCriterion(context, related, name, 'connect', criterion),
           filters: [],
+          links: [],
           payloads: [{ from: parent, columns: fromParent }],
           owner: { operation: 'update', modelName: related.modelName },
           returns: 'count',
@@ -302,6 +304,7 @@ function addChildOwned(
     updateRows(t, related, unlink, {
       where,
       filters: [{ from: parent, columns: fromParent }],
+      links: [],
       payloads: [],
       owner: { operation: 'update', modelName: related.modelName },
       returns: 'count',
@@ -341,11 +344,8 @@ function addJunctionOwned(
     through.childColumns,
   );
   if (isFilteredWrite(mutation)) {
-    throw ormError(
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
-      `${mutation.kind}() nested mutation for relation "${name}" is not supported on a many-to-many relation yet`,
-      { meta: { kind: mutation.kind, relation: name, reason: 'many-to-many-relation' } },
-    );
+    addFilteredWrite(t, model, parent, name, relation, mutation);
+    return;
   }
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
     const values = withCreateDefaults(context, through.namespaceId, through.table, {}, undefined);
@@ -393,6 +393,7 @@ function addJunctionOwned(
         { from: parent, columns: fromParent },
         { from: target, columns: fromTarget },
       ],
+      links: [],
     });
   }
 }
@@ -405,32 +406,24 @@ function addFilteredWrite(
   relation: ResolvedRelation,
   mutation: FilteredWrite,
 ): void {
-  const { contract } = t.context;
   const related = {
     context: t.context,
     state: mutation.state,
     modelName: relation.to,
     namespaceId: relation.toNamespace,
   };
-  const parents = [
-    {
-      from: parent,
-      columns: columnMappings(
-        contract,
-        model.tables.root,
-        localColumnsOf(contract, model, relation),
-        related.state.tables.root,
-        resolveRelationTargetColumns(contract, relation),
-      ),
-    },
-  ];
+  const sources = sourcesOf(t.context.contract, model, relation, related.state.tables, parent);
   if (mutation.kind === 'deleteAll') {
-    addDeleteAll(t, related, parents);
+    addDeleteAll(t, related, sources);
     return;
   }
   const set = updateValuesOf(related, mutation.data);
-  const linking = relation.on.targetFields.filter((field) =>
-    Object.hasOwn(set, columnOfContractField(contract, relation.toNamespace, relation.to, field)),
+  const linkFields = relation.through === undefined ? relation.on.targetFields : [];
+  const linking = linkFields.filter((field) =>
+    Object.hasOwn(
+      set,
+      columnOfContractField(t.context.contract, relation.toNamespace, relation.to, field),
+    ),
   );
   if (linking.length > 0) {
     throw ormError(
@@ -442,8 +435,47 @@ function addFilteredWrite(
     );
   }
   if (Object.keys(set).length > 0) {
-    addUpdateAll(t, related, set, parents, 'count');
+    addUpdateAll(t, related, set, sources, 'count');
   }
+}
+
+function sourcesOf(
+  contract: Contract<SqlStorage>,
+  model: Model,
+  relation: ResolvedRelation,
+  { root, scope }: CollectionTables,
+  parent: NodeId,
+): Sources {
+  const localColumns = localColumnsOf(contract, model, relation);
+  const { through } = relation;
+  if (through === undefined) {
+    const columns = columnMappings(
+      contract,
+      model.tables.root,
+      localColumns,
+      root,
+      resolveRelationTargetColumns(contract, relation),
+    );
+    return { filters: [{ from: parent, columns }], links: [] };
+  }
+  const links = scope.aliasTable({ namespaceId: through.namespaceId, tableName: through.table });
+  return {
+    filters: [],
+    links: [
+      {
+        from: parent,
+        columns: columnMappings(
+          contract,
+          model.tables.root,
+          localColumns,
+          links,
+          through.parentColumns,
+        ),
+        junction: links.tableSource(contract),
+        targets: columnMappings(contract, links, through.childColumns, root, through.targetColumns),
+      },
+    ],
+  };
 }
 
 function addChildInserts(

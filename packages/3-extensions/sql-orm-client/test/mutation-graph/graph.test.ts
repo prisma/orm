@@ -1,3 +1,4 @@
+import { TableSource } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { CrossJoin } from '../../src/mutation-graph/cross-join';
@@ -5,6 +6,7 @@ import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
+import { JunctionFilterData } from '../../src/mutation-graph/junction-filter-data';
 import { PayloadData } from '../../src/mutation-graph/payload-data';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -23,6 +25,7 @@ import {
   nameIsAda,
   newGraph,
   newGraphWithoutReturning,
+  positions,
   updateUsers,
   visibleNodes,
 } from './statements';
@@ -85,6 +88,21 @@ describe('Graph', () => {
           '\n',
         ),
       );
+    });
+
+    it('gives an edge also from the State of the junction table of each link edge', () => {
+      const graph = newGraph();
+      const [parent] = positions();
+      const link = new JunctionFilterData(
+        parent,
+        columnMappings('users', 'posts', [['id', 'user_id']]),
+        TableSource.named('posts'),
+        columnMappings('posts', 'users', [['user_id', 'id']]),
+      );
+
+      const edges = graph.stateEdgesFor(deleteUsers(), [link]);
+
+      expect(edges.map(({ table }) => table.tableName)).toEqual(['users', 'posts']);
     });
 
     it('adds the first State of a table that no node has read or written', () => {

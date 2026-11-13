@@ -1,8 +1,9 @@
-import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
+import { BinaryExpr, ColumnRef, ParamRef, TableSource } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import type { NodeId } from '../../src/mutation-graph/edge';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import type { Graph } from '../../src/mutation-graph/graph';
+import { JunctionFilterData } from '../../src/mutation-graph/junction-filter-data';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
 import { UnionAll } from '../../src/mutation-graph/union-all';
@@ -112,6 +113,25 @@ describe('the delete rule, on a contract with returning', () => {
     graph.setResult(find);
 
     expect(graph.result).toBe(find);
+  });
+
+  it('leaves a Delete with a link edge as it is', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda], ['id', 'name']);
+    const find = addWithState(graph, found);
+    graph.setResult(find);
+    const parent = addWithState(graph, findUsers([nameIsAda]));
+    const link = new JunctionFilterData(
+      parent,
+      columnMappings('users', 'posts', [['id', 'user_id']]),
+      TableSource.named('posts'),
+      columnMappings('posts', 'users', [['user_id', 'id']]),
+    );
+    const del = addWithState(graph, deleteUsers(found.ast.where), { link: [link] });
+
+    expect(graph.result).toBe(find);
+    expect(graph.inputsOf(del)['link']).toEqual([link]);
+    expect(returnedAt(graph, 2)).toEqual([]);
   });
 
   it.each([

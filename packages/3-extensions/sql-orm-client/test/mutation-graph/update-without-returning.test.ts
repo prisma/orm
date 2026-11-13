@@ -44,7 +44,13 @@ describe('Update on a contract without returning', () => {
 
     expect(
       await update.execute(
-        { filter: [[idMatch(7), idMatch(8)]], payload: null, state: null, requires: null },
+        {
+          filter: [[idMatch(7), idMatch(8)]],
+          payload: null,
+          link: null,
+          state: null,
+          requires: null,
+        },
         run,
       ),
     ).toEqual([{ id: 7 }, { id: 8 }]);
@@ -58,7 +64,7 @@ describe('Update on a contract without returning', () => {
 
     expect(
       await update.execute(
-        { filter: [[idMatch(7)]], payload: null, state: null, requires: null },
+        { filter: [[idMatch(7)]], payload: null, link: null, state: null, requires: null },
         runWithoutReturning(1),
       ),
     ).toEqual([{ id: 5, name: 'Ada' }]);
@@ -73,6 +79,7 @@ describe('Update on a contract without returning', () => {
         {
           filter: [[new FilterData(from, postId).output({ id: 10 })]],
           payload: [[{ user_id: ParamRef.of(7, { name: 'user_id' }) }]],
+          link: null,
           state: null,
           requires: null,
         },
@@ -86,7 +93,13 @@ describe('Update on a contract without returning', () => {
 
     expect(
       await update.execute(
-        { filter: [[idMatch(7), idMatch(8)]], payload: null, state: null, requires: null },
+        {
+          filter: [[idMatch(7), idMatch(8)]],
+          payload: null,
+          link: null,
+          state: null,
+          requires: null,
+        },
         runWithoutReturning(2),
       ),
     ).toEqual({ affectedRows: 2 });

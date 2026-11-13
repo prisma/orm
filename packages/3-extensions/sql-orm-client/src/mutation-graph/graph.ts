@@ -12,6 +12,7 @@ import { changedBy, storageOf, tableKey, type WriteKind } from './changed-by';
 import { type ColumnMapping, DataEdge, type Edge, type NodeId } from './edge';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
+import type { JunctionFilterData } from './junction-filter-data';
 import type { InputEdges, Node, Slot, Slots, StatementAst } from './node';
 import { type Replacement, type Rule, rulesFor } from './rules';
 import { State, StateEdge } from './state';
@@ -103,8 +104,11 @@ export class Graph {
     return id;
   }
 
-  stateEdgesFor(node: StatementNode): StateEdge[] {
-    return tablesReadBy(node.statements).map((table) => new StateEdge(this.#stateOf(table), table));
+  stateEdgesFor(node: StatementNode, links: readonly JunctionFilterData[] = []): StateEdge[] {
+    return uniqueTables([
+      ...tablesReadBy(node.statements),
+      ...links.map(({ junction }) => storageOf(junction)),
+    ]).map((table) => new StateEdge(this.#stateOf(table), table));
   }
 
   nodeAt(id: NodeId): Node | undefined {

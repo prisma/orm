@@ -12,6 +12,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { combineWhereExprs } from '../where-utils';
 import type { FilterData, KeyMatch } from './filter-data';
+import type { JunctionFilterData } from './junction-filter-data';
 import type { Executed, OutputsOf, Run } from './node';
 import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
@@ -19,33 +20,48 @@ import type { StateEdge } from './state';
 
 export type Filtered = { filter: FilterData[]; state: StateEdge[]; requires: Requires[] };
 
+export type Linked = Filtered & { link: JunctionFilterData[] };
+
 export const filteredSlots = { filter: 'list', state: 'list', requires: 'list' } as const;
+
+export const linkedSlots = {
+  filter: 'list',
+  link: 'list',
+  state: 'list',
+  requires: 'list',
+} as const;
+
+type FilteredInputs = Pick<OutputsOf<Filtered>, 'filter' | 'requires'> &
+  Partial<Pick<OutputsOf<Linked>, 'link'>>;
 
 export function executeFiltered(
   ast: SelectAst | UpdateAst | DeleteAst,
-  inputs: Pick<OutputsOf<Filtered>, 'filter' | 'requires'>,
+  inputs: FilteredInputs,
   run: Run,
 ): Executed {
-  const { filter } = inputs;
+  const filter = inputs.filter ?? [];
+  const link = inputs.link ?? [];
   if (requirementUnmet(inputs.requires)) {
     return rowsResult([]);
   }
-  if (filter === null) {
+  if (filter.length === 0 && link.length === 0) {
     return executeStatement(ast, run);
   }
-  if (filter.some((conditions) => conditions.length === 0)) {
+  if ([...filter, ...link].some((rows) => rows.length === 0)) {
     return rowsResult([]);
   }
-  return executeStatement(ast.withWhere(filteredWhere(ast.where, filter)), run);
+  return executeStatement(ast.withWhere(filteredWhere(ast, filter, link)), run);
 }
 
 export function filteredWhere(
-  where: AnyExpression | undefined,
+  ast: SelectAst | UpdateAst | DeleteAst,
   filter: readonly (readonly KeyMatch[])[],
+  link: readonly (readonly AnyExpression[])[],
 ): AnyExpression | undefined {
   return combineWhereExprs([
-    ...(where === undefined ? [] : [where]),
+    ...(ast.where === undefined ? [] : [ast.where]),
     ...filter.map((matches) => anyOf(matches.map(({ condition }) => condition))),
+    ...link.map(anyOf),
   ]);
 }
 
