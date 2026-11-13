@@ -1,5 +1,6 @@
 import { ParamRef, RawQueryAst } from '@internal/sql-relational-core/ast';
-import { planFromAst } from '@internal/sql-relational-core/plan';
+import type { AffectedCount } from '@internal/sql-relational-core/expression';
+import { planFromAst, type SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { withTransaction } from '../src/sql-runtime';
 import { deferred } from './closed-runtime-stub';
@@ -17,6 +18,54 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
+
+it.each(['execute', 'prepared'] as const)(
+  'rechecks admitted %s results without taking manual cleanup ownership',
+  async (operation) => {
+    for (const outcome of ['timer', 'monotonic', 'success', 'rejection'] as const) {
+      const { runtime, driver, events } = createSetup();
+      const entered = deferred();
+      const resume = deferred();
+      const failure = new Error('driver failed');
+      vi.mocked(driver.execute).mockImplementation(async () => {
+        entered.resolve();
+        await resume.promise;
+        if (outcome === 'rejection') throw failure;
+        return { affectedRows: 1 };
+      });
+      const connection = await runtime.connection();
+      const tx = await connection.transaction({ timeout: 10 });
+      const aborted = vi.fn();
+      tx.signal.addEventListener('abort', aborted);
+      const plan: SqlQueryPlan<AffectedCount> = planFromAst(
+        RawQueryAst.affectedCount(['update t set x = 1']),
+        testContract,
+      );
+      const prepared = await runtime.prepare({}, () => plan);
+      const pending = operation === 'execute' ? tx.execute(plan) : prepared.execute(tx, {});
+      const result = pending.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await entered.promise;
+      if (outcome === 'monotonic') vi.spyOn(performance, 'now').mockReturnValue(100000);
+      else if (outcome !== 'success') await vi.advanceTimersByTimeAsync(10);
+      resume.resolve();
+      expect(await result).toEqual(
+        outcome === 'success'
+          ? { value: { affectedRows: 1 } }
+          : { error: outcome === 'rejection' ? failure : tx.signal.reason },
+      );
+      expect(aborted).toHaveBeenCalledTimes(outcome === 'success' ? 0 : 1);
+      expect(names(events)).not.toContain('rollback');
+      expect(names(events)).not.toContain('release');
+      await tx.rollback();
+      await connection.release();
+      await runtime.close();
+      vi.restoreAllMocks();
+    }
+  },
+);
 
 it('arms after BEGIN, aborts once, and refuses work and commit after expiry', async () => {
   const { runtime, driver, events } = createSetup();

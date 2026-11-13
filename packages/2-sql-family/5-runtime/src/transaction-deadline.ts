@@ -74,7 +74,9 @@ export function containTransaction(
     },
     async execute(request) {
       assertActive();
-      return transaction.execute(request);
+      const stats = await transaction.execute(request);
+      assertActive();
+      return stats;
     },
     commit: () => transaction.commit(),
     rollback: () => transaction.rollback(),
