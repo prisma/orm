@@ -88,7 +88,7 @@ The policies are scoped to each driver query; caller-owned clients and the globa
 
 ## Related Subsystems
 
-- **[Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Driver specification
+- **[Adapters & Targets](../../../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Driver specification
 
 ## Related ADRs
 
