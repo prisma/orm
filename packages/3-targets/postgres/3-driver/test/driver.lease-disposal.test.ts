@@ -131,6 +131,129 @@ it('upgrades an in-progress release to destruction', async () => {
   expect(client.release).toHaveBeenCalledExactlyOnceWith(expect.any(Error));
 });
 
+it.each([false, true])(
+  'upgrades direct release during a nonstream query, owned %s',
+  async (ownedByDriver) => {
+    const { client, entered, resume } = setup();
+    client.end.mockImplementation(async () => {
+      resume.resolve();
+    });
+    const driver = createBoundDriverFromBinding(
+      {
+        kind: 'pgClient',
+        client: {
+          connect: client.connect,
+          end: client.end,
+          on: client.on,
+          query: client.query,
+        } as unknown as Client,
+        ownedByDriver,
+      },
+      { disabled: true },
+    );
+    const connection = await driver.acquireConnection();
+    const running = connection.execute({ sql: 'blocked' });
+    await entered.promise;
+    const releasing = connection.release();
+    const destroying = connection.destroy(new Error('unsafe'));
+    let disposed = false;
+    const disposal = Promise.all([releasing, destroying]).then(() => {
+      disposed = true;
+    });
+    try {
+      await expect.poll(() => disposed, { timeout: 100, interval: 5 }).toBe(true);
+      expect(client.end).toHaveBeenCalledTimes(ownedByDriver ? 1 : 0);
+      expect(driver.state).toBe('closed');
+    } finally {
+      resume.resolve();
+      await Promise.all([running, disposal]);
+    }
+  },
+);
+
+it('shares a failed upgraded direct teardown and retries the physical close', async () => {
+  const { client, entered, resume } = setup();
+  const failure = new Error('end failed');
+  client.end.mockRejectedValueOnce(failure).mockImplementation(async () => {
+    resume.resolve();
+  });
+  const driver = createBoundDriverFromBinding(
+    {
+      kind: 'pgClient',
+      client: {
+        connect: client.connect,
+        end: client.end,
+        on: client.on,
+        query: client.query,
+      } as unknown as Client,
+      ownedByDriver: true,
+    },
+    { disabled: true },
+  );
+  const connection = await driver.acquireConnection();
+  const running = connection.execute({ sql: 'blocked' });
+  await entered.promise;
+  const releasing = connection.release();
+  const destroying = connection.destroy(failure);
+  expect(destroying).toBe(releasing);
+  const result = releasing.catch((error: unknown) => error);
+  try {
+    await expect.poll(() => client.end.mock.calls.length, { timeout: 100, interval: 5 }).toBe(1);
+    expect(await result).toBe(failure);
+    await connection.destroy(failure);
+    expect(client.end).toHaveBeenCalledTimes(2);
+    await connection.destroy();
+    expect(client.end).toHaveBeenCalledTimes(2);
+  } finally {
+    resume.resolve();
+    await Promise.allSettled([running, result]);
+  }
+});
+
+it.each(['commit', 'rollback'] as const)(
+  'ignores rollback of an A handle confirmed by %s while B owns a cursor',
+  async (ending) => {
+    const { driver, client, close } = setup(true);
+    const connection = await driver.acquireConnection();
+    const a = await connection.beginTransaction();
+    await a[ending]();
+    const b = await connection.beginTransaction();
+    await b.execute({ sql: 'write B' });
+    const rows = b.query({ sql: 'select B' })[Symbol.asyncIterator]();
+    await rows.next();
+    const calls = client.query.mock.calls.length;
+    try {
+      await a.rollback();
+      expect(client.query).toHaveBeenCalledTimes(calls);
+      expect(close).not.toHaveBeenCalled();
+      expect(await rows.next()).toEqual({ done: false, value: { id: 2 } });
+      await b.commit();
+      expect(close).toHaveBeenCalledTimes(1);
+      await connection.release();
+      expect(client.release).toHaveBeenCalledExactlyOnceWith();
+    } finally {
+      await connection.destroy();
+    }
+  },
+);
+
+it('permits rollback after failed COMMIT and retries failed ROLLBACK', async () => {
+  const { driver, client } = setup();
+  const connection = await driver.acquireConnection();
+  const tx = await connection.beginTransaction();
+  const failure = new Error('settlement failed');
+  client.query.mockRejectedValueOnce(failure);
+  await expect(tx.commit()).rejects.toBe(failure);
+  client.query.mockRejectedValueOnce(failure);
+  await expect(tx.rollback()).rejects.toBe(failure);
+  await tx.rollback();
+  const count = client.query.mock.calls.length;
+  await tx.rollback();
+  expect(client.query).toHaveBeenCalledTimes(count);
+  await connection.release();
+  expect(client.release).toHaveBeenCalledExactlyOnceWith();
+});
+
 it('keeps failed disposal invalid and permits a disposal retry', async () => {
   const { driver, client } = setup();
   const connection = await driver.acquireConnection();
