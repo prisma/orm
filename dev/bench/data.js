@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794345732144,
+  "lastUpdate": 1794597892514,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -455045,6 +455045,401 @@ window.BENCHMARK_DATA = {
             "range": "±2.87%",
             "unit": "ops/sec",
             "extra": "86 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "w.a.madden+machine@gmail.com",
+            "name": "willbot",
+            "username": "wmadden-electric"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "747ee317e3dc3c3fc1d7621169acb95edfc7a537",
+          "message": "fix(client): a statement can no longer run after its transaction has closed (#30995)\n\n```ts\nawait prisma.$transaction(async (tx) => {\n  // UPDATE \"User\", then INSERT INTO \"Post\", then SELECT: three statements, sent one after another\n  const update = tx.user.update({\n    where: { id },\n    data: { name: 'renamed', posts: { create: { title: 'late post' } } },\n  })\n  await Promise.all([update, somethingElse()]) // somethingElse() throws after the UPDATE has run\n})\n```\n\nThe callback throws while the `update` is partway through its\nstatements, and Prisma rolls the transaction back. Before this change\nthe rest of the `update`'s statements were sent anyway, after the\nrollback. Measured against the code before this change, on\n`@prisma/adapter-pg`, `@prisma/adapter-mariadb` and\n`@prisma/adapter-better-sqlite3`: the user's name is rolled back and the\n`late post` row is committed, because the `INSERT` ran after the\n`ROLLBACK`, outside the transaction. After this change the `update`\nfails with the usual `P2028` \"transaction already closed\" error and\nnothing more is sent.\n\nWhether a given run hits this depends on timing: the rollback has to\narrive between two of the operation's statements. The measurement forces\nthat by throwing as soon as a query event reports the `UPDATE`.\n\n## The decision\n\n**Once the transaction manager starts closing a transaction, no further\nstatement issued under it reaches the driver adapter.** This is enforced\nin `TransactionManager`, the one place that commits and rolls back, so\nit holds for every adapter, including ones Prisma does not maintain.\n\nThis is the full fix for #29952 on Prisma 7. #29954 stopped\n`@prisma/adapter-pg` from crashing the process when a transaction was\nclosed twice. It left open what else could reach an adapter after a\ntransaction closed.\n\n## How we got here\n\n#29952 was reported on Prisma 6, where the Rust query engine could\ncommit and roll back the same transaction. Prisma 7 has no Rust query\nengine, and its `TransactionManager` takes a per-transaction lock for\ncommit, rollback, timeout and disconnect, so it cannot close a\ntransaction twice.\n\nStatements do not take that lock. `getTransaction()` handed the\nadapter's own transaction object to the query interpreter, which kept\nusing it for every statement of a query plan. A plan that sends its\nstatements one after another, such as an update with nested writes,\ncarried on when the transaction closed under it. (A large `createMany`\nis not such a plan: it sends its `INSERT`s all at once.) Four things\ncause that:\n\n1. The callback throws while another query is still running, as above. A\nfailing query in a `Promise.all` is the usual way.\n2. The transaction's timeout expires in the middle of a plan with\nseveral statements.\n3. A query in the callback is not awaited, and the callback returns and\ncommits.\n4. In `@prisma/query-plan-executor`, a query hits its time limit and its\nplan keeps running in the background.\n\nWhat the late statement did depended on the adapter. On neon and mariadb\nit ran on a pooled connection that might belong to someone else. On\nbetter-sqlite3, where the transaction shares the adapter's single\nconnection, it ran outside any transaction or inside the next one. On pg\nit has been rejected since #29954, but only once the adapter's\n`rollback()` has run: a statement sent just after the manager's\n`ROLLBACK` still ran and was committed on its own.\n\nNested transactions had the same hole one level down: after a rollback\nto a savepoint, the rest of a sibling plan ran in the outer transaction,\nwhich could commit it.\n\n## What changes\n\n### The manager hands out its own handle\n\n`getTransaction()` now returns a `SqlQueryable` that the manager owns,\nand no longer the adapter's `Transaction`. A caller cannot commit or\nroll back behind the manager's back, and every statement passes one\ncheck: if the transaction has started closing, throw the `P2028` error\nfor how it closed (committed, rolled back, or timed out). Otherwise the\nstatement is counted as running until it settles.\n\n`TransactionManager` is exported from `@prisma/client-engine-runtime`,\nso the narrower return type is a compile-time change for any outside\ncode that called `commit()` or `rollback()` on the result. Nothing in\nthis repository did.\n\n### Closing marks the transaction first, waits for running statements,\nthen acts\n\n1. Mark the transaction as closing. Handles reject new statements from\nhere on.\n2. Wait for the statements already running.\n3. Send `COMMIT` or `ROLLBACK` and call the adapter, as before.\n\nA rollback, a timeout and a disconnect wait at most 2 seconds, then go\nahead. A statement that never returns must not stop a rollback, and on\n`@prisma/adapter-libsql` it would also block every other query on the\nclient.\n\nA commit waits as long as it takes, because committing while a statement\nis still being sent has no correct outcome. If the transaction's timeout\nexpires or the client disconnects during that wait, the commit becomes a\nrollback and the caller of commit gets the timeout or rolled-back error.\n\n`getTransaction()` on a closing transaction now throws at once. It used\nto wait for the close to finish and then throw the same error.\n\n### Nested transactions\n\nEach nested transaction is a level with its own savepoint. Rolling one\nback closes that level: handles issued inside it reject. Committing one\nmerges it into its parent: handles issued inside it keep working,\nbecause the work now belongs to the outer transaction. That keeps\ntoday's behaviour for a query started on the outer transaction while a\nnested one was open, which is tied to the nested level because both\nshare one transaction id.\n\nThe manager used to track nesting as a depth counter and a list of\nsavepoint names. It now keeps one list of levels, each with its\nsavepoint.\n\n### neon and mariadb get the guard pg has\n\nAdapters are a public interface, and a caller that closes a pooled\nconnection's transaction twice corrupts the pool for everyone else. On\nmariadb a second `rollback()` after the pool has lent the connection out\nsends `ROLLBACK` into the new owner's session. `adapter-mariadb` also\nnow releases its connection when removing its error listener throws.\nBoth adapters now ignore a second `commit()` or `rollback()` and reject\nstatements and savepoint calls after close with\n`TransactionAlreadyClosed`. neon also releases its connection with an\nerror when a statement is still running, so the pool destroys it.\n`adapter-pg`'s private names are renamed to match.\n\nThe `Transaction` interface in `@prisma/driver-adapter-utils` now says\nin its doc comments what a caller must do. No types change there.\n\n## What users will notice\n\n- A late statement that used to run on pg, mariadb and better-sqlite3\nnow fails with `P2028`. That was measured on those three. neon and\nplanetscale are expected to behave the same from reading their adapters;\nSQL Server was not checked.\n- When a nested transaction rolls back, a query on the same transaction\nthat is still running, or that starts while the rollback is in progress,\nfails with a `P2028` error saying a nested transaction was rolled back.\nThat includes a query started on the outer transaction while the nested\none was open, because both share one transaction id.\n- If the client disconnects while a write outside any transaction is\npartway through a plan that needed an internal transaction, that write\nfails with the `P2028` \"rolled back\" error.\n- A query that was started and never awaited now rejects when the\ntransaction closes under it. With no handler attached, Node reports an\nunhandled rejection.\n- A commit that is still waiting on a statement when the transaction\ntimes out now rolls back and reports the timeout.\n- If a query is started and not awaited, and the callback returns while\nthat query is between two of its statements, the commit keeps what the\nquery already sent and the rest is rejected. Before, the rest ran after\nthe commit, outside the transaction.\n\n## Verification\n\n- **Transaction manager unit tests**: 36 new tests in\n`transaction-manager-statements.test.ts`, with fake timers and no\ndatabase. The ones for new behaviour were run against the old manager\nfirst and failed there. The package's 275 tests pass.\n- **Adapter unit tests**: neon (13 pass) and mariadb (51 pass), each new\ntest red on the old adapter. The neon tests use a real `neon.Pool` with\nthe client's `connect`, `query` and `end` stubbed, so they show the pool\ndestroys a connection released with an error. pg's 60 tests pass after\nthe rename.\n- **Functional test**: `rollback rejects the statements an update with\nnested writes has not sent yet` in `interactive-transactions`. It fails\nthe callback as soon as a query event shows the `UPDATE` ran, then\nchecks that the update was rejected with `P2028`, the user is unchanged\nand no post exists. It skips MongoDB, and the remote executor, where\nquery events only arrive with the whole response.\n- **Old code against new, on real databases**: a script with the\nfunctional test's steps and assertions, run five times per build against\nPostgreSQL through `adapter-pg` and MySQL 8 through `adapter-mariadb`.\nWith the transaction manager and `adapter-mariadb` from before this\nchange it fails 5 of 5 on both, with the `late post` row committed. With\nthis change it passes 5 of 5 on both. The same script against the real\n`adapter-better-sqlite3`, with Node's built-in `node:sqlite` standing in\nfor the native module, fails 3 of 3 before and passes 10 of 10 after.\n\n- **Manual QA on real databases**, on PostgreSQL, MySQL 8 and SQLite:\nordinary transactions, a timeout during an operation, an un-awaited\nquery, a commit stuck behind a slow statement, `$disconnect()` during a\ntransaction, nested transactions, and 200 concurrent transactions on a\npool of 5. No hang, leaked connection or stray row. The same load run on\nthe code before this change left 30 stray rows and 66 wrongly renamed\nusers on MySQL.\n\n**Not verified locally:** the functional test itself has only been run\nby CI, because the local runner's database reset goes through Prisma\nMigrate, which refuses to run for an AI agent without the user's\nconsent. SQL Server and CockroachDB were checked by reading their query\nplans, not by running them, and the native `better-sqlite3` module does\nnot build on the local Node version.\n\n## Not in this change\n\n- **Prisma 6.** The fault reported in #29952 is in the Rust engine in\n`prisma/prisma-engines`. Fixing it there needs an engine change and a\n6.19 patch release.\n- **A statement that hangs forever on pg, neon or mariadb.** The driver\nqueues the manager's `ROLLBACK` behind it, as before. Freeing that\nconnection needs a way to tell an adapter to destroy it.\n- **Prisma 8** has its own drivers and needs its own check.\n- **A stale nested client.** A new query through a nested transaction's\nclient, after that nested transaction rolled back, still runs in the\nouter transaction. That is unchanged by this pull request.\n\n## Alternatives considered\n\n- **Guard every adapter and leave the manager alone.** Nine adapters\nwould each carry the same guard, third-party adapters would stay\nexposed, and users would get the driver-level `P1018` where a moment\nlater they get `P2028`.\n- **Run statements under the per-transaction lock.** It stops late\nstatements, but it serialises every statement in a transaction, and a\nhung statement would stop the timeout from even marking the transaction\nclosed.\n- **Reject handles after a nested commit too.** Simpler, but it fails a\nquery the user started on the outer transaction while the nested one was\nopen, which works today.\n- **Wait for running statements with no deadline on rollback.** A hung\nstatement would then mean a rollback that never happens and a\n`$disconnect()` that never returns on the adapters that roll back at\nonce today.\n\nAgent: gimli-22\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n<!-- coderabbit-ai-generated:v1 -->\n\n## Summary by CodeRabbit\n\n* **Bug Fixes**\n* Improved transaction handling across database adapters and the client\nengine. Operations after a transaction closes are rejected, and\nconnections are cleaned up consistently when commits, rollbacks, or\nin-flight statements encounter errors.\n* Improved coordination of nested transactions and running statements,\nincluding handling of timeouts and disconnects. Queries using a\nrolled-back nested transaction now return a specific error.\n* **Documentation**\n* Clarified transaction statement ordering and when transaction\noperations may be called, including how query plans execute statements.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: Claude Fable 5.2 <noreply@anthropic.com>",
+          "timestamp": "2026-11-13T20:14:11+01:00",
+          "tree_id": "21f0785aa553a99b4e72e75a0998e99a7ef00222",
+          "url": "https://github.com/prisma/orm/commit/747ee317e3dc3c3fc1d7621169acb95edfc7a537"
+        },
+        "date": 1794597849804,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 119390,
+            "range": "±1.28%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 113325,
+            "range": "±0.90%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 66325,
+            "range": "±0.80%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 68687,
+            "range": "±0.89%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 22093,
+            "range": "±0.69%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1379364,
+            "range": "±0.49%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 121079,
+            "range": "±0.28%",
+            "unit": "ops/sec",
+            "extra": "100 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 60772,
+            "range": "±0.10%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1021,
+            "range": "±0.73%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.46,
+            "range": "±13.16%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 2.34,
+            "range": "±18.18%",
+            "unit": "ops/sec",
+            "extra": "17 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 0.92,
+            "range": "±15.64%",
+            "unit": "ops/sec",
+            "extra": "10 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 71.04446506500244,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.720467567443848,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 9177,
+            "range": "±12.30%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 6849,
+            "range": "±0.33%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 1671,
+            "range": "±1.17%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 446232,
+            "range": "±0.66%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 223144,
+            "range": "±0.45%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 156672,
+            "range": "±0.27%",
+            "unit": "ops/sec",
+            "extra": "96 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 5235,
+            "range": "±2.72%",
+            "unit": "ops/sec",
+            "extra": "79 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 5917,
+            "range": "±1.98%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 5433,
+            "range": "±1.38%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 5146,
+            "range": "±0.99%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 5361,
+            "range": "±1.23%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 6352,
+            "range": "±1.19%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 3147,
+            "range": "±2.66%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 2659,
+            "range": "±1.24%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1448,
+            "range": "±1.60%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1409,
+            "range": "±1.25%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 8702,
+            "range": "±1.44%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 4275,
+            "range": "±0.94%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 4383,
+            "range": "±1.23%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 3526,
+            "range": "±1.24%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 4140,
+            "range": "±1.31%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count all",
+            "value": 9721,
+            "range": "±1.45%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 8186,
+            "range": "±1.16%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 7799,
+            "range": "±1.33%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 7845,
+            "range": "±1.18%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 3729,
+            "range": "±1.16%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 1930,
+            "range": "±1.15%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 4934,
+            "range": "±1.34%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 6904,
+            "range": "±1.37%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 1816,
+            "range": "±2.23%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 1896,
+            "range": "±1.51%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1081,
+            "range": "±1.18%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1420,
+            "range": "±1.07%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1398,
+            "range": "±1.08%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2327,
+            "range": "±1.47%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 4002,
+            "range": "±1.75%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
           }
         ]
       }
