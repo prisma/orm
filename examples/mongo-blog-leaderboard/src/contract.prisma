@@ -23,7 +23,7 @@ model Post {
   content   String
   kind      String
   authorId  ObjectId
-  createdAt Date
+  createdAt DateTime
   author    User     @relation(fields: [authorId], references: [id])
 
   @@discriminator(kind)

@@ -5,7 +5,7 @@ import {
 } from '@internal/framework-components/authoring';
 import { dataTypeId } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import { mongoScalarAuthoringTypes } from '../src/core/authoring';
+import { mongoScalarAuthoringTypes, mongoScalarTypeConstructors } from '../src/core/authoring';
 import { mongoDescriptorById } from '../src/core/codecs';
 import { mongoBson, mongoJson } from '../src/core/data-types';
 import { mongoTargetDescriptorMeta } from '../src/core/descriptor-meta';
@@ -15,7 +15,6 @@ const expectedScalars = [
   ['String', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['Bool', 'mongo/bool@1'],
-  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
   ['Int64', 'mongo/int64@1'],
@@ -28,7 +27,6 @@ const deprecatedAliases = [
   ['Int', 'Int32'],
   ['Float', 'Double'],
   ['Boolean', 'Bool'],
-  ['DateTime', 'Date'],
 ] as const;
 
 describe('mongoScalarAuthoringTypes', () => {
@@ -69,7 +67,6 @@ describe('mongoScalarAuthoringTypes', () => {
     ['Double', 'double'],
     ['Decimal128', 'decimal'],
     ['Bool', 'bool'],
-    ['Date', 'date'],
     ['ObjectId', 'objectId'],
     ['Binary', 'binData'],
     ['Vector', 'array'],
@@ -123,7 +120,7 @@ describe('mongoScalarAuthoringTypes', () => {
   it('is contributed by the target, beside the temporal type aliases', () => {
     const { temporal, ...scalars } = mongoTargetDescriptorMeta.authoring.type;
     expect({ scalars, temporal: Object.keys(temporal) }).toEqual({
-      scalars: mongoScalarAuthoringTypes,
+      scalars: mongoScalarTypeConstructors,
       temporal: ['CreatedAt', 'UpdatedAt'],
     });
   });

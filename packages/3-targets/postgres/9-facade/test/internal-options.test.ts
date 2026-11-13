@@ -9,6 +9,7 @@ describe('the internal options entry', () => {
       'resolveOptionalPostgresBinding',
       'toDriverCursorOptions',
       'validateCursorOptions',
+      'validateTransactionOptions',
     ];
     expect({
       internal: Object.keys(internalEntry).sort(),

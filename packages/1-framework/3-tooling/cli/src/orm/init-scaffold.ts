@@ -146,6 +146,11 @@ function declaresRuntimeDependencies(parsed: Record<string, unknown> | null): bo
   return value !== null && typeof value === 'object' && Object.keys(value).length > 0;
 }
 
+function declaredPackageType(parsed: Record<string, unknown> | null): string | undefined {
+  const value = parsed?.['type'];
+  return typeof value === 'string' ? value : undefined;
+}
+
 function hasDirectDep(parsed: Record<string, unknown>, name: string): boolean {
   for (const field of ['dependencies', 'devDependencies'] as const) {
     const value = parsed[field];
@@ -295,49 +300,13 @@ function planScaffold(ctx: {
     }
   }
 
-  const tsconfigPath = join(cwd, 'tsconfig.json');
-  if (existsSync(tsconfigPath)) {
-    const existing = readFileSync(tsconfigPath, 'utf-8');
-    let merged: string;
-    try {
-      merged = mergeTsConfig(existing);
-    } catch (error) {
-      if (error instanceof TsConfigParseError) {
-        throw errorInitInvalidTsconfig({ path: 'tsconfig.json', cause: error.message });
-      }
-      throw error;
-    }
-    files.push({
-      path: 'tsconfig.json',
-      content: merged,
-      note: 'Updated tsconfig.json with required compiler options.',
-    });
-  } else {
-    files.push({ path: 'tsconfig.json', content: defaultTsConfig() });
-  }
-
-  const gitignorePath = join(cwd, '.gitignore');
-  const nextGitignore = mergeGitignore(
-    existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf-8') : undefined,
-  );
-  if (nextGitignore !== null) {
-    files.push({ path: '.gitignore', content: nextGitignore });
-  }
-
-  const gitattributesPath = join(cwd, '.gitattributes');
-  const nextGitattributes = mergeGitattributes(
-    existsSync(gitattributesPath) ? readFileSync(gitattributesPath, 'utf-8') : undefined,
-    requiredGitattributesLines(outputDir, inputs.target),
-  );
-  if (nextGitattributes !== null) {
-    files.push({ path: '.gitattributes', content: nextGitattributes });
-  }
-
   const manifestPath = join(cwd, 'package.json');
   const manifestExisted = existsSync(manifestPath);
   const synthesiseManifest = !manifestExisted && !hasProjectManifest(cwd);
   let parsedManifest: Record<string, unknown> | null = null;
   let scriptsRewritten: readonly string[] = [];
+  let manifestContent: string | null = null;
+  let packageType: string | undefined;
   if (manifestExisted || synthesiseManifest) {
     const raw = manifestExisted
       ? readFileSync(manifestPath, 'utf-8')
@@ -383,8 +352,9 @@ function planScaffold(ctx: {
       working = withType;
       changed = true;
     }
+    packageType = withType !== null ? 'module' : declaredPackageType(parsedManifest);
     if (changed) {
-      files.push({ path: 'package.json', content: working });
+      manifestContent = working;
     }
     warnings.push(...scriptWarnings);
     if (typeWarning !== null) {
@@ -395,6 +365,48 @@ function planScaffold(ctx: {
         'No package.json found in the target directory; created a minimal one. Edit `name` / `version` to taste.',
       );
     }
+  }
+
+  const tsconfigPath = join(cwd, 'tsconfig.json');
+  if (existsSync(tsconfigPath)) {
+    const existing = readFileSync(tsconfigPath, 'utf-8');
+    let merged: string;
+    try {
+      merged = mergeTsConfig(existing, packageType);
+    } catch (error) {
+      if (error instanceof TsConfigParseError) {
+        throw errorInitInvalidTsconfig({ path: 'tsconfig.json', cause: error.message });
+      }
+      throw error;
+    }
+    files.push({
+      path: 'tsconfig.json',
+      content: merged,
+      note: 'Updated tsconfig.json with required compiler options.',
+    });
+  } else {
+    files.push({ path: 'tsconfig.json', content: defaultTsConfig() });
+  }
+
+  const gitignorePath = join(cwd, '.gitignore');
+  const nextGitignore = mergeGitignore(
+    existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf-8') : undefined,
+  );
+  if (nextGitignore !== null) {
+    files.push({ path: '.gitignore', content: nextGitignore });
+  }
+
+  const gitattributesPath = join(cwd, '.gitattributes');
+  const nextGitattributes = mergeGitattributes(
+    existsSync(gitattributesPath) ? readFileSync(gitattributesPath, 'utf-8') : undefined,
+    requiredGitattributesLines(outputDir, inputs.target),
+  );
+  if (nextGitattributes !== null) {
+    files.push({ path: '.gitattributes', content: nextGitattributes });
+  }
+
+  if (manifestContent !== null) {
+    files.push({ path: 'package.json', content: manifestContent });
   }
 
   // The README describes a fresh scaffold; a Prisma 7 project has its own.

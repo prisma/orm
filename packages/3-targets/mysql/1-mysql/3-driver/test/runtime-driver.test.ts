@@ -155,6 +155,96 @@ async function connected(options?: Parameters<typeof mysqlRuntimeDriver.create>[
   return driver;
 }
 
+describe('per-transaction isolation setup', () => {
+  it.each([
+    [undefined, undefined],
+    [{}, undefined],
+    [{ isolationLevel: undefined }, undefined],
+    [{ isolationLevel: 'ReadUncommitted' }, 'READ UNCOMMITTED'],
+    [{ isolationLevel: 'ReadCommitted' }, 'READ COMMITTED'],
+    [{ isolationLevel: 'RepeatableRead' }, 'REPEATABLE READ'],
+    [{ isolationLevel: 'Serializable' }, 'SERIALIZABLE'],
+  ] as const)('sets %j only for this start', async (start, isolation) => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    connection.query.mockClear();
+    await (await held.beginTransaction(start)).rollback();
+    expect(connection.query.mock.calls).toEqual(
+      isolation === undefined ? [] : [[`SET TRANSACTION ISOLATION LEVEL ${isolation}`]],
+    );
+    expect(connection.beginTransaction).toHaveBeenCalledTimes(1);
+    if (isolation !== undefined) {
+      expect(connection.query.mock.invocationCallOrder[0]).toBeLessThan(
+        connection.beginTransaction.mock.invocationCallOrder[0]!,
+      );
+    }
+    await held.release();
+    await driver.close();
+  });
+
+  it.each([null, false, 12, 'read committed', 'Serializable; SELECT 1'])(
+    'rejects %j before transaction SQL',
+    async (isolationLevel) => {
+      const driver = await connected();
+      const held = await driver.acquireConnection();
+      connection.query.mockClear();
+      await expect(
+        held.beginTransaction({ isolationLevel: isolationLevel as string }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
+      expect(connection.query).not.toHaveBeenCalled();
+      expect(connection.beginTransaction).not.toHaveBeenCalled();
+      await held.release();
+      await driver.close();
+    },
+  );
+
+  it('keeps SET and BEGIN under the same query lock', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    let resolveGate = () => {};
+    let resolveEntered = () => {};
+    const gate = new Promise<void>((resolve) => {
+      resolveGate = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      resolveEntered = resolve;
+    });
+    connection.query.mockClear();
+    connection.query.mockImplementationOnce(async () => {
+      resolveEntered();
+      await gate;
+      return [];
+    });
+    const opening = held.beginTransaction({ isolationLevel: 'ReadCommitted' });
+    await entered;
+    const statement = held.execute({ sql: 'UPDATE t SET id = 1' });
+    expect(connection.query.mock.calls).toEqual([
+      ['SET TRANSACTION ISOLATION LEVEL READ COMMITTED'],
+    ]);
+    expect(connection.beginTransaction).not.toHaveBeenCalled();
+    resolveGate();
+    const tx = await opening;
+    await statement;
+    expect(connection.beginTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+      connection.query.mock.invocationCallOrder[1]!,
+    );
+    await tx.rollback();
+    await held.release();
+    await driver.close();
+  });
+
+  it('does not BEGIN when isolation setup fails', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    const failure = new Error('SET failed');
+    connection.query.mockRejectedValueOnce(failure);
+    await expect(held.beginTransaction({ isolationLevel: 'ReadCommitted' })).rejects.toBe(failure);
+    expect(connection.beginTransaction).not.toHaveBeenCalled();
+    await held.destroy().catch(() => undefined);
+    await driver.close();
+  });
+});
+
 const streaming = { stream: true } as const;
 
 const valued = { sql: 'SELECT n FROM t WHERE n > ?1', params: [0] };

@@ -14,6 +14,8 @@ Applications receive it as an exact-pinned dependency of `@prisma/orm-mongo`; ap
 
 A bare namespace import (e.g. `@prisma/orm-target-mongo/adapter`) aggregates that layer's full surface; deeper paths select individual modules.
 
+`temporal-polyfill` is a required peer dependency. Only the `/target/control` entry, and the `/target` aggregate that includes it, load it, as a fallback `Temporal` when the runtime has none; no entry an application loads at run time does. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Responsibilities
 
 Everything MongoDB-target-specific: adapter wiring, codec registration, and the wire connection. Shared Mongo semantics live in `@prisma/orm-family-mongo`.

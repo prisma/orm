@@ -74,7 +74,7 @@ In addition to the canonical slice DoD:
 ### PR-side items
 
 - [ ] Linear issue moved to `Ready to be merged` (the team's terminal-before-merge state).
-- [ ] PR title carries Linear ticket prefix (e.g. `tml-XXXX:`).
+- [ ] PR title is in conventional-commit form (`type(scope): description`); the Linear ticket is in the description.
 - [ ] PR description follows `drive-pr-description` shape (decision-led, narrative).
 - [ ] PR linked to its Linear issue via GitHub integration (auto-close on merge works).
 - [ ] No `projects/` references in long-lived files added by the slice (per the doc-maintenance rule; grep gate in [`grep-library.md`](./grep-library.md)).

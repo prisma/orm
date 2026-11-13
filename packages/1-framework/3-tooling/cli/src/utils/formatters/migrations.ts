@@ -125,7 +125,8 @@ export interface MigrationCommandResult {
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef?: { readonly name: string; readonly hash: string } | null;
   readonly summary: string;
-  readonly warnings?: readonly MigrationPlannerConflict[];
+  /** What the planner flagged without refusing to plan it. */
+  readonly plannerWarnings?: readonly MigrationPlannerConflict[];
   readonly timings: {
     readonly total: number;
   };

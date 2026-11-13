@@ -58,7 +58,7 @@ describe('the MongoDB type helpers', () => {
     ['Double', 'mongo/double@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
-    ['Date', 'mongo/date@1'],
+    ['DateTime', 'mongo/date@1'],
     ['Int64', 'mongo/int64@1'],
     ['Int64Number', 'mongo/int64Number@1'],
     ['Decimal128', 'mongo/decimal128@1'],
@@ -74,9 +74,7 @@ describe('the MongoDB type helpers', () => {
   );
 
   it('leave out a constructor PSL keeps only as a deprecated name', () => {
-    expect(['Int', 'Float', 'Boolean', 'DateTime', 'Int32'].filter((name) => name in type)).toEqual(
-      ['Int32'],
-    );
+    expect(['Int', 'Float', 'Boolean', 'Int32'].filter((name) => name in type)).toEqual(['Int32']);
   });
 
   it('give a vector its length as a type parameter', () => {

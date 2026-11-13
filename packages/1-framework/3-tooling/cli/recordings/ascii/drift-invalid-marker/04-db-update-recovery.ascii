@@ -206,7 +206,7 @@ prisma db update → Update your database schema to match your contract
 │
 ■  ✖ Database schema does not satisfy contract (4 failures) (PN-RUN-3020)
 │    Why: The resulting database schema does not satisfy the destination contract.
-│    Fix: Inspect the reported conflict, reconcile schema drift if needed, then re-run `prisma db update`
+│    Fix: Resolve the cause the failure names, then re-run `prisma db update`
 │    Issues (showing 1 of 1):
 │      - [missing_column] Column "user"."email" is missing from database
 >

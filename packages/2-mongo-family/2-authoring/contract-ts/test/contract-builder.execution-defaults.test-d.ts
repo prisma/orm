@@ -43,11 +43,11 @@ const mongoTargetPack = {
 
 test('a field a generator fills can be optional but not a list', () => {
   defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
-    field.scalar(type.Date()).onCreate(gen.now()).optional();
+    field.scalar(type.DateTime()).onCreate(gen.now()).optional();
     // @ts-expect-error onCreate and onUpdate fill the field, so it cannot be a list
-    field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()).many();
-    field.scalar(type.Date()).onUpdate(gen.now()).optional();
-    field.scalar(type.Date()).optional();
+    field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()).many();
+    field.scalar(type.DateTime()).onUpdate(gen.now()).optional();
+    field.scalar(type.DateTime()).optional();
     field.scalar(type.String()).optional().many();
     return { models: {} };
   });
@@ -55,7 +55,7 @@ test('a field a generator fills can be optional but not a list', () => {
 
 test('the type error for many() on a field that generates a value says why', () => {
   defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
-    const createdAt = field.scalar(type.Date()).onCreate(gen.now());
+    const createdAt = field.scalar(type.DateTime()).onCreate(gen.now());
     expectTypeOf<
       ThisParameterType<typeof createdAt.many>
     >().toEqualTypeOf<'This field generates a value on write, so it cannot be a list'>();
@@ -72,7 +72,7 @@ test('a generated field still satisfies the widest FieldBuilder constraint', () 
     ExecutionMutationDefaultPhases | undefined
   >;
   defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field, gen, type }) => {
-    expectTypeOf(field.scalar(type.Date()).onCreate(gen.now())).toExtend<WideFieldBuilder>();
+    expectTypeOf(field.scalar(type.DateTime()).onCreate(gen.now())).toExtend<WideFieldBuilder>();
     expectTypeOf(field.scalar(type.String()).optional()).toExtend<WideFieldBuilder>();
     return { models: {} };
   });
@@ -88,8 +88,8 @@ test('the built contract types its execution defaults with the collection and fi
           fields: {
             _id: field.scalar(type.ObjectId()),
             title: field.scalar(type.String()),
-            createdAt: field.scalar(type.Date()).onCreate(gen.now()),
-            touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
+            createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
+            touchedAt: field.scalar(type.DateTime()).onUpdate(gen.now()),
           },
         }),
       },
@@ -125,7 +125,10 @@ test('the built contract types an execution default ref with the stored name of 
           collection: 'posts',
           fields: {
             id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
-            createdAt: field.scalar(type.Date()).onCreate(gen.now()).mongo({ field: 'created_at' }),
+            createdAt: field
+              .scalar(type.DateTime())
+              .onCreate(gen.now())
+              .mongo({ field: 'created_at' }),
           },
         }),
       },

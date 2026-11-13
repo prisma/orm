@@ -237,7 +237,7 @@ function updateDocument(inputs: {
           addedNamespaces: value.namespaces?.added ?? [],
         }
       : {}),
-    ...(inputs.plannerWarnings.length > 0 ? { warnings: inputs.plannerWarnings } : {}),
+    ...(inputs.plannerWarnings.length > 0 ? { plannerWarnings: inputs.plannerWarnings } : {}),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
     summary: value.summary,

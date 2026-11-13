@@ -1,0 +1,167 @@
+import {
+  ColumnRef,
+  DeleteAst,
+  ProjectionItem,
+  SelectAst,
+  TableSource,
+} from '@internal/sql-relational-core/ast';
+import { describe, expect, it } from 'vitest';
+import { Delete } from '../../src/mutation-graph/delete';
+import { Find } from '../../src/mutation-graph/find';
+import { Graph } from '../../src/mutation-graph/graph';
+import { Insert } from '../../src/mutation-graph/insert';
+import { State, StateEdge } from '../../src/mutation-graph/state';
+import { UnionAll } from '../../src/mutation-graph/union-all';
+import { createCollectionFor } from '../collection-fixtures';
+import { cascadeContract } from './cascade-contract';
+import { printGraph } from './print-graph';
+import {
+  addFiltered,
+  addWithState,
+  columnMappings,
+  findUsers,
+  findUsersWith,
+  insertInto,
+  insertOwner,
+  newGraph,
+  newGraphWithoutReturning,
+  recordingRun,
+  updateUsers,
+} from './statements';
+
+const users = { namespaceId: 'public', tableName: 'users' };
+const sameId = columnMappings('users', 'users', [['id', 'id']]);
+const withState = { state: true };
+
+function cascadeTable(name: string): TableSource {
+  return TableSource.named(name, undefined, 'public');
+}
+
+function findIn(name: string): Find {
+  return new Find(
+    SelectAst.from(cascadeTable(name)).withProjection([
+      ProjectionItem.of('id', ColumnRef.of(name, 'id')),
+    ]),
+  );
+}
+
+describe('table state in the graph', () => {
+  it('adds the first State of a table in front of the first node that reads it', () => {
+    const graph = newGraph();
+    graph.setResult(addWithState(graph, findUsers()));
+
+    expect(printGraph(graph, withState)).toBe(
+      ['n1 State users', 'n2 Find users <- state n1', 'result: n2'].join('\n'),
+    );
+  });
+
+  it('gives a node one state edge for each table its statement reads', () => {
+    const { includes, tables } = createCollectionFor('User').collection.include('posts').state;
+    const graph = newGraph();
+    addWithState(graph, findUsersWith({ includes, tables }));
+
+    expect(printGraph(graph, withState)).toBe(
+      [
+        'n1 State users',
+        'n2 State posts',
+        'n3 Find users <- state n1, state n2',
+        'result: none',
+      ].join('\n'),
+    );
+  });
+
+  it('adds a new State of the table a write changes, which later readers read', () => {
+    const graph = newGraphWithoutReturning();
+    const find = addWithState(graph, findUsers());
+    addFiltered(graph, updateUsers({ name: 'Ada' }), [find, sameId]);
+    addWithState(graph, findUsers());
+
+    expect(printGraph(graph, withState)).toBe(
+      [
+        'n1 State users',
+        'n2 Find users <- state n1',
+        "n3 Update users set name = 'Ada' <- FilterData n2 (id->id), state n1",
+        'n4 State users <- state n3',
+        'n5 Find users <- state n4',
+        'result: none',
+      ].join('\n'),
+    );
+  });
+
+  it('adds a State only for the target of an insert', () => {
+    const graph = newGraph();
+    addWithState(graph, new Insert([insertInto('posts', [{ title: 'Hello' }])], insertOwner));
+
+    expect(printGraph(graph, withState)).toBe(
+      [
+        'n1 State posts',
+        'n2 Insert posts <- state n1',
+        'n3 State posts <- state n2',
+        'result: none',
+      ].join('\n'),
+    );
+  });
+
+  it('adds a State for every table a delete changes through its foreign keys', () => {
+    const graph = new Graph(cascadeContract);
+    const find = addWithState(graph, findIn('Org'));
+    const orgId = ProjectionItem.of('id', ColumnRef.of('Org', 'id'));
+    const del = addFiltered(graph, new Delete(DeleteAst.from(cascadeTable('Org'))), [
+      find,
+      [[orgId, orgId]],
+    ]);
+    graph.setResult(del);
+    addWithState(graph, findIn('Member'));
+
+    expect(printGraph(graph, withState)).toBe(
+      [
+        'n1 State Org',
+        'n2 Find Org <- state n1',
+        'n3 Delete Org <- FilterData n2 (id->id), state n1',
+        'n4 State Org <- state n3',
+        'n5 State Team <- state n3',
+        'n6 State Member <- state n3',
+        'n7 State Badge <- state n3',
+        'n8 Find Member <- state n6',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('adds no state to a node that runs no statement', () => {
+    const graph = newGraph();
+    const union = graph.add(new UnionAll(), {});
+
+    expect(graph.inputsOf(union)).toEqual({ rows: [] });
+    expect(graph.nodes()).toHaveLength(1);
+  });
+
+  it('prints the graph without state by default', () => {
+    const graph = newGraphWithoutReturning();
+    const find = addWithState(graph, findUsers());
+    graph.setResult(addFiltered(graph, updateUsers({ name: 'Ada' }), [find, sameId]));
+
+    expect(printGraph(graph)).toBe(
+      [
+        'n1 Find users',
+        "n2 Update users set name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n2',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('State', () => {
+  it('runs no statement and gives no row', async () => {
+    const run = recordingRun();
+
+    expect(await new State(users).execute({ write: null }, run)).toEqual([]);
+    expect(await new State(users).execute({ write: [[undefined]] }, run)).toEqual([]);
+    expect(run).toMatchObject({ queried: [], executed: [] });
+  });
+
+  it('is frozen, and so is its edge', () => {
+    expect(Object.isFrozen(new State(users))).toBe(true);
+    expect(Object.isFrozen(new StateEdge(newGraph().add(new UnionAll(), {}), users))).toBe(true);
+  });
+});

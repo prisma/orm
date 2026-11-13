@@ -60,6 +60,9 @@ const storedMembers: Readonly<
   'mongo/bool': { member: true, other: false },
   'mongo/objectid': { member: '65a1b2c3d4e5f6a7b8c9d0e1', other: '65a1b2c3d4e5f6a7b8c9d0e2' },
   'mongo/date': { member: '2024-01-02T03:04:05.500Z', other: '2024-01-03T03:04:05.500Z' },
+  'mongo/calendar-date': { member: '2024-02-29', other: '2024-03-01' },
+  'mongo/time': { member: '09:30:00.500', other: '10:30:00.000' },
+  'mongo/duration': { member: 'PT1H30M', other: 'P1D' },
   'mongo/vector': { member: [1, 2], other: [2, 1] },
   'mongo/int64': { member: '9007199254740991', other: '1' },
   'mongo/decimal128': { member: '1.5', other: '2.5' },
@@ -70,6 +73,18 @@ const storedMembers: Readonly<
 const buildRefusals: Readonly<Record<string, readonly string[]>> = {
   'mongo/objectId@1': [
     'enum "MongoObjectId1" @@type codec "mongo/objectId@1" stores BSON type objectId, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',
+  ],
+  'mongo/date-instant@1': [
+    'enum "MongoDateInstant1" @@type codec "mongo/date-instant@1" stores BSON type date, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',
+  ],
+  'mongo/date-instant-string@1': [
+    'enum "MongoDateInstantString1" @@type codec "mongo/date-instant-string@1" stores BSON type date, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',
+  ],
+  'mongo/date-string@1': [
+    'enum "MongoDateString1" @@type codec "mongo/date-string@1" stores BSON type date, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',
+  ],
+  'mongo/date-temporal@1': [
+    'enum "MongoDateTemporal1" @@type codec "mongo/date-temporal@1" stores BSON type date, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',
   ],
   'mongo/date@1': [
     'enum "MongoDate1" @@type codec "mongo/date@1" stores BSON type date, which a collection validator cannot list as an enum value. Use a codec whose BSON type is string, int, double, bool, object or array.',

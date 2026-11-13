@@ -128,7 +128,7 @@ describe('mongo defineContract refuses what a collection validator cannot descri
     it.each([
       ['a string', field.scalar(type.String()), { bsonType: 'string' }],
       ['an int', field.scalar(type.Int32()), { bsonType: 'int' }],
-      ['a date', field.scalar(type.Date()), { bsonType: 'date' }],
+      ['a date', field.scalar(type.DateTime()), { bsonType: 'date' }],
       ['bytes', field.scalar(type.Binary()), { bsonType: 'binData' }],
     ])(
       'accepts a root model whose _id holds %s, and validates it as such',

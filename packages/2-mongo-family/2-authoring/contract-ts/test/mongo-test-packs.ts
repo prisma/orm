@@ -22,7 +22,7 @@ export const mongoTestScalarTypes = {
   String: scalar('mongo/string@1'),
   Int32: scalar('mongo/int32@1'),
   Bool: scalar('mongo/bool@1'),
-  Date: scalar('mongo/date@1'),
+  DateTime: scalar('mongo/date@1'),
   ObjectId: scalar('mongo/objectId@1'),
   Double: scalar('mongo/double@1'),
   Int64: scalar('mongo/int64@1'),
@@ -34,7 +34,6 @@ export const mongoTestScalarTypes = {
   Int: { ...scalar('mongo/int32@1'), deprecated: { replacement: 'Int32' } },
   Float: { ...scalar('mongo/double@1'), deprecated: { replacement: 'Double' } },
   Boolean: { ...scalar('mongo/bool@1'), deprecated: { replacement: 'Bool' } },
-  DateTime: { ...scalar('mongo/date@1'), deprecated: { replacement: 'Date' } },
   Vector: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'mongo/int32', name: 'length', optional: true }],

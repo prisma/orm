@@ -1,43 +1,43 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import {
-  CaseExpr,
-  LiteralExpr,
-  OrderByItem,
-  type ProjectionItem,
-  type SelectAst,
-} from '@internal/sql-relational-core/ast';
+import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
 import { ormError } from '../orm-errors';
 import { combineWhereExprs } from '../where-utils';
 import type { WrittenRowOwner } from '../written-keys';
-import type { ColumnPair, StorageRow } from './edge';
+import type { ColumnMapping, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
 import { anyOf, withColumns } from './filtered-statement';
-import type { Executed, OutputsOf, Run } from './node';
+import type { Executed, OutputsOf, Run, StatementAst } from './node';
+import { type Requires, requirementUnmet } from './requires';
 import type { Rows } from './rows';
 import { rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 import { StatementNode } from './statement-node';
 
-type Keyed = { keys: Rows };
+type Keyed = { keys: Rows; state: StateEdge[]; requires: Requires[] };
 
-/** Keys per read-back statement. The `ORDER BY CASE` costs the database the number of keys times the number of rows it returns, so the keys are read in chunks of this size. */
 const KEYS_PER_STATEMENT = 500;
 
 /**
- * Reads the rows an insert wrote back by their keys, for a database without `RETURNING`, in the order the insert wrote them, and fails when it finds fewer rows than keys, so the transaction rolls back. It reads at most 500 keys per statement.
+ * Reads the rows a write wrote back by their keys, for a database without `RETURNING`, in no particular order, and fails when it finds fewer rows than keys, so the transaction rolls back. It reads at most 500 keys per statement.
  *
- * A `Find` with a `FilterData` edge cannot do this: the edge hands the `Find` conditions, not the key values, so the `Find` cannot order the rows by key or count the keys. The database does both comparisons, with its own rules for collation and precision: each key's condition both selects its row and, in an `ORDER BY CASE`, places it.
+ * A `Find` with a `FilterData` edge reads the same rows, but it neither checks that every key was found nor splits the keys across statements.
  */
 export class FindByKeys extends StatementNode<Keyed> {
+  readonly slots = { keys: 'one', state: 'list', requires: 'list' } as const;
   readonly ast: SelectAst;
-  readonly keyColumns: readonly ColumnPair[];
+  readonly keyColumns: readonly ColumnMapping[];
   readonly owner: WrittenRowOwner;
 
-  constructor(ast: SelectAst, keyColumns: readonly ColumnPair[], owner: WrittenRowOwner) {
+  constructor(ast: SelectAst, keyColumns: readonly ColumnMapping[], owner: WrittenRowOwner) {
     super();
     this.ast = ast;
     this.keyColumns = Object.freeze([...keyColumns]);
     this.owner = owner;
     Object.freeze(this);
+  }
+
+  get statements(): readonly StatementAst[] {
+    return [this.ast];
   }
 
   get returns(): readonly ProjectionItem[] {
@@ -46,7 +46,7 @@ export class FindByKeys extends StatementNode<Keyed> {
 
   override execute(inputs: OutputsOf<Keyed>, run: Run): Executed {
     const keys = inputs.keys;
-    if (keys.length === 0) {
+    if (requirementUnmet(inputs.requires) || keys.length === 0) {
       return rowsResult([]);
     }
     const chunks = Array.from({ length: Math.ceil(keys.length / KEYS_PER_STATEMENT) }, (_, index) =>
@@ -73,19 +73,7 @@ export class FindByKeys extends StatementNode<Keyed> {
   #statementFor(keys: readonly StorageRow[]): SelectAst {
     const conditions = keys.map((key) => keyCondition(this.keyColumns, key));
     const existing = this.ast.where === undefined ? [] : [this.ast.where];
-    const found = this.ast.withWhere(combineWhereExprs([...existing, anyOf(conditions)]));
-    return conditions.length === 1
-      ? found
-      : found.withOrderBy([
-          OrderByItem.asc(
-            CaseExpr.of(
-              conditions.map((condition, position) => ({
-                condition,
-                value: LiteralExpr.of(position),
-              })),
-            ),
-          ),
-        ]);
+    return this.ast.withWhere(combineWhereExprs([...existing, anyOf(conditions)]));
   }
 
   override withReturning(columns: readonly ProjectionItem[]): FindByKeys {

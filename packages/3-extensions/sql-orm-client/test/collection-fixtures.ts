@@ -2,6 +2,7 @@ import { type Contract, soleDomainNamespaceId } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { Collection } from '../src/collection';
+import type { RelatedCollection } from '../src/relation-mutations';
 import type { MockRuntime, TestContract } from './helpers';
 import {
   createMockRuntime,
@@ -39,6 +40,14 @@ export function createCollectionFor<ModelName extends TestModelName>(
     collection,
     runtime,
   };
+}
+
+export function relatedCollectionOf(
+  context: ExecutionContext<Contract<SqlStorage>> = getTestContext(),
+): RelatedCollection {
+  const runtime = createMockRuntime();
+  return (relation) =>
+    new Collection({ runtime, context }, relation.to, { namespaceId: relation.toNamespace });
 }
 
 export function createCollection() {

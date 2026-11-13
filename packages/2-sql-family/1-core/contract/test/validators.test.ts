@@ -847,11 +847,11 @@ describe('SQL contract validators', () => {
 
     it('rejects an N:M relation whose through.parentColumns and on.localFields differ in length', () => {
       const c = manyToManyContract({
-        on: { localFields: [], targetFields: ['user_id'] },
-        through: consistentThrough,
+        on: { localFields: ['id'], targetFields: ['user_id'] },
+        through: { ...consistentThrough, parentColumns: ['user_id', 'user_id'] },
       });
       expect(() => validateSqlContractFully(c)).toThrow(
-        /through\.parentColumns \(1\) with on\.localFields \(0\) of differing length/,
+        /through\.parentColumns \(2\) with on\.localFields \(1\) of differing length/,
       );
     });
 

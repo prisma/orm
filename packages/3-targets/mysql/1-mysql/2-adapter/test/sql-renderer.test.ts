@@ -664,3 +664,172 @@ describe('MySQL lowering refusals', () => {
     expect(() => sqlOf(ast)).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }));
   });
 });
+
+describe('MySQL lowering of a statement embedded in raw SQL', () => {
+  const user = TableSource.named('user');
+  const selectUsers = (where: ParamRef) =>
+    fromUser
+      .withProjection([ProjectionItem.of('id', id), ProjectionItem.of('email', email)])
+      .withWhere(BinaryExpr.gt(id, where));
+  const embeddedSelectSql =
+    'SELECT `user`.`id` AS `id`, `user`.`email` AS `email` FROM `user` WHERE `user`.`id` > ?1';
+
+  it('splices a select after INSERT INTO without parentheses', () => {
+    expect(
+      lower(
+        RawQueryAst.affectedCount([
+          'INSERT INTO archive (id, email) ',
+          selectUsers(ParamRef.of(5)),
+          '',
+        ]),
+      ),
+    ).toEqual({
+      sql: `INSERT INTO archive (id, email) ${embeddedSelectSql}`,
+      params: [{ kind: 'literal', value: 5 }],
+    });
+  });
+
+  it('splices a select into a CTE body', () => {
+    expect(
+      sqlOf(
+        RawQueryAst.affectedCount([
+          'WITH x AS (',
+          selectUsers(ParamRef.of(5)),
+          ') SELECT id FROM x',
+        ]),
+      ),
+    ).toBe(`WITH x AS (${embeddedSelectSql}) SELECT id FROM x`);
+  });
+
+  it('splices a multi-column select as a derived table', () => {
+    expect(
+      sqlOf(RawQueryAst.affectedCount(['SELECT * FROM (', selectUsers(ParamRef.of(5)), ') AS t'])),
+    ).toBe(`SELECT * FROM (${embeddedSelectSql}) AS t`);
+  });
+
+  it('numbers params before, inside and after the embedded select in template order', () => {
+    expect(
+      lower(
+        RawQueryAst.affectedCount([
+          'WITH n AS (SELECT ',
+          ParamRef.of(1),
+          ' AS v) SELECT * FROM (',
+          selectUsers(ParamRef.of(2)),
+          ' AND `user`.`id` < ',
+          ParamRef.of(3),
+          ') AS t',
+        ]),
+      ),
+    ).toEqual({
+      sql: 'WITH n AS (SELECT ?1 AS v) SELECT * FROM (SELECT `user`.`id` AS `id`, `user`.`email` AS `email` FROM `user` WHERE `user`.`id` > ?2 AND `user`.`id` < ?3) AS t',
+      params: [
+        { kind: 'literal', value: 1 },
+        { kind: 'literal', value: 2 },
+        { kind: 'literal', value: 3 },
+      ],
+    });
+  });
+
+  it('renders a select part inside a RawExpr in expression position', () => {
+    const exists = new RawExpr({
+      parts: ['EXISTS (', selectUsers(ParamRef.of(2)), ')'],
+      returns: { codecId: 'mysql/bool@1', nullable: false },
+    });
+    expect(
+      lower(selectId.withWhere(AndExpr.of([BinaryExpr.eq(email, ParamRef.of('a@b.c')), exists]))),
+    ).toEqual({
+      sql: 'SELECT `user`.`id` AS `id` FROM `user` WHERE (`user`.`email` = ?1 AND EXISTS (SELECT `user`.`id` AS `id`, `user`.`email` AS `email` FROM `user` WHERE `user`.`id` > ?2))',
+      params: [
+        { kind: 'literal', value: 'a@b.c' },
+        { kind: 'literal', value: 2 },
+      ],
+    });
+  });
+
+  it.each([
+    [
+      'an insert',
+      InsertAst.into(user)
+        .withRows([{ email: ParamRef.of('a@b.c') }])
+        .withReturning([ProjectionItem.of('id', id)]),
+    ],
+    [
+      'an update',
+      UpdateAst.table(user)
+        .withSet({ email: ParamRef.of('a@b.c') })
+        .withReturning([ProjectionItem.of('id', id)]),
+    ],
+    ['a delete', DeleteAst.from(user).withReturning([ProjectionItem.of('id', id)])],
+  ])('refuses %s with RETURNING, which MySQL lacks', (_name, ast) => {
+    expect(() => sqlOf(RawQueryAst.affectedCount(['WITH x AS (', ast, ') SELECT 1']))).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_UNSUPPORTED',
+        meta: expect.objectContaining({ feature: 'returning' }),
+      }),
+    );
+  });
+
+  it('refuses an embedded select that builds an ordered array, as for any non-select statement', () => {
+    const titles = ColumnRef.of('rows', 'title');
+    const ordered = fromUser.withProjection([
+      ProjectionItem.of(
+        'v',
+        JsonArrayAggExpr.of(new NativeJsonValueProjection(titles), 'null', [
+          OrderByItem.asc(titles),
+        ]),
+      ),
+    ]);
+    expect(() => sqlOf(RawQueryAst.affectedCount(['SELECT * FROM (', ordered, ') AS t']))).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_UNSUPPORTED',
+        meta: expect.objectContaining({ feature: 'ordered-array-outside-select' }),
+      }),
+    );
+  });
+});
+
+describe('MySQL lowering of a row value IN a subquery', () => {
+  const rowValueInSubquery = SelectAst.from(TableSource.named('tag'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+    .withWhere(
+      BinaryExpr.in(
+        ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+        SubqueryExpr.of(
+          SelectAst.from(TableSource.named('user_tags', 'ut'))
+            .withProjection([
+              ProjectionItem.of('tenant_id', ColumnRef.of('ut', 'tenant_id')),
+              ProjectionItem.of('tag_id', ColumnRef.of('ut', 'tag_id')),
+            ])
+            .withWhere(BinaryExpr.eq(ColumnRef.of('ut', 'user_id'), LiteralExpr.of(1))),
+        ),
+      ),
+    );
+
+  it('renders the row value and the subquery', () => {
+    expect(sqlOf(rowValueInSubquery)).toBe(
+      'SELECT `tag`.`id` AS `id` FROM `tag` WHERE (`tag`.`tenant_id`, `tag`.`id`) IN (SELECT `ut`.`tenant_id` AS `tenant_id`, `ut`.`tag_id` AS `tag_id` FROM `user_tags` AS `ut` WHERE `ut`.`user_id` = 1)',
+    );
+  });
+
+  it('refuses a subquery whose columns do not match the row value', () => {
+    const ast = SelectAst.from(TableSource.named('tag'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+      .withWhere(
+        BinaryExpr.in(
+          ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+          SubqueryExpr.of(
+            SelectAst.from(TableSource.named('user_tags')).withProjection([
+              ProjectionItem.of('tag_id', ColumnRef.of('user_tags', 'tag_id')),
+            ]),
+          ),
+        ),
+      );
+
+    expect(() => lower(ast)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: 'A subquery compared with a row value of 2 columns must project 2 columns',
+      }),
+    );
+  });
+});

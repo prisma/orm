@@ -1,0 +1,5 @@
+model Date {
+  id       ObjectId  @id @map("_id")
+  day      Int32
+  bookings Booking[]
+}

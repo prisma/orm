@@ -1,0 +1,389 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "orders": {
+      "model": "Order",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Order": {
+            "fields": {
+              "closesAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAtS": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAtT": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAtTime": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAtTimeT": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdOn": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdOnT": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "deliverBy": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "lasts": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/duration-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "opensAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "paidAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "settledAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant@1",
+                  "kind": "scalar"
+                }
+              },
+              "shipBy": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "shippedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "orders",
+              "fields": {
+                "closesAt": {
+                  "field": "closesAt"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "createdAtS": {
+                  "field": "createdAtS"
+                },
+                "createdAtT": {
+                  "field": "createdAtT"
+                },
+                "createdAtTime": {
+                  "field": "createdAtTime"
+                },
+                "createdAtTimeT": {
+                  "field": "createdAtTimeT"
+                },
+                "createdOn": {
+                  "field": "createdOn"
+                },
+                "createdOnT": {
+                  "field": "createdOnT"
+                },
+                "deliverBy": {
+                  "field": "deliverBy"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "label": {
+                  "field": "label"
+                },
+                "lasts": {
+                  "field": "lasts"
+                },
+                "opensAt": {
+                  "field": "opensAt"
+                },
+                "paidAt": {
+                  "field": "paidAt"
+                },
+                "settledAt": {
+                  "field": "settledAt"
+                },
+                "shipBy": {
+                  "field": "shipBy"
+                },
+                "shippedAt": {
+                  "field": "shippedAt"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "orders": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "closesAt": {
+                      "bsonType": "string"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "createdAtS": {
+                      "bsonType": "date"
+                    },
+                    "createdAtT": {
+                      "bsonType": "date"
+                    },
+                    "createdAtTime": {
+                      "bsonType": "string"
+                    },
+                    "createdAtTimeT": {
+                      "bsonType": "string"
+                    },
+                    "createdOn": {
+                      "bsonType": "date"
+                    },
+                    "createdOnT": {
+                      "bsonType": "date"
+                    },
+                    "deliverBy": {
+                      "bsonType": "date"
+                    },
+                    "label": {
+                      "bsonType": "string"
+                    },
+                    "lasts": {
+                      "bsonType": "string"
+                    },
+                    "opensAt": {
+                      "bsonType": "string"
+                    },
+                    "paidAt": {
+                      "bsonType": "date"
+                    },
+                    "settledAt": {
+                      "bsonType": "date"
+                    },
+                    "shipBy": {
+                      "bsonType": "date"
+                    },
+                    "shippedAt": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "closesAt",
+                    "createdAt",
+                    "createdAtS",
+                    "createdAtT",
+                    "createdAtTime",
+                    "createdAtTimeT",
+                    "createdOn",
+                    "createdOnT",
+                    "deliverBy",
+                    "label",
+                    "lasts",
+                    "opensAt",
+                    "paidAt",
+                    "settledAt",
+                    "shipBy",
+                    "shippedAt"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "96fd4bea8254db05228455df843c892dfe9edebe4b8da75dbc8a13fb6f81dc21"
+  },
+  "execution": {
+    "executionHash": "8deb7ec3cb9817982f0cb7af74d7d54b0d127c6ae0c4e6d47fcfc074b31c0d66",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdAtS",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdAtT",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timeStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdAtTime",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainTimeNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdAtTimeT",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "dateStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdOn",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "plainDateNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "orders",
+            "field": "createdOnT",
+            "namespace": "__unbound__"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

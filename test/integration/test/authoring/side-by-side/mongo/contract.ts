@@ -52,7 +52,7 @@ const Post = model('Post', {
     id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
     authorId: field.scalar(type.ObjectId()),
     title: field.scalar(type.String()),
-    publishedAt: field.scalar(type.Date()).optional(),
+    publishedAt: field.scalar(type.DateTime()).optional(),
   },
   relations: {
     author: rel.belongsTo(User, { from: 'authorId', to: User.ref('id') }),

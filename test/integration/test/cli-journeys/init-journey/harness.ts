@@ -642,12 +642,12 @@ export async function selfEmitLatestMigration(project: JourneyProject): Promise<
 }
 
 /**
- * Runs `prisma migrate`. Applies every pending migration
+ * Runs `prisma db migrate`. Applies every pending migration
  * to the live database — the mongo planner's missing-`createCollection`
  * seam (TML-2486) surfaces here when the bug is present.
  */
 export async function migrationApply(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', PROJECT_CLI_FILE, 'migrate']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'migrate']);
 }
 
 /**

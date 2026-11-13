@@ -191,7 +191,7 @@ The PostgreSQL target ships two type aliases (ADR 275), in the namespace `tempor
 
 ## Not decided here
 
-- **Other targets.** [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (2026-10-30) decides that a convenience name is the same concept on every target, not the same representation, and that each target declares its tables over its own explicit types. It records each target's tables as the target gets them: SQLite and MySQL so far. MongoDB's `Date`, which is a moment in time, still names an explicit type until its table is recorded there.
+- **Other targets.** [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (2026-10-30) decides that a convenience name is the same concept on every target, not the same representation, and that each target declares its tables over its own explicit types. It records the tables of SQLite, MySQL and MongoDB. MongoDB's `Date`, which named an instant, became the calendar date there.
 - **Other scalars.** Decided for PostgreSQL by [ADR 316 — PostgreSQL scalars get convenience types](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-02): `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are convenience types over explicit types named after the database type, such as `Int2`, `Int8BigInt` and `Varchar`.
 
 ## Alternatives considered

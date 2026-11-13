@@ -17,9 +17,11 @@ import {
   withFailingSpace,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
+import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
+import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { mongoTargetDescriptorMeta } from '../descriptor-meta';
 import type { MongoTargetContract } from '../mongo-target-contract';
 import { MongoTargetContractSerializer } from '../mongo-target-contract-serializer';
@@ -33,6 +35,8 @@ import { MongoTargetSchemaVerifier } from './mongo-target-schema-verifier';
 import { entityNamesDeclaredBy, scopeVerifyResultToSpace } from './scope-verify-result';
 
 export type { MongoControlTargetDescriptor };
+
+setFallbackTemporal(fallbackTemporal);
 
 /**
  * `migration.ts` default-exports a `Migration` subclass whose `operations`
