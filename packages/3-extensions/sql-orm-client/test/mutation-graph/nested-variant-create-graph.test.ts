@@ -217,6 +217,97 @@ describe('a nested create of a variant stored in the base table', () => {
   });
 });
 
+interface CommentMutator {
+  create(data: object): unknown;
+}
+
+function thrownBy(run: () => unknown): { code?: unknown; message?: unknown; meta?: unknown } {
+  try {
+    run();
+  } catch (error) {
+    return error as { code?: unknown; message?: unknown; meta?: unknown };
+  }
+  throw new Error('expected the call to throw');
+}
+
+function topLevelBugCreate(data: Record<string, unknown>): Graph {
+  const bugs = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+    namespaceId: 'public',
+  }).variant('bug');
+  return createGraph(
+    { context, state: bugs.state, modelName: 'Task', namespaceId: 'public' },
+    parsed('Task', data),
+  );
+}
+
+describe('a nested create of a variant stored in the base table with a relation callback in its row', () => {
+  it('inserts the row with the discriminator, then the rows of a base relation with its key', () => {
+    const graph = createOf('Project', {
+      id: 1,
+      name: 'Launch',
+      tasks: (tasks: VariantMutator) =>
+        tasks.variant('bug').create({
+          ...crash,
+          comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
+        }),
+    });
+
+    expect(printGraph(graph)).toBe(
+      [
+        'n1 Insert projects_tbl',
+        'n2 Insert tasks <- PayloadData n1 (id->project_id)',
+        'n3 Insert task_comments <- PayloadData n2 (id->task_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+    expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
+    expect(insertedRows(graph, 'task_comments')).toEqual([{ body: 'Seen it' }]);
+  });
+
+  it('inserts each row with the discriminator in its own Insert in update()', () => {
+    const graph = updateOf('Project', {
+      tasks: (tasks: VariantMutator) =>
+        tasks.variant('bug').create([
+          {
+            ...crash,
+            comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
+          },
+          hang,
+        ]),
+    });
+
+    expect(printGraph(graph)).toBe(
+      [
+        'n1 Find projects_tbl where id = 1 limit 1',
+        'n2 Insert tasks <- PayloadData n1 (id->project_id)',
+        'n3 Insert task_comments <- PayloadData n2 (id->task_id)',
+        'n4 Insert tasks <- PayloadData n1 (id->project_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+    expect(insertedRows(graph, 'tasks')).toEqual([crashRow, hangRow]);
+  });
+
+  it('refuses a callback on a relation of the variant with the error of the top-level variant create', () => {
+    const assignee = { assignee: (person: CommentMutator) => person.create({ name: 'Ada' }) };
+    const topLevel = thrownBy(() => topLevelBugCreate({ ...crash, ...assignee }));
+    const nested = thrownBy(() =>
+      createOf('Project', {
+        id: 1,
+        name: 'Launch',
+        tasks: (tasks: VariantMutator) => tasks.variant('bug').create({ ...crash, ...assignee }),
+      }),
+    );
+
+    expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
+    expect(nested).toMatchObject({
+      code: topLevel.code,
+      message: topLevel.message,
+      meta: topLevel.meta,
+    });
+  });
+});
+
 describe('a nested create of a variant stored in its own table', () => {
   it('is refused while the graph is built', () => {
     expect(() =>
