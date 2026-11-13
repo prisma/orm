@@ -104,6 +104,19 @@ describe('create options on a relation', () => {
       { kind: 'create', relation: 'profile', reason: 'to-one-relation' },
     ],
     [
+      'onConflict skip on the to-one relation User.invitedBy',
+      {
+        invitedBy: (invitedBy: Mutator) =>
+          invitedBy.create(
+            { id: 5, name: 'Ada', email: 'ada@example.com' },
+            { onConflict: 'skip' },
+          ),
+      },
+      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'create() nested mutation for relation "invitedBy" supports onConflict "skip" only on one-to-many relations',
+      { kind: 'create', relation: 'invitedBy', reason: 'to-one-relation' },
+    ],
+    [
       'onConflict skip on the many-to-many relation User.tags',
       { tags: (tags: Mutator) => tags.create([{ id: 't', name: 'Go' }], { onConflict: 'skip' }) },
       'ORM.RELATION_MUTATION_UNSUPPORTED',
@@ -275,6 +288,14 @@ describe('create options on a relation', () => {
           },
         }),
       );
+    });
+
+    it('accepts onConflict skip on a variant stored in the table of its base model', () => {
+      expect(
+        parse({
+          bugs: (bugs: Mutator) => bugs.create({ id: 1, title: 'A' }, { onConflict: 'skip' }),
+        }).relationMutations.map(({ name }) => name),
+      ).toEqual(['bugs']);
     });
   });
 });

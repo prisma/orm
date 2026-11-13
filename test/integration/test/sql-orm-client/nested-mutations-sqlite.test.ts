@@ -341,6 +341,37 @@ describe('integration/nested-mutations on SQLite: update()', () => {
   );
 
   it(
+    'skips a child that collides on conflictOn with a post of another user and links the others',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({ id: 1, name: 'Ada' });
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        await users.where({ id: 1 }).update({
+          posts: (posts) =>
+            posts.create(
+              [
+                { id: 10, title: 'Clash' },
+                { id: 11, title: 'New' },
+              ],
+              { onConflict: 'skip', conflictOn: ['id'] },
+            ),
+        });
+
+        expect(rows('select id, user_id, title from posts order by id')).toEqual([
+          { id: 10, user_id: 9, title: 'Taken' },
+          { id: 11, user_id: 1, title: 'New' },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
     'applies an array of operations on a to-many relation in array order',
     async () => {
       await withDatabase(async ({ users, posts }) => {

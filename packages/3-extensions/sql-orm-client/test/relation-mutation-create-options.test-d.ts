@@ -4,8 +4,10 @@ import type { Contract } from './fixtures/generated/contract';
 
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
 
-test('create on a one-to-many relation takes onConflict skip and conflictOn fields of the related model', () => {
+test('create on a one-to-many relation takes onConflict skip and conflictOn fields of the related model, and a to-one or many-to-many create takes the same rows without options', () => {
   const update: UserUpdate = {
+    profile: (profile) => profile.create({ id: 1, bio: 'Hi' }),
+    tags: (tags) => tags.create({ id: 'a', name: 'Go' }),
     posts: (posts) => [
       posts.create({ id: 1, title: 'A', views: 0 }, { onConflict: 'skip' }),
       posts.create([{ id: 2, title: 'B', views: 0 }], {
