@@ -60,15 +60,25 @@ const commands: Readonly<Record<string, AnyCommand>> = {
 
 const CLI_DOCS_URL = 'https://www.prisma.io/docs/cli';
 
+const PRISMA_7_INSTALL = 'install its CLI with `npm install --save-dev @prisma/prisma7@7`';
+
 function v7Command(
   from: string,
-  entry: Omit<RedirectSpec, 'from' | 'flag' | 'code' | 'summary'>,
+  entry: Omit<RedirectSpec, 'from' | 'flag' | 'code' | 'summary' | 'reason'> & {
+    readonly reason: string;
+    readonly whileMigrationsStayOnPrisma7?: boolean;
+  },
 ): RedirectSpec {
+  const { whileMigrationsStayOnPrisma7, reason, ...rest } = entry;
+  const prisma7 = whileMigrationsStayOnPrisma7
+    ? `While Prisma 7 still owns this project's migrations, ${PRISMA_7_INSTALL} and run \`prisma7 ${from}\` instead.`
+    : `To keep using Prisma 7, ${PRISMA_7_INSTALL} and run \`prisma7 ${from}\`.`;
   return {
     from,
     code: 'CLI.V7_COMMAND',
     summary: `\`{bin} ${from}\` is a Prisma 7 command and is not available in Prisma 8`,
-    ...entry,
+    reason: `${reason} ${prisma7}`,
+    ...rest,
   };
 }
 
@@ -114,19 +124,20 @@ const redirects: readonly RedirectSpec[] = [
       '{bin} db migrate --advance-ref db',
     ],
     reason:
-      "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
+      'Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`.',
+    whileMigrationsStayOnPrisma7: true,
     help: 'contract emit',
   }),
   v7Command('migrate deploy', {
     replacement: '{bin} db migrate',
-    reason:
-      "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
+    reason: '`db migrate` applies the planned migrations.',
+    whileMigrationsStayOnPrisma7: true,
     help: 'db migrate',
   }),
   v7Command('migrate status', {
     replacement: '{bin} migration status',
-    reason:
-      "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
+    reason: '`migration status` reports which planned migrations the database has applied.',
+    whileMigrationsStayOnPrisma7: true,
     help: 'migration status',
   }),
   v7Command('migrate diff', {
@@ -138,13 +149,15 @@ const redirects: readonly RedirectSpec[] = [
   v7Command('migrate reset', {
     replacement: '{bin} db update',
     reason:
-      "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
+      'Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`.',
+    whileMigrationsStayOnPrisma7: true,
     help: 'db update',
   }),
   v7Command('migrate resolve', {
     replacement: '{bin} db sign <migration>',
     reason:
-      "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
+      "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand.",
+    whileMigrationsStayOnPrisma7: true,
     help: 'db sign',
   }),
   v7Command('generate', {

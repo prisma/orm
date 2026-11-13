@@ -161,6 +161,9 @@ describe("the engine's telemetry command group", () => {
 
 const DOCS_URL = 'https://www.prisma.io/docs/cli';
 
+const PRISMA_7_PLAIN =
+  /\. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma\/prisma7@7` and run `prisma7 [a-z ]+`\.$/;
+
 const DOCS = { kind: 'open-url', label: 'Read the docs', url: DOCS_URL };
 
 function replacement(command: string) {
@@ -206,7 +209,7 @@ describe('a retired invocation', () => {
   it.each([
     {
       path: 'migrate dev',
-      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
+      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate dev` instead.",
       nextActions: [
         step(1, 'prisma-test contract emit'),
         step(2, 'prisma-test migration plan --name <name>'),
@@ -216,53 +219,53 @@ describe('a retired invocation', () => {
     },
     {
       path: 'migrate deploy',
-      why: "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
+      why: "`db migrate` applies the planned migrations. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate deploy` instead.",
       nextActions: [replacement('prisma-test db migrate'), help('db migrate')],
     },
     {
       path: 'migrate status',
-      why: "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
+      why: "`migration status` reports which planned migrations the database has applied. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate status` instead.",
       nextActions: [replacement('prisma-test migration status'), help('migration status')],
     },
     {
       path: 'migrate diff',
-      why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
+      why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`. To keep using Prisma 7, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate diff`.',
       nextActions: [replacement('prisma-test db update --dry-run'), help('db update')],
     },
     {
       path: 'migrate reset',
-      why: "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
+      why: "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate reset` instead.",
       nextActions: [replacement('prisma-test db update'), help('db update')],
     },
     {
       path: 'migrate resolve',
-      why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
+      why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate resolve` instead.",
       nextActions: [replacement('prisma-test db sign <migration>'), help('db sign')],
     },
     {
       path: 'generate',
-      why: expect.any(String),
+      why: expect.stringMatching(PRISMA_7_PLAIN),
       nextActions: [replacement('prisma-test contract emit'), help('contract emit')],
     },
-    { path: 'validate', why: expect.any(String), nextActions: [DOCS] },
+    { path: 'validate', why: expect.stringMatching(PRISMA_7_PLAIN), nextActions: [DOCS] },
     {
       path: 'format',
-      why: expect.any(String),
+      why: expect.stringMatching(PRISMA_7_PLAIN),
       nextActions: [replacement('prisma-test contract format'), help('contract format')],
     },
-    { path: 'studio', why: expect.any(String), nextActions: [DOCS] },
+    { path: 'studio', why: expect.stringMatching(PRISMA_7_PLAIN), nextActions: [DOCS] },
     {
       path: 'db pull',
-      why: expect.any(String),
+      why: expect.stringMatching(PRISMA_7_PLAIN),
       nextActions: [replacement('prisma-test contract infer'), help('contract infer')],
     },
     {
       path: 'db push',
-      why: expect.any(String),
+      why: expect.stringMatching(PRISMA_7_PLAIN),
       nextActions: [replacement('prisma-test db update'), help('db update')],
     },
-    { path: 'db seed', why: expect.any(String), nextActions: [DOCS] },
-    { path: 'db execute', why: expect.any(String), nextActions: [DOCS] },
+    { path: 'db seed', why: expect.stringMatching(PRISMA_7_PLAIN), nextActions: [DOCS] },
+    { path: 'db execute', why: expect.stringMatching(PRISMA_7_PLAIN), nextActions: [DOCS] },
   ])(
     'answers Prisma 7 $path with CLI.V7_COMMAND and what to run instead',
     async ({ path, why, nextActions }) => {
@@ -288,21 +291,16 @@ describe('a retired invocation', () => {
     },
   );
 
-  it('describes no new Prisma 7 path in terms of Prisma 7 itself', () => {
-    const newPaths = [
-      'generate',
-      'validate',
-      'format',
-      'studio',
-      'db pull',
-      'db push',
-      'db seed',
-      'db execute',
-    ];
-    for (const redirect of ormCommandFamily.redirects.filter(({ from }) =>
-      newPaths.includes(from),
+  it('ends every Prisma 7 reason with how to install and run the Prisma 7 CLI, never through npx', () => {
+    for (const redirect of ormCommandFamily.redirects.filter(
+      ({ code }) => code === 'CLI.V7_COMMAND',
     )) {
-      expect(redirect.reason).not.toContain('Prisma 7');
+      expect(redirect.reason).toMatch(
+        new RegExp(
+          `(To keep using Prisma 7|While Prisma 7 still owns this project's migrations), install its CLI with \`npm install --save-dev @prisma/prisma7@7\` and run \`prisma7 ${redirect.from}\`( instead)?\\.$`,
+        ),
+      );
+      expect(redirect.reason).not.toContain('npx');
     }
   });
 
