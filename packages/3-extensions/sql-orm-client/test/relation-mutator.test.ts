@@ -29,6 +29,9 @@ interface PolymorphicMutator {
     create(data: object | readonly object[]): unknown;
     connect(criteria: object | readonly object[]): unknown;
     disconnect(criteria?: readonly object[]): unknown;
+    where(filter: object): { updateAll(data: object): unknown; deleteAll(): unknown };
+    updateAll(data: object): unknown;
+    deleteAll(): unknown;
   };
 }
 
@@ -106,7 +109,14 @@ describe('relation-mutator', () => {
   it('variant().create() carries the variant value with one row or an array', () => {
     const bugs = variantOf(tasks, 'bug');
 
-    expect(Object.keys(bugs)).toEqual(['create', 'connect', 'disconnect']);
+    expect(Object.keys(bugs).sort()).toEqual([
+      'connect',
+      'create',
+      'deleteAll',
+      'disconnect',
+      'updateAll',
+      'where',
+    ]);
     expect(bugs.create({ title: 'Crash' })).toEqual({
       kind: 'create',
       data: [{ title: 'Crash' }],
@@ -134,6 +144,22 @@ describe('relation-mutator', () => {
       kind: 'disconnect',
       criteria: [{ id: 1 }],
       state,
+    });
+  });
+
+  it('variant().where(), updateAll() and deleteAll() carry the state of the filtered variant collection', () => {
+    const bugs = variantOf(tasks, 'bug');
+    const variantTasks = tasks.variant('bug');
+
+    expect(bugs.updateAll({ title: 'Seen' })).toEqual({
+      kind: 'updateAll',
+      state: variantTasks.state,
+      data: { title: 'Seen' },
+    });
+    expect(bugs.deleteAll()).toEqual({ kind: 'deleteAll', state: variantTasks.state });
+    expect(bugs.where({ title: 'Crash' }).deleteAll()).toEqual({
+      kind: 'deleteAll',
+      state: variantTasks.where({ title: 'Crash' }).state,
     });
   });
 

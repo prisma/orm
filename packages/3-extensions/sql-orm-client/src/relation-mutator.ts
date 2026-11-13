@@ -75,6 +75,7 @@ function createVariantRelationMutator<
 >(variantCollection: RelationCollection<TContract, ModelName>) {
   const { state } = variantCollection;
   return {
+    ...createFilteredRelationMutator<TContract, ModelName>(variantCollection),
     create(
       data:
         | MutationCreateInput<TContract, ModelName>

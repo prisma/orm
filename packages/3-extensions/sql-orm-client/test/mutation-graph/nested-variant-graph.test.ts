@@ -20,12 +20,28 @@ import { buildTestContextFromContract, createMockRuntime } from '../helpers';
 import { printGraph } from './print-graph';
 import { visibleNodes } from './statements';
 
+interface FilteredMutator {
+  where(filter: unknown): FilteredMutator;
+  updateAll(data: object): unknown;
+  deleteAll(): unknown;
+}
+
 interface VariantMutator {
-  variant(value: string): {
+  variant(value: string): FilteredMutator & {
     create(data: object | readonly object[]): unknown;
     connect(criteria: object | readonly object[]): unknown;
     disconnect(criteria?: readonly object[]): unknown;
   };
+}
+
+interface FieldComparison {
+  eq(value: unknown): unknown;
+  gt(value: unknown): unknown;
+}
+
+interface FieldAccessor {
+  readonly severity: FieldComparison;
+  readonly priority: FieldComparison;
 }
 
 const serializer = new PostgresContractSerializer();
@@ -765,6 +781,144 @@ describe('disconnect on a variant where the base mutator refuses it or the paren
     ).toMatchObject({
       code: 'ORM.RELATION_MUTATION_INVALID',
       meta: { kind: 'disconnect', relation: 'tasks', problem: 'missing-criterion' },
+    });
+  });
+});
+
+const featureExists = (condition: string) =>
+  `exists (select id from tasks tasks_2 inner join features on tasks_2.id = features.id where (id = tasks.id and tasks.type = 'feature'${condition}))`;
+
+describe('updateAll and deleteAll on a variant', () => {
+  it('add the discriminator and filter by fields of a variant stored in the base table on 1:N', () => {
+    expect(
+      printGraph(
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => [
+            tasks.variant('bug').where({ title: 'Crash' }).updateAll({ title: 'Seen' }),
+            tasks
+              .variant('bug')
+              .where((bug: FieldAccessor) => bug.severity.eq('high'))
+              .deleteAll(),
+          ],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        "n2 Update tasks set title = 'Seen' where type = 'bug' and title = 'Crash' <- FilterData n1 (id->project_id)",
+        "n3 Delete tasks where type = 'bug' and severity = 'high' <- FilterData n1 (id->project_id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('add the variant condition and filter by fields of a variant stored in its own table on 1:N', () => {
+    expect(
+      printGraph(
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => [
+            tasks
+              .variant('feature')
+              .where((feature: FieldAccessor) => feature.priority.gt(2))
+              .updateAll({ title: 'Seen' }),
+            tasks.variant('feature').deleteAll(),
+          ],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        `n2 Update tasks set title = 'Seen' where ${featureExists(' and features.priority > 2')} <- FilterData n1 (id->project_id)`,
+        `n3 Delete tasks where ${featureExists('')} <- FilterData n1 (id->project_id)`,
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('add the variant condition beside the junction on M:N, on both storage layouts', () => {
+    expect(
+      printGraph(
+        updateOf('Label', {
+          tasks: (tasks: VariantMutator) => [
+            tasks.variant('bug').updateAll({ title: 'Seen' }),
+            tasks
+              .variant('feature')
+              .where((feature: FieldAccessor) => feature.priority.eq(1))
+              .deleteAll(),
+          ],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find labels where id = 1',
+        "n2 Update tasks set title = 'Seen' where type = 'bug' <- JunctionFilterData n1 (id->label_id; task_labels task_id->id)",
+        `n3 Delete tasks where ${featureExists(' and features.priority = 1')} <- JunctionFilterData n1 (id->label_id; task_labels task_id->id)`,
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('refuse a field of the variant in updateAll data with the error of the variant collection', () => {
+    const topLevel = thrownBy(() =>
+      new Collection({ runtime: createMockRuntime(), context }, 'Task', { namespaceId: 'public' })
+        .variant('bug')
+        .where({ title: 'Crash' })
+        .updateAll({ severity: 'low' } as never),
+    );
+    const nested = thrownBy(() =>
+      updateOf('Project', {
+        tasks: (tasks: VariantMutator) => tasks.variant('bug').updateAll({ severity: 'low' }),
+      }),
+    );
+
+    expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
+    expect(nested).toMatchObject({
+      code: topLevel.code,
+      message: topLevel.message,
+      meta: topLevel.meta,
+    });
+  });
+
+  it('refuse a field that links the rows to the parent as the base mutator does', () => {
+    expect(
+      thrownBy(() =>
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('feature').updateAll({ projectId: 2 }),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'ORM.RELATION_MUTATION_INVALID',
+      meta: {
+        kind: 'updateAll',
+        relation: 'tasks',
+        problem: 'parent-link-column',
+        fields: ['projectId'],
+      },
+    });
+  });
+
+  it('are refused in create() and on to-one relations as on the base mutator', () => {
+    expect(
+      thrownBy(() =>
+        createOf('Project', {
+          id: 1,
+          name: 'Launch',
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').deleteAll(),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'deleteAll', relation: 'tasks' },
+    });
+    expect(
+      thrownBy(() =>
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').updateAll({ title: 'Seen' }),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      meta: { kind: 'updateAll', relation: 'task', reason: 'to-one-relation' },
     });
   });
 });
