@@ -173,11 +173,10 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         ]);
 
         const failure = errorOf(failed);
-        expect(failure).toMatchObject(
-          project.target === 'mongo'
-            ? { code: 'CLI.UNEXPECTED', why: expect.stringContaining('E11000 duplicate key') }
-            : { code: 'MIGRATION.EXECUTION_FAILED', meta: { failingSpace: 'app' } },
-        );
+        expect(failure).toMatchObject({
+          code: 'MIGRATION.EXECUTION_FAILED',
+          meta: { failingSpace: 'app' },
+        });
         expect(await ledgerLength(project)).toBe(ledgerBefore);
         const marker = await appMarker(project);
         expect({ storageHash: marker?.storageHash, meta: marker?.meta }).toEqual({

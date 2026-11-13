@@ -78,7 +78,10 @@ withTempDir(({ createTempDir }) => {
       const deploy = ['--to', 'production', '--permit-policy-change', '--json'];
 
       const failed = await runMigrate(project.ctx, deploy);
-      errorOf(failed);
+      expect(errorOf(failed)).toMatchObject({
+        code: 'MIGRATION.EXECUTION_FAILED',
+        meta: { failingSpace: 'app' },
+      });
       const afterFailure = await appMarker(project);
       const [usersCollection] = await client.db(name).listCollections({ name: 'users' }).toArray();
       await users.deleteOne({ email: 'a@x.io' });

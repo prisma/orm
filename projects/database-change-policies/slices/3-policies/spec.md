@@ -223,7 +223,7 @@ The architect and code reviews (in `reviews/`) found the following; each is deci
 | MySQL and MongoDB did not run the `db migrate --to <ref>` journeys; the failed-run guarantee was tested through the CLI only on Postgres and MongoDB | Both are added on all four targets. The MongoDB failed-run test also checks that the first migration stayed applied and that a retry with the flag records the policies. |
 | ADR 307 and the Migration System doc did not mention policies | ADR 307 gains a status note; the subsystem doc describes the ref field, the marker field and the checks. |
 
-Deferred: MongoDB reports a failed schema command as `CLI.UNEXPECTED` rather than `MIGRATION.EXECUTION_FAILED` ([TML-3779](https://linear.app/prisma-company/issue/TML-3779)); it predates this slice. The marker-destination shape declared in many places predates the slice; the slice adds the field through one framework type where the runners receive it, and the remaining copies are a separate refactor.
+Deferred: the marker-destination shape declared in many places predates the slice; the slice adds the field through one framework type where the runners receive it, and the remaining copies are a separate refactor.
 
 ## Framework domain
 
