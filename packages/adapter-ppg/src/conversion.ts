@@ -1,4 +1,11 @@
-import { ArgType, ColumnType, ColumnTypeEnum, IsolationLevel } from '@prisma/driver-adapter-utils'
+import {
+  ArgType,
+  ColumnType,
+  ColumnTypeEnum,
+  IsolationLevel,
+  normalizeTimestamp,
+  normalizeTimestamptz,
+} from '@prisma/driver-adapter-utils'
 import { getTypeParser } from 'pg-types'
 import { parse as parseArray } from 'postgres-array'
 
@@ -346,12 +353,12 @@ function normalize_date(date: string): string {
 
 function normalize_timestamp(time: string | null): string | null {
   if (time === null) return null
-  return `${time.replace(' ', 'T')}+00:00`
+  return normalizeTimestamp(time)
 }
 
 function normalize_timestamptz(time: string | null): string | null {
   if (time === null) return null
-  return time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
+  return normalizeTimestamptz(time)
 }
 
 /*
