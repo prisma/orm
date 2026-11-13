@@ -555,4 +555,191 @@ describe('integration/nested-variant-creates', () => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe('connect and disconnect on a variant', () => {
+    async function seed(runtime: PgIntegrationRuntime): Promise<void> {
+      await setupSchema(runtime);
+      await runtime.query("insert into projects_tbl (id, name) values (1, 'Launch')");
+      await runtime.query(`
+        insert into tasks (id, title, type, severity, project_id) values
+          (1, 'Crash', 'bug', 'high', null),
+          (2, 'Dark mode', 'feature', null, null),
+          (3, 'Hang', 'bug', 'low', 1),
+          (4, 'Search', 'feature', null, 1)
+      `);
+      await runtime.query('insert into features (id, priority) values (2, 1), (4, 2)');
+      await runtime.query("insert into task_comments (id, body) values (1, 'Seen it')");
+      await runtime.query("insert into labels (id, name) values (1, 'ui')");
+      await runtime.query('insert into task_labels (task_id, label_id) values (3, 1), (4, 1)');
+    }
+
+    function projectOfTasks(runtime: PgIntegrationRuntime) {
+      return runtime.query('select id, project_id from tasks order by id');
+    }
+
+    function links(runtime: PgIntegrationRuntime) {
+      return runtime.query('select task_id, label_id from task_labels order by task_id');
+    }
+
+    const rowMissing = (kind: 'connect' | 'disconnect', relation: string) => ({
+      code: 'ORM.RELATION_ROW_MISSING',
+      message: `${kind}() nested mutation for relation "${relation}" did not find a matching row`,
+      meta: { kind, relation },
+    });
+
+    it(
+      'on a relation the child holds the key for, links and unlinks only rows of the variant',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          const connected = await projects.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks.variant('bug').connect([{ id: 1 }, { id: 2 }]),
+              tasks.variant('feature').connect({ id: 1 }),
+            ],
+          });
+          const afterConnect = await projectOfTasks(runtime);
+          const disconnected = await projects.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks.variant('bug').disconnect(),
+              tasks.variant('feature').disconnect([{ id: 3 }]),
+            ],
+          });
+
+          expect([connected, disconnected]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Launch' },
+          ]);
+          expect(afterConnect).toEqual([
+            { id: 1, project_id: 1 },
+            { id: 2, project_id: null },
+            { id: 3, project_id: 1 },
+            { id: 4, project_id: 1 },
+          ]);
+          expect(await projectOfTasks(runtime)).toEqual([
+            { id: 1, project_id: null },
+            { id: 2, project_id: null },
+            { id: 3, project_id: null },
+            { id: 4, project_id: 1 },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'on a relation the child holds the key for, a variant stored in its own table links and unlinks only its rows',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          await projects.where({ id: 1 }).update({
+            tasks: (tasks) => tasks.variant('feature').connect([{ id: 2 }, { id: 1 }]),
+          });
+          const afterConnect = await projectOfTasks(runtime);
+          await projects.where({ id: 1 }).update({
+            tasks: (tasks) => tasks.variant('feature').disconnect([{ id: 4 }, { id: 3 }]),
+          });
+
+          expect(afterConnect).toEqual([
+            { id: 1, project_id: null },
+            { id: 2, project_id: 1 },
+            { id: 3, project_id: 1 },
+            { id: 4, project_id: 1 },
+          ]);
+          expect(await projectOfTasks(runtime)).toEqual([
+            { id: 1, project_id: null },
+            { id: 2, project_id: 1 },
+            { id: 3, project_id: 1 },
+            { id: 4, project_id: null },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'on a relation the parent holds the key for, connects a row of the variant and refuses a row of another',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { comments } = collectionsOf(runtime);
+
+          const bug = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').connect({ id: 1 }),
+          });
+          const wrongFeature = await rejectionShape(
+            comments.where({ id: 1 }).update({
+              task: (task) => task.variant('feature').connect({ id: 3 }),
+            }),
+          );
+          const feature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').connect({ id: 2 }),
+          });
+          const wrongBug = await rejectionShape(
+            comments.where({ id: 1 }).update({
+              task: (task) => task.variant('bug').connect({ id: 4 }),
+            }),
+          );
+
+          expect([bug, feature]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: 2 },
+          ]);
+          expect(wrongFeature).toMatchObject(rowMissing('connect', 'task'));
+          expect(wrongBug).toMatchObject(rowMissing('connect', 'task'));
+          expect(await runtime.query('select id, task_id from task_comments')).toEqual([
+            { id: 1, task_id: 2 },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'on a relation through a junction, links and unlinks a row of the variant and refuses a row of another',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { labels } = collectionsOf(runtime);
+
+          const wrongConnect = await rejectionShape(
+            labels.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').connect({ id: 2 }),
+            }),
+          );
+          const wrongDisconnect = await rejectionShape(
+            labels.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').disconnect([{ id: 4 }]),
+            }),
+          );
+          const unchanged = await links(runtime);
+          const updated = await labels.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks.variant('feature').connect({ id: 2 }),
+              tasks.variant('feature').disconnect([{ id: 4 }]),
+              tasks.variant('bug').connect({ id: 1 }),
+            ],
+          });
+
+          expect(wrongConnect).toMatchObject(rowMissing('connect', 'tasks'));
+          expect(wrongDisconnect).toMatchObject(rowMissing('disconnect', 'tasks'));
+          expect(unchanged).toEqual([
+            { task_id: 3, label_id: 1 },
+            { task_id: 4, label_id: 1 },
+          ]);
+          expect(updated).toEqual({ id: 1, name: 'ui' });
+          expect(await links(runtime)).toEqual([
+            { task_id: 1, label_id: 1 },
+            { task_id: 2, label_id: 1 },
+            { task_id: 3, label_id: 1 },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
 });

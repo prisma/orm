@@ -39,6 +39,7 @@ const schema = `
 interface Harness {
   readonly db: ReturnType<typeof orm<Contract>>[typeof UNBOUND_NAMESPACE_ID];
   readonly rows: (sql: string) => unknown[];
+  readonly exec: (sql: string) => void;
 }
 
 const {
@@ -104,6 +105,7 @@ async function withDatabase(
           .prepare(sql)
           .all()
           .map((row) => ({ ...row })),
+      exec: (sql) => database.exec(sql),
     });
   } finally {
     await runtime.close();
@@ -571,6 +573,152 @@ describe('integration/nested-variant-creates on SQLite', () => {
           ]);
           expect(rows('select label_id, task_id from task_labels order by task_id')).toEqual([
             { label_id: 1, task_id: 2 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+  });
+
+  describe('connect and disconnect on a variant', () => {
+    const seed = `
+      insert into projects (id, name) values (1, 'Launch');
+      insert into people (id, name) values (1, 'Ada');
+      insert into tasks (id, title, type, severity, project_id, pinned_by_id) values
+        (1, 'Crash', 'bug', 'high', null, null),
+        (2, 'Dark mode', 'feature', null, null, null),
+        (3, 'Hang', 'bug', 'low', 1, 1),
+        (4, 'Search', 'feature', null, 1, null);
+      insert into features (id, priority) values (2, 1), (4, 2);
+      insert into task_comments (id, body) values (1, 'Seen it');
+      insert into labels (id, name) values (1, 'ui');
+      insert into task_labels (task_id, label_id) values (3, 1), (4, 1);
+    `;
+    const linksSql = 'select id, project_id, pinned_by_id from tasks order by id';
+    const rowMissing = (kind: 'connect' | 'disconnect', relation: string) => ({
+      code: 'ORM.RELATION_ROW_MISSING',
+      message: `${kind}() nested mutation for relation "${relation}" did not find a matching row`,
+      meta: { kind, relation },
+    });
+
+    it(
+      'on 1:N and 1:1, links and unlinks only rows of the variant on both storage layouts',
+      async () => {
+        await withDatabase(async ({ db, rows, exec }) => {
+          exec(seed);
+
+          const project = await db.Project.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) => [
+                tasks.variant('bug').connect([{ id: 1 }, { id: 2 }]),
+                tasks.variant('feature').connect({ id: 2 }),
+                tasks.variant('feature').disconnect([{ id: 3 }, { id: 4 }]),
+              ],
+            });
+          const person = await db.Person.select('id', 'name')
+            .where({ id: 1 })
+            .update({ pinnedTask: (task) => task.variant('feature').disconnect() });
+          const afterFeature = rows(linksSql);
+          await db.Person.where({ id: 1 }).update({
+            pinnedTask: (task) => task.variant('bug').disconnect(),
+          });
+
+          expect([project, person]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Ada' },
+          ]);
+          expect(afterFeature).toEqual([
+            { id: 1, project_id: 1, pinned_by_id: null },
+            { id: 2, project_id: 1, pinned_by_id: null },
+            { id: 3, project_id: 1, pinned_by_id: 1 },
+            { id: 4, project_id: null, pinned_by_id: null },
+          ]);
+          expect(rows(linksSql)).toEqual([
+            { id: 1, project_id: 1, pinned_by_id: null },
+            { id: 2, project_id: 1, pinned_by_id: null },
+            { id: 3, project_id: 1, pinned_by_id: null },
+            { id: 4, project_id: null, pinned_by_id: null },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'on N:1, connects a row of the variant and refuses a row of another',
+      async () => {
+        await withDatabase(async ({ db, rows, exec }) => {
+          exec(seed);
+          const comments = db.TaskComment.select('id', 'body', 'taskId');
+
+          const bug = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').connect({ id: 1 }),
+          });
+          const wrongFeature = await rejectionShape(
+            comments.where({ id: 1 }).update({
+              task: (task) => task.variant('feature').connect({ id: 3 }),
+            }),
+          );
+          const feature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').connect({ id: 2 }),
+          });
+          const wrongBug = await rejectionShape(
+            comments.where({ id: 1 }).update({
+              task: (task) => task.variant('bug').connect({ id: 4 }),
+            }),
+          );
+
+          expect([bug, feature]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: 2 },
+          ]);
+          expect(wrongFeature).toMatchObject(rowMissing('connect', 'task'));
+          expect(wrongBug).toMatchObject(rowMissing('connect', 'task'));
+          expect(rows('select id, task_id from task_comments')).toEqual([{ id: 1, task_id: 2 }]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'on M:N, links and unlinks a row of the variant and refuses a row of another',
+      async () => {
+        await withDatabase(async ({ db, rows, exec }) => {
+          exec(seed);
+          const labels = db.Label.select('id', 'name');
+          const linkSql = 'select task_id, label_id from task_labels order by task_id';
+
+          const wrongConnect = await rejectionShape(
+            labels.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').connect({ id: 2 }),
+            }),
+          );
+          const wrongDisconnect = await rejectionShape(
+            labels.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').disconnect([{ id: 4 }]),
+            }),
+          );
+          const unchanged = rows(linkSql);
+          const updated = await labels.where({ id: 1 }).update({
+            tasks: (tasks) => [
+              tasks.variant('feature').connect({ id: 2 }),
+              tasks.variant('feature').disconnect([{ id: 4 }]),
+              tasks.variant('bug').connect({ id: 1 }),
+            ],
+          });
+
+          expect(wrongConnect).toMatchObject(rowMissing('connect', 'tasks'));
+          expect(wrongDisconnect).toMatchObject(rowMissing('disconnect', 'tasks'));
+          expect(unchanged).toEqual([
+            { task_id: 3, label_id: 1 },
+            { task_id: 4, label_id: 1 },
+          ]);
+          expect(updated).toEqual({ id: 1, name: 'ui' });
+          expect(rows(linkSql)).toEqual([
+            { task_id: 1, label_id: 1 },
+            { task_id: 2, label_id: 1 },
+            { task_id: 3, label_id: 1 },
           ]);
         });
       },
