@@ -69,7 +69,7 @@ async function withDatabase(
   run: (harness: Harness) => Promise<void>,
   setup: Setup = withReturning,
 ): Promise<void> {
-  const directory = mkdtempSync(join(tmpdir(), 'orm-nested-variant-creates-'));
+  const directory = mkdtempSync(join(tmpdir(), 'orm-nested-variant-mutations-'));
   const path = join(directory, 'test.db');
   const database = new DatabaseSync(path);
   database.exec(schema);
@@ -141,7 +141,7 @@ function bug(id: number, title: string, severity: string, links: Record<string, 
   };
 }
 
-describe('integration/nested-variant-creates on SQLite', () => {
+describe('integration/nested-variant-mutations on SQLite', () => {
   describe('a variant stored in the base table on a relation the child holds the key for', () => {
     it(
       'create() writes each row with the discriminator and the key of the parent',
