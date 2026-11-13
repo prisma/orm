@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
+import {
+  baseContract,
+  createCollectionFor,
+  relatedCollectionOf,
+  withoutCapabilityKeys,
+} from '../collection-fixtures';
 import {
   buildMixedPolyContract,
   buildTestContextFromContract,
@@ -16,6 +21,11 @@ import { printGraph } from './print-graph';
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
 
 const post = { id: 10, title: 'Hello', views: 0 };
+const other = { id: 11, title: 'Other', views: 0 };
+
+function updateOf(...writes: string[]): string {
+  return ['n1 Find users where id = 1 limit 1', ...writes, 'result: n1'].join('\n');
+}
 
 function printUpdate(input: Record<string, unknown>): string {
   const context = getTestContext();
@@ -36,13 +46,54 @@ function printUpdate(input: Record<string, unknown>): string {
 }
 
 describe('create options on a relation', () => {
-  it('builds the same graph for onConflict skip on a one-to-many relation as without options', () => {
+  it('inserts the rows of onConflict skip without relation callbacks in one Insert that skips conflicts', () => {
+    expect({
+      untargeted: printUpdate({
+        posts: (posts: Mutator) => posts.create([post, other], { onConflict: 'skip' }),
+      }),
+      targeted: printUpdate({
+        posts: (posts: Mutator) =>
+          posts.create([post, other], { onConflict: 'skip', conflictOn: ['title'] }),
+      }),
+      byParentLink: printUpdate({
+        posts: (posts: Mutator) =>
+          posts.create([post, other], { onConflict: 'skip', conflictOn: ['userId'] }),
+      }),
+    }).toEqual({
+      untargeted: updateOf(
+        'n2 Insert posts 2 rows on conflict do nothing <- PayloadData n1 (id->user_id)',
+      ),
+      targeted: updateOf(
+        'n2 Insert posts 2 rows on conflict (title) do nothing <- PayloadData n1 (id->user_id)',
+      ),
+      byParentLink: updateOf(
+        'n2 Insert posts 2 rows on conflict (user_id) do nothing <- PayloadData n1 (id->user_id)',
+      ),
+    });
+  });
+
+  it('inserts each row of onConflict skip with relation callbacks in its own Insert that its children read', () => {
     expect(
       printUpdate({
         posts: (posts: Mutator) =>
-          posts.create([post], { onConflict: 'skip', conflictOn: ['title'] }),
+          posts.create(
+            [
+              {
+                ...post,
+                comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }),
+              },
+              other,
+            ],
+            { onConflict: 'skip', conflictOn: ['title'] },
+          ),
       }),
-    ).toBe(printUpdate({ posts: (posts: Mutator) => posts.create([post]) }));
+    ).toBe(
+      updateOf(
+        'n2 Insert posts on conflict (title) do nothing <- PayloadData n1 (id->user_id)',
+        'n3 Insert comments <- PayloadData n2 (id->post_id)',
+        'n4 Insert posts on conflict (title) do nothing <- PayloadData n1 (id->user_id)',
+      ),
+    );
   });
 
   const rejections = [
@@ -103,6 +154,26 @@ describe('create options on a relation', () => {
       },
     ],
     [
+      'onConflict skip with a row that gives no value for any conflict key',
+      'User',
+      {
+        posts: (posts: Mutator) =>
+          posts.create([{ ...post, embedding: [1, 2, 3] }, other], {
+            onConflict: 'skip',
+            conflictOn: ['embedding'],
+          }),
+      },
+      'ORM.RELATION_MUTATION_INVALID',
+      'create() nested mutation for relation "posts" row 1 gives no value for any conflict key: (embedding)',
+      {
+        kind: 'create',
+        relation: 'posts',
+        problem: 'row-cannot-conflict',
+        index: 1,
+        conflictKeys: [['embedding']],
+      },
+    ],
+    [
       'onConflict connect',
       'User',
       { posts: (posts: Mutator) => posts.create(post, { onConflict: 'connect' }) },
@@ -151,6 +222,38 @@ describe('create options on a relation', () => {
 
       await expect(collection.create({ ...parent, ...input } as never)).rejects.toThrow(
         expect.objectContaining({ code, message, meta }),
+      );
+      expect(runtime.executions).toEqual([]);
+    },
+  );
+
+  const withComment = {
+    ...post,
+    comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }),
+  };
+
+  it.each([
+    ['insertOnConflictSkip', { onConflict: 'skip', conflictOn: ['title'] }, [post]],
+    ['insertOnConflictWithoutTarget', { onConflict: 'skip' }, [post]],
+    ['insertOnConflictTarget', { onConflict: 'skip', conflictOn: ['title'] }, [post]],
+    ['returning', { onConflict: 'skip' }, [withComment]],
+  ] as const)(
+    'refuses onConflict skip before any statement on a contract without %s',
+    async (capability, options, rows) => {
+      const { collection, runtime } = createCollectionFor(
+        'User',
+        withoutCapabilityKeys(baseContract, [capability]),
+      );
+
+      await expect(
+        collection.where({ id: 1 }).update({
+          posts: (posts: Mutator) => posts.create(rows, options),
+        } as never),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: 'ORM.CAPABILITY_MISSING',
+          meta: expect.objectContaining({ capability }),
+        }),
       );
       expect(runtime.executions).toEqual([]);
     },

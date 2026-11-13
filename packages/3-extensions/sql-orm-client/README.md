@@ -311,6 +311,18 @@ The option needs the contract capability `insertOnConflictSkip`, and also `inser
 
 The optional `configure` callback may still be passed in second position when there are no options.
 
+### In a nested create
+
+A nested `create` on a one-to-many relation takes the same option in `create()` and `update()`:
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.create(rows, { onConflict: 'skip', conflictOn: ['slug'] }),
+});
+```
+
+A row that collides is left unchanged and is not linked to the parent, and the relation callbacks inside it do not run. Rows without relation callbacks are inserted in one statement; a row with relation callbacks is inserted on its own, and without `returning` such a row is refused. The capability checks are those of `createAll`. A to-one or many-to-many relation refuses the option with `ORM.RELATION_MUTATION_UNSUPPORTED`. In nested and top-level calls, a row that gives no non-null value for every column of at least one conflict key (the `conflictOn` fields, or every primary key and unique constraint of the table) is refused before any statement runs. A value the row gives, a create default the ORM fills in, or, in a nested create, the parent's key in the child's foreign key counts; a column the database fills in does not.
+
 ## Writes without `RETURNING`
 
 A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so it is one statement with `RETURNING`, except when the read-back loads includes or the variant tables of a polymorphic base model. When it does not, as on MySQL, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`. The rows come back in no particular order. A write the ORM cannot read back is refused before any statement runs, as a rejection of the call:

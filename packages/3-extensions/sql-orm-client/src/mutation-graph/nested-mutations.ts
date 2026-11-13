@@ -3,9 +3,11 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast, castAs } from '@internal/utils/casts';
 import {
+  assertInsertConflictSkipCapability,
   assertReturningCapability,
   columnOfContractField,
   type ResolvedRelation,
+  resolveInsertConflictColumns,
   resolveModelTableName,
   resolveRelationTargetColumns,
 } from '../collection-contract';
@@ -31,10 +33,16 @@ import {
 } from '../relation-mutations';
 import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
-import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
+import type {
+  MutationCreateInput,
+  MutationUpdateInput,
+  RelationMutation,
+  RelationMutationCreate,
+} from '../types';
 import { emptyState } from '../types';
 import { Assert } from './assert';
 import { addDeleteAll, addUpdateAll, variantKeyMappings } from './collection-graphs';
+import { conflictKeysOf, rowThatCannotConflict } from './conflict-keys';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -88,15 +96,27 @@ export function addCreateWithRelations(
   t: Translation,
   model: Model,
   parsed: ParsedMutationInput,
+  createOf: CreateOf,
+): NodeId {
+  return insertWithRelations(t, model, parsed, createOf, undefined, undefined);
+}
+
+function insertWithRelations(
+  t: Translation,
+  model: Model,
+  parsed: ParsedMutationInput,
   { keysFromParent, returns, shape, variantValue }: CreateOf,
+  storageRow: Record<string, unknown> | undefined,
+  conflict: InsertConflictSkip | undefined,
 ): NodeId {
   for (const relationMutation of parsed.relationMutations) {
     rejectUpdateOnly(relationMutation);
   }
   const before = addBeforeWrite(t, model, parsed.relationMutations);
-  const row = createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
+  const row =
+    storageRow ?? createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
   return insertRows(t, model, [row], {
-    conflict: undefined,
+    conflict,
     keys: [...keysFromParent, ...before.keys],
     requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
     owner: { operation: 'create', modelName: model.modelName },
@@ -351,19 +371,32 @@ function addChildOwned(
     }
     const variantValue = mutation.variant;
     const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
+    const values = rows.map((row) =>
+      createRowOf(context, related, variantValue, row.scalarData, undefined),
+    );
+    const conflict = conflictSkipOf(t, related, name, targetColumns, mutation, values);
     if (rows.some((row) => row.relationMutations.length > 0)) {
-      for (const row of rows) {
-        nestedCreate(t, related, row, keys, 'count', variantValue);
-      }
+      rows.forEach((row, index) => {
+        insertWithRelations(
+          t,
+          related,
+          row,
+          { keysFromParent: keys, returns: 'count', shape: allColumns, variantValue },
+          values[index],
+          conflict,
+        );
+      });
       return;
     }
-    addChildInserts(
-      t,
-      related,
-      variantValue,
-      rows.map((row) => row.scalarData),
+    insertRows(t, related, values, {
+      conflict,
       keys,
-    );
+      requires: [],
+      owner: { operation: 'create', modelName: related.modelName },
+      returns: 'count',
+      shape: allColumns,
+      afterWrite: undefined,
+    });
     return;
   }
   if (mutation.kind === 'connect') {
@@ -588,23 +621,49 @@ function sourcesOf(
   };
 }
 
-function addChildInserts(
+function conflictSkipOf(
   t: Translation,
   model: Model,
-  variantValue: string | undefined,
+  name: string,
+  parentLinkColumns: readonly string[],
+  { options }: RelationMutationCreate<Contract<SqlStorage>, string>,
   rows: readonly Readonly<Record<string, unknown>>[],
-  keys: readonly KeySource[],
-): void {
-  const values = rows.map((row) => createRowOf(t.context, model, variantValue, row, undefined));
-  insertRows(t, model, values, {
-    conflict: undefined,
-    keys,
-    requires: [],
-    owner: { operation: 'create', modelName: model.modelName },
-    returns: 'count',
-    shape: allColumns,
-    afterWrite: undefined,
-  });
+): InsertConflictSkip | undefined {
+  if (options === undefined) {
+    return undefined;
+  }
+  const { contract } = t.context;
+  const conflictOn = options.conflictOn ?? [];
+  assertInsertConflictSkipCapability(
+    contract,
+    `create() nested mutation for relation "${name}"`,
+    conflictOn.length > 0,
+  );
+  const columns = resolveInsertConflictColumns(
+    contract,
+    model.namespaceId,
+    model.modelName,
+    conflictOn,
+  );
+  const { namespaceId, tableName } = model.tables.root.storage;
+  const conflictKeys = conflictKeysOf(contract, namespaceId, tableName, 'skip', columns);
+  const index = rowThatCannotConflict(rows, conflictKeys, new Set(parentLinkColumns));
+  if (index !== undefined) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `create() nested mutation for relation "${name}" row ${index} gives no value for any conflict key: ${conflictKeys.map((key) => `(${key.join(', ')})`).join(', ')}`,
+      {
+        meta: {
+          kind: 'create',
+          relation: name,
+          problem: 'row-cannot-conflict',
+          index,
+          conflictKeys,
+        },
+      },
+    );
+  }
+  return { columns };
 }
 
 function addFindAndAssert(
