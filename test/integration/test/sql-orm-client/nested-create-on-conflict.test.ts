@@ -4,7 +4,7 @@ import {
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
-import { type PgIntegrationRuntime, seedPosts, seedUsers } from './runtime-helpers';
+import { type PgIntegrationRuntime, seedPosts, seedProfiles, seedUsers } from './runtime-helpers';
 
 async function seedOtherAuthor(runtime: PgIntegrationRuntime): Promise<void> {
   await seedUsers(runtime, [{ id: 9, name: 'Other', email: 'other@example.com' }]);
@@ -109,6 +109,95 @@ describe('integration/nested create with onConflict skip on a one-to-many relati
         expect(
           runtime.executions.filter(({ sql }) => sql.toLowerCase().startsWith('insert')),
         ).toHaveLength(1);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('integration/nested create with onConflict connect on a child-held relation', () => {
+  it(
+    'create() links a colliding row of another parent by its conflictOn field with its other fields unchanged, and runs its callbacks under it',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await runtime.query('create unique index posts_title_unique on posts (title)');
+        await seedOtherAuthor(runtime);
+
+        const created = await users
+          .select('id')
+          .include('posts', (posts) => posts.select('id', 'title').orderBy((post) => post.id.asc()))
+          .create({
+            id: 1,
+            name: 'Ada',
+            email: 'ada@example.com',
+            posts: (posts) =>
+              posts.create(
+                [
+                  {
+                    id: 20,
+                    title: 'Taken',
+                    views: 0,
+                    comments: (comments) => comments.create({ id: 100, body: 'On the taken post' }),
+                  },
+                  { id: 21, title: 'New', views: 1 },
+                ],
+                { onConflict: 'connect', conflictOn: ['title'] } as never,
+              ),
+          });
+
+        expect({ created, ...(await tablesOf(runtime)) }).toEqual({
+          created: {
+            id: 1,
+            posts: [
+              { id: 10, title: 'Taken' },
+              { id: 21, title: 'New' },
+            ],
+          },
+          posts: [
+            { ...takenPost, user_id: 1 },
+            { id: 21, title: 'New', user_id: 1, views: 1 },
+          ],
+          comments: [{ id: 100, post_id: 10, body: 'On the taken post' }],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() moves a colliding row of another parent by its key and links the profile the parent already has again without a change',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+        await seedUsers(runtime, [{ id: 1, name: 'Ada', email: 'ada@example.com' }]);
+        await seedOtherAuthor(runtime);
+        await seedProfiles(runtime, [{ id: 5, userId: 1, bio: 'Original' }]);
+
+        await users.where({ id: 1 }).update({
+          posts: (posts) =>
+            posts.create(
+              [
+                { id: 10, title: 'Changed', views: 0 },
+                { id: 11, title: 'New', views: 1 },
+              ],
+              { onConflict: 'connect' } as never,
+            ),
+          profile: (profile) =>
+            profile.create({ id: 5, bio: 'Changed' }, { onConflict: 'connect' } as never),
+        });
+
+        expect({
+          ...(await tablesOf(runtime)),
+          profiles: await runtime.query('select id, user_id, bio from profiles'),
+        }).toEqual({
+          posts: [
+            { ...takenPost, user_id: 1 },
+            { id: 11, title: 'New', user_id: 1, views: 1 },
+          ],
+          comments: [],
+          profiles: [{ id: 5, user_id: 1, bio: 'Original' }],
+        });
       });
     },
     timeouts.spinUpPpgDev,

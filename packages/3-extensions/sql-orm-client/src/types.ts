@@ -1951,13 +1951,14 @@ type RelationConnectCriterion<
   ? Record<string, unknown>
   : UniqueConstraintCriterion<TContract, ModelName, NsId>;
 
-export type NestedCreateConflictAction = 'skip';
+export type NestedCreateConflictAction = 'skip' | 'connect';
 
 export interface NestedCreateOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  ConflictAction extends NestedCreateConflictAction = NestedCreateConflictAction,
 > {
-  readonly onConflict: NestedCreateConflictAction;
+  readonly onConflict: ConflictAction;
   readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
 }
 
@@ -2415,7 +2416,9 @@ type RelationCreateOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ConflictActions extends NestedCreateConflictAction,
-> = [ConflictActions] extends [never] ? never : NestedCreateOptions<TContract, ModelName>;
+> = [ConflictActions] extends [never]
+  ? never
+  : NestedCreateOptions<TContract, ModelName, ConflictActions>;
 
 type RelationConflictActions<
   TContract extends Contract<SqlStorage>,

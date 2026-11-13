@@ -43,11 +43,10 @@ function updateOf(...writes: string[]): string {
   return ['n1 Find users where id = 1', ...writes, 'result: n1'].join('\n');
 }
 
-function printUpdate(input: Record<string, unknown>): string {
-  const context = getTestContext();
+function printUpdate(input: Record<string, unknown>, context = getTestContext()): string {
   const target = {
     context,
-    state: createCollectionFor('User').collection.where({ id: 1 }).state,
+    state: createCollectionFor('User', context.contract).collection.where({ id: 1 }).state,
     modelName: 'User',
     namespaceId: 'public',
   };
@@ -62,6 +61,70 @@ function printUpdate(input: Record<string, unknown>): string {
 }
 
 describe('create options on a relation', () => {
+  it('inserts each row of onConflict connect on its own and links a colliding row by updating its parent key', () => {
+    expect({
+      one: printUpdate({
+        posts: (posts: Mutator) => posts.create(post, { onConflict: 'connect' }),
+      }),
+      several: printUpdate({
+        posts: (posts: Mutator) =>
+          posts.create([post, other], { onConflict: 'connect', conflictOn: ['title'] }),
+      }),
+      withCallback: printUpdate({
+        posts: (posts: Mutator) =>
+          posts.create(
+            { ...post, comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }) },
+            { onConflict: 'connect' },
+          ),
+      }),
+    }).toEqual({
+      one: updateOf('n2 Insert posts on conflict (id) do update <- PayloadData n1 (id->user_id)'),
+      several: updateOf(
+        'n2 Insert posts on conflict (title) do update <- PayloadData n1 (id->user_id)',
+        'n3 Insert posts on conflict (title) do update <- PayloadData n1 (id->user_id)',
+      ),
+      withCallback: updateOf(
+        'n2 Insert posts on conflict (id) do update <- PayloadData n1 (id->user_id)',
+        'n3 Insert comments <- PayloadData n2 (id->post_id)',
+      ),
+    });
+  });
+
+  it('reads a row of onConflict connect with relation callbacks back by its conflict columns without returning', () => {
+    const withoutReturning = {
+      ...getTestContext(),
+      contract: withoutCapabilityKeys(baseContract, ['returning']),
+    };
+    const comments = (mutator: Mutator) => mutator.create({ id: 3, body: 'Hi' });
+
+    expect({
+      byKey: printUpdate(
+        {
+          posts: (posts: Mutator) => posts.create({ ...post, comments }, { onConflict: 'connect' }),
+        },
+        withoutReturning,
+      ),
+      byTitle: printUpdate(
+        {
+          posts: (posts: Mutator) =>
+            posts.create({ ...post, comments }, { onConflict: 'connect', conflictOn: ['title'] }),
+        },
+        withoutReturning,
+      ),
+    }).toEqual({
+      byKey: updateOf(
+        'n2 Insert posts on conflict (id) do update <- PayloadData n1 (id->user_id)',
+        'n3 FindByKeys posts by (id) for create <- Rows n2',
+        'n4 Insert comments <- PayloadData n3 (id->post_id)',
+      ),
+      byTitle: updateOf(
+        'n2 Insert posts on conflict (title) do update <- PayloadData n1 (id->user_id)',
+        'n3 FindByKeys posts by (title) for create <- Rows n2',
+        'n4 Insert comments <- PayloadData n3 (id->post_id)',
+      ),
+    });
+  });
+
   it('counts the parent link toward the conflict key of a row of onConflict skip', () => {
     expect(
       printUpdate({
@@ -148,6 +211,30 @@ describe('create options on a relation', () => {
         conflictKeys: [['embedding']],
       },
     ],
+    [
+      'onConflict connect on the many-to-many relation User.tags',
+      { tags: (tags: Mutator) => tags.create({ id: 't', name: 'Go' }, { onConflict: 'connect' }) },
+      'ORM.OPERATION_UNSUPPORTED',
+      'create() nested mutation for relation "tags" does not support onConflict "connect"',
+      { kind: 'create', relation: 'tags', reason: 'on-conflict-connect' },
+    ],
+    [
+      'onConflict connect on the to-one relation Post.author in a create row',
+      {
+        posts: (posts: Mutator) =>
+          posts.create({
+            ...post,
+            author: (author: Mutator) =>
+              author.create(
+                { id: 5, name: 'Ada', email: 'ada@example.com' },
+                { onConflict: 'connect' },
+              ),
+          }),
+      },
+      'ORM.OPERATION_UNSUPPORTED',
+      'create() nested mutation for relation "author" does not support onConflict "connect"',
+      { kind: 'create', relation: 'author', reason: 'on-conflict-connect' },
+    ],
   ] as const;
 
   it.each(rejections)(
@@ -168,24 +255,35 @@ describe('create options on a relation', () => {
     comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }),
   };
 
-  it('refuses onConflict skip on a row with relation callbacks before any statement on a contract without returning', async () => {
-    const { collection, runtime } = createCollectionFor(
-      'User',
-      withoutCapabilityKeys(baseContract, ['returning']),
-    );
+  it.each([
+    ['skip on a row with relation callbacks', 'returning', { onConflict: 'skip' }, [withComment]],
+    [
+      'connect on a column other than the key the row gives',
+      'insertOnConflictTarget',
+      { onConflict: 'connect', conflictOn: ['title'] },
+      [post],
+    ],
+  ] as const)(
+    'refuses onConflict %s before any statement on a contract without %s',
+    async (_, capability, options, rows) => {
+      const { collection, runtime } = createCollectionFor(
+        'User',
+        withoutCapabilityKeys(baseContract, [capability]),
+      );
 
-    await expect(
-      collection.where({ id: 1 }).update({
-        posts: (posts: Mutator) => posts.create([withComment], { onConflict: 'skip' }),
-      } as never),
-    ).rejects.toThrow(
-      expect.objectContaining({
-        code: 'ORM.CAPABILITY_MISSING',
-        meta: expect.objectContaining({ capability: 'returning' }),
-      }),
-    );
-    expect(runtime.executions).toEqual([]);
-  });
+      await expect(
+        collection.where({ id: 1 }).update({
+          posts: (posts: Mutator) => posts.create(rows, options),
+        } as never),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: 'ORM.CAPABILITY_MISSING',
+          meta: expect.objectContaining({ capability }),
+        }),
+      );
+      expect(runtime.executions).toEqual([]);
+    },
+  );
 
   describe('on a relation whose target is a variant stored in its own table', () => {
     const contract = withPatchedDomainModels(buildMixedPolyContract(), (models) => {

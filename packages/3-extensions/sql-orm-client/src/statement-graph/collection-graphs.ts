@@ -5,6 +5,7 @@ import {
   type ProjectionItem,
   SelectAst,
 } from '@internal/sql-relational-core/ast';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   hasContractCapability,
   isAutoIncrementColumn,
@@ -42,6 +43,7 @@ import {
   findRows,
   insertRows,
   type KeySource,
+  type Model,
   type Returns,
   readBack,
   type Shape,
@@ -250,7 +252,7 @@ export function createAllGraph(
       collection.context.contract,
       { action: method, modelName, meta: { method, model: modelName } },
       state.tables.root.storage,
-      { columns: conflict.columns },
+      { onConflict: 'skip', columns: conflict.columns },
       rows,
       () => [],
     );
@@ -394,7 +396,7 @@ export function upsertGraph(
   requireIdentityColumnsForIncludes(collection);
   const targeted = hasContractCapability(contract, 'insertOnConflictTarget');
   if (!targeted) {
-    requireOnlyCollidingKey(collection, create, conflictColumns);
+    requireOnlyCollidingKey(context, modelOf(collection), create, conflictColumns, 'upsert()');
   }
   const updateSet =
     Object.keys(update).length > 0
@@ -435,15 +437,16 @@ function identityProjection(collection: DescribeCollectionRowsOptions): readonly
 }
 
 /**
- * Without capability `insertOnConflictTarget`, the database's conflict clause fires on any unique key, so the upsert is allowed only when the named columns are the only key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out.
+ * Without capability `insertOnConflictTarget`, the database's conflict clause fires on any unique key, so a write that updates on conflict is allowed only when the named columns are the only key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out.
  */
-function requireOnlyCollidingKey(
-  collection: DescribeCollectionRowsOptions,
+export function requireOnlyCollidingKey(
+  context: ExecutionContext,
+  { modelName, tables }: Model,
   create: Readonly<Record<string, unknown>>,
   conflictColumns: readonly string[],
+  action: string,
 ): void {
-  const { context, modelName, state } = collection;
-  const { namespaceId, tableName } = state.tables.root.storage;
+  const { namespaceId, tableName } = tables.root.storage;
   const named = new Set(conflictColumns);
   const colliding = resolveUniqueKeyColumnSets(context.contract, namespaceId, tableName).find(
     (columns) =>
@@ -457,8 +460,8 @@ function requireOnlyCollidingKey(
   if (colliding === undefined) return;
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `upsert() on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
-    { meta: { capability: 'insertOnConflictTarget', action: 'upsert()' } },
+    `${action} on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
+    { meta: { capability: 'insertOnConflictTarget', action } },
   );
 }
 

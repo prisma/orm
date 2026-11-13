@@ -3,6 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
+  ColumnRef,
   DefaultValueExpr,
   DeleteAst,
   ExistsExpr,
@@ -154,28 +155,40 @@ export interface InsertConflictSkip {
   readonly columns: readonly string[];
 }
 
-function conflictSkipClause(
+export interface InsertConflictLink {
+  readonly columns: readonly string[];
+  readonly targeted: boolean;
+  readonly link: readonly string[];
+}
+
+export type InsertConflict = InsertConflictSkip | InsertConflictLink;
+
+function conflictClause(
   target: AliasedTable,
-  conflictSkip: InsertConflictSkip | undefined,
+  conflict: InsertConflict | undefined,
 ): InsertOnConflict | undefined {
-  if (!conflictSkip) return undefined;
-  if (conflictSkip.columns.length === 0) return InsertOnConflict.doNothing();
-  return InsertOnConflict.on(
-    conflictSkip.columns.map((column) => target.column(column)),
-  ).doNothing();
+  if (!conflict) return undefined;
+  if ('link' in conflict) {
+    const columns = conflict.targeted ? conflict.columns : [];
+    return InsertOnConflict.on(columns.map((column) => target.column(column))).doUpdateSet(
+      Object.fromEntries(conflict.link.map((column) => [column, ColumnRef.of('excluded', column)])),
+    );
+  }
+  if (conflict.columns.length === 0) return InsertOnConflict.doNothing();
+  return InsertOnConflict.on(conflict.columns.map((column) => target.column(column))).doNothing();
 }
 
 export function insertAst(
   contract: Contract<SqlStorage>,
   target: AliasedTable,
   rows: readonly Record<string, unknown>[],
-  conflictSkip: InsertConflictSkip | undefined,
+  conflict: InsertConflict | undefined,
 ): InsertAst {
   const { namespaceId, tableName } = target.storage;
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   return InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
-    .withOnConflict(conflictSkipClause(target, conflictSkip));
+    .withOnConflict(conflictClause(target, conflict));
 }
 
 function stripUndefinedValues(row: Record<string, unknown>): Record<string, unknown> {
