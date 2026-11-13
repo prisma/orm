@@ -1,6 +1,6 @@
 {
   "name": "lsp-playground",
-  "version": "8.0.0-rc.22",
+  "version": "8.0.0-rc.23",
   "private": true,
   "type": "module",
   "description": "Private dev playground: opens a PSL file in a browser Monaco editor wired to the Prisma 8 language server for live diagnostics.",
@@ -24,7 +24,7 @@
     "@codingame/monaco-vscode-textmate-service-override": "^25.1.2",
     "@codingame/monaco-vscode-theme-defaults-default-extension": "^25.1.2",
     "@codingame/monaco-vscode-theme-service-override": "^25.1.2",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.22",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.23",
     "monaco-editor": "^0.56.0",
     "monaco-languageclient": "^10.7.0",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@^25.1.2",
@@ -35,9 +35,9 @@
     "ws": "^8.21.2"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.9.0",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.22",
-    "@repo/tsconfig": "workspace:8.0.0-rc.22",
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
     "@types/node": "catalog:",
     "@types/ws": "^8.5.13",
     "puppeteer-core": "^25.4.0",

@@ -1,0 +1,24 @@
+// use prisma-8
+
+// A Date field records when something happened.
+types {
+  Stamp = DateTime
+}
+
+type Visit {
+  at   DateTime
+  note String?
+}
+
+model Post {
+  id          ObjectId  @id @map("_id")
+  title       String
+  publishedAt DateTime?
+  editedAt    DateTime[]
+  createdAt   DateTime      @onCreate(now())
+  updatedAt   DateTime      @onCreate(now()) @onUpdate(now())
+  reviewedAt  Stamp
+  visits      Visit[]
+  Dated       Bool
+  @@map("posts")
+}

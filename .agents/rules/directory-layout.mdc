@@ -25,6 +25,9 @@ packages/
       4-codec-testkit/   # @internal/postgres-codec-testkit
       9-facade/          # @internal/postgres
     sqlite/  mongo/      # the same shape
+    mysql/
+      1-mysql/           # MySQL: 1-target, 2-adapter, 3-driver, 9-facade
+      2-mariadb/         # MariaDB: 1-target, 2-adapter, 3-driver, 9-facade
   3-extensions/          # Domain 3: Extension packs
     pgvector/
 ```
@@ -39,7 +42,7 @@ Planes (shared, migration, runtime) are not directories. `architecture.config.js
 
 ## Registering a target package
 
-Register every package under `3-targets/<db>/` in `architecture.config.json` with the recipe in [Repo-Map-and-Layering.md](../../docs/onboarding/Repo-Map-and-Layering.md): `src/core/*.ts` shared, `src/core/migrations/**` migration, `src/core/runtime/**` runtime, `src/exports/control.ts` migration, `src/exports/runtime.ts` runtime, `src/exports/pack.ts` shared. Control-only code goes in `src/core/migrations/`, runtime-only code in `src/core/runtime/`. `pnpm lint:deps` fails when a source file matches no glob or more than one, and when a package in a database folder depends on a sibling that is not numbered lower or on another database's packages.
+Register every package under `3-targets/<db>/` in `architecture.config.json` with the recipe in [Repo-Map-and-Layering.md](../../docs/onboarding/Repo-Map-and-Layering.md): `src/core/*.ts` shared, `src/core/migrations/**` migration, `src/core/runtime/**` runtime, `src/exports/control.ts` migration, `src/exports/runtime.ts` runtime, `src/exports/pack.ts` shared. Control-only code goes in `src/core/migrations/`, runtime-only code in `src/core/runtime/`. `pnpm lint:deps` fails when a source file matches no glob or more than one, and when a package in a database folder breaks dependency order. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.
 
 ## Multi-Plane Entrypoints
 

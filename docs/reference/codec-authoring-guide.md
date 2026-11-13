@@ -430,7 +430,7 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 | `@internal/target-mongo/data-types` | the data type each codec represents |
 | `@internal/target-mongo/codec-types` | the `CodecTypes` map emitted `contract.d.ts` files import |
 
-The source lives in `packages/3-targets/mongo/1-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The target's descriptors list the codec descriptors, built with `mongoCodecDescriptor` from `@internal/mongo-codec`, and the adapter's runtime and control descriptors encode with the codecs `assembleMongoCodecRegistry` takes from the descriptors of the whole stack. A MongoDB extension declares its codecs the same way, once, in `types.codecTypes.codecDescriptors`. The adapter's control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-targets/mongo/2-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step. `BsonScalar`, `BsonValue` and `BsonInputValue` are declared once in `@internal/mongo-value`, which both maps import, and `@internal/target-mongo/codec-types` re-exports them.
+The source lives in `packages/3-targets/mongo/1-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts`, the date and time codecs and their `now()` generators in `src/core/{date-time-codecs,date-time-values,date-time-now-generators}.ts`, and `src/exports/codec-types.ts`. The target's descriptors list the codec descriptors, built with `mongoCodecDescriptor` from `@internal/mongo-codec`, and the adapter's runtime and control descriptors encode with the codecs `assembleMongoCodecRegistry` takes from the descriptors of the whole stack. A MongoDB extension declares its codecs the same way, once, in `types.codecTypes.codecDescriptors`. The target contributes the type constructor that names each scalar for PSL and the TypeScript builder's `type.*` (`mongoScalarTypeConstructors` in `packages/3-targets/mongo/1-target/src/core/authoring.ts`, which holds the base scalars, the explicit date and time types and the convenience types `DateTime`, `Date`, `Time` and `Duration`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step. `BsonScalar`, `BsonValue` and `BsonInputValue` are declared once in `@internal/mongo-value`, which both maps import, and `@internal/target-mongo/codec-types` re-exports them.
 
 The PSL name, TS helper, BSON storage types and application type of every Mongo codec are listed in [Scalar types](scalar-types.md#mongodb). What that page does not list is the JSON form `contract.json` stores for each codec's values, which its data type reads and the codec's `toDataTypeValue` returns:
 
@@ -440,7 +440,10 @@ The PSL name, TS helper, BSON storage types and application type of every Mongo 
 | `mongo/objectId@1` | the application value, 24 hexadecimal digits |
 | `mongo/int32@1` | the application value, an integer from -2147483648 to 2147483647 |
 | `mongo/double@1` | the application value, with NaN and the infinities written as the text `"NaN"`, `"Infinity"` and `"-Infinity"`, as the SQL float codecs write them |
-| `mongo/date@1` | ISO-8601 text in UTC, as `Date.toISOString()` writes it |
+| `mongo/date@1`, `mongo/date-instant@1`, `mongo/date-instant-string@1` | ISO-8601 text in UTC, as `Date.toISOString()` writes it |
+| `mongo/date-string@1`, `mongo/date-temporal@1` | the calendar date, `2024-02-29` |
+| `mongo/time-string@1`, `mongo/time-temporal@1` | the time of day with three fraction digits, `09:30:00.000` |
+| `mongo/duration-string@1` | the ISO 8601 duration as written, `PT1H30M` |
 | `mongo/int64@1` | decimal text; a safe-integer `number` is accepted on the way in |
 | `mongo/int64Number@1` | decimal text, as `mongo/int64@1` writes it |
 | `mongo/binary@1` | unwrapped base64 |
@@ -469,7 +472,7 @@ export const mongoStringCodec = mongoCodec({
 
 `Bson` (`mongo/bson@1`) passes values through, so the driver's number handling shows: a stored `long` in the safe-integer range and an integral `double` read back as a JavaScript `number` (the driver's default `promoteLongs` and `promoteValues`), and a `number` that fits in 32 bits is written back as `int`. Wrap a value in `Long` or `Double` to keep its BSON type across a read and a write.
 
-The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
+The PSL names `Int`, `Float` and `Boolean` are deprecated aliases of `Int32`, `Double` and `Bool`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
 
 The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, a larger one (or any one with `promoteLongs: false`) as a `Long`, and every one as a `bigint` with `useBigInt64`, so the `int64` and `int64Number` codecs accept all three in `fromWire`. `mongo/int64@1` and `mongo/int64Number@1` both name the `mongo/int64` data type, as `pg/int8@1` and `pg/int8number@1` both name `pg/int8`: the first reads a `bigint`, the second a `number` within ±(2^53 − 1), refusing a stored value outside that range or with a fraction rather than rounding it, and both write a BSON `long`. Reading a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.
 

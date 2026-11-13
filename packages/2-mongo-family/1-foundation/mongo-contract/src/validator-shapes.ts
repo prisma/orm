@@ -2,6 +2,8 @@
 export interface ValidatorShape {
   readonly properties: Readonly<Record<string, unknown>>;
   readonly required: readonly string[];
+  /** Whether the shape allows no field but its properties (`additionalProperties: false`). */
+  readonly closed: boolean;
 }
 
 /** A root model's shape in a collection validator, with one shape per variant. */
@@ -25,6 +27,7 @@ function shapeOf(schema: Record<string, unknown>): ValidatorShape {
     required: Array.isArray(required)
       ? required.filter((name): name is string => typeof name === 'string')
       : [],
+    closed: schema['additionalProperties'] === false,
   };
 }
 
@@ -48,4 +51,85 @@ export function validatorFieldNamesOf(jsonSchema: unknown): ReadonlySet<string> 
       ...root.variants.flatMap((variant) => Object.keys(variant.properties)),
     ]),
   );
+}
+
+/**
+ * The discriminator a variant branch selects on: its one property whose schema is only
+ * `{ enum: [value] }`, as the derived validator writes it. A field typed by a one-value enum also has
+ * a `bsonType`.
+ */
+export interface ValidatorDiscriminator {
+  readonly field: string;
+  readonly value: unknown;
+}
+
+/**
+ * One kind of document a collection validator describes: a root model with no variants, or a
+ * variant with its root's required fields and properties. `key` names the same kind of document in
+ * another validator of the collection: the root's position in `anyOf`, and the variant's
+ * discriminator value, or its position when it has none. Roots are matched by position because
+ * `deriveCollectionValidators` writes them in the same order every time.
+ */
+export interface ValidatorDocumentShape {
+  readonly key: string;
+  readonly rootIndex: number;
+  readonly discriminator: ValidatorDiscriminator | undefined;
+  readonly required: readonly string[];
+  readonly properties: Readonly<Record<string, unknown>>;
+  readonly closed: boolean;
+}
+
+function discriminatorOf(
+  properties: Readonly<Record<string, unknown>>,
+): ValidatorDiscriminator | undefined {
+  const named = Object.entries(properties).flatMap(([field, schema]) => {
+    if (!isRecord(schema) || Object.keys(schema).length !== 1) return [];
+    const values = schema['enum'];
+    return Array.isArray(values) && values.length === 1 ? [{ field, value: values[0] }] : [];
+  });
+  const [only, ...others] = named;
+  return others.length === 0 ? only : undefined;
+}
+
+/** Each kind of document a collection validator's `$jsonSchema` describes. */
+export function validatorDocumentShapesOf(jsonSchema: unknown): readonly ValidatorDocumentShape[] {
+  return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex): ValidatorDocumentShape[] => {
+    if (root.variants.length === 0) {
+      return [
+        {
+          key: `${rootIndex}`,
+          rootIndex,
+          discriminator: undefined,
+          required: root.required,
+          properties: root.properties,
+          closed: root.closed,
+        },
+      ];
+    }
+    return root.variants.map((variant, variantIndex) => {
+      const discriminator = discriminatorOf(variant.properties);
+      return {
+        key: `${rootIndex}:${discriminator === undefined ? variantIndex : JSON.stringify([discriminator.field, discriminator.value])}`,
+        rootIndex,
+        discriminator,
+        required: [...new Set([...root.required, ...variant.required])],
+        properties: { ...root.properties, ...variant.properties },
+        closed: root.closed || variant.closed,
+      };
+    });
+  });
+}
+
+const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * The BSON types a property schema's `bsonType` names, `number` read as every numeric type; none
+ * when it names none.
+ */
+export function propertyBsonTypesOf(schema: unknown): readonly string[] {
+  const bsonType = isRecord(schema) ? schema['bsonType'] : undefined;
+  const names = Array.isArray(bsonType) ? bsonType : bsonType === undefined ? [] : [bsonType];
+  return names
+    .filter((name): name is string => typeof name === 'string')
+    .flatMap((name) => (name === 'number' ? NUMBER_TYPES : [name]));
 }

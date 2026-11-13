@@ -37,7 +37,7 @@ export default defineContract({}, ({ field, model, gen, type }) => ({
 
 ### `@internal/sqlite/config`
 
-Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 ```typescript
 import { defineConfig } from '@internal/sqlite/config';
@@ -130,6 +130,8 @@ await db.execute(db.raw.sql`UPDATE posts SET views = 0`.affectedCount().build())
 `mode` is `'strict'` by default, and every `budgets()` violation throws. Pass `mode: 'permissive'` and a violation whose severity is `'warn'` goes to `log.warn` instead, and the query runs; a violation whose severity is `'error'` still throws. `budgets()` gives latency `'warn'` and the row count `'error'` by default, so a row-count limit warns only with `severities: { rowCount: 'warn' }`.
 
 ### Transactions
+
+Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactionOptions` accepts only `isolationLevel: IsolationLevel.Serializable` (or the literal `'Serializable'`), through factory `transactionOptions` or `transaction(fn, options?)`. The driver keeps plain BEGIN and does not alter PRAGMAs. See [transaction isolation](../../../../docs/reference/transaction-isolation.md) for null rejection, undefined inheritance and explicit-only defaults.
 
 `db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
 

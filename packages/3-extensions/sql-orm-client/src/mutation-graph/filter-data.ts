@@ -5,10 +5,13 @@ import {
   ParamRef,
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
-import { type ColumnPair, Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type NodeId, type StorageRow } from './edge';
 
 /** The condition that matches the row whose source columns hold the values in `sourceRow`. */
-export function keyCondition(columns: readonly ColumnPair[], sourceRow: StorageRow): AnyExpression {
+export function keyCondition(
+  columns: readonly ColumnMapping[],
+  sourceRow: StorageRow,
+): AnyExpression {
   const conditions = columns.map(([source, target]) =>
     BinaryExpr.eq(
       target.expr,
@@ -22,17 +25,24 @@ export function keyCondition(columns: readonly ColumnPair[], sourceRow: StorageR
   return first !== undefined && others.length === 0 ? first : AndExpr.of(conditions);
 }
 
-/** Matches each source row's row in the reading statement. `changed` holds new values, by source column, that a write between the two gave every row. */
-export class FilterData extends Edge<AnyExpression> {
-  readonly changed: Readonly<StorageRow>;
+export interface KeyMatch {
+  readonly condition: AnyExpression;
+  readonly key: Readonly<StorageRow>;
+}
 
-  constructor(from: NodeId, columns: readonly ColumnPair[], changed: Readonly<StorageRow> = {}) {
+/** Matches each source row's row in the reading statement: the condition that selects it, and its key by target column. */
+export class FilterData extends DataEdge<KeyMatch> {
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
     super(from, columns);
-    this.changed = changed;
     Object.freeze(this);
   }
 
-  override output(sourceRow: StorageRow): AnyExpression {
-    return keyCondition(this.columns, { ...sourceRow, ...this.changed });
+  override output(sourceRow: StorageRow): KeyMatch {
+    return {
+      condition: keyCondition(this.columns, sourceRow),
+      key: Object.fromEntries(
+        this.columns.map(([source, target]) => [target.alias, sourceRow[source.alias]]),
+      ),
+    };
   }
 }

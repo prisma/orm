@@ -15,4 +15,5 @@ export {
   type TransactionStartTarget,
   transactionSettlement,
   transactionStart,
+  wasRefusedBeforeBegin,
 } from '../transaction-state';

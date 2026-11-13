@@ -57,6 +57,7 @@ describe('a sqlite transaction', () => {
       verifyMarker: false,
       middleware: [activityTracer(started)],
       collections: { Post: PostCollection },
+      transactionOptions: { isolationLevel: 'Serializable' },
     });
 
     const result = await db.transaction(async (tx) => {
@@ -92,6 +93,29 @@ describe('a sqlite transaction', () => {
         { kind: 'statement', parentKind: 'orm-call' },
       ],
     });
+  });
+});
+
+describe('a selected SQLite transaction that rolls back', () => {
+  it('preserves stored rows and allows the next transaction to commit', async () => {
+    const db = sqlite({ contract, path, verifyMarker: false });
+    const failure = new Error('callback failed');
+    try {
+      const before = await db.orm.Post.select('id', 'views').all();
+      await expect(
+        db.transaction(
+          async (tx) => {
+            await tx.execute(tx.raw.sql`UPDATE posts SET views = 42`.affectedCount().build());
+            throw failure;
+          },
+          { isolationLevel: 'Serializable' },
+        ),
+      ).rejects.toBe(failure);
+      const after = await db.transaction(async (tx) => tx.orm.Post.select('id', 'views').all());
+      expect(after).toEqual(before);
+    } finally {
+      await db.close();
+    }
   });
 });
 

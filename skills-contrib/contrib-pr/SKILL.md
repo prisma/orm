@@ -124,7 +124,7 @@ Fill in the [pull request template](../../.github/PULL_REQUEST_TEMPLATE.md) sect
 - **Summary**: one or two sentences focused on *why*, not file-by-file *what*. "Adds X because Y was broken" rather than "Adds X function in foo.ts and modifies bar.ts".
 - **Testing performed**: list the actual `pnpm test:*` commands you ran. If you ran a manual repro (e.g. against the demo), say so.
 - **Skill update**: say which agent skill the change teaches. Write `n/a — internal only` only when the change is purely internal or a refactor with no user-visible delta. A user-facing change that teaches no existing skill still needs a sentence saying why no skill update is required. The checklist below asks you to confirm this section.
-- **Checklist**: confirm DCO signoff, scope, tests, conventional title.
+- **Checklist**: confirm DCO signoff, tests, and the Skill update section.
 - **Notes for the reviewer** (optional): alternative approaches you considered, follow-ups intentionally deferred, anything you want the reviewer to focus on.
 
 Do **not** include an "AI-authored" disclosure. Maintainers do not require it; it adds noise.

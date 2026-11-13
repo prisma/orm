@@ -108,7 +108,7 @@ function initDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
-    ...(inputs.plannerWarnings.length > 0 ? { warnings: inputs.plannerWarnings } : {}),
+    ...(inputs.plannerWarnings.length > 0 ? { plannerWarnings: inputs.plannerWarnings } : {}),
     summary: value.summary,
     timings: { total: Date.now() - inputs.startedAt },
   };

@@ -182,12 +182,11 @@ describe('write terminals run as one orm-call', () => {
     );
   });
 
-  it('create() with a relation callback runs its statements and its read-back in a transaction of the call', async () => {
+  it('create() with a relation callback runs its statements in a transaction of the call', async () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
     recorded.runtime.setNextResults([
       [aliceRow],
       [{ id: 10, title: 'Post', user_id: 1, views: 1 }],
-      [aliceRow],
     ]);
 
     const created = await recorded.collection.create(
@@ -200,7 +199,7 @@ describe('write terminals run as one orm-call', () => {
     );
 
     expect(summary(recorded)).toEqual(
-      oneCall(['audit'], 3, { outcome: 'succeeded', result: created }, ['committed']),
+      oneCall(['audit'], 2, { outcome: 'succeeded', result: created }, ['committed']),
     );
   });
 
@@ -281,7 +280,7 @@ describe('write terminals run as one orm-call', () => {
 
   it('upsert() and delete() end with the row', async () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
-    recorded.runtime.setNextResults([[aliceRow], [{ id: 1 }], [aliceRow]]);
+    recorded.runtime.setNextResults([[aliceRow], [aliceRow], []]);
 
     await recorded.collection.upsert(
       { create: alice, update: { name: 'Alice' }, conflictOn: { id: 1 } },

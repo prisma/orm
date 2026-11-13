@@ -12,6 +12,7 @@ import type {
   PreparedStatementHandle,
   SqlDriver,
   SqlExecuteRequest,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { SelectAst as SelectAstCtor, TableSource } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
@@ -84,7 +85,7 @@ export interface RecordingConnection {
   query: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
-  beginTransaction(): Promise<RecordingTransaction>;
+  beginTransaction(start?: SqlTransactionOptions): Promise<RecordingTransaction>;
   readonly transaction: RecordingTransaction;
 }
 
@@ -180,7 +181,7 @@ export function createRecordingDriver(
     }),
     release: vi.fn().mockResolvedValue(undefined),
     destroy: vi.fn().mockResolvedValue(undefined),
-    beginTransaction: () => beginTransactionSpy(),
+    beginTransaction: (start) => beginTransactionSpy(start),
   };
 
   const acquireConnectionSpy = vi.fn().mockResolvedValue(connection);

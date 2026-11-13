@@ -590,6 +590,25 @@ export async function selfEmitMigration(
   return runMigrationFile(migrationTs, args, ctx.testDir);
 }
 
+/** Runs the `migration.ts` of `migrationDir` again, and expects it to write the same `ops.json`. */
+export async function expectMigrationTsReproducesOps(
+  ctx: JourneyContext,
+  migrationDir: string,
+  label: string,
+): Promise<void> {
+  const opsPath = join(migrationDir, 'ops.json');
+  const written = readFileSync(opsPath, 'utf-8');
+  const emitted = await selfEmitMigration(ctx, ['--dir', migrationDir, '--config', ctx.configPath]);
+  expect(
+    emitted.exitCode,
+    `${label}: node migration.ts: ${emitted.stdout}\n${emitted.stderr}`,
+  ).toBe(0);
+  expect(
+    readFileSync(opsPath, 'utf-8'),
+    `${label}: a re-run of migration.ts reproduces ops.json`,
+  ).toBe(written);
+}
+
 /**
  * Follows a message that says to run a migration's `migration.ts` with node: runs `node migration.ts` inside `packageDir`, the migration package directory, as a user would.
  */

@@ -26,16 +26,20 @@ A PR open against the wrong branch is recoverable but visible; this gate costs n
 
 The `main` ruleset requires conversation resolution. A PR with auto-merge enabled and every check green still sits at `BLOCKED` while any review thread is unresolved, including CodeRabbit's. Before enabling auto-merge, list the unresolved threads. `reviewThreads` takes no `isResolved` filter, so page through every thread and keep the unresolved ones: `gh api graphql --paginate -F number=<PR number> -f query='query($number:Int!,$endCursor:String){repository(owner:"prisma",name:"orm"){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved path}}}}}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved==false)|"\(.id) \(.path)"'`. It prints nothing when every thread is resolved. Reply to each open thread with the fix commit or the reason for no change, and resolve it. Seen on #30350 and #30380 (2026-09-22/23).
 
+## Auto-merge on is not the same as queued
+
+After turning auto-merge on, confirm the PR enters the queue (`mergeQueueEntry` is set) and that the head has a `CI (PR)` run. A push while the PR is queued gets no PR CI, and a conflict with `main` keeps it out silently. A review thread opened while the PR is queued does not stop the merge, so list unresolved threads again after it merges and answer each one. See [`failure-modes.md § F54`](../calibration/failure-modes.md#f54-auto-merge-is-on-and-the-pr-never-enters-the-merge-queue).
+
 ## PR title convention
 
 - Conventional-commit prefix: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `test:` / `build:` / `ci:`.
-- Linear ticket identifier included as `(TML-NNNN)` suffix OR in the description as `Refs: TML-NNNN` — GitHub integration auto-transitions Linear on merge if either is present.
+- The Linear ticket identifier does not go in the title. It goes in the description. Write `Fixes TML-NNNN` when the PR completes the issue: Linear then closes the issue on merge. Write `Part of TML-NNNN` when more PRs will follow: Linear links the PR and leaves the issue open.
 - One-line summary, present tense, imperative mood.
 
 Examples:
 
-- `feat(sql): add returning() to insert operations (TML-2549)`
-- `fix(emitter): handle null defaults in column codecs (TML-2487)`
+- `feat(sql): add returning() to insert operations`
+- `fix(emitter): handle null defaults in column codecs`
 
 ## PR body conventions (full mode)
 
@@ -50,7 +54,7 @@ The canonical `drive-pr-description` structure applies. Additional repo conventi
 
 For PRs routed as **direct change** by `drive-start-workflow`:
 
-- Title: conventional-commit prefix; ≤ 60 chars; Linear ticket in title.
+- Title: conventional-commit prefix; ≤ 60 chars.
 - Body: 4-line structure (intent / Linear / scope / verification) per `drive-pr-description` § Direct-change mode.
 - No `## Changes` section needed (the diff is the change).
 - No `## Why` section needed (the intent paragraph carries why).
@@ -87,8 +91,8 @@ This check fires on every PR, regardless of authoring path. Cheap to run, expens
 
 - Each slice maps to a Linear Issue.
 - Issue description links back to `projects/<project>/slices/<slice>/` (in-project) or to the orphan-slice PR description path (orphan).
-- PR title follows the convention above: conventional-commit prefix + one-line summary + `(TML-NNNN)` suffix.
-- PR description references the Linear issue (`Refs: TML-XXXX` line OR included in the title — either is enough for auto-close).
+- PR title follows the convention above: conventional-commit prefix + one-line summary.
+- PR description references the Linear issue: `Fixes TML-XXXX` when the PR completes it (Linear closes it on merge), `Part of TML-XXXX` otherwise.
 
 ## Linear state conventions
 

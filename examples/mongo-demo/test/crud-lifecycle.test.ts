@@ -68,6 +68,34 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
     expect(afterDelete).toHaveLength(0);
   });
 
+  it('writes a calendar date and a time of day, and reads them back as strings', async () => {
+    const created = await orm.users.create({
+      name: 'Dana',
+      email: 'dana@example.com',
+      bio: null,
+      role: 'author',
+      address: null,
+      birthday: '1990-02-28',
+      availableFrom: '09:30',
+    });
+
+    const stored = await client
+      .db(dbName)
+      .collection('users')
+      .findOne({ email: 'dana@example.com' });
+    const [read] = await orm.users.where(MongoFieldFilter.eq('email', 'dana@example.com')).all();
+
+    expect({
+      created: { birthday: created.birthday, availableFrom: created.availableFrom },
+      stored: { birthday: stored?.['birthday'], availableFrom: stored?.['availableFrom'] },
+      read: { birthday: read?.birthday, availableFrom: read?.availableFrom },
+    }).toEqual({
+      created: { birthday: '1990-02-28', availableFrom: '09:30:00.000' },
+      stored: { birthday: new Date('1990-02-28T00:00:00.000Z'), availableFrom: '09:30:00.000' },
+      read: { birthday: '1990-02-28', availableFrom: '09:30:00.000' },
+    });
+  });
+
   it('createAll → read → updateAll → read → deleteAll → read', async () => {
     const created = await orm.users.createAll([
       { name: 'Alice', email: 'alice@example.com', bio: null, role: 'reader', address: null },

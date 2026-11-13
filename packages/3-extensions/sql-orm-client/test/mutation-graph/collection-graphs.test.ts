@@ -6,6 +6,7 @@ import {
   updateAllGraph,
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
+import type { Graph } from '../../src/mutation-graph/graph';
 import type { CollectionState } from '../../src/types';
 import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
@@ -33,11 +34,25 @@ const tableWithNoIdentity = createStatementTables({
 });
 const targetWithIncludes = targetOf(users.include('posts').state);
 
+function printAsRun(graph: Graph): string {
+  graph.removeUnreadFinds();
+  return printGraph(graph);
+}
+
 describe('updateAllGraph', () => {
-  it('builds one Update as the result, returning nothing yet', () => {
+  it('builds one Update that returns the selected columns as the result, once the Find it folded is removed', () => {
     const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'rows');
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
+      ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
+    );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('builds one Update with the caller filter for a count', () => {
+    const graph = updateAllGraph(target, { email: 'ada@example.com' }, 'count');
+
+    expect(printAsRun(graph)).toBe(
       ["n1 Update users set email = 'ada@example.com' where name = 'Ada'", 'result: n1'].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual([]);
@@ -46,7 +61,7 @@ describe('updateAllGraph', () => {
   it('adds a Find that reads the written rows with their includes, as the result', () => {
     const graph = updateAllGraph(targetWithIncludes, { email: 'ada@example.com' }, 'rows');
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
       [
         "n1 Update users set email = 'ada@example.com' where name = 'Ada'",
         'n2 Find users <- FilterData n1 (id->id)',
@@ -86,20 +101,27 @@ describe('updateAllGraph', () => {
 });
 
 describe('deleteAllGraph', () => {
-  it('builds one Delete as the result, returning nothing yet', () => {
+  it('builds one Delete that returns the columns of the Find it stands for, as the result', () => {
     const graph = deleteAllGraph(target, 'rows');
 
-    expect(printGraph(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
+    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+  });
+
+  it('builds one Delete that returns nothing for a count', () => {
+    const graph = deleteAllGraph(target, 'count');
+
+    expect(printAsRun(graph)).toBe(["n1 Delete users where name = 'Ada'", 'result: n1'].join('\n'));
     expect(returnedAt(graph, 0)).toEqual([]);
   });
 
-  it('builds a Find with the includes as the result and then a Delete when there are includes', () => {
+  it('builds a Find with the includes as the result and then a Delete of the rows it found by key when there are includes', () => {
     const graph = deleteAllGraph(targetWithIncludes, 'rows');
 
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc",
-        "n2 Delete users where name = 'Ada'",
+        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n1',
       ].join('\n'),
     );
@@ -107,10 +129,10 @@ describe('deleteAllGraph', () => {
     expect(returnedAt(graph, 1)).toEqual([]);
   });
 
-  it('does not make that Find return identity columns', () => {
+  it('makes that Find also return the identity columns the Delete reads', () => {
     const graph = deleteAllGraph(targetOf(users.select('name').include('posts').state), 'rows');
 
-    expect(returnedAt(graph, 0)).toEqual(['name', 'posts']);
+    expect(returnedAt(graph, 0)).toEqual(['name', 'posts', 'id']);
   });
 });
 
@@ -126,7 +148,7 @@ describe('updateFirstGraph', () => {
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id']);
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('adds a Find that reads the updated row with its includes, as the result', () => {
@@ -194,7 +216,7 @@ describe('updateFirstGraph', () => {
       expect.objectContaining({
         code: 'ORM.ROW_IDENTITY_MISSING',
         message:
-          'update()/delete() on model "User" requires the table to have a primary key or unique constraint',
+          'update() on model "User" requires the table to have a primary key or unique constraint',
         meta: { model: 'User', table: 'no_such_table' },
       }),
     );
@@ -202,16 +224,17 @@ describe('updateFirstGraph', () => {
 });
 
 describe('deleteFirstGraph', () => {
-  it('builds a Find of the first row and a Delete of the row it finds', () => {
+  it('builds a Find of the first row as the result and a Delete of the row it finds, which returns nothing', () => {
     const graph = deleteFirstGraph(target);
 
-    expect(printGraph(graph)).toBe(
+    expect(printAsRun(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n2',
+        'result: n1',
       ].join('\n'),
     );
+    expect(returnedAt(graph, 1)).toEqual([]);
   });
 
   it('makes the Find carry the includes and be the result when there are includes', () => {

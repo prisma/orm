@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCollectionTables } from '../../src/collection-tables';
 import { createAllVariantGraph } from '../../src/mutation-graph/collection-graphs';
+import { mtiCreateContextOf } from '../../src/mutation-graph/storage-rows';
 import { emptyState } from '../../src/types';
 import { buildMixedPolyContract, buildTestContextFromContract } from '../helpers';
 import { printGraph } from './print-graph';
@@ -18,18 +19,20 @@ const collection = {
   modelName: 'Task',
   namespaceId: 'public',
 };
-const darkMode = { base: { title: 'Dark mode', type: 'feature' }, variant: { priority: 1 } };
-const exportPdf = { base: { title: 'Export to PDF', type: 'feature' }, variant: { priority: 3 } };
+const mti = mtiCreateContextOf(collection);
+if (mti === undefined) {
+  throw new Error('the collection is narrowed to the MTI variant feature');
+}
+const darkMode = { title: 'Dark mode', priority: 1 };
+const exportPdf = { title: 'Export to PDF', priority: 3 };
 
 describe('createAllVariantGraph', () => {
   it('builds no node for no rows', () => {
-    expect(printGraph(createAllVariantGraph(collection, features, 'Feature', []))).toBe(
-      'result: none',
-    );
+    expect(printGraph(createAllVariantGraph(collection, features, mti, []))).toBe('result: none');
   });
 
   it('inserts the base row, then the variant row with its key, and joins them for one row', () => {
-    const graph = createAllVariantGraph(collection, features, 'Feature', [darkMode]);
+    const graph = createAllVariantGraph(collection, features, mti, [darkMode]);
 
     expect(printGraph(graph)).toBe(
       [
@@ -42,19 +45,25 @@ describe('createAllVariantGraph', () => {
     expect(returnedAt(graph, 1)).toEqual(['features__priority', 'features__assignee_id']);
   });
 
-  it('puts the joined rows of several rows one after another', () => {
-    const graph = createAllVariantGraph(collection, features, 'Feature', [darkMode, exportPdf]);
+  it('puts the joined rows of several rows one after another, each insert after the one before', () => {
+    const graph = createAllVariantGraph(collection, features, mti, [darkMode, exportPdf]);
 
-    expect(printGraph(graph)).toBe(
+    expect(printGraph(graph, { state: true })).toBe(
       [
-        'n1 Insert tasks',
-        'n2 Insert features <- PayloadData n1 (id->id)',
-        'n3 CrossJoin <- Rows n1, Rows n2',
-        'n4 Insert tasks',
-        'n5 Insert features <- PayloadData n4 (id->id)',
-        'n6 CrossJoin <- Rows n4, Rows n5',
-        'n7 UnionAll <- Rows n3, Rows n6',
-        'result: n7',
+        'n1 State tasks',
+        'n2 Insert tasks <- state n1',
+        'n3 State tasks <- state n2',
+        'n4 State features',
+        'n5 Insert features <- PayloadData n2 (id->id), state n4',
+        'n6 State features <- state n5',
+        'n7 CrossJoin <- Rows n2, Rows n5',
+        'n8 Insert tasks <- state n3',
+        'n9 State tasks <- state n8',
+        'n10 Insert features <- PayloadData n8 (id->id), state n6',
+        'n11 State features <- state n10',
+        'n12 CrossJoin <- Rows n8, Rows n10',
+        'n13 UnionAll <- Rows n7, Rows n12',
+        'result: n13',
       ].join('\n'),
     );
   });

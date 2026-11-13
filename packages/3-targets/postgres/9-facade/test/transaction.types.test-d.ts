@@ -1,10 +1,32 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
+import type { PostgresTransactionOptions } from '../src/exports/runtime';
+import type { PostgresServerlessConnection } from '../src/exports/serverless';
 import type { PostgresClient } from '../src/runtime/postgres';
 import type { PostgresTransactionContext } from '../src/runtime/postgres-members';
 
 type TestContract = Contract<SqlStorage>;
+
+test('transaction options are target-specific and preserve inference on both transports', () => {
+  expectTypeOf<PostgresTransactionOptions>().not.toBeAny();
+  expectTypeOf<PostgresTransactionOptions['isolationLevel']>().toEqualTypeOf<
+    'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable' | undefined
+  >();
+  expectTypeOf<PostgresTransactionOptions>().not.toHaveProperty('timeout');
+  expectTypeOf<null>().not.toExtend<PostgresTransactionOptions['isolationLevel']>();
+  const pooled = {} as PostgresClient<TestContract>;
+  const direct = {} as PostgresServerlessConnection<TestContract>;
+  expectTypeOf(
+    pooled.transaction(async () => 42, { isolationLevel: 'Serializable' }),
+  ).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    direct.transaction(async () => 'value' as const, { isolationLevel: 'ReadUncommitted' }),
+  ).toEqualTypeOf<Promise<'value'>>();
+  expectTypeOf(direct.transaction)
+    .parameter(1)
+    .toEqualTypeOf<PostgresTransactionOptions | undefined>();
+});
 
 test('transaction context does not expose a transaction method', () => {
   type HasTransaction = 'transaction' extends keyof PostgresTransactionContext<TestContract>

@@ -37,7 +37,15 @@ describe('mongo control-plane generators', () => {
   it('registers the timestampNow generator for control-plane checks', () => {
     expect(
       mongoTargetDescriptorMeta.controlMutationDefaults.generatorDescriptors.map((d) => d.id),
-    ).toEqual(['timestampNow']);
+    ).toEqual([
+      'timestampNow',
+      'instantNow',
+      'plainDateNow',
+      'plainTimeNow',
+      'instantStringNow',
+      'dateStringNow',
+      'timeStringNow',
+    ]);
   });
 
   it('keeps authoring contributions out of the runtime descriptor', () => {

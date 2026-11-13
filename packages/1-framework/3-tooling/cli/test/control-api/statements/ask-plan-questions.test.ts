@@ -80,7 +80,7 @@ describe('a rename typed at the prompt', () => {
     expect(asked).toEqual([
       ['Drop column "ratio" from "T" would lose the values of field "T.ratio".'],
       [
-        'Alter type of "T"."ratio2" to int4 would change the type of field "T.ratio" and can change or lose its values.',
+        'Alter type of "T"."ratio2" to int4 would change the type of field "T.ratio" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
       ],
     ]);
   });

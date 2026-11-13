@@ -222,6 +222,12 @@ export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
   readonly operationsByPlan?: ReadonlyArray<readonly MigrationPlanOperation[]>;
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
+  /** What every successful `plan` call flags without refusing it. */
+  readonly warnings?: ReadonlyArray<{
+    readonly kind: string;
+    readonly summary: string;
+    readonly why?: string;
+  }>;
   readonly throwOnOperations?: unknown;
   readonly throwOnPlan?: unknown;
   /** Receives the statements of every `plan` call, in call order. */
@@ -312,6 +318,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
             })),
             accessChanges: [],
             temporaryValues: script.temporaryValues ?? [],
+            ...(script.warnings === undefined ? {} : { warnings: script.warnings }),
             appliedStatements: options.statements.map((statement) => ({
               statement,
               operationIndexes: (operations ?? [ADDITIVE_OP]).map((_, index) => index),
@@ -400,6 +407,7 @@ export function offlineConfig(options: {
 }
 
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+export const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /**
  * The control client the offline commands render snapshot declarations

@@ -11,26 +11,58 @@ import {
   type UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { combineWhereExprs } from '../where-utils';
-import type { FilterData } from './filter-data';
+import type { FilterData, KeyMatch } from './filter-data';
+import type { JunctionFilterData } from './junction-filter-data';
 import type { Executed, OutputsOf, Run } from './node';
+import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
+import type { StateEdge } from './state';
 
-export type Filtered = { filter: FilterData[] };
+export type Filtered = { filter: FilterData[]; state: StateEdge[]; requires: Requires[] };
+
+export type Linked = Filtered & { link: JunctionFilterData[] };
+
+export const filteredSlots = { filter: 'list', state: 'list', requires: 'list' } as const;
+
+export const linkedSlots = {
+  filter: 'list',
+  link: 'list',
+  state: 'list',
+  requires: 'list',
+} as const;
+
+type FilteredInputs = Pick<OutputsOf<Filtered>, 'filter' | 'requires'> &
+  Partial<Pick<OutputsOf<Linked>, 'link'>>;
 
 export function executeFiltered(
   ast: SelectAst | UpdateAst | DeleteAst,
-  filter: OutputsOf<Filtered>['filter'],
+  inputs: FilteredInputs,
   run: Run,
 ): Executed {
-  if (filter === null) {
-    return executeStatement(ast, run);
-  }
-  if (filter.some((conditions) => conditions.length === 0)) {
+  const filter = inputs.filter ?? [];
+  const link = inputs.link ?? [];
+  if (requirementUnmet(inputs.requires)) {
     return rowsResult([]);
   }
-  const existing = ast.where === undefined ? [] : [ast.where];
-  const where = combineWhereExprs([...existing, ...filter.map(anyOf)]);
-  return executeStatement(ast.withWhere(where), run);
+  if (filter.length === 0 && link.length === 0) {
+    return executeStatement(ast, run);
+  }
+  if ([...filter, ...link].some((rows) => rows.length === 0)) {
+    return rowsResult([]);
+  }
+  return executeStatement(ast.withWhere(filteredWhere(ast, filter, link)), run);
+}
+
+export function filteredWhere(
+  ast: SelectAst | UpdateAst | DeleteAst,
+  filter: readonly (readonly KeyMatch[])[],
+  link: readonly (readonly AnyExpression[])[],
+): AnyExpression | undefined {
+  return combineWhereExprs([
+    ...(ast.where === undefined ? [] : [ast.where]),
+    ...filter.map((matches) => anyOf(matches.map(({ condition }) => condition))),
+    ...link.map(anyOf),
+  ]);
 }
 
 /** Any of the conditions: an `IN` list when each compares the same column with a parameter, else an `OR`. */
