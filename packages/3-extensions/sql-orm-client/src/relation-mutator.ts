@@ -5,6 +5,7 @@ import type {
   CollectionState,
   FilteredRelationMutator,
   MutationCreateInput,
+  NestedCreateOptions,
   RelationMutation,
   RelationMutationConnect,
   RelationMutationCreate,
@@ -54,11 +55,13 @@ export function createRelationMutator<
       data:
         | MutationCreateInput<TContract, ModelName>
         | readonly MutationCreateInput<TContract, ModelName>[],
+      options?: NestedCreateOptions<TContract, ModelName>,
     ) {
       const rows = Array.isArray(data) ? [...data] : [data];
       return {
         kind: 'create',
         data: rows,
+        ...ifDefined('options', options),
       } as RelationMutationCreate<TContract, ModelName>;
     },
     variant(value: string) {
