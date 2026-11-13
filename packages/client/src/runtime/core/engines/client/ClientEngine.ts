@@ -549,12 +549,14 @@ export class ClientEngine implements Engine {
       throw this.#transformRequestError(err, request)
     })
 
-    const hasRawQueries = firstModelName === undefined
+    // Model queries are parameterized even when the batch also has raw queries, so that their
+    // values reach the database as given instead of being parsed by the query compiler.
+    const onlyRawQueries = queries.every(isRawQuery)
     let batchResponse: BatchResponse
     let placeholderValues: Record<string, unknown> = {}
     let queryInfoQueries = queries.map((query) => query.query)
 
-    if (!hasRawQueries) {
+    if (!onlyRawQueries) {
       const { parameterizedBatch, placeholderValues: extractedValues } = parameterizeBatch(
         batchPayload as JsonBatchQuery,
         this.#paramGraph,
