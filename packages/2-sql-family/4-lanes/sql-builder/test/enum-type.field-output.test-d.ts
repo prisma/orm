@@ -168,3 +168,72 @@ test('sql-builder insert: in-union literal is accepted', () => {
   db.__unbound__.User.insert([{ role: 'user', status: 'active' }]);
   db.__unbound__.User.insert([{ role: 'user', status: null }]);
 });
+
+// ---------------------------------------------------------------------------
+// Where comparisons: a raw value compared with an enum column uses its input type
+// ---------------------------------------------------------------------------
+
+test('sql-builder where: eq and ne reject an out-of-union literal on either side', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.eq(f.role, 'nope'));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.eq('nope', f.role));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.ne(f.role, 'nope'));
+  // @ts-expect-error 'nope' is not in the 'active' | 'inactive' union
+  users.where((f, fns) => fns.eq(f.status, 'nope'));
+});
+
+test('sql-builder where: in and notIn reject an out-of-union literal', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.in(f.role, ['user', 'nope']));
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  users.where((f, fns) => fns.notIn(f.role, ['nope']));
+});
+
+test('sql-builder where: in-union literals, null and column operands are accepted', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  users.where((f, fns) => fns.eq(f.role, 'admin'));
+  users.where((f, fns) => fns.eq('admin', f.role));
+  users.where((f, fns) => fns.ne(f.role, 'user'));
+  users.where((f, fns) => fns.eq(f.status, null));
+  users.where((f, fns) => fns.eq(f.role, f.status));
+  users.where((f, fns) => fns.in(f.role, ['user', 'admin']));
+  users.where((f, fns) => fns.notIn(f.status, ['inactive']));
+});
+
+test('sql-builder where: a raw SQL operand keeps the codec input type', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  users.where((_f, fns) => fns.eq(fns.raw`lower(role)`.returns('pg/text@1'), 'nope'));
+});
+
+test('sql-builder where: a column in an in-list does not widen the tested column’s values', () => {
+  const db = null as unknown as EnumDb;
+  const users = db.__unbound__.User.select('role');
+
+  // @ts-expect-error 'inactive' is a status member, not a role member
+  users.where((f, fns) => fns.in(f.role, [f.status, 'inactive']));
+  users.where((f, fns) => fns.in(f.role, [f.status, 'admin']));
+});
+
+test('sql-builder where: an enum column of a left-joined table keeps its values', () => {
+  const db = null as unknown as EnumDb;
+  const joined = db.__unbound__.User.as('a')
+    .outerLeftJoin(db.__unbound__.User.as('b'), (f, fns) => fns.eq(f.a.role, f.b.role))
+    .select('r', (f) => f.a.role);
+
+  // @ts-expect-error 'nope' is not in the 'user' | 'admin' union
+  joined.where((f, fns) => fns.eq(f.b.role, 'nope'));
+  joined.where((f, fns) => fns.eq(f.b.role, 'admin'));
+  joined.where((f, fns) => fns.eq(f.b.role, null));
+});
