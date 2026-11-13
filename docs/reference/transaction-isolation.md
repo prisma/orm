@@ -35,7 +35,7 @@ Supabase's `.supabase` secondary root still has no callback transaction API. Its
 
 Factory `transactionOptions` and per-call options accept `timeout` as integer milliseconds in `1..2147483647`, with no finite default. Global omission, `undefined` or `null` disables it; local omission/`undefined` inherits and local `null` disables it independently of isolation (`isolationLevel: null` remains invalid). These defaults apply only to explicit callbacks.
 
-The clock starts after successful BEGIN, includes post-BEGIN setup, and stops when commit starts. Expiry invalidates transaction access and rejects with `RUNTIME.TRANSACTION_TIMEOUT` after safe cleanup, without awaiting a hung callback. Acquisition/BEGIN and commit duration are excluded. This is not wire cancellation, JavaScript termination or a hard rejection-time bound: blocked JavaScript and safe cleanup can delay rejection.
+The clock starts after successful BEGIN, includes post-BEGIN setup, and stops when commit starts. Expiry invalidates transaction access and rejects with `RUNTIME.TRANSACTION_TIMEOUT` after safe cleanup, without awaiting a hung callback. If rollback fails, rejection is `RUNTIME.TRANSACTION_ROLLBACK_FAILED` with the selected timeout as its cause. Acquisition/BEGIN and commit duration are excluded. This is not wire cancellation, JavaScript termination or a hard rejection-time bound: blocked JavaScript and safe cleanup can delay rejection.
 
 ## Driver and runtime start SPI
 
