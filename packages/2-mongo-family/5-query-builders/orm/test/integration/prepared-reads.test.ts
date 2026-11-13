@@ -1,8 +1,8 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
+import type { MongoCodecTypesBase } from '@internal/mongo-contract';
 import type { MongoExecutionContext, MongoPreparable } from '@internal/mongo-query-ast/execution';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
-import type { MongoCodecTypesBase } from '@internal/mongo-contract';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -130,16 +130,23 @@ describe('prepared ORM reads', { timeout: timeouts.spinUpMongoMemoryServer }, ()
   it('runs first() with an object-form where', async () => {
     const users = mongoOrm({ context, runtime }).users;
     const run = await prepareRead({ name: 'mongo/string@1' }, (p) =>
-      users
-        .where({ name: p.name })
-        .select('name', 'email')
-        .prepared.first(),
+      users.where({ name: p.name }).select('name', 'email').prepared.first(),
     );
 
     expect({ found: await run({ name: 'Bob' }), missing: await run({ name: 'Zed' }) }).toEqual({
       found: { name: 'Bob', email: 'bob@example.com' },
       missing: null,
     });
+  });
+
+  it('runs firstOrThrow(), which rejects when no document matches', async () => {
+    const users = mongoOrm({ context, runtime }).users;
+    const run = await prepareRead({ name: 'mongo/string@1' }, (p) =>
+      users.where({ name: p.name }).select('name').prepared.firstOrThrow(),
+    );
+
+    expect(await run({ name: 'Cid' })).toEqual({ name: 'Cid' });
+    await expect(run({ name: 'Zed' })).rejects.toMatchObject({ code: 'RUNTIME.NO_ROWS' });
   });
 
   it('refuses a limit placeholder that first() replaces, as unused', async () => {

@@ -235,7 +235,9 @@ type WhereScalarValue<Field, Element, CodecId extends string> =
 /**
  * A placeholder on a list field stands for one item, which is never `null`: a `null` there means the field is not a list, which a placeholder cannot say.
  */
-type WherePlaceholderNullable<Field> = Field extends { readonly many: { readonly elementNullable: boolean } }
+type WherePlaceholderNullable<Field> = Field extends {
+  readonly many: { readonly elementNullable: boolean };
+}
   ? false
   : Field extends { readonly nullable: true }
     ? boolean

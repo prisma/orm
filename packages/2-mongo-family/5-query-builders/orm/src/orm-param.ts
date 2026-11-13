@@ -1,4 +1,5 @@
 import { isPlainRecord } from '@internal/contract/is-plain-record';
+import type { ContractField } from '@internal/contract/types';
 import {
   isMongoPreparedParamRef,
   MongoParamRef,
@@ -39,4 +40,34 @@ export function ormParam(
 ): MongoParamRef {
   rejectPlaceholder(value, path);
   return new MongoParamRef(value, options);
+}
+
+/**
+ * Keeps a placeholder compared with a scalar field in a `where`, after checking it fits the field: its codec must be the field's codec, and it may be nullable only on a nullable field that is not a list. On a list field it stands for one item.
+ */
+export function wherePlaceholder(
+  placeholder: MongoPreparedParamRef,
+  field: ContractField,
+  fieldCodecId: string,
+  path: string,
+): MongoPreparedParamRef {
+  const { name, codecId, nullable } = placeholder;
+  if (codecId !== fieldCodecId) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `The prepared parameter '${name}' has codec '${codecId}', but the field '${path}' has codec '${fieldCodecId}'.`,
+      { meta: { name, field: path, codecId, fieldCodecId } },
+    );
+  }
+  const list = Boolean(field.many);
+  if (nullable && (list || !field.nullable)) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      list
+        ? `The prepared parameter '${name}' is nullable, but the field '${path}' is a list, where a parameter stands for one item, which is never null.`
+        : `The prepared parameter '${name}' is nullable, but the field '${path}' is not.`,
+      { meta: { name, field: path, nullable: true, list } },
+    );
+  }
+  return placeholder;
 }

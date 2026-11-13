@@ -31,6 +31,12 @@ describe('.prepared on a Mongo collection', () => {
     >();
   });
 
+  test('firstOrThrow() describes one row', () => {
+    expectTypeOf(users.prepared.firstOrThrow()).toEqualTypeOf<
+      MongoPreparable<Record<string, unknown>, Promise<UserRow>>
+    >();
+  });
+
   test('a read with an include describes the included rows', () => {
     const withTasks = users.include('tasks');
     expectTypeOf(withTasks.prepared.all()).toEqualTypeOf<

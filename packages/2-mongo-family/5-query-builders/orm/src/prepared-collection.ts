@@ -6,4 +6,6 @@ export interface MongoPreparedCollection<Row> {
   all(): MongoPreparable<Record<string, unknown>, AsyncIterableResult<Row>>;
   /** Reads with `limit` set to 1, replacing any `limit` placeholder. */
   first(): MongoPreparable<Record<string, unknown>, Promise<Row | null>>;
+  /** As `first()`, but each run rejects as `firstOrThrow()` does when no document matches. */
+  firstOrThrow(): MongoPreparable<Record<string, unknown>, Promise<Row>>;
 }

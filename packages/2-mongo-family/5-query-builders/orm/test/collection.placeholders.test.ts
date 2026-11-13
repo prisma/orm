@@ -50,6 +50,18 @@ describe('a prepared placeholder in the Mongo ORM', () => {
     expect(plans).toEqual([]);
   });
 
+  it('is refused as a top-level scalar field in an object-form update, which a where accepts', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = createMongoCollection(collectionContext(contract, executor), 'User');
+    const name = placeholder as unknown as string;
+
+    await expect(users.where({ name }).update({ name })).rejects.toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      meta: { name: 'value', field: 'name' },
+    });
+    expect(plans).toEqual([]);
+  });
+
   it('is refused in a callback-form update, and nothing is sent', async () => {
     const { executor, plans } = recordingExecutor();
     const users = createMongoCollection(collectionContext(contract, executor), 'User');

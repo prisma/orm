@@ -109,9 +109,7 @@ describe('.prepared reads on a Mongo ORM collection', () => {
     const { executor } = recordingExecutor();
     const described = usersOf(executor).limit(take).prepared.first();
 
-    expect(described.plan.command).toEqual(
-      new AggregateCommand('users', [new MongoLimitStage(1)]),
-    );
+    expect(described.plan.command).toEqual(new AggregateCommand('users', [new MongoLimitStage(1)]));
   });
 
   it('first() reads the first document as a row, or null when there is none', async () => {
@@ -124,6 +122,50 @@ describe('.prepared reads on a Mongo ORM collection', () => {
     };
 
     expect(results).toEqual({ found: { id: 'u1', displayName: 'Ann' }, missing: null });
+  });
+
+  it('firstOrThrow() describes the plan firstOrThrow() sends, limited to one document', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = usersOf(executor).where({ displayName: name }).limit(take);
+
+    const described = users.prepared.firstOrThrow();
+    expect(plans).toEqual([]);
+    await users.firstOrThrow().catch(() => undefined);
+
+    expect({ described: described.plan, sent: plans }).toEqual({
+      described: plans[0],
+      sent: [
+        expect.objectContaining({
+          command: new AggregateCommand('users', [
+            new MongoMatchStage(MongoFieldFilter.eq('display_name', name)),
+            new MongoLimitStage(1),
+          ]),
+        }),
+      ],
+    });
+  });
+
+  it('firstOrThrow() reads the first document as a row', async () => {
+    const { executor } = recordingExecutor();
+    const described = usersOf(executor).prepared.firstOrThrow();
+
+    const row = await described.consume(rowsOf([{ _id: 'u1', display_name: 'Ann' }]));
+
+    expect(row).toEqual({ id: 'u1', displayName: 'Ann' });
+  });
+
+  it('firstOrThrow() rejects as the ad-hoc firstOrThrow() does when there is no document', async () => {
+    const { executor } = recordingExecutor();
+    const users = usersOf(executor);
+
+    const prepared = await users.prepared
+      .firstOrThrow()
+      .consume(rowsOf([]))
+      .catch((error: unknown) => error);
+    const adHoc = await users.firstOrThrow().catch((error: unknown) => error);
+
+    expect(prepared).toEqual(adHoc);
+    expect(prepared).toMatchObject({ code: 'RUNTIME.NO_ROWS' });
   });
 });
 
@@ -231,6 +273,116 @@ describe('a placeholder in a filter-expression where', () => {
 
     expect(() => users.where(MongoFieldFilter.eq(path, value))).toThrow(
       expect.objectContaining(placeholderRefused(city, path)),
+    );
+  });
+});
+
+const objectId = new MongoPreparedParamRef('objectId', 'mongo/objectId@1', false);
+const nullableName = new MongoPreparedParamRef('nullableName', 'mongo/string@1', true);
+
+const codecMismatch = (
+  placeholder: MongoPreparedParamRef,
+  field: string,
+  fieldCodecId: string,
+) => ({
+  code: 'ORM.ARGUMENT_INVALID',
+  message: `The prepared parameter '${placeholder.name}' has codec '${placeholder.codecId}', but the field '${field}' has codec '${fieldCodecId}'.`,
+  meta: { name: placeholder.name, field, codecId: placeholder.codecId, fieldCodecId },
+});
+
+const nullableOnField = (placeholder: MongoPreparedParamRef, field: string, list: boolean) => ({
+  code: 'ORM.ARGUMENT_INVALID',
+  message: list
+    ? `The prepared parameter '${placeholder.name}' is nullable, but the field '${field}' is a list, where a parameter stands for one item, which is never null.`
+    : `The prepared parameter '${placeholder.name}' is nullable, but the field '${field}' is not.`,
+  meta: { name: placeholder.name, field, nullable: true, list },
+});
+
+describe('the codec of a placeholder in a where', () => {
+  it.each([
+    ['object form', { displayName: objectId }],
+    ['filter expression', MongoFieldFilter.eq('displayName', objectId)],
+  ])('must be the field codec, in the %s', (_label, filter) => {
+    const { executor } = recordingExecutor();
+    const users = usersOf(executor);
+
+    expect(() => users.where(filter as never)).toThrow(
+      expect.objectContaining(codecMismatch(objectId, 'displayName', 'mongo/string@1')),
+    );
+  });
+
+  it('must be the field codec on a scalar inside a value object', () => {
+    const { executor } = recordingExecutor();
+    const users = usersOf(executor);
+
+    expect(() => users.where(MongoFieldFilter.eq('home.city', objectId))).toThrow(
+      expect.objectContaining(codecMismatch(objectId, 'home.city', 'mongo/string@1')),
+    );
+  });
+
+  it('must be the field codec for each element of a membership list', () => {
+    const { executor } = recordingExecutor();
+    const users = usersOf(executor);
+
+    expect(() => users.where(MongoFieldFilter.in('displayName', [name, objectId]))).toThrow(
+      expect.objectContaining(codecMismatch(objectId, 'displayName', 'mongo/string@1')),
+    );
+  });
+
+  it.each([
+    ['object form', { tags: objectId }],
+    ['filter expression', MongoFieldFilter.eq('tags', objectId)],
+  ])('must be the element codec on a list field, in the %s', (_label, filter) => {
+    const { executor } = recordingExecutor();
+    const users = ormUsersOf(executor);
+
+    expect(() => users.where(filter as never)).toThrow(
+      expect.objectContaining(codecMismatch(objectId, 'tags', 'mongo/string@1')),
+    );
+  });
+
+  it.each([
+    ['object form', { displayName: nullableName }],
+    ['filter expression', MongoFieldFilter.eq('displayName', nullableName)],
+    ['membership list', MongoFieldFilter.in('displayName', [nullableName])],
+  ])('may be nullable only on a nullable field, in the %s', (_label, filter) => {
+    const { executor } = recordingExecutor();
+    const users = usersOf(executor);
+
+    expect(() => users.where(filter as never)).toThrow(
+      expect.objectContaining(nullableOnField(nullableName, 'displayName', false)),
+    );
+  });
+
+  it.each([
+    ['object form', { tags: nullableName }],
+    ['filter expression', MongoFieldFilter.eq('tags', nullableName)],
+    ['membership list', MongoFieldFilter.in('tags', [nullableName])],
+  ])('is never nullable on a list field, in the %s', (_label, filter) => {
+    const { executor } = recordingExecutor();
+    const users = ormUsersOf(executor);
+
+    expect(() => users.where(filter as never)).toThrow(
+      expect.objectContaining(nullableOnField(nullableName, 'tags', true)),
+    );
+  });
+
+  it('may be nullable on a nullable field, in both forms', () => {
+    const { executor } = recordingExecutor();
+    const described = usersOf(executor)
+      .where({ email: nullableName })
+      .where(MongoFieldFilter.eq('email', nullableName))
+      .prepared.all();
+
+    expect(described.plan.command).toEqual(
+      new AggregateCommand('users', [
+        new MongoMatchStage(
+          MongoAndExpr.of([
+            MongoFieldFilter.eq('email', nullableName),
+            MongoFieldFilter.eq('email', nullableName),
+          ]),
+        ),
+      ]),
     );
   });
 });

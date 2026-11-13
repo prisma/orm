@@ -85,7 +85,7 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
-import { ormParam, rejectPlaceholder } from './orm-param';
+import { ormParam, rejectPlaceholder, wherePlaceholder } from './orm-param';
 import type { MongoPreparedCollection } from './prepared-collection';
 import type {
   DiscriminatorValues,
@@ -491,7 +491,9 @@ export class MongoCollectionImpl<
     return this.#clone({ orderBy: merged });
   }
 
-  limit(n: PagingCount<TContract>): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
+  limit(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
     return this.#clone({ limit: n });
   }
 
@@ -513,11 +515,12 @@ export class MongoCollectionImpl<
     return {
       all: () => this.#describeRows(),
       first: () => this.#describeFirst(),
+      firstOrThrow: () => this.#describeFirstOrThrow(),
     };
   }
 
-  async firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
-    return this.#clone({ limit: 1 }).#query().firstOrThrow();
+  firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
+    return this.#run(this.#describeFirstOrThrow());
   }
 
   async create(
@@ -906,6 +909,17 @@ export class MongoCollectionImpl<
     };
   }
 
+  #describeFirstOrThrow(): MongoPreparable<
+    Record<string, unknown>,
+    Promise<IncludedRow<TContract, ModelName, TIncludes>>
+  > {
+    const rows = this.#clone({ limit: 1 }).#describeRows();
+    return {
+      plan: rows.plan,
+      consume: (documents) => rows.consume(documents).firstOrThrow(),
+    };
+  }
+
   #rowMapper(): (document: unknown) => unknown {
     return documentRowMapper(
       this.#contract,
@@ -1068,7 +1082,7 @@ export class MongoCollectionImpl<
       const field = fields[key];
       const compared =
         isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
-          ? value
+          ? wherePlaceholder(value, field, field.type.codecId, key)
           : this.#wrapFieldValue(value, field, key, 'filter');
       filters.push(whereEquality(storedName, field, compared));
     }
@@ -1087,8 +1101,12 @@ export class MongoCollectionImpl<
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
     }
+    const fieldCodecId = field.type.codecId;
     const encode = (value: MongoValue): MongoValue => {
-      if (value === null || isMongoPreparedParamRef(value)) return value;
+      if (value === null) return null;
+      if (isMongoPreparedParamRef(value)) {
+        return wherePlaceholder(value, field, fieldCodecId, filter.field);
+      }
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
           ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
