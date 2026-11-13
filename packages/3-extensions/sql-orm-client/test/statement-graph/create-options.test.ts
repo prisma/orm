@@ -160,6 +160,52 @@ describe('create options on a relation', () => {
     ]);
   });
 
+  it('links the row of onConflict connect on a parent-held or many-to-many relation through its read-back', () => {
+    const ada = { id: 5, name: 'Ada', email: 'ada@example.com' };
+    const go = { id: 'go', name: 'Go' };
+    const rust = { id: 'rust', name: 'Rust' };
+
+    expect({
+      parentHeld: printUpdate({
+        invitedBy: (invitedBy: Mutator) => invitedBy.create(ada, { onConflict: 'connect' }),
+      }),
+      manyToMany: printUpdate({
+        tags: (tags: Mutator) => tags.create(go, { onConflict: 'connect', conflictOn: ['name'] }),
+      }),
+      manyToManyRows: printUpdate({
+        tags: (tags: Mutator) => tags.create([go, rust], { onConflict: 'connect' }),
+      }),
+      withoutReturning: printUpdate(
+        {
+          tags: (tags: Mutator) => tags.create(go, { onConflict: 'connect', conflictOn: ['name'] }),
+        },
+        { ...getTestContext(), contract: withoutCapabilityKeys(baseContract, ['returning']) },
+      ),
+    }).toEqual({
+      parentHeld: [
+        'n1 Find users where id = 1',
+        'n2 Insert users on conflict (id) do update <- Requires n1',
+        'n3 Update users set nothing where id = 1 <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)',
+        'result: n3',
+      ].join('\n'),
+      manyToMany: updateOf(
+        'n2 Insert tags on conflict (name) do update <- Requires n1',
+        'n3 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
+      ),
+      manyToManyRows: updateOf(
+        'n2 Insert tags on conflict (id) do update <- Requires n1',
+        'n3 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
+        'n4 Insert tags on conflict (id) do update <- Requires n1',
+        'n5 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n4 (id->tag_id)',
+      ),
+      withoutReturning: updateOf(
+        'n2 Insert tags on conflict (name) do update <- Requires n1',
+        'n3 FindByKeys tags by (name) for create <- Rows n2',
+        'n4 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n3 (id->tag_id)',
+      ),
+    });
+  });
+
   it('counts the parent link toward the conflict key of a row of onConflict skip', () => {
     expect(
       printUpdate({
@@ -245,30 +291,6 @@ describe('create options on a relation', () => {
         index: 1,
         conflictKeys: [['embedding']],
       },
-    ],
-    [
-      'onConflict connect on the many-to-many relation User.tags',
-      { tags: (tags: Mutator) => tags.create({ id: 't', name: 'Go' }, { onConflict: 'connect' }) },
-      'ORM.OPERATION_UNSUPPORTED',
-      'create() nested mutation for relation "tags" does not support onConflict "connect"',
-      { kind: 'create', relation: 'tags', reason: 'on-conflict-connect' },
-    ],
-    [
-      'onConflict connect on the to-one relation Post.author in a create row',
-      {
-        posts: (posts: Mutator) =>
-          posts.create({
-            ...post,
-            author: (author: Mutator) =>
-              author.create(
-                { id: 5, name: 'Ada', email: 'ada@example.com' },
-                { onConflict: 'connect' },
-              ),
-          }),
-      },
-      'ORM.OPERATION_UNSUPPORTED',
-      'create() nested mutation for relation "author" does not support onConflict "connect"',
-      { kind: 'create', relation: 'author', reason: 'on-conflict-connect' },
     ],
   ] as const;
 

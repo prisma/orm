@@ -2427,8 +2427,8 @@ type RelationConflictActions<
   NsId extends string = never,
 > =
   RelationCardinality<TContract, ModelName, RelName, NsId> extends '1:1' | 'N:1' | 'N:M'
-    ? never
-    : 'skip';
+    ? 'connect'
+    : NestedCreateConflictAction;
 
 type RelationMutationCallback<
   TContract extends Contract<SqlStorage>,

@@ -260,7 +260,7 @@ describe('integration/nested-mutations on SQLite: create()', () => {
                   title: 'Changed',
                   comments: (comments) => comments.create({ id: 100, body: 'On the taken post' }),
                 },
-                { onConflict: 'connect' } as never,
+                { onConflict: 'connect' },
               ),
           });
 
@@ -272,6 +272,55 @@ describe('integration/nested-mutations on SQLite: create()', () => {
           created: { id: 1, posts: [{ id: 10, title: 'Taken' }] },
           posts: [{ id: 10, user_id: 1, title: 'Taken' }],
           comments: [{ id: 100, post_id: 10 }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'links an existing author and an existing tag under onConflict connect, unchanged, and creates and links a new tag',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({ id: 9, name: 'Other' });
+
+        await posts.create({
+          id: 30,
+          title: 'Linked',
+          author: (author) => author.create({ id: 9, name: 'Changed' }, { onConflict: 'connect' }),
+        });
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          tags: (tags) =>
+            tags.create(
+              [
+                { id: 1, name: 'Changed' },
+                { id: 2, name: 'New' },
+              ],
+              { onConflict: 'connect' },
+            ),
+        });
+
+        expect({
+          users: rows('select id, name from users order by id'),
+          posts: rows('select id, user_id from posts'),
+          tags: rows('select id, name from tags order by id'),
+          userTags: rows('select user_id, tag_id from user_tags order by tag_id'),
+        }).toEqual({
+          users: [
+            { id: 1, name: 'Ada' },
+            { id: 9, name: 'Other' },
+          ],
+          posts: [{ id: 30, user_id: 9 }],
+          tags: [
+            { id: 1, name: 'SQL' },
+            { id: 2, name: 'New' },
+          ],
+          userTags: [
+            { user_id: 1, tag_id: 1 },
+            { user_id: 1, tag_id: 2 },
+          ],
         });
       });
     },
@@ -492,10 +541,10 @@ describe('integration/nested-mutations on SQLite: update()', () => {
                 { id: 10, title: 'Changed' },
                 { id: 11, title: 'New' },
               ],
-              { onConflict: 'connect' } as never,
+              { onConflict: 'connect' },
             ),
           profile: (profile) =>
-            profile.create({ id: 5, bio: 'Changed' }, { onConflict: 'connect' } as never),
+            profile.create({ id: 5, bio: 'Changed' }, { onConflict: 'connect' }),
         });
 
         expect({
@@ -507,6 +556,43 @@ describe('integration/nested-mutations on SQLite: update()', () => {
             { id: 11, user_id: 1, title: 'New' },
           ],
           profiles: [{ id: 5, user_id: 1, bio: 'Original' }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'creates and links a new author under onConflict connect, and links an already linked tag again without a second junction row',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (mutator) => mutator.create({ id: 30, title: 'Post' }),
+          tags: (tags) => tags.connect({ id: 1 }),
+        });
+
+        await posts.where({ id: 30 }).update({
+          author: (author) => author.create({ id: 7, name: 'New' }, { onConflict: 'connect' }),
+        });
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.create({ id: 1, name: 'Changed' }, { onConflict: 'connect' }),
+        });
+
+        expect({
+          users: rows('select id, name from users order by id'),
+          posts: rows('select id, user_id from posts'),
+          tags: rows('select id, name from tags order by id'),
+          userTags: rows('select user_id, tag_id from user_tags'),
+        }).toEqual({
+          users: [
+            { id: 1, name: 'Ada' },
+            { id: 7, name: 'New' },
+          ],
+          posts: [{ id: 30, user_id: 7 }],
+          tags: [{ id: 1, name: 'SQL' }],
+          userTags: [{ user_id: 1, tag_id: 1 }],
         });
       });
     },

@@ -143,19 +143,32 @@ function insertWithRelations(
   });
 }
 
-function nestedCreate(
+function addLinkedCreates(
   t: Translation,
-  model: Model,
-  parsed: ParsedMutationInput,
-  keysFromParent: readonly KeySource[],
-  returns: Returns,
-  variantValue: string | undefined,
-): NodeId {
-  return addCreateWithRelations(t, model, parsed, {
-    keysFromParent,
-    returns,
-    shape: allColumns,
-    variantValue,
+  related: Model,
+  name: string,
+  relatedCollection: RelatedCollection,
+  mutation: Extract<Mutation, { kind: 'create' }>,
+  resolved: ResolvedConflict | undefined,
+  data: readonly MutationCreateInput<Contract<SqlStorage>, string>[],
+  link: (created: NodeId) => void,
+): void {
+  const rows = data.map((row) => parseCreateInput(t, related, row, relatedCollection));
+  const values = rows.map((row) =>
+    createRowOf(t.context, related, mutation.variant, row.scalarData, undefined),
+  );
+  const conflict = conflictOf(t, related, name, [], resolved, rows, values);
+  rows.forEach((row, index) => {
+    link(
+      insertWithRelations(
+        t,
+        related,
+        row,
+        { keysFromParent: [], returns: 'rows', shape: allColumns, variantValue: mutation.variant },
+        values[index],
+        conflict,
+      ),
+    );
   });
 }
 
@@ -354,7 +367,7 @@ function addParentOwned(
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
     }
-    nestedConflictOf(t, name, relation, mutation);
+    const resolved = nestedConflictOf(t, name, relation, mutation);
     const keys: KeySource[] = [];
     const added = (from: NodeId) => keys.push({ from, columns });
     if (
@@ -368,19 +381,8 @@ function addParentOwned(
     ) {
       return keys;
     }
-    return [
-      {
-        from: nestedCreate(
-          t,
-          related,
-          parseCreateInput(t, related, row, relatedCollection),
-          [],
-          'rows',
-          mutation.variant,
-        ),
-        columns,
-      },
-    ];
+    addLinkedCreates(t, related, name, relatedCollection, mutation, resolved, [row], added);
+    return keys;
   }
   const [criterion] = mutation.criteria;
   if (criterion === undefined) {
@@ -554,7 +556,7 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
-    nestedConflictOf(t, name, relation, mutation);
+    const resolved = nestedConflictOf(t, name, relation, mutation);
     if (
       addVariantInOwnTable(t, { relation, relatedCollection }, mutation, [], (base) =>
         addLink(base, undefined),
@@ -562,19 +564,17 @@ function addJunctionOwned(
     ) {
       return;
     }
-    for (const row of mutation.data) {
-      addLink(
-        nestedCreate(
-          t,
-          related,
-          parseCreateInput(t, related, row, relatedCollection),
-          [],
-          'rows',
-          mutation.variant,
-        ),
-        undefined,
-      );
-    }
+    const conflict = resolved === undefined ? undefined : linkKeyConflict(contract, relation);
+    addLinkedCreates(
+      t,
+      related,
+      name,
+      relatedCollection,
+      mutation,
+      resolved,
+      mutation.data,
+      (created) => addLink(created, conflict),
+    );
     return;
   }
   if (mutation.kind === 'connect') {
@@ -736,16 +736,8 @@ function nestedConflictOf(
         { meta: { kind: 'create', relation: name, reason } },
       );
     }
-    return resolved;
   }
-  if (!hasThrough(relation) && relation.cardinality !== 'N:1') {
-    return resolved;
-  }
-  throw ormError(
-    'ORM.OPERATION_UNSUPPORTED',
-    `create() nested mutation for relation "${name}" does not support onConflict "connect"`,
-    { meta: { kind: 'create', relation: name, reason: 'on-conflict-connect' } },
-  );
+  return resolved;
 }
 
 function variantTargetOf(
@@ -803,7 +795,11 @@ function conflictOf(
       requireOnlyCollidingKey(context, model, value, connectColumns, call.action);
     }
   }
-  return { columns: connectColumns, targeted, link: parentLinkColumns };
+  return {
+    columns: connectColumns,
+    targeted,
+    link: parentLinkColumns.length > 0 ? parentLinkColumns : connectColumns.slice(0, 1),
+  };
 }
 
 function addFindAndAssert(
