@@ -239,6 +239,10 @@ Catch-all for an unanticipated failure inside a CLI command: an unclassified exc
 
 The migration-file CLI (`prisma migration`) received a flag it does not recognise; wraps clipanion's unknown-syntax error at the parser boundary so consumers can build "did you mean" suggestions from meta instead of parsing the message. Payload: `flag`, `knownFlags`.
 
+### CLI.V7_COMMAND
+
+Settled by `@prisma/cli-engine` from the redirect table in `family.ts`, not raised by a command: the user typed a Prisma 7 command path that Prisma 8 does not have, such as `prisma generate`, `prisma db push` or `prisma migrate dev`; instead of failing as unknown, the run settles with the summary "`prisma <path>` is a Prisma 7 command and is not available in Prisma 8". `why` says what the suggested Prisma 8 commands do and what they do not cover, and ends with how to install Prisma 7's CLI (`npm install --save-dev @prisma/prisma7@7`) and run the same command as `prisma7 <path>`, with a placeholder for every value Prisma 7 requires (for example `prisma7 db execute --file <path>`); for the `migrate` commands except `migrate diff`, that sentence applies while Prisma 7 still owns the project's migrations. Next actions, in order: the replacement commands as run-command actions (labelled "Use the replacement" for one, "Step 1", "Step 2", … for several), a run-command pointing at the suggested command's `--help`, and an open-url action to the CLI docs when Prisma 8 has no equivalent. The engine's entry is the reference: [CLI.V7_COMMAND](https://docs.prisma.io/docs/cli/error-reference#CLI.V7_COMMAND). Exits 2. Payload: none.
+
 ## CONTRACT
 
 ### CONTRACT.ARGUMENT_INVALID
