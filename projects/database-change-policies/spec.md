@@ -72,7 +72,7 @@ Every key is optional. A key a ref omits is **undeclared**: the ref says nothing
 
 **In the marker.** The application space's marker row stores the policies in force under `meta.policies`, in the same shape as the ref's `policies`. The `meta` column already exists on Postgres, SQLite, MySQL and MongoDB, so no marker table changes. MySQL's marker upsert currently replaces `meta` with `{}` on every write, and must stop doing so. A marker write that does not change policy keeps `meta.policies` as it is.
 
-**In the ledger.** Every change to a database's policies appends a ledger entry recording the previous policies, the new policies and when the change happened. It has no migration name or hash. Existing ledger entries are migration entries.
+**Nowhere else.** The ledger is the journal of applied migrations (ADR 228 fixes its row shape and gives it no upgrade path), so a policy change writes nothing to it. The repository's history of the ref file is the record of what was declared and when.
 
 ### What each command does
 
@@ -94,11 +94,11 @@ When a command is given a ref (`db migrate --to <ref>`, `db update --to <ref>`, 
 
 - **They agree:** the command runs under the database's policies.
 - **They differ, without `--permit-policy-change`:** the command fails with `MIGRATION.POLICY_MISMATCH` before running anything.
-- **They differ, with `--permit-policy-change`:** the command first writes the ref's declared settings into the marker and appends a ledger entry, then runs under the new policies. When nothing else is pending, it changes only the policies.
+- **They differ, with `--permit-policy-change`:** the command checks the run against the ref's declared settings, runs it, and writes those settings into the marker when the run succeeds. When nothing else is pending, it changes only the policies.
 
 Undeclared settings are never compared and never written. A command given no ref, including a Composer deploy with no `targetRef`, never changes a policy.
 
-On Postgres and SQLite the policy write is part of the run's transaction, so a run that fails leaves the policies unchanged. On MongoDB the policy write happens before the migrations and stays if a migration then fails; the ledger records it.
+On Postgres, SQLite and MySQL the policy write is part of the run's transaction. On MongoDB it happens after the last migration. Either way a run that fails leaves the policies as they were, so a failed deploy never leaves a database with a loosened policy and none of the change that needed it; the retry sees the same mismatch and takes the same flag. If the write itself fails after the migrations ran, the retry finds nothing pending and writes only the policies.
 
 `--permit-policy-change` is accepted by `db migrate` and `db update`. Composer's deployment resource gains `permitPolicyChange`, default `false`. No error ever lists `--permit-policy-change` as a next action.
 
@@ -156,7 +156,7 @@ Composer's deploy step (`packages/1-prisma-cloud/1-extensions/target/src/orm-mig
 - The glossary defines change policy, data protection policy and their values, says how they differ from control policy, and widens `migrate` to "bring the database to a ref, applying its policies with consent".
 - The migration domain docs replace "dev-only" and "tears down and rebuilds" for `db update`.
 - The Migration System doc's recovery table matches the errors above.
-- The decision records on refs, the marker and the ledger gain notes for the new fields.
+- The decision records on refs and the marker gain notes for the new fields.
 
 ## Requirements this design satisfies
 
@@ -172,6 +172,23 @@ Composer's deploy step (`packages/1-prisma-cloud/1-extensions/target/src/orm-mig
 | A policy change needs no migration | A deploy writes policies when they are the only difference |
 | Existing projects keep working | The defaults equal today's behaviour, and refs without `policies` declare nothing |
 
+## Decisions the orchestrating agent made
+
+Will Madden settled the design above in the session recorded in [`design.md`](design.md). These points are not his rulings; the agent decided them on 2026-10-30, after checking them against the decision records, and recorded the reasons so a reviewer can overturn any of them.
+
+| Decision | Reason |
+|---|---|
+| `db sign` needs `reconcile` | It rewrites the marker to any contract the database satisfies, which is the move that puts a database outside the migration graph. Adoption still works: a database with no marker has no policy. A hotfix on a migrations-only database is repaired with a migration, whose already-satisfied operations the runner skips. |
+| `migration status --to <ref>` reports a mismatch | `status` shows what `db migrate` would do next, and a run that would stop on `POLICY_MISMATCH` has nothing pending. It reports; it does not fail. |
+| No error suggests `--permit-policy-change` | `db update` names the `--delete` that answers each question, but that flag loses data in a database the user may already reconcile; this one rewrites the rule itself. An error offering it has an agent out of ideas loosening production's policy. The flag is documented in `--help` and the skill. |
+| Defaults equal today's behaviour | A marker with no policies must mean something; refusing everything is unusable and migrations-only breaks every development database. Absence is never written out, so no existing database is touched. |
+| `data-loss-permitted`, not `loss-permitted` | The other two levels carry the `data-loss-` prefix. |
+| Under `permitted`, `db update` applies an unanswered loss as a delete and still honours `--rename` | "Permitted" means nobody is asked. A rename is a statement of intent, not a consent, so it still applies. |
+| Under `with-consent`, `db migrate` runs a lossy migration | `migration plan` refuses to write a destructive operation without consent, so the migration's existence is the consent. The limit is recorded under Known limits in `design.md`. |
+| `db init` has no policy | It runs against a database with no marker; there is nothing to read. |
+| Policies are written when the run succeeds | Writing them first would leave a failed MongoDB deploy with a loosened policy and none of the change that needed it. |
+| Composer's "already at target" check compares policies | Otherwise a ref whose only change is a policy is skipped forever. |
+
 ## Non-goals
 
 - **Permitted change operations and the compatibility policy.** The policy shape leaves room for both.
@@ -186,7 +203,7 @@ Composer's deploy step (`packages/1-prisma-cloud/1-extensions/target/src/orm-mig
 - Replaying the incident on Postgres, a `db migrate` and a Composer deploy to a database whose marker is off the graph fail with `MIGRATION.MARKER_MISMATCH`, naming the last graph hash and the missing migrations, saying the database need not be reset, and giving the next actions for its change policy (integration tests in both repositories).
 - On a database whose policy permits only `migrate`, `db update` and `db sign` fail with `MIGRATION.CHANGE_POLICY_FORBIDS` (integration tests).
 - Under `data-loss-forbidden`, a migration that drops a column fails with `MIGRATION.DATA_PROTECTION_FORBIDS` in `db migrate` and in a Composer deploy, with and without a ref, and `db update` refuses the same change even with `--delete` (integration tests).
-- A deploy to a ref whose declared policy differs from the database's fails with `MIGRATION.POLICY_MISMATCH` before running anything; with `--permit-policy-change` it writes the policy, appends the ledger entry, then runs; with nothing else pending it changes only the policy (integration tests on Postgres, SQLite, MySQL and MongoDB).
+- A deploy to a ref whose declared policy differs from the database's fails with `MIGRATION.POLICY_MISMATCH` before running anything; with `--permit-policy-change` it runs under the ref's policies and writes them on success; with nothing else pending it changes only the policy (integration tests on Postgres, SQLite, MySQL and MongoDB).
 - `migration ref set` and ref advancement keep an existing `policies` field (tests).
 - The skill, the decision records, the glossary and the migration docs say what this spec says. No text in the repository recommends resetting or dropping a database to fix a migration problem, or scopes `db update` to local, solo or dev-only databases.
 - Linear tickets exist for each follow-up in [`design.md`](design.md).

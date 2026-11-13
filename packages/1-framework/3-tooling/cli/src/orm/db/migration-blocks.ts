@@ -12,6 +12,7 @@ import {
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
 import { plannerWarningText } from '../../utils/planner-warning-text';
+import { declaredSettingsText } from '../../utils/policy-errors';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
@@ -161,13 +162,20 @@ function applySummaryText(result: MigrationCommandResult): string {
   const planned = result.plan.operations.length;
   const spaces = result.perSpace?.length ?? 0;
   const across = spaces > 0 ? ` across ${spaces} contract space${spaces === 1 ? '' : 's'}` : '';
+  const policies = result.databasePoliciesUpdated;
   if (result.changedStorageEntities !== undefined) return result.summary;
   if (executed === 0) {
-    return `Database already matches contract${across}`;
+    return policies === undefined
+      ? `Database already matches contract${across}`
+      : `Policies updated: ${declaredSettingsText(policies)}`;
   }
-  return executed < planned
-    ? `Applied ${executed} of ${planned} operation(s)${across}; ${skippedOperationsText(planned - executed)}`
-    : `Applied ${executed} operation(s)${across}`;
+  const applied =
+    executed < planned
+      ? `Applied ${executed} of ${planned} operation(s)${across}; ${skippedOperationsText(planned - executed)}`
+      : `Applied ${executed} operation(s)${across}`;
+  return policies === undefined
+    ? applied
+    : `${applied}; policies updated: ${declaredSettingsText(policies)}`;
 }
 
 /** For each namespace the plan removes, the answers that answer all of its questions. */

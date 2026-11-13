@@ -1,5 +1,6 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import {
+  checkDatabasePoliciesHeld,
   type MigrationOperationPolicy,
   runnerFailure,
   runnerSuccess,
@@ -13,6 +14,7 @@ import {
   type SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
+  type DatabasePolicies,
   failedPostcheckWhy,
   failedPrecheckWhy,
   type MigrationRunnerFailure,
@@ -100,12 +102,23 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
   async execute(options: {
     readonly driver: Driver;
     readonly perSpaceOptions: ReadonlyArray<Options>;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult> {
-    const { driver, perSpaceOptions } = options;
+    const { driver, perSpaceOptions, expectedDatabasePolicies } = options;
     if (perSpaceOptions.length === 0) return ok({ perSpaceResults: [] });
     return withMarkerLock(
       driver,
-      () => this.#applySpaces(driver, perSpaceOptions),
+      async () => {
+        if (expectedDatabasePolicies !== undefined) {
+          const policiesCheck = await checkDatabasePoliciesHeld(
+            this.family,
+            driver,
+            expectedDatabasePolicies,
+          );
+          if (!policiesCheck.ok) return notOk(withDatabaseUnchanged(policiesCheck.failure, true));
+        }
+        return this.#applySpaces(driver, perSpaceOptions);
+      },
       (result) => result.ok,
     );
   }
@@ -202,16 +215,21 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     }
 
     const existingInvariants = new Set(existingMarker?.invariants ?? []);
-    const isSelfEdgeNoOp =
-      isSelfEdge &&
+    const incomingIsSubsetOfExisting = options.plan.providedInvariants.every((id) =>
+      existingInvariants.has(id),
+    );
+    const isSelfEdgeNoOp = isSelfEdge && applied.executedCount === 0 && incomingIsSubsetOfExisting;
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
       applied.executedCount === 0 &&
-      options.plan.providedInvariants.every((id) => existingInvariants.has(id));
-    if (!isSelfEdgeNoOp) {
+      atDestination &&
+      incomingIsSubsetOfExisting;
+    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const written = await this.#writeMarkerAndLedger(
         driver,
         options,
         existingMarker,
-        applied.executed,
+        isSelfEdgeNoOp || recordsPoliciesOnly ? undefined : applied.executed,
         progress,
       );
       if (!written.ok) return written;
@@ -332,7 +350,8 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
     driver: Driver,
     options: Options,
     existingMarker: ContractMarkerRecord | null,
-    executed: readonly Op[],
+    /** The operations to record in the ledger, or `undefined` when the run applied none to record. */
+    executed: readonly Op[] | undefined,
     progress: SpaceProgress,
   ): Promise<Checked> {
     const { plan } = options;
@@ -343,6 +362,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
         options.destinationContract.profileHash ??
         plan.destination.storageHash,
       invariants: plan.providedInvariants,
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     await driver.query('START TRANSACTION');
     try {
@@ -363,6 +383,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
             'Marker was modified by another process during migration execution.',
             {
               meta: {
+                reason: 'storageHash',
                 space: plan.spaceId,
                 expectedStorageHash: existingMarker.storageHash,
                 foundStorageHash: found?.storageHash ?? null,
@@ -372,7 +393,7 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
           );
         }
       }
-      await this.#writeLedger(driver, options, executed);
+      if (executed !== undefined) await this.#writeLedger(driver, options, executed);
     } catch (error) {
       await driver.query('ROLLBACK').catch(() => undefined);
       throw error;

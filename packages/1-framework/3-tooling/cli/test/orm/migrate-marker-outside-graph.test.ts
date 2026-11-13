@@ -52,8 +52,8 @@ async function projectWithExtensionOffItsGraph(): Promise<string> {
   await addExtensionSpace(cwd);
   mocks.readAllMarkers.mockResolvedValue(
     new Map([
-      ['app', { storageHash: C1, invariants: [] }],
-      ['pgvector', { storageHash: UNKNOWN, invariants: [] }],
+      ['app', { storageHash: C1, invariants: [], meta: {} }],
+      ['pgvector', { storageHash: UNKNOWN, invariants: [], meta: {} }],
     ]),
   );
   mocks.readLedger.mockImplementation(async (space: string) =>
@@ -135,8 +135,8 @@ describe('a contract space whose marker is outside its migration graph', () => {
     const cwd = await projectWithExtensionOffItsGraph();
     mocks.readAllMarkers.mockResolvedValue(
       new Map([
-        ['app', { storageHash: UNKNOWN, invariants: [] }],
-        ['pgvector', { storageHash: UNKNOWN, invariants: [] }],
+        ['app', { storageHash: UNKNOWN, invariants: [], meta: {} }],
+        ['pgvector', { storageHash: UNKNOWN, invariants: [], meta: {} }],
       ]),
     );
 
@@ -154,8 +154,8 @@ describe('a contract space whose marker is outside its migration graph', () => {
     const cwd = await projectWithExtensionOffItsGraph();
     mocks.readAllMarkers.mockResolvedValue(
       new Map([
-        ['app', { storageHash: C1, invariants: [] }],
-        ['pgvector', { storageHash: EXT_C1, invariants: [] }],
+        ['app', { storageHash: C1, invariants: [], meta: {} }],
+        ['pgvector', { storageHash: EXT_C1, invariants: [], meta: {} }],
       ]),
     );
 
@@ -176,8 +176,8 @@ describe('a contract space whose marker is outside its migration graph', () => {
       const cwd = await projectWithExtensionShippingNoMigrations();
       mocks.readAllMarkers.mockResolvedValue(
         new Map([
-          ['app', { storageHash: C1, invariants: [] }],
-          ['pgvector', { storageHash: marker, invariants: [] }],
+          ['app', { storageHash: C1, invariants: [], meta: {} }],
+          ['pgvector', { storageHash: marker, invariants: [], meta: {} }],
         ]),
       );
 
@@ -194,7 +194,7 @@ describe('a contract space whose marker is outside its migration graph', () => {
     const cwd = await buildProjectWithoutMigrations();
     writeProjectManifest(cwd);
     mocks.readAllMarkers.mockResolvedValue(
-      new Map([['app', { storageHash: UNKNOWN, invariants: [] }]]),
+      new Map([['app', { storageHash: UNKNOWN, invariants: [], meta: {} }]]),
     );
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
@@ -212,7 +212,7 @@ describe('a contract space whose marker is outside its migration graph', () => {
     const cwd = await buildProject();
     writeProjectManifest(cwd);
     mocks.readAllMarkers.mockResolvedValue(
-      new Map([['app', { storageHash: UNKNOWN, invariants: [] }]]),
+      new Map([['app', { storageHash: UNKNOWN, invariants: [], meta: {} }]]),
     );
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', '@db', '--json'], {

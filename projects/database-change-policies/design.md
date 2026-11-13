@@ -53,7 +53,11 @@ The two copies are desired state and actual state, the same split the migration 
 
 A command that both enforces a policy and rewrites it from the ref it is given would override the policy it is meant to enforce: an agent with an edited ref, or a branch deploying to a shared database, would silently loosen it. So `db migrate` and `db update` enforce the database's policy, and change it only with `--permit-policy-change`. A command with no ref changes nothing.
 
-A CD pipeline can only deploy, so the consent is a flag on the deploy, not a separate command. A team that wants reviewed policy changes applied by its pipeline passes the flag; a cautious team leaves it out and applies policy changes by hand. With consent given, the policies are written before the migrations run, so a policy change and the migration it permits ship in one deploy, as they were planned. A policy change needs no migration: when the policies are the only difference, the deploy writes them and nothing else.
+A CD pipeline can only deploy, so the consent is a flag on the deploy, not a separate command. A team that wants reviewed policy changes applied by its pipeline passes the flag; a cautious team leaves it out and applies policy changes by hand. With consent given, the run is checked against the ref's policies, the migrations run, and the policies are written when the run succeeds, so a policy change and the migration it permits ship in one deploy, as they were planned, and a failed deploy never leaves a loosened policy behind. A policy change needs no migration: when the policies are the only difference, the deploy writes them and nothing else.
+
+## Why no ledger row
+
+An earlier draft of the spec appended a ledger row for every policy change. Nobody asked for it. The ledger is the journal of applied migrations: every row names a migration, ADR 228 fixes that shape, and the ledger has no schema upgrade path, so a policy row would need a new column on every existing database. The repository's history of the ref file already records what was declared and when.
 
 ## Scenarios
 
@@ -132,7 +136,9 @@ The glossary's existing **control policy** (managed, tolerated, external, observ
 - **The Rails model: the marker names its ref, the ref holds the rules.** Rejected: the database could not be read without a checkout.
 - **A deploy always applies its ref's policies.** Rejected: a deploy would silently override the policy it enforces.
 - **A deploy that proceeds when the ref and the database disagree, reporting the difference as pending.** Rejected: the ref would stop describing the database, and plans made against it could be refused at apply.
-- **Checking migrations against the old policy and writing the new one afterwards.** Rejected once consent became explicit: a policy change and the migration it permits would need two deploys.
+- **Checking migrations against the old policy and writing the new one afterwards.** Rejected once consent became explicit: a policy change and the migration it permits would need two deploys. (The run is checked against the new policy; only the write happens afterwards.)
+- **Writing the new policy before the migrations run.** Rejected: on MongoDB, which has no transaction around the run, a failed deploy would leave a loosened policy and none of the change that needed it.
+- **A ledger row for every policy change.** Rejected; see "Why no ledger row".
 - **A separate `db policy set` command.** Rejected: a pipeline only deploys, and a second way to change a policy is a second path around review.
 - **Composer reconciling by itself when no path exists.** Rejected: a failed deploy with a clear recovery is the normal case.
 - **Storing policies in a new marker column.** Rejected for `meta.policies`: `meta` exists on all three targets for fields added later, so no marker table changes on existing databases.

@@ -43,10 +43,11 @@ Slice 3 replaces this with the one recovery the database's policy permits. Witho
 
 ## Slice 3: policies are recorded, compared and enforced for change policy (orm) (TML-3727)
 
+Slice spec: [`slices/3-policies/spec.md`](slices/3-policies/spec.md).
+
 **Outcome:**
 - **Refs:** they accept `policies`, and every ref writer keeps the field.
-- **The marker:** it stores the policies in force under `meta.policies` on Postgres, SQLite, MySQL and MongoDB. Other marker writes keep them.
-- **The ledger:** it records policy changes.
+- **The marker:** it stores the policies in force under `meta.policies` on Postgres, SQLite, MySQL and MongoDB, written when a run given consent succeeds. Other marker writes keep them.
 - **The mismatch rule:** commands given a ref apply it, with `MIGRATION.POLICY_MISMATCH`, and `--permit-policy-change` on `db migrate` and `db update`.
 - **`migration status --to <ref>`:** it reports a mismatch.
 - **Enforcement:** `db migrate`, `db update` and `db sign` enforce the change policy with `MIGRATION.CHANGE_POLICY_FORBIDS`.
@@ -55,11 +56,10 @@ Slice 3 replaces this with the one recovery the database's policy permits. Witho
 **In scope:**
 - the ref schema and writer in `@internal/migration-tools`;
 - marker reads and writes on the four targets;
-- the ledger record and its writers;
 - the control API operations and CLI commands above;
 - the new decision record;
 - glossary entries for change policy and the widened `migrate`;
-- notes in the decision records on refs, the marker and the ledger;
+- notes in the decision records on refs and the marker;
 - the skill's documentation of policies, the flag and the new errors.
 
 **Builds on:** slice 1. **Hands to:** slice 4 (stored policies and the mismatch rule). Slice 5 (the control API's `permitPolicyChange` option and policy comparison).

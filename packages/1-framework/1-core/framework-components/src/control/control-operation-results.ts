@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import type { DatabasePolicies, MarkerDatabasePoliciesComparison } from './database-policies';
 import type { SchemaDiffIssue } from './schema-diff';
 
 export const VERIFY_CODE_MARKER_MISSING = 'CONTRACT.MARKER_MISSING';
@@ -145,13 +146,27 @@ export type SpaceSigned =
 /**
  * A space whose marker did not hold `expected`, the hashes the caller read before it verified the space, when the family came to write it. `found` is what the marker held instead. The marker was left as it was.
  */
-export interface SpaceMarkerConflict {
+export interface SpaceMarkerHashConflict {
   readonly status: 'conflict';
+  readonly reason: 'storageHash';
   readonly space: string;
   readonly contract: MarkerHashes;
   readonly expected: MarkerHashes | null;
   readonly found: MarkerHashes | null;
 }
+
+/**
+ * The application space's marker no longer records the policies the caller checked: another process changed them, or they cannot be read. The family signs no space after it finds this, and leaves the marker as it was.
+ */
+export interface SpaceDatabasePoliciesConflict {
+  readonly status: 'conflict';
+  readonly reason: 'databasePolicies';
+  readonly space: string;
+  readonly checked: DatabasePolicies;
+  readonly comparison: Exclude<MarkerDatabasePoliciesComparison, { readonly kind: 'held' }>;
+}
+
+export type SpaceMarkerConflict = SpaceMarkerHashConflict | SpaceDatabasePoliciesConflict;
 
 /** What signing did to one contract space's marker. */
 export type SpaceSignature = SpaceSigned | SpaceMarkerConflict;

@@ -1,4 +1,11 @@
 import { mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
+import {
+  type DeclaredDatabasePolicies,
+  type DeclaredDatabasePoliciesIssue,
+  parseDeclaredDatabasePolicies,
+} from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { type } from 'arktype';
 import { dirname, join, relative } from 'pathe';
 import {
@@ -11,7 +18,11 @@ import {
 export interface RefEntry {
   readonly hash: string;
   readonly invariants: readonly string[];
+  readonly policies?: DeclaredDatabasePolicies;
 }
+
+/** A ref with its name: what a `--to` naming a ref resolves to. */
+export type NamedRef = { readonly name: string } & RefEntry;
 
 export type Refs = Readonly<Record<string, RefEntry>>;
 
@@ -30,7 +41,11 @@ export const HEAD_REF_NAME = 'head';
  */
 export interface RefLoadProblem {
   readonly refName: string;
+  /** The ref file that could not be read. */
+  readonly path: string;
   readonly detail: string;
+  /** The invalid keys of the ref's `policies`, when they are what is wrong. */
+  readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[];
 }
 
 export interface TolerantRefsResult {
@@ -53,14 +68,40 @@ export function validateRefValue(value: string): boolean {
   return REF_VALUE_PATTERN.test(value);
 }
 
-const RefEntrySchema = type({
+const RefEntryFileSchema = type({
   hash: 'string',
   invariants: 'string[]',
+  'policies?': 'unknown',
 }).narrow((entry, ctx) => {
   if (!validateRefValue(entry.hash))
     return ctx.mustBe(`a valid contract hash (got "${entry.hash}")`);
   return true;
 });
+
+function policiesIssueText({ path, problem }: DeclaredDatabasePoliciesIssue): string {
+  return path === '' ? `policies ${problem}` : `policies.${path} ${problem}`;
+}
+
+interface RefEntryProblem {
+  readonly detail: string;
+  readonly policyIssues: readonly DeclaredDatabasePoliciesIssue[];
+}
+
+/** The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. */
+function refEntryOf(parsed: unknown): Result<RefEntry, RefEntryProblem> {
+  const entry = RefEntryFileSchema(parsed);
+  if (entry instanceof type.errors) return notOk({ detail: entry.summary, policyIssues: [] });
+  const { hash, invariants, policies } = entry;
+  if (policies === undefined) return ok({ hash, invariants });
+  const declared = parseDeclaredDatabasePolicies(policies);
+  if (!declared.ok) {
+    return notOk({
+      detail: declared.failure.map(policiesIssueText).join('\n'),
+      policyIssues: declared.failure,
+    });
+  }
+  return ok({ hash, invariants, policies: declared.value });
+}
 
 function refFilePath(refsDir: string, name: string): string {
   return join(refsDir, `${name}.json`);
@@ -105,12 +146,12 @@ export async function readRef(refsDir: string, name: string): Promise<RefEntry> 
     throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
   }
 
-  const result = RefEntrySchema(parsed);
-  if (result instanceof type.errors) {
-    throw errorInvalidRefFile(filePath, result.summary);
+  const result = refEntryOf(parsed);
+  if (!result.ok) {
+    throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
   }
 
-  return result;
+  return result.value;
 }
 
 export async function readRefs(refsDir: string): Promise<Refs> {
@@ -155,12 +196,12 @@ export async function readRefs(refsDir: string): Promise<Refs> {
       throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
     }
 
-    const result = RefEntrySchema(parsed);
-    if (result instanceof type.errors) {
-      throw errorInvalidRefFile(filePath, result.summary);
+    const result = refEntryOf(parsed);
+    if (!result.ok) {
+      throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
     }
 
-    refs[name] = result;
+    refs[name] = result.value;
   }
 
   return refs;
@@ -169,7 +210,7 @@ export async function readRefs(refsDir: string): Promise<Refs> {
 /**
  * Read a space's user-authored refs without ever throwing on disk
  * content. A ref whose JSON is unparseable or whose shape fails
- * {@link RefEntrySchema} is omitted from `refs` and reported as a
+ * {@link refEntryOf} is omitted from `refs` and reported as a
  * {@link RefLoadProblem}; the remaining well-formed refs are still
  * returned. A missing `refs/` directory yields no refs and no problems.
  *
@@ -221,17 +262,26 @@ export async function readRefsTolerant(refsDir: string): Promise<TolerantRefsRes
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      problems.push({ refName: name, detail: e instanceof Error ? e.message : String(e) });
+      problems.push({
+        refName: name,
+        path: filePath,
+        detail: e instanceof Error ? e.message : String(e),
+      });
       continue;
     }
 
-    const result = RefEntrySchema(parsed);
-    if (result instanceof type.errors) {
-      problems.push({ refName: name, detail: result.summary });
+    const result = refEntryOf(parsed);
+    if (!result.ok) {
+      problems.push({
+        refName: name,
+        path: filePath,
+        detail: result.failure.detail,
+        policyIssues: result.failure.policyIssues,
+      });
       continue;
     }
 
-    refs[name] = result;
+    refs[name] = result.value;
   }
 
   return { refs, problems };
@@ -250,11 +300,33 @@ export async function writeRef(refsDir: string, name: string, entry: RefEntry): 
   await mkdir(dir, { recursive: true });
 
   const tmpPath = join(dir, `.${name.split('/').pop()}.json.${Date.now()}.tmp`);
-  await writeFile(
-    tmpPath,
-    `${JSON.stringify({ hash: entry.hash, invariants: [...entry.invariants] }, null, 2)}\n`,
-  );
+  const content = {
+    hash: entry.hash,
+    invariants: [...entry.invariants],
+    ...ifDefined('policies', entry.policies),
+  };
+  await writeFile(tmpPath, `${JSON.stringify(content, null, 2)}\n`);
   await rename(tmpPath, filePath);
+}
+
+/**
+ * Points ref `name` at `hash`, keeping everything else the ref declares. A ref that does not exist
+ * yet is written with no invariants. Returns the entry as written.
+ */
+export async function advanceRef(refsDir: string, name: string, hash: string): Promise<RefEntry> {
+  const existing = await readExistingRef(refsDir, name);
+  const entry: RefEntry = existing === undefined ? { hash, invariants: [] } : { ...existing, hash };
+  await writeRef(refsDir, name, entry);
+  return entry;
+}
+
+async function readExistingRef(refsDir: string, name: string): Promise<RefEntry | undefined> {
+  try {
+    return await readRef(refsDir, name);
+  } catch (error) {
+    if (MigrationToolsError.is(error) && error.code === 'MIGRATION.UNKNOWN_REF') return undefined;
+    throw error;
+  }
 }
 
 export async function deleteRef(refsDir: string, name: string): Promise<void> {

@@ -1,5 +1,10 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
-import type { ControlAdapterInstance, ControlStack } from '@internal/framework-components/control';
+import type {
+  ControlAdapterInstance,
+  ControlStack,
+  MarkerDestination,
+  MarkerInsert,
+} from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -100,11 +105,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   insertMarker(
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerInsert,
   ): Promise<void>;
 
   /**
@@ -116,11 +117,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   initMarker(
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
   ): Promise<void>;
 
   /**
@@ -134,11 +131,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
     driver: SqlControlDriverInstance<TTarget>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
   ): Promise<boolean>;
 
   /**

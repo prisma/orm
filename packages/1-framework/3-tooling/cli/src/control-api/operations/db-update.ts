@@ -8,7 +8,12 @@ import type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk } from '@internal/utils/result';
+import { ActionableCliError } from '../../utils/cli-errors';
+import { chooseAction } from '../../utils/next-actions';
+import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
@@ -41,6 +46,10 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly acceptDataLoss?: boolean;
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
+  /** See {@link DbUpdateOptions.ref}. */
+  readonly ref?: NamedRef;
+  /** See {@link DbUpdateOptions.permitPolicyChange}. */
+  readonly permitPolicyChange?: boolean;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
@@ -64,6 +73,25 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
 export async function executeDbUpdate<TFamilyId extends string, TTargetId extends string>(
   options: ExecuteDbUpdateOptions<TFamilyId, TTargetId>,
 ): Promise<DbUpdateResult> {
+  if (options.permitPolicyChange === true && options.ref === undefined) {
+    return notOk(errorPermitPolicyChangeNeedsRef({ command: 'db update', to: undefined }));
+  }
+  const contractStorageHash = options.contract.storage.storageHash;
+  if (options.ref !== undefined && options.ref.hash !== contractStorageHash) {
+    const fix = `Pass the contract the ref names, or a ref whose hash is ${contractStorageHash}.`;
+    return notOk(
+      new ActionableCliError(
+        'CLI.INVALID_ARGUMENTS',
+        'The ref names another contract than the one db update reconciles to',
+        {
+          why: `db update was given ref "${options.ref.name}" at ${options.ref.hash}, but the contract it reconciles to is ${contractStorageHash}.`,
+          fix,
+          nextActions: [chooseAction(fix)],
+          meta: { refName: options.ref.name, refHash: options.ref.hash, contractStorageHash },
+        },
+      ),
+    );
+  }
   return (await executeRun<TFamilyId, TTargetId>({
     driver: options.driver,
     adapter: options.adapter,
@@ -82,6 +110,8 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     answerQuestions: options.answerQuestions,
     acceptDataLoss: options.acceptDataLoss ?? false,
     acceptAccessChanges: options.acceptAccessChanges ?? false,
+    ...ifDefined('ref', options.ref),
+    permitPolicyChange: options.permitPolicyChange ?? false,
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
     ...ifDefined('onProgress', options.onProgress),

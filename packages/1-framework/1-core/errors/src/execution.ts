@@ -95,6 +95,29 @@ export function errorMarkerRowCorrupt(options: {
 }
 
 /**
+ * The application space's marker records policies that cannot be read. Deleting the marker would
+ * drop the policies and the invariants it records, so the advice keeps it.
+ */
+export function errorMarkerPoliciesCorrupt(options: {
+  readonly why: string;
+  readonly space: string;
+  readonly markerLocation: string;
+}): CliStructuredError {
+  const advice =
+    'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.';
+  return new CliStructuredError(
+    'CONTRACT.MARKER_ROW_CORRUPT',
+    "The marker's policies cannot be read",
+    {
+      why: options.why,
+      fix: `${advice} The marker for space "${options.space}" in ${options.markerLocation} also records the database's contract and invariants.`,
+      nextActions: [{ kind: 'user-choice', label: advice }],
+      meta: { space: options.space },
+    },
+  );
+}
+
+/**
  * Driver-level failure while reading the contract marker table.
  */
 export function errorMarkerReadFailed(options: {

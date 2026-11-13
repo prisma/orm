@@ -17,8 +17,6 @@ import {
   mapRefResolutionError,
   requireLiveDatabase,
 } from '../../utils/cli-errors';
-import { statementFlag } from '../statements/statement-flag';
-import type { StatementText } from '../statements/statement-text';
 
 export interface RefResolutionContext {
   readonly graph: MigrationGraph;
@@ -62,10 +60,9 @@ export function liveMarkerUse(flags: {
 export function retryCommandFor(args: {
   readonly commandName: string;
   readonly from?: string | undefined;
-  readonly to: string | undefined;
-  readonly advanceRef?: string | undefined;
-  /** The statements as given: each verb's values in order, `rename` first. */
-  readonly statements?: readonly StatementText[] | undefined;
+  readonly to?: string | undefined;
+  /** The other flags the user gave, which the retry repeats after `--to`. */
+  readonly rerunArgs?: readonly string[] | undefined;
   /** The command runs without a database when `--from` names a contract. */
   readonly canRunOffline: boolean;
 }): string {
@@ -77,8 +74,7 @@ export function retryCommandFor(args: {
     ...(args.from === undefined ? [] : [`--from ${args.from}`]),
     ...(suggestsOffline ? ['--from <contract>'] : []),
     ...(args.to === undefined ? [] : [`--to ${args.to}`]),
-    ...(args.advanceRef === undefined ? [] : [`--advance-ref ${args.advanceRef}`]),
-    ...(args.statements ?? []).map(statementFlag),
+    ...(args.rerunArgs ?? []),
     ...(needsConnection ? ['--db $DATABASE_URL'] : []),
   ].join(' ');
 }

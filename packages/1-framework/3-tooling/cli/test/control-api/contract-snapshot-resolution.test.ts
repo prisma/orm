@@ -131,6 +131,7 @@ describe('resolveContractRefToSnapshot', () => {
         contractJson: contractJsonForHash(HASH_FLOAT),
         contractJsonPath: contractPathAbsolute,
         source: 'emitted',
+        ref: { name: 'floating', hash: HASH_FLOAT, invariants: [] },
       });
     }
   });

@@ -1,4 +1,4 @@
-import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import type { SqlControlAdapter } from '../src/core/control-adapter';
@@ -8,6 +8,7 @@ import { buildContract, FIXTURE_HASH, makeStack } from './control-instance-stack
 interface StoredMarker {
   readonly storageHash: string;
   readonly profileHash: string;
+  readonly meta?: Record<string, unknown>;
 }
 
 const EXT_SPACE_ID = 'pgvector';
@@ -68,7 +69,7 @@ function createMarkerStore(
       const stored = markers.get(space);
       return stored === undefined
         ? null
-        : { ...stored, contractJson: null, updatedAt: new Date(), invariants: [] };
+        : { meta: {}, ...stored, contractJson: null, updatedAt: new Date(), invariants: [] };
     },
     async insertMarker(_driver: unknown, space: string, destination: StoredMarker) {
       events.push(`insert ${space}`);
@@ -216,6 +217,7 @@ describe('sql family signSpaces', () => {
       },
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: EXT_SPACE_ID,
         contract: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
         expected: { storageHash: 'old-ext', profileHash: 'old-ext-profile' },
@@ -260,6 +262,7 @@ describe('sql family signSpaces', () => {
       },
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         contract: appHashes,
         expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
@@ -270,6 +273,95 @@ describe('sql family signSpaces', () => {
     expect(store.markers()).toEqual({
       [APP_SPACE_ID]: { storageHash: 'moved-by-migrate', profileHash: 'moved-profile' },
       [EXT_SPACE_ID]: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
+    });
+  });
+
+  it('signs nothing when the policies changed after the check, and reports them on the application space', async () => {
+    const moved = {
+      storageHash: 'old-app',
+      profileHash: 'old-app-profile',
+      meta: { policies: { change: ['migrate'] } },
+    };
+    const store = createMarkerStore({ [APP_SPACE_ID]: moved });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [
+        { space: EXT_SPACE_ID, contract: extContract, expected: null },
+        {
+          space: APP_SPACE_ID,
+          contract: appContract,
+          expected: { storageHash: 'old-app', profileHash: 'old-app-profile' },
+        },
+      ],
+      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+    });
+
+    expect(signatures).toEqual([
+      {
+        status: 'conflict',
+        reason: 'databasePolicies',
+        space: APP_SPACE_ID,
+        checked: DEFAULT_DATABASE_POLICIES,
+        comparison: { kind: 'moved', found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] } },
+      },
+    ]);
+    expect(store.markers()).toEqual({ [APP_SPACE_ID]: moved });
+  });
+
+  it('signs an extension space without the application space when the policies still hold', async () => {
+    const store = createMarkerStore({
+      [APP_SPACE_ID]: {
+        storageHash: 'old-app',
+        profileHash: 'old-app-profile',
+        meta: { policies: { change: ['migrate'] } },
+      },
+    });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [{ space: EXT_SPACE_ID, contract: extContract, expected: null }],
+      expectedDatabasePolicies: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+    });
+
+    expect(signatures).toEqual([
+      {
+        status: 'created',
+        space: EXT_SPACE_ID,
+        contract: { storageHash: EXT_HASH, profileHash: 'ext-profile' },
+      },
+    ]);
+  });
+
+  it('signs no extension space without the application space when the policies moved', async () => {
+    const store = createMarkerStore({
+      [APP_SPACE_ID]: {
+        storageHash: 'old-app',
+        profileHash: 'old-app-profile',
+        meta: { policies: { change: ['migrate'] } },
+      },
+    });
+
+    const signatures = await store.instance.signSpaces({
+      driver,
+      spaces: [{ space: EXT_SPACE_ID, contract: extContract, expected: null }],
+      expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+    });
+
+    expect({ signatures, ext: store.markers()[EXT_SPACE_ID] }).toEqual({
+      signatures: [
+        {
+          status: 'conflict',
+          reason: 'databasePolicies',
+          space: APP_SPACE_ID,
+          checked: DEFAULT_DATABASE_POLICIES,
+          comparison: {
+            kind: 'moved',
+            found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          },
+        },
+      ],
+      ext: undefined,
     });
   });
 
@@ -286,6 +378,7 @@ describe('sql family signSpaces', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         contract: appHashes,
         expected: null,
