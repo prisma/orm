@@ -2,7 +2,6 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast, castAs } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
 import {
   assertReturningCapability,
   columnOfContractField,
@@ -60,7 +59,7 @@ import {
   modelOf,
   mtiCreateContextOf,
   updateValuesOf,
-  variantCreateRowsOf,
+  variantCreateRowOf,
   withCreateDefaults,
 } from './storage-rows';
 
@@ -127,6 +126,7 @@ interface OwnTableVariant {
   readonly collection: DescribeCollectionRowsOptions;
   readonly mti: MtiCreateContext;
   readonly variantTable: AliasedTable;
+  readonly defaultValueCache: Map<string, unknown>;
 }
 
 function ownTableVariantOf(
@@ -152,39 +152,36 @@ function ownTableVariantOf(
     collection,
     mti,
     variantTable: requireVariantTable(collection.state.tables, mti.variant.value),
+    defaultValueCache: new Map(),
   };
 }
 
-function addOwnTableVariantRows(
+function addOwnTableVariantRow(
   t: Translation,
-  { collection, mti, variantTable }: OwnTableVariant,
+  { collection, mti, variantTable, defaultValueCache }: OwnTableVariant,
   relatedCollection: RelatedCollection,
-  data: CreateMutation['data'],
+  row: MutationCreateInput<Contract<SqlStorage>, string>,
   keysFromParent: readonly KeySource[],
-): NodeId[] {
+): NodeId {
   const model = modelOf(collection);
-  for (const row of data) {
-    parseCreateInput(t, model, row, relatedCollection);
-  }
+  parseCreateInput(t, model, row, relatedCollection);
   const { root } = model.tables;
-  const variantKeys = variantKeyMappings(t.context.contract, root, variantTable);
-  return variantCreateRowsOf(collection, mti, variantTable, data).map((row) => {
-    const base = addInsert(t, root, [row.base], {
-      conflict: undefined,
-      keys: keysFromParent,
-      junction: undefined,
-      requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
-      owner: { operation: 'create', modelName: model.modelName },
-    });
-    addInsert(t, variantTable, [row.variant], {
-      conflict: undefined,
-      keys: [{ from: base, columns: variantKeys }],
-      junction: undefined,
-      requires: [],
-      owner: { operation: 'create', modelName: mti.variant.modelName },
-    });
-    return base;
+  const split = variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache);
+  const base = addInsert(t, root, [split.base], {
+    conflict: undefined,
+    keys: keysFromParent,
+    junction: undefined,
+    requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
+    owner: { operation: 'create', modelName: model.modelName },
   });
+  addInsert(t, variantTable, [split.variant], {
+    conflict: undefined,
+    keys: [{ from: base, columns: variantKeyMappings(t.context.contract, root, variantTable) }],
+    junction: undefined,
+    requires: [],
+    owner: { operation: 'create', modelName: mti.variant.modelName },
+  });
+  return base;
 }
 
 export function addBeforeWrite(
@@ -307,11 +304,7 @@ function addParentOwned(
         columns,
       };
     }
-    const [from] = addOwnTableVariantRows(t, variant, relatedCollection, [row], []);
-    if (from === undefined) {
-      throw new InternalError('a variant row stored in its own table adds one base Insert');
-    }
-    return { from, columns };
+    return { from: addOwnTableVariantRow(t, variant, relatedCollection, row, []), columns };
   }
   const [criterion] = mutation.criteria;
   if (criterion === undefined) {
@@ -351,7 +344,9 @@ function addChildOwned(
     const keys = [{ from: parent, columns: fromParent }];
     const variant = ownTableVariantOf(t, relationMutation, mutation);
     if (variant !== undefined) {
-      addOwnTableVariantRows(t, variant, relatedCollection, mutation.data, keys);
+      for (const row of mutation.data) {
+        addOwnTableVariantRow(t, variant, relatedCollection, row, keys);
+      }
       return;
     }
     const variantValue = mutation.variant;
@@ -464,8 +459,8 @@ function addJunctionOwned(
   if (mutation.kind === 'create') {
     const variant = ownTableVariantOf(t, relationMutation, mutation);
     if (variant !== undefined) {
-      for (const base of addOwnTableVariantRows(t, variant, relatedCollection, mutation.data, [])) {
-        addLink(base, undefined);
+      for (const row of mutation.data) {
+        addLink(addOwnTableVariantRow(t, variant, relatedCollection, row, []), undefined);
       }
       return;
     }

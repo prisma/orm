@@ -166,58 +166,56 @@ export function variantCreateRowsOf(
   variantTable: AliasedTable,
   rows: readonly ModelData[],
 ): VariantCreateRow[] {
+  const defaultValueCache = new Map<string, unknown>();
+  return rows.map((row) =>
+    variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache),
+  );
+}
+
+export function variantCreateRowOf(
+  collection: DescribeCollectionRowsOptions,
+  mti: MtiCreateContext,
+  variantTable: AliasedTable,
+  row: ModelData,
+  defaultValueCache: Map<string, unknown>,
+): VariantCreateRow {
   const { context, namespaceId, state } = collection;
   const { contract } = context;
   const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, mergedFieldToColumn } = mti;
   const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
   const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
-  const defaultValueCache = new Map<string, unknown>();
   const base = state.tables.root.storage;
 
-  return rows.map((row) => {
-    const allMapped: Record<string, unknown> = {};
-    for (const [fieldName, value] of Object.entries(row)) {
-      if (value === undefined) continue;
-      allMapped[
-        columnOfCallerField(
-          contract,
-          namespaceId,
-          mergedFieldToColumn,
-          variant.modelName,
-          fieldName,
-        )
-      ] = value;
-    }
-    allMapped[polyInfo.discriminatorColumn] = variant.value;
+  const allMapped: Record<string, unknown> = {};
+  for (const [fieldName, value] of Object.entries(row)) {
+    if (value === undefined) continue;
+    allMapped[
+      columnOfCallerField(contract, namespaceId, mergedFieldToColumn, variant.modelName, fieldName)
+    ] = value;
+  }
+  allMapped[polyInfo.discriminatorColumn] = variant.value;
 
-    const baseRow: Record<string, unknown> = {};
-    const variantRow: Record<string, unknown> = {};
-    for (const [column, value] of Object.entries(allMapped)) {
-      if (baseFieldColumns.has(column) || column === polyInfo.discriminatorColumn) {
-        baseRow[column] = value;
-      }
-      if (variantFieldColumns.has(column)) {
-        variantRow[column] = value;
-      }
+  const baseRow: Record<string, unknown> = {};
+  const variantRow: Record<string, unknown> = {};
+  for (const [column, value] of Object.entries(allMapped)) {
+    if (baseFieldColumns.has(column) || column === polyInfo.discriminatorColumn) {
+      baseRow[column] = value;
     }
+    if (variantFieldColumns.has(column)) {
+      variantRow[column] = value;
+    }
+  }
 
-    return {
-      base: withCreateDefaults(
-        context,
-        base.namespaceId,
-        base.tableName,
-        baseRow,
-        defaultValueCache,
-      ),
-      variant: withCreateDefaults(
-        context,
-        variantTable.storage.namespaceId,
-        variantTable.storage.tableName,
-        variantRow,
-        defaultValueCache,
-      ),
-    };
-  });
+  return {
+    base: withCreateDefaults(context, base.namespaceId, base.tableName, baseRow, defaultValueCache),
+    variant: withCreateDefaults(
+      context,
+      variantTable.storage.namespaceId,
+      variantTable.storage.tableName,
+      variantRow,
+      defaultValueCache,
+    ),
+  };
 }
 
 export function updateValuesOf(
