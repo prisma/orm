@@ -68,6 +68,8 @@ const URLS = [
   'postgres://u:p@[2001:db8::1]/db',
   'postgres://u@localhost/db',
   'postgres://localhost',
+  'postgresql:///db',
+  'postgres:///db?host=/var/run/postgresql',
   'postgres://u:p@localhost/db?schema=public&connection_limit=5',
   'postgres://u:p@localhost/db?replication=database',
   'postgres://u:p@localhost/db?client_encoding=LATIN1&fallback_application_name=x',
@@ -97,6 +99,20 @@ describe('a pg client built from the settings of a URL', () => {
       );
     },
   );
+
+  // #8230: `postgresql:///db` should work like `psql db`, using the
+  // PGUSER/PGHOST defaults instead of an empty user or host.
+  it('falls back to PGUSER and PGHOST when the URL has no user or host', () => {
+    vi.stubEnv('PGUSER', 'envuser');
+    vi.stubEnv('PGHOST', '/tmp');
+    const client = new pg.Client(fromUrl('postgresql:///db'));
+    expect(connectsWith(client)).toMatchObject({
+      user: 'envuser',
+      host: '/tmp',
+      isDomainSocket: true,
+      database: 'db',
+    });
+  });
 
   it('keeps TLS on without certificate checks for ssl=no-verify', () => {
     const client = new pg.Client(fromUrl('postgres://u:p@localhost/db?ssl=no-verify'));
