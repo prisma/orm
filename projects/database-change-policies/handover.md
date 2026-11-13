@@ -16,7 +16,7 @@ Slice 1 is merged. Slice 3 is finished and waits only for Will's review: [prisma
    - the design session where Will settled the design (2026-10-15 to 2026-10-23): `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-agents-db-reset-design-2a94d6/a02116db-9e86-47d5-848d-e0501dfe2e70.jsonl`
 3. **Design documents.** Read the copies on branch `tml-3727-policies`, because main has older ones. These are also the documents to give Serhii, in this order:
    1. [`design.md`](design.md): the incident, why there are two policies, scenarios, prior art, rejected alternatives.
-   2. [ADR 319 — Databases record a change policy and a data protection policy](../../docs/architecture%20docs/adrs/ADR%20319%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md). It was numbered 314 until 2026-11-11; main took 314 for another ADR.
+   2. [ADR 320 — Databases record a change policy and a data protection policy](../../docs/architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md). It was numbered 314, then 319, and is now 320: main took 314 for another ADR on 2026-11-11, and approved PR #30483 takes 319.
    3. [`spec.md`](spec.md): the project requirements, with a table of decisions the agents made rather than Will.
    4. [`plan.md`](plan.md): the five slices.
    5. [`slices/3-policies/spec.md`](slices/3-policies/spec.md) and the review files in `slices/3-policies/reviews/` (force-added; the folder is normally gitignored).
@@ -66,7 +66,7 @@ Follow-ups filed: TML-3743 (a one-step command to bring an off-graph database ba
 
 1. Fresh worktree from `bot/tml-3727-policies` (or from `origin/main` once #30926 merges). Run `pnpm install` and `pnpm build` through `mise exec --`.
 2. Keep #30926 green until Will approves, then land it as above.
-3. Will's discussion with Serhii may change the design. If it does, update ADR 319, the spec and the plan before building more.
+3. Will's discussion with Serhii may change the design. If it does, update ADR 320, the spec and the plan before building more.
 4. **Slice 4 (TML-3728)**, after #30926 merges, through the Drive process (`/drive-process`): slice spec, plan, Opus implementer, `/drive-code-review` without the walkthrough, fixes, manual QA, then the PR. Content: `db update` applies the three levels of each data protection setting to its questions; `db migrate` refuses, with `MIGRATION.DATA_PROTECTION_FORBIDS`, a run containing a destructive operation under `data-loss-forbidden` or an access-widening one under `access-widening-forbidden`; each target supplies the function that finds access-widening operations in a recorded `ops.json`; `migration plan --to <ref>` checks the plan against the ref's declared data protection. Then remove the "not yet enforced" notes from the docs and the skill.
 5. **Composer slices 2 and 5**, after the ORM releases that contain slices 1 and 3. Clone `git@github-wmadden-electric:prisma/composer.git` into `wip/`. The deploy step is `packages/1-prisma-cloud/1-extensions/target/src/orm-migrate.ts`.
 6. **Close-out** per `close-project.md`: verify the project's definition of done in `spec.md`, move anything long-lived to `docs/`, file the follow-ups in `design.md` that have no ticket yet, then delete `projects/database-change-policies/`.

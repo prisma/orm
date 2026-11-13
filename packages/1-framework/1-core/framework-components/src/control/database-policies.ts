@@ -1,6 +1,6 @@
 /**
  * The database's policies: its change policy and its data protection policy. A ref declares them;
- * the application space's marker records them in `meta.policies`. See ADR 319.
+ * the application space's marker records them in `meta.policies`. See ADR 320.
  */
 
 import type { ContractMarkerRecord } from '@internal/contract/types';
