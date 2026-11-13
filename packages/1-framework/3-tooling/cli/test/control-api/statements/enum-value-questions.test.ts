@@ -31,6 +31,7 @@ const plan: PlannedQuestions = {
     },
   ],
   accessChanges: [],
+  temporaryValues: [],
 };
 
 async function questionsOf(statements: readonly { verb: 'rename'; text: string }[] = []) {
@@ -49,7 +50,7 @@ async function questionsOf(statements: readonly { verb: 'rename'; text: string }
       asked.push(...batch);
       return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
     },
-    replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+    replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
   });
   return asked;
 }
@@ -95,6 +96,7 @@ describe('a question about an enum value', () => {
           },
         ],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -108,7 +110,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked.map(({ subject, question }) => ({ subject, question }))).toEqual([
@@ -148,6 +150,7 @@ describe('a question about an enum value', () => {
           },
         ],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -167,7 +170,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toMatchObject([
@@ -204,6 +207,7 @@ describe('a question about an enum value', () => {
       plan: {
         dataLoss: [{ operationIndex: 0, label: 'Change values', loss: 'drop', subject }],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -217,7 +221,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject: text }) => ({ verb: 'delete', text }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked[0]).toMatchObject({

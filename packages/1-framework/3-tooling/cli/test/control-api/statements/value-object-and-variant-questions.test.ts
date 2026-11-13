@@ -21,7 +21,7 @@ async function questionsOf(input: {
   readonly canConvert?: boolean;
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
-  /** The fields the plan gives a temporary value; left out, the command does not say. */
+  /** The fields the plan gives a temporary value; none when left out. */
   readonly temporaryValues?: readonly string[];
 }) {
   const asked: PlanQuestion[] = [];
@@ -35,9 +35,7 @@ async function questionsOf(input: {
         ...(input.keepDataAdvice === undefined ? {} : { keepDataAdvice: input.keepDataAdvice }),
       })),
       accessChanges: [],
-      ...(input.temporaryValues === undefined
-        ? {}
-        : { temporaryValues: input.temporaryValues.map((field) => ({ field, value: '""' })) }),
+      temporaryValues: (input.temporaryValues ?? []).map((field) => ({ field, value: '""' })),
     },
     askAccess: false,
     canConvert: input.canConvert ?? false,
@@ -51,7 +49,7 @@ async function questionsOf(input: {
       asked.push(...batch);
       return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
     },
-    replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+    replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
   });
   return { asked, consented: result.ok ? result.value.consented : undefined };
 }
@@ -79,7 +77,13 @@ describe('a question about a value object field', () => {
       [true, false].map(async (canConvert) => {
         const {
           asked: [question],
-        } = await questionsOf({ origin, destination, subject: lat, canConvert });
+        } = await questionsOf({
+          origin,
+          destination,
+          subject: lat,
+          canConvert,
+          temporaryValues: canConvert ? [] : ['GeoPoint.latitude'],
+        });
         return question?.question;
       }),
     );
@@ -107,6 +111,26 @@ describe('a question about a value object field', () => {
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
       'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.',
     ]);
+  });
+
+  it('names the new field as the destination contract does, which the reported temporary values use', async () => {
+    const twoNamespaces = contractOf({
+      app: { models: { Place: place }, valueObjects: { GeoPoint: ['latitude', 'lng'] } },
+      other: { models: { Tag: { fields: ['id'] } } },
+    });
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin,
+      destination: twoNamespaces,
+      subject: lat,
+      canConvert: true,
+      temporaryValues: ['app.GeoPoint.latitude'],
+    });
+
+    expect(question?.question).toBe(
+      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "app.GeoPoint.latitude".',
+    );
   });
 
   it('leaves out the note under migration plan when the run already backfills the new field', async () => {
@@ -139,7 +163,14 @@ describe('a question about a value object field', () => {
     ) {
       const {
         asked: [question],
-      } = await questionsOf({ origin, destination: gained, subject: lat, canConvert, statements });
+      } = await questionsOf({
+        origin,
+        destination: gained,
+        subject: lat,
+        canConvert,
+        statements,
+        temporaryValues: canConvert ? [] : ['GeoPoint.latitude', 'GeoPoint.longitude'],
+      });
       return question?.question;
     }
 
@@ -165,6 +196,7 @@ describe('a question about a value object field', () => {
       destination,
       subject: lat,
       labels: ['Remove key "lat" from "place"."location"', 'Remove key "lat" from "trip"."stops"'],
+      temporaryValues: ['GeoPoint.latitude'],
     });
 
     expect(question).toMatchObject({

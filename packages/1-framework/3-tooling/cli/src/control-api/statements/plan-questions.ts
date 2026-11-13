@@ -106,8 +106,8 @@ export interface PlannedQuestions {
   readonly accessChanges: readonly PlannedAccessChange[];
   /** The namespaces the planner removes and adds; absent when it reports none. */
   readonly namespaces?: MigrationPlanNamespaces;
-  /** The fields the plan gives a temporary value, as a statement names each; absent when the command does not say. */
-  readonly temporaryValues?: readonly { readonly field: string }[];
+  /** The fields the plan gives a temporary value, as a statement names each in the destination contract. */
+  readonly temporaryValues: readonly { readonly field: string }[];
 }
 
 /** The contracts a statement names things in, and the statements the plan carries out so far. */
@@ -549,8 +549,8 @@ type DataLossContracts = StatementContracts & {
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions that carry edits that keep their data. */
   readonly keptSubjects?: readonly string[];
-  /** The fields the plan gives a temporary value, as a statement names each; absent when the command does not say, and then every one gets one where the command cannot convert. */
-  readonly temporaryValues?: readonly { readonly field: string }[];
+  /** The fields the plan gives a temporary value, as a statement names each in the destination contract. */
+  readonly temporaryValues: readonly { readonly field: string }[];
 };
 
 /** What a command says of keeping a subject's data: why its answer loses it, if anything, and each way to keep it. */
@@ -632,13 +632,11 @@ function newRequiredFieldNote(
       ),
   );
   if (unfilled.length === 0) return [];
-  const parent = text.slice(0, text.lastIndexOf('.'));
   const deleted = statementFlag({ verb: 'delete', text });
-  const added = unfilled.map((name) => `${parent}.${name}`);
-  const filled = (each: string) =>
-    contracts.temporaryValues === undefined
-      ? !contracts.canConvert
-      : contracts.temporaryValues.some((value) => value.field === each);
+  const added = unfilled.map((name) =>
+    valueObjectFieldStatementText(contracts.destination, { ...field, field: name }),
+  );
+  const filled = (each: string) => contracts.temporaryValues.some((value) => value.field === each);
   const temporary = added.filter(filled);
   const needed = added.filter((each) => !filled(each));
   const named = (fields: readonly string[]) =>
@@ -1013,7 +1011,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       canConvert: input.canConvert,
       statements,
       ...ifDefined('keepDataEditAdvice', input.keepDataEditAdvice),
-      ...ifDefined('temporaryValues', plan.temporaryValues),
+      temporaryValues: plan.temporaryValues,
     };
     const pending = <TEntry extends PlannedSubject>(
       verb: ConsentVerb,

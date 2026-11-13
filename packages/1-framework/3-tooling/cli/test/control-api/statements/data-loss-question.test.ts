@@ -24,7 +24,14 @@ describe('dataLossQuestion for data no model names', () => {
         subject: { kind: 'storage', name: 'users.age' },
         loss: 'typeChange',
       },
-      { origin, destination, statements: [], canConvert: false, originKnown: false },
+      {
+        origin,
+        destination,
+        statements: [],
+        canConvert: false,
+        originKnown: false,
+        temporaryValues: [],
+      },
     );
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
@@ -41,6 +48,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
@@ -57,6 +65,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: false,
+      temporaryValues: [],
     });
 
     expect(question.question).toBe(
@@ -86,6 +95,7 @@ describe('dataLossQuestion verbs', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
   }
@@ -117,6 +127,7 @@ describe('dataLossQuestion verbs', () => {
         statements: [{ verb: 'rename', text: 'User.nickname:User.handle' }],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(question.verbs).toEqual(['delete']);
@@ -157,6 +168,7 @@ describe('dataLossQuestion for a type change', () => {
       statements,
       canConvert,
       originKnown: true,
+      temporaryValues: [],
     });
   }
 
@@ -178,6 +190,7 @@ describe('dataLossQuestion for a type change', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(rebuild.question).toBe(
@@ -224,6 +237,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({ verbs: question.verbs, question: question.question }).toEqual({
       verbs: ['delete'],
@@ -239,6 +253,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [{ verb: 'rename', text: 'Profile:Person' }],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({
       subject: question.subject,
@@ -282,7 +297,14 @@ describe('dataLossQuestion with advice from the target', () => {
         loss: 'drop',
         keepDataAdvice: 'To keep its data, move it by hand.',
       },
-      { origin: users, destination: users, statements: [], canConvert: true, originKnown: true },
+      {
+        origin: users,
+        destination: users,
+        statements: [],
+        canConvert: true,
+        originKnown: true,
+        temporaryValues: [],
+      },
     );
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
