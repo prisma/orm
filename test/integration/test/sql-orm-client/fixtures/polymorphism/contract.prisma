@@ -21,6 +21,7 @@
 //   Person   <--reporter(N:1)-- Task
 //   Person   <--assignee(N:1)-- Bug (STI) / Feature (MTI)
 //   TaskComment <--comments(1:N)-- Task
+//   Label   --tasks(M:N, through TaskLabel)--> Task
 
 model Task {
   id         Int    @id @default(autoincrement())
@@ -32,6 +33,7 @@ model Task {
   project  Project?     @relation(fields: [projectId], references: [id])
   reporter Person?      @relation(fields: [reporterId], references: [id])
   comments TaskComment[]
+  labels   Label[]
 
   @@discriminator(type)
   @@map("tasks")
@@ -133,4 +135,24 @@ model TaskComment {
   task Task? @relation(fields: [taskId], references: [id])
 
   @@map("task_comments")
+}
+
+model Label {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  tasks Task[]
+
+  @@map("labels")
+}
+
+model TaskLabel {
+  taskId  Int @map("task_id")
+  labelId Int @map("label_id")
+
+  task  Task  @relation(fields: [taskId], references: [id])
+  label Label @relation(fields: [labelId], references: [id])
+
+  @@id([taskId, labelId])
+  @@map("task_labels")
 }

@@ -8,6 +8,10 @@
       "model": "Account",
       "namespace": "public"
     },
+    "labels": {
+      "model": "Label",
+      "namespace": "public"
+    },
     "people": {
       "model": "Person",
       "namespace": "public"
@@ -18,6 +22,10 @@
     },
     "task_comments": {
       "model": "TaskComment",
+      "namespace": "public"
+    },
+    "task_labels": {
+      "model": "TaskLabel",
       "namespace": "public"
     },
     "tasks": {
@@ -238,6 +246,66 @@
               "table": "features"
             }
           },
+          "Label": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "tasks": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "label_id"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "task_id"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "label_id"
+                  ],
+                  "table": "task_labels",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                }
+              },
+              "namespaceId": "public",
+              "table": "labels"
+            }
+          },
           "Person": {
             "fields": {
               "id": {
@@ -414,6 +482,34 @@
                   "namespace": "public"
                 }
               },
+              "labels": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "task_id"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "label_id"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "task_id"
+                  ],
+                  "table": "task_labels",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Label",
+                  "namespace": "public"
+                }
+              },
               "project": {
                 "cardinality": "N:1",
                 "nullable": true,
@@ -539,6 +635,70 @@
               },
               "namespaceId": "public",
               "table": "task_comments"
+            }
+          },
+          "TaskLabel": {
+            "fields": {
+              "labelId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "taskId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "label": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "labelId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Label",
+                  "namespace": "public"
+                }
+              },
+              "task": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "taskId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "labelId": {
+                  "column": "label_id"
+                },
+                "taskId": {
+                  "column": "task_id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "task_labels"
             }
           },
           "Ticket": {
@@ -844,6 +1004,32 @@
               },
               "uniques": []
             },
+            "labels": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "people": {
               "columns": {
                 "id": {
@@ -952,6 +1138,85 @@
               "primaryKey": {
                 "columns": [
                   "id"
+                ]
+              },
+              "uniques": []
+            },
+            "task_labels": {
+              "columns": {
+                "label_id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "task_id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "task_labels_task_id_idx_5d5ac774"
+                  },
+                  "source": {
+                    "columns": [
+                      "task_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "task_labels"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "tasks"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "task_labels_label_id_idx_c7720d3e"
+                  },
+                  "source": {
+                    "columns": [
+                      "label_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "task_labels"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "labels"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "label_id"
+                  ],
+                  "name": "task_labels_label_id_idx_c7720d3e",
+                  "prefix": "task_labels_label_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "task_id"
+                  ],
+                  "name": "task_labels_task_id_idx_5d5ac774",
+                  "prefix": "task_labels_task_id_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "task_id",
+                  "label_id"
                 ]
               },
               "uniques": []
@@ -1252,7 +1517,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "00913b83286a9e6492e6621c3ba277633d43a309cdda39f9cb46f0a54752c1eb"
+    "storageHash": "90ed4ed73044bd26942bfbf4840f786922a8423af4820fc3411c3ff0eeaa09de"
   },
   "capabilities": {
     "postgres": {

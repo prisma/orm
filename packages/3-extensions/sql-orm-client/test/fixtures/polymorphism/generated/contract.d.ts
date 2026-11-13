@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'00913b83286a9e6492e6621c3ba277633d43a309cdda39f9cb46f0a54752c1eb'>;
+  StorageHashBase<'90ed4ed73044bd26942bfbf4840f786922a8423af4820fc3411c3ff0eeaa09de'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -362,10 +362,11 @@ export namespace Models {
     assigneeId: FieldOutputTypes['public']['Bug']['assigneeId'];
     severity: FieldOutputTypes['public']['Bug']['severity'];
     comments: public_TaskComment[];
+    labels: public_Label[];
     project: public_Project | null;
     reporter: public_Person | null;
     assignee: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter' | 'assignee';
+    readonly [RelationKeys]?: 'comments' | 'labels' | 'project' | 'reporter' | 'assignee';
   };
   export type public_Epic = {
     id: FieldOutputTypes['public']['Task']['id'];
@@ -375,9 +376,10 @@ export namespace Models {
     type: 'epic';
     scope: FieldOutputTypes['public']['Epic']['scope'];
     comments: public_TaskComment[];
+    labels: public_Label[];
     project: public_Project | null;
     reporter: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter';
+    readonly [RelationKeys]?: 'comments' | 'labels' | 'project' | 'reporter';
   };
   export type public_Feature = {
     id: FieldOutputTypes['public']['Task']['id'];
@@ -388,10 +390,17 @@ export namespace Models {
     assigneeId: FieldOutputTypes['public']['Feature']['assigneeId'];
     priority: FieldOutputTypes['public']['Feature']['priority'];
     comments: public_TaskComment[];
+    labels: public_Label[];
     project: public_Project | null;
     reporter: public_Person | null;
     assignee: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter' | 'assignee';
+    readonly [RelationKeys]?: 'comments' | 'labels' | 'project' | 'reporter' | 'assignee';
+  };
+  export type public_Label = {
+    id: FieldOutputTypes['public']['Label']['id'];
+    name: FieldOutputTypes['public']['Label']['name'];
+    tasks: public_AnyTask[];
+    readonly [RelationKeys]?: 'tasks';
   };
   export type public_Person = {
     id: FieldOutputTypes['public']['Person']['id'];
@@ -422,9 +431,10 @@ export namespace Models {
     title: FieldOutputTypes['public']['Task']['title'];
     type: 'bug' | 'epic' | 'feature';
     comments: public_TaskComment[];
+    labels: public_Label[];
     project: public_Project | null;
     reporter: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter';
+    readonly [RelationKeys]?: 'comments' | 'labels' | 'project' | 'reporter';
   };
   export type public_TaskComment = {
     body: FieldOutputTypes['public']['TaskComment']['body'];
@@ -432,6 +442,13 @@ export namespace Models {
     taskId: FieldOutputTypes['public']['TaskComment']['taskId'];
     task: public_AnyTask | null;
     readonly [RelationKeys]?: 'task';
+  };
+  export type public_TaskLabel = {
+    labelId: FieldOutputTypes['public']['TaskLabel']['labelId'];
+    taskId: FieldOutputTypes['public']['TaskLabel']['taskId'];
+    label: public_Label;
+    task: public_AnyTask;
+    readonly [RelationKeys]?: 'label' | 'task';
   };
   export type public_Ticket = {
     id: FieldOutputTypes['public']['Ticket']['id'];
@@ -460,11 +477,13 @@ export declare const models: {
     Bug: Models.public_Bug;
     Epic: Models.public_Epic;
     Feature: Models.public_Feature;
+    Label: Models.public_Label;
     Person: Models.public_Person;
     Project: Models.public_Project;
     Regular: Models.public_Regular;
     Task: Models.public_Task;
     TaskComment: Models.public_TaskComment;
+    TaskLabel: Models.public_TaskLabel;
     Ticket: Models.public_Ticket;
     User: Models.public_User;
     AnyTask: Models.public_AnyTask;
@@ -605,6 +624,30 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly labels: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly people: {
               columns: {
                 readonly id: {
@@ -698,6 +741,64 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'tasks';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly task_labels: {
+              columns: {
+                readonly label_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly task_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['task_id', 'label_id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'task_labels_label_id_idx_c7720d3e';
+                  readonly prefix: 'task_labels_label_id_idx';
+                  readonly columns: readonly ['label_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'task_labels_task_id_idx_5d5ac774';
+                  readonly prefix: 'task_labels_task_id_idx';
+                  readonly columns: readonly ['task_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'task_labels';
+                    readonly columns: readonly ['task_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'tasks';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'task_labels';
+                    readonly columns: readonly ['label_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'labels';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -941,6 +1042,7 @@ type ContractBase = Omit<
   readonly targetFamily: 'sql';
   readonly roots: {
     readonly accounts: { readonly namespace: 'public' & NamespaceId; readonly model: 'Account' };
+    readonly labels: { readonly namespace: 'public' & NamespaceId; readonly model: 'Label' };
     readonly people: { readonly namespace: 'public' & NamespaceId; readonly model: 'Person' };
     readonly projects_tbl: {
       readonly namespace: 'public' & NamespaceId;
@@ -949,6 +1051,10 @@ type ContractBase = Omit<
     readonly task_comments: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'TaskComment';
+    };
+    readonly task_labels: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'TaskLabel';
     };
     readonly tasks: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
     readonly tickets: { readonly namespace: 'public' & NamespaceId; readonly model: 'Ticket' };
@@ -1088,6 +1194,43 @@ type ContractBase = Omit<
             };
             readonly base: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
           };
+          readonly Label: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly tasks: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
+                readonly cardinality: 'N:M';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['label_id'];
+                };
+                readonly through: {
+                  readonly table: 'task_labels';
+                  readonly namespaceId: 'public';
+                  readonly parentColumns: readonly ['label_id'];
+                  readonly childColumns: readonly ['task_id'];
+                  readonly targetColumns: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'labels';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly name: { readonly column: 'name' };
+              };
+            };
+          };
           readonly Person: {
             readonly fields: {
               readonly id: {
@@ -1198,6 +1341,24 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['taskId'];
                 };
               };
+              readonly labels: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Label';
+                };
+                readonly cardinality: 'N:M';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['task_id'];
+                };
+                readonly through: {
+                  readonly table: 'task_labels';
+                  readonly namespaceId: 'public';
+                  readonly parentColumns: readonly ['task_id'];
+                  readonly childColumns: readonly ['label_id'];
+                  readonly targetColumns: readonly ['id'];
+                };
+              };
               readonly project: {
                 readonly to: {
                   readonly namespace: 'public' & NamespaceId;
@@ -1276,6 +1437,49 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly body: { readonly column: 'body' };
                 readonly id: { readonly column: 'id' };
+                readonly taskId: { readonly column: 'task_id' };
+              };
+            };
+          };
+          readonly TaskLabel: {
+            readonly fields: {
+              readonly labelId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly taskId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: {
+              readonly label: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Label';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['labelId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly task: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['taskId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'task_labels';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly labelId: { readonly column: 'label_id' };
                 readonly taskId: { readonly column: 'task_id' };
               };
             };
