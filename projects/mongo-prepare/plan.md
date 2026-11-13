@@ -7,7 +7,7 @@ Design: [spec.md](spec.md). Both design reviewers (architect, principal engineer
 | # | Slice | Branch | Status |
 |---|---|---|---|
 | 1 | Runtime, query builder, client (spec D1–D8, D10–D12) | `tml-3792-mongo-prepare` | merged (#30967) |
-| 2 | ORM reads `.prepared.all()` / `.prepared.first()` (spec D9) | `tml-3792-mongo-prepare-orm-reads` | building |
+| 2 | ORM reads `.prepared.all()` / `.prepared.first()` / `.prepared.firstOrThrow()` (spec D9) | `tml-3792-mongo-prepare-orm-reads` | building |
 
 ## Slice 1 dispatches
 
@@ -39,18 +39,19 @@ Every dispatch: tests first, then implementation. Follow `CLAUDE.md` golden rule
 
 ## Slice 2 dispatches
 
-Same rules as slice 1. Spec D9 is the design. Postgres is the pattern to copy: the SQL ORM's `.prepared` reads, SQL's `Preparable`, and the client's `prepareQuery` in the Postgres facade.
+Same rules as slice 1. Spec D9 is the design. Postgres is the pattern to copy: the SQL ORM's `.prepared` reads, SQL's `Preparable`, and `prepareQuery` in the SQL ORM package, which the Postgres facade calls. The MongoDB ORM package may not import the MongoDB runtime, so MongoDB's counterpart of `prepareQuery` lives in the facade.
 
 ### 5. ORM prepared reads
 
-- **Outcome:** a MongoDB collection has `.prepared.all()` and `.prepared.first()`, returning a `MongoPreparable<Row, Result>`. A placeholder works as a top-level field value in an object-form `where`, in a filter-expression `where` on a scalar field (including a scalar inside a value object, such as `address.city`), and in `limit` and `offset`.
+- **Outcome:** a MongoDB collection has `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, returning a `MongoPreparable<Row, Result>`. A placeholder works as a top-level field value in an object-form `where`, in a filter-expression `where` on a scalar field (including a scalar inside a value object, such as `address.city`), and in `limit` and `offset`.
 - **Scope:** `MongoPreparable` in `@internal/mongo-query-ast/execution`. In the ORM: the pass-through in `#compileWhereObject` and `#encodeFieldFilter` only; `MongoCollectionState.limit`/`offset` widen; `first()` sets `limit` to 1; types require the placeholder's codec to be the field's codec (the element codec on a list field, not nullable there; nullable only on a nullable field).
 - **Decided:** a placeholder in a filter-expression `where` on a field that is not a scalar (a whole value object, or a path the contract does not know) is refused with `ORM.ARGUMENT_INVALID` when the `where` is built, through `ormParam`. A declaration names a scalar codec, so it cannot stand for a value object.
+- **Decided:** in both `where` forms, a placeholder whose codec id is not the field's, or whose nullability does not fit the field, is refused with `ORM.ARGUMENT_INVALID` when the `where` is built (spec D9).
 - **Gate:** typecheck and tests (with `--coverage`) in touched packages; `pnpm lint:deps`.
 
 ### 6. Client and documents
 
-- **Outcome:** `db.prepare(declaration, (p) => db.orm.users.where(...).prepared.all())` works, and the handle's `query(runtime, params)` returns the consumer's result: a row stream for `all`, `Row | null` for `first`.
+- **Outcome:** `db.prepare(declaration, (p) => db.orm.users.where(...).prepared.all())` works, and the handle's `query(runtime, params)` returns the consumer's result: a row stream for `all`, `Row | null` for `first`, `Row` for `firstOrThrow`.
 - **Scope:** facade `mongo.ts` accepts a plan or a `MongoPreparable`; integration tests through `mongo()` against an in-memory replica set; ADR 318 section for ORM reads; `skills/prisma-8/references/queries-mongo.md` (drop "ORM reads cannot be prepared yet"); READMEs; release-note fragment; upgrade instructions if a public type changes.
 - **Gate:** typecheck, tests with coverage, touched integration files, `pnpm lint:deps`, `pnpm fixtures:check`, `pnpm check:error-reference`, `pnpm lint:docs`, `pnpm lint:ratchets`, `check:upgrade-coverage --mode pr`.
 
