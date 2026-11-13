@@ -41,6 +41,22 @@ describe('the pgvector nearest-neighbour collection methods', () => {
     }>();
   });
 
+  test('accepts vectors of any length for an undimensioned field', () => {
+    type Methods = MethodsFor<{
+      readonly embedding: {
+        readonly nullable: false;
+        readonly type: {
+          readonly kind: 'scalar';
+          readonly codecId: 'pg/vector@1';
+          readonly typeParams: Record<never, never>;
+        };
+      };
+    }>;
+    expectTypeOf<Methods['embedding_nearest']['parameters']>().toEqualTypeOf<
+      readonly [vector: Vector, maxDistance?: number]
+    >();
+  });
+
   test('are none for a model with no vector field', () => {
     expectTypeOf<MethodsFor<Pick<PostFields, 'id'>>>().toEqualTypeOf<Record<never, never>>();
   });
