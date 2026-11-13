@@ -52,7 +52,7 @@ Same rules as slice 1. Spec D9 is the design. Postgres is the pattern to copy: t
 ### 6. Client and documents
 
 - **Outcome:** `db.prepare(declaration, (p) => db.orm.users.where(...).prepared.all())` works, and the handle's `query(runtime, params)` returns the consumer's result: a row stream for `all`, `Row | null` for `first`, `Row` for `firstOrThrow`.
-- **Scope:** facade `mongo.ts` accepts a plan or a `MongoPreparable`; integration tests through `mongo()` against an in-memory replica set; ADR 318 section for ORM reads; `skills/prisma-8/references/queries-mongo.md` (drop "ORM reads cannot be prepared yet"); READMEs; release-note fragment; upgrade instructions if a public type changes.
+- **Scope:** facade `mongo.ts` accepts a plan or a `MongoPreparable`; integration tests through `mongo()` against an in-memory replica set; ADR 318 section for ORM reads; `skills/prisma-8/references/queries-mongo.md` (drop "ORM reads cannot be prepared yet"); READMEs; upgrade instructions if a public type changes.
 - **Gate:** typecheck, tests with coverage, touched integration files, `pnpm lint:deps`, `pnpm fixtures:check`, `pnpm check:error-reference`, `pnpm lint:docs`, `pnpm lint:ratchets`, `check:upgrade-coverage --mode pr`.
 
 ## Open items
