@@ -12,6 +12,7 @@ import {
   createRelationMutator,
   isRelationMutationCallback,
   isRelationMutationDescriptor,
+  type RelationCollection,
 } from './relation-mutator';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from './types';
 
@@ -27,12 +28,17 @@ export interface ParsedRelationMutation {
   readonly name: string;
   readonly relation: ResolvedRelation;
   readonly mutations: readonly RelationMutation<Contract<SqlStorage>, string>[];
+  readonly relatedCollection: RelatedCollection;
 }
 
 export interface ParsedMutationInput {
   readonly scalarData: Record<string, unknown>;
   readonly relationMutations: readonly ParsedRelationMutation[];
 }
+
+export type RelatedCollection = (
+  relation: ResolvedRelation,
+) => RelationCollection<Contract<SqlStorage>, string>;
 
 export function parseMutationInput(
   contract: Contract<SqlStorage>,
@@ -41,6 +47,7 @@ export function parseMutationInput(
   input:
     | MutationCreateInput<Contract<SqlStorage>, string>
     | MutationUpdateInput<Contract<SqlStorage>, string>,
+  relatedCollection: RelatedCollection,
 ): ParsedMutationInput {
   const scalarData: Record<string, unknown> = {};
   const relations = resolveModelRelations(contract, namespaceId, modelName);
@@ -65,7 +72,9 @@ export function parseMutationInput(
       );
     }
 
-    const result: unknown = value(createRelationMutator<Contract<SqlStorage>, string>());
+    const result: unknown = value(
+      createRelationMutator<Contract<SqlStorage>, string>(relatedCollection(relation)),
+    );
     const elements: readonly unknown[] = Array.isArray(result) ? result : [result];
     const mutations = elements.map((element, index) => {
       const at = Array.isArray(result) ? index : undefined;
@@ -92,7 +101,7 @@ export function parseMutationInput(
       );
     }
     if (mutations.length > 0) {
-      relationMutations.push({ name: fieldName, relation, mutations });
+      relationMutations.push({ name: fieldName, relation, mutations, relatedCollection });
     }
   }
 

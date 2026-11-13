@@ -30,7 +30,7 @@ await db.User.where({ id: 1 }).update({
 
 ### Descriptors
 
-Two operations join the existing `create` / `connect` / `disconnect` union, as `updateAll` (filters and data) and `deleteAll` (filters). `where` stores its input on the narrowed mutator; the translation resolves it against the related model, so every filter form the collection's `where()` accepts is accepted (as in PR #30634). The descriptor check in `relation-mutator.ts` and `parseMutationInput` in `relation-mutations.ts` accept the two new kinds and an array of descriptors.
+Two operations join the existing `create` / `connect` / `disconnect` union, as `updateAll` (state and data) and `deleteAll` (state). The mutator holds a collection of the related model, made the way `include()` makes the collection its refinement callback receives; `where` calls that collection's `where()` at once, so every filter form the collection's `where()` accepts is accepted, and the descriptor holds the state of the collection it returns (filters and tables). The descriptor check in `relation-mutator.ts` and `parseMutationInput` in `relation-mutations.ts` accept the two new kinds and an array of descriptors.
 
 ### Execution
 

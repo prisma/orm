@@ -48,6 +48,7 @@ import {
   getModelFieldColumns,
   hasCompleteUniqueKey,
   isToOneCardinality,
+  type ResolvedRelation,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -157,6 +158,7 @@ import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import { parseMutationInput } from './relation-mutations';
+import type { RelationCollection } from './relation-mutator';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -1949,6 +1951,7 @@ export class CollectionBase<
         MutationCreateInput<Contract<SqlStorage>, string>,
         'create overload inputs are model-field records whose relation fields are callbacks'
       >(data),
+      this.#relatedCollection,
     );
     const rows =
       mtiCreateContextOf(this.#descriptionOptions()) === undefined
@@ -2388,7 +2391,13 @@ export class CollectionBase<
       MutationUpdateInput<Contract<SqlStorage>, string>,
       'update input is a model-field record whose relation fields are callbacks'
     >(data);
-    const parsed = parseMutationInput(this.contract, this.namespaceId, this.modelName, input);
+    const parsed = parseMutationInput(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
+      input,
+      this.#relatedCollection,
+    );
     if (parsed.relationMutations.length > 0) {
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
     }
@@ -2653,6 +2662,14 @@ export class CollectionBase<
       }),
     );
   }
+
+  #relatedCollection = (
+    relation: ResolvedRelation,
+  ): RelationCollection<Contract<SqlStorage>, string> =>
+    this.#createCollection(relation.to, {
+      namespaceId: relation.toNamespace,
+      includeRefinementMode: false,
+    });
 
   #createCollection<
     ModelNameInner extends string,

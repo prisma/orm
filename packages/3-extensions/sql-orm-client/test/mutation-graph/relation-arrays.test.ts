@@ -4,14 +4,22 @@ import { describe, expect, it } from 'vitest';
 import { createGraph, updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor } from '../collection-fixtures';
+import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
 
+const relatedCollection = relatedCollectionOf();
+
 function parsed(modelName: 'User' | 'Post', input: Record<string, unknown>) {
-  return parseMutationInput(getTestContext().contract, 'public', modelName, input as never);
+  return parseMutationInput(
+    getTestContext().contract,
+    'public',
+    modelName,
+    input as never,
+    relatedCollection,
+  );
 }
 
 function printUpdate(input: Record<string, unknown>): string {

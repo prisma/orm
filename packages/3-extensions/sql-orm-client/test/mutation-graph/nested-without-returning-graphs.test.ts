@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { createGraph, updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { baseContract, createCollectionFor, withoutCapabilityKeys } from '../collection-fixtures';
+import {
+  baseContract,
+  createCollectionFor,
+  relatedCollectionOf,
+  withoutCapabilityKeys,
+} from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -27,6 +32,7 @@ function graphOf(
       target.namespaceId,
       target.modelName,
       data as never,
+      relatedCollectionOf(target.context),
     ),
   );
 }
@@ -83,9 +89,13 @@ describe('nested write graphs on a contract without capability "returning"', () 
   });
 
   it('updates the parent, runs the child operations with the keys the Update gives, then reads the parent back by its key', () => {
-    const parsed = parseMutationInput(withoutReturning, 'public', 'User', {
-      posts: (posts: Mutator) => posts.connect({ id: 10 }),
-    } as never);
+    const parsed = parseMutationInput(
+      withoutReturning,
+      'public',
+      'User',
+      { posts: (posts: Mutator) => posts.connect({ id: 10 }) } as never,
+      relatedCollectionOf(context),
+    );
 
     expect(
       printGraph(updateFirstGraph(targetOf('User'), { name: 'Ada' }, parsed.relationMutations)),
