@@ -39,10 +39,6 @@ Provide SQLite transport and connection management. Execute SQL statements and m
 - Query compilation (sql-query)
 - Runtime execution orchestration (sql-runtime)
 
-## Scope cleanup
-
-Transaction settlement closes its suspended SQLite statement iterators before issuing COMMIT or ROLLBACK. Connection release and destruction close all registered iterators before closing the database. Closure unregisters statements even if their consumers never resume; repeated disposal is harmless. Ended transaction handles and iterators cannot perform later work, including after another transaction starts on the same connection. A failed COMMIT preserves its original error and still allows rollback cleanup without reopening the transaction for statements.
-
 ## Architecture
 
 ```mermaid

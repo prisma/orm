@@ -102,7 +102,7 @@ afterEach(() => {
 });
 
 describe.each(['anon', 'service_role'] as const)('isolation options under %s', (role) => {
-  it('inherits timeout, closes late work, and resets the role exactly once after rollback', async () => {
+  it('inherits timeout and destroys without rollback, role reset or release', async () => {
     await using db = await supabase({
       contract,
       url: 'postgres://localhost/db',
@@ -133,9 +133,11 @@ describe.each(['anon', 'service_role'] as const)('isolation options under %s', (
     resume.resolve();
     await vi.advanceTimersByTimeAsync(0);
     expect(recorded.statements).toEqual(
-      underRole(role, [['BEGIN ISOLATION LEVEL SERIALIZABLE'], ['ROLLBACK']]),
+      underRole(role, [['BEGIN ISOLATION LEVEL SERIALIZABLE']]).slice(0, 3),
     );
-    expect(recorded.disposals).toEqual([undefined]);
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+    ]);
     expect(vi.getTimerCount()).toBe(0);
     await expect(bound.transaction(async () => 42, { timeout: null })).resolves.toBe(42);
   });
@@ -215,7 +217,7 @@ describe.each(['anon', 'service_role'] as const)('isolation options under %s', (
 });
 
 describe('isolation across Supabase roots and user roles', () => {
-  it('destroys without resetting the role when timeout rollback fails', async () => {
+  it('retains ordinary callback-error rollback failure semantics with a configured timeout', async () => {
     await using db = await supabase({
       contract,
       url: 'postgres://localhost/db',
@@ -225,10 +227,16 @@ describe('isolation across Supabase roots and user roles', () => {
     const failure = new Error('rollback failed');
     recorded.rollbackFailure = failure;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
-    const run = db.asAnon().transaction(async () => new Promise<void>(() => {}), { timeout: 1 });
+    const callbackError = new Error('callback failed');
+    const run = db.asAnon().transaction(
+      async () => {
+        throw callbackError;
+      },
+      { timeout: 1 },
+    );
     const rejected = expect(run).rejects.toMatchObject({
       code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
-      cause: { code: 'RUNTIME.TRANSACTION_TIMEOUT' },
+      cause: callbackError,
       details: { rollbackError: failure },
     });
     await vi.advanceTimersByTimeAsync(1);
@@ -278,8 +286,10 @@ describe('isolation across Supabase roots and user roles', () => {
     resume.resolve();
     await rejected;
     expect(callback).not.toHaveBeenCalled();
-    expect(recorded.statements).toEqual(underRole('anon', [['BEGIN'], ['ROLLBACK']]));
-    expect(recorded.disposals).toEqual([undefined]);
+    expect(recorded.statements).toEqual(underRole('anon', [['BEGIN']]).slice(0, 3));
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+    ]);
   });
   it('applies selected isolation after JWT role setup on the same connection', async () => {
     const secret = 'test-secret';

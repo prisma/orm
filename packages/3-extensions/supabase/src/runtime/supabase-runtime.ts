@@ -155,8 +155,8 @@ export class SupabaseRuntimeImpl<
         return self.runPreparedExecuteAgainstRoleQueryable(prepared, params, conn, options);
       },
 
-      async transaction(start?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(conn, session, undefined, start);
+      async transaction(options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(conn, session, undefined, options);
       },
 
       /**
@@ -235,7 +235,7 @@ export class SupabaseRuntimeImpl<
           scope[preparedStatementQuery](statement, params, options),
         preparedExecute: (statement, params, options) =>
           scope[preparedStatementExecute](statement, params, options),
-        transaction: (parent, start) => runtime().beginRoleTransaction(binding, parent, start),
+        transaction: (parent, options) => runtime().beginRoleTransaction(binding, parent, options),
       };
       return scope;
     };
@@ -244,11 +244,11 @@ export class SupabaseRuntimeImpl<
   private async beginRoleTransaction(
     binding: SupabaseRoleBinding,
     parent: ActivityParent,
-    start?: RuntimeTransactionOptions,
+    options?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
     const { conn, session } = await this.openRoleConnection(binding, { activityParent: parent });
     return this.ownTransaction(session, () =>
-      this.beginTransactionOn(conn, session, parent, start),
+      this.beginTransactionOn(conn, session, parent, options),
     );
   }
 

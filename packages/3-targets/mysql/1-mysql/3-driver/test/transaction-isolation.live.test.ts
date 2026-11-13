@@ -130,68 +130,6 @@ describe('MySQL next-transaction isolation on real pooled connections', {
     });
   });
 
-  it('evicts a successful SET interrupted by release before BEGIN and preserves the next borrower baseline', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
-      const driver = mysqlRuntimeDriver.create({
-        ...single,
-        sessionSettings: { transaction_isolation: 'REPEATABLE-READ' },
-      });
-      await driver.connect({ kind: 'url', url });
-      const writer = await driverAt(url);
-      let held = await driver.acquireConnection();
-      const writing = await writer.acquireConnection();
-      let resume = () => {};
-      const paused = new Promise<void>((resolve) => {
-        resume = resolve;
-      });
-      try {
-        await held.execute({ sql: 'CREATE TABLE t (id INT PRIMARY KEY, value INT) ENGINE=InnoDB' });
-        await held.execute({ sql: 'INSERT INTO t VALUES (1, 1)' });
-        const identity = await collect(held.query({ sql: 'SELECT CONNECTION_ID() AS id' }));
-        const client = captured.clients.at(-2);
-        if (!client) throw new Error('No acquired reader client');
-        const query = client.query.bind(client);
-        let entered = () => {};
-        const entering = new Promise<void>((resolve) => {
-          entered = resolve;
-        });
-        const intercepted = vi.spyOn(client, 'query').mockImplementationOnce(async (...args) => {
-          const result = await query(...args);
-          entered();
-          await paused;
-          return result;
-        });
-        const begin = vi.spyOn(client, 'beginTransaction');
-        const starting = held.beginTransaction({ isolationLevel: 'ReadUncommitted' });
-        const rejected = expect(starting).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
-        await entering;
-        const releasing = held.release();
-        resume();
-        await Promise.all([rejected, releasing]);
-        expect(intercepted).toHaveBeenCalledWith(
-          'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
-        );
-        expect(begin).not.toHaveBeenCalled();
-        held = await driver.acquireConnection();
-        const replacement = await collect(held.query({ sql: 'SELECT CONNECTION_ID() AS id' }));
-        const write = await writing.beginTransaction();
-        await write.execute({ sql: 'UPDATE t SET value = 2 WHERE id = 1' });
-        const next = await held.beginTransaction();
-        expect(await collect(next.query({ sql: 'SELECT value FROM t' }))).toEqual([{ value: '1' }]);
-        await write.commit();
-        expect(await collect(next.query({ sql: 'SELECT value FROM t' }))).toEqual([{ value: '1' }]);
-        await next.rollback();
-        expect(replacement).not.toEqual(identity);
-      } finally {
-        resume();
-        await held.destroy();
-        await writing.destroy();
-        await driver.close();
-        await writer.close();
-      }
-    });
-  });
-
   it.for(['set', 'begin'] as const)(
     'evicts after failed %s so pending next-transaction settings cannot be reused',
     async (point, test) => {
@@ -210,7 +148,7 @@ describe('MySQL next-transaction isolation on real pooled connections', {
               isolationLevel: 'Serializable',
             } satisfies SqlTransactionOptions),
           ).rejects.toBe(failure);
-          await held.release();
+          await held.destroy(failure);
           held = await driver.acquireConnection();
           expect(await collect(held.query({ sql: 'SELECT CONNECTION_ID() AS id' }))).not.toEqual(
             identity,

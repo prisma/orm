@@ -192,15 +192,25 @@ describe.each(['pooled', 'serverless'] as const)('%s transaction isolation', (tr
       resume.resolve();
       await outcome;
       expect(recorded.statements).toEqual(
-        onOneConnection([`BEGIN ISOLATION LEVEL ${isolation}`, expires ? 'ROLLBACK' : 'COMMIT']),
+        onOneConnection(
+          expires
+            ? [`BEGIN ISOLATION LEVEL ${isolation}`]
+            : [`BEGIN ISOLATION LEVEL ${isolation}`, 'COMMIT'],
+        ),
       );
-      expect(recorded.disposals).toHaveLength(transport === 'pooled' ? 1 : 0);
+      expect(recorded.disposals).toHaveLength(transport === 'pooled' || expires ? 1 : 0);
       expect(vi.getTimerCount()).toBe(0);
-      const manual = await db.runtime().connection();
-      const tx = await manual.transaction();
-      await vi.advanceTimersByTimeAsync(20);
-      await tx.rollback();
-      await manual.release();
+      if (expires && transport === 'serverless') {
+        await expect(db.runtime().connection()).rejects.toMatchObject({
+          code: 'DRIVER.NOT_CONNECTED',
+        });
+      } else {
+        const manual = await db.runtime().connection();
+        const tx = await manual.transaction();
+        await vi.advanceTimersByTimeAsync(20);
+        await tx.rollback();
+        await manual.release();
+      }
       await db.close();
     },
   );

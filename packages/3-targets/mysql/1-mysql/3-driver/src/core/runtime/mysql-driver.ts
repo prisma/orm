@@ -107,12 +107,7 @@ function resultReceived(rows: Readable): boolean {
  * Reads and drops what is left of a stream's result. The package's `close()` stops it keeping new rows; the rows already buffered are read here with `read()`, which works whether or not the caller's iterator is still attached to the stream, so an iterator the caller abandoned cannot hold the drain up.
  */
 async function dropRest(rows: Readable & { close?: () => void }): Promise<void> {
-  let closeFailure: { error: unknown } | undefined;
-  try {
-    rows.close?.();
-  } catch (error) {
-    closeFailure = { error };
-  }
+  rows.close?.();
   const drain = () => {
     while (rows.read() !== null) {}
   };
@@ -120,7 +115,6 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
   try {
     drain();
     await finished(rows);
-    if (closeFailure !== undefined) throw closeFailure.error;
   } finally {
     rows.off('readable', drain);
   }
@@ -165,14 +159,8 @@ abstract class MysqlQueryable implements SqlQueryable {
 
   constructor(protected readonly streams: boolean) {}
 
-  protected assertUsable(): void {}
-
-  protected assertAccepting(): void {
-    this.assertUsable();
-  }
-
   /** Records a stream that is open, and returns the call that records its end. */
-  protected streamOpened(_rows: Readable, _releaseLock: () => void): () => void {
+  protected streamOpened(_rows: Readable): () => void {
     return () => {};
   }
 
@@ -198,7 +186,6 @@ abstract class MysqlQueryable implements SqlQueryable {
     }
     const result = await this.#runReleasing(request);
     for (const row of Array.isArray(result) ? result : []) {
-      if (this.handedBack) throw connectionReleased();
       yield blindCast<
         Row,
         'the package returns the rows the statement produces, shaped by the query'
@@ -241,20 +228,17 @@ abstract class MysqlQueryable implements SqlQueryable {
       throw error;
     }
     try {
-      this.assertAccepting();
       const rows = startStream(client, request, outcome);
       rows.on('error', ignoreAfterStop);
-      const streamClosed = this.streamOpened(rows, releaseLock);
+      const streamClosed = this.streamOpened(rows);
       let settled = false;
       try {
         for await (const row of rows.iterator({ destroyOnReturn: false })) {
-          if (this.handedBack) throw connectionReleased();
           yield blindCast<
             Row,
             'the package streams the rows the statement produces, shaped by the query'
           >(row);
         }
-        if (this.handedBack) throw connectionReleased();
         settled = true;
       } catch (error) {
         settled = true;
@@ -294,9 +278,7 @@ abstract class MysqlQueryable implements SqlQueryable {
 /** The state of a held connection, shared by the connection and its transactions as the Postgres driver shares its transaction state. */
 interface HeldState {
   /** The streams open on the client, which a release or destroy cancels and reads to their end. */
-  readonly streams: Map<Readable, () => void>;
-  generation: number;
-  cancelling: Promise<void> | undefined;
+  readonly streams: Set<Readable>;
   /** Set once a cancel on the client went out without an answer: a late `KILL QUERY` could interrupt a later statement, so the release closes the connection instead of returning it. */
   cancelUnconfirmed: boolean;
   /** The statements that are not streams and hold the client's lock, which a release lets finish. */
@@ -333,44 +315,9 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     return this.held.cancel;
   }
 
-  protected override streamOpened(rows: Readable, releaseLock: () => void): () => void {
-    const close = () => {
-      this.held.streams.delete(rows);
-      releaseLock();
-    };
-    this.held.streams.set(rows, close);
-    return close;
-  }
-
-  protected async cancelRunning(): Promise<void> {
-    if (this.held.cancelling !== undefined) return this.held.cancelling;
-    const cancelling = (async () => {
-      if ((await this.held.cancel(this.client.threadId)) === 'unconfirmed') {
-        this.held.cancelUnconfirmed = true;
-      }
-      await Promise.all(
-        [...this.held.streams].map(async ([rows, closed]) => {
-          try {
-            await dropRest(rows);
-          } catch (error) {
-            if (!isQueryInterrupted(error)) this.held.cancelUnconfirmed = true;
-          } finally {
-            closed();
-          }
-          return undefined;
-        }),
-      );
-    })();
-    this.held.cancelling = cancelling;
-    try {
-      await cancelling;
-    } finally {
-      this.held.cancelling = undefined;
-    }
-  }
-
-  protected async closeStreams(): Promise<void> {
-    if (this.held.streams.size > 0) await this.cancelRunning();
+  protected override streamOpened(rows: Readable): () => void {
+    this.held.streams.add(rows);
+    return () => this.held.streams.delete(rows);
   }
 
   protected override get handedBack(): boolean {
@@ -382,43 +329,27 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
   }
 
   /** Takes the client's lock, or fails once the connection is handed back, whether the statement was sent after that or was still waiting for the lock. A lock taken after that is given straight back. */
-  protected override async lockClient(
-    client: PoolConnection,
-    validate = () => this.assertUsable(),
-  ): Promise<() => void> {
-    validate();
+  protected override async lockClient(client: PoolConnection): Promise<() => void> {
+    this.#refuseIfUnusable();
     const locking = acquireClientQueryLock(client);
     try {
       const releaseLock = await Promise.race([locking, this.held.handedBack.signal]);
-      try {
-        validate();
-        return () => {
-          const cancelling = this.held.cancelling;
-          if (cancelling === undefined) releaseLock();
-          else void cancelling.then(releaseLock, releaseLock);
-        };
-      } catch (error) {
-        releaseLock();
-        throw error;
-      }
+      if (!this.held.handedBack.done && !this.held.cancelUnconfirmed) return releaseLock;
+      releaseLock();
     } catch {
       void locking.then((releaseLock) => releaseLock());
     }
-    validate();
+    this.#refuseIfUnusable();
     throw connectionReleased();
   }
 
   /** Refuses a statement on a connection that was handed back, or whose cancel went out without an answer: a late `KILL QUERY` would interrupt it. */
-  protected override assertUsable(): void {
+  #refuseIfUnusable(): void {
     if (this.held.handedBack.done) throw connectionReleased();
     if (this.held.cancelUnconfirmed) throw cancelNotConfirmed();
   }
 
-  protected override runStatement<T>(
-    work: () => Promise<T>,
-    validate = () => this.assertUsable(),
-  ): Promise<T> {
-    validate();
+  protected override runStatement<T>(work: () => Promise<T>): Promise<T> {
     const running = work();
     this.held.running.add(running);
     void running.then(
@@ -436,22 +367,19 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     super(streams);
   }
 
-  protected async acquireClient(validate = () => this.assertAccepting()): Promise<PoolConnection> {
-    validate();
+  protected async acquireClient(): Promise<PoolConnection> {
+    this.#refuseIfUnusable();
     return this.client;
   }
 
   protected async releaseClient(): Promise<void> {}
 
   /** Runs one of the package's transaction calls under the client's lock, taken as a statement takes it, so it keeps its place among the statements sent. */
-  protected async underLock(
-    call: () => Promise<void>,
-    validate = () => this.assertUsable(),
-  ): Promise<void> {
-    const client = await this.acquireClient(validate);
-    const releaseLock = await this.lockClient(client, validate);
+  protected async underLock(call: () => Promise<void>): Promise<void> {
+    const client = await this.acquireClient();
+    const releaseLock = await this.lockClient(client);
     try {
-      await this.runStatement(call, validate);
+      await this.runStatement(call);
     } catch (error) {
       throw normalizeMysqlError(error);
     } finally {
@@ -462,10 +390,6 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
 
 class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
   #onRelease: (() => void) | undefined;
-  #disposal: Promise<void> | undefined;
-  #destroyRequested = false;
-  #disposed = false;
-  #isolationPending = false;
 
   constructor(
     client: PoolConnection,
@@ -476,9 +400,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     super(
       client,
       {
-        streams: new Map(),
-        generation: 0,
-        cancelling: undefined,
+        streams: new Set(),
         cancelUnconfirmed: false,
         running: new Set(),
         cancel,
@@ -507,20 +429,9 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
       Serializable: 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
     };
     await this.underLock(async () => {
-      if (isolationLevel === undefined && this.#isolationPending) {
-        throw errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL transaction isolation setup is pending', {
-          fix: 'Dispose of this connection or explicitly replace the pending transaction isolation level.',
-        });
-      }
-      if (isolationLevel !== undefined) {
-        this.#isolationPending = true;
-        await this.client.query(statements[isolationLevel]);
-      }
-      this.assertUsable();
+      if (isolationLevel !== undefined) await this.client.query(statements[isolationLevel]);
       await this.client.beginTransaction();
-      this.#isolationPending = false;
     });
-    this.held.generation++;
     return new MysqlTransactionImpl(this.client, this.held, this.streams);
   }
 
@@ -528,41 +439,29 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
    * Returns the connection to the pool, as the Postgres driver's `release()` does. From then on the connection refuses every statement, those still waiting for its lock included, so none runs later in another caller's session. A statement that is not a stream and is already running finishes, as on Postgres. A stream still open, such as one the caller dropped, is cancelled and read to its end by the driver: the package's release sends `ROLLBACK` behind that statement and waits for it, which would otherwise never finish, where `pg`'s release does not wait on the server.
    */
   async release(): Promise<void> {
-    await this.#dispose(false);
+    if (this.held.handedBack.done) return;
+    this.held.handedBack.refuse();
+    try {
+      if (this.held.streams.size > 0) await this.#cancelRunning();
+      await this.#runningSettled();
+      if (this.held.cancelUnconfirmed) await this.#close();
+      else await this.client.release();
+    } finally {
+      this.#released();
+    }
   }
 
   /** Closes the connection instead of returning it. It refuses every statement from then on, cancels whatever still runs and waits for it to end, so the package's `destroy()` never sends a `KILL` of its own. */
   async destroy(_reason?: unknown): Promise<void> {
-    await this.#dispose(true);
-  }
-
-  async #dispose(destroy: boolean): Promise<void> {
-    if (this.#disposed) return;
-    this.#destroyRequested ||= destroy;
+    if (this.held.handedBack.done) return;
     this.held.handedBack.refuse();
-    if (destroy && this.#disposal !== undefined && this.held.running.size > 0) {
-      await this.cancelRunning();
-    }
-    this.#disposal ??= this.#drainAndDispose();
     try {
-      await this.#disposal;
-    } catch (error) {
-      this.#disposal = undefined;
-      throw error;
-    }
-  }
-
-  async #drainAndDispose(): Promise<void> {
-    if (this.held.streams.size > 0 || (this.#destroyRequested && this.held.running.size > 0)) {
-      await this.cancelRunning();
-    }
-    await this.#runningSettled();
-    if (this.held.cancelling !== undefined) await this.held.cancelling;
-    if (this.#destroyRequested || this.held.cancelUnconfirmed || this.#isolationPending)
+      if (this.held.streams.size > 0 || this.held.running.size > 0) await this.#cancelRunning();
+      await this.#runningSettled();
       await this.#close();
-    else await this.client.release();
-    this.#disposed = true;
-    this.#released();
+    } finally {
+      this.#released();
+    }
   }
 
   /** Closes the client once the `ping` queued behind anything left on it has answered, so nothing is receiving and the package's `destroy()` sends no `KILL` of its own. */
@@ -571,60 +470,25 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     this.client.destroy();
   }
 
+  async #cancelRunning(): Promise<void> {
+    if ((await this.held.cancel(this.client.threadId)) === 'unconfirmed') {
+      this.held.cancelUnconfirmed = true;
+    }
+    await Promise.all([...this.held.streams].map((rows) => dropRest(rows).catch(() => undefined)));
+  }
+
   async #runningSettled(): Promise<void> {
     await Promise.allSettled([...this.held.running]);
   }
 }
 
 class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction {
-  readonly #generation = this.held.generation;
-  #ended = false;
-  #settling = false;
-  #settled = false;
-
-  protected override get handedBack(): boolean {
-    return this.#ended || super.handedBack || this.#generation !== this.held.generation;
-  }
-
-  #assertCurrent(): void {
-    super.assertUsable();
-    if (this.#generation !== this.held.generation) throw connectionReleased();
-  }
-
-  protected override assertUsable(): void {
-    this.#assertCurrent();
-    if (this.#ended) throw connectionReleased();
-  }
-
-  protected override assertAccepting(): void {
-    super.assertAccepting();
-    if (this.#settling) throw connectionReleased();
-  }
-
-  async #settle(call: () => Promise<void>): Promise<void> {
-    this.#settling = true;
-    const closing = this.closeStreams();
-    await this.underLock(
-      async () => {
-        await closing;
-        this.#assertCurrent();
-        this.#ended = true;
-        await call();
-      },
-      () => this.#assertCurrent(),
-    );
-    this.#settled = true;
-  }
-
   async commit(): Promise<void> {
-    this.assertAccepting();
-    await this.#settle(() => this.client.commit());
+    await this.underLock(() => this.client.commit());
   }
 
   async rollback(): Promise<void> {
-    if (this.#settled) return;
-    this.#assertCurrent();
-    await this.#settle(() => this.client.rollback());
+    await this.underLock(() => this.client.rollback());
   }
 }
 

@@ -30,7 +30,7 @@ An omitted or `undefined` local level inherits the factory default; without eith
 
 ORM-owned transactions use ReadCommitted. ORM operations inside an explicit transaction participate in that transaction without changing its isolation or starting another transaction. Isolation settings apply only to the next transaction; the session default is not changed. UTC session setup remains enabled.
 
-Callback options also accept `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. Implicit ORM and manual transactions remain untimed. See [callback timeouts](../../../../../docs/reference/transaction-isolation.md#timeout).
+Callback options also accept `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. Implicit ORM and manual transactions remain untimed. See [callback timeouts](../../../../../docs/reference/transaction-options.md#timeout).
 
 ## Environment requirements
 

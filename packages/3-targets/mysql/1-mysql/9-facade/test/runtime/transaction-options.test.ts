@@ -71,9 +71,10 @@ describe('MySQL callback isolation options', () => {
         isolationLevel: 'Serializable',
         timeout: local === undefined ? global : local,
       });
-      expect(tx.rollback).toHaveBeenCalledTimes(expires ? 1 : 0);
+      expect(tx.rollback).not.toHaveBeenCalled();
+      expect(connection.destroy).toHaveBeenCalledTimes(expires ? 1 : 0);
       expect(tx.commit).toHaveBeenCalledTimes(expires ? 0 : 1);
-      expect(connection.release).toHaveBeenCalledTimes(1);
+      expect(connection.release).toHaveBeenCalledTimes(expires ? 0 : 1);
       expect(vi.getTimerCount()).toBe(0);
       await db.close();
     },

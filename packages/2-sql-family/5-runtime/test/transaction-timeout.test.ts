@@ -40,7 +40,7 @@ it.each([undefined, null, 1, 2147483647])(
 it.each(['resolve', 'reject'] as const)(
   'expires a hung callback, waits for cleanup, and contains late %s',
   async (settlement) => {
-    const rollback = deferred();
+    const disposal = deferred();
     const entered = deferred();
     let rejectLate = (_error: unknown) => {};
     let resolveLate = () => {};
@@ -48,8 +48,11 @@ it.each(['resolve', 'reject'] as const)(
       rejectLate = reject;
       resolveLate = resolve;
     });
-    const { runtime, driver, events } = createSetup({
-      failures: { rollbackHeldUntil: rollback.promise },
+    const { runtime, driver, events } = createSetup();
+    const physical = await driver.acquireConnection();
+    vi.mocked(physical.destroy).mockImplementation(async () => {
+      await disposal.promise;
+      events.push({ name: 'destroy' });
     });
     let ended = false;
     const run = withTransaction(
@@ -77,7 +80,7 @@ it.each(['resolve', 'reject'] as const)(
     await vi.advanceTimersByTimeAsync(10);
     expect(ended).toBe(false);
     expect(names(events)).not.toContain('release');
-    rollback.resolve();
+    disposal.resolve();
     await rejected;
     if (settlement === 'reject') rejectLate(new Error('late callback failure'));
     else resolveLate();
@@ -85,7 +88,7 @@ it.each(['resolve', 'reject'] as const)(
     expect(driver.execute).not.toHaveBeenCalled();
     expect(
       names(events).filter((name) => ['commit', 'rollback', 'release', 'destroy'].includes(name)),
-    ).toEqual(['rollback', 'release']);
+    ).toEqual(['destroy']);
     expect(
       names(events).filter((name) => name === 'finalized:transaction:rolled-back'),
     ).toHaveLength(1);
@@ -229,27 +232,26 @@ it('preserves a callback rejection selected before expiry while rollback waits',
   await runtime.close();
 });
 
-it('retains the rollback failure envelope and ignores destruction failure on expiry', async () => {
+it('preserves timeout when destruction fails without attempting rollback or release', async () => {
   const rollbackError = new Error('rollback failed');
   const { runtime, events } = createSetup({
     failures: { rollback: rollbackError, destroy: new Error('destroy failed') },
   });
   const run = withTransaction(runtime, async () => new Promise<void>(() => {}), { timeout: 10 });
   const rejected = expect(run).rejects.toMatchObject({
-    code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
-    cause: { code: 'RUNTIME.TRANSACTION_TIMEOUT' },
-    details: { rollbackError },
+    code: 'RUNTIME.TRANSACTION_TIMEOUT',
+    details: { timeout: 10 },
   });
   await vi.advanceTimersByTimeAsync(10);
   await rejected;
   expect(
     names(events).filter((name) => ['commit', 'rollback', 'release', 'destroy'].includes(name)),
-  ).toEqual(['rollback', 'destroy']);
+  ).toEqual(['destroy']);
   expect(vi.getTimerCount()).toBe(0);
   await runtime.close();
 });
 
-it('drops a successful rollback hook failure without replacing timeout', async () => {
+it('finalizes abandoned transaction activities without replacing timeout on hook failure', async () => {
   const hookError = new Error('hook failed');
   const error = vi.fn();
   const { runtime, events } = createSetup({
@@ -267,9 +269,13 @@ it('drops a successful rollback hook failure without replacing timeout', async (
   const rejected = expect(run).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
   await vi.advanceTimersByTimeAsync(10);
   await rejected;
-  expect(error).toHaveBeenCalledWith({ event: 'middleware.activityEnded.error', error: hookError });
+  expect(error).toHaveBeenCalledWith({
+    event: 'middleware.activityEnded.error',
+    error: hookError,
+    middleware: 'failing-end',
+  });
   expect(names(events).filter((name) => ['rollback', 'release', 'destroy'].includes(name))).toEqual(
-    ['rollback', 'release'],
+    ['destroy'],
   );
   expect(vi.getTimerCount()).toBe(0);
   await runtime.close();
@@ -316,7 +322,9 @@ it.each(['execute', 'prepared'] as const)(
     expect(names(events).filter((name) => name === 'finalized:statement:rolled-back')).toHaveLength(
       1,
     );
-    expect(names(events).filter((name) => name === 'rollback')).toHaveLength(1);
+    expect(names(events)).not.toContain('rollback');
+    expect(names(events)).not.toContain('release');
+    expect(names(events).filter((name) => name === 'destroy')).toHaveLength(1);
     expect(vi.getTimerCount()).toBe(0);
     await runtime.close();
   },

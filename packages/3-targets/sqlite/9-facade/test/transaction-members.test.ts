@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { join } from 'pathe';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { Contract } from '../../1-target/test/fixtures/sqlite-contract.d';
 import contractJson from '../../1-target/test/fixtures/sqlite-contract.json' with { type: 'json' };
 import sqlite from '../src/exports/runtime';
@@ -97,26 +97,39 @@ describe('a sqlite transaction', () => {
 });
 
 describe('a selected SQLite transaction that rolls back', () => {
-  it('rolls back expired callback ORM writes and refuses late work', async () => {
+  it('destroys an expired callback with parked RETURNING rows and permits fresh work', async () => {
     const db = sqlite({
       contract,
       path,
       verifyMarker: false,
       transactionOptions: { isolationLevel: 'Serializable', timeout: 100 },
     });
+    const closed = vi.spyOn(DatabaseSync.prototype, 'close');
     try {
       const before = await db.orm.Post.select('id', 'views').all();
       let written = false;
+      let parked: AsyncIterator<unknown> | undefined;
       let late: (() => Promise<unknown>) | undefined;
       await expect(
         db.transaction(async (tx) => {
           await tx.orm.Post.where({ id: 1 }).select('id', 'views').update({ views: 42 });
           written = true;
+          parked = tx
+            .query(
+              tx.raw.sql`UPDATE posts SET views = 43 RETURNING id`
+                .returnsRow({ id: 'sqlite/integer@1' })
+                .build(),
+            )
+            [Symbol.asyncIterator]();
+          expect((await parked.next()).done).toBe(false);
           late = async () => tx.orm.Post.select('id', 'views').all();
           await new Promise<void>(() => {});
         }),
       ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT', details: { timeout: 100 } });
       expect(written).toBe(true);
+      expect(closed).toHaveBeenCalledTimes(1);
+      if (parked === undefined) throw new Error('Missing parked iterator');
+      await expect(parked.next()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
       expect(await db.orm.Post.select('id', 'views').all()).toEqual(before);
       if (late === undefined) throw new Error('Missing late ORM operation');
       await expect(late()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
@@ -127,6 +140,7 @@ describe('a selected SQLite transaction that rolls back', () => {
       ).toEqual(before);
     } finally {
       await db.close();
+      closed.mockRestore();
     }
   });
   it('preserves stored rows and allows the next transaction to commit', async () => {

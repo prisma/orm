@@ -129,7 +129,7 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
     });
   });
 
-  it('rolls back timed callback ORM writes and safely reuses the same session', async (test) => {
+  it('discards timed callback ORM writes and uses a fresh session', async (test) => {
     await withSeededDatabase(test, exampleDatabase, async (url) => {
       const observed = observeStarts();
       try {
@@ -160,7 +160,10 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
         ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT', details: { timeout: 100 } });
         expect(written).toBe(true);
         expect(await db.orm.User.select('id').where({ id: 20 }).all()).toEqual([]);
-        expect(await db.query(identity)).toEqual(before);
+        expect(await db.query(identity)).not.toEqual(before);
+        expect(observed.destroyed).toEqual([
+          expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+        ]);
         if (late === undefined) throw new Error('Missing late ORM operation');
         await expect(late()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
         expect(observed.starts).toEqual([{ isolationLevel: 'RepeatableRead' }]);

@@ -2,11 +2,11 @@
 
 One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
 
-Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-isolation.md) for precedence, validation and explicit-only defaults.
+Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
 
-Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip, independently of the always-run dev-database cases.
+Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip.
 
-Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-isolation.md#timeout) for bounds, cleanup and timing limitations.
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout) for bounds, cleanup and timing limitations.
 
 Two runtime entry points create three kinds of object:
 

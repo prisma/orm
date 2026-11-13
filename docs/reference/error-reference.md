@@ -1475,11 +1475,11 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
-Rolling back after callback failure or timeout itself failed; the connection is destroyed rather than returned to the pool. The selected callback error or timeout is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. A hook failure after successful rollback is instead logged while preserving the selected callback error or timeout.
+Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 
-The runtime transaction exceeded its configured deadline before commit admission. Transaction access is invalidated and its signal aborts with this error. The callback helper rejects after safe rollback or destruction, not arbitrary callback settlement; a manual runtime transaction's caller owns cleanup. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-isolation.md#timeout).
+The runtime transaction exceeded its configured deadline before commit admission. Transaction access is invalidated and its signal aborts with this error. The callback helper destroys the connection without rollback or release, then rejects with this timeout even if disposal fails, without waiting for callback JavaScript; a manual runtime transaction's caller owns cleanup. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-options.md#timeout).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 
