@@ -2,9 +2,15 @@ import { ParamRef } from '@internal/sql-relational-core/ast';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
-import { createGraph, updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
+import { requireVariantTable } from '../../src/collection-tables';
+import {
+  createAllVariantGraph,
+  createGraph,
+  updateFirstGraph,
+} from '../../src/mutation-graph/collection-graphs';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
+import { mtiCreateContextOf } from '../../src/mutation-graph/storage-rows';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { Contract as PolyContract } from '../fixtures/polymorphism/generated/contract';
 import polyContractJson from '../fixtures/polymorphism/generated/contract.json' with {
@@ -30,23 +36,35 @@ function withPinnedTask(json: unknown): unknown {
   return copy;
 }
 
+function withoutReturning(json: unknown): unknown {
+  const copy = JSON.parse(JSON.stringify(json));
+  for (const group of Object.values<Record<string, unknown>>(copy.capabilities)) {
+    delete group['returning'];
+  }
+  return copy;
+}
+
 const context = buildTestContextFromContract(
   serializer.deserializeContract<PolyContract>(withPinnedTask(polyContractJson)),
 );
+const contextWithoutReturning = {
+  ...context,
+  contract: serializer.deserializeContract<PolyContract>(withoutReturning(polyContractJson)),
+};
 
-function relatedCollection() {
+function relatedCollection(ctx = context) {
   const runtime = createMockRuntime();
   return (relation: { readonly to: string; readonly toNamespace: string }) =>
-    new Collection({ runtime, context }, relation.to, { namespaceId: relation.toNamespace });
+    new Collection({ runtime, context: ctx }, relation.to, { namespaceId: relation.toNamespace });
 }
 
-function parsed(modelName: string, data: Record<string, unknown>) {
+function parsed(modelName: string, data: Record<string, unknown>, ctx = context) {
   return parseMutationInput(
-    context.contract,
+    ctx.contract,
     'public',
     modelName,
     data as never,
-    relatedCollection(),
+    relatedCollection(ctx),
   );
 }
 
@@ -57,13 +75,13 @@ function targetOf(modelName: string) {
   return { context, state: collection.where({ id: 1 }).state, modelName, namespaceId: 'public' };
 }
 
-function createOf(modelName: string, data: Record<string, unknown>): Graph {
-  const collection = new Collection({ runtime: createMockRuntime(), context }, modelName, {
+function createOf(modelName: string, data: Record<string, unknown>, ctx = context): Graph {
+  const collection = new Collection({ runtime: createMockRuntime(), context: ctx }, modelName, {
     namespaceId: 'public',
   });
   return createGraph(
-    { context, state: collection.state, modelName, namespaceId: 'public' },
-    parsed(modelName, data),
+    { context: ctx, state: collection.state, modelName, namespaceId: 'public' },
+    parsed(modelName, data, ctx),
   );
 }
 
@@ -308,26 +326,197 @@ describe('a nested create of a variant stored in the base table with a relation 
   });
 });
 
+const darkMode = { title: 'Dark mode', priority: 1 };
+const exportPdf = { title: 'Export to PDF', priority: 3 };
+
 describe('a nested create of a variant stored in its own table', () => {
-  it('is refused while the graph is built', () => {
-    expect(() =>
+  describe('on a relation the child holds the key for', () => {
+    it('inserts the base row with the key of the parent, then the variant row with its key, per row in create()', () => {
+      const graph = createOf('Project', {
+        id: 1,
+        name: 'Launch',
+        tasks: (tasks: VariantMutator) => tasks.variant('feature').create([darkMode, exportPdf]),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Insert projects_tbl',
+          'n2 Insert tasks <- PayloadData n1 (id->project_id)',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'n4 Insert tasks <- PayloadData n1 (id->project_id)',
+          'n5 Insert features <- PayloadData n4 (id->id)',
+          'result: n1',
+        ].join('\n'),
+      );
+      expect(insertedRows(graph, 'tasks')).toEqual([
+        { title: 'Dark mode', type: 'feature' },
+        { title: 'Export to PDF', type: 'feature' },
+      ]);
+      expect(insertedRows(graph, 'features')).toEqual([{ priority: 1 }, { priority: 3 }]);
+    });
+
+    it('inserts the base row with the key of the parent, then the variant row in update()', () => {
+      const graph = updateOf('Project', {
+        tasks: (tasks: VariantMutator) => tasks.variant('feature').create(darkMode),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find projects_tbl where id = 1 limit 1',
+          'n2 Insert tasks <- PayloadData n1 (id->project_id)',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+
+    it('inserts the base row with the key of the parent on a to-one relation', () => {
+      const graph = updateOf('Person', {
+        pinnedTask: (task: VariantMutator) => task.variant('feature').create(darkMode),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find people where id = 1 limit 1',
+          'n2 Insert tasks <- PayloadData n1 (id->reporter_id)',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+  });
+
+  describe('on a relation the parent holds the key for', () => {
+    it('inserts the base and variant rows first and copies the base key into the parent in create()', () => {
+      const graph = createOf('TaskComment', {
+        body: 'Seen it',
+        task: (task: VariantMutator) => task.variant('feature').create(darkMode),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Insert tasks',
+          'n2 Insert features <- PayloadData n1 (id->id)',
+          'n3 Insert task_comments <- PayloadData n1 (id->task_id)',
+          'result: n3',
+        ].join('\n'),
+      );
+    });
+
+    it('inserts the base and variant rows and writes the base key with an Update in update()', () => {
+      const graph = updateOf('TaskComment', {
+        task: (task: VariantMutator) => task.variant('feature').create(darkMode),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find task_comments where id = 1 limit 1',
+          'n2 Insert tasks <- Requires n1',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'n4 Update task_comments set nothing <- FilterData n1 (id->id), PayloadData n2 (id->task_id)',
+          'result: n4',
+        ].join('\n'),
+      );
+    });
+  });
+
+  describe('on a relation through a junction', () => {
+    it('inserts the base and variant rows and links the base key, per row in create()', () => {
+      const graph = createOf('Label', {
+        name: 'ui',
+        tasks: (tasks: VariantMutator) => tasks.variant('feature').create([darkMode, exportPdf]),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Insert labels',
+          'n2 Insert tasks',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'n4 Insert tasks',
+          'n5 Insert features <- PayloadData n4 (id->id)',
+          'n6 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
+          'n7 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n4 (id->task_id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+
+    it('inserts the base and variant rows and links the base key in update()', () => {
+      const graph = updateOf('Label', {
+        tasks: (tasks: VariantMutator) => tasks.variant('feature').create(darkMode),
+      });
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find labels where id = 1 limit 1',
+          'n2 Insert tasks <- Requires n1',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'n4 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
+          'result: n1',
+        ].join('\n'),
+      );
+    });
+  });
+
+  it('refuses a relation callback in the row with the error of the top-level variant create', () => {
+    const row = {
+      ...darkMode,
+      comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
+    };
+    const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+      namespaceId: 'public',
+    }).variant('feature');
+    const topLevel = thrownBy(() => {
+      parsed('Task', row);
+      const mti = mtiCreateContextOf({
+        context,
+        state: features.state,
+        modelName: 'Task',
+        namespaceId: 'public',
+      });
+      if (mti === undefined) {
+        throw new Error('feature is stored in its own table');
+      }
+      createAllVariantGraph(
+        { context, state: features.state, modelName: 'Task', namespaceId: 'public' },
+        requireVariantTable(features.state.tables, 'feature'),
+        mti,
+        [row],
+      );
+    });
+    const nested = thrownBy(() =>
       createOf('Project', {
         id: 1,
         name: 'Launch',
-        tasks: (tasks: VariantMutator) =>
-          tasks.variant('feature').create({ title: 'Dark mode', priority: 1 }),
-      }),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ORM.OPERATION_UNSUPPORTED',
-        meta: {
-          kind: 'create',
-          relation: 'tasks',
-          model: 'Task',
-          variant: 'Feature',
-          reason: 'mti-variant',
-        },
+        tasks: (tasks: VariantMutator) => tasks.variant('feature').create(row),
       }),
     );
+
+    expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
+    expect(nested).toMatchObject({
+      code: topLevel.code,
+      message: topLevel.message,
+      meta: topLevel.meta,
+    });
+  });
+
+  it('is refused on a contract without returning as createAll() on the variant refuses it', () => {
+    expect(
+      thrownBy(() =>
+        createOf(
+          'Project',
+          {
+            id: 1,
+            name: 'Launch',
+            tasks: (tasks: VariantMutator) => tasks.variant('feature').create(darkMode),
+          },
+          contextWithoutReturning,
+        ),
+      ),
+    ).toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: 'createAll() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'createAll()' },
+    });
   });
 });
