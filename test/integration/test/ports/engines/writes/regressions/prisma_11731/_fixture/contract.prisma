@@ -1,0 +1,18 @@
+// use prisma-8
+
+model MyModel {
+  id     Int    @id
+  name   String
+  itemId Int?   @unique
+  item   Item?  @relation(references: [id], fields: [itemId])
+
+  @@map("MyModel")
+}
+
+model Item {
+  id      Int      @id
+  uniq    String   @unique
+  myModel MyModel?
+
+  @@map("Item")
+}

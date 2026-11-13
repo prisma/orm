@@ -1,0 +1,25 @@
+// use prisma-8
+
+model ModelA {
+  id    String   @id @onCreate(cuid(2))
+  manyB ModelB[]
+
+  @@map("ModelA")
+}
+
+model ModelB {
+  id    String   @id @onCreate(cuid(2))
+  manyA ModelA[]
+
+  @@map("ModelB")
+}
+
+model ModelAToModelB {
+  modelAId String @map("A")
+  modelBId String @map("B")
+  modelA   ModelA @relation(fields: [modelAId], references: [id], onDelete: Cascade)
+  modelB   ModelB @relation(fields: [modelBId], references: [id], onDelete: Cascade)
+
+  @@id([modelAId, modelBId])
+  @@map("_ModelAToModelB")
+}
