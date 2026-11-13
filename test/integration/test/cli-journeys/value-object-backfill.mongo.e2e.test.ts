@@ -4,7 +4,7 @@
  * `User.home` holds an `Address` or `null` or nothing, and `User.addresses` a list of them whose elements may be `null`.
  *
  * - B1: `migration plan --backfill Address.zip` writes one `fillStoredKey` per place `Address` is stored, whose value is `placeholder('Address.zip:value')`, and `ops.json` stays empty. `db update` refuses the statement. Once the value is written, `node migration.ts` and `db migrate` fill every object and leave `null`, missing and empty values alone.
- * - B2: `db update` fills `Address.zip` and `Address.floor` with typed temporary values and reports them.
+ * - B2: `db update` fills `Address.zip` and `Address.floor` with typed temporary values and reports them. A new `Address.seen DateTime` has no temporary value, so the document check stops the apply and names `--backfill Address.seen`.
  * - B3: when `Address` also loses `zip`, the question offers `--rename Address.zip:Address.country` first and says the new field gets a temporary value. `--rename` plans the rename and no fill. `--delete Address.zip --backfill Address.country` writes the placeholder, and once it is filled the apply removes `zip` and fills `country`. A new `DateTime` field has no temporary value, so there the question says it still needs `--backfill`.
  * - B4: the same for a field of an embedded model, `Line.code`, in a one-to-many embed: `--backfill Line.code` with `migration plan`, and a temporary value with `db update`.
  *
@@ -57,6 +57,9 @@ model User {
 const ADDRESS = usersPsl('  street String');
 const ADDRESS_WITH_ZIP = usersPsl('  street String\n  zip    String');
 const ADDRESS_WITH_FLOOR = usersPsl('  street String\n  zip    String\n  floor  Int');
+const ADDRESS_WITH_FLOOR_SEEN = usersPsl(
+  '  street String\n  zip    String\n  floor  Int\n  seen   DateTime',
+);
 const ADDRESS_WITH_COUNTRY = usersPsl('  street  String\n  country String');
 const ADDRESS_WITH_SEEN = usersPsl('  street String\n  seen   DateTime');
 
@@ -340,6 +343,18 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
     await verifiedAndSettled(ctx, dbName, 'B2.06', async () => {
       const further = await runDbUpdate(ctx, ['--dry-run', '--no-interactive', '--json']);
       return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
+    });
+
+    await emit(ctx, { psl: ADDRESS_WITH_FLOOR_SEEN }, 'B2.07');
+    const stopped = engineError(await runDbUpdate(ctx, ['--no-interactive', '--json']));
+    expect(
+      { code: stopped?.code, why: stopped?.why },
+      'B2.08: a field with no temporary value stops at the document check, which names --backfill',
+    ).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      why: expect.stringContaining(
+        'To give "addresses.seen" and "home.seen" values you choose, plan the change with migration plan --backfill Address.seen.',
+      ),
     });
   });
 

@@ -69,10 +69,17 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
-import { unrewritableFieldNameReason } from './migration-factories';
+import { unrewritableFieldNameReason, unrewritableKeyReason } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
-import { storedKeyPath } from './stored-key-path';
+import { storedKeyFieldAt } from './mongo-stored-key-fills';
+import {
+  documentsWithObject,
+  type JsonPathStep,
+  jsonPathText,
+  lacksKey,
+  storedKeyPath,
+} from './stored-key-path';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -390,13 +397,46 @@ function backfillAdvice(
   contract: MongoContract,
   collection: string,
   requires: readonly string[],
+  keys: ReadonlyMap<string, RequiredKey>,
   rewriteCollection: RewriteCollection,
 ): readonly string[] {
-  const accepted = backfillStatements(contract, collection, requires, rewriteCollection);
+  const accepted = backfillStatements(contract, collection, requires, keys, rewriteCollection);
   if (accepted.length === 0) return [];
+  const statements = [...new Set(accepted.map(({ statement }) => `--backfill ${statement}`))];
   return [
-    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${accepted.map(({ statement }) => `--backfill ${statement}`).join(' ')}.`,
+    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${statements.join(' ')}.`,
   ];
+}
+
+/** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, when the planner would accept it. */
+function nestedBackfillStatement(
+  contract: MongoContract,
+  collection: string,
+  key: RequiredKey,
+  rewriteCollection: RewriteCollection,
+): string | undefined {
+  const parsed = storedKeyPath(key.field, key.path);
+  if (!parsed.ok) return undefined;
+  const names = [
+    key.field,
+    ...parsed.value.path.steps.flatMap((step) => (step.kind === 'member' ? [step.name] : [])),
+  ];
+  if (names.some((name) => unrewritableKeyReason(name) !== undefined)) return undefined;
+  const found = storedKeyFieldAt(contract, { collection, ...key });
+  if (found === undefined) return undefined;
+  const refusals = rewriteRefusals(
+    {
+      kind: 'fillStoredKey',
+      collection,
+      field: key.field,
+      variant: found.place.variant,
+      model: found.place.model,
+      storedKey: { key: found.text, together: [] },
+    },
+    contract,
+    rewriteCollection,
+  );
+  return refusals.length === 0 ? found.text : undefined;
 }
 
 /** The `--backfill` statement of each of `fields` the planner would accept it for, with the field's stored name. */
@@ -404,9 +444,15 @@ function backfillStatements(
   contract: MongoContract,
   collection: string,
   fields: readonly string[],
+  keys: ReadonlyMap<string, RequiredKey>,
   rewriteCollection: RewriteCollection,
 ): readonly { readonly stored: string; readonly statement: string }[] {
   return fields.flatMap((stored) => {
+    const key = keys.get(stored);
+    if (key !== undefined) {
+      const statement = nestedBackfillStatement(contract, collection, key, rewriteCollection);
+      return statement === undefined ? [] : [{ stored, statement }];
+    }
     if (unrewritableFieldNameReason(stored) !== undefined) return [];
     const field = fieldStoredAt(contract, collection, stored);
     if (field.kind !== 'field') return [];
@@ -467,59 +513,129 @@ function mongoshValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-/** The required fields and the property schemas, in canonical form, of one kind of document a validator describes. */
-interface DocumentShape {
-  readonly key: string;
-  readonly required: ReadonlySet<string>;
-  readonly properties: ReadonlyMap<string, string>;
-}
-
-function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
-  return validatorDocumentShapesOf(jsonSchema).map((shape) => ({
-    key: shape.key,
-    required: new Set(shape.required),
-    properties: new Map(
-      Object.entries(shape.properties).map(
-        ([field, schema]) => [field, canonicalize(schema)] as const,
-      ),
-    ),
-  }));
-}
-
 const ANY_VALUE = canonicalize({});
 
-const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };
+/** A key inside a root field's value that a validator change makes required: the root field, and the JSONPath from its value to the key. */
+interface RequiredKey {
+  readonly field: string;
+  readonly path: string;
+}
+
+/** What a validator change touches: the fields and nested keys it makes required, each by its dotted stored path such as `home.seen`, and the fields whose accepted values it changes. */
+interface TouchedFields {
+  readonly requires: readonly string[];
+  readonly retypes: readonly string[];
+  /** Each nested key of `requires`, by its dotted path. */
+  readonly keys: ReadonlyMap<string, RequiredKey>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The object schemas a property schema accepts: itself, or the branches of its `oneOf` or `anyOf`. */
+function objectSchemasOf(schema: unknown): readonly Record<string, unknown>[] {
+  if (!isRecord(schema)) return [];
+  if (isRecord(schema['properties'])) return [schema];
+  return [schema['oneOf'], schema['anyOf']]
+    .flatMap((branches) => (Array.isArray(branches) ? branches : []))
+    .flatMap(objectSchemasOf);
+}
+
+/** The element schema a property schema gives a list, itself or through its `oneOf` or `anyOf` branches. */
+function itemsOf(schema: unknown): unknown {
+  if (!isRecord(schema)) return undefined;
+  if (schema['items'] !== undefined) return schema['items'];
+  return [schema['oneOf'], schema['anyOf']]
+    .flatMap((branches) => (Array.isArray(branches) ? branches : []))
+    .map(itemsOf)
+    .find((items) => items !== undefined);
+}
+
+function requiredOf(schema: Record<string, unknown>): ReadonlySet<string> {
+  const required = schema['required'];
+  return new Set(Array.isArray(required) ? required.filter((key) => typeof key === 'string') : []);
+}
+
+/** The keys below a property that the new schema requires and the old one, which also describes the objects there, did not. A union of object schemas is not compared. */
+function nestedRequiredKeys(
+  before: unknown,
+  after: unknown,
+  steps: readonly JsonPathStep[],
+): readonly (readonly JsonPathStep[])[] {
+  const [objectBefore, ...otherBefore] = objectSchemasOf(before);
+  const [objectAfter, ...otherAfter] = objectSchemasOf(after);
+  const inObjects =
+    objectBefore === undefined ||
+    objectAfter === undefined ||
+    otherBefore.length > 0 ||
+    otherAfter.length > 0
+      ? []
+      : [
+          ...[...requiredOf(objectAfter)]
+            .filter((key) => !requiredOf(objectBefore).has(key))
+            .map((key): readonly JsonPathStep[] => [...steps, { kind: 'member', name: key }]),
+          ...Object.entries(isRecord(objectAfter['properties']) ? objectAfter['properties'] : {})
+            .filter(
+              ([key]) =>
+                isRecord(objectBefore['properties']) &&
+                Object.hasOwn(objectBefore['properties'], key),
+            )
+            .flatMap(([key, schema]) =>
+              nestedRequiredKeys(Reflect.get(objectBefore['properties'] ?? {}, key), schema, [
+                ...steps,
+                { kind: 'member', name: key },
+              ]),
+            ),
+        ];
+  const itemsBefore = itemsOf(before);
+  const itemsAfter = itemsOf(after);
+  return [
+    ...inObjects,
+    ...(itemsBefore === undefined || itemsAfter === undefined
+      ? []
+      : nestedRequiredKeys(itemsBefore, itemsAfter, [...steps, { kind: 'wildcard' }])),
+  ];
+}
 
 /**
  * The fields a validator change makes required, and those whose accepted values it changes, each
- * kind of document compared with the same kind under the validator the collection has. A kind the
- * collection's validator does not describe is not compared; with no validator, every field it
- * requires is new.
+ * kind of document compared with the same kind under the validator the collection has. Inside a
+ * field both validators describe, a key of its objects or list elements that the change makes
+ * required is named by its dotted path. A kind the collection's validator does not describe is not
+ * compared; with no validator, every field it requires is new.
  */
-function fieldsTouched(
-  before: unknown,
-  after: unknown,
-): { readonly requires: readonly string[]; readonly retypes: readonly string[] } {
-  const shapesBefore = documentShapes(before);
+function fieldsTouched(before: unknown, after: unknown): TouchedFields {
+  const shapesBefore = validatorDocumentShapesOf(before);
   const requires = new Set<string>();
   const retypes = new Set<string>();
-  for (const shape of documentShapes(after)) {
-    const previous =
-      shapesBefore.length === 0 ? NO_SHAPE : shapesBefore.find(({ key }) => key === shape.key);
+  const keys = new Map<string, RequiredKey>();
+  for (const shape of validatorDocumentShapesOf(after)) {
+    const previous: Pick<ValidatorDocumentShape, 'required' | 'properties'> | undefined =
+      shapesBefore.length === 0
+        ? { required: [], properties: {} }
+        : shapesBefore.find(({ key }) => key === shape.key);
     if (previous === undefined) continue;
     for (const field of shape.required) {
-      if (field !== '_id' && !previous.required.has(field)) requires.add(field);
+      if (field !== '_id' && !previous.required.includes(field)) requires.add(field);
     }
-    for (const [field, schema] of shape.properties) {
-      const schemaBefore = previous.properties.get(field);
-      if (schemaBefore !== undefined && schemaBefore !== schema && schema !== ANY_VALUE) {
-        retypes.add(field);
+    for (const [field, schema] of Object.entries(shape.properties)) {
+      if (!Object.hasOwn(previous.properties, field)) continue;
+      const schemaBefore = previous.properties[field];
+      const canonical = canonicalize(schema);
+      if (canonicalize(schemaBefore) !== canonical && canonical !== ANY_VALUE) retypes.add(field);
+      for (const steps of nestedRequiredKeys(schemaBefore, schema, [])) {
+        const names = steps.flatMap((step) => (step.kind === 'member' ? [step.name] : []));
+        const dotted = [field, ...names].join('.');
+        requires.add(dotted);
+        keys.set(dotted, { field, path: jsonPathText(steps) });
       }
     }
   }
   return {
     requires: [...requires].sort(),
     retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
+    keys,
   };
 }
 
@@ -531,7 +647,7 @@ function quotedList(fields: readonly string[]): string {
 }
 
 /** What a validator change touches, in words: `This validator change makes "plan" required.` */
-function touchedSentence(touched: ReturnType<typeof fieldsTouched>): string {
+function touchedSentence(touched: TouchedFields): string {
   const parts = [
     ...(touched.requires.length === 0 ? [] : [`makes ${quotedList(touched.requires)} required`]),
     ...(touched.retypes.length === 0
@@ -866,6 +982,7 @@ export class MongoMigrationRunner {
                 options.destinationContract,
                 command.collection,
                 fields,
+                new Map(),
                 inPlace.rewrite,
               ).map(({ statement }) => `--backfill ${statement}`),
             );
@@ -1161,12 +1278,8 @@ export class MongoMigrationRunner {
             ...backfillAdvice(
               contract,
               collection,
-              await this.fieldsSomeDocumentLacks(
-                failed.source,
-                collection,
-                failing,
-                touched.requires,
-              ),
+              await this.fieldsSomeDocumentLacks(failed.source, collection, failing, touched),
+              touched.keys,
               inPlace.rewrite,
             ),
             byHandAdvice(collection),
@@ -1297,26 +1410,37 @@ export class MongoMigrationRunner {
     };
   }
 
-  /** Each of `fields` that a document matching `failing` lacks or holds as `null`. */
+  /** Each field or nested key the change makes required that a document matching `failing` lacks or holds as `null`; a nested key counts only in an object that the document holds. */
   private async fieldsSomeDocumentLacks(
     source: MongoQueryPlan,
     collection: string,
     failing: Readonly<Record<string, unknown>>,
-    fields: readonly string[],
+    touched: TouchedFields,
   ): Promise<readonly string[]> {
+    const lackingFilter = (field: string): Record<string, unknown> | undefined => {
+      const key = touched.keys.get(field);
+      if (key === undefined) {
+        return unrewritableFieldNameReason(field) === undefined ? { [field]: null } : undefined;
+      }
+      const parsed = storedKeyPath(key.field, key.path);
+      return parsed.ok
+        ? documentsWithObject(parsed.value, (object) => lacksKey(object, parsed.value.key))
+        : undefined;
+    };
     const lacking = await Promise.all(
-      fields.map(async (field) =>
-        unrewritableFieldNameReason(field) === undefined &&
-        (await this.firstRow({
-          ...source,
-          command: new RawAggregateCommand(collection, [
-            { $match: { $and: [failing, { [field]: null }] } },
-            { $limit: 1 },
-          ]),
-        })) !== undefined
+      touched.requires.map(async (field) => {
+        const filter = lackingFilter(field);
+        return filter !== undefined &&
+          (await this.firstRow({
+            ...source,
+            command: new RawAggregateCommand(collection, [
+              { $match: { $and: [failing, filter] } },
+              { $limit: 1 },
+            ]),
+          })) !== undefined
           ? [field]
-          : [],
-      ),
+          : [];
+      }),
     );
     return lacking.flat();
   }

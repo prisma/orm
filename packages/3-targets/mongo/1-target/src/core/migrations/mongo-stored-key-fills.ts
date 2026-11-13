@@ -25,6 +25,8 @@ import {
   embeddingModelOf,
   type MongoContract,
   ownStoredNameOf,
+  ownStoredNamesOf,
+  valueObjectStoredNamesOf,
   variantFilter,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -444,4 +446,73 @@ export function planStoredKeyFills(
     }
   }
   return conflicts.length > 0 ? notOk(conflicts) : ok(fills);
+}
+
+/** A field of a value object or an embedded model at one place documents hold it. */
+export interface StoredKeyField {
+  readonly subject: Extract<MigrationSubject, { readonly kind: 'field' | 'valueObjectField' }>;
+  /** The field as a statement names it, such as `Address.seen`. */
+  readonly text: string;
+  readonly place: StoredPlace;
+}
+
+function storedTypesOf(contract: MongoContract) {
+  const valueObjects = valueObjectsWithCoordinates(contract.storage).map(
+    ({ coordinate, valueObject }) => ({
+      type: { kind: 'valueObject', valueObject: coordinate } as const,
+      storedNames: valueObjectStoredNamesOf(valueObject),
+      subjectOf: (field: string) => ({
+        kind: 'valueObjectField' as const,
+        namespaceId: asNamespaceId(coordinate.namespaceId),
+        valueObject: coordinate.entityName,
+        field,
+      }),
+    }),
+  );
+  const embedded = modelCoordinates(contract).flatMap((coordinate) => {
+    const model = modelAt(contract, coordinate);
+    return model === undefined || embeddingModelOf(contract.domain, coordinate) === undefined
+      ? []
+      : [
+          {
+            type: { kind: 'embeddedModel', model: coordinate } as const,
+            storedNames: ownStoredNamesOf(model),
+            subjectOf: (field: string) => ({ kind: 'field' as const, ...coordinate, field }),
+          },
+        ];
+  });
+  return [...valueObjects, ...embedded];
+}
+
+/**
+ * The field of a value object or an embedded model that the destination's documents store at `path` inside root field `field` of `collection`, where `path` is the JSONPath from the field's value to the key; `undefined` when no listed place holds one there.
+ */
+export function storedKeyFieldAt(
+  contract: MongoContract,
+  at: { readonly collection: string; readonly field: string; readonly path: string },
+): StoredKeyField | undefined {
+  const placesOf = storedPlacesOf(contract);
+  for (const { type, storedNames, subjectOf } of storedTypesOf(contract)) {
+    const places = placesOf(type);
+    if (!places.ok) continue;
+    for (const [name, storedName] of Object.entries(storedNames)) {
+      const place = places.value.find(
+        (each) =>
+          each.collection === at.collection &&
+          each.field === at.field &&
+          jsonPathText([...each.steps, { kind: 'member', name: storedName }]) === at.path,
+      );
+      if (place === undefined) continue;
+      const subject = subjectOf(name);
+      return {
+        subject,
+        text:
+          subject.kind === 'valueObjectField'
+            ? valueObjectFieldStatementText(contract, subject)
+            : fieldStatementText(contract, subject),
+        place,
+      };
+    }
+  }
+  return undefined;
 }
