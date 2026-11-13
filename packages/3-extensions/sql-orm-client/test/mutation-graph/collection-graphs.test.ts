@@ -286,20 +286,43 @@ const projects = createCollectionFor('Project')
   .collection.orderBy((project) => project.id.asc())
   .select('id', 'name');
 
-const byKey: readonly { readonly name: string; readonly target: ReturnType<typeof targetOf> }[] = [
-  { name: 'the primary key', target: targetOf(allUsers.where({ id: 1 }).state) },
+interface KeyedCase {
+  readonly name: string;
+  readonly target: ReturnType<typeof targetOf>;
+  readonly update: string;
+  readonly delete: string;
+}
+
+const byKey: readonly KeyedCase[] = [
+  {
+    name: 'the primary key',
+    target: targetOf(allUsers.where({ id: 1 }).state),
+    update: "n1 Update users set name = 'Grace' where id = 1",
+    delete: 'n1 Delete users where id = 1',
+  },
   {
     name: 'a unique constraint',
     target: targetOf(allUsers.whereUnique({ email: 'ada@example.com' }).state),
+    update: "n1 Update users set name = 'Grace' where email = 'ada@example.com'",
+    delete: "n1 Delete users where email = 'ada@example.com'",
   },
   {
     name: 'chained wheres over a composite key',
     target: targetOf(projects.where({ tenantId: 1 }).where({ id: 2 }).state, 'Project'),
+    update: "n1 Update projects set name = 'Grace' where tenant_id = 1 and id = 2",
+    delete: 'n1 Delete projects where tenant_id = 1 and id = 2',
   },
-  { name: 'the callback form', target: targetOf(allUsers.where((user) => user.id.eq(1)).state) },
+  {
+    name: 'the callback form',
+    target: targetOf(allUsers.where((user) => user.id.eq(1)).state),
+    update: "n1 Update users set name = 'Grace' where id = 1",
+    delete: 'n1 Delete users where id = 1',
+  },
   {
     name: 'the key with another condition',
     target: targetOf(allUsers.where({ id: 1 }).where((user) => user.name.like('A%')).state),
+    update: "n1 Update users set name = 'Grace' where id = 1 and name like 'A%'",
+    delete: "n1 Delete users where id = 1 and name like 'A%'",
   },
 ];
 
@@ -321,19 +344,17 @@ const notByKey: readonly { readonly name: string; readonly target: ReturnType<ty
   ];
 
 describe('updateFirstGraph and deleteFirstGraph by key', () => {
-  describe.each(byKey)('with a condition on $name', ({ target: keyed }) => {
-    it('builds one Update with the condition of the collection', () => {
-      const graph = updateFirstGraph(keyed, { name: 'Grace' });
-
-      expect(printAsRun(graph)).toMatch(
-        /^n1 Update \S+ set name = 'Grace' where [^<]+\nresult: n1$/,
+  describe.each(byKey)('with a condition on $name', ({ target: keyed, update, delete: remove }) => {
+    it('builds one Update with the whole condition of the collection', () => {
+      expect(printAsRun(updateFirstGraph(keyed, { name: 'Grace' }))).toBe(
+        [update, 'result: n1'].join('\n'),
       );
     });
 
-    it('builds one Delete with the condition of the collection that returns the selected columns', () => {
+    it('builds one Delete with the whole condition of the collection that returns the selected columns', () => {
       const graph = deleteFirstGraph(keyed);
 
-      expect(printAsRun(graph)).toMatch(/^n1 Delete \S+ where [^<]+\nresult: n1$/);
+      expect(printAsRun(graph)).toBe([remove, 'result: n1'].join('\n'));
       expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
     });
   });
@@ -350,20 +371,6 @@ describe('updateFirstGraph and deleteFirstGraph by key', () => {
         /^n1 Find .* limit 1( offset 1)?\nn2 Delete \S+ <- FilterData n1/,
       );
     });
-  });
-
-  it('prints the folded update by primary key', () => {
-    const graph = updateFirstGraph(targetOf(allUsers.where({ id: 1 }).state), { name: 'Grace' });
-
-    expect(printAsRun(graph)).toBe(
-      ["n1 Update users set name = 'Grace' where id = 1", 'result: n1'].join('\n'),
-    );
-  });
-
-  it('prints the folded delete by primary key', () => {
-    expect(printAsRun(deleteFirstGraph(targetOf(allUsers.where({ id: 1 }).state)))).toBe(
-      ['n1 Delete users where id = 1', 'result: n1'].join('\n'),
-    );
   });
 
   it('keeps a Find without a limit as the result and a Delete by key for delete() with includes', () => {
