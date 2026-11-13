@@ -61,7 +61,9 @@ function disconnectOf<TContract extends Contract<SqlStorage>, ModelName extends 
       'criteria',
       criteria === undefined
         ? undefined
-        : castAs<RelationMutationConnect<TContract, ModelName>['criteria']>([...criteria]),
+        : castAs<NonNullable<RelationMutationDisconnect<TContract, ModelName>['criteria']>>([
+            ...criteria,
+          ]),
     ),
     ...ifDefined('state', state),
   };
