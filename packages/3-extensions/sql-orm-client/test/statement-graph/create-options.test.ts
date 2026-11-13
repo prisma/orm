@@ -27,7 +27,7 @@ const post = { id: 10, title: 'Hello', views: 0 };
 const other = { id: 11, title: 'Other', views: 0 };
 
 function updateOf(...writes: string[]): string {
-  return ['n1 Find users where id = 1 limit 1', ...writes, 'result: n1'].join('\n');
+  return ['n1 Find users where id = 1', ...writes, 'result: n1'].join('\n');
 }
 
 function printUpdate(input: Record<string, unknown>): string {
