@@ -27,6 +27,10 @@
     "series": {
       "model": "Series",
       "namespace": "__unbound__"
+    },
+    "tallies": {
+      "model": "Tally",
+      "namespace": "__unbound__"
     }
   },
   "domain": {
@@ -561,6 +565,56 @@
                 }
               }
             }
+          },
+          "Tally": {
+            "fields": {
+              "hits": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "ratio": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "total": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tallies",
+              "fields": {
+                "hits": {
+                  "field": "hits"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "ratio": {
+                  "field": "ratio"
+                },
+                "total": {
+                  "field": "total"
+                }
+              }
+            }
           }
         }
       }
@@ -940,6 +994,44 @@
                 "validationAction": "error",
                 "validationLevel": "strict"
               }
+            },
+            "tallies": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "hits": {
+                      "bsonType": [
+                        "null",
+                        "int"
+                      ]
+                    },
+                    "ratio": {
+                      "bsonType": [
+                        "null",
+                        "double"
+                      ]
+                    },
+                    "total": {
+                      "bsonType": [
+                        "null",
+                        "long"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             }
           },
           "valueObject": {
@@ -1008,7 +1100,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "d9eb4195e93e0635171fe59d8bc76ea81da5edb4190111b37671eeb5ffd9b39c"
+    "storageHash": "587167f68245c71b02d0b16add544f6309946b099c767c78cfa60e0d3c68b8ce"
   },
   "capabilities": {},
   "extensions": {},

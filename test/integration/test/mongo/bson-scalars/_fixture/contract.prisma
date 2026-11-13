@@ -20,6 +20,15 @@ model Reading {
   @@map("readings")
 }
 
+model Tally {
+  id    ObjectId @id @map("_id")
+  hits  Int32?
+  ratio Double?
+  total Int64?
+
+  @@map("tallies")
+}
+
 enum Role {
   @@type("mongo/string@1")
   User  = "USER"
