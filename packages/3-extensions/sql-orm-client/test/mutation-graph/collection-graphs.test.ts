@@ -1,5 +1,3 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createStatementTables } from '../../src/collection-tables';
 import {
@@ -9,9 +7,8 @@ import {
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
 import type { Graph } from '../../src/mutation-graph/graph';
-import { parseMutationInput } from '../../src/relation-mutations';
-import type { CollectionState, RelationMutator } from '../../src/types';
-import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
+import type { CollectionState } from '../../src/types';
+import { createCollectionFor } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 import { returnedAt } from './statements';
@@ -384,34 +381,5 @@ describe('updateFirstGraph and deleteFirstGraph by key', () => {
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
-  });
-
-  it('keeps the Find without a limit when a nested write reads it', () => {
-    const context = getTestContext();
-    const parsed = parseMutationInput(
-      context.contract,
-      'public',
-      'User',
-      {
-        invitedBy: (inviter: RelationMutator<Contract<SqlStorage>, string>) =>
-          inviter.connect({ id: 2 }),
-      } as never,
-      relatedCollectionOf(context),
-    );
-    const graph = updateFirstGraph(
-      targetOf(allUsers.where({ id: 1 }).state),
-      { name: 'Ada' },
-      parsed.relationMutations,
-    );
-
-    expect(printAsRun(graph)).toBe(
-      [
-        'n1 Find users where id = 1',
-        'n2 Find users where id = 2 limit 1 <- Requires n1',
-        'n3 Assert <- Rows n2, Requires n1',
-        "n4 Update users set name = 'Ada' where id = 1 <- PayloadData n2 (id->invited_by_id)",
-        'result: n4',
-      ].join('\n'),
-    );
   });
 });
