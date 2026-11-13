@@ -129,7 +129,7 @@ The policies are the database's, not a space's: they are read from and written t
 
 ### The CLI
 
-`db migrate` and `db update` gain `--permit-policy-change` (boolean). The flag's help text: `Write the ref's declared policies into the database before enforcing them`. No error suggests it: no next action proposes it, and `POLICY_MISMATCH` never hints at it. A next action that repeats the command the user ran (for example "run db migrate again" after a failed migration) repeats the flags the user gave, including this one; it never adds it. The skill documents it.
+`db migrate` and `db update` gain `--permit-policy-change` (boolean). The flag's help text: `Check the run against the ref's declared policies and write them into the database when it succeeds`. No error suggests it: no next action proposes it, and `POLICY_MISMATCH` never hints at it. A next action that repeats the command the user ran (for example "run db migrate again" after a failed migration) repeats the flags the user gave, including this one; it never adds it. The skill documents it.
 
 `db migrate --to <ref>` and `db update --to <ref>` resolve the ref as today and also pass the whole entry as `ref`.
 
@@ -206,7 +206,7 @@ The architect and code reviews (in `reviews/`) found the following; each is deci
 |---|---|
 | The ADR number 309 was taken on `main` while the branch was open | The decision record becomes the next free number after rebasing on `main`. |
 | Policies were read and enforced per contract space, but only the application space's were ever written | Policies belong to the database. They live on the application space's marker and govern every space. |
-| `TargetRef` (`{name?: string} & RefEntry`) let a nameless entry carry policies and meant different things on `migrate` and `dbUpdate` | `MigrateOptions` and `DbUpdateOptions` take `ref?: NamedRef` (`{name: string} & RefEntry`, required name) for policies and invariants, and `migrate` keeps a separate `targetHash?: string` for a `--to` that names a hash, `@db` or `@empty`. `dbUpdate` refuses, as an internal error, a `ref` whose hash is not the contract it reconciles to. |
+| `TargetRef` (`{name?: string} & RefEntry`) let a nameless entry carry policies and meant different things on `migrate` and `dbUpdate` | `DbUpdateOptions` takes `ref?: NamedRef` (`{name: string} & RefEntry`, required name) for policies and invariants. `MigrateOptions` takes one `target?: MigrateTarget`, which is either `{ kind: 'ref', ref: NamedRef }` or `{ kind: 'hash', hash: string }` for a `--to` that names a hash, `@db` or `@empty`. `dbUpdate` refuses, as an internal error, a `ref` whose hash is not the contract it reconciles to. |
 | An invalid `meta.policies` raised `CONTRACT.MARKER_READ_FAILED`, a connectivity error, rebuilt by catching it by code | `CONTRACT.MARKER_ROW_CORRUPT`, raised once in the CLI from a result the framework parser returns. |
 | `change: []` was accepted, and its advice looped between the two commands | `change` holds at least one strategy, in the ref and in the marker. |
 | A policy-only `db update` wrote a zero-operation ledger row | The runner decides the marker write and the ledger write separately. A run that only records policies (no operation, marker already at its destination, no new invariant) writes no ledger row. An in-sync `db update` without the flag keeps writing the row it wrote before this slice, which the off-graph error reads. |

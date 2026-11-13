@@ -13,5 +13,6 @@ export const dbFlag = flag.string({
 
 /** Consent for `db migrate` and `db update` to write the ref's declared policies into the database. */
 export const permitPolicyChangeFlag = flag.boolean({
-  brief: "Write the ref's declared policies into the database before enforcing them",
+  brief:
+    "Check the run against the ref's declared policies and write them into the database when it succeeds",
 });
