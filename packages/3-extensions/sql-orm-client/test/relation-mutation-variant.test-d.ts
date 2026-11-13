@@ -89,23 +89,81 @@ describe('variant() on the mutator of a polymorphic target', () => {
     expectTypeOf([update, toOne]).toExtend<readonly unknown[]>();
   });
 
-  test('the variant mutator has create, connect and disconnect', () => {
+  test('the variant mutator has the operations of the base mutator except variant', () => {
     expectTypeOf<keyof VariantRelationMutator<Contract, 'Task', 'bug'>>().toEqualTypeOf<
-      'create' | 'connect' | 'disconnect'
+      'create' | 'connect' | 'disconnect' | 'where' | 'updateAll' | 'deleteAll'
     >();
 
     const update: ProjectUpdate = {
       tasks: (tasks) => {
         const bugs = tasks.variant('bug');
-        expectTypeOf(bugs).not.toHaveProperty('where');
-        expectTypeOf(bugs).not.toHaveProperty('updateAll');
-        expectTypeOf(bugs).not.toHaveProperty('deleteAll');
         expectTypeOf(bugs).not.toHaveProperty('variant');
         return bugs.create({ title: 'Crash', severity: 'high' });
       },
     };
 
     expectTypeOf(update).toExtend<ProjectUpdate>();
+  });
+
+  test('where on the variant mutator filters by the fields of the variant, as a variant collection does', () => {
+    const update: ProjectUpdate = {
+      tasks: (tasks) => [
+        tasks
+          .variant('bug')
+          .where((bug) => bug.severity.eq('high'))
+          .updateAll({ title: 'Triaged' }),
+        tasks
+          .variant('feature')
+          .where((feature) => feature.priority.gt(2))
+          .where({ title: 'Dark mode' })
+          .deleteAll(),
+        tasks.variant('bug').updateAll({ title: 'Seen' }),
+        tasks.variant('feature').deleteAll(),
+      ],
+    };
+    const junction: LabelUpdate = {
+      tasks: (tasks) =>
+        tasks
+          .variant('feature')
+          .where((feature) => feature.priority.eq(1))
+          .updateAll({ title: 'Top' }),
+    };
+
+    expectTypeOf([update, junction]).toExtend<readonly unknown[]>();
+  });
+
+  test('where and updateAll on the variant mutator reject what the variant collection rejects', () => {
+    const update: ProjectUpdate = {
+      tasks: (tasks) => [
+        tasks
+          .variant('bug')
+          // @ts-expect-error
+          .where((bug) => bug.priority.eq(1))
+          .deleteAll(),
+        // @ts-expect-error
+        tasks.variant('bug').updateAll({ severity: 'low' }),
+        // @ts-expect-error
+        tasks.variant('bug').updateAll({ projectId: 2 }),
+        // @ts-expect-error
+        tasks.variant('bug').where({ title: 'Crash' }).connect({ id: 1 }),
+      ],
+    };
+
+    expectTypeOf(update).toExtend<ProjectUpdate>();
+  });
+
+  test('where, updateAll and deleteAll on the variant mutator are refused in create() and on to-one relations', () => {
+    const inCreate: ProjectCreate = {
+      name: 'Launch',
+      // @ts-expect-error
+      tasks: (tasks) => tasks.variant('bug').deleteAll(),
+    };
+    const toOne: CommentUpdate = {
+      // @ts-expect-error
+      task: (task) => task.variant('bug').where({ title: 'Crash' }).updateAll({ title: 'Seen' }),
+    };
+
+    expectTypeOf([inCreate, toOne]).toExtend<readonly unknown[]>();
   });
 
   test('connect on the variant mutator takes the criteria of the base model on every layout', () => {

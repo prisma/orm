@@ -1948,10 +1948,11 @@ export interface RelationMutationDisconnect<
 export type RelationMutationFilter<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  VariantValue extends string | undefined = undefined,
 > =
   | WhereArg
   | ((
-      model: ModelAccessor<TContract, ModelName>,
+      model: VariantAwareModelAccessor<TContract, ModelName, VariantValue>,
       tools: ModelCallbackTools<TContract, ModelName>,
     ) => WhereCallbackResult)
   | ShorthandWhereFilter<TContract, never, ModelName>;
@@ -2147,10 +2148,11 @@ export interface FilteredRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
+  VariantValue extends string | undefined = undefined,
 > {
   where(
-    filter: RelationMutationFilter<TContract, ModelName>,
-  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields>;
+    filter: RelationMutationFilter<TContract, ModelName, VariantValue>,
+  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>;
   updateAll(
     data: RelationMutationUpdateAllData<TContract, ModelName, ParentLinkFields>,
   ): RelationMutationUpdateAll<TContract, ModelName>;
@@ -2228,16 +2230,25 @@ export interface VariantRelationMutator<
   LinkWritesDisabled extends boolean = false,
   BareDisconnectDisabled extends boolean = false,
   DisconnectDisabled extends boolean = false,
+  FilteredWritesDisabled extends boolean = false,
+  ParentLinkFields extends string = never,
 > extends Pick<
     RelationMutator<
       TContract,
       ModelName,
       LinkWritesDisabled,
       BareDisconnectDisabled,
-      DisconnectDisabled
+      DisconnectDisabled,
+      FilteredWritesDisabled,
+      ParentLinkFields
     >,
-    'connect' | 'disconnect'
+    'connect' | 'disconnect' | 'updateAll' | 'deleteAll'
   > {
+  readonly where: FilteredWritesDisabled extends true
+    ? (
+        input: never,
+      ) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>['where'];
   create(
     data: LinkWritesDisabled extends true
       ? never
@@ -2256,6 +2267,8 @@ type RelationMutatorVariant<
   LinkWritesDisabled extends boolean,
   BareDisconnectDisabled extends boolean,
   VariantDisconnectDisabled extends boolean,
+  FilteredWritesDisabled extends boolean,
+  ParentLinkFields extends string,
 > =
   IsPolymorphicBase<TContract, ModelName> extends true
     ? {
@@ -2267,7 +2280,9 @@ type RelationMutatorVariant<
           V,
           LinkWritesDisabled,
           BareDisconnectDisabled,
-          VariantDisconnectDisabled
+          VariantDisconnectDisabled,
+          FilteredWritesDisabled,
+          ParentLinkFields
         >;
       }
     : unknown;
@@ -2300,7 +2315,13 @@ type RelationMutationCallback<
         ? true
         : RelationCardinality<TContract, ModelName, RelName> extends 'N:1'
           ? true
-          : false
+          : false,
+      Context extends 'create'
+        ? true
+        : RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
+          ? true
+          : false,
+      RelationParentLinkFields<TContract, ModelName, RelName>
     >,
 ) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
   ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>

@@ -62,9 +62,11 @@ export function createRelationMutator<
       } as RelationMutationCreate<TContract, ModelName>;
     },
     variant(value: string) {
-      const { state } = related.variant(value);
+      const variantCollection = related.variant(value);
+      const { state } = variantCollection;
       const { variantValue } = state;
       return {
+        ...createFilteredRelationMutator<TContract, ModelName>(variantCollection),
         create: (
           data:
             | MutationCreateInput<TContract, ModelName>
