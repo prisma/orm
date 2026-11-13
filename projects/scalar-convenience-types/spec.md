@@ -1,128 +1,155 @@
-# Convenience types for the other PostgreSQL scalars
+# Convenience types for the scalars that are not dates or times
 
-Linear: TML-3715 (all types except `Json`), TML-3789 (`Json`).
+Linear: TML-3715 (PostgreSQL, done), TML-3789 (PostgreSQL `Json`), TML-3790 (SQLite, MySQL and MongoDB).
 
 ## Summary
 
 ```prisma
-model Account {
-  id       Int     @id                               // exactly Int4
-  visits   Int(storage: int2)                         // exactly Int2
-  balance  BigInt                                     // exactly Int8BigInt
-  rank     BigInt(as: number)                         // exactly Int8Number
-  price    Decimal(precision: 10, scale: 2)           // exactly NumericString(10, 2)
-  name     String                                     // exactly Text
-  code     String(storage: varchar, length: 12)       // exactly Varchar(12)
-  ratio    Float                                      // exactly Float8
-  active   Boolean                                    // exactly Bool
-  avatar   Bytes                                      // exactly Bytea
-  settings Json                                       // exactly Jsonb
+// PostgreSQL
+model Event {
+  id      Int     @id            // exactly Int4
+  name    String                 // exactly Text
+  payload Json                   // exactly PlainJson: a json column
+  fast    Json(storage: jsonb)   // exactly Jsonb: a jsonb column
+}
+
+// MongoDB
+model Event {
+  id      ObjectId @id @map("_id")
+  visits  Int                    // exactly Int32
+  total   BigInt(as: number)     // exactly Int64Number
+  payload Json                   // a JSON value stored as BSON
 }
 ```
 
-PostgreSQL gets convenience types for its other scalars, built the way ADR 279 built `DateTime`, `Date`, `Time` and `Duration`. Each convenience type is named for what a field means in the application: an integer, a decimal number, text. Its arguments choose one explicit type, named after the database type and, where that database type has more than one codec, the application value. The contract stores only the explicit type.
+`Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` name what a field means in the application. On every target each is a convenience type: its `storage` and `as` arguments choose one explicit type, and the contract stores only that explicit type. An explicit type names one codec and is named after what stores it.
 
-The names users already write (`Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes`, `Json`) stay. They become convenience types. The explicit types they used to name get the database's names (`Int4`, `Int8BigInt`, `Float8`, `NumericString`, `Text`, `Bool`, `Bytea`).
+The mechanism is the type choice of ADR 279. It lives in the framework domain and does not change.
 
-## Why
+## State
 
-ADR 257 names every explicit type after what the database stores, so a schema says exactly what each column is. ADR 279 adds a layer of names for application concepts on top, so a user can write what a field means and get a working default. A name such as `Int` should mean "an integer", not "a PostgreSQL `int4`". The codec maps the concept to one database type and one application value.
+| Part | State |
+| --- | --- |
+| PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` | Merged, prisma/orm#30942. Recorded in ADR 316. |
+| PostgreSQL `Json` | To build. This spec. |
+| SQLite, MySQL, MongoDB | To build. This spec. |
 
-A survey of 16 data tools (`wip/survey/`, not committed) supports the list of concepts. Every tool that names concepts rather than column types has separate names for an integer and a big integer (SQLAlchemy `Integer` and `BigInteger`, Django `IntegerField` and `BigIntegerField`, Rails `:integer` and `:bigint`, Gel `int32` and `int64`, Prisma 7 `Int` and `BigInt`). Most default JSON to `jsonb` (Prisma 7, Django, Ecto, MikroORM, Hibernate, Gel). Drizzle (`mode: 'bigint'`), MikroORM (`new DecimalType('number')`) and SQLAlchemy (`asdecimal=False`) choose the application value with an option, as `as:` does.
+## Rules that hold on every target
 
-## The convenience types
+These come from ADR 279, ADR 315 and ADR 316. They are listed here because every table below follows them.
 
-Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names.
+1. A convenience name is a concept, not a representation. Its options are the same on every target; the values of `storage` and `as`, and the defaults, are each target's own.
+2. Every convenience type has a `storage` option, even where a target has one storage for it. It has an `as` option only where some target reads the concept as more than one kind of value. Today only `BigInt` does.
+3. A bare convenience name gives the codec that name gave before, so no existing schema or contract changes.
+4. An explicit type is named after the database type that stores it, plus a suffix for the application value where that database type has more than one codec.
+5. An explicit name that disappears stays for one release line as a deprecated alias that warns `PSL_DEPRECATED_SCALAR_NAME` and emits the same contract.
+6. `contract infer`, `contract print` and the schema readers write the convenience call, with only the arguments that differ from the defaults.
+7. A convenience type and an explicit type cannot share a name: a type choice row names its explicit type in the same namespace. So wherever a convenience name is also the name rule 4 would give the explicit type, the explicit type needs another name.
 
-| Convenience type | `as` | `storage` | Becomes |
-| --- | --- | --- | --- |
-| `Int(storage?)` | | `int4` (default) | `Int4` |
-| | | `int2` | `Int2` |
-| `BigInt(as?, storage?)` | `bigint` (default) | `int8` (default) | `Int8BigInt` |
-| | `number` | `int8` | `Int8Number` |
-| | `bigint` | `numeric` | `NumericBigInt` |
-| `Float(storage?)` | | `float8` (default) | `Float8` |
-| | | `float4` | `Float4` |
-| `Decimal(storage?, precision?, scale?)` | | `numeric` (default) | `NumericString` |
-| `String(storage?, length?)` | | `text` (default) | `Text` |
-| | | `varchar` | `Varchar` |
-| | | `char` | `Char` |
-| `Boolean(storage?)` | | `bool` (default) | `Bool` |
-| `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
-| `Json(storage?)` | | `jsonb` (default) | `Jsonb` |
-| | | `json` | the explicit `json` type (name open, see below) |
+## PostgreSQL `Json`
 
-A type has an `as` option only where its database types have more than one codec. Today only `BigInt` does. Adding one later, such as a decimal library value for `Decimal`, adds an option and rows without renaming anything.
-
-`Int` covers integers read as a JavaScript `number` within 32 bits. `BigInt` covers integers that may exceed 32 bits, as every surveyed tool does. `Int8Number` is reached only through `BigInt(as: number)`, so each explicit type has one convenience call.
-
-Two consequences of the type-choice mechanism, which is not changed (it lives in the framework domain):
-
-- An option's default does not depend on another option. `BigInt(as: number)` works because its default storage `int8` has a `number` row. `BigInt(storage: numeric, as: number)` is refused, because no row exists.
-- An argument the chosen type does not take is refused. `String(length: 12)` chooses `Text`, which takes no length, so it is refused at `length`, with a message that says `Text`, the type `storage: text` chooses, takes no `length`. The user writes `String(storage: varchar, length: 12)`.
-
-Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
-
-## The explicit types after the renames
-
-Names follow ADR 257's token rule and ADR 279's suffix rule: the database type, plus a suffix naming the application value when the database type has more than one codec. No codec id changes.
-
-| Explicit type | Codec id | Database type | Application value | Name today |
+| Convenience type | `storage` | Becomes | Codec | Column |
 | --- | --- | --- | --- | --- |
-| `Int2` | `pg/int2@1` | `int2` | `number` | `SmallInt` |
-| `Int4` | `pg/int4@1` | `int4` | `number` | `Int` |
-| `Int8BigInt` | `pg/int8@1` | `int8` | `bigint` | `BigInt` |
-| `Int8Number` | `pg/int8number@1` | `int8` | `number` (safe-integer range) | `BigIntNumber` |
-| `NumericString(p?, s?)` | `pg/numeric@1` | `numeric` | `string` (decimal text) | `Numeric`, `Decimal` |
-| `NumericBigInt` | `pg/unboundedint@1` | `numeric` | `bigint` | `UnboundedInt` |
-| `Float4` | `pg/float4@1` | `float4` | `number` | `Real` |
-| `Float8` | `pg/float8@1` | `float8` | `number` | `Float` |
-| `Text` | `pg/text@1` | `text` | `string` | `String` |
-| `Varchar(n?)` | `sql/varchar@1` | `character varying` | `string` | `VarChar` |
-| `Char(n?)` | `sql/char@1` | `character` | `string` | `Char` |
-| `Bool` | `pg/bool@1` | `bool` | `boolean` | `Boolean` |
-| `Bytea` | `pg/bytea@1` | `bytea` | `Uint8Array` | `Bytes` |
-| `Jsonb` | `pg/jsonb@1` | `jsonb` | `JsonValue` | `Jsonb` |
-| open | `pg/json@1` | `json` | `JsonValue` | `Json` |
+| `Json(storage?)` | `json` (default) | `PlainJson` | `pg/json@1` | `json` |
+| | `jsonb` | `Jsonb` | `pg/jsonb@1` | `jsonb` |
 
-`sql.String(n)` and `sql.Char(n)` stay as they are.
+- **`Json` still means a `json` column.** `Json` is the exact name of a PostgreSQL type, so it must not mean a different one. A user who wants `jsonb` writes `Json(storage: jsonb)` or `Jsonb`.
+- **No schema or contract changes.** A field written `Json` keeps codec `pg/json@1`. There is no migration and no upgrade step for PSL schemas.
+- **`PlainJson` is the explicit name of the `json` type,** under rule 7. It is the one explicit name not derived from rule 4, and ADR 316 records it as that exception. Users meet it in hover text and in the type reference; the tools never write it.
+- **Tools.** A `json` column is written `Json`. A `jsonb` column is written `Json(storage: jsonb)`, where the tools wrote `Jsonb` before. The Prisma 7 reader writes Prisma 7's `Json`, which was `jsonb`, as `Json(storage: jsonb)`, and `@db.Json` as `Json`.
+- **TypeScript.** `type.Json()` and `type.Json({ storage: 'jsonb' })` are typed as the explicit type they choose. The column helper `jsonColumn` becomes `plainJsonColumn`, with no alias, as ADR 316 did for `int8Column`. That rename gets an upgrade instruction with a detection pattern.
+- **Docs.** `docs/reference/scalar-types.md` and the `prisma-8` skill say what a `json` column cannot do (no equality filter, no index, no unique constraint) and that `Json(storage: jsonb)` can.
 
-An explicit name that disappears (`SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar`) stays for one release line as a deprecated alias of its new name, under ADR 257's rule: `PSL_DEPRECATED_SCALAR_NAME` as a warning, the same codec, no contract change. The names that become convenience types need no alias. At their defaults they give the same codec as today, except `Json`, below.
+Out of scope here: clearer errors where a `json` field hits one of those limits. It gets its own ticket. An earlier warning for a bare `Json` (prisma/orm#30085) was rejected, so the ticket covers errors at the point of failure only.
 
-## `Json` changes its default storage
+## SQLite
 
-`Json` today is the explicit type for a `json` column. As a convenience type it defaults to `jsonb`. A field written `Json` in an existing Prisma 8 schema therefore changes from `json` to `jsonb`: the contract changes, `db verify` reports the difference, and the migration planner plans the column change. The upgrade instruction tells users to write `Json(storage: json)` to keep a `json` column, or to re-emit and migrate. A Prisma 7 schema is not affected: Prisma 7's `Json` was already `jsonb`.
+SQLite's column types are `text`, `integer`, `real` and `blob`.
 
-## Tools
+| Convenience type | `as` | `storage` | Becomes | Codec | Name today |
+| --- | --- | --- | --- | --- | --- |
+| `Int(storage?)` | | `integer` | `IntegerNumber` | `sqlite/integer@1` | `Int` |
+| `BigInt(as?, storage?)` | `bigint` (default) | `integer` | `IntegerBigInt` | `sqlite/bigint@1` | `BigInt` |
+| | `number` | `integer` | `IntegerSafeNumber` (open) | `sqlite/bigintnumber@1` | `BigIntNumber` |
+| `Float(storage?)` | | `real` | `Real` | `sqlite/real@1` | `Float` |
+| `Decimal(storage?)` | | `text` | `Text` | `sqlite/text@1` | `Decimal` |
+| `String(storage?)` | | `text` | `Text` | `sqlite/text@1` | `String` |
+| `Bytes(storage?)` | | `blob` | `Blob` | `sqlite/blob@1` | `Bytes` |
+| `Json(storage?)` | | `text` | `PlainJson` (open) | `sqlite/json@1` | `Json` |
 
-The tools already handle type choices (ADR 279), so no tool code change is expected:
+- `Decimal` and `String` are one codec today, so both become `Text`, and the tools write a `text` column as `String`. A decimal codec for SQLite is not part of this project.
+- SQLite declares no `Boolean` today, so it gets none here. Adding a type is a separate change.
+- `BigIntNumber` stays as a deprecated alias of its new name.
 
-- `contract infer`, `contract print` and the Prisma 7 schema reader write the convenience call that gives a column's explicit type, with only the arguments that differ from the defaults: an `int2` column is `Int(storage: int2)`, `int8` is `BigInt`, `numeric(10,2)` is `Decimal(precision: 10, scale: 2)`, `varchar(12)` is `String(storage: varchar, length: 12)`, `json` is `Json(storage: json)`.
-- For each database type, the explicit type marked `inferred` is the one the convenience default gives: `Int8BigInt` for `int8`, `NumericString` for `numeric`.
-- The language server completes and explains the new types, and its hover names the explicit type a call becomes.
-- In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })` and so on are typed as the explicit type they choose.
+## MySQL
 
-Fixtures, examples and printer goldens that use these names are re-emitted; their `contract.json` files do not change, except for fields written `Json`.
+MySQL is a proof of concept with three scalars. It gets convenience types for those three only.
+
+| Convenience type | `storage` | Becomes | Codec | Name today |
+| --- | --- | --- | --- | --- |
+| `Int(storage?)` | `int` | open | `mysql/int@1` | `Int` |
+| `BigInt(as?, storage?)` | `bigint` | open | `mysql/bigint@1` | `BigInt` |
+| `String(storage?, length?)` | `varchar` (default) | `Varchar`, length 191 unless written | `sql/varchar@1` | `String` |
+
+MySQL's column types are named `int` and `bigint`, so rule 4 gives the explicit types the names the convenience types take. See the open questions.
+
+## MongoDB
+
+MongoDB's explicit types are already named after BSON types, so most rows only add the convenience type.
+
+| Convenience type | `as` | `storage` | Becomes | Codec | Change |
+| --- | --- | --- | --- | --- | --- |
+| `Int(storage?)` | | `int32` | `Int32` | `mongo/int32@1` | `Int` stops being a deprecated alias |
+| `BigInt(as?, storage?)` | `bigint` (default) | `int64` | `Int64` | `mongo/int64@1` | new |
+| | `number` | `int64` | `Int64Number` | `mongo/int64Number@1` | |
+| `Float(storage?)` | | `double` | `Double` | `mongo/double@1` | `Float` stops being a deprecated alias |
+| `Decimal(storage?)` | | `decimal128` | `Decimal128` | `mongo/decimal128@1` | new |
+| `Boolean(storage?)` | | `bool` | `Bool` | `mongo/bool@1` | `Boolean` stops being a deprecated alias |
+| `Bytes(storage?)` | | `binData` | `Binary` | `mongo/binary@1` | new |
+| `String(storage?)` | | `string` | open | `mongo/string@1` | explicit `String` needs a name |
+| `Json(storage?)` | | `bson` (open) | `PlainJson` (open) | `mongo/json@1` | explicit `Json` needs a name |
+
+- **`Json` has one storage, BSON.** MongoDB stores a JSON value as native BSON values, which is its idiomatic form, so that is the default and the only value. A JSON string storage would need a new codec and is not part of this project.
+- **`Int`, `Float` and `Boolean` stop warning.** Today they warn and point to `Int32`, `Double` and `Bool`. As convenience types they are the names a user is meant to write. Their codecs do not change.
+- **`Int64` keeps its name.** Rule 4 would rename it `Int64BigInt`, because `int64` has two codecs. See the open questions.
+- **The deprecation warning fires wherever a deprecated name is written,** as the SQL family's does: with or without arguments, in a field, a value object member or a `types {}` alias. Today MongoDB's fires only for a bare name in a field.
+- The Prisma 6 schema reader keeps its bindings; it names codecs, not PSL names.
+
+## The SQL family's `sql.String(n)` and `sql.Char(n)`
+
+`sql.String(n)` is a `varchar(n)` column on every SQL target. It now shares a name with the `String` convenience type and means something else. It is renamed `sql.Varchar(n)`, and `sql.String` stays for one release line as a deprecated alias. `sql.Char(n)` keeps its name.
+
+## Open questions for Will
+
+Each is a name the rules do not give. I state what I would choose.
+
+1. **The explicit JSON type on SQLite and MongoDB.** I would use `PlainJson` on every target: one name for "a JSON value and nothing else", already approved for PostgreSQL. On MongoDB it reads correctly beside `Bson`, which holds any BSON value.
+2. **MongoDB's explicit string type.** The BSON type is `string`, so rule 4 gives `String`, which the convenience type takes. PostgreSQL and SQLite have `Text`, but BSON has no type of that name. I have no name to propose.
+3. **MySQL's explicit `int` and `bigint` types.** Rule 4 gives `Int` and `BigInt`. MySQL accepts `int4` and `int8` as other names for the same column types, so `Int4` and `Int8BigInt` would match PostgreSQL. I would use those.
+4. **SQLite's `integer` read as a `number` in the safe-integer range** (`sqlite/bigintnumber@1`). `sqlite/integer@1` also reads a `number`, so the suffix `Number` is taken. I wrote `IntegerSafeNumber`; I would like your name for it.
+5. **MongoDB's `Int64`.** Rule 4 says `Int64BigInt`. I would leave `Int64` alone: it is the BSON type's name, it is in released schemas, and renaming it buys only consistency.
+6. **The `storage` value for MongoDB's `Json`.** A JSON value is stored as several BSON types, so no single BSON type names it. I would use `bson`.
 
 ## Scope
 
-In scope: PostgreSQL. The type declarations in `packages/3-targets/postgres/1-target/src/core/type-constructors.ts` and `authoring.ts`, their tests, the `inferred` marks, fixtures and examples, `docs/reference/scalar-types.md`, the codec authoring guide and subsystem docs that list these names, the `prisma-8` skill references, the `app` and `extension` upgrade instructions, and ADR 316, which records the decision and amends ADR 279's "Not decided here".
+In scope: the type declarations of the four targets, their tests, the `inferred` marks, fixtures and examples, `docs/reference/scalar-types.md`, the `prisma-8` skill references, upgrade instructions for every rename, and the ADRs: ADR 316 gains PostgreSQL `Json`, and a new ADR records the other targets' tables as ADR 315 did for the date and time types.
+
+Also in scope, because main is wrong today: main has two ADRs numbered 316. The one from prisma/orm#30956 (an extension pack's extension is found through the search path) merged second and takes the next free number.
 
 Out of scope:
 
-- **SQLite, MySQL and MongoDB.** Each uses some of these names for explicit types today. They get the same convenience types, over their own explicit types, in TML-3790.
-- **The type-choice mechanism.** It is in the framework domain and does not change. The two limits above are accepted.
-- **Convenience types for `Uuid`, `Inet` and the other single-concept types.**
-
-## Open question
-
-**The explicit name of PostgreSQL's `json` type.** The token rule gives `Json`, which the convenience type takes. ADR 279 solved the same clash for `date` with a value suffix, but `json` has one codec, so the suffix rule does not give a name. This needs a name from Will.
+- The type choice mechanism, and anything else under `packages/1-framework`.
+- New codecs: a SQLite decimal or boolean, a MongoDB JSON string, MySQL's missing scalars.
+- Convenience types for single-concept types such as `Uuid`, `ObjectId`, `Vector` and `Bson`.
+- Clearer errors for `json` limits on PostgreSQL.
 
 ## Acceptance criteria
 
-- [ ] Each row of the convenience table resolves to its explicit type, in PSL and in a TypeScript contract, and each refused combination named above is refused at its argument.
-- [ ] A schema written with the convenience types and one written with the explicit types emit the same `contract.json`.
-- [ ] Existing fixtures and examples emit byte-identical `contract.json` files, except fields written `Json`.
-- [ ] `contract infer`, `contract print` and the Prisma 7 reader write the convenience calls listed under Tools, and the print round-trip tests pass.
-- [ ] Each removed explicit name is a deprecated alias that warns and emits the same contract.
-- [ ] `docs/reference/scalar-types.md`, the new ADR and the upgrade instructions describe the final names, and `pnpm lint:deps` and the CI-only checks pass.
+- [ ] On each target, each row of its table resolves to its explicit type in PSL and in a TypeScript contract.
+- [ ] On each target, a schema written with the convenience types and one written with the explicit types emit the same `contract.json`.
+- [ ] Existing fixtures and examples emit byte-identical `contract.json` files.
+- [ ] `contract infer` and `contract print` write the convenience calls, and the print round-trip tests pass.
+- [ ] Each removed explicit name is a deprecated alias that warns and emits the same contract. MongoDB's `Int`, `Float` and `Boolean` no longer warn.
+- [ ] Every rename a user must act on has an upgrade instruction with a detection pattern.
+- [ ] `docs/reference/scalar-types.md` and the ADRs describe the final names.
+- [ ] No file under `packages/1-framework` changes.
