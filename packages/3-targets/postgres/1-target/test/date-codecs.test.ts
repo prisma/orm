@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { pgTimestamptzDateDescriptor } from '../src/core/date-codecs';
@@ -126,6 +127,14 @@ describe('pg/timestamptz-date@1', () => {
         }
       },
     );
+  });
+
+  it('encodes a Date created in another realm', async () => {
+    const value: Date = runInNewContext('new Date("2026-01-02T03:04:05.123Z")');
+    expect({
+      wire: await codec.toWire(value, {}),
+      json: toContractJson(codec, value),
+    }).toEqual({ wire: '2026-01-02T03:04:05.123Z', json: '2026-01-02T03:04:05.123Z' });
   });
 
   it.each([new Date(Number.NaN), '2026-01-01', 0, null])(

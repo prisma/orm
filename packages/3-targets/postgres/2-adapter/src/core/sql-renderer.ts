@@ -75,6 +75,7 @@ import {
   pgVarchar,
 } from '@internal/target-postgres/data-types';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
+import { isDate } from '@internal/type-implementations/date';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { adapterError } from './adapter-errors';
@@ -882,7 +883,7 @@ function renderLiteral(expr: LiteralExpr): string {
   if (expr.value === undefined) {
     return 'NULL';
   }
-  if (expr.value instanceof Date) {
+  if (isDate(expr.value)) {
     return `'${escapeLiteral(expr.value.toISOString())}'`;
   }
   if (Array.isArray(expr.value)) {

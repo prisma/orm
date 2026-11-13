@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -760,6 +761,19 @@ describe('SQLite adapter', () => {
       const { sql } = adapter.lower(ast, { contract });
       expect(sql).toBe(
         `SELECT 12 AS "bigintValue", '2024-01-01T00:00:00.000Z' AS "dateValue", '{"ok":true}' AS "jsonValue", NULL AS "missingValue" FROM "user"`,
+      );
+    });
+
+    it('renders a Date literal created in another realm as its ISO text', () => {
+      const ast = SelectAst.from(TableSource.named('user')).withProjection([
+        ProjectionItem.of(
+          'at',
+          LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+        ),
+      ]);
+
+      expect(adapter.lower(ast, { contract }).sql).toBe(
+        `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
       );
     });
   });

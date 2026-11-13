@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -518,6 +519,19 @@ describe('Postgres adapter', () => {
 
     expect(sql).toBe(
       `SELECT 12 AS "bigintValue", '2024-01-01T00:00:00.000Z' AS "createdAtLiteral", ARRAY[1, 'two'] AS "arrayValue", '{"ok":true}' AS "jsonValue", NULL AS "missingValue" FROM "user"`,
+    );
+  });
+
+  it('renders a Date literal created in another realm as its ISO text', () => {
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of(
+        'at',
+        LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+      ),
+    ]);
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
     );
   });
 
