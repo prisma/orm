@@ -1,3 +1,4 @@
+import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { MongoQueryExecutor } from '@internal/mongo-orm';
 import type { MongoRuntime } from '@internal/mongo-runtime';
 import { describe, expectTypeOf, test } from 'vitest';
@@ -84,6 +85,53 @@ describe('the handle db.prepare returns', () => {
     void db.prepare({ take: 'mongo/string@1' }, (p) =>
       // @ts-expect-error -- the string codec's input is not a number
       db.query.from('accounts').limit(p.take).build(),
+    );
+  });
+});
+
+describe('the handle db.prepare returns for an ORM read', () => {
+  type AccountRow = Awaited<ReturnType<typeof db.orm.accounts.firstOrThrow>>;
+
+  test('returns the result the ad-hoc read returns', async () => {
+    const all = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.all(),
+    );
+    const first = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.first(),
+    );
+    const firstOrThrow = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.firstOrThrow(),
+    );
+    const runtime = await db.runtime();
+
+    expectTypeOf(all.query(runtime, { email: 'a' })).toEqualTypeOf<
+      AsyncIterableResult<AccountRow>
+    >();
+    expectTypeOf(first.query(runtime, { email: 'a' })).toEqualTypeOf<Promise<AccountRow | null>>();
+    expectTypeOf(firstOrThrow.query(runtime, { email: 'a' })).toEqualTypeOf<Promise<AccountRow>>();
+  });
+
+  test('types run params from the declaration', async () => {
+    const page = await db.prepare({ email: 'mongo/string@1', take: 'mongo/int32@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).limit(p.take).prepared.all(),
+    );
+    expectTypeOf(page.query).parameter(1).toEqualTypeOf<{
+      readonly email: string;
+      readonly take: number;
+    }>();
+  });
+
+  test('has no execute', async () => {
+    const all = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.all(),
+    );
+    expectTypeOf(all).not.toHaveProperty('execute');
+  });
+
+  test('refuses a placeholder whose codec is not the field codec', () => {
+    void db.prepare({ id: 'mongo/objectId@1' }, (p) =>
+      // @ts-expect-error -- email is a string field
+      db.orm.accounts.where({ email: p.id }).prepared.all(),
     );
   });
 });
