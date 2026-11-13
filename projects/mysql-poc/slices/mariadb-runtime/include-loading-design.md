@@ -29,7 +29,7 @@ This follows ADR 296 and ADR 302: the database does whatever it can do. The data
 - **Statement graph:** the ORM client's graph of steps for one call (`Graph` in `mutation-graph/graph.ts`). A step is a node. A `StatementNode` sends statements; other nodes, such as `CrossJoin` and `UnionAll`, combine rows in memory. An edge passes one node's rows to another.
 - **Keys edge:** an edge that passes the rows of one node to another as key values. `FindByKeys` takes its keys this way today (a `Rows` edge in its `keys` slot).
 - **Identity:** a table's primary key, or a unique key whose columns are all `NOT NULL`.
-- **`FindRelated`:** the new statement node that runs one include's child query (section 3). The name is a suggestion for Will; "related" is the ORM client's word for the other side of a relation (`relatedModelName`).
+- **`FindRelated`:** the new statement node that runs one include's child query (section 3). "Related" is the ORM client's word for the other side of a relation (`relatedModelName`).
 
 ## Requirements
 

@@ -48,7 +48,7 @@ Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,
 
 - the one-query include needs three capabilities: `sql.jsonAgg` (kept; MySQL gains it, Postgres also reports it under `sql`) and the new `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`. Postgres, SQLite and MySQL report all three; MariaDB only `jsonAgg`;
 - `selectIncludeStrategy(contract): 'join' | 'query'`;
-- a read with includes is a statement graph: `Find` for the parents, one new statement node per relation that reads the related rows by the parents' keys (suggested name `FindRelated`, not yet confirmed by Will), and a new node `NestJoin` beside `CrossJoin` and `UnionAll`. Writes add the same steps after their read-back step (`Find` or `FindByKeys`). `Find` itself is not changed. There is no `Preload` node;
+- a read with includes is a statement graph: `Find` for the parents, one new statement node per relation that reads the related rows by the parents' keys (`FindRelated`, confirmed by Will 2026-11-14), and a new node `NestJoin` beside `CrossJoin` and `UnionAll`. Writes add the same steps after their read-back step (`Find` or `FindByKeys`). `Find` itself is not changed. There is no `Preload` node;
 - the folder `sql-orm-client/src/mutation-graph/` is renamed `statement-graph/`, in its own commit;
 - a graph that writes no table runs without a transaction;
 - `stitchKey`; chunks of at most 10 000 keys and 1 MiB of encoded keys, split by one helper shared with `FindByKeys`;
@@ -58,7 +58,7 @@ Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,
 
 **Plan.** 6b-1 is one PR with no MariaDB code, tested by running the existing Postgres include tests a second time with both capabilities switched off through the adapter descriptor. Build it in two dispatches:
 
-The design was reviewed against the code by an architect and a principal engineer on 2026-11-14, and their findings are folded in. Will has not yet given the go-ahead to build.
+The design was reviewed against the code by an architect and a principal engineer on 2026-11-14, and their findings are folded in. Will gave the go-ahead to build on 2026-11-14, and accepted the limit on keys a codec cannot reproduce (`deferred.md`). The dispatches are in `slices/mariadb-runtime/plan.md`.
 
 1. The folder rename, in its own commit. Then capabilities, `selectIncludeStrategy`, the graph read for every include form (design section 4's table), `NestJoin`, `stitchKey`, chunking, the transaction rule, tests. No code for 6b-1 exists yet.
 2. Writes with includes, the cache key, the prepared-read refusal, the docs and the two ADRs.
@@ -86,7 +86,7 @@ Then `/drive-code-review`, fixes, a second review if fixes are substantial, manu
 
 ## Rules for agents and subagents
 
-- Subagents use model `opus`.
+- Implementer subagents use model `opus`; reviewer subagents use Fable (Will, 2026-11-14).
 - Run node, pnpm and commits through `mise exec --`. Use `pnpm`, never `npm`/`npx`; a shell hook blocks command lines containing the word "npm".
 - Never run whole test suites locally (`test:packages`, `test:integration`, `test:e2e`, `test:all`); run the touched test files. A full `pnpm build` at the root is fine; never build single packages. Do not run repo-wide chains after merging main; check whether the merged files touch your packages.
 - Never write to `/tmp`; use `wip/` (gitignored).
