@@ -112,27 +112,71 @@ export const bindAdapter = (
 
 // *.bind(transaction) is required to preserve the `this` context of functions whose
 // execution is delegated to napi.rs.
-const bindTransaction = (errorRegistry: ErrorRegistryInternal, transaction: Transaction): ErrorCapturingTransaction => {
+const bindTransaction = (
+  errorRegistry: ErrorRegistryInternal,
+  transaction: Transaction,
+): ErrorCapturingTransaction => {
+  let isClosed = false
+  let dispatchQueue: Promise<unknown> = Promise.resolve()
+
+  const enqueueStatement = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) => {
+    return async (...args: A): Promise<R> => {
+      if (isClosed) {
+        throw { kind: 'TransactionAlreadyClosed', cause: 'Transaction is already closed' }
+      }
+
+      const resPromise = dispatchQueue.then(async () => {
+        if (isClosed) {
+          throw { kind: 'TransactionAlreadyClosed', cause: 'Transaction is already closed' }
+        }
+        return fn(...args)
+      })
+
+      dispatchQueue = resPromise.catch(() => {})
+      return resPromise
+    }
+  }
+
+  const markClosed = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) => {
+    return async (...args: A): Promise<R> => {
+      isClosed = true
+      const resPromise = dispatchQueue.then(async () => {
+        return fn(...args)
+      })
+      dispatchQueue = resPromise.catch(() => {})
+      return resPromise
+    }
+  }
+
   const boundTransaction: ErrorCapturingTransaction = {
     adapterName: transaction.adapterName,
     provider: transaction.provider,
     options: transaction.options,
-    queryRaw: wrapAsync(errorRegistry, transaction.queryRaw.bind(transaction)),
-    executeRaw: wrapAsync(errorRegistry, transaction.executeRaw.bind(transaction)),
-    commit: wrapAsync(errorRegistry, transaction.commit.bind(transaction)),
-    rollback: wrapAsync(errorRegistry, transaction.rollback.bind(transaction)),
+    queryRaw: wrapAsync(errorRegistry, enqueueStatement(transaction.queryRaw.bind(transaction))),
+    executeRaw: wrapAsync(errorRegistry, enqueueStatement(transaction.executeRaw.bind(transaction))),
+    commit: wrapAsync(errorRegistry, markClosed(transaction.commit.bind(transaction))),
+    rollback: wrapAsync(errorRegistry, markClosed(transaction.rollback.bind(transaction))),
   }
 
   if (transaction.createSavepoint) {
-    boundTransaction.createSavepoint = wrapAsync(errorRegistry, transaction.createSavepoint.bind(transaction))
+    boundTransaction.createSavepoint = wrapAsync(
+      errorRegistry,
+      enqueueStatement(transaction.createSavepoint.bind(transaction)),
+    )
   }
 
   if (transaction.rollbackToSavepoint) {
-    boundTransaction.rollbackToSavepoint = wrapAsync(errorRegistry, transaction.rollbackToSavepoint.bind(transaction))
+    boundTransaction.rollbackToSavepoint = wrapAsync(
+      errorRegistry,
+      enqueueStatement(transaction.rollbackToSavepoint.bind(transaction)),
+    )
   }
 
   if (transaction.releaseSavepoint) {
-    boundTransaction.releaseSavepoint = wrapAsync(errorRegistry, transaction.releaseSavepoint.bind(transaction))
+    boundTransaction.releaseSavepoint = wrapAsync(
+      errorRegistry,
+      enqueueStatement(transaction.releaseSavepoint.bind(transaction)),
+    )
   }
 
   return boundTransaction
