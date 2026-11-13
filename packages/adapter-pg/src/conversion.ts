@@ -332,7 +332,9 @@ function normalize_timez(time: string): string {
 /******************/
 
 function normalize_money(money: string): string {
-  return money.slice(1)
+  // Postgres formats money using `lc_monetary`, e.g. `$1,234.50` or `-$120.00`.
+  // Keep only the sign, the digits and the decimal point.
+  return money.replace(/[^\d.-]/g, '')
 }
 
 /******************/
