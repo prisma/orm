@@ -51,10 +51,10 @@ Almost everything about the reverse relation follows from that one declaration:
 |---|---|
 | The model it points at | `Post`, the model that declared `author` |
 | The fields it joins on | `User.id` and `Post.authorId`, the same pair |
-| Whether it holds one post or many | Many, unless `authorId` is unique |
+| How many posts it can hold | Any number, or at most one when `authorId` is unique |
 | **What it is called on `User`** | **Nowhere. Only the author knows.** |
 
-So `posts Post[]` states exactly two things: a name, and the model the name points at. Neither repeats anything written elsewhere. The back-reference is the smallest declaration that carries the one fact the foreign key cannot.
+So `posts Post[]` states three things: a name, the model the name points at, and its form, a list here. The form is the author's choice within what the foreign key allows: a list is always allowed, and a single field (`profile Profile?`) only when the foreign key is unique. The name is the part nothing else can supply. The back-reference is the smallest declaration that carries it.
 
 ## Why Prisma 8 does not make up the name
 
@@ -126,11 +126,15 @@ Post: Post.relations({
 }),
 ```
 
-The PSL interpreters for SQL and for MongoDB match each back-reference to a foreign key declaration on the model it names, and refuse one they cannot match:
+The PSL interpreters for SQL and for MongoDB match each back-reference to a foreign key declaration on the model it names. The field's form sets the relation's cardinality: a list is one-to-many, and a single field is one-to-one.
+
+On SQL, a list field may instead name a model it reaches through a join model, a model with a foreign key to each end. That declares a many-to-many relation, matched to the join model's two foreign keys. It is declared on the model like any other relation.
+
+The interpreters refuse a field they cannot match:
 
 | The back-reference | Error |
 |---|---|
-| has no foreign key declaration to match | `PSL_ORPHANED_BACKRELATION` |
+| has no foreign key declaration to match and, on SQL, no join model either | `PSL_ORPHANED_BACKRELATION` |
 | matches more than one, as with `author` and `editor` above | `PSL_AMBIGUOUS_BACKRELATION`; name both ends with `@relation("written")` |
 | is a single field but is required | `PSL_REQUIRED_ONE_TO_ONE_BACKRELATION` |
 | is a single field, on SQL, over a foreign key that is not unique | `PSL_NON_UNIQUE_BACKRELATION` |
