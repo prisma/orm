@@ -121,6 +121,10 @@ export function buildNextSteps(options: {
     push('Install the project dependencies with your package manager (this run skipped them).');
   }
   push('Set DATABASE_URL in your environment (export it or add it to .env).');
+  const noDatabaseStep = noDatabaseStepFor(options.target);
+  if (noDatabaseStep !== null) {
+    push(noDatabaseStep);
+  }
   if (!options.contractEmitted) {
     push(`Emit the contract: \`${options.emitCommand}\``);
     push(`Edit your schema at ${options.schemaPath}, then re-run the emit command.`);
@@ -132,6 +136,21 @@ export function buildNextSteps(options: {
     'Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
   );
   return steps;
+}
+
+/**
+ * A new project has no database behind the placeholder `DATABASE_URL` the
+ * scaffold writes. This names one command that gives a working connection
+ * string with no account, and says to put it where the placeholder is, so
+ * the project ends up with one `DATABASE_URL`. The Prisma 7 path adopts the
+ * database the project already has, so it does not get this step.
+ */
+export const NO_DATABASE_STEP =
+  'No database yet? `npx create-db@latest` creates a temporary Prisma Postgres database with no account (deleted after 24 hours unless claimed). Set DATABASE_URL to the connection string it prints, in place of the placeholder.';
+
+/** `create-db` creates PostgreSQL databases only, so no other target gets the step. */
+export function noDatabaseStepFor(target: InitOutput['target']): string | null {
+  return target === 'postgres' ? NO_DATABASE_STEP : null;
 }
 
 /** The install that precedes the Prisma 7 check failed, so nothing was written. */

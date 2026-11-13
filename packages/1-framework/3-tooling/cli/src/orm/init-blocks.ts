@@ -3,6 +3,7 @@ import type { NextAction } from '@prisma/cli-engine/protocol';
 import {
   DB_SIGN_STEP,
   type InitOutput,
+  noDatabaseStepFor,
   PRISMA7_LOOP_STEP,
   PRISMA7_QUICK_REFERENCE_STEP,
 } from '../commands/init/output';
@@ -63,6 +64,7 @@ function scaffoldTree(document: InitOutput): Block {
  * same advice in the shape an agent can act on.
  */
 export function buildInitNextActions(inputs: {
+  readonly target: InitOutput['target'];
   readonly contractEmitted: boolean;
   readonly schemaPath: string;
   readonly prisma7: { readonly clientMoved: boolean } | null;
@@ -90,6 +92,11 @@ export function buildInitNextActions(inputs: {
       runCommandAction('Set up the Prisma agent skills for your coding agent', 'prisma init'),
     );
     return actions;
+  }
+  const noDatabaseStep = noDatabaseStepFor(inputs.target);
+  if (noDatabaseStep !== null) {
+    // A choice, not a command to run: a project that already has a database skips it.
+    actions.splice(1, 0, chooseAction(noDatabaseStep));
   }
   actions.push({
     kind: 'edit-file',
