@@ -235,6 +235,48 @@ test('a refined to-one include is nullable even when the relation is not', () =>
   >().toEqualTypeOf<Scalars<Models.public_User> | null>();
 });
 
+test('a refined required to-one include that only selects equals a nested Shape spec', () => {
+  const refined = db.Article.include('reviewer', (reviewer) => reviewer.select('id'));
+  expectTypeOf<ResultType<typeof refined>>().toEqualTypeOf<
+    Shape<Models.public_Article, { reviewer: { '+': 'id' } }>
+  >();
+});
+
+test('a refined required to-one include that only orders is not nullable', () => {
+  const refined = db.Article.include('reviewer', (reviewer) => reviewer.orderBy((r) => r.id.asc()));
+  expectTypeOf<ResultType<typeof refined>['reviewer']>().toEqualTypeOf<
+    Scalars<Models.public_User>
+  >();
+});
+
+test('a refined to-one include with paging is nullable even when the relation is not', () => {
+  const offset = db.Article.include('reviewer', (reviewer) => reviewer.offset(1));
+  expectTypeOf<
+    ResultType<typeof offset>['reviewer']
+  >().toEqualTypeOf<Scalars<Models.public_User> | null>();
+  const limit = db.Article.include('reviewer', (reviewer) => reviewer.limit(0));
+  expectTypeOf<
+    ResultType<typeof limit>['reviewer']
+  >().toEqualTypeOf<Scalars<Models.public_User> | null>();
+  const cursor = db.Article.include('reviewer', (reviewer) =>
+    reviewer.orderBy((r) => r.id.asc()).cursor({ id: 1 }),
+  );
+  expectTypeOf<
+    ResultType<typeof cursor>['reviewer']
+  >().toEqualTypeOf<Scalars<Models.public_User> | null>();
+});
+
+declare const narrowToOne: boolean;
+
+test('a conditionally filtered to-one refinement follows the relation, as a conditional filter is not known', () => {
+  const refined = db.Article.include('reviewer', (reviewer) =>
+    narrowToOne ? reviewer.where({ id: 1 }) : reviewer,
+  );
+  expectTypeOf<ResultType<typeof refined>['reviewer']>().toEqualTypeOf<
+    Scalars<Models.public_User>
+  >();
+});
+
 test('ResultType of a variant collection equals Scalars of the variant member', () => {
   const bugs = poly.Task.variant('bug');
   expectTypeOf<ResultType<typeof bugs>>().toEqualTypeOf<Scalars<PolyModels.public_Bug>>();
@@ -293,7 +335,7 @@ test('prepared terminals preserve complete emitted ordinary result types', () =>
   >();
   const refined = db.Article.select('id').include('reviewer', (reviewer) => reviewer.select('id'));
   expectTypeOf(refined.prepared.first().consume).returns.toEqualTypeOf<
-    Promise<{ id: number; reviewer: { id: number } | null } | null>
+    Promise<{ id: number; reviewer: { id: number } } | null>
   >();
 
   const bugs = poly.Task.variant('bug').include('assignee');

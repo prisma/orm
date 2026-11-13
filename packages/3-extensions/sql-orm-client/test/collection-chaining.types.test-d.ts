@@ -5,6 +5,7 @@ import type {
   CollectionTypeStateOf,
   Filtered,
   Ordered,
+  Paged,
   QueryFragment,
 } from '../src/collection-types';
 import { createChainingOrm, type PostCollection } from './collection-chaining-fixture';
@@ -47,7 +48,7 @@ describe('class methods keep the class', () => {
 
   test('after limit, offset and distinct', () => {
     const posts = Post.limit(10).offset(1).distinct('title').published();
-    expectTypeOf(posts).toEqualTypeOf<Filtered<PostCollection>>();
+    expectTypeOf(posts).toEqualTypeOf<Filtered<Paged<PostCollection>>>();
   });
 
   test('after include, with the widened row', async () => {
@@ -61,7 +62,7 @@ describe('class methods keep the class', () => {
 
   test('after cursor and distinctOn', () => {
     expectTypeOf(Post.recent().cursor({ id: 1 }).distinctOn('title').published()).toEqualTypeOf<
-      Filtered<Ordered<PostCollection>>
+      Filtered<Paged<Ordered<PostCollection>>>
     >();
   });
 
