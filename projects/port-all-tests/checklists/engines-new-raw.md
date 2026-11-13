@@ -386,7 +386,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_27452.rs
 
-- [ ] `new::regressions::prisma_27452::comment_like_upsert_with_nested_comments` — issue #27452: comment-like upsert with nested comments [connectors: exclude(MongoDb,SqlServer)] → non-ported `test/integration/test/ports/engines/non-ported/new/regressions/prisma_27452/prisma_27452.md`
+- [x] `new::regressions::prisma_27452::comment_like_upsert_with_nested_comments` — issue #27452: comment-like upsert with nested comments [connectors: exclude(MongoDb,SqlServer)] → non-ported `test/integration/test/ports/engines/non-ported/new/regressions/prisma_27452/prisma_27452.md`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_5952.rs
 
