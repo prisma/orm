@@ -445,3 +445,86 @@ Location: `packages/1-framework/3-tooling/cli/src/control-api/operations/contrac
 Issue: The loader reads each ref from a file path, but the `refUnreadable` violation keeps only the space and the ref name. To raise `MIGRATION.INVALID_REF_FILE` with a path, the CLI rebuilds it with three helpers, `spaceMigrationDirectory`, `spaceRefsDirectory` and the newly exported `refFilePath`. That repeats the loader's layout rule in a second place, and `refFilePath` is exported only to support the repetition. If the ref layout changes, the error would name a file that does not exist.
 
 Suggestion: give the `refUnreadable` violation the `path` the loader read, and pass it to `errorInvalidRefFile`. Then drop the `refFilePath` export. `errorInvalidRefFile` stays exported, since the CLI legitimately raises it.
+
+## Round 7
+
+Re-reviewed at `4862e81d12`, the tip of #30926 with `main` merged in. Range: `origin/main...HEAD`. New since round 6 (`3a5626a3af`): `82dbe63a42`, `15117ea12c`, `8e6db6865e`, `fd515e068c`, `c376d41bb3`, `fe6baed181`, `781afc13ab`, `49891e9377`, `d638ae8782`, `51aebff741`, `f2dc1acced`, `4862e81d12`, and the merge `a0ffa17c92`. Persona: architect.
+
+### Verdicts on the sixth round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A31 | Fixed, with one new gap (A35) | The `MIGRATION.MARKER_NOT_IN_HISTORY` entry says the advice follows the change policy and gives the payload (`space`, `change`). The skill's migration-review row makes `db sign` and `db update` conditional on `reconcile`. The `CONTRACT.MARKER_ROW_CORRUPT` entry says `migration status` without `--to` reports a warning and goes on. A later commit changed `migration status --to <ref>` in the same way, and the entry was not updated (A35). |
+| A32 | Fixed | `RefLoadProblem` and the `refUnreadable` violation carry `path`, the file the loader read. `mapIntegrityViolations` passes it to `errorInvalidRefFile`. `refFilePath` is private again. The head ref's path has one owner, `contractSpaceHeadRefPath`, used by its reader and by the loader. |
+
+Spot checks that earlier fixes still hold at the tip: the three SQL runners call `checkDatabasePoliciesHeld` (A21). MongoDB's write guard builds its key checks from `DATABASE_POLICIES_KEYS` and `DATA_PROTECTION_KEYS` (A28). `markerSwapFailure` has the `markerChanged` arm, and the runner maps it to its own failure (A29). ADR 021, ADR 307, the ADR index, the glossary and the Migration System doc all link ADR 319.
+
+### The merge
+
+The only conflict was in `mongo-runner.ts`. `main` added the type-change failure helpers, and the branch added `checkDatabasePolicies` and `markerPoliciesCorrupt`. Both are kept, side by side, and neither touches the other. `main` added no new marker write path. The runner still writes the application marker only through `updateMarker` with `checkedPolicies`, or through `initMarker` with `databasePolicies`. `main` also changed `migrateAdvice` and the type-change advice to re-run with `invocation.rerunArgs`. The branch's `rerunArgs` for `db migrate` and `db update` include `--permit-policy-change` when it was given, so the new advice repeats the flag correctly.
+
+### Agreement between the ADR, the docs and the code
+
+The rewritten ADR 319 matches the code on: where the policies live, the consent flag, writing on success, the lock-time comparison, MongoDB's guarded write, and the off-graph recovery. Its table still describes data protection enforcement and `MIGRATION.DATA_PROTECTION_FORBIDS`. Round 1 accepted that for a decision record. The glossary, the Migration System doc and the skill now say plainly that data protection is recorded and compared but not yet enforced. That is the right split. The `--permit-policy-change` help text and the spec now say the policies are written when the run succeeds, which matches the ADR.
+
+### New findings
+
+#### A33 — `dbUpdate` reports a caller's mismatched ref with a runner failure code (medium-low)
+
+Location: `packages/1-framework/3-tooling/cli/src/control-api/operations/db-run.ts` lines 244-261; `docs/reference/error-reference.md`, the `## MIGRATION` introduction (line 1508) and `MIGRATION.DESTINATION_CONTRACT_MISMATCH` (line 1658).
+
+Issue: `MIGRATION.DESTINATION_CONTRACT_MISMATCH` is one of the codes a runner reports when an apply fails. The error reference says those codes carry `failingSpace` and `databaseUnchanged`. The rc.18 to rc.19 upgrade notes tell consumers to read this group of codes as "the apply failed". `dbUpdate` now also raises it before planning, when the caller's `ref` names a different contract from the `contract` argument. Nothing was applied, the payload has neither `failingSpace` nor `databaseUnchanged`, and the cause is a mistake in the call, not two emits that disagree. A consumer such as Composer that handles runner failures by code will handle this case as a failed apply.
+
+Suggestion: give this refusal a code of its own, in the namespace of caller input errors. Leave the name to Will. If the code stays, take it out of the runner-codes list for this case: say in the `## MIGRATION` introduction that `dbUpdate` also raises it before any apply, without `failingSpace` or `databaseUnchanged`.
+
+#### A34 — The spec and the upgrade note still say the mismatched ref is an internal error (low)
+
+Location: `projects/database-change-policies/slices/3-policies/spec.md` line 209 (the `TargetRef` row of "Decisions after the first review"); `upgrade-instructions/pending/database-policies/app/instructions.md` line 5 ("or the call fails as an internal error").
+
+Issue: `781afc13ab` changed the refusal from an `InternalError` to a structured `MIGRATION.DESTINATION_CONTRACT_MISMATCH` with a fix and a payload. The spec's decision table and the upgrade note for app authors still say it is an internal error. A Composer author who follows the note will not match the code the call now returns.
+
+Suggestion: after A33 is settled, name the code in both places, and say that the call returns it as a failure result.
+
+#### A35 — The error reference still says `migration status --to <ref>` fails on unreadable policies (low)
+
+Location: `docs/reference/error-reference.md` line 506 (`CONTRACT.MARKER_ROW_CORRUPT`); code: `packages/1-framework/3-tooling/cli/src/orm/migration/status.ts` lines 463-481 and 590-595.
+
+Issue: Since `fe6baed181`, `migration status` never fails on unreadable policies. With `--to <ref>`, it skips the comparison with the ref and reports the unreadable policies once, as a warning finding. The entry still lists `migration status --to <ref>` among the commands that raise the error. It says only that `migration status` "without `--to`" reports a warning, and only "when a marker is outside the migration graph". A reader of the reference expects a failure and a non-zero exit, but gets a report.
+
+Suggestion: remove `migration status --to <ref>` from the list of commands that raise it. Write instead: "`migration status` never fails on it. When it needs the policies, to advise on a marker outside the graph or to compare with the ref `--to` names, it reports the same error once as a warning finding, with the same advice, and goes on."
+
+#### A36 — ADR 319 is also the number of an ADR in another open pull request (low)
+
+Location: `docs/architecture docs/adrs/ADR 319 - Databases record a change policy and a data protection policy.md`; open PR #30483, which adds `ADR 319 - A model has a back-reference only when it declares one.md` and an ADR index row for it.
+
+Issue: `51aebff741` renumbered from 314 to 319 because `main` took 314. 319 is free on `main`, but #30483 (updated 2026-11-13) uses the same number. Whichever of the two merges second will clash. The links in ADR 021, ADR 218, ADR 307, the ADR index, the glossary and the Migration System doc would then point at a number that two ADRs share.
+
+Suggestion: before queueing #30926, check `main` and the open PRs again. If #30483 has not merged, agree with its author which PR keeps 319. If this PR moves, renumber every link in the same commit.
+
+#### A37 — The framework's parse result repeats arktype's message format in its interface (low)
+
+Location: `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` lines 125-140 (`DeclaredDatabasePoliciesIssue`, `parseDeclaredDatabasePolicies`); `packages/1-framework/3-tooling/migration/src/refs.ts` lines 79-81 (`policiesIssueText`).
+
+Issue: `DeclaredDatabasePoliciesIssue` has a `path` field and a `message` that the doc comment says "begins with that path", because arktype's `error.message` begins with it. `policiesIssueText` relies on this. It writes `policies.${message}` when the path is not empty and `policies ${message}` when it is, so the path is in effect read out of the message, not out of `path`. The framework's exported interface now depends on arktype's message format. This was not the intent of `c376d41bb3`, whose purpose was to stop exporting the schema. If arktype changes how it writes its messages, `MIGRATION.INVALID_REF_FILE` names the wrong field, and no type error shows it. `databasePoliciesOf` uses the same messages without the `meta.policies.` prefix, so the two readers name a field in different ways.
+
+Suggestion: make `message` the problem alone (arktype's `error.problem`, for example "must be \"migrate\" or \"reconcile\" (was \"nope\")"). Each caller then composes `<prefix><path> <problem>`: `policies.change` for a ref file and `meta.policies.change` for the marker. Drop "beginning with that path" from the doc comment.
+
+#### A38 — "Repeat the flags the user gave" has four separate implementations (low)
+
+Location: `packages/1-framework/3-tooling/cli/src/orm/migrate.ts` lines 522-529 (`rerunArgs`) and 357-361 (`retryCommandFor`); `packages/1-framework/3-tooling/cli/src/orm/db/update.ts` lines 405-413 (`rerunArgs`), 101-110 (the dry run's apply command) and 359-366 (`retryCommandFor`); `packages/1-framework/3-tooling/cli/src/control-api/operations/ref-resolution.ts` lines 63-86.
+
+Issue: The spec's rule is that a printed follow-up command repeats the flags the user gave, and never adds `--permit-policy-change`. Each command builds that list of flags by hand in two or three places, and `retryCommandFor` builds it again from named arguments. `49891e9377` had to fix two of these lists, which had dropped the flag after the round 2 fix had covered the others. The next flag added to `db migrate` or `db update` has to be added to each list, and nothing checks that it was.
+
+Suggestion: give each command one function that returns the flags the user gave (`--to`, `--advance-ref`, `--permit-policy-change`, and the statements for `db update`). Use it for `rerunArgs`, for the dry run's apply command, and as `retryCommandFor`'s input instead of its separate `to`, `advanceRef` and `permitPolicyChange` arguments.
+
+### Notes that need no change
+
+- `markerPoliciesUnreadableFinding` turns the CLI's `CONTRACT.MARKER_ROW_CORRUPT` envelope into a `migration status` finding. The advice is built in one place (`errorMarkerPoliciesCorrupt`), and the status command only changes how it is reported. This is the right place for it.
+- `MARKER_NOT_IN_HISTORY` recommends no command when the policies cannot be read. That follows ADR 319's rule that advice must never propose a command the policy might refuse.
+- `parseDeclaredDatabasePolicies` is a parser, so it belongs in the framework under the exemption. Apart from A37, it adds no text that only the CLI needs.
+- `runPolicyOnly` now reports every loaded space and takes the application plan from either the runner's plans or the plans kept from it. The result has the same shape as other successful runs. The policies are still the application space's alone.
+
+### Not checked
+
+- I did not run tests. The rendered terminal format in ADR 319's examples (`✘ [CODE] … why: … →`) is not compared with the CLI's real output. The spec's sketch uses a different format, and both are illustrations.
+- I read `f2dc1acced` (the handover) only for ADR numbers, not for its content.

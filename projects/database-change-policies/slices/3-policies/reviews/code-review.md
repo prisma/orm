@@ -563,3 +563,141 @@ All pass, with output under `wip/`:
 | E9 | `db sign` on a migrations-only database is refused | PASS | PASS | Envelope wording updated and asserted in the enforcement journey. |
 
 Totals: 30 PASS of 30 edge cases and done conditions.
+
+## Round 8
+
+Reviews `3a5626a3af..HEAD` at `4862e81d12`: seven commits that change code (`82dbe63a42`, `15117ea12c`, `c376d41bb3`, `fe6baed181`, `781afc13ab`, `49891e9377`, `4862e81d12`), the documentation commits, and the merge of `main` (`a0ffa17c92`). Persona: principal engineer.
+
+### Summary
+
+The seven commits are sound. F22 is fixed: `migration status` now reports unreadable policies as a finding and still gives its report, with and without `--to`. The merge kept the MongoDB runner correct: main's new failure paths all return before the marker write, the policy check still runs before the first space, and the application marker's write is still guarded. No marker writer main added since the branch point touches `meta`. MariaDB (PR #30964) reuses MySQL's runner and marker code, which already keeps `meta`.
+
+But the merge turned the tip red. Main now reports MongoDB's failed unique-index build as `MIGRATION.EXECUTION_FAILED`, and the shared failed-run journey still expects `CLI.UNEXPECTED` on MongoDB (F23). Two smaller findings: advice that tells the user to run `db migrate` again drops `--to` and `--permit-policy-change` (F24), and one error-reference sentence is out of date (F25).
+
+### Round-7 finding
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| F22 — `migration status` failed outright on an off-graph marker with unreadable policies | Fixed in `82dbe63a42` and `fe6baed181` | `status.ts` reads the policies with `databasePoliciesOf` through `appPoliciesInForce`. When they cannot be read, it adds one warning `CONTRACT.MARKER_ROW_CORRUPT` finding (`markerPoliciesUnreadableFinding`) and goes on. `MARKER_NOT_IN_HISTORY` then recommends no command, and `--to <ref>` skips the comparison. The JSON schema accepts the new finding. Two tests in `migration-status-policies.test.ts` assert exit code 0, both findings with their next actions, the summary, and no `policyDifferences`. |
+
+### The other commits
+
+- **`15117ea12c` (the unreadable-ref result carries its file).** The path now comes from the reader, for both user refs and the head ref (`contractSpaceHeadRefPath`). No behaviour change beyond that. Correct.
+- **`c376d41bb3` (a parser, not a schema, on the control entry point).** `parseDeclaredDatabasePolicies` wraps the same schema. Ref files validate `policies` as `unknown` first, then through the parser, so `MIGRATION.INVALID_REF_FILE` still names the field (`policies.change[0] …`). `refEntryOf` rebuilds the entry from the three known keys. That drops undeclared top-level keys, but `writeRef` already wrote only those three, so no writer loses anything new.
+- **`fe6baed181` (`db sign` reads a moved profile hash as moved).** `sameMarkerHashes` compares both hashes and treats `null` correctly. A unit test covers a profile-hash-only move.
+- **`781afc13ab` (control API).** A `dbUpdate` ref for another contract now returns `MIGRATION.DESTINATION_CONTRACT_MISMATCH` with `refName`, `refHash` and `contractStorageHash`, which the reference entry lists. A policy-only `migrate` now also runs when the application plan was kept from the runner (`at-head`, or no marker and nothing to move). The runner then gets a zero-operation plan, writes the marker and no ledger row. The result lists every loaded space. Two tests in `migrate-runner-schedule.test.ts`.
+- **`49891e9377`.** `retryCommandFor` and the dry run's apply command repeat `--permit-policy-change` only when given. Three tests.
+- **`4862e81d12`.** The flag's help text now matches the spec.
+
+### Findings
+
+#### F23 — The tip is red: the shared failed-run journey expects `CLI.UNEXPECTED` on MongoDB
+
+Path: test/integration/test/utils/database-policies-migrate.ts 175–180.
+
+Main's PR #30970 added `indexBuildFailure` to the MongoDB runner (`mongo-runner.ts` 684–726). A unique index that cannot be built because of duplicate keys now fails as `MIGRATION.EXECUTION_FAILED`, not as an uncaught error. This is the fix for the deferred item about the runner reporting `CLI.UNEXPECTED`. The shared journey still asserts the old behaviour on MongoDB:
+
+```ts
+project.target === 'mongo'
+  ? { code: 'CLI.UNEXPECTED', why: expect.stringContaining('E11000 duplicate key') }
+  : { code: 'MIGRATION.EXECUTION_FAILED', meta: { failingSpace: 'app' } },
+```
+
+Running `cli.database-policies.mongo.e2e.test.ts` at the tip fails this test in both the `integration` and `packaging` projects (`wip/logs/review8-e2e-mongo.txt`). The received failure is `MIGRATION.EXECUTION_FAILED`, with a `why` ending "The operations that ran before the failure stay applied." CI on the PR will fail.
+
+Suggestion: drop the MongoDB branch and assert `{ code: 'MIGRATION.EXECUTION_FAILED', meta: { failingSpace: 'app' } }` on every target. MongoDB's runner sets `failingSpace` through `withFailingSpace`. Also add `code: 'MIGRATION.EXECUTION_FAILED'` to the MongoDB-only test "keeps the first migration applied when the second fails", which today only calls `errorOf`. The spec's *Deferred* line and the handover still list this as an open follow-up; update them once the ticket's state is confirmed.
+
+#### F24 — Advice that says to run `db migrate` again drops `--to` and `--permit-policy-change`
+
+Path: packages/1-framework/3-tooling/cli/src/utils/runner-failure-advice.ts 56–59 (`dbMigrateCommand`) and its "re-run" call sites at 243, 313, 414, 424, 434, 436, 455, 468 and 469.
+
+The spec (*The CLI*) says a next action that repeats the command the user ran repeats the flags the user gave, including `--permit-policy-change`, and gives "run db migrate again" after a failed migration as the example. `migrate.ts` builds `invocation.rerunArgs` with `--to`, `--advance-ref` and the flag, but only the generic fallback in `migrateAdvice` uses them. `dbMigrateCommand` prints plain `db migrate`. Main's merge adds two more such sites (`changeValueAdvice`).
+
+Concrete failure on Postgres: the user runs `db migrate --to production --permit-policy-change`, and a cast in the second migration meets a value it cannot convert. The advice says to change the value, then re-run `prisma db migrate`. That command has no ref, so it compares no policies and records none. It also targets the contract head, not `production`. The user ends with the migrations applied and the policies not recorded, and the next `--to production` run fails with `POLICY_MISMATCH`.
+
+Suggestion: where the advice repeats the run, print `cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])`, for example with a `dbMigrateRerun(invocation)` helper beside `dbMigrateCommand`. Add a unit test in which a failed type change under `--to production --permit-policy-change` advises re-running with both flags.
+
+#### F25 — The error reference says `migration status --to <ref>` raises `MARKER_ROW_CORRUPT`
+
+Path: docs/reference/error-reference.md 506.
+
+The entry lists `migration status --to <ref>` among the commands that fail with this code, and says only "`migration status` without `--to`" reports it as a finding. Since `fe6baed181`, `--to <ref>` also reports it as a warning finding, skips the comparison, and exits 0.
+
+Suggestion: remove `migration status --to <ref>` from the list, and say `migration status` (with or without `--to`) reports the error as a warning finding with the same advice, and does not compare policies when `--to` names a ref.
+
+### Deferred
+
+| Item | Why deferred |
+|---|---|
+| A policy-only run with `--permit-policy-change` on a database with no marker creates the marker at the empty contract. | Accepted; I found no concrete harm. `781afc13ab` widens the paths that reach it but not its effect. |
+| Data protection settings are stored and compared but not enforced. | Next slice. |
+| The marker-destination shape is declared in several places outside the runners. | Predates the slice; the spec records it as a separate refactor. |
+| MongoDB's `initMarker` is a plain insert, so a concurrent first marker write fails as a duplicate key. | Predates the slice; not a silent overwrite. |
+
+The round-3 deferred item about MongoDB reporting a failed schema command as `CLI.UNEXPECTED` is closed by main; F23 is the test that still assumes it.
+
+### Acceptance-criteria verification
+
+Every row was checked against the code and test assertions at `4862e81d12`. The MySQL integration file was not run this round (it needs a private `mysqld`). Main changed no MySQL or MariaDB marker, ledger or runner code since the branch point, and the branch's MySQL code is unchanged since round 4, so the MySQL parts rest on round 4's runs.
+
+#### Pre-investigated edge cases
+
+| # | Case | Verdict | What I checked |
+|---|---|---|---|
+| E1 | No `meta.policies`, ref without `policies` | PASS | Journey `applies a ref without policies … records none` asserts `meta` strictly `{}`; passes on PostgreSQL, SQLite and MongoDB. |
+| E2 | Ref declares only `change` | PASS | `migrate-database-policies.test.ts` asserts only `change` differs and the written policies have default data settings; passes. |
+| E3 | Ref declares the defaults | PASS | Control-API test `writes nothing when the ref declares the policies already in force`; passes. |
+| E4 | `--permit-policy-change` with nothing pending | PASS | Journey asserts `Policies updated: change: migrate` and an unchanged ledger on all three targets run. New control-API tests cover the kept-plan path and list every space. |
+| E5 | Postgres run fails after the policy check | PASS | Shared journey on PostgreSQL asserts `EXECUTION_FAILED` in space `app`, marker and ledger unchanged; passes. |
+| E6 | MongoDB run fails on the second migration | PASS | MongoDB-only test passes: first migration kept, policies unchanged, retry records them. It does not assert the failure code (F23). |
+| E7 | `db update --dry-run` on a migrations-only database | PASS | Enforcement journey asserts the whole envelope; passes. |
+| E8 | `db sign` with no marker | PASS | Journey `signs a database with no marker`; passes. |
+| E9 | `db sign` on a migrations-only database | PASS | Enforcement journey asserts the whole envelope; passes. |
+| E10 | Extension marker carries policies | PASS | SQLite runner test from round 4 unchanged; the CLI reads only the application marker. |
+| E11 | Unreadable `meta.policies` | PASS | Parser now reports issues by path (`database-policies.test.ts`, 26 tests pass). The keep-the-marker advice is asserted in the control API and in both `migration status` tests. The reference sentence is stale (F25). |
+| E12 | `migration ref set` keeps policies and invariants | PASS | `refs` tests (106 pass) and `ref-set.test.ts`; ref reading now goes through `refEntryOf`, and the policies survive it. |
+| E13 | `db update` advancing a ref with policies | PASS | `advanceRef` unchanged; `ref-advancement.test.ts` passes. |
+| E14 | MySQL `db migrate` twice | PASS | Code unchanged since round 4, when the live adapter test ran. Not run this round. |
+| E15 | Off-graph marker, `change: [migrate]` | PASS | `marker-mismatch.test.ts`; Postgres journey passes. |
+| E16 | Off-graph marker, default policies | PASS | `marker-mismatch.test.ts`. |
+
+#### Slice-specific done conditions
+
+| # | Condition | Verdict | What I checked |
+|---|---|---|---|
+| D1a | Mismatching ref fails before any DDL, four targets | PASS | Shared journey passes on PostgreSQL, SQLite and MongoDB; MySQL from round 4. |
+| D1b | With the flag, writes `meta.policies` and applies migrations in one run | PASS | Shared journey, same targets. |
+| D1c | Policy-only run writes the marker | PASS | Shared journey and runner tests. |
+| D1d | A failed run leaves the policies unchanged | FAIL | The behaviour holds on every target (the received MongoDB failure still leaves the marker unchanged), but the MongoDB journey fails at the tip on its code assertion (F23). |
+| D1e | `db update` and `db sign` refused under `change: [migrate]` | PASS | Enforcement journey passes on PostgreSQL, SQLite and MongoDB. |
+| D1f | `db update` and `db migrate` behave as today with no policies | PASS | Enforcement journey passes. |
+| D2a | Unit: parser defaults and validation | PASS | `database-policies.test.ts`, with three new `parseDeclaredDatabasePolicies` cases. |
+| D2b | Unit: policy differences | PASS | Same file. |
+| D2c | Unit: `advanceRef` keeps invariants and policies for all three callers | PASS | Unchanged; tests pass. |
+| D2d | Unit: both error builders assert whole envelopes | PASS | `policy-errors.test.ts` unchanged. |
+| D2e | Unit: `marker-mismatch` for both policy cases | PASS | Unchanged. |
+| D3 | MySQL marker test proves `meta` survives an upsert | PASS | Code and test unchanged since round 4's live run. Not run this round. |
+| D4a | `pnpm check:error-reference` passes | PASS | `wip/logs/review8-errref.txt`: 412 codes listed. |
+| D4b | Skill, glossary and ADRs say what the spec says | PASS | ADR renumbered to 319 with every reference updated, and no clash on `main`. The flag's help text now matches the spec. One stale reference sentence is F25. |
+
+The spec's rule that re-run commands repeat the user's flags (round-2 row R13) is now FAIL for the `db migrate` advice sites (F24); the retry and dry-run commands that `49891e9377` fixed pass.
+
+#### Summary
+
+| Verdict | Round 8 (16 edge cases + 14 done conditions) |
+|---|---|
+| PASS | 29 |
+| FAIL | 1 (D1d) |
+| WEAK | 0 |
+| NOT VERIFIED | 0 |
+
+### Verification
+
+Output under `wip/logs/`:
+
+- **CLI, nine files:** `review8-cli.txt` (111 tests pass). **CLI `ref-set`, `ref-advancement`, `db-sign.ref-advancement`, `policy-errors`, `marker-mismatch`:** `review8-cli2.txt` (83 pass). **CLI typecheck:** `review8-cli-typecheck.txt` (clean).
+- **Framework policies:** `review8-fw.txt` (26 pass). **Migration tools refs:** `review8-migration.txt` (106 pass).
+- **MongoDB runner:** `review8-mongo-runner.txt` (51 pass).
+- **Integration, PostgreSQL and SQLite:** `cli.database-policies.{migrate,enforcement,postgres}.e2e.test.ts`, `review8-e2e-sql.txt` (56 pass).
+- **Integration, MongoDB:** `cli.database-policies.mongo.e2e.test.ts`, `review8-e2e-mongo.txt`: 26 pass, 2 fail (F23).
+- **`pnpm check:error-reference`:** `review8-errref.txt`.
