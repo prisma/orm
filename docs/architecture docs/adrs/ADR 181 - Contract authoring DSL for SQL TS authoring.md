@@ -149,7 +149,7 @@ A foreign key column physically exists on one side of a relationship — the sid
 
 - `rel.belongsTo(User, { from: 'authorId', to: User.ref('id') })` — the owning side. The `from` field on this model maps to the `to` field on the target. FK constraint details (name, referential actions) go in `.sql({ fk: { ... } })`.
 - `rel.hasMany('Post', { by: 'authorId' })` — the reverse side. No FK is authored here; the `by` parameter tells the lowering pipeline which field on the target model owns the FK.
-- `rel.hasOne('Profile', { by: 'accountId' })` — reverse side, 1:1.
+- `rel.hasOne('Profile', { by: 'accountId' })` — reverse side, 1:1. The target's `by` fields must be unique: its primary key, a unique constraint or a unique index without a `where` must cover exactly those fields. Otherwise the contract build fails with `CONTRACT.RELATION_INVALID`.
 - `rel.manyToMany('Tag', { through: 'PostTag', from: 'postId', to: 'tagId' })` — junction-table relationship.
 
 ## How lowering works
