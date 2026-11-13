@@ -500,7 +500,7 @@ describe('a nested create of a variant stored in its own table', () => {
     });
   });
 
-  it('is refused on a contract without returning as createAll() on the variant refuses it', () => {
+  it('is refused on a contract without returning as create() on the variant refuses it', () => {
     expect(
       thrownBy(() =>
         createOf(
@@ -515,8 +515,8 @@ describe('a nested create of a variant stored in its own table', () => {
       ),
     ).toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
-      message: 'createAll() requires contract capability "returning"',
-      meta: { capability: 'returning', action: 'createAll()' },
+      message: 'create() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'create()' },
     });
   });
 });
