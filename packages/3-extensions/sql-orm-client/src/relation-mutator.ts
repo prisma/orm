@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { ifDefined } from '@internal/utils/defined';
 import type {
   CollectionState,
   FilteredRelationMutator,
@@ -21,6 +22,34 @@ export interface RelationCollection<
   where(
     filter: RelationMutationFilter<TContract, ModelName>,
   ): RelationCollection<TContract, ModelName>;
+  variant(value: string): RelationCollection<TContract, ModelName>;
+}
+
+function isList<T>(data: T | readonly T[]): data is readonly T[] {
+  return Array.isArray(data);
+}
+
+function createRows<TContract extends Contract<SqlStorage>, ModelName extends string>(
+  data:
+    | MutationCreateInput<TContract, ModelName>
+    | readonly MutationCreateInput<TContract, ModelName>[],
+): MutationCreateInput<TContract, ModelName>[] {
+  return isList(data) ? [...data] : [data];
+}
+
+function createVariantRelationMutator<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+>(variant: string | undefined) {
+  return {
+    create(
+      data:
+        | MutationCreateInput<TContract, ModelName>
+        | readonly MutationCreateInput<TContract, ModelName>[],
+    ): RelationMutationCreate<TContract, ModelName> {
+      return { kind: 'create', data: createRows(data), ...ifDefined('variant', variant) };
+    },
+  };
 }
 
 function createFilteredRelationMutator<
@@ -52,12 +81,13 @@ export function createRelationMutator<
       data:
         | MutationCreateInput<TContract, ModelName>
         | readonly MutationCreateInput<TContract, ModelName>[],
-    ) {
-      const rows = Array.isArray(data) ? [...data] : [data];
-      return {
-        kind: 'create',
-        data: rows,
-      } as RelationMutationCreate<TContract, ModelName>;
+    ): RelationMutationCreate<TContract, ModelName> {
+      return { kind: 'create', data: createRows(data) };
+    },
+    variant(value: string) {
+      return createVariantRelationMutator<TContract, ModelName>(
+        related.variant(value).state.variantValue,
+      );
     },
     connect(criteria: Record<string, unknown> | readonly Record<string, unknown>[]) {
       const values = Array.isArray(criteria) ? [...criteria] : [criteria];
