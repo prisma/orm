@@ -14,7 +14,9 @@ import { mariadb } from '@prisma/orm-mariadb/runtime'
 
 const db = mariadb({ contract, url: process.env['MARIADB_URL'] })
 
-const users = await db.orm.User.include({ posts: (p) => p.orderBy({ id: 'desc' }).take(3) }).findMany()
+const users = await db.orm.User
+  .include('posts', (posts) => posts.orderBy((post) => post.id.desc()).limit(3))
+  .all()
 await db.orm.User.upsert({
   create: { email: 'a@example.com' },
   update: { role: 'ADMIN' },

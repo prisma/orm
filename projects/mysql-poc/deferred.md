@@ -82,3 +82,7 @@ MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 1
 ## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06)
 
 `mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.
+
+## A key column whose codec cannot reproduce the stored value (slice 6b-1 design review, 2026-11-14)
+
+The ORM reads a key, decodes it, and sends it back encoded: in the write graphs' read-back today, and in every per-relation include from slice 6b-1. A `timestamptz(6)` or `datetime(6)` key read with a `Date` codec loses the digits below a millisecond, so the key sent back matches nothing, and the row or its children are missing without an error. Fix belongs with the codecs: a codec for a key column must reproduce the stored value, or the ORM must be able to ask whether it does. That needs a codec property the framework does not have.
