@@ -37,6 +37,7 @@
 - **Docs & references**: `ARCHITECTURE.md` contains dependency graphs (requires GraphViz to regenerate), `docker/README.md` explains local DB setup, `docs/benchmarking.md` covers performance benchmarking, `examples/` provides sample apps, and `sandbox/` hosts debugging helpers like the DMMF explorer. Planning documents live under `docs/plans/<topic>/` as a numbered index (`000-<topic>-index.md`) plus per-task files.
 
 - **Client architecture (Prisma 7)**:
+  - `ParamGraph.deserialize` caches decoded data by immutable `SerializedParamGraph` object identity in a weak map; wrappers and enum lookups remain per client. Keep schema isolation and enum lookup regression coverage in `packages/param-graph/src/param-graph.test.ts`; `helpers/benchmark-deserialization.ts` reproduces repeated construction without a database.
   - `ClientEngine` in `packages/client/src/runtime/core/engines/client/` orchestrates query execution using Wasm query compiler.
   - Two executor implementations: `LocalExecutor` (driver adapters, direct DB) and `RemoteExecutor` (Accelerate/Data Proxy).
   - `QueryInterpreter` class in `packages/client-engine-runtime/src/interpreter/query-interpreter.ts` executes query plans against `SqlQueryable` (driver adapter interface).
