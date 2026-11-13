@@ -381,9 +381,10 @@ export class TransactionManager {
 
   /**
    * Returns a handle for running statements in the transaction. The handle rejects every
-   * statement issued after the transaction, or the nested transaction that is innermost now,
-   * has started to close. Once that nested transaction commits, the handle runs its statements
-   * in the enclosing transaction.
+   * statement issued after the transaction has started to close, or after the nested transaction
+   * that is innermost now has started to roll back. A commit of that nested transaction never
+   * closes the handle: it runs its statements in the enclosing transaction from then on,
+   * including one issued while the commit waits to release the savepoint.
    */
   getTransaction(txInfo: TransactionInfo, operation: string): Promise<SqlQueryable> {
     return new Promise((resolve) => resolve(this.#issueHandle(txInfo, operation)))

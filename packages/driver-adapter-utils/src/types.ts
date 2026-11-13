@@ -284,8 +284,8 @@ export type TransactionOptions = {
 /**
  * A transaction on one connection. The caller calls either `commit()` or `rollback()`, once,
  * and sends nothing on the transaction afterwards. `commit()` is called only when no statement is
- * running. `rollback()`, `rollbackToSavepoint()` and a `ROLLBACK` sent through `executeRaw` may be
- * called while one is.
+ * running. `rollback()`, `rollbackToSavepoint()`, `releaseSavepoint()` and a `ROLLBACK` sent through
+ * `executeRaw` may be called while one is.
  */
 export interface Transaction extends AdapterInfo, SqlQueryable {
   /**
