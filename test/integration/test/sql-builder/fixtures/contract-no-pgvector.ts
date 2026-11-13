@@ -40,7 +40,7 @@ const Comment = model('Comment', {
 const Profile = model('Profile', {
   fields: {
     id: field.column(int4Column).id(),
-    userId: field.column(int4Column).column('user_id'),
+    userId: field.column(int4Column).column('user_id').unique(),
     bio: field.column(textColumn),
   },
 }).sql({ table: 'profiles' });

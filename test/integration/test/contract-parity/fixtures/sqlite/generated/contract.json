@@ -843,7 +843,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "profiles_userId_idx_a489d58a"
+                    "unique": [
+                      "userId"
+                    ]
                   },
                   "source": {
                     "columns": [
@@ -861,22 +863,19 @@
                   }
                 }
               ],
-              "indexes": [
-                {
-                  "columns": [
-                    "userId"
-                  ],
-                  "name": "profiles_userId_idx_a489d58a",
-                  "prefix": "profiles_userId_idx",
-                  "unique": false
-                }
-              ],
+              "indexes": [],
               "primaryKey": {
                 "columns": [
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "userId"
+                  ]
+                }
+              ]
             },
             "tags": {
               "columns": {
@@ -1021,7 +1020,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "61f45717d58063c164b53696498c9bb6823230363cbbf5b6ebcad72797501deb"
+    "storageHash": "958c7b7504888f565f5c6106efe3f30b30b93d8363dbd31434bd9fdb243aec1c"
   },
   "execution": {
     "executionHash": "2fd552b8b15a3551234178e075fd25d6a5c4eff1d93bc4e236730b63e646f7d3",

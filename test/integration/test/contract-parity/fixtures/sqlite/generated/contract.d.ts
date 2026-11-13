@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'61f45717d58063c164b53696498c9bb6823230363cbbf5b6ebcad72797501deb'>;
+  StorageHashBase<'958c7b7504888f565f5c6106efe3f30b30b93d8363dbd31434bd9fdb243aec1c'>;
 export type ExecutionHash =
   ExecutionHashBase<'2fd552b8b15a3551234178e075fd25d6a5c4eff1d93bc4e236730b63e646f7d3'>;
 export type ProfileHash =
@@ -470,15 +470,8 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'profiles_userId_idx_a489d58a';
-                  readonly prefix: 'profiles_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-              ];
+              uniques: readonly [{ readonly columns: readonly ['userId'] }];
+              indexes: readonly [];
               foreignKeys: readonly [
                 {
                   readonly source: {
