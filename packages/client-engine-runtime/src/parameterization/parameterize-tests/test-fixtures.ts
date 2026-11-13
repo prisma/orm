@@ -28,6 +28,7 @@ const testSchema = /* prisma */ `
     balance   Decimal?
     status    Status    @default(ACTIVE)
     avatar    Bytes?
+    metadata  Json?
 
     posts     Post[]
     profile   Profile?
