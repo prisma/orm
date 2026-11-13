@@ -293,8 +293,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Transactions from their start until their commit or rollback settles. close() waits for them once it refuses, but an open transaction alone does not keep a 'when-idle' close from starting to refuse.
   readonly #openTransactionWork = new InFlightOperations();
   // Ends the open-transaction record of the transaction most recently begun on each connection.
-  readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
-  readonly #transactionChecks = new WeakMap<SqlQueryable, () => void>();
+  readonly #transactionCallbacks = new WeakMap<
+    SqlQueryable,
+    { cleanup?: () => void | Promise<void>; check?: () => void }
+  >();
   #openActivityHandles = 0;
   #refusing = false;
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
@@ -793,7 +795,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       try {
         await this.#inFlight.track(teardown);
       } finally {
-        const ending = this.#transactionWorkOn.get(held)?.();
+        const ending = this.#transactionCallbacks.get(held)?.cleanup?.();
         if (ending !== undefined) await ending;
       }
     };
@@ -911,7 +913,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     try {
       const stream = run.runQuery(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.#transactionCallbacks.get(queryable)?.check?.();
         return driverCall();
       });
 
@@ -1101,7 +1103,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let telemetryOutcome: TelemetryOutcome = 'success';
     try {
       return await run.runExecute(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.#transactionCallbacks.get(queryable)?.check?.();
         return driverCall();
       });
     } catch (error) {
@@ -1438,7 +1440,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const { timeout: _timeout, ...driverOptions } = options ?? {};
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
-    this.#transactionWorkOn.set(connection, endTransactionWork);
+    this.#transactionCallbacks.set(connection, {
+      ...this.#transactionCallbacks.get(connection),
+      cleanup: endTransactionWork,
+    });
     let activity: TransactionActivityRun<SqlMiddlewareContext>;
     try {
       activity = await startTransactionActivity<SqlMiddlewareContext>({
@@ -1523,20 +1528,26 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
     if (timeout !== undefined) {
       timer = setTimeout(expire, timeout);
-      this.#transactionChecks.set(driverTx, check);
-      this.#transactionWorkOn.set(connection, async () => {
-        stopDeadline();
-        stopAcceptingChildren();
-        try {
-          if (!settlement.committed && !settlement.rolledBack) {
-            settlement.rolledBack = true;
-            await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+      this.#transactionCallbacks.set(driverTx, {
+        ...this.#transactionCallbacks.get(driverTx),
+        check,
+      });
+      this.#transactionCallbacks.set(connection, {
+        ...this.#transactionCallbacks.get(connection),
+        cleanup: async () => {
+          stopDeadline();
+          stopAcceptingChildren();
+          try {
+            if (!settlement.committed && !settlement.rolledBack) {
+              settlement.rolledBack = true;
+              await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+            }
+          } catch (error) {
+            settlement.logDroppedError(error);
+          } finally {
+            endTransactionWork();
           }
-        } catch (error) {
-          settlement.logDroppedError(error);
-        } finally {
-          endTransactionWork();
-        }
+        },
       });
     }
     const self = this;
