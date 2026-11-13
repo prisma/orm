@@ -487,10 +487,7 @@ export class ClientEngine implements Engine {
       placeholderValues = extractedValues
       queryInfoQuery = parameterizedQuery.query
 
-      // We do not cache `createMany` and `createManyAndReturn` queries as they are very unlikely
-      // to benefit from caching due to their high variability in parameters, which leads to a very
-      // high cache miss rate and potential cache bloat.
-      const isCacheable = query.action !== 'createMany' && query.action !== 'createManyAndReturn'
+      const isCacheable = isCacheableQuery(query)
       const cached = isCacheable ? this.#queryPlanCache?.getSingle(cacheKey) : undefined
       if (cached) {
         debug('query plan cache hit')
@@ -563,7 +560,8 @@ export class ClientEngine implements Engine {
       placeholderValues = extractedValues
       queryInfoQueries = parameterizedBatch.batch.map((query) => query.query)
 
-      const cached = this.#queryPlanCache?.getBatch(cacheKeyStr)
+      const isCacheable = queries.every(isCacheableQuery)
+      const cached = isCacheable ? this.#queryPlanCache?.getBatch(cacheKeyStr) : undefined
       if (cached) {
         debug('batch query plan cache hit')
         batchResponse = cached
@@ -571,7 +569,9 @@ export class ClientEngine implements Engine {
         debug('batch query plan cache miss')
         try {
           batchResponse = this.#compileBatch(parameterizedBatch.batch, cacheKeyStr, queryCompiler)
-          this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          if (isCacheable) {
+            this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          }
         } catch (error) {
           throw this.#transformCompileError(error)
         }
@@ -778,6 +778,14 @@ function getErrorMessageWithLink(engine: ClientEngine, title: string, query?: st
     database: engine.config.activeProvider as any,
     query,
   })
+}
+
+// We do not cache `createMany` and `createManyAndReturn` queries as they are very unlikely
+// to benefit from caching due to their high variability in parameters, which leads to a very
+// high cache miss rate and potential cache bloat. A batch is cached as one entry, so a batch
+// that contains such a query is not cached either.
+function isCacheableQuery(query: JsonQuery): boolean {
+  return query.action !== 'createMany' && query.action !== 'createManyAndReturn'
 }
 
 function isRawQuery(query: JsonQuery): query is RawJsonQuery {
