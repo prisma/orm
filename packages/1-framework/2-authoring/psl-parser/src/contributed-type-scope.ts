@@ -67,9 +67,11 @@ export interface ContributedTypeScope {
 }
 
 export function isContributedTypeDescriptor(
-  value: ContributedTypeDescriptor | ContributedTypeNamespace,
+  value: unknown,
 ): value is ContributedTypeDescriptor {
   return (
+    typeof value === 'object' &&
+    value !== null &&
     'kind' in value &&
     (value.kind === 'typeConstructor' || value.kind === 'typeAlias' || value.kind === 'typeChoice')
   );
