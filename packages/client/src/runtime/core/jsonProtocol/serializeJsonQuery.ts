@@ -6,6 +6,7 @@ import { ErrorFormat } from '../../getPrismaClient'
 import { CallSite } from '../../utils/CallSite'
 import { isDate, isValidDate } from '../../utils/date'
 import { isDecimalJsLike } from '../../utils/decimalJsLike'
+import { isJSONConvertible } from '../../utils/jsonConvertible'
 import {
   JsonArgumentValue,
   JsonFieldSelection,
@@ -21,15 +22,7 @@ import { computeEngineSideOmissions, computeEngineSideSelection } from '../exten
 import { isFieldRef } from '../model/FieldRef'
 import { isParam } from '../model/Param'
 import { isSkip, Skip } from '../types'
-import {
-  Action,
-  JsArgs,
-  JsInputValue,
-  JsonConvertible,
-  Omission,
-  RawParameters,
-  Selection,
-} from '../types/exported/JsApi'
+import { Action, JsArgs, JsInputValue, Omission, RawParameters, Selection } from '../types/exported/JsApi'
 import { ValidationError } from '../types/ValidationError'
 
 const jsActionToProtocolAction: Record<Action, JsonQueryAction> = {
@@ -410,10 +403,6 @@ function serializeArgumentsArray(array: JsInputValue[], context: SerializeContex
 
 function isRawParameters(value: JsInputValue): value is RawParameters {
   return typeof value === 'object' && value !== null && value['__prismaRawParameters__'] === true
-}
-
-function isJSONConvertible(value: JsInputValue): value is JsonConvertible {
-  return typeof value === 'object' && value !== null && typeof value['toJSON'] === 'function'
 }
 
 function validateSelectionForUndefined(value: unknown, context: SerializeContext) {
