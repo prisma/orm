@@ -280,6 +280,39 @@ describe('integration/create on conflict skip', () => {
   );
 
   it(
+    'createAll() and createAndCount() refuse a row that gives no value for the conflictOn columns and write nothing',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const returningUsers = createReturningUsersCollection(runtime);
+        const countingUsers = createUsersCollection(runtime);
+        await runtime.query('create unique index users_invited_by_unique on users (invited_by_id)');
+        const data = [
+          { id: 1, name: 'Ada', email: 'ada@example.com', invitedById: 7 },
+          { id: 2, name: 'Grace', email: 'grace@example.com', invitedById: null },
+        ];
+        const refusal = (method: string) =>
+          expect.objectContaining({
+            code: 'ORM.ARGUMENT_INVALID',
+            message: `${method} row 1 for model "User" gives no value for any conflict key: (invited_by_id)`,
+            meta: { method, model: 'User', index: 1, conflictKeys: [['invited_by_id']] },
+          });
+
+        runtime.resetExecutions();
+        expect(() =>
+          returningUsers.createAll(data, { onConflict: 'skip', conflictOn: ['invitedById'] }),
+        ).toThrow(refusal('createAll()'));
+        await expect(
+          countingUsers.createAndCount(data, { onConflict: 'skip', conflictOn: ['invitedById'] }),
+        ).rejects.toThrow(refusal('createAndCount()'));
+        expect(runtime.executions).toHaveLength(0);
+
+        expect(await runtime.query('select id from users')).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'an onConflict value other than skip is refused',
     async () => {
       await withCollectionRuntime(async (runtime) => {

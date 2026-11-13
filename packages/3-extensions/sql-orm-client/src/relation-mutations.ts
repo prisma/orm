@@ -3,9 +3,12 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  getModelFieldColumns,
+  modelOf,
   type ResolvedRelation,
   type ResolvedThrough,
   resolveModelRelations,
+  resolvePolymorphismInfo,
 } from './collection-contract';
 import { ormError } from './orm-errors';
 import {
@@ -14,7 +17,12 @@ import {
   isRelationMutationDescriptor,
   type RelationCollection,
 } from './relation-mutator';
-import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from './types';
+import type {
+  MutationCreateInput,
+  MutationUpdateInput,
+  NestedCreateOptions,
+  RelationMutation,
+} from './types';
 
 export interface JunctionRelation extends ResolvedRelation {
   readonly through: ResolvedThrough;
@@ -100,6 +108,11 @@ export function parseMutationInput(
         },
       );
     }
+    for (const mutation of mutations) {
+      if (mutation.kind === 'create' && mutation.options !== undefined) {
+        assertCreateOptions(contract, fieldName, relation, mutation.variant, mutation.options);
+      }
+    }
     if (mutations.length > 0) {
       relationMutations.push({ name: fieldName, relation, mutations, relatedCollection });
     }
@@ -109,6 +122,96 @@ export function parseMutationInput(
     scalarData,
     relationMutations,
   };
+}
+
+function assertCreateOptions(
+  contract: Contract<SqlStorage>,
+  name: string,
+  relation: ResolvedRelation,
+  variantValue: string | undefined,
+  { onConflict, conflictOn }: NestedCreateOptions<Contract<SqlStorage>, string>,
+): void {
+  if (onConflict !== 'skip' && onConflict !== 'connect') {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `create() nested mutation for relation "${name}" takes onConflict "skip" or "connect"; received ${JSON.stringify(onConflict)}`,
+      { meta: { kind: 'create', relation: name, problem: 'invalid-on-conflict' } },
+    );
+  }
+  const fields = getModelFieldColumns(contract, relation.toNamespace, relation.to);
+  const unknownFields = (conflictOn ?? []).filter((field) => !Object.hasOwn(fields, field));
+  if (unknownFields.length > 0) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_INVALID',
+      `conflictOn of create() nested mutation for relation "${name}" names fields model "${relation.to}" does not have: ${unknownFields.map((field) => `"${field}"`).join(', ')}`,
+      {
+        meta: {
+          kind: 'create',
+          relation: name,
+          problem: 'unknown-conflict-field',
+          fields: unknownFields,
+        },
+      },
+    );
+  }
+  const ownTableVariant = ownTableVariantOf(contract, relation, variantValue);
+  if (ownTableVariant !== undefined) {
+    throw ormError(
+      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      `create() nested mutation for relation "${name}" does not support onConflict: its target, variant "${ownTableVariant}", is stored in its own table`,
+      {
+        meta: { kind: 'create', relation: name, reason: 'mti-variant', variant: ownTableVariant },
+      },
+    );
+  }
+  if (onConflict === 'skip') {
+    const reason = hasThrough(relation)
+      ? 'many-to-many-relation'
+      : relation.cardinality === 'N:1' || relation.cardinality === '1:1'
+        ? 'to-one-relation'
+        : undefined;
+    if (reason !== undefined) {
+      throw ormError(
+        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        `create() nested mutation for relation "${name}" supports onConflict "skip" only on one-to-many relations`,
+        { meta: { kind: 'create', relation: name, reason } },
+      );
+    }
+    return;
+  }
+  throw ormError(
+    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    `create() nested mutation for relation "${name}" does not support onConflict "connect"`,
+    { meta: { kind: 'create', relation: name, reason: 'on-conflict-connect' } },
+  );
+}
+
+function ownTableVariantOf(
+  contract: Contract<SqlStorage>,
+  relation: ResolvedRelation,
+  variantValue: string | undefined,
+): string | undefined {
+  if (variantValue !== undefined) {
+    const variant = resolvePolymorphismInfo(
+      contract,
+      relation.toNamespace,
+      relation.to,
+    )?.variants.get(variantValue);
+    return variant?.strategy === 'mti' ? variant.modelName : undefined;
+  }
+  const base = modelOf(contract, relation.toNamespace, relation.to)?.base;
+  if (base === undefined) {
+    return undefined;
+  }
+  const variants = resolvePolymorphismInfo(contract, base.namespace, base.model)?.variants;
+  return [...(variants?.values() ?? [])].some(
+    (variant) =>
+      variant.modelName === relation.to &&
+      variant.namespaceId === relation.toNamespace &&
+      variant.strategy === 'mti',
+  )
+    ? relation.to
+    : undefined;
 }
 
 function invalidRelationField(

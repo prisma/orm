@@ -175,6 +175,57 @@ describe('integration/nested-mutations on SQLite: create()', () => {
   );
 
   it(
+    'skips a child that collides with an unrelated row under onConflict skip and runs callbacks only under inserted children',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        const created = await users
+          .select('id')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .create({
+            id: 1,
+            name: 'Ada',
+            posts: (posts) =>
+              posts.create(
+                [
+                  {
+                    id: 10,
+                    title: 'Clash',
+                    comments: (comments) => comments.create({ id: 100, body: 'Skipped' }),
+                  },
+                  {
+                    id: 11,
+                    title: 'New',
+                    comments: (comments) => comments.create({ id: 101, body: 'Kept' }),
+                  },
+                ],
+                { onConflict: 'skip' },
+              ),
+          });
+
+        expect({
+          created,
+          posts: rows('select id, user_id, title from posts order by id'),
+          comments: rows('select id, post_id from comments order by id'),
+        }).toEqual({
+          created: { id: 1, posts: [{ id: 11, title: 'New' }] },
+          posts: [
+            { id: 10, user_id: 9, title: 'Taken' },
+            { id: 11, user_id: 1, title: 'New' },
+          ],
+          comments: [{ id: 101, post_id: 11 }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
     'links a tag once when two connect criteria find the same tag',
     async () => {
       await withDatabase(async ({ users, rows }) => {
@@ -284,6 +335,37 @@ describe('integration/nested-mutations on SQLite: update()', () => {
         expect(updated).toBeNull();
         expect(rows('select id from tags order by id')).toEqual([{ id: 1 }]);
         expect(rows('select user_id from user_tags')).toEqual([]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'skips a child that collides on conflictOn with a post of another user and links the others',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({ id: 1, name: 'Ada' });
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        await users.where({ id: 1 }).update({
+          posts: (posts) =>
+            posts.create(
+              [
+                { id: 10, title: 'Clash' },
+                { id: 11, title: 'New' },
+              ],
+              { onConflict: 'skip', conflictOn: ['id'] },
+            ),
+        });
+
+        expect(rows('select id, user_id, title from posts order by id')).toEqual([
+          { id: 10, user_id: 9, title: 'Taken' },
+          { id: 11, user_id: 1, title: 'New' },
+        ]);
       });
     },
     timeouts.databaseOperation,
