@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
@@ -140,12 +141,16 @@ function connectionOptions(
   parameters: UrlParameters,
   connectTimeoutMs: number | undefined,
 ): ConnectionConfig {
+  const host = decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1');
+  const user = decodeURIComponent(parsed.username) || userInfo().username;
+  const password = decodeURIComponent(parsed.password);
+  const database = decodeURIComponent(parsed.pathname.slice(1));
   return {
-    host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
+    ...ifDefined('host', host || undefined),
     ...ifDefined('port', parsed.port === '' ? undefined : Number(parsed.port)),
-    user: decodeURIComponent(parsed.username),
-    password: decodeURIComponent(parsed.password),
-    database: decodeURIComponent(parsed.pathname.slice(1)),
+    ...ifDefined('user', user || undefined),
+    ...ifDefined('password', password || undefined),
+    ...ifDefined('database', database || undefined),
     ...ifDefined('ssl', tlsOptions(parameters)),
     allowPublicKeyRetrieval: parameters.allowPublicKeyRetrieval ?? false,
     connectTimeout: connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
