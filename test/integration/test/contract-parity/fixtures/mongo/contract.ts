@@ -43,7 +43,7 @@ const User = model('User', {
     visits: field.scalar(type.Int64()),
     balance: field.scalar(type.Decimal128()),
     active: field.scalar(type.Bool()),
-    joinedAt: field.scalar(type.Date()),
+    joinedAt: field.scalar(type.DateTime()),
     avatar: field.scalar(type.Binary()).optional(),
     settings: field.scalar(type.Json()),
     raw: field.scalar(type.Bson()).optional(),

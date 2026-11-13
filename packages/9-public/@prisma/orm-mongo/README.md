@@ -16,6 +16,8 @@ pnpm add @prisma/orm-mongo mongodb
 
 `mongodb` is a peer dependency: the driver is the application's, so a single connection pool and a single BSON implementation serve both Prisma 8 and any direct `mongodb` use in the same process.
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |

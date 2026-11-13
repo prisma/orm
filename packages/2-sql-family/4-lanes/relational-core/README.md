@@ -66,6 +66,10 @@ flowchart TD
     AST --> ORM
 ```
 
+## Transaction start SPI
+
+`SqlTransactionOptions` carries only `{ readonly isolationLevel?: string | undefined }` to `SqlConnection.beginTransaction(options?)`. Callers resolve policy before invoking the driver; target validators and drivers decide supported levels and SQL. An omitted level preserves database/session defaults. Drivers do not distinguish ORM-owned transactions from callback or manual transactions. See [ownership and forwarding requirements](../../../../docs/reference/transaction-isolation.md#driver-and-runtime-start-spi).
+
 ## Components
 
 ### Schema Builder (`schema.ts`)

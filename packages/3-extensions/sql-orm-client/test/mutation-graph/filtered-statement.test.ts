@@ -1,4 +1,12 @@
-import { BinaryExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
+import {
+  BinaryExpr,
+  ColumnRef,
+  ParamRef,
+  ProjectionItem,
+  SelectAst,
+  SubqueryExpr,
+  TableSource,
+} from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import type { StatementAst } from '../../src/mutation-graph/node';
 import { printExpression } from './print-expression';
@@ -11,7 +19,10 @@ import {
   updateUsers,
 } from './statements';
 
-const idIs = (value: number) => BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value));
+const idIs = (value: number) => ({
+  condition: BinaryExpr.eq(ColumnRef.of('users', 'id'), ParamRef.of(value)),
+  key: { id: value },
+});
 const emailColumn = columnMappings('users', 'users', [['email', 'email']]).map(
   ([source]) => source,
 );
@@ -39,7 +50,7 @@ describe.each([
     const run = recordingRun([{ id: 1 }]);
 
     const rows = await node.execute(
-      { filter: null, payload: null, state: null, requires: null },
+      { filter: null, payload: null, link: null, state: null, requires: null },
       run,
     );
 
@@ -51,7 +62,7 @@ describe.each([
     const run = recordingRun();
 
     await make().execute(
-      { filter: [[idIs(7), idIs(8)]], payload: null, state: null, requires: null },
+      { filter: [[idIs(7), idIs(8)]], payload: null, link: null, state: null, requires: null },
       run,
     );
 
@@ -60,15 +71,21 @@ describe.each([
 
   it('keeps an OR between conditions on different columns or with no value parameter', async () => {
     const run = recordingRun();
-    const emailIs = BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a'));
-    const idIsName = BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name'));
+    const emailIs = {
+      condition: BinaryExpr.eq(ColumnRef.of('users', 'email'), ParamRef.of('a')),
+      key: { email: 'a' },
+    };
+    const idIsName = {
+      condition: BinaryExpr.eq(ColumnRef.of('users', 'id'), ColumnRef.of('users', 'name')),
+      key: {},
+    };
 
     await make().execute(
-      { filter: [[idIs(7), emailIs]], payload: null, state: null, requires: null },
+      { filter: [[idIs(7), emailIs]], payload: null, link: null, state: null, requires: null },
       run,
     );
     await make().execute(
-      { filter: [[idIs(7), idIsName]], payload: null, state: null, requires: null },
+      { filter: [[idIs(7), idIsName]], payload: null, link: null, state: null, requires: null },
       run,
     );
 
@@ -82,7 +99,13 @@ describe.each([
     const run = recordingRun();
 
     await make().execute(
-      { filter: [[idIs(7)], [idIs(8), idIs(9)]], payload: null, state: null, requires: null },
+      {
+        filter: [[idIs(7)], [idIs(8), idIs(9)]],
+        payload: null,
+        link: null,
+        state: null,
+        requires: null,
+      },
       run,
     );
 
@@ -93,7 +116,7 @@ describe.each([
     const run = recordingRun([{ id: 1 }]);
 
     const rows = await make().execute(
-      { filter: [[idIs(7)], []], payload: null, state: null, requires: null },
+      { filter: [[idIs(7)], []], payload: null, link: null, state: null, requires: null },
       run,
     );
 
@@ -106,7 +129,10 @@ describe.each([
     const run = recordingRun([{ id: 1 }]);
 
     expect(
-      await make().execute({ filter: null, payload: null, state: null, requires: [[]] }, run),
+      await make().execute(
+        { filter: null, payload: null, link: null, state: null, requires: [[]] },
+        run,
+      ),
     ).toEqual([]);
     expect(run).toMatchObject({ queried: [], executed: [] });
   });
@@ -131,7 +157,10 @@ describe.each([
     const run = recordingRun([], 3);
 
     expect(
-      await node.execute({ filter: null, payload: null, state: null, requires: null }, run),
+      await node.execute(
+        { filter: null, payload: null, link: null, state: null, requires: null },
+        run,
+      ),
     ).toEqual({ affectedRows: 3 });
     expect(run.executed).toEqual([node.ast]);
     expect(run.queried).toEqual([]);
@@ -142,9 +171,55 @@ describe.each([
 
     const rows = await make()
       .withReturning(emailColumn)
-      .execute({ filter: null, payload: null, state: null, requires: null }, run);
+      .execute({ filter: null, payload: null, link: null, state: null, requires: null }, run);
 
     expect(rows).toEqual([{ email: 'a@b.c' }]);
     expect(run.executed).toEqual([]);
+  });
+});
+
+describe.each([
+  ['Update', () => updateUsers({ email: 'a@b.c' }, nameIsAda)],
+  ['Delete', () => deleteUsers(nameIsAda)],
+] as const)('%s with a link edge', (_name, make) => {
+  const linkedTo = (value: number) =>
+    BinaryExpr.in(
+      ColumnRef.of('users', 'id'),
+      SubqueryExpr.of(
+        SelectAst.from(TableSource.named('posts'))
+          .withProjection([ProjectionItem.of('user_id', ColumnRef.of('posts', 'user_id'))])
+          .withWhere(BinaryExpr.eq(ColumnRef.of('posts', 'id'), ParamRef.of(value))),
+      ),
+    );
+
+  it('adds the condition of each source row to its where, with or between the rows and and between the edges', async () => {
+    const run = recordingRun([], 1);
+
+    await make().execute(
+      {
+        filter: [[idIs(7)]],
+        payload: null,
+        link: [[linkedTo(1), linkedTo(2)], [linkedTo(3)]],
+        state: null,
+        requires: null,
+      },
+      run,
+    );
+
+    expect(run.executed.map(whereOf)).toEqual([
+      "(name = 'Ada' and id = 7 and (id in (select user_id from posts where id = 1) or id in (select user_id from posts where id = 2)) and id in (select user_id from posts where id = 3))",
+    ]);
+  });
+
+  it('returns no rows and runs nothing when a link edge has no source row', async () => {
+    const run = recordingRun([], 1);
+
+    const result = await make().execute(
+      { filter: null, payload: null, link: [[]], state: null, requires: null },
+      run,
+    );
+
+    expect(result).toEqual([]);
+    expect(run).toMatchObject({ queried: [], executed: [] });
   });
 });

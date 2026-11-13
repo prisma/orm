@@ -6,7 +6,7 @@ export const contract = defineContract({}, ({ field, model, type }) => {
     fields: {
       id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
       kind: field.scalar(type.String()),
-      createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+      createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
     },
     discriminator: {
       field: 'kind',
@@ -20,13 +20,13 @@ export const contract = defineContract({}, ({ field, model, type }) => {
         fields: {
           id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
           title: field.scalar(type.String()),
-          createdAt: field.scalar(type.Date()).onCreate(gen.now()),
+          createdAt: field.scalar(type.DateTime()).onCreate(gen.now()),
           updatedAt: field
-            .scalar(type.Date())
+            .scalar(type.DateTime())
             .onCreate(gen.now())
             .onUpdate(gen.now())
             .mongo({ field: 'updated_at' }),
-          touchedAt: field.scalar(type.Date()).onUpdate(gen.now()),
+          touchedAt: field.scalar(type.DateTime()).onUpdate(gen.now()),
         },
       }),
       Counter: model('Counter', {
@@ -39,7 +39,7 @@ export const contract = defineContract({}, ({ field, model, type }) => {
           factor: field.scalar(type.Double()),
           hits: field.scalar(type.Int32()),
           label: field.scalar(type.String()).optional(),
-          updatedAt: field.scalar(type.Date()).onCreate(gen.now()).onUpdate(gen.now()),
+          updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
         },
       }),
       Event,

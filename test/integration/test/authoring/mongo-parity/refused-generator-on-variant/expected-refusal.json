@@ -7,7 +7,7 @@
     {
       "code": "PSL_GENERATOR_ON_VARIANT_FIELD",
       "message": "Generated value on variant \"Bug\" field \"seenAt\": execution defaults apply to every document in collection \"tasks\", so declare them on the base model.",
-      "spanText": "seenAt Date @onCreate(now())"
+      "spanText": "seenAt DateTime @onCreate(now())"
     }
   ]
 }

@@ -9,7 +9,7 @@ export const contract = defineContract({}, ({ field, model, type }) => ({
     /* field.objectId() is the document id */
     Event: model('Event', {
       collection: 'events',
-      fields: { _id: field.scalar(type.ObjectId()), at: field.scalar(type.Date()) },
+      fields: { _id: field.scalar(type.ObjectId()), at: field.scalar(type.DateTime()) },
     }),
   },
 }));

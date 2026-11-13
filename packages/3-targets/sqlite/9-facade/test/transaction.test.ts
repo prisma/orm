@@ -5,7 +5,8 @@ import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import { planFromAst } from '@internal/sql-relational-core/plan';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf } from '@repo/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { SqliteTransactionOptions } from '../src/exports/runtime';
 
 // No third-party mocks needed: node:sqlite (built-in) drives the real driver.
 
@@ -27,6 +28,88 @@ const contract: Contract<SqlStorage> = {
   capabilities: {},
   meta: {},
 };
+
+describe('sqlite transaction isolation options', () => {
+  it.each([
+    [undefined, undefined, undefined],
+    [{}, {}, undefined],
+    [{ isolationLevel: undefined }, { isolationLevel: undefined }, undefined],
+    [{ isolationLevel: 'Serializable' }, undefined, 'Serializable'],
+    [{ isolationLevel: 'Serializable' }, {}, 'Serializable'],
+    [{ isolationLevel: 'Serializable' }, { isolationLevel: undefined }, 'Serializable'],
+    [undefined, { isolationLevel: 'Serializable' }, 'Serializable'],
+  ] as const)('resolves global %j and local %j', async (global, local, isolationLevel) => {
+    const db = sqlite({ contract, path: ':memory:', transactionOptions: global });
+    const runtime = db.runtime();
+    const open = runtime.connection.bind(runtime);
+    const starts: unknown[] = [];
+    vi.spyOn(runtime, 'connection').mockImplementation(async () => {
+      const connection = await open();
+      const begin = connection.transaction.bind(connection);
+      vi.spyOn(connection, 'transaction').mockImplementation((start) => {
+        starts.push(start);
+        return begin(start);
+      });
+      return connection;
+    });
+    try {
+      expect(await db.transaction(async () => 42, local)).toBe(42);
+      const manual = await runtime.connection();
+      await (await manual.transaction()).rollback();
+      await manual.release();
+      expect(starts).toEqual([{ isolationLevel }, undefined]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  const invalid = [
+    null,
+    1,
+    'Serializable',
+    { isolationLevel: null },
+    { isolationLevel: 1 },
+    { isolationLevel: 'ReadCommitted' },
+    { isolationLevel: 'ReadUncommitted' },
+    { isolationLevel: 'RepeatableRead' },
+    { isolationLevel: 'Serializable; SELECT 1' },
+    { isolationLevel: 'Serializable', extra: true },
+  ];
+
+  it.each(invalid)(
+    'rejects invalid factory options %j before constructing the runtime',
+    (value) => {
+      expect(() =>
+        sqlite({ contract, transactionOptions: value as SqliteTransactionOptions }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ARGUMENT_INVALID',
+          why: expect.any(String),
+          fix: expect.any(String),
+        }),
+      );
+    },
+  );
+
+  it.each(invalid)('rejects invalid callback options %j before acquisition', async (value) => {
+    const db = sqlite({ contract, path: ':memory:' });
+    const acquire = vi.spyOn(db.runtime(), 'connection');
+    const callback = vi.fn(async () => 42);
+    try {
+      await expect(
+        db.transaction(callback, value as SqliteTransactionOptions),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.ARGUMENT_INVALID',
+        why: expect.any(String),
+        fix: expect.any(String),
+      });
+      expect(acquire).not.toHaveBeenCalled();
+      expect(callback).not.toHaveBeenCalled();
+    } finally {
+      await db.close();
+    }
+  });
+});
 
 describe('sqlite transaction()', () => {
   it("offers the client's toSql", async () => {

@@ -256,7 +256,7 @@ describe('the advice for rows a required field has no value for', () => {
       ).fix,
     ]).toEqual([
       'The backfill step of field "Item.note" left those rows without a value. Make its run fill every row in the migration.ts of the failed migration, run that file with node, and re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
-      'Fix the issue and re-run `{bin} db migrate --to <contract> --config app/prisma.config.ts --db <url>`.',
+      'Resolve the cause the failure names, then re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
       'Plan it with `{bin} migration plan --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
     ]);
   });

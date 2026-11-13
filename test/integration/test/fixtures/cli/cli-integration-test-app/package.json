@@ -20,7 +20,7 @@
     "@internal/target-mongo": "workspace:8.0.0-rc.23",
     "@internal/target-postgres": "workspace:8.0.0-rc.23",
     "@internal/utils": "workspace:8.0.0-rc.23",
-    "@prisma/cli-engine": "0.9.0",
+    "@prisma/cli-engine": "0.10.0",
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.23",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.23",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.23",

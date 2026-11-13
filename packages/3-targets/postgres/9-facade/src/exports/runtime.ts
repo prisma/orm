@@ -1,4 +1,5 @@
 export type { PostgresFullTextMethods } from '@internal/target-postgres/full-text';
+export { postgresIsolationLevels as IsolationLevel } from '@internal/target-postgres/runtime';
 export { isPgClient, isPgPool, type PostgresBinding } from '../runtime/binding';
 export { buildNamespacedNativeEnums, type NamespacedNativeEnums } from '../runtime/native-enums';
 export type {
@@ -9,6 +10,10 @@ export type {
 } from '../runtime/postgres';
 export { default } from '../runtime/postgres';
 export type { PostgresQueryMembers, PostgresTransactionContext } from '../runtime/postgres-members';
-export type { PostgresCursorOptions, PostgresPoolOptions } from '../runtime/postgres-options';
+export type {
+  PostgresCursorOptions,
+  PostgresPoolOptions,
+  PostgresTransactionOptions,
+} from '../runtime/postgres-options';
 export type { PostgresRuntime } from '../runtime/postgres-runtime';
 export { PostgresRuntimeImpl } from '../runtime/postgres-runtime';

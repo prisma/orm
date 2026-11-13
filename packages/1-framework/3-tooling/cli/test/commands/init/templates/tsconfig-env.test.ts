@@ -41,7 +41,7 @@ describe('defaultTsConfig', () => {
 describe('mergeTsConfig', () => {
   it('adds the required compiler options to a minimal user config', () => {
     const existing = JSON.stringify({ compilerOptions: { strict: true } });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: Record<string, unknown>;
     };
     expect(merged.compilerOptions['strict']).toBe(true);
@@ -55,7 +55,7 @@ describe('mergeTsConfig', () => {
     const existing = JSON.stringify({
       compilerOptions: { types: ['vite/client', 'node'] },
     });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toEqual(['vite/client', 'node']);
@@ -65,7 +65,7 @@ describe('mergeTsConfig', () => {
     const existing = JSON.stringify({
       compilerOptions: { types: ['vitest/globals'] },
     });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toContain('vitest/globals');
@@ -76,15 +76,74 @@ describe('mergeTsConfig', () => {
     // `types` must be an array per the TS config schema; anything else
     // is invalid and the safest fix is to overwrite with what we need.
     const existing = JSON.stringify({ compilerOptions: { types: 'node' } });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toEqual(['node']);
   });
 
+  it.each([
+    { module: 'nodenext', moduleResolution: 'nodenext' },
+    { module: 'NodeNext', moduleResolution: 'NodeNext' },
+    { module: 'node18', moduleResolution: 'node16' },
+    { module: 'node20', moduleResolution: 'node16' },
+    { module: 'node18', moduleResolution: 'nodenext' },
+    { module: 'node20', moduleResolution: 'nodenext' },
+  ])('keeps a pair the scaffold already typechecks under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }), 'module')) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      ...compilerOptions,
+      resolveJsonModule: true,
+    });
+  });
+
+  it.each([
+    { module: 'commonjs', moduleResolution: 'node' },
+    { moduleResolution: 'nodenext' },
+    { module: 'esnext', moduleResolution: 'nodenext' },
+    { module: 'commonjs', moduleResolution: 'bundler' },
+    { module: 'node16', moduleResolution: 'node16' },
+  ])('replaces a pair the scaffold cannot typecheck under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }), 'module')) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      module: 'preserve',
+      moduleResolution: 'bundler',
+    });
+  });
+
+  it.each([undefined, 'commonjs'])(
+    'replaces a nodenext pair when package.json type is %s, since db.ts then compiles as CommonJS',
+    (packageType) => {
+      const existing = JSON.stringify({
+        compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' },
+      });
+      const merged = JSON.parse(mergeTsConfig(existing, packageType)) as {
+        compilerOptions: Record<string, unknown>;
+      };
+      expect(merged.compilerOptions).toMatchObject({
+        module: 'preserve',
+        moduleResolution: 'bundler',
+      });
+    },
+  );
+
+  it('keeps a bundler pair when package.json declares no type', () => {
+    const existing = JSON.stringify({
+      compilerOptions: { module: 'esnext', moduleResolution: 'bundler' },
+    });
+    const merged = JSON.parse(mergeTsConfig(existing, undefined)) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({ module: 'esnext', moduleResolution: 'bundler' });
+  });
+
   it('is idempotent on a previously-merged config', () => {
-    const first = mergeTsConfig(JSON.stringify({ compilerOptions: { strict: true } }));
-    const second = mergeTsConfig(first);
+    const first = mergeTsConfig(JSON.stringify({ compilerOptions: { strict: true } }), 'module');
+    const second = mergeTsConfig(first, 'module');
     expect(JSON.parse(second)).toEqual(JSON.parse(first));
   });
 });
@@ -99,7 +158,7 @@ describe('mergeTsConfig JSONC support', () => {
       '  },',
       '}',
     ].join('\n');
-    const merged = mergeTsConfig(jsonc);
+    const merged = mergeTsConfig(jsonc, 'module');
     // Merged file is itself valid JSONC and re-parses cleanly.
     const reparsed = parseTsConfigText(merged).config as {
       compilerOptions: Record<string, unknown>;
@@ -118,17 +177,17 @@ describe('mergeTsConfig JSONC support', () => {
       '  }',
       '}',
     ].join('\n');
-    const merged = mergeTsConfig(jsonc);
+    const merged = mergeTsConfig(jsonc, 'module');
     expect(merged).toContain('// important: do not delete this comment');
   });
 
   it('throws TsConfigParseError on bare unparseable input', () => {
-    expect(() => mergeTsConfig('{ "compilerOptions": ')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('{ "compilerOptions": ', 'module')).toThrow(TsConfigParseError);
   });
 
   it('throws TsConfigParseError when the input does not parse to an object', () => {
-    expect(() => mergeTsConfig('"a string at the root"')).toThrow(TsConfigParseError);
-    expect(() => mergeTsConfig('[1, 2, 3]')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('"a string at the root"', 'module')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('[1, 2, 3]', 'module')).toThrow(TsConfigParseError);
   });
 });
 

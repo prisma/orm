@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { createGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor, withoutDefaultInInsert } from '../collection-fixtures';
+import {
+  createCollectionFor,
+  relatedCollectionOf,
+  withoutDefaultInInsert,
+} from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -22,6 +26,7 @@ function graphOf(
       target.namespaceId,
       target.modelName,
       data as never,
+      relatedCollectionOf(target.context),
     ),
   );
 }
@@ -259,7 +264,7 @@ describe('createGraph', () => {
         [
           'n1 Insert users',
           'n2 Insert posts <- PayloadData n1 (id->user_id)',
-          'n3 Find users <- FilterData n1 (id->id)',
+          'n3 FindByKeys users by (id) for create <- Rows n1',
           'result: n3',
         ].join('\n'),
       );
@@ -353,7 +358,7 @@ describe('createGraph', () => {
       namespaceId: 'public',
     };
 
-    it('inserts the children in one InsertChunked of the runs of rows that set the same columns', () => {
+    it('inserts the children in one Insert of a statement for each run of rows that set the same columns', () => {
       expect(
         printGraph(
           graphOf(target, {
@@ -363,26 +368,8 @@ describe('createGraph', () => {
         ),
       ).toBe(
         [
-          'n1 InsertChunked users (1 statement)',
-          'n2 InsertChunked posts (2 statements) <- PayloadData n1 (id->user_id)',
-          'result: n1',
-        ].join('\n'),
-      );
-    });
-
-    it('inserts the target row and the junction row as InsertChunked', () => {
-      expect(
-        printGraph(
-          graphOf(target, {
-            ...ada,
-            tags: (tags: Mutator) => tags.create([{ id: 't1', name: 'SQL' }]),
-          }),
-        ),
-      ).toBe(
-        [
-          'n1 InsertChunked users (1 statement)',
-          'n2 InsertChunked tags (1 statement)',
-          'n3 InsertChunked user_tags (1 statement) <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
+          'n1 Insert users',
+          'n2 Insert posts (2 statements) <- PayloadData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
       );

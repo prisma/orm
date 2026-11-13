@@ -6,6 +6,8 @@ import fixtureContractJson from './fixtures/generated/contract.json' with { type
 const recorded = vi.hoisted(() => ({
   statements: [] as Array<{ readonly connection: number; readonly text: string }>,
   connections: 0,
+  beginFailure: undefined as Error | undefined,
+  disposals: [] as unknown[],
 }));
 
 vi.mock('pg', () => {
@@ -15,6 +17,8 @@ vi.mock('pg', () => {
         connection,
         text: typeof request === 'string' ? request : request.text,
       });
+      const text = typeof request === 'string' ? request : request.text;
+      if (text.startsWith('BEGIN') && recorded.beginFailure) throw recorded.beginFailure;
       return { rows: [], rowCount: 0 };
     });
   }
@@ -22,7 +26,7 @@ vi.mock('pg', () => {
     on = vi.fn().mockReturnThis();
     connect = vi.fn(async () => ({
       query: recordingQuery(++recorded.connections),
-      release: vi.fn(),
+      release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
       on: vi.fn(),
       off: vi.fn(),
     }));
@@ -35,13 +39,18 @@ vi.mock('pg', () => {
     on = vi.fn().mockReturnThis();
     connect = vi.fn().mockResolvedValue(undefined);
     query = recordingQuery(++recorded.connections);
-    end = vi.fn().mockResolvedValue(undefined);
+    end = vi.fn(async () => {
+      recorded.disposals.push('client ended');
+    });
     release = vi.fn();
   }
   return { Pool, Client };
 });
 
-import postgres, { type PostgresTransactionContext } from '../src/exports/runtime';
+import postgres, {
+  type PostgresTransactionContext,
+  type PostgresTransactionOptions,
+} from '../src/exports/runtime';
 import postgresServerless from '../src/exports/serverless';
 import { contractFromJson } from '../src/exports/static';
 
@@ -93,6 +102,111 @@ function onOneConnection(texts: readonly string[]) {
 afterEach(() => {
   recorded.statements.length = 0;
   recorded.connections = 0;
+  recorded.beginFailure = undefined;
+  recorded.disposals.length = 0;
+});
+
+describe.each(['pooled', 'serverless'] as const)('%s transaction isolation', (transport) => {
+  async function client(transactionOptions?: PostgresTransactionOptions) {
+    const options = { contract, verifyMarker: false as const, collections, transactionOptions };
+    return transport === 'pooled'
+      ? postgres({ ...options, url })
+      : postgresServerless(options).connect({ url });
+  }
+
+  it.each([
+    [undefined, undefined, 'BEGIN'],
+    [{}, {}, 'BEGIN'],
+    [{ isolationLevel: undefined }, { isolationLevel: undefined }, 'BEGIN'],
+    [{ isolationLevel: 'RepeatableRead' }, undefined, 'BEGIN ISOLATION LEVEL REPEATABLE READ'],
+    [{ isolationLevel: 'RepeatableRead' }, {}, 'BEGIN ISOLATION LEVEL REPEATABLE READ'],
+    [
+      { isolationLevel: 'RepeatableRead' },
+      { isolationLevel: undefined },
+      'BEGIN ISOLATION LEVEL REPEATABLE READ',
+    ],
+    [
+      { isolationLevel: 'RepeatableRead' },
+      { isolationLevel: 'Serializable' },
+      'BEGIN ISOLATION LEVEL SERIALIZABLE',
+    ],
+    [undefined, { isolationLevel: 'ReadUncommitted' }, 'BEGIN ISOLATION LEVEL READ UNCOMMITTED'],
+    [undefined, { isolationLevel: 'ReadCommitted' }, 'BEGIN ISOLATION LEVEL READ COMMITTED'],
+  ] as const)('resolves global %j and local %j', async (global, local, begin) => {
+    const db = await client(global);
+    recorded.statements.length = 0;
+    await db.transaction(useEveryMember, local);
+    expect(recorded.statements).toEqual(
+      onOneConnection([begin, selectIds, resetViews, selectById, selectTitled, 'COMMIT']),
+    );
+    recorded.statements.length = 0;
+    const manual = await db.runtime().connection();
+    await (await manual.transaction()).rollback();
+    await manual.release();
+    expect(recorded.statements).toEqual(onOneConnection(['BEGIN', 'ROLLBACK']));
+    await db.close();
+  });
+
+  it('destroys an uncertain failed isolation start without invoking the callback', async () => {
+    const db = await client({ isolationLevel: 'Serializable' });
+    recorded.statements.length = 0;
+    const failure = new Error('begin failed');
+    recorded.beginFailure = failure;
+    const callback = vi.fn(async () => undefined);
+    await expect(db.transaction(callback)).rejects.toBe(failure);
+    expect(callback).not.toHaveBeenCalled();
+    expect(recorded.statements).toEqual(onOneConnection(['BEGIN ISOLATION LEVEL SERIALIZABLE']));
+    expect(recorded.disposals).toHaveLength(1);
+    if (transport === 'pooled') expect(recorded.disposals[0]).toBeInstanceOf(Error);
+    else expect(recorded.disposals).toEqual(['client ended']);
+    await db.close();
+  });
+
+  const invalid = [
+    null,
+    1,
+    'Serializable',
+    { isolationLevel: null },
+    { isolationLevel: 1 },
+    { isolationLevel: 'unknown' },
+    { isolationLevel: 'Serializable; DROP TABLE posts' },
+    { isolationLevel: 'Serializable', extra: true },
+  ];
+
+  it.each(invalid)('rejects invalid global options %j during construction', (value) => {
+    const options = { contract, transactionOptions: value as PostgresTransactionOptions };
+    expect(() =>
+      transport === 'pooled' ? postgres({ ...options, url }) : postgresServerless(options),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ARGUMENT_INVALID',
+        why: expect.any(String),
+        fix: expect.any(String),
+      }),
+    );
+    expect(recorded.connections).toBe(0);
+  });
+
+  it.each(invalid)(
+    'rejects invalid local options %j before acquisition or callback',
+    async (value) => {
+      const db = await client();
+      const acquire = vi.spyOn(db.runtime(), 'connection');
+      const callback = vi.fn(async () => 42);
+      recorded.statements.length = 0;
+      await expect(
+        db.transaction(callback, value as PostgresTransactionOptions),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.ARGUMENT_INVALID',
+        why: expect.any(String),
+        fix: expect.any(String),
+      });
+      expect(acquire).not.toHaveBeenCalled();
+      expect(callback).not.toHaveBeenCalled();
+      expect(recorded.statements).toEqual([]);
+      await db.close();
+    },
+  );
 });
 
 describe('a postgres transaction', () => {

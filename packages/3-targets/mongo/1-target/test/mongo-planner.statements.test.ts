@@ -8,6 +8,7 @@ import {
   planned,
   profiles,
   profilesSchema,
+  refusal,
   renameModel,
   users,
 } from './mongo-statement-fixtures';
@@ -126,25 +127,37 @@ describe('MongoMigrationPlanner, time-series options the server fills in', () =>
 });
 
 describe('MongoMigrationPlanner, convert and backfill statements', () => {
-  it('refuses a convert or backfill statement, which it cannot carry out', () => {
-    const field = { namespaceId: NS, model: 'Profile', field: 'name' };
-    const convert: ResolvedMigrationStatement = { kind: 'convert', entity: 'field', field };
-    const backfill: ResolvedMigrationStatement = { kind: 'backfill', entity: 'field', field };
+  it('refuses a convert of a variant and a backfill of a value object field, which it cannot carry out', () => {
+    const convert: ResolvedMigrationStatement = {
+      kind: 'convert',
+      entity: 'model',
+      model: { namespaceId: NS, model: 'Profile' },
+    };
+    const backfill: ResolvedMigrationStatement = {
+      kind: 'backfill',
+      entity: 'valueObjectField',
+      field: { namespaceId: NS, valueObject: 'Address', field: 'zip' },
+    };
     const refused = (statement: ResolvedMigrationStatement) =>
       plan({ from: profiles, to: profiles, schema: profilesSchema, statements: [statement] });
 
-    expect([refused(convert), refused(backfill)]).toEqual(
-      (['convert', 'backfill'] as const).map((verb, index) => ({
-        kind: 'failure',
-        conflicts: [
-          {
-            kind: 'statementRefused',
-            summary: `MongoDB does not apply ${verb} statements in this release, so nothing was planned: ${verb} field "Profile.name"`,
-            why: `MongoDB cannot carry out ${verb} statements in this release. Leave out the statement.`,
-            refusedStatement: [convert, backfill][index],
-          },
-        ],
-      })),
-    );
+    expect([refused(convert), refused(backfill)].map((result) => refusal(result))).toEqual([
+      [
+        {
+          kind: 'statementRefused',
+          summary:
+            'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Profile"',
+          why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
+        },
+      ],
+      [
+        {
+          kind: 'statementRefused',
+          summary:
+            'MongoDB does not apply backfill statements in this release, so nothing was planned: backfill value object field "Address.zip"',
+          why: 'MongoDB cannot carry out backfill statements in this release. Leave out the statement.',
+        },
+      ],
+    ]);
   });
 });

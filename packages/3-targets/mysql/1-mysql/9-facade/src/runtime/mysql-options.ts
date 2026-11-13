@@ -1,5 +1,32 @@
+import {
+  type MysqlIsolationLevel,
+  mysqlIsolationLevelSchema,
+} from '@internal/target-mysql/runtime';
 import { type } from 'arktype';
 import { mysqlClientError } from '../errors';
+
+export interface MysqlTransactionOptions {
+  readonly isolationLevel?: MysqlIsolationLevel | undefined;
+}
+
+const transactionOptionsSchema = type({
+  'isolationLevel?': mysqlIsolationLevelSchema.or('undefined'),
+}).onUndeclaredKey('reject');
+
+export function validateTransactionOptions(
+  options: MysqlTransactionOptions | undefined,
+): MysqlTransactionOptions | undefined {
+  if (options === undefined) return undefined;
+  const result = transactionOptionsSchema(options);
+  if (result instanceof type.errors) {
+    throw mysqlClientError('RUNTIME.ARGUMENT_INVALID', 'Invalid transaction options', {
+      why: result.summary,
+      fix: 'Pass an isolationLevel of ReadUncommitted, ReadCommitted, RepeatableRead, or Serializable, or leave it unset.',
+      meta: { extension: 'mysql', argument: 'transactionOptions', received: options },
+    });
+  }
+  return result;
+}
 
 const streamOptionSchema = type('boolean | undefined');
 

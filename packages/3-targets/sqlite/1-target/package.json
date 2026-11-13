@@ -34,7 +34,6 @@
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/driver-sqlite": "workspace:8.0.0-rc.23",
     "@internal/publish-surface": "workspace:8.0.0-rc.23",
     "@repo/test-utils": "workspace:8.0.0-rc.23",
     "@repo/tsconfig": "workspace:8.0.0-rc.23",

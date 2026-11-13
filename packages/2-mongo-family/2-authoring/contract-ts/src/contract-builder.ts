@@ -57,6 +57,7 @@ import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import type { Temporal } from 'temporal-spec';
 import { createTypeHelpersFromNamespace } from './authoring-helper-runtime';
 import { buildMongoContractFromDefinition } from './build-contract';
 import {
@@ -112,6 +113,7 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
 
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
+// packages/3-targets/mongo/9-facade/test/codec-types.types.test-d.ts checks that the two are equal.
 type MongoCodecTypes = {
   readonly 'mongo/objectId@1': {
     readonly input: string;
@@ -178,6 +180,41 @@ type MongoCodecTypes = {
     readonly input: BsonInputValue;
     readonly output: BsonValue;
     readonly traits: never;
+  };
+  readonly 'mongo/date-instant@1': {
+    readonly input: Temporal.Instant;
+    readonly output: Temporal.Instant;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-instant-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-temporal@1': {
+    readonly input: Temporal.PlainDate;
+    readonly output: Temporal.PlainDate;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-temporal@1': {
+    readonly input: Temporal.PlainTime;
+    readonly output: Temporal.PlainTime;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/duration-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality';
   };
 };
 

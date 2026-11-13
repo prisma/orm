@@ -1,4 +1,5 @@
 import type { ClientActivity } from '@internal/framework-components/runtime';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { expectTypeOf, test } from 'vitest';
 import { type ActivityHandle, startActivityOn } from '../src/activity-handle';
 import type {
@@ -31,7 +32,10 @@ test('a handle is typed by its kind, and nests through its own members', async (
   expectTypeOf(call.intercepted).toEqualTypeOf<
     { readonly result: ReadonlyArray<{ readonly id: number }> } | undefined
   >();
-  expectTypeOf(call.transaction).toEqualTypeOf<(() => Promise<RuntimeTransaction>) | undefined>();
+  expectTypeOf<keyof SqlTransactionOptions>().toEqualTypeOf<'isolationLevel'>();
+  expectTypeOf(call.transaction).toEqualTypeOf<
+    ((start?: SqlTransactionOptions) => Promise<RuntimeTransaction>) | undefined
+  >();
   expectTypeOf(call.startActivity).toBeFunction();
   expectTypeOf(call.planContentHash).toBeFunction();
   // @ts-expect-error - statement is not a client kind

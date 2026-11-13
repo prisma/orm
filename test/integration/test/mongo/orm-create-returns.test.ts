@@ -21,7 +21,7 @@ const contract = defineContract({
     }),
     DatedNote: model('DatedNote', {
       collection: 'dated_notes',
-      fields: { _id: field.scalar(type.Date()), title: field.scalar(type.String()) },
+      fields: { _id: field.scalar(type.DateTime()), title: field.scalar(type.String()) },
     }),
     ByteNote: model('ByteNote', {
       collection: 'byte_notes',

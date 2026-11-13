@@ -15,9 +15,20 @@ Legend:
 | `transaction(fn)` (atomic commit/rollback) | ✅ | ✅ | — | `test/e2e/framework/test/transaction.test.ts` (`withTransaction`, the runtime primitive `transaction(fn)` delegates to); `test/e2e/framework/test/transaction-orm.test.ts` (`db.transaction` commit/rollback); `test/e2e/framework/test/sqlite/transaction.test.ts` (`db.transaction`) |
 | ORM operations inside a transaction (read-your-own-write) | ✅ | ✅ | — | `test/e2e/framework/test/transaction-orm.test.ts`; `test/e2e/framework/test/sqlite/transaction.test.ts` (`read-your-own-write`) |
 | Prepared statements (`prepare(decl, cb)`) | ✅ | ✅ | — | `test/e2e/framework/test/runtime.prepared.test.ts`; `test/e2e/framework/test/sqlite/prepared.test.ts` |
-| `isolationLevel` (batch + interactive) | ❌ | ❌ | — | |
+| Callback `isolationLevel` | Works | Works (Serializable only) | — | `packages/3-targets/postgres/9-facade/test/transaction-isolation.integration.test.ts`; `packages/3-targets/postgres/3-driver/test/driver.isolation.integration.test.ts`; `packages/3-targets/sqlite/9-facade/test/transaction.test.ts`; `packages/3-targets/sqlite/3-driver/test/transaction-isolation.test.ts` |
+| Batch transaction isolation | Not in 8.0 | Not in 8.0 | — | No batch transaction API is added. |
 | `timeout` (+ `P2028`) | ❌ | ❌ | — | |
 | `maxWait` (+ `P2028`) | ❌ | ❌ | — | |
-| Client-level `transactionOptions` defaults | ❌ | ❌ | — | |
+| Explicit-callback `transactionOptions` defaults | Works | Works (Serializable only) | — | `packages/3-targets/postgres/9-facade/test/transaction-isolation.integration.test.ts` (pooled/serverless, override/manual baseline); `packages/3-targets/sqlite/9-facade/test/transaction.test.ts` (real driver defaults/overrides) |
 | Nested interactive transactions (savepoints) | ❌ | ❌ | — | |
 | Write-conflict surfacing (`P2034`) | ❌ | ❌ | — | |
+
+## Additional isolation evidence
+
+| Surface | Status | Evidence and limits |
+| --- | --- | --- |
+| MySQL four actual isolation levels and one-shot pool reuse | Works | `packages/3-targets/mysql/1-mysql/3-driver/test/transaction-isolation.live.test.ts`: dirty-read distinction, repeatable snapshot, Serializable locking, configured READ UNCOMMITTED baseline, size-one reuse and failed SET/BEGIN eviction. Requires MYSQL_URL; executed on MySQL 8.4.13. |
+| MySQL explicit callback defaults and implicit ORM ownership | Works | `packages/3-targets/mysql/1-mysql/9-facade/test/runtime/transaction-isolation.live.test.ts`: actual root/held ORM transactions, explicit Serializable participation, manual no-default start and callback-owned failure destruction. Precedence/validation matrix additionally covered by unit tests. |
+| Supabase callback isolation forwarding and defaults | Untested at database integration tier | `packages/3-extensions/supabase/test/transaction-members.test.ts`, `supabase-runtime.transaction-activity.test.ts`, and `supabase-runtime.isolation-failures.test.ts` prove same-session role/start forwarding and cleanup using recording transports. PostgreSQL evidence does not substitute for a Supabase database-specific isolation test. |
+
+PostgreSQL ReadUncommitted is effectively ReadCommitted; MySQL ReadUncommitted permits dirty reads. SQLite accepts only Serializable without changing BEGIN or PRAGMAs. MySQL explicit unconfigured callbacks intentionally use the server/session default, not a blanket READ COMMITTED session override; implicit ORM starts retain ReadCommitted. See [API, validation and SPI rules](../docs/reference/transaction-isolation.md). These claims do not imply timeout/maxWait/P2028, retry, savepoint or batch support.
