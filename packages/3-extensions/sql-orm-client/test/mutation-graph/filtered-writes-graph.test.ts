@@ -35,7 +35,7 @@ function graphOf(
 }
 
 function updateOf(...writes: string[]): string {
-  return ['n1 Find users where id = 1 limit 1', ...writes, 'result: n1'].join('\n');
+  return ['n1 Find users where id = 1', ...writes, 'result: n1'].join('\n');
 }
 
 const viewsAreSeven = BinaryExpr.eq(ColumnRef.of('posts', 'views'), LiteralExpr.of(7));
@@ -187,7 +187,7 @@ describe('updateAll and deleteAll on a many-to-many relation in update()', () =>
     expect(graphOf({ tags }, 'User', getTestContext(), true)).toBe(
       [
         'n1 State users',
-        'n2 Find users where id = 1 limit 1 <- state n1',
+        'n2 Find users where id = 1 <- state n1',
         'n3 State tags',
         "n4 Find tags where name = 'Go' limit 1 <- state n3, Requires n2",
         'n5 Assert <- Rows n4, Requires n2',

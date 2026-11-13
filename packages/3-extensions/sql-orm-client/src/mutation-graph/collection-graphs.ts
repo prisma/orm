@@ -64,6 +64,7 @@ import {
   withUpdateDefaults,
 } from './storage-rows';
 import { UnionAll } from './union-all';
+import { pinsUniqueKey } from './unique-condition';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
@@ -162,10 +163,11 @@ export function updateFirstGraph(
     requireIdentityColumns(collection, 'update()');
     requireIdentityColumnsForIncludes(collection);
   }
-  const find = addFindOfFirstRow(b, collection, bare ? selectRowsAst : selectIdentityAst);
-  if (find === undefined) {
+  const first = addFindOfFirstRow(b, collection, bare ? selectRowsAst : selectIdentityAst);
+  if (first === undefined) {
     return b.graph;
   }
+  const { find, where } = first;
   if (bare) {
     b.graph.setResult(find);
     return b.graph;
@@ -192,7 +194,7 @@ export function updateFirstGraph(
 
   b.graph.setResult(
     updateRows(b, model, values, {
-      where: undefined,
+      where,
       filters: [{ from: find, columns: sameRowColumns(collection) }],
       links: [],
       payloads: before.keys,
@@ -209,16 +211,17 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   const { state } = collection;
   const b = builderOf(collection);
   requireIdentityColumns(collection, 'delete()');
-  const find = addFindOfFirstRow(b, collection, selectRowsAst);
-  if (find === undefined) {
+  const first = addFindOfFirstRow(b, collection, selectRowsAst);
+  if (first === undefined) {
     return b.graph;
   }
+  const { find, where } = first;
+  b.graph.setResult(find);
   deleteRows(b, state.tables, {
-    where: undefined,
+    where,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
   });
-  b.graph.setResult(find);
   return b.graph;
 }
 
@@ -438,13 +441,28 @@ function addFindOfFirstRow(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   select: typeof selectIdentityAst,
-): NodeId | undefined {
-  const { state } = collection;
+): { readonly find: NodeId; readonly where: AnyExpression | undefined } | undefined {
+  const { context, state } = collection;
   checkLimitOffset('limit', state.limit);
   if (state.limit === 0) {
     return undefined;
   }
-  return findRows(b, select(collection, { ...state, limit: 1 }), noInputs);
+  const where = whereOf(collection);
+  if (
+    state.offset === undefined &&
+    state.cursor === undefined &&
+    pinsUniqueKey(context.contract, state.tables.root, where)
+  ) {
+    const unordered = { ...state, limit: undefined, orderBy: undefined };
+    return {
+      find: findRows(b, select(collection, unordered).withWhere(where), noInputs),
+      where,
+    };
+  }
+  return {
+    find: findRows(b, select(collection, { ...state, limit: 1 }), noInputs),
+    where: undefined,
+  };
 }
 
 function requireIdentityColumns(collection: DescribeCollectionRowsOptions, method: string): void {
