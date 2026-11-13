@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createStatementTables } from '../../src/collection-tables';
 import {
@@ -7,8 +9,9 @@ import {
   updateFirstGraph,
 } from '../../src/mutation-graph/collection-graphs';
 import type { Graph } from '../../src/mutation-graph/graph';
-import type { CollectionState } from '../../src/types';
-import { createCollectionFor } from '../collection-fixtures';
+import { parseMutationInput } from '../../src/relation-mutations';
+import type { CollectionState, RelationMutator } from '../../src/types';
+import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 import { returnedAt } from './statements';
@@ -18,11 +21,11 @@ const users = createCollectionFor('User')
   .orderBy((user) => user.id.asc())
   .select('id', 'name');
 
-function targetOf(state: CollectionState) {
+function targetOf(state: CollectionState, modelName = 'User') {
   return {
     context: getTestContext(),
     state,
-    modelName: 'User',
+    modelName,
     namespaceId: 'public',
   };
 }
@@ -272,6 +275,136 @@ describe('deleteFirstGraph', () => {
 
     expect(() => deleteFirstGraph(noIdentity)).toThrow(
       expect.objectContaining({ code: 'ORM.ROW_IDENTITY_MISSING' }),
+    );
+  });
+});
+
+const allUsers = createCollectionFor('User')
+  .collection.orderBy((user) => user.id.asc())
+  .select('id', 'name');
+const projects = createCollectionFor('Project')
+  .collection.orderBy((project) => project.id.asc())
+  .select('id', 'name');
+
+const byKey: readonly { readonly name: string; readonly target: ReturnType<typeof targetOf> }[] = [
+  { name: 'the primary key', target: targetOf(allUsers.where({ id: 1 }).state) },
+  {
+    name: 'a unique constraint',
+    target: targetOf(allUsers.whereUnique({ email: 'ada@example.com' }).state),
+  },
+  {
+    name: 'chained wheres over a composite key',
+    target: targetOf(projects.where({ tenantId: 1 }).where({ id: 2 }).state, 'Project'),
+  },
+  { name: 'the callback form', target: targetOf(allUsers.where((user) => user.id.eq(1)).state) },
+  {
+    name: 'the key with another condition',
+    target: targetOf(allUsers.where({ id: 1 }).where((user) => user.name.like('A%')).state),
+  },
+];
+
+const notByKey: readonly { readonly name: string; readonly target: ReturnType<typeof targetOf> }[] =
+  [
+    { name: 'an offset', target: targetOf(allUsers.where({ id: 1 }).offset(1).state) },
+    {
+      name: 'a cursor',
+      target: targetOf({
+        ...allUsers.where({ id: 1 }).state,
+        cursor: allUsers.cursor({ id: 0 }).state.cursor,
+      }),
+    },
+    {
+      name: 'a part of a composite key',
+      target: targetOf(projects.where({ id: 2 }).state, 'Project'),
+    },
+    { name: 'a condition on no key', target: targetOf(allUsers.where({ name: 'Ada' }).state) },
+  ];
+
+describe('updateFirstGraph and deleteFirstGraph by key', () => {
+  describe.each(byKey)('with a condition on $name', ({ target: keyed }) => {
+    it('builds one Update with the condition of the collection', () => {
+      const graph = updateFirstGraph(keyed, { name: 'Grace' });
+
+      expect(printAsRun(graph)).toMatch(
+        /^n1 Update \S+ set name = 'Grace' where [^<]+\nresult: n1$/,
+      );
+    });
+
+    it('builds one Delete with the condition of the collection that returns the selected columns', () => {
+      const graph = deleteFirstGraph(keyed);
+
+      expect(printAsRun(graph)).toMatch(/^n1 Delete \S+ where [^<]+\nresult: n1$/);
+      expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
+    });
+  });
+
+  describe.each(notByKey)('with $name', ({ target: unkeyed }) => {
+    it('keeps the Find of the first row for update()', () => {
+      expect(printAsRun(updateFirstGraph(unkeyed, { name: 'Grace' }))).toMatch(
+        /^n1 Find .* limit 1( offset 1)?\nn2 Update \S+ set name = 'Grace' <- FilterData n1/,
+      );
+    });
+
+    it('keeps the Find of the first row for delete()', () => {
+      expect(printAsRun(deleteFirstGraph(unkeyed))).toMatch(
+        /^n1 Find .* limit 1( offset 1)?\nn2 Delete \S+ <- FilterData n1/,
+      );
+    });
+  });
+
+  it('prints the folded update by primary key', () => {
+    const graph = updateFirstGraph(targetOf(allUsers.where({ id: 1 }).state), { name: 'Grace' });
+
+    expect(printAsRun(graph)).toBe(
+      ["n1 Update users set name = 'Grace' where id = 1", 'result: n1'].join('\n'),
+    );
+  });
+
+  it('prints the folded delete by primary key', () => {
+    expect(printAsRun(deleteFirstGraph(targetOf(allUsers.where({ id: 1 }).state)))).toBe(
+      ['n1 Delete users where id = 1', 'result: n1'].join('\n'),
+    );
+  });
+
+  it('keeps a Find without a limit as the result and a Delete by key for delete() with includes', () => {
+    const graph = deleteFirstGraph(targetOf(allUsers.where({ id: 1 }).include('posts').state));
+
+    expect(printAsRun(graph)).toBe(
+      [
+        'n1 Find users where id = 1',
+        'n2 Delete users where id = 1 <- FilterData n1 (id->id)',
+        'result: n1',
+      ].join('\n'),
+    );
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
+  });
+
+  it('keeps the Find without a limit when a nested write reads it', () => {
+    const context = getTestContext();
+    const parsed = parseMutationInput(
+      context.contract,
+      'public',
+      'User',
+      {
+        invitedBy: (inviter: RelationMutator<Contract<SqlStorage>, string>) =>
+          inviter.connect({ id: 2 }),
+      } as never,
+      relatedCollectionOf(context),
+    );
+    const graph = updateFirstGraph(
+      targetOf(allUsers.where({ id: 1 }).state),
+      { name: 'Ada' },
+      parsed.relationMutations,
+    );
+
+    expect(printAsRun(graph)).toBe(
+      [
+        'n1 Find users where id = 1',
+        'n2 Find users where id = 2 limit 1 <- Requires n1',
+        'n3 Assert <- Rows n2, Requires n1',
+        "n4 Update users set name = 'Ada' where id = 1 <- PayloadData n2 (id->invited_by_id)",
+        'result: n4',
+      ].join('\n'),
     );
   });
 });
