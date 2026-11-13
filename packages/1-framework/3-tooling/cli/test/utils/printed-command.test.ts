@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BIN_COMMANDS } from '../../src/orm/cli';
 import { dbFlag } from '../../src/orm/flags';
-import { cliCommand, selfEmitCommand } from '../../src/utils/printed-command';
+import { cliCommand, rerunFlags, selfEmitCommand } from '../../src/utils/printed-command';
 
 describe('selfEmitCommand', () => {
   it('names the migration.ts relative to where the CLI ran, with the --config it was given', () => {
@@ -29,5 +29,18 @@ describe('cliCommand', () => {
         .filter(([, command]) => Object.values(command.args?.flags ?? {}).includes(dbFlag))
         .map(([name]) => name),
     );
+  });
+});
+
+describe('rerunFlags', () => {
+  it.each([
+    {
+      flags: { to: 'production', advanceRef: 'my db', permitPolicyChange: true },
+      args: ['--to', 'production', '--advance-ref', "'my db'", '--permit-policy-change'],
+    },
+    { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: false }, args: [] },
+    { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: undefined }, args: [] },
+  ])('repeats exactly the flags given: $args', ({ flags, args }) => {
+    expect(rerunFlags(flags)).toEqual(args);
   });
 });

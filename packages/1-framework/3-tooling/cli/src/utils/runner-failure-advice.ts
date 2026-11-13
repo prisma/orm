@@ -18,6 +18,8 @@ import { chooseAction, editFileAction } from './next-actions';
 import {
   type CliInvocation,
   cliCommand,
+  dbMigrateRerun,
+  dbUpdateRerun,
   printedPath,
   printedPlanCommand,
   selfEmitCommand,
@@ -53,9 +55,14 @@ function quoted(command: string): string {
   return `\`${command}\``;
 }
 
-/** A `db migrate` command as advice prints it. */
+/** A `db migrate` command as advice prints it, for a migration that is not the one the user ran. */
 function dbMigrateCommand(invocation: CliInvocation): string {
   return quoted(cliCommand(invocation, 'db migrate'));
+}
+
+/** The `db migrate` the user ran, as advice that repeats it prints it. */
+function dbMigrateAgain(invocation: CliInvocation): string {
+  return quoted(dbMigrateRerun(invocation));
 }
 
 /** The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it, which writes its operations, and apply it. */
@@ -104,10 +111,7 @@ export function dbUpdateFailedTypeChangeAdvice(
     chooseAction(
       `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
     ),
-    ...changeValueAdvice(
-      change,
-      quoted(cliCommand(invocation, 'db update', invocation.rerunArgs ?? [])),
-    ),
+    ...changeValueAdvice(change, quoted(dbUpdateRerun(invocation))),
   ];
 }
 
@@ -213,7 +217,7 @@ export function dbUpdateRowsHoldingValueAdvice(
     return [
       rename,
       chooseAction(
-        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(cliCommand(invocation, 'db update', [...others, ...deletes]))}`,
+        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(dbUpdateRerun(invocation, [...others, ...deletes]))}`,
       ),
     ];
   }
@@ -240,7 +244,7 @@ function migrateRowsHoldingValueAdvice(
       ? []
       : [
           editFileAction(
-            `To keep that data by hand, make the edits below in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}.\n${swaps}`,
+            `To keep that data by hand, make the edits below in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateAgain(invocation)}.\n${swaps}`,
           ),
         ];
   if (failedMigration === undefined) return byHand;
@@ -279,7 +283,7 @@ export function dbUpdateRowsFailingCheckAdvice(
   databaseStorageHash: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  const update = cliCommand(invocation, 'db update', invocation.rerunArgs ?? []);
+  const update = dbUpdateRerun(invocation);
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
@@ -305,12 +309,12 @@ function migrateRowsFailingCheckAdvice(
 ): RunnerAdvice {
   const { replacedCheck } = report;
   if (replacedCheck === undefined) {
-    return [fixRowsFirst(report, cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []))];
+    return [fixRowsFirst(report, dbMigrateRerun(invocation))];
   }
   const { file, run } = failedMigrationFile(failedMigration);
   return [
     editFileAction(
-      `To keep the data, add ${updateOperation(report)} to ${file}, ${betweenTheChecks(report, replacedCheck)}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      `To keep the data, add ${updateOperation(report)} to ${file}, ${betweenTheChecks(report, replacedCheck)}, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
     ),
   ];
 }
@@ -370,7 +374,7 @@ function replan(
   flags: readonly string[],
   failed: FailedMigrationText,
   except: string | undefined = undefined,
-  afterPlan = `fill in the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(failed.invocation)}`,
+  afterPlan = `fill in the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(failed.invocation)}`,
 ): NextAction {
   const others =
     except === undefined ? OTHER_STATEMENTS : `${OTHER_STATEMENTS} except any ${except}`;
@@ -411,7 +415,7 @@ function migrateFailedTypeChangeAdvice(
   if (change.by === 'conversion') {
     return [
       editFileAction(
-        `${changeText} Fix the conversion in ${file}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+        `${changeText} Fix the conversion in ${file}, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
       ),
     ];
   }
@@ -419,9 +423,9 @@ function migrateFailedTypeChangeAdvice(
   if (failedMigration === undefined) {
     return [
       chooseAction(
-        `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+        `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
       ),
-      ...changeValueAdvice(change, dbMigrateCommand(invocation)),
+      ...changeValueAdvice(change, dbMigrateAgain(invocation)),
     ];
   }
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
@@ -431,9 +435,9 @@ function migrateFailedTypeChangeAdvice(
         change.reason === 'noCast'
           ? 'with a cast the database does not have between these types: replace it'
           : "with the database's cast, which met a value it cannot cast: replace that cast"
-      } with your own conversion of the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      } with your own conversion of the values there, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
     ),
-    ...changeValueAdvice(change, dbMigrateCommand(invocation)),
+    ...changeValueAdvice(change, dbMigrateAgain(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
   ];
 }
@@ -452,7 +456,7 @@ function migrateRowsWithoutValueAdvice(
         : `The backfill step of field "${first.field}"`;
     return [
       editFileAction(
-        `${step} left those rows without a value. Make its run fill every row in ${file}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+        `${step} left those rows without a value. Make its run fill every row in ${file}, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
       ),
     ];
   }
@@ -465,8 +469,8 @@ function migrateRowsWithoutValueAdvice(
   if (reports.every(({ reason }) => reason === 'nullValues')) {
     const rerun = chooseAction(
       one
-        ? `Set a value in ${theRows(first?.rows ?? 0)} and re-run ${dbMigrateCommand(invocation)}`
-        : `Set a value in the rows that hold NULL in each of ${fieldList(reports)} and re-run ${dbMigrateCommand(invocation)}`,
+        ? `Set a value in ${theRows(first?.rows ?? 0)} and re-run ${dbMigrateAgain(invocation)}`
+        : `Set a value in the rows that hold NULL in each of ${fieldList(reports)} and re-run ${dbMigrateAgain(invocation)}`,
     );
     const backfill = again('Delete');
     const fields = one ? 'the field' : 'those fields';
@@ -548,7 +552,7 @@ function migrateSchemaCheckAdvice(
       `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete ${directory} (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
     ),
     editFileAction(
-      `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateCommand(invocation)}`,
+      `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
     ),
   ];
 }
@@ -580,10 +584,7 @@ export function migrateAdvice(
     failedOnDisk === undefined ? undefined : failedMigrationText(failedOnDisk, invocation);
   const { blockingObjects } = failure.meta;
   if (blockingObjects !== undefined) {
-    return blockingObjectsAdvice(
-      blockingObjects,
-      cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []),
-    );
+    return blockingObjectsAdvice(blockingObjects, dbMigrateRerun(invocation));
   }
   if (facts.failedTypeChange !== undefined) {
     return migrateFailedTypeChangeAdvice(facts.failedTypeChange, failedMigration, invocation);
@@ -604,8 +605,6 @@ export function migrateAdvice(
     return migrateFailedPrecheckAdvice(facts.failedPrecheck, invocation);
   }
   return [
-    chooseAction(
-      `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
-    ),
+    chooseAction(`Resolve the cause the failure names, then re-run ${dbMigrateAgain(invocation)}`),
   ];
 }

@@ -2,7 +2,7 @@ import type { MigrationRunnerFailure } from '@internal/framework-components/cont
 import type { RunnerFailureFacts } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
 import { chooseAction, editFileAction } from './next-actions';
-import { type CliInvocation, cliCommand } from './printed-command';
+import { type CliInvocation, cliCommand, dbUpdateRerun } from './printed-command';
 import {
   blockingObjectsAdvice,
   dbUpdateFailedTypeChangeAdvice,
@@ -27,7 +27,7 @@ export function dbUpdateRunnerFailureError(
   },
 ): CliStructuredError {
   const { databaseStorageHash, invocation } = context;
-  const update = cliCommand(invocation, 'db update', invocation.rerunArgs ?? []);
+  const update = dbUpdateRerun(invocation);
   const { blockingObjects } = failure.meta;
   const advice =
     blockingObjects !== undefined

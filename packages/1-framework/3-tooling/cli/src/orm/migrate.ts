@@ -40,7 +40,6 @@ import {
   resolveContractRef,
   retryCommandFor,
 } from '../control-api/operations/ref-resolution';
-import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
@@ -60,7 +59,12 @@ import { TONE_MIGRATION_GRAPH_PALETTE } from '../utils/formatters/migration-grap
 import { createToneMigrationListStyler } from '../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../utils/formatters/tone-markup';
 import { runCommandAction } from '../utils/next-actions';
-import { type CliInvocation, cliCommand, cliInvocation } from '../utils/printed-command';
+import {
+  type CliInvocation,
+  cliCommand,
+  cliInvocation,
+  rerunFlags,
+} from '../utils/printed-command';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
@@ -355,9 +359,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         createClient,
         retryCommand: retryCommandFor({
           commandName: 'db migrate',
-          to: args.flags.to,
-          advanceRef: args.flags.advanceRef,
-          permitPolicyChange: args.flags.permitPolicyChange,
+          rerunArgs: rerunFlags(args.flags),
           canRunOffline: false,
         }),
       });
@@ -520,13 +522,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           migrationsDir,
           invocation: {
             ...cliInvocation(ctx, args.flags.db),
-            rerunArgs: [
-              ...(args.flags.to === undefined ? [] : ['--to', shellQuoted(args.flags.to)]),
-              ...(args.flags.advanceRef === undefined
-                ? []
-                : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
-              ...(permitPolicyChange ? ['--permit-policy-change'] : []),
-            ],
+            rerunArgs: rerunFlags(args.flags),
           },
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('target', migrateTargetOf(target)),

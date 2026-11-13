@@ -31,7 +31,7 @@ import {
 import { retryCommandFor } from '../../control-api/operations/ref-resolution';
 import { matchConsents } from '../../control-api/statements/plan-questions';
 import { renamedAndDeleted } from '../../control-api/statements/resolve-statements';
-import { shellQuoted, statementFlag } from '../../control-api/statements/statement-flag';
+import { statementFlag } from '../../control-api/statements/statement-flag';
 import { isStatementVerb, type StatementText } from '../../control-api/statements/statement-text';
 import type {
   AskedDataLoss,
@@ -51,7 +51,12 @@ import type {
   MigrationCommandResult,
   RemovedNamespaceJson,
 } from '../../utils/formatters/migrations';
-import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
+import {
+  type CliInvocation,
+  cliInvocation,
+  dbUpdateRerun,
+  rerunFlags,
+} from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { baseDirFor, migrationsDirFor } from '../migration/paths';
@@ -65,7 +70,7 @@ import { prepareMigrationRun } from './prepare';
 
 function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
-  /** Where the CLI ran and the `--config` and `--db` it was given, which printed commands repeat. */
+  /** Where the CLI ran and the `--config`, `--db` and other flags it was given, which printed commands repeat. */
   readonly invocation: CliInvocation;
   /** The contract the database was at before the run, when a migration on disk ends at it. */
   readonly databaseStorageHash: string | undefined;
@@ -73,8 +78,6 @@ function updatePresentations(inputs: {
   readonly database: string | undefined;
   readonly to: string | undefined;
   readonly dryRun: boolean;
-  readonly advanceRef: string | undefined;
-  readonly permitPolicyChange: boolean;
   readonly statements: readonly StatementText[];
 }): Presentations {
   const { document, database, dryRun } = inputs;
@@ -100,14 +103,7 @@ function updatePresentations(inputs: {
       migrationResultNextActions(
         document,
         inputs.invocation,
-        cliCommand(inputs.invocation, 'db update', [
-          ...(inputs.to === undefined ? [] : ['--to', shellQuoted(inputs.to)]),
-          ...(inputs.advanceRef === undefined
-            ? []
-            : ['--advance-ref', shellQuoted(inputs.advanceRef)]),
-          ...(inputs.permitPolicyChange ? ['--permit-policy-change'] : []),
-          ...inputs.statements.map(statementFlag),
-        ]),
+        dbUpdateRerun(inputs.invocation, inputs.statements.map(statementFlag)),
       ),
   };
 }
@@ -359,10 +355,12 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         retryCommand: () =>
           retryCommandFor({
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
-            to: args.flags.to,
-            advanceRef: args.flags.advanceRef,
-            permitPolicyChange: args.flags.permitPolicyChange,
-            statements: [...planned, ...previewConsents, ...unansweredConsents(ctx.statements)],
+            rerunArgs: [
+              ...rerunFlags(args.flags),
+              ...[...planned, ...previewConsents, ...unansweredConsents(ctx.statements)].map(
+                statementFlag,
+              ),
+            ],
             canRunOffline: false,
           }),
       });
@@ -404,14 +402,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...previewConsents,
           ...unansweredConsents(ctx.statements),
         ].map(statementFlag);
-        const rerunArgs = [
-          ...(args.flags.to === undefined ? [] : ['--to', shellQuoted(args.flags.to)]),
-          ...(args.flags.advanceRef === undefined
-            ? []
-            : ['--advance-ref', shellQuoted(args.flags.advanceRef)]),
-          ...(args.flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
-          ...statementArgs,
-        ];
         const result = await client.dbUpdate({
           contract: contractJson,
           mode,
@@ -420,7 +410,11 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...ifDefined('ref', destination?.ref),
           ...(args.flags.permitPolicyChange === true ? { permitPolicyChange: true } : {}),
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
-          invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs, statementArgs },
+          invocation: {
+            ...cliInvocation(ctx, args.flags.db),
+            rerunArgs: rerunFlags(args.flags),
+            statementArgs,
+          },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),
         });
@@ -501,14 +495,12 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           { data: document },
           updatePresentations({
             document,
-            invocation: cliInvocation(ctx, args.flags.db),
+            invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
             databaseStorageHash,
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,
             to: args.flags.to,
             dryRun: args.flags.dryRun,
-            advanceRef: args.flags.advanceRef,
-            permitPolicyChange: args.flags.permitPolicyChange === true,
             statements: [...planned, ...previewConsents],
           }),
         ),
