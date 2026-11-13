@@ -2279,13 +2279,13 @@ export class DeleteAst extends QueryAst {
 
 /**
  * One column of a raw query's declared result row: the codec that decodes the
- * column and whether it may carry `null`. Structurally identical to the
- * contract-free lane's `ColumnDescriptor`, so a spec written for one reads as
- * a spec for the other.
+ * column and whether it may carry `null`. A complete codec binding preserves
+ * the parameters and array metadata of a contract column reference.
  */
 export interface RawQueryColumn {
   readonly codecId: string;
   readonly nullable: boolean;
+  readonly codec?: CodecRef;
 }
 
 /**
@@ -2319,7 +2319,18 @@ function frozenRawQueryResult(result: RawQueryResult): RawQueryResult {
         { meta: { kind: 'raw-query', field: 'result.columns', column: name } },
       );
     }
-    columns[name] = Object.freeze({ codecId: column.codecId, nullable: column.nullable });
+    if (column.codec !== undefined && column.codec.codecId !== column.codecId) {
+      throw structuredError(
+        'RUNTIME.AST_INVALID',
+        'A raw query result codec must match its declared codecId',
+        { meta: { kind: 'raw-query', field: 'result.columns', column: name } },
+      );
+    }
+    columns[name] = Object.freeze({
+      codecId: column.codecId,
+      nullable: column.nullable,
+      ...ifDefined('codec', column.codec === undefined ? undefined : frozenCodecRef(column.codec)),
+    });
   }
   return Object.freeze({ kind: 'rows' as const, columns: Object.freeze(columns) });
 }

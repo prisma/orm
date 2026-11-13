@@ -5,6 +5,7 @@ import type { Functions, Subquery } from '@internal/sql-relational-core/function
 import { createIndexReferences } from '@internal/sql-relational-core/index-reference';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type {
   AggregateFunctions,
   Expression,
@@ -101,7 +102,11 @@ export class TableProxyImpl<
     const refs = Object.fromEntries(
       Object.entries(this.#table.columns).map(([name, column]) => [
         name,
-        { codecId: column.codecId, nullable: column.nullable },
+        {
+          codecId: column.codecId,
+          nullable: column.nullable,
+          ...ifDefined('codec', this.#scope.topLevel[name]?.codec),
+        },
       ]),
     );
     return blindCast<
