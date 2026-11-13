@@ -2219,16 +2219,19 @@ export interface VariantRelationMutator<
   ModelName extends string,
   VariantValue extends string,
   LinkWritesDisabled extends boolean = false,
+  ConflictActions extends NestedCreateConflictAction = NestedCreateConflictAction,
 > {
   create(
     data: LinkWritesDisabled extends true
       ? never
       : NestedVariantCreateInput<TContract, ModelName, VariantValue>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName>;
   create(
     data: LinkWritesDisabled extends true
       ? never
       : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue>[],
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName>;
 }
 
@@ -2256,7 +2259,7 @@ export type RelationMutator<
     ? {
         variant<V extends DiscriminatorValues<TContract, ModelName>>(
           value: V,
-        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
+        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled, ConflictActions>;
       }
     : unknown);
 

@@ -1,7 +1,9 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
+import { Collection } from '../../src/collection';
 import { createCollectionTables } from '../../src/collection-tables';
 import { createGraph, updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
@@ -13,13 +15,24 @@ import {
   withoutCapabilityKeys,
 } from '../collection-fixtures';
 import { defineContract, field, model, rel } from '../contract-builder';
+import type { Contract as PolyContract } from '../fixtures/polymorphism/generated/contract';
+import polyContractJson from '../fixtures/polymorphism/generated/contract.json' with {
+  type: 'json',
+};
 import {
   buildMixedPolyContract,
   buildTestContextFromContract,
+  createMockRuntime,
   getTestContext,
   withPatchedDomainModels,
 } from '../helpers';
 import { printGraph } from './print-graph';
+
+interface VariantMutator {
+  variant(value: string): {
+    create(data: object | readonly object[], options?: { onConflict: 'skip' }): unknown;
+  };
+}
 
 type Mutator = RelationMutator<Contract<SqlStorage>, string>;
 
@@ -387,6 +400,64 @@ describe('onConflict skip with a conflict key that a to-one relation write insid
         'n6 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n5 (id->category_id)',
         'result: n1',
       ].join('\n'),
+    );
+  });
+});
+
+describe('onConflict on a create through variant()', () => {
+  const polyContext = buildTestContextFromContract(
+    new PostgresContractSerializer().deserializeContract<PolyContract>(polyContractJson),
+  );
+
+  function updateProject(tasks: (mutator: VariantMutator) => unknown) {
+    const target = {
+      context: polyContext,
+      state: new Collection({ runtime: createMockRuntime(), context: polyContext }, 'Project', {
+        namespaceId: 'public',
+      }).where({ id: 1 }).state,
+      modelName: 'Project',
+      namespaceId: 'public',
+    };
+    const { relationMutations } = parseMutationInput(
+      polyContext.contract,
+      'public',
+      'Project',
+      { tasks } as never,
+      relatedCollectionOf(polyContext),
+    );
+    return printGraph(updateFirstGraph(target, {}, relationMutations));
+  }
+
+  it('accepts onConflict skip on a variant stored in the base table', () => {
+    expect(
+      updateProject((tasks) =>
+        tasks
+          .variant('bug')
+          .create([{ id: 5, title: 'Crash', severity: 'high' }], { onConflict: 'skip' }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        'n2 Insert tasks on conflict do nothing <- PayloadData n1 (id->project_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('rejects onConflict on a variant stored in its own table', () => {
+    expect(() =>
+      updateProject((tasks) =>
+        tasks
+          .variant('feature')
+          .create({ title: 'Dark mode', priority: 1 }, { onConflict: 'skip' }),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        message:
+          'create() nested mutation for relation "tasks" does not support onConflict: its target, variant "Feature", is stored in its own table',
+        meta: { kind: 'create', relation: 'tasks', reason: 'mti-variant', variant: 'Feature' },
+      }),
     );
   });
 });

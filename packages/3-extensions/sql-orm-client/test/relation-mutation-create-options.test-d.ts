@@ -1,8 +1,10 @@
 import { expectTypeOf, test } from 'vitest';
 import type { MutationUpdateInput } from '../src/types';
 import type { Contract } from './fixtures/generated/contract';
+import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
+type PolyUpdate<ModelName extends string> = MutationUpdateInput<PolyContract, ModelName>;
 
 test('create on a one-to-many relation takes onConflict skip and conflictOn fields of the related model, and a to-one or many-to-many create takes the same rows without options', () => {
   const update: UserUpdate = {
@@ -38,4 +40,21 @@ test('create options reject connect, a conflictOn entry that is not a field, and
   };
 
   expectTypeOf(update).toExtend<UserUpdate>();
+});
+
+test('create through variant() takes onConflict skip on a one-to-many relation only', () => {
+  const oneToMany: PolyUpdate<'Project'> = {
+    tasks: (tasks) =>
+      tasks.variant('bug').create({ title: 'Crash', severity: 'high' }, { onConflict: 'skip' }),
+  };
+  const toOne: PolyUpdate<'TaskComment'> = {
+    task: (task) => task.variant('bug').create({ title: 'Crash', severity: 'low' }),
+  };
+  const lowCrash = { title: 'Crash', severity: 'low' } as const;
+  const toOneWithOptions: PolyUpdate<'TaskComment'> = {
+    // @ts-expect-error
+    task: (task) => task.variant('bug').create(lowCrash, { onConflict: 'skip' }),
+  };
+
+  expectTypeOf([oneToMany, toOne, toOneWithOptions]).toExtend<readonly unknown[]>();
 });
