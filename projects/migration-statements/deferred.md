@@ -297,3 +297,9 @@ When rows hold an enum value `db update` removes from a member that takes no nul
 **Found:** slice 4b PR 2 review of dispatch 1 (2026-11-11).
 
 `packages/3-targets/mongo/1-target/src/core/migrations/stored-key-path.ts` copies the parser in `packages/2-sql-family/9-family/src/core/migrations/json-path.ts` (`parseJsonPath`, `writtenPrefix`, `jsonPathText`), because the layering rules stop the MongoDB target from importing the SQL family, and the framework domain may not take it. Two copies of one grammar can drift apart. Move the parser to a shared package outside the framework domain, which both families may import, if such a package is agreed. The MongoDB walk reads a wildcard as list elements only, so the copy's grammar is wider than what MongoDB walks.
+
+## The question about a removed field of an embedded model says nothing of the model's new required fields
+
+**Found:** slice 4b PR 2 review of dispatch 3 (2026-11-14).
+
+When a value object loses a field and gains a required one, the question about the removal says whether the new field gets a temporary value or still needs `--backfill` (`newRequiredFieldNote` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`). A MongoDB embedded model that loses `Line.sku` and gains a required `Line.code` gets no such note, because its fields are `field` subjects, and the note reads only `valueObjectField` subjects. Giving `field` subjects the note would also give it to every root model's removed field beside a new required one, on SQL too, whose plans word that case through their own refusals. Telling an embedded model apart in the CLI needs the domain's owner relation, which no other part of the question reads. The plan itself is right either way: `--delete Line.sku` plans the removal, and the new field is filled or left to the document check, whose advice names `--backfill Line.code`.
