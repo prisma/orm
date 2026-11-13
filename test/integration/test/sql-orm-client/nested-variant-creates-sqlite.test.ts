@@ -107,11 +107,11 @@ describe('integration/nested-variant-creates on SQLite', () => {
       'create() writes each row with the discriminator and the key of the parent',
       async () => {
         await withDatabase(async ({ db, rows }) => {
-          const created = await db.Project.create({
+          const created = await db.Project.select('id', 'name').create({
             name: 'Launch',
             tasks: (tasks) => tasks.variant('bug').create([crash, hang]),
           });
-          const single = await db.Project.create({
+          const single = await db.Project.select('id', 'name').create({
             name: 'Polish',
             tasks: (tasks) => tasks.variant('bug').create(crash),
           });
@@ -136,12 +136,14 @@ describe('integration/nested-variant-creates on SQLite', () => {
         await withDatabase(async ({ db, rows }) => {
           await db.Project.create({ name: 'Launch' });
 
-          const updated = await db.Project.where({ id: 1 }).update({
-            tasks: (tasks) => [
-              tasks.variant('bug').create(crash),
-              tasks.variant('bug').create([hang]),
-            ],
-          });
+          const updated = await db.Project.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) => [
+                tasks.variant('bug').create(crash),
+                tasks.variant('bug').create([hang]),
+              ],
+            });
 
           expect(updated).toEqual({ id: 1, name: 'Launch' });
           expect(rows(tasksSql)).toEqual([
@@ -157,14 +159,16 @@ describe('integration/nested-variant-creates on SQLite', () => {
       'create() and update() write the row with the discriminator on a to-one relation',
       async () => {
         await withDatabase(async ({ db, rows }) => {
-          const created = await db.Person.create({
+          const created = await db.Person.select('id', 'name').create({
             name: 'Ada',
             pinnedTask: (task) => task.variant('bug').create(crash),
           });
           await db.Person.create({ name: 'Grace' });
-          const updated = await db.Person.where({ id: 2 }).update({
-            pinnedTask: (task) => task.variant('bug').create([hang]),
-          });
+          const updated = await db.Person.select('id', 'name')
+            .where({ id: 2 })
+            .update({
+              pinnedTask: (task) => task.variant('bug').create([hang]),
+            });
 
           expect([created, updated]).toEqual([
             { id: 1, name: 'Ada' },
@@ -180,19 +184,65 @@ describe('integration/nested-variant-creates on SQLite', () => {
     );
   });
 
+  describe('a variant stored in the base table with a relation callback in its row', () => {
+    it(
+      'create() and update() write the row with the discriminator and the rows of a base relation',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          const created = await db.Project.select('id', 'name').create({
+            name: 'Launch',
+            tasks: (tasks) =>
+              tasks.variant('bug').create({
+                ...crash,
+                comments: (comments) => comments.create({ body: 'Seen it' }),
+              }),
+          });
+          const updated = await db.Project.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) =>
+                tasks
+                  .variant('bug')
+                  .create([
+                    hang,
+                    { ...crash, comments: (comments) => comments.create([{ body: 'Again' }]) },
+                  ]),
+            });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Launch' },
+          ]);
+          expect(rows(tasksSql)).toEqual([
+            bug(1, 'Crash', 'high', { project_id: 1 }),
+            bug(2, 'Hang', 'low', { project_id: 1 }),
+            bug(3, 'Crash', 'high', { project_id: 1 }),
+          ]);
+          expect(rows('select id, body, task_id from task_comments order by id')).toEqual([
+            { id: 1, body: 'Seen it', task_id: 1 },
+            { id: 2, body: 'Again', task_id: 3 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+  });
+
   describe('a variant stored in the base table on a relation the parent holds the key for', () => {
     it(
       'create() and update() write the row with the discriminator and link the parent to it',
       async () => {
         await withDatabase(async ({ db, rows }) => {
-          const created = await db.TaskComment.create({
+          const created = await db.TaskComment.select('id', 'body', 'taskId').create({
             body: 'Seen it',
             task: (task) => task.variant('bug').create(crash),
           });
           await db.TaskComment.create({ body: 'Again' });
-          const updated = await db.TaskComment.where({ id: 2 }).update({
-            task: (task) => task.variant('bug').create([hang]),
-          });
+          const updated = await db.TaskComment.select('id', 'body', 'taskId')
+            .where({ id: 2 })
+            .update({
+              task: (task) => task.variant('bug').create([hang]),
+            });
 
           expect([created, updated]).toEqual([
             { id: 1, body: 'Seen it', taskId: 1 },
@@ -210,11 +260,11 @@ describe('integration/nested-variant-creates on SQLite', () => {
       'create() writes each row with the discriminator and links it',
       async () => {
         await withDatabase(async ({ db, rows }) => {
-          const created = await db.Label.create({
+          const created = await db.Label.select('id', 'name').create({
             name: 'ui',
             tasks: (tasks) => tasks.variant('bug').create([crash, hang]),
           });
-          const single = await db.Label.create({
+          const single = await db.Label.select('id', 'name').create({
             name: 'api',
             tasks: (tasks) => tasks.variant('bug').create(crash),
           });
@@ -244,12 +294,14 @@ describe('integration/nested-variant-creates on SQLite', () => {
         await withDatabase(async ({ db, rows }) => {
           await db.Label.create({ name: 'ui' });
 
-          const updated = await db.Label.where({ id: 1 }).update({
-            tasks: (tasks) => [
-              tasks.variant('bug').create(crash),
-              tasks.variant('bug').create([hang]),
-            ],
-          });
+          const updated = await db.Label.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) => [
+                tasks.variant('bug').create(crash),
+                tasks.variant('bug').create([hang]),
+              ],
+            });
 
           expect(updated).toEqual({ id: 1, name: 'ui' });
           expect(rows(tasksSql)).toEqual([bug(1, 'Crash', 'high'), bug(2, 'Hang', 'low')]);
