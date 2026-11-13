@@ -2300,6 +2300,7 @@ export interface VariantRelationMutator<
   FilteredWritesDisabled extends boolean = false,
   ParentLinkFields extends string = never,
   NsId extends string = never,
+  ConflictActions extends NestedCreateConflictAction = NestedCreateConflictAction,
 > extends Pick<
     RelationMutator<
       TContract,
@@ -2322,11 +2323,13 @@ export interface VariantRelationMutator<
     data: LinkWritesDisabled extends true
       ? never
       : NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: LinkWritesDisabled extends true
       ? never
       : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>[],
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
 }
 
@@ -2339,6 +2342,7 @@ type RelationMutatorVariant<
   FilteredWritesDisabled extends boolean,
   ParentLinkFields extends string,
   NsId extends string,
+  ConflictActions extends NestedCreateConflictAction,
 > =
   IsPolymorphicBase<TContract, ModelName, NsId> extends true
     ? {
@@ -2353,7 +2357,8 @@ type RelationMutatorVariant<
           VariantDisconnectDisabled,
           FilteredWritesDisabled,
           ParentLinkFields,
-          NsId
+          NsId,
+          ConflictActions
         >;
       }
     : unknown;
@@ -2419,7 +2424,8 @@ type RelationMutationCallback<
       Context extends 'create' ? true : Cardinality extends 'N:1' ? true : false,
       Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
       RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
-      TargetNs
+      TargetNs,
+      RelationConflictActions<TContract, ModelName, RelName, NsId>
     >,
 ) => Cardinality extends '1:1' | 'N:1'
   ? ToOneRelationMutationResult<TContract, TargetModel, TargetNs>

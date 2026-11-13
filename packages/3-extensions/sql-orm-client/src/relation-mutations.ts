@@ -110,7 +110,7 @@ export function parseMutationInput(
     }
     for (const mutation of mutations) {
       if (mutation.kind === 'create' && mutation.options !== undefined) {
-        assertCreateOptions(contract, fieldName, relation, mutation.options);
+        assertCreateOptions(contract, fieldName, relation, mutation.variant, mutation.options);
       }
     }
     if (mutations.length > 0) {
@@ -128,6 +128,7 @@ function assertCreateOptions(
   contract: Contract<SqlStorage>,
   name: string,
   relation: ResolvedRelation,
+  variantValue: string | undefined,
   { onConflict, conflictOn }: NestedCreateOptions<Contract<SqlStorage>, string>,
 ): void {
   if (onConflict !== 'skip' && onConflict !== 'connect') {
@@ -153,12 +154,13 @@ function assertCreateOptions(
       },
     );
   }
-  if (isVariantInOwnTable(contract, relation)) {
+  const ownTableVariant = ownTableVariantOf(contract, relation, variantValue);
+  if (ownTableVariant !== undefined) {
     throw ormError(
       'ORM.RELATION_MUTATION_UNSUPPORTED',
-      `create() nested mutation for relation "${name}" does not support onConflict: its target, variant "${relation.to}", is stored in its own table`,
+      `create() nested mutation for relation "${name}" does not support onConflict: its target, variant "${ownTableVariant}", is stored in its own table`,
       {
-        meta: { kind: 'create', relation: name, reason: 'mti-variant', variant: relation.to },
+        meta: { kind: 'create', relation: name, reason: 'mti-variant', variant: ownTableVariant },
       },
     );
   }
@@ -184,10 +186,22 @@ function assertCreateOptions(
   );
 }
 
-function isVariantInOwnTable(contract: Contract<SqlStorage>, relation: ResolvedRelation): boolean {
+function ownTableVariantOf(
+  contract: Contract<SqlStorage>,
+  relation: ResolvedRelation,
+  variantValue: string | undefined,
+): string | undefined {
+  if (variantValue !== undefined) {
+    const variant = resolvePolymorphismInfo(
+      contract,
+      relation.toNamespace,
+      relation.to,
+    )?.variants.get(variantValue);
+    return variant?.strategy === 'mti' ? variant.modelName : undefined;
+  }
   const base = modelOf(contract, relation.toNamespace, relation.to)?.base;
   if (base === undefined) {
-    return false;
+    return undefined;
   }
   const variants = resolvePolymorphismInfo(contract, base.namespace, base.model)?.variants;
   return [...(variants?.values() ?? [])].some(
@@ -195,7 +209,9 @@ function isVariantInOwnTable(contract: Contract<SqlStorage>, relation: ResolvedR
       variant.modelName === relation.to &&
       variant.namespaceId === relation.toNamespace &&
       variant.strategy === 'mti',
-  );
+  )
+    ? relation.to
+    : undefined;
 }
 
 function invalidRelationField(

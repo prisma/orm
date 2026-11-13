@@ -74,8 +74,9 @@ export function createRelationMutator<
           data:
             | MutationCreateInput<TContract, ModelName>
             | readonly MutationCreateInput<TContract, ModelName>[],
+          options?: NestedCreateOptions<TContract, ModelName>,
         ): RelationMutationCreate<TContract, ModelName> => ({
-          ...mutator.create(data),
+          ...mutator.create(data, options),
           ...ifDefined('variant', variantValue),
         }),
         connect: (
