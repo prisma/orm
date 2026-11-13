@@ -86,13 +86,14 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
-import {
-  ormParam,
-  rejectPlaceholder,
-  type WherePlaceholderTarget,
-  wherePlaceholder,
-} from './orm-param';
+import { ormParam } from './orm-param';
 import type { MongoPreparedCollection } from './prepared-collection';
+import {
+  rejectExprPlaceholder,
+  rejectPlaceholder,
+  type WherePlaceholderField,
+  wherePlaceholder,
+} from './prepared-placeholders';
 import type {
   DiscriminatorValues,
   IncludedRow,
@@ -288,7 +289,7 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 const LIST_INDEX = /^\d+$/;
 
 function rejectLiteralPlaceholder(literal: MongoAggLiteral): MongoAggLiteral {
-  rejectPlaceholder(literal.value, '$expr');
+  rejectExprPlaceholder(literal.value);
   return literal;
 }
 
@@ -650,6 +651,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('update');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('update');
     this.#rejectIncludes('update');
     const filter = this.#mergeFilters();
@@ -671,6 +673,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('updateAll');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('updateAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -697,6 +700,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<number> {
     this.#requireFilters('updateAndCount');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('updateAndCount');
     this.#rejectIncludes('updateAndCount');
     const filter = this.#mergeFilters();
@@ -708,6 +712,7 @@ export class MongoCollectionImpl<
 
   async delete(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('delete');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('delete');
     this.#rejectIncludes('delete');
     const filter = this.#mergeFilters();
@@ -724,6 +729,7 @@ export class MongoCollectionImpl<
 
   deleteAll(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('deleteAll');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('deleteAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -741,6 +747,7 @@ export class MongoCollectionImpl<
 
   async deleteAndCount(): Promise<number> {
     this.#requireFilters('deleteAndCount');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('deleteAndCount');
     this.#rejectIncludes('deleteAndCount');
     const filter = this.#mergeFilters();
@@ -756,6 +763,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]);
   }): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('upsert');
+    this.#rejectFilterPlaceholders();
     this.#rejectWindowing('upsert');
     this.#rejectIncludes('upsert');
     const filter = this.#mergeFilters();
@@ -996,17 +1004,12 @@ export class MongoCollectionImpl<
         meta: { model: this.#modelName },
       });
     }
-    return blindCast<
-      MongoQueryPlan<Record<string, unknown>>,
-      'an aggregate pipeline yields documents, which the driver returns as records'
-    >(
-      compileMongoQuery(
-        this.#collectionName,
-        this.#state,
-        this.#contract.storage.storageHash,
-        model,
-        this.#contract.storage,
-      ),
+    return compileMongoQuery(
+      this.#collectionName,
+      this.#state,
+      this.#contract.storage.storageHash,
+      model,
+      this.#contract.storage,
     );
   }
 
@@ -1109,11 +1112,7 @@ export class MongoCollectionImpl<
       const field = fields[key];
       const compared =
         isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
-          ? wherePlaceholder(
-              value,
-              { codecId: field.type.codecId, nullable: field.nullable, list: Boolean(field.many) },
-              key,
-            )
+          ? wherePlaceholder(value, this.#placeholderField(key, field, field.type.codecId), key)
           : this.#wrapFieldValue(value, field, key, 'filter');
       filters.push(whereEquality(storedName, field, compared));
     }
@@ -1132,7 +1131,7 @@ export class MongoCollectionImpl<
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
     }
-    const target = this.#placeholderTarget(filter.field, field, field.type.codecId);
+    const placeholderField = this.#placeholderField(filter.field, field, field.type.codecId);
     const encode = (value: MongoValue): MongoValue => {
       if (value === null) return null;
       if (value instanceof MongoParamRef) {
@@ -1144,7 +1143,8 @@ export class MongoCollectionImpl<
       return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
     const operand = (value: MongoValue): MongoValue => {
-      if (isMongoPreparedParamRef(value)) return wherePlaceholder(value, target, filter.field);
+      if (isMongoPreparedParamRef(value))
+        return wherePlaceholder(value, placeholderField, filter.field);
       rejectPlaceholder(value, filter.field);
       return encode(value);
     };
@@ -1167,7 +1167,7 @@ export class MongoCollectionImpl<
   /**
    * A path that ends in a list index names one item of the list, so a placeholder there may be null exactly when the list's items may be.
    */
-  #placeholderTarget(path: string, field: ContractField, codecId: string): WherePlaceholderTarget {
+  #placeholderField(path: string, field: ContractField, codecId: string): WherePlaceholderField {
     const segments = path.split('.');
     const last = segments.at(-1);
     const list =
@@ -1511,7 +1511,6 @@ export class MongoCollectionImpl<
     return MongoAndExpr.of([...this.#state.filters]);
   }
 
-  /** Every write that uses the collection's filters starts here, so a placeholder a `where` kept is refused before the write runs. */
   #requireFilters(methodName: string): void {
     if (this.#state.filters.length === 0) {
       throw ormError(
@@ -1520,6 +1519,10 @@ export class MongoCollectionImpl<
         { meta: { method: methodName } },
       );
     }
+  }
+
+  /** A write runs at once, so a placeholder a `where` kept is refused before it is sent. */
+  #rejectFilterPlaceholders(): void {
     for (const filter of this.#state.filters) rejectFilterPlaceholders(filter);
   }
 

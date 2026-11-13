@@ -128,6 +128,17 @@ describe('the handle db.prepare returns for an ORM read', () => {
     expectTypeOf(all).not.toHaveProperty('execute');
   });
 
+  test('refuses an ad-hoc read, which would run inside the callback', () => {
+    void db.prepare({ email: 'mongo/string@1' }, (p) =>
+      // @ts-expect-error -- first() sends the query and returns a promise, not a prepared read
+      db.orm.accounts.where({ email: p.email }).first(),
+    );
+    void db.prepare({ email: 'mongo/string@1' }, (p) =>
+      // @ts-expect-error -- all() sends the query and returns a row stream, not a prepared read
+      db.orm.accounts.where({ email: p.email }).all(),
+    );
+  });
+
   test('refuses a placeholder whose codec is not the field codec', () => {
     void db.prepare({ id: 'mongo/objectId@1' }, (p) =>
       // @ts-expect-error -- email is a string field

@@ -75,19 +75,13 @@ describe('a prepared placeholder in the Mongo ORM', () => {
     expect(plans).toEqual([]);
   });
 
-  it('is refused in a value-object literal in a where', async () => {
+  it('is refused in a value-object literal by the where call itself', () => {
     const { executor, plans } = recordingExecutor();
     const users = createMongoCollection(collectionContext(contract, executor), 'User');
 
-    await expect(
-      (async () =>
-        users
-          .where({
-            homeAddress: { city: placeholder as unknown as string, country: 'FR' },
-          })
-          .all()
-          .toArray())(),
-    ).rejects.toMatchObject(refused);
+    expect(() =>
+      users.where({ homeAddress: { city: placeholder as unknown as string, country: 'FR' } }),
+    ).toThrow(expect.objectContaining(refused));
     expect(plans).toEqual([]);
   });
 

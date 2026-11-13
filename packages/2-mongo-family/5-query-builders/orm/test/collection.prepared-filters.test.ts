@@ -46,6 +46,12 @@ const refused = (placeholder: MongoPreparedParamRef, field: string) => ({
   meta: { name: placeholder.name, field },
 });
 
+const refusedInExpr = (placeholder: MongoPreparedParamRef) => ({
+  code: 'ORM.ARGUMENT_INVALID',
+  message: `The prepared parameter '${placeholder.name}' cannot be used inside $expr. A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset. ORM writes run at once, and value objects are built with the query, so neither can take one.`,
+  meta: { name: placeholder.name, operator: '$expr' },
+});
+
 const placeholderInExpr = MongoExprFilter.of(
   MongoAggOperator.of('$eq', [MongoAggFieldRef.of('name'), MongoAggLiteral.of(text)]),
 );
@@ -66,12 +72,17 @@ describe('a placeholder in a filter-expression where', () => {
       text,
       'name',
     ],
-    ['an $expr literal', MongoExprFilter.of(MongoAggLiteral.of(text)), text, '$expr'],
-    ['an $expr operator argument', placeholderInExpr, text, '$expr'],
   ])('is refused in %s when the where is built', (_label, filter, placeholder, field) => {
     expect(() => users().where(filter)).toThrow(
       expect.objectContaining(refused(placeholder, field)),
     );
+  });
+
+  it.each<[string, MongoFilterExpr]>([
+    ['an $expr literal', MongoExprFilter.of(MongoAggLiteral.of(text))],
+    ['an $expr operator argument', placeholderInExpr],
+  ])('is refused in %s when the where is built, naming $expr', (_label, filter) => {
+    expect(() => users().where(filter)).toThrow(expect.objectContaining(refusedInExpr(text)));
   });
 
   it.each<[string, (inner: MongoFilterExpr) => MongoFilterExpr]>([

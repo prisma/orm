@@ -8,13 +8,27 @@ changes:
       matches:
         - ':\s{0,20}MongoCollection<[^<>]{0,200}(?:<[^<>]{0,200}>[^<>]{0,200}){0,4}>\s{0,20}=\s{0,20}\{'
         - '\bimplements\s{1,20}MongoCollection\b'
-  - id: mongo-client-prepare-is-its-own
+  - id: mongo-prepare-member-removed
     summary: |
-      `MongoClient.prepare`, from `@prisma/orm-mongo/runtime`, also takes an ORM read and returns `MongoPreparedFrom<Params, Q>`. `MongoClient` no longer extends `MongoPrepareMember`, so a client assigned to a variable typed `MongoPrepareMember` no longer type-checks.
+      `MongoPrepareMember`, from `@prisma/orm-mongo/family-runtime`, is removed. `prepare` is declared on `MongoRuntime` itself, and `MongoClient`, from `@prisma/orm-mongo/runtime`, declares its own `prepare`, which also takes an ORM read and returns `MongoPreparedFrom<Params, Q>`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\bMongoPrepareMember\b'
+  - id: mongo-where-filter-takes-placeholders
+    summary: |
+      `MongoWhereFilter`, from `@prisma/orm-mongo/orm`, lets each scalar field's value also be a `MongoPreparedParamRef`, the placeholder a `prepare` callback receives. Code that takes a `MongoWhereFilter` and reads a field's value as the field's type must handle the placeholder first.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bMongoWhereFilter\b'
+  - id: compile-mongo-query-has-no-row-type
+    summary: |
+      `compileMongoQuery`, from `@prisma/orm-mongo/orm`, takes no type argument and returns `MongoQueryPlan<Record<string, unknown>>`. A call that passed a row type, `compileMongoQuery<Row>(...)`, no longer compiles.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bcompileMongoQuery\s{0,20}<'
 ---
 
 # MongoDB prepared ORM reads
@@ -36,6 +50,23 @@ const users: MongoCollection<Contract, 'User'> = {
 };
 ```
 
-## `mongo-client-prepare-is-its-own`
+## `mongo-prepare-member-removed`
 
-Type a value that holds a `mongo()` client as `MongoClient<Contract>`, not `MongoPrepareMember`. `MongoPrepareMember` is the `prepare` of a `MongoRuntime`, which takes plans only.
+Replace `MongoPrepareMember` with the type that has the `prepare` you call: `MongoRuntime` for a runtime, `MongoClient<Contract>` for a `mongo()` client. To name only the method, write `MongoRuntime['prepare']`.
+
+## `mongo-where-filter-takes-placeholders`
+
+Where you read a value out of a `MongoWhereFilter`, check for a placeholder before using it as the field's type:
+
+```ts
+import { isMongoPreparedParamRef } from '@prisma/orm-mongo/value';
+
+const name = filter.name;
+const label = name === undefined || isMongoPreparedParamRef(name) ? undefined : name.toUpperCase();
+```
+
+A placeholder's value is known only when a prepared statement runs.
+
+## `compile-mongo-query-has-no-row-type`
+
+Drop the type argument from `compileMongoQuery(...)`. Where you need a row type, type the rows where you read them.
