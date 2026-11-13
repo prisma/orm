@@ -1,0 +1,36 @@
+{
+  "name": "prisma",
+  "description": "The Prisma 8 agent skill",
+  "owner": {
+    "name": "Prisma",
+    "url": "https://www.prisma.io"
+  },
+  "plugins": [
+    {
+      "name": "prisma",
+      "displayName": "Prisma",
+      "source": "./skills",
+      "strict": false,
+      "description": "Teaches coding agents how to work with Prisma 8: edit the data contract, emit artefacts, plan and apply migrations, and write typed db.orm / db.sql queries. Use when working with @prisma/orm-postgres, @prisma/orm-sqlite, or @prisma/orm-mongo — not Prisma ORM 7 or earlier. After a version mismatch, run prisma skills sync, then check the sync output for the destination it actually wrote (e.g. .claude/skills/prisma-8, .agents/skills/prisma-8, .cursor/skills/prisma-8, .windsurf/skills/prisma-8, or .devin/skills/prisma-8) and continue from that synced project skill and its references — not this plugin copy. If no destination was written (skills.agents empty or not configured), configure one before continuing.",
+      "version": "0.1.3",
+      "author": {
+        "name": "Prisma",
+        "url": "https://www.prisma.io"
+      },
+      "homepage": "https://www.prisma.io",
+      "repository": "https://github.com/prisma/orm",
+      "license": "Apache-2.0",
+      "category": "development",
+      "keywords": [
+        "prisma",
+        "orm",
+        "database",
+        "typescript",
+        "migrations",
+        "contract-first",
+        "coding-agents"
+      ],
+      "skills": ["./prisma-8"]
+    }
+  ]
+}
