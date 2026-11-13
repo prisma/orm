@@ -122,7 +122,7 @@ describe('integration: a write annotated with invalidateAnnotation invalidates o
       await readUserOne(db.orm.public.User);
       events.length = 0;
 
-      await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (meta) =>
+      await db.orm.public.User.where({ name: 'Alice' }).update({ name: 'Alicia' }, (meta) =>
         meta.annotate(invalidateAnnotation({ keys: ['user-1'] })),
       );
       const lastTwoEvents = events.slice(-2);
@@ -132,6 +132,25 @@ describe('integration: a write annotated with invalidateAnnotation invalidates o
         outcomes: ['committed'],
         lastTwoEvents: ['transaction-succeeded', 'unset:user-1'],
         unsets: ['unset:user-1'],
+        read: { name: 'Alicia' },
+      });
+    });
+  });
+
+  it('invalidates after an ORM update by the primary key, which runs one statement and no transaction, has completed', async () => {
+    await withFacade(async ({ db, events, outcomes }) => {
+      await readUserOne(db.orm.public.User);
+      events.length = 0;
+
+      await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (meta) =>
+        meta.annotate(invalidateAnnotation({ keys: ['user-1'] })),
+      );
+      const writeEvents = [...events];
+      const read = await readUserOne(db.orm.public.User);
+
+      expect({ outcomes, writeEvents, read }).toEqual({
+        outcomes: ['committed'],
+        writeEvents: ['statement', 'unset:user-1'],
         read: { name: 'Alicia' },
       });
     });
