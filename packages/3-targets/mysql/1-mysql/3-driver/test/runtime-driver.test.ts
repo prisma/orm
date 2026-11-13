@@ -898,6 +898,46 @@ describe('MySQL runtime driver and its pool', () => {
     },
   );
 
+  it.for(['set', 'begin'] as const)(
+    'refuses an optionless retry after %s failure and evicts pending isolation',
+    async (point) => {
+      const driver = await connected();
+      const held = await driver.acquireConnection();
+      const failure = new Error('setup failed');
+      if (point === 'set') connection.query.mockRejectedValueOnce(failure);
+      else connection.beginTransaction.mockRejectedValueOnce(failure);
+      await expect(held.beginTransaction({ isolationLevel: 'Serializable' })).rejects.toBe(failure);
+      const begins = connection.beginTransaction.mock.calls.length;
+      await expect(held.beginTransaction()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+      expect(connection.beginTransaction).toHaveBeenCalledTimes(begins);
+      await held.release();
+      expect(connection.release).not.toHaveBeenCalled();
+      expect(connection.destroy).toHaveBeenCalledTimes(1);
+      await driver.close();
+    },
+  );
+
+  it('replaces pending isolation explicitly and clears it only after successful BEGIN', async () => {
+    const driver = await connected();
+    const held = await driver.acquireConnection();
+    connection.query.mockClear();
+    connection.beginTransaction.mockRejectedValueOnce(new Error('BEGIN failed'));
+    await expect(held.beginTransaction({ isolationLevel: 'Serializable' })).rejects.toThrow(
+      'BEGIN failed',
+    );
+    const tx = await held.beginTransaction({ isolationLevel: 'ReadCommitted' });
+    await tx.rollback();
+    await (await held.beginTransaction()).rollback();
+    expect(connection.query.mock.calls).toEqual([
+      ['SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'],
+      ['SET TRANSACTION ISOLATION LEVEL READ COMMITTED'],
+    ]);
+    await held.release();
+    expect(connection.release).toHaveBeenCalledTimes(1);
+    expect(connection.destroy).not.toHaveBeenCalled();
+    await driver.close();
+  });
+
   it('drains and unregisters an abandoned stream even when closing it throws', async () => {
     const driver = await connected(streaming);
     const held = await driver.acquireConnection();

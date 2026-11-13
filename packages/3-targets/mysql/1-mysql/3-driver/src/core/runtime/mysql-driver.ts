@@ -507,6 +507,11 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
       Serializable: 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
     };
     await this.underLock(async () => {
+      if (isolationLevel === undefined && this.#isolationPending) {
+        throw errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL transaction isolation setup is pending', {
+          fix: 'Dispose of this connection or explicitly replace the pending transaction isolation level.',
+        });
+      }
       if (isolationLevel !== undefined) {
         this.#isolationPending = true;
         await this.client.query(statements[isolationLevel]);
