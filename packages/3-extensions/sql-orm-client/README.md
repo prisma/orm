@@ -394,7 +394,7 @@ await db.User.where({ id: 1 }).update({
 });
 ```
 
-`updateAll` data is the related model's own fields, and the related model's update defaults apply as they do for a collection's `updateAll`. On a one-to-many relation it cannot set the fields that link the related rows to the record; that is refused with `ORM.RELATION_MUTATION_INVALID` (`problem: 'parent-link-column'`, with the fields in `fields`) and is a type error. `updateAll` with no fields to set changes no rows. Neither operation is an error when no row matches.
+`updateAll` data is the related model's own fields, and the related model's update defaults apply as they do for a collection's `updateAll`. On a one-to-many relation neither the data nor an update default may set the fields that link the related rows to the record; that is refused with `ORM.RELATION_MUTATION_INVALID` (`problem: 'parent-link-column'`, with the fields in `fields`), and setting them in the data is a type error. `updateAll` with no fields to set changes no rows. Neither operation is an error when no row matches.
 
 Both operations are available only in `update()` and only on a to-many relation. Inside `create()`, or on a to-one relation, they are refused with `ORM.RELATION_MUTATION_UNSUPPORTED` and are type errors.
 
