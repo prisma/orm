@@ -263,6 +263,43 @@ describe('SqlRuntime', () => {
     expect(runtime.telemetry()).toBeNull();
   });
 
+  it('computes telemetry fingerprint lazily on first read and memoises the result (#30932)', async () => {
+    const { stackInstance, context, driver } = createTestSetup();
+    const runtime = createRuntime({
+      stackInstance,
+      context,
+      driver,
+      verifyMarker: false,
+    });
+
+    const plan = createRawExecutionPlan({ sql: 'SELECT id FROM users WHERE id = 123' });
+    await runtime.execute(plan);
+
+    // telemetry() computes the fingerprint lazily on read
+    const event1 = runtime.telemetry();
+    expect(event1).not.toBeNull();
+    expect(event1?.target).toBe('postgres');
+    expect(event1?.lane).toBe('raw');
+    expect(event1?.outcome).toBe('success');
+    expect(typeof event1?.fingerprint).toBe('string');
+    expect(event1?.fingerprint).toHaveLength(64);
+
+    // Second read returns the exact same memoised object
+    const event2 = runtime.telemetry();
+    expect(event2).toBe(event1);
+
+    // A subsequent statement clears and updates the telemetry
+    const plan2 = createRawExecutionPlan({ sql: 'DELETE FROM users WHERE id = 456' });
+    await runtime.execute(plan2);
+
+    const event3 = runtime.telemetry();
+    expect(event3).not.toBeNull();
+    expect(event3).not.toBe(event1);
+    expect(typeof event3?.fingerprint).toBe('string');
+    expect(event3?.fingerprint).toHaveLength(64);
+  });
+
+
   it('closes runtime and driver', async () => {
     const { stackInstance, context, driver } = createTestSetup();
 
