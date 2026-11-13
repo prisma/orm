@@ -531,7 +531,8 @@ describe('integration/nested-variant-creates on SQLite', () => {
 
           expect(topLevel).toMatchObject({
             code: 'ORM.CAPABILITY_MISSING',
-            meta: { capability: 'returning', action: 'createAll()' },
+            message: 'create() requires contract capability "returning"',
+            meta: { capability: 'returning', action: 'create()' },
           });
           expect(nested).toEqual(topLevel);
           expect(rows('select id from projects')).toEqual([]);
