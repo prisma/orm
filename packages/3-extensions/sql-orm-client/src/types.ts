@@ -1931,7 +1931,9 @@ export type RelationMutationUpdateAllData<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
-> = Partial<DefaultModelRow<TContract, ModelName>> & { readonly [K in ParentLinkFields]?: never };
+> = Partial<DefaultModelInputRow<TContract, ModelName>> & {
+  readonly [K in ParentLinkFields]?: never;
+};
 
 export interface RelationMutationUpdateAll<
   TContract extends Contract<SqlStorage>,
@@ -1939,7 +1941,7 @@ export interface RelationMutationUpdateAll<
 > {
   readonly kind: 'updateAll';
   readonly state: CollectionState;
-  readonly data: Partial<DefaultModelRow<TContract, ModelName>>;
+  readonly data: Partial<DefaultModelInputRow<TContract, ModelName>>;
 }
 
 export interface RelationMutationDeleteAll {

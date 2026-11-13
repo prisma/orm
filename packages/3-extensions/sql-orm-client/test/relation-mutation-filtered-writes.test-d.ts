@@ -70,3 +70,11 @@ test('where, updateAll and deleteAll reject other fields, other operations, the 
 
   expectTypeOf([update, returnsWhere, create, toOne]).toExtend<readonly unknown[]>();
 });
+
+test('updateAll data takes the input type of each field, such as a string for a Char<36> field', () => {
+  const input: UserUpdate = {
+    tags: (tags) => tags.updateAll({ id: 'a3f1c2d4-0000-0000-0000-000000000000' }),
+  };
+
+  expectTypeOf(input).toExtend<UserUpdate>();
+});
