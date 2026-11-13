@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createReturningTagsCollection,
   createReturningUsersCollection,
   createReturningUsersCollectionWithout,
   createUsersCollection,
@@ -274,6 +275,60 @@ describe('integration/create on conflict skip', () => {
             conflictOn: ['posts' as never],
           }),
         ).toThrow(/posts/);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'createAll() and createAndCount() refuse a row that gives no value for the conflictOn columns and write nothing',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const returningUsers = createReturningUsersCollection(runtime);
+        const countingUsers = createUsersCollection(runtime);
+        await runtime.query('create unique index users_invited_by_unique on users (invited_by_id)');
+        const data = [
+          { id: 1, name: 'Ada', email: 'ada@example.com', invitedById: 7 },
+          { id: 2, name: 'Grace', email: 'grace@example.com', invitedById: null },
+        ];
+        const refusal = (method: string) =>
+          expect.objectContaining({
+            code: 'ORM.ARGUMENT_INVALID',
+            message: `${method} row 1 for model "User" gives no value for any conflict key: (invited_by_id)`,
+            meta: { method, model: 'User', index: 1, conflictKeys: [['invited_by_id']] },
+          });
+
+        runtime.resetExecutions();
+        expect(() =>
+          returningUsers.createAll(data, { onConflict: 'skip', conflictOn: ['invitedById'] }),
+        ).toThrow(refusal('createAll()'));
+        await expect(
+          countingUsers.createAndCount(data, { onConflict: 'skip', conflictOn: ['invitedById'] }),
+        ).rejects.toThrow(refusal('createAndCount()'));
+        expect(runtime.executions).toHaveLength(0);
+
+        expect(await runtime.query('select id from users')).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'createAll() accepts rows whose only key value is a create default the ORM fills in',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const tags = createReturningTagsCollection(runtime);
+
+        const inserted = await tags
+          .select('name')
+          .createAll([{ name: 'Go' }, { name: 'Rust' }], { onConflict: 'skip', conflictOn: ['id'] })
+          .toArray();
+
+        expect(inserted).toEqual([{ name: 'Go' }, { name: 'Rust' }]);
+        expect(await runtime.query('select name from tags order by name')).toEqual([
+          { name: 'Go' },
+          { name: 'Rust' },
+        ]);
       });
     },
     timeouts.spinUpPpgDev,
