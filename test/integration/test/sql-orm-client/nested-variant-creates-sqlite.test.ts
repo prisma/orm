@@ -542,4 +542,39 @@ describe('integration/nested-variant-creates on SQLite', () => {
       timeouts.databaseOperation,
     );
   });
+
+  describe('the base mutator on a polymorphic target with a variant stored in its own table', () => {
+    it(
+      'connect() and disconnect() find the related row on N:1 and M:N relations',
+      async () => {
+        await withDatabase(async ({ db, rows }) => {
+          await db.Task.variant('bug').create({ title: 'Crash', severity: 'high' });
+          await db.Task.variant('feature').create(darkMode);
+          await db.TaskComment.create({ body: 'Seen it' });
+          await db.Label.create({
+            name: 'ui',
+            tasks: (tasks) => tasks.connect({ id: 1 }),
+          });
+
+          const comment = await db.TaskComment.select('id', 'body', 'taskId')
+            .where({ id: 1 })
+            .update({ task: (task) => task.connect({ id: 2 }) });
+          const label = await db.Label.select('id', 'name')
+            .where({ id: 1 })
+            .update({
+              tasks: (tasks) => [tasks.connect({ id: 2 }), tasks.disconnect([{ id: 1 }])],
+            });
+
+          expect([comment, label]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 2 },
+            { id: 1, name: 'ui' },
+          ]);
+          expect(rows('select label_id, task_id from task_labels order by task_id')).toEqual([
+            { label_id: 1, task_id: 2 },
+          ]);
+        });
+      },
+      timeouts.databaseOperation,
+    );
+  });
 });

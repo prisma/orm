@@ -520,3 +520,45 @@ describe('a nested create of a variant stored in its own table', () => {
     });
   });
 });
+
+describe('the base mutator on a polymorphic target with a variant stored in its own table', () => {
+  interface Mutator {
+    connect(criteria: object): unknown;
+    disconnect(criteria?: readonly object[]): unknown;
+  }
+
+  it('finds the row to connect on a relation the parent holds the key for', () => {
+    expect(
+      printGraph(updateOf('TaskComment', { task: (task: Mutator) => task.connect({ id: 2 }) })),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        'n2 Find tasks where id = 2 limit 1 <- Requires n1',
+        'n3 Assert <- Rows n2, Requires n1',
+        'n4 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
+        'result: n4',
+      ].join('\n'),
+    );
+  });
+
+  it('finds the rows to connect and to disconnect on a relation through a junction', () => {
+    expect(
+      printGraph(
+        updateOf('Label', {
+          tasks: (tasks: Mutator) => [tasks.connect({ id: 2 }), tasks.disconnect([{ id: 3 }])],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find labels where id = 1',
+        'n2 Find tasks where id = 2 limit 1 <- Requires n1',
+        'n3 Assert <- Rows n2, Requires n1',
+        'n4 Insert task_labels on conflict (task_id, label_id) do nothing <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
+        'n5 Find tasks where id = 3 limit 1 <- Requires n1',
+        'n6 Assert <- Rows n5, Requires n1',
+        'n7 Delete task_labels <- FilterData n1 (id->label_id), FilterData n5 (id->task_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+});

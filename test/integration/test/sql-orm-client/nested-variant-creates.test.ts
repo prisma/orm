@@ -520,4 +520,39 @@ describe('integration/nested-variant-creates', () => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe('the base mutator on a polymorphic target with a variant stored in its own table', () => {
+    it(
+      'connect() and disconnect() find the related row on N:1 and M:N relations',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupSchema(runtime);
+          await runtime.query(
+            "insert into tasks (id, title, type, severity) values (1, 'Crash', 'bug', 'high'), (2, 'Dark mode', 'feature', null)",
+          );
+          await runtime.query('insert into features (id, priority) values (2, 1)');
+          await runtime.query("insert into task_comments (id, body) values (1, 'Seen it')");
+          await runtime.query("insert into labels (id, name) values (1, 'ui')");
+          await runtime.query('insert into task_labels (task_id, label_id) values (1, 1)');
+          const { comments, labels } = collectionsOf(runtime);
+
+          const comment = await comments.where({ id: 1 }).update({
+            task: (task) => task.connect({ id: 2 }),
+          });
+          const label = await labels.where({ id: 1 }).update({
+            tasks: (tasks) => [tasks.connect({ id: 2 }), tasks.disconnect([{ id: 1 }])],
+          });
+
+          expect([comment, label]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 2 },
+            { id: 1, name: 'ui' },
+          ]);
+          expect(
+            await runtime.query('select label_id, task_id from task_labels order by task_id'),
+          ).toEqual([{ label_id: 1, task_id: 2 }]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
 });
