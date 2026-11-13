@@ -85,6 +85,14 @@ class MariaDbQueryable<Connection extends mariadb.Pool | mariadb.Connection> imp
 // All transaction operations use `client.query` instead of `client.execute` to avoid using the
 // binary protocol, which does not support transactions in the MariaDB driver.
 class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements Transaction {
+  /**
+   * Set on entry to `commit()` or `rollback()`, before either sends SQL. Once the pool has lent the
+   * connection to a new owner, a second close would send `COMMIT` or `ROLLBACK` into that owner's
+   * session and release the connection twice, so the transaction closes at most once and sends
+   * nothing afterwards.
+   */
+  private closed = false
+
   constructor(
     readonly conn: mariadb.Connection,
     mariadbOptions: PrismaMariadbOptions | undefined,
@@ -94,42 +102,66 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
     super(conn, mariadbOptions)
   }
 
+  protected override async performIO(query: SqlQuery): Promise<ArrayModeResult> {
+    this.assertOpen()
+    return await super.performIO(query)
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    try {
-      await this.client.query({ sql: 'COMMIT' })
-    } catch (err) {
-      this.onError(err)
-    } finally {
-      this.cleanup?.()
-      await releaseConnection(this.client)
-    }
+    await this.close('COMMIT')
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    try {
-      await this.client.query({ sql: 'ROLLBACK' })
-    } catch (err) {
-      this.onError(err)
-    } finally {
-      this.cleanup?.()
-      await releaseConnection(this.client)
-    }
+    await this.close('ROLLBACK')
   }
 
   async createSavepoint(name: string): Promise<void> {
-    await this.client.query({ sql: `SAVEPOINT ${name}` }).catch(this.onError.bind(this))
+    await this.sendTransactionControl(`SAVEPOINT ${name}`)
   }
 
   async rollbackToSavepoint(name: string): Promise<void> {
-    await this.client.query({ sql: `ROLLBACK TO ${name}` }).catch(this.onError.bind(this))
+    await this.sendTransactionControl(`ROLLBACK TO ${name}`)
   }
 
   async releaseSavepoint(name: string): Promise<void> {
-    await this.client.query({ sql: `RELEASE SAVEPOINT ${name}` }).catch(this.onError.bind(this))
+    await this.sendTransactionControl(`RELEASE SAVEPOINT ${name}`)
+  }
+
+  private async close(sql: 'COMMIT' | 'ROLLBACK'): Promise<void> {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+
+    try {
+      await this.client.query({ sql })
+    } catch (err) {
+      this.onError(err)
+    } finally {
+      try {
+        this.cleanup?.()
+      } finally {
+        await releaseConnection(this.client)
+      }
+    }
+  }
+
+  private async sendTransactionControl(sql: string): Promise<void> {
+    this.assertOpen()
+    await this.client.query({ sql }).catch(this.onError.bind(this))
+  }
+
+  private assertOpen(): void {
+    if (this.closed) {
+      throw new DriverAdapterError({
+        kind: 'TransactionAlreadyClosed',
+        cause: 'The transaction has already been committed or rolled back',
+      })
+    }
   }
 }
 

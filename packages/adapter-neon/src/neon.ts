@@ -137,6 +137,9 @@ class NeonWsQueryable<ClientT extends neon.Pool | neon.PoolClient> extends NeonQ
 }
 
 class NeonTransaction extends NeonWsQueryable<neon.PoolClient> implements Transaction {
+  private closed = false
+  private runningStatements = 0
+
   constructor(
     client: neon.PoolClient,
     readonly options: TransactionOptions,
@@ -145,18 +148,55 @@ class NeonTransaction extends NeonWsQueryable<neon.PoolClient> implements Transa
     super(client)
   }
 
+  override async performIO(query: SqlQuery): Promise<PerformIOResult> {
+    if (this.closed) {
+      throw new DriverAdapterError({
+        kind: 'TransactionAlreadyClosed',
+        cause: 'The transaction has already been committed or rolled back',
+      })
+    }
+
+    this.runningStatements++
+    try {
+      return await super.performIO(query)
+    } finally {
+      this.runningStatements--
+    }
+  }
+
+  /**
+   * Closes the transaction at most once. Once the pool has lent the client to
+   * a new owner, a second `release()` would corrupt the pool's bookkeeping, so
+   * it is skipped. A client with a statement still running is released with an
+   * error so the pool destroys it instead of lending out a busy connection.
+   */
+  private close(): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+
+    try {
+      this.cleanup?.()
+    } finally {
+      if (this.runningStatements > 0) {
+        this.client.release(new Error('Transaction closed with a statement still running'))
+      } else {
+        this.client.release()
+      }
+    }
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async createSavepoint(name: string): Promise<void> {

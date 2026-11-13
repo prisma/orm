@@ -1,13 +1,19 @@
 import timers from 'node:timers/promises'
 
-import type { SqlDriverAdapter, SqlQuery, SqlResultSet, Transaction } from '@prisma/driver-adapter-utils'
 import { expect, test, vi } from 'vitest'
 
 import { noopTracingHelper } from '../tracing'
-import { Options } from './transaction'
+import {
+  MockDriverAdapter,
+  START_TRANSACTION_TIME,
+  startTransaction,
+  TRANSACTION_EXECUTION_TIMEOUT,
+  TRANSACTION_OPTIONS,
+} from './test-utils'
 import { TransactionManager } from './transaction-manager'
 import {
   InvalidTransactionIsolationLevelError,
+  NestedTransactionRolledBackError,
   TransactionClosedError,
   TransactionExecutionTimeoutError,
   TransactionManagerError,
@@ -17,122 +23,6 @@ import {
 } from './transaction-manager-error'
 
 vi.useFakeTimers()
-
-const START_TRANSACTION_TIME = 200
-const TRANSACTION_EXECUTION_TIMEOUT = 500
-
-const TRANSACTION_OPTIONS = {
-  timeout: TRANSACTION_EXECUTION_TIMEOUT,
-  maxWait: START_TRANSACTION_TIME * 2,
-  isolationLevel: undefined,
-} as Options
-
-class MockDriverAdapter implements SqlDriverAdapter {
-  adapterName = 'mock-adapter'
-  provider: SqlDriverAdapter['provider']
-  private readonly usePhantomQuery: boolean
-  private readonly createSavepoint: Transaction['createSavepoint']
-  private readonly rollbackToSavepoint: Transaction['rollbackToSavepoint']
-  private readonly releaseSavepoint: Transaction['releaseSavepoint']
-
-  executeRawMock = vi.fn().mockResolvedValue(1)
-  commitMock = vi.fn().mockResolvedValue(undefined)
-  rollbackMock = vi.fn().mockResolvedValue(undefined)
-
-  constructor(
-    options: {
-      provider?: SqlDriverAdapter['provider']
-      usePhantomQuery?: boolean
-      createSavepoint?: Transaction['createSavepoint']
-      rollbackToSavepoint?: Transaction['rollbackToSavepoint']
-      releaseSavepoint?: Transaction['releaseSavepoint']
-    } = {},
-  ) {
-    const { provider = 'postgres' as SqlDriverAdapter['provider'], usePhantomQuery = false } = options
-    this.usePhantomQuery = usePhantomQuery
-    this.provider = provider
-
-    this.createSavepoint = Object.hasOwn(options, 'createSavepoint')
-      ? options.createSavepoint
-      : async (name) => {
-          const sql = this.provider === 'sqlserver' ? `SAVE TRANSACTION ${name}` : `SAVEPOINT ${name}`
-          await this.executeRawMock({ sql, args: [], argTypes: [] })
-        }
-    this.rollbackToSavepoint = Object.hasOwn(options, 'rollbackToSavepoint')
-      ? options.rollbackToSavepoint
-      : async (name) => {
-          const sql =
-            this.provider === 'sqlserver'
-              ? `ROLLBACK TRANSACTION ${name}`
-              : this.provider === 'postgres'
-                ? `ROLLBACK TO SAVEPOINT ${name}`
-                : `ROLLBACK TO ${name}`
-          await this.executeRawMock({ sql, args: [], argTypes: [] })
-        }
-    this.releaseSavepoint = Object.hasOwn(options, 'releaseSavepoint')
-      ? options.releaseSavepoint
-      : this.provider === 'sqlserver'
-        ? undefined
-        : async (name) => {
-            await this.executeRawMock({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
-          }
-  }
-
-  executeRaw(params: SqlQuery): Promise<number> {
-    return this.executeRawMock(params)
-  }
-
-  queryRaw(_params: SqlQuery): Promise<SqlResultSet> {
-    throw new Error('Not implemented for test')
-  }
-
-  executeScript(_script: string): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
-
-  dispose(): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
-
-  startTransaction(): Promise<Transaction> {
-    const executeRawMock = this.executeRawMock
-    const commitMock = this.commitMock
-    const rollbackMock = this.rollbackMock
-    const usePhantomQuery = this.usePhantomQuery
-    const provider = this.provider
-
-    const mockTransaction: Transaction = {
-      adapterName: 'mock-adapter',
-      provider,
-      options: { usePhantomQuery },
-      queryRaw: vi.fn().mockRejectedValue('Not implemented for test'),
-      executeRaw: executeRawMock,
-      commit: commitMock,
-      rollback: rollbackMock,
-      createSavepoint: this.createSavepoint,
-      rollbackToSavepoint: this.rollbackToSavepoint,
-      releaseSavepoint: this.releaseSavepoint,
-    }
-
-    return new Promise((resolve) =>
-      setTimeout(() => {
-        resolve(mockTransaction)
-      }, START_TRANSACTION_TIME),
-    )
-  }
-}
-
-async function startTransaction(transactionManager: TransactionManager, options: Partial<Options> = {}) {
-  const [{ id }] = await Promise.all([
-    transactionManager.startTransaction({
-      timeout: TRANSACTION_EXECUTION_TIMEOUT,
-      maxWait: START_TRANSACTION_TIME * 2,
-      ...options,
-    }),
-    vi.advanceTimersByTimeAsync(START_TRANSACTION_TIME + 100),
-  ])
-  return id
-}
 
 test('transaction executes normally', async () => {
   const driverAdapter = new MockDriverAdapter()
@@ -423,8 +313,16 @@ test('missing rollbackToSavepoint fails nested rollback', async () => {
 
   const id = await startTransaction(transactionManager)
   await transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, newTxId: id })
+  const nested = await transactionManager.getTransaction({ id }, 'query')
 
   await expect(transactionManager.rollbackTransaction(id)).rejects.toThrow('rollbackToSavepoint is not implemented')
+
+  await expect(nested.executeRaw({ sql: 'INSERT', args: [], argTypes: [] })).rejects.toEqual(
+    new NestedTransactionRolledBackError('query'),
+  )
+  expect(driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)).toEqual([
+    expect.stringMatching(/^SAVEPOINT /),
+  ])
 })
 
 test('transaction is rolled back', async () => {

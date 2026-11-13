@@ -257,7 +257,7 @@ describe('PgTransaction', () => {
     expect(statements).toEqual([])
   })
 
-  it('should destroy the connection when settling with a query still in flight', async () => {
+  it('should destroy the connection when closing with a statement still running', async () => {
     const { pool, adapter, releases } = await setup((text) =>
       text === 'SELECT pending' ? new Promise(() => {}) : undefined,
     )
