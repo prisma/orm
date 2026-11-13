@@ -58,7 +58,7 @@ States were last checked against GitHub and Linear on 2026-10-30.
 
 ## Stream 4: Query features
 
-**Row 1, transaction options.** Split from nested transactions on 2026-10-05. A draft adds an isolation level option (prisma/orm#30333, draft since 2026-09-17). Update 2026-11-10: started. prisma/orm#30990 (Serhii, through StevenMcClankerton) adds transaction isolation options, opened 2026-11-10, in review. Update 2026-11-11: prisma/orm#30990 (isolation options, Serhii) is approved and not merged. Update 2026-11-14: prisma/orm#30990 (isolation) merged 2026-11-11. Callback transaction timeouts are prisma/orm#31012, approved.
+**Row 1, transaction options.** Split from nested transactions on 2026-10-05. A draft adds an isolation level option (prisma/orm#30333, draft since 2026-09-17). Update 2026-11-10: started. prisma/orm#30990 (Serhii, through StevenMcClankerton) adds transaction isolation options, opened 2026-11-10, in review. Update 2026-11-11: prisma/orm#30990 (isolation options, Serhii) is approved and not merged. Update 2026-11-14: prisma/orm#30990 (isolation) merged 2026-11-11. Callback transaction timeouts, prisma/orm#31012, merged 2026-11-13, so the row is done.
 
 **Row 1b, nested transactions.** Its own project since 2026-10-05.
 

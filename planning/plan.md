@@ -21,10 +21,10 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Foundations and breaking changes | 7 of 8 (88%) | `█████████░` | 1 | 0 |
 | Upgrade path from Prisma 7 | 6 of 7 (86%) | `█████████░` | 1 | 0 |
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
-| Query features | 8 of 11 (73%) | `███████░░░` | 2 | 1 |
+| Query features | 9 of 11 (82%) | `████████░░` | 1 | 1 |
 | Docs and the new user's first hour | 1 of 5 (20%) | `██░░░░░░░░` | 3 | 1 |
 | Work found along the way | 4 of 7 (57%) | `██████░░░░` | 1 | 2 |
-| **All streams** | **29 of 44 (66%)** | `███████░░░` | **9** | **6** |
+| **All streams** | **30 of 44 (68%)** | `███████░░░` | **8** | **6** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -78,13 +78,13 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 
 ## Stream 4: Query features
 
-**GA readiness:** 8 of 11 Must projects done (73%). 2 in progress, 1 not started.
+**GA readiness:** 9 of 11 Must projects done (82%). 1 in progress, 1 not started.
 
 Everything here is additive, so nothing here can block a breaking change.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 🔄 1/2 | Transaction options: isolation levels and timeouts | Must | Serhii | Isolation levels merged 2026-11-11. Timeouts for callback transactions are approved and not merged | Merge the timeouts PR |
+| 1 | ✅ 2/2 | Transaction options: isolation levels and timeouts | Must | Serhii | Done 2026-11-13. Isolation levels merged 2026-11-11, and timeouts for callback transactions 2026-11-13 |  |
 | 1b | ⏳ | Nested transactions | Must | Serhii | Not designed |  |
 | 2 | 🔄 5/9 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 9 slices in `projects/nested-mutations/`. Merged: every write runs through one mutation graph, nested `create()` and `update()` included (2026-11-10); one write graph for every database (2026-11-12); a relation callback returns an array of operations, and `update()` updates and deletes filtered related rows on one-to-many and many-to-many relations (2026-11-13). Open PRs, not yet reviewed: `variant(value).create()` in relation callbacks, skipping colliding rows in a nested create, and refusing a `hasOne` relation whose child key is not unique. Left after them: nested `upsert` | Review the three open PRs |
 | 3 | ✅ 1/1 | Design the replacement for `omit` | Must (design only) | Will | Design done (Will, 2026-10-07) |  |
