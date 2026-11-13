@@ -65,6 +65,14 @@ export abstract class Generator {
   getProvider(): string {
     return parseEnvValue(this.config.provider)
   }
+
+  /**
+   * Usage instructions the CLI prints after this generator's success message
+   * on `prisma generate`, if the generator provides any.
+   */
+  get usageHint(): string | undefined {
+    return undefined
+  }
 }
 
 export class JsonRpcGenerator extends Generator {
@@ -111,4 +119,8 @@ export class InProcessGenerator extends Generator {
   }
 
   override stop(): void {}
+
+  override get usageHint(): string | undefined {
+    return this.#generator.usageHint
+  }
 }
