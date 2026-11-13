@@ -10,7 +10,7 @@ This page lists the projects in priority order, by stream. Work the streams in p
 
 **Progress column:** one symbol, then done/total where the row has countable units. ✅ done · 🟡 code done, waiting on review or docs · 🔄 in progress · ⏳ not started · ❓ needs a decision from Will. The units are the slices, pull requests, tickets or items the Status column names; a row with no units yet has no count.
 
-States were last checked against GitHub and Linear on 2026-11-11.
+States were last checked against GitHub and Linear on 2026-11-14.
 
 ## How far from GA
 
@@ -40,7 +40,7 @@ GA is the last chance to make breaking changes, so this stream decides the date.
 | 4 | ✅ 6/6 | SQL expression literals | Must | Will | Done 2026-10-12 |  |
 | 5 | ✅ 5/5 | PSL mixins, then remove field presets; generated values become `@onCreate` and `@onUpdate`, and type aliases become an authoring shorthand | Must | Serhii (mixins), Will (TML-3607) | Done 2026-10-27. Mixins done 2026-10-14. ADR 275 merged 2026-10-19. TML-3607's 3 slices merged 2026-10-20, 2026-10-22 and 2026-10-27; the last removed field presets |  |
 | 6 | ✅ 1/1 | Remove `@noCheck` and `.noCheck()` | Must | Will | Done 2026-10-16 |  |
-| 7 | 🔄 6/7 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Must | Will | 5 of 7 slices merged. The TypeScript MongoDB validator slice merged 2026-10-20, with a MongoDB field keeping its own name in code. Left: the rest of TML-3537 (enum values, value object fields and variants on Postgres and SQLite), and convert and backfill on MongoDB (TML-3538, backlog). TML-3537's first PR, renames, moves and deletes of Postgres namespaces, merged 2026-10-22. Its second, renames and deletes of enum values, merged 2026-10-23. Its third, value object fields and variants, merged 2026-10-28. Its fourth, renaming, removing and filling value object fields and converting and deleting variants, merged 2026-11-06, and TML-3537 is done. Left: convert and backfill on MongoDB (TML-3538). The first TML-3538 PR, MongoDB checking documents before a validator change and asking about type changes, is approved and not merged | Merge the first TML-3538 PR |
+| 7 | 🔄 6/7 | Migration statements: the planner refuses data loss, the user states renames, deletes, conversions and backfills | Must | Will | 5 of 7 slices merged. The TypeScript MongoDB validator slice merged 2026-10-20, with a MongoDB field keeping its own name in code. Left: the rest of TML-3537 (enum values, value object fields and variants on Postgres and SQLite), and convert and backfill on MongoDB (TML-3538, backlog). TML-3537's first PR, renames, moves and deletes of Postgres namespaces, merged 2026-10-22. Its second, renames and deletes of enum values, merged 2026-10-23. Its third, value object fields and variants, merged 2026-10-28. Its fourth, renaming, removing and filling value object fields and converting and deleting variants, merged 2026-11-06, and TML-3537 is done. Left: convert and backfill on MongoDB (TML-3538). The first TML-3538 PR, MongoDB checking documents before a validator change and asking about type changes, merged 2026-11-11. TML-3538 is still in progress | The rest of TML-3538 |
 | 8 | ✅ 4/4 | Client surfaces: a client takes a typed contract value, custom collections on every client and transaction | Must | Will | Slice 1 merged 2026-10-19; it is breaking: `postgres<Contract>({ contractJson })` became `postgres({ contract: contractFromJson<Contract>(json) })`. Slice 2, custom collections on every SQL client, merged 2026-10-20. Slice 3, a transaction offers the client's query members, merged 2026-10-20. Slice 4, a client loads without a database and renders plans as SQL, merged 2026-10-21. Done 2026-10-21 (Will). The close-out merged 2026-10-21 |  |
 
 ## Stream 2: Upgrade path from Prisma 7
@@ -84,9 +84,9 @@ Everything here is additive, so nothing here can block a breaking change.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 🔄 | Transaction options: isolation levels and timeouts | Must | Serhii | Started 2026-11-10: a PR adding transaction isolation options is approved and not merged. Timeouts are not in it | Merge the isolation options PR |
+| 1 | 🔄 1/2 | Transaction options: isolation levels and timeouts | Must | Serhii | Isolation levels merged 2026-11-11. Timeouts for callback transactions are approved and not merged | Merge the timeouts PR |
 | 1b | ⏳ | Nested transactions | Must | Serhii | Not designed |  |
-| 2 | 🔄 0/5 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | Every top-level write runs through one mutation graph. Nested `create()` and `update()` moved onto it, and the old nested-write executor was removed, merged 2026-11-10. Slice 1 (`update` and `delete` on a filtered set) in review since 2026-10-09 | Review the slice 1 PR |
+| 2 | 🔄 5/9 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 9 slices in `projects/nested-mutations/`. Merged: every write runs through one mutation graph, nested `create()` and `update()` included (2026-11-10); one write graph for every database (2026-11-12); a relation callback returns an array of operations, and `update()` updates and deletes filtered related rows on one-to-many and many-to-many relations (2026-11-13). Open PRs, not yet reviewed: `variant(value).create()` in relation callbacks, skipping colliding rows in a nested create, and refusing a `hasOne` relation whose child key is not unique. Left after them: nested `upsert` | Review the three open PRs |
 | 3 | ✅ 1/1 | Design the replacement for `omit` | Must (design only) | Will | Design done (Will, 2026-10-07) |  |
 | 4 | ⏳ | Expressions in updates (what `increment` and `decrement` did in Prisma 7) | When there is time | Serhii | Not designed | |
 | 5 | ✅ 1/1 | A query that fails when nothing matches (what `firstOrThrow` did in Prisma 7) | Must | Serhii | `firstOrThrow` on collections merged 2026-10-08 |  |
@@ -108,7 +108,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 2/2 | Docs and the shipped skill stop naming `prisma-composer` | Must, urgent | Will | Done 2026-10-08 |  |
-| 2 | 🔄 0/3 | Correct the query reference in the shipped skill, which promises features that do not exist | Must, urgent | Will | 1 PR approved, 1 PR open, 3 tickets open | Merge the approved data-transforms PR, then review the back-references PR |
+| 2 | 🔄 0/3 | Correct the query reference in the shipped skill, which promises features that do not exist | Must, urgent | Will | Both PRs approved and not merged: data transforms (since 2026-09-29) and back-references. 3 tickets open | Merge both PRs |
 | 3 | 🔄 1/11 | Docs gaps found by the eval: 11 items, 5 high | Must | Will | 1 of 11 merged. The rest not re-checked | Re-check the 11 items against prisma/web |
 | 4 | ❓ | ORM scenario for the eval: decide the project, then build it | Must | Will | Not decided | Decide the project |
 | 5 | 🔄 | Docs restructure | Must | Will | The docs audit draft is active again, updated 2026-10-22. Three new pages merged 2026-10-23: a database on your machine, Advanced PostgreSQL, and supported versions. More merged 2026-10-29: Types for your code, Money and decimals, a Vercel deployment guide, and extension pages. The docs update for rc.21 and rc.22 merged 2026-10-30 | |
