@@ -549,6 +549,76 @@ testMatrix.setupTestSuite(
       expect(users).toHaveLength(2)
     })
 
+    testIf(provider !== Providers.MONGODB)(
+      'sql: nested array transaction rolls back with the outer transaction',
+      async () => {
+        const email1 = `user_${copycat.uuid(901)}@website.com`
+        const email2 = `user_${copycat.uuid(902)}@website.com`
+        const email3 = `user_${copycat.uuid(903)}@website.com`
+
+        await expect(
+          prisma.$transaction(async (tx) => {
+            await tx.user.create({ data: { email: email1 } })
+
+            const created = await tx.$transaction([
+              tx.user.create({ data: { email: email2 } }),
+              tx.user.create({ data: { email: email3 } }),
+            ])
+            expect(created.map((u) => u.email)).toEqual([email2, email3])
+
+            throw new Error('Rollback')
+          }),
+        ).rejects.toThrow(/Rollback/)
+
+        const users = await prisma.user.findMany({
+          where: { email: { in: [email1, email2, email3] } },
+        })
+        expect(users).toHaveLength(0)
+      },
+    )
+
+    testIf(provider !== Providers.MONGODB)(
+      'sql: failed nested array transaction can be caught and the outer transaction commits',
+      async () => {
+        const outerEmail = `user_${copycat.uuid(905)}@website.com`
+        const nestedEmail = `user_${copycat.uuid(906)}@website.com`
+
+        await prisma.$transaction(async (tx) => {
+          await tx.user.create({ data: { email: outerEmail } })
+
+          await expect(
+            tx.$transaction([
+              tx.user.create({ data: { email: nestedEmail } }),
+              tx.user.create({ data: { email: outerEmail } }),
+            ]),
+          ).rejects.toMatchObject({ code: 'P2002' })
+        })
+
+        const users = await prisma.user.findMany({
+          where: { email: { in: [outerEmail, nestedEmail] } },
+        })
+        expect(users.map((u) => u.email)).toEqual([outerEmail])
+      },
+    )
+
+    testIf(provider === Providers.POSTGRESQL)(
+      'postgresql: nested array transaction is not committed before the outer transaction',
+      async () => {
+        const email = `user_${copycat.uuid(904)}@website.com`
+
+        await prisma.$transaction(async (tx) => {
+          await tx.$transaction([tx.user.create({ data: { email } })])
+
+          // Read through the root client, i.e. from outside the transaction.
+          const visibleOutside = await prisma.user.findMany({ where: { email } })
+          expect(visibleOutside).toHaveLength(0)
+        })
+
+        const users = await prisma.user.findMany({ where: { email } })
+        expect(users).toHaveLength(1)
+      },
+    )
+
     testIf(provider !== Providers.MONGODB)('sql: enforce order for nested transactions', async () => {
       const result = prisma.$transaction(async (tx) => {
         const nested = tx.$transaction(async (tx2) => {

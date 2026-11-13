@@ -777,6 +777,11 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
       promises: Array<PrismaPromise<any>>
       options?: BatchTransactionOptions
     }): Promise<any> {
+      const itxContext = getItxScopeContext(this)
+      if (itxContext.kind === 'nested') {
+        return this._nestedTransactionWithArray({ promises, options })
+      }
+
       const id = BatchTxIdCounter.nextId()
       const lock = getLockCountPromise(promises.length)
 
@@ -804,6 +809,46 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
     }
 
     /**
+     * Run the queries of an array-form `$transaction` that was called on an
+     * interactive-transaction client. They run one after another in a nested
+     * transaction (a savepoint) on the outer transaction's connection, so they
+     * commit and roll back together with it.
+     */
+    _nestedTransactionWithArray({
+      promises,
+      options,
+    }: {
+      promises: Array<PrismaPromise<any>>
+      options?: BatchTransactionOptions
+    }): Promise<any> {
+      for (const request of promises) {
+        if (request?.[Symbol.toStringTag] !== 'PrismaPromise') {
+          throw new Error(
+            `All elements of the array need to be Prisma Client promises. Hint: Please make sure you are not awaiting the Prisma client calls you intended to pass in the $transaction function.`,
+          )
+        }
+      }
+
+      if (config.activeProvider === 'mongodb') {
+        throw new PrismaClientValidationError(
+          `The ${config.activeProvider} provider does not support nested transactions`,
+          { clientVersion: this._clientVersion },
+        )
+      }
+
+      return this._withInteractiveTransaction({
+        options,
+        run: async (_client, transaction) => {
+          const results: unknown[] = []
+          for (const request of promises) {
+            results.push(await (request.requestTransaction?.(transaction) ?? request))
+          }
+          return results
+        },
+      })
+    }
+
+    /**
      * Perform a long-running transaction
      * @param callback
      * @param options
@@ -814,6 +859,20 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
       options = {},
     }: {
       callback: (client: Client) => Promise<unknown>
+      options?: Options
+    }) {
+      return this._withInteractiveTransaction({ options, run: (client) => callback(client) })
+    }
+
+    /**
+     * Start an interactive transaction (or a savepoint when called on an
+     * interactive-transaction client), run `run` in it, then commit or roll back.
+     */
+    async _withInteractiveTransaction({
+      run,
+      options = {},
+    }: {
+      run: (client: Client, transaction: PrismaPromiseInteractiveTransaction) => Promise<unknown>
       options?: Options
     }) {
       const itxContext = getItxScopeContext(this)
@@ -856,7 +915,7 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         // execute user logic with a proxied the client
         const transaction = { kind: 'itx', ...info } as const
 
-        result = await callback(this._createItxClient(transaction, scopeId, scopeState))
+        result = await run(this._createItxClient(transaction, scopeId, scopeState), transaction)
 
         if (isNested) {
           // Don't allow closing a transaction if we are not the active scope.
