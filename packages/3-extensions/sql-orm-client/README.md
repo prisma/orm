@@ -418,7 +418,7 @@ await db.Project.where({ id: 1 }).update({
 });
 ```
 
-`deleteAll` on a variant stored in its own table deletes the base rows, as `deleteAll` on a variant collection does; the variant rows are removed by the foreign-key action of the variant table, so declare it with a cascading delete.
+`deleteAll` on a variant stored in its own table deletes the base rows, as `deleteAll` on a variant collection does; the variant rows are removed by the variant table's foreign key to the base table, which a PSL contract declares with a cascading delete for every variant stored in its own table. PSL is the contract source that declares variants; the TypeScript contract builder does not.
 
 ### Updating and deleting related rows
 
