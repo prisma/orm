@@ -428,7 +428,10 @@ function addFilteredWrite(
     addDeleteAll(t, related, parents);
     return;
   }
-  const linking = relation.on.targetFields.filter((field) => Object.hasOwn(mutation.data, field));
+  const set = updateValuesOf(related, mutation.data);
+  const linking = relation.on.targetFields.filter((field) =>
+    Object.hasOwn(set, columnOfContractField(contract, relation.toNamespace, relation.to, field)),
+  );
   if (linking.length > 0) {
     throw ormError(
       'ORM.RELATION_MUTATION_INVALID',
@@ -438,7 +441,6 @@ function addFilteredWrite(
       },
     );
   }
-  const set = updateValuesOf(related, mutation.data);
   if (Object.keys(set).length > 0) {
     addUpdateAll(t, related, set, parents, 'count');
   }

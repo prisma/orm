@@ -115,6 +115,20 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
       { kind: 'updateAll', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
     [
+      'with an update default on the field linking the children to the parent',
+      () =>
+        graphOf({ posts: (posts: Mutator) => posts.updateAll({ title: 'a' }) }, 'User', {
+          ...getTestContext(),
+          applyMutationDefaults: (options) =>
+            options.op === 'update' && options.entry === 'posts'
+              ? [{ field: 'user_id', value: 2 }]
+              : [],
+        }),
+      'ORM.RELATION_MUTATION_INVALID',
+      'updateAll() nested mutation for relation "posts" cannot set "userId", which links the related rows to their parent',
+      { kind: 'updateAll', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
+    ],
+    [
       'on a many-to-many relation',
       () => graphOf({ tags: (tags: Mutator) => tags.deleteAll() }),
       'ORM.RELATION_MUTATION_UNSUPPORTED',
