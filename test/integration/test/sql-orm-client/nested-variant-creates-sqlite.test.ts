@@ -20,6 +20,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { rejectionShape } from './error-shape';
 import type { Contract } from './fixtures/polymorphism-sqlite/generated/contract';
 import contractJson from './fixtures/polymorphism-sqlite/generated/contract.json' with {
   type: 'json',
@@ -483,16 +484,24 @@ describe('integration/nested-variant-creates on SQLite', () => {
       'writes no row of either table when a later row of the call fails',
       async () => {
         await withDatabase(async ({ db, rows }) => {
-          await expect(
-            db.Project.create({
-              name: 'Launch',
-              tasks: (tasks) =>
-                tasks.variant('feature').create([
-                  { id: 7, ...darkMode },
-                  { id: 7, ...exportPdf },
-                ]),
-            }),
-          ).rejects.toThrow();
+          expect(
+            await rejectionShape(
+              db.Project.create({
+                name: 'Launch',
+                tasks: (tasks) =>
+                  tasks.variant('feature').create([
+                    { id: 7, ...darkMode },
+                    { id: 7, ...exportPdf },
+                  ]),
+              }),
+            ),
+          ).toMatchObject({
+            name: 'SqlQueryError',
+            kind: 'sql_query',
+            sqlState: '23505',
+            constraint: 'tasks.id',
+            message: 'UNIQUE constraint failed: tasks.id',
+          });
 
           expect(rows('select id from projects')).toEqual([]);
           expect(rows(featureTasksSql)).toEqual([]);

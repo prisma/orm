@@ -1,5 +1,6 @@
 import { Collection } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
+import { rejectionShape } from './error-shape';
 import { getPolyTestContext } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
@@ -452,16 +453,25 @@ describe('integration/nested-variant-creates', () => {
           await setupSchema(runtime);
           const { projects } = collectionsOf(runtime);
 
-          await expect(
-            projects.create({
-              name: 'Launch',
-              tasks: (tasks) =>
-                tasks.variant('feature').create([
-                  { id: 7, ...darkMode },
-                  { id: 7, ...exportPdf },
-                ]),
-            }),
-          ).rejects.toThrow();
+          expect(
+            await rejectionShape(
+              projects.create({
+                name: 'Launch',
+                tasks: (tasks) =>
+                  tasks.variant('feature').create([
+                    { id: 7, ...darkMode },
+                    { id: 7, ...exportPdf },
+                  ]),
+              }),
+            ),
+          ).toMatchObject({
+            name: 'SqlQueryError',
+            kind: 'sql_query',
+            sqlState: '23505',
+            constraint: 'tasks_pkey',
+            detail: 'Key (id)=(7) already exists.',
+            message: 'duplicate key value violates unique constraint "tasks_pkey"',
+          });
 
           expect(await runtime.query('select id from projects_tbl')).toEqual([]);
           expect(await storedFeatures(runtime)).toEqual({ tasks: [], features: [] });
