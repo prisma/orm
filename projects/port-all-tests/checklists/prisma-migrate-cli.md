@@ -191,7 +191,7 @@ Excluded from this segment (per inventory, unit-level and out of scope): `packag
 - [ ] `sqlserver-multischema > datasource property \`schemas=["base"]\` should succeed` — single-schema introspection succeeds with sanitized PK names [providers: sqlserver]
 - [ ] `sqlserver-multischema > datasource property \`schemas=["does-not-exist"]\` should error with P4001, empty database` — non-existent schema rejects with P4001 [providers: sqlserver]
 - [ ] `sqlserver-multischema > datasource property \`schemas=["does-not-exist", "base"]\` should succeed` — mix of existing/non-existent schema succeeds on existing [providers: sqlserver]
-- [ ] `sqlserver-multischema > url with \`?schema=does-not-exist\` should error with with P4001, empty database` — URL `?schema=does-not-exist` rejects with P4001 [providers: sqlserver]
+- [ ] `sqlserver-multischema > url with \`?schema=does-not-exist\` should error with P4001, empty database` — URL `?schema=does-not-exist` rejects with P4001 [providers: sqlserver]
 - [ ] `sqlserver-multischema > url with \`?schema=base\` should succeed` — URL `?schema=base` scopes introspection to base schema [providers: sqlserver]
 
 ### packages/migrate/src/__tests__/DbPush.test.ts
