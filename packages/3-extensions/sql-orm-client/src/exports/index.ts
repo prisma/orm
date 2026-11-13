@@ -74,6 +74,7 @@ export type {
   ModelAccessor,
   ModelCallbackTools,
   ModelIndexReferences,
+  MutationUpdateInput,
   NumericFieldNames,
   Orderable,
   OrderableFieldNames,
