@@ -89,14 +89,14 @@ describe('variant() on the mutator of a polymorphic target', () => {
     expectTypeOf([update, toOne]).toExtend<readonly unknown[]>();
   });
 
-  test('the variant mutator has only create', () => {
-    expectTypeOf<keyof VariantRelationMutator<Contract, 'Task', 'bug'>>().toEqualTypeOf<'create'>();
+  test('the variant mutator has create, connect and disconnect', () => {
+    expectTypeOf<keyof VariantRelationMutator<Contract, 'Task', 'bug'>>().toEqualTypeOf<
+      'create' | 'connect' | 'disconnect'
+    >();
 
     const update: ProjectUpdate = {
       tasks: (tasks) => {
         const bugs = tasks.variant('bug');
-        expectTypeOf(bugs).not.toHaveProperty('connect');
-        expectTypeOf(bugs).not.toHaveProperty('disconnect');
         expectTypeOf(bugs).not.toHaveProperty('where');
         expectTypeOf(bugs).not.toHaveProperty('updateAll');
         expectTypeOf(bugs).not.toHaveProperty('deleteAll');
@@ -106,6 +106,67 @@ describe('variant() on the mutator of a polymorphic target', () => {
     };
 
     expectTypeOf(update).toExtend<ProjectUpdate>();
+  });
+
+  test('connect on the variant mutator takes the criteria of the base model on every layout', () => {
+    const create: ProjectCreate = {
+      name: 'Launch',
+      tasks: (tasks) => tasks.variant('bug').connect([{ id: 1 }, { id: 2 }]),
+    };
+    const update: ProjectUpdate = {
+      tasks: (tasks) => tasks.variant('feature').connect({ id: 1 }),
+    };
+    const toOne: CommentUpdate = {
+      task: (task) => task.variant('bug').connect({ id: 1 }),
+    };
+    const toOneCreate: CommentCreate = {
+      body: 'Hi',
+      task: (task) => task.variant('bug').connect({ id: 1 }),
+    };
+    const junction: LabelUpdate = {
+      tasks: (tasks) => tasks.variant('feature').connect([{ id: 1 }]),
+    };
+
+    expectTypeOf([create, update, toOne, toOneCreate, junction]).toExtend<readonly unknown[]>();
+  });
+
+  test('disconnect on the variant mutator follows the base mutator on 1:N and M:N', () => {
+    const update: ProjectUpdate = {
+      tasks: (tasks) => [
+        tasks.variant('bug').disconnect(),
+        tasks.variant('feature').disconnect([{ id: 2 }]),
+      ],
+    };
+    const junction: LabelUpdate = {
+      tasks: (tasks) => tasks.variant('bug').disconnect([{ id: 1 }]),
+    };
+    const bareJunction: LabelUpdate = {
+      // @ts-expect-error
+      tasks: (tasks) => tasks.variant('bug').disconnect(),
+    };
+    const inCreate: ProjectCreate = {
+      name: 'Launch',
+      // @ts-expect-error
+      tasks: (tasks) => tasks.variant('bug').disconnect([{ id: 1 }]),
+    };
+
+    expectTypeOf([update, junction, bareJunction, inCreate]).toExtend<readonly unknown[]>();
+  });
+
+  test('disconnect on the variant mutator takes nothing on N:1', () => {
+    const toOne: CommentUpdate = {
+      // @ts-expect-error
+      task: (task) => task.variant('bug').disconnect(),
+    };
+    const withCriteria: CommentUpdate = {
+      // @ts-expect-error
+      task: (task) => task.variant('bug').disconnect([{ id: 1 }]),
+    };
+    const base: CommentUpdate = {
+      task: (task) => task.disconnect(),
+    };
+
+    expectTypeOf([toOne, withCriteria, base]).toExtend<readonly unknown[]>();
   });
 
   test('the mutator of a polymorphic target keeps connect and the filtered writes', () => {

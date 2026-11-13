@@ -1,4 +1,11 @@
-import type { AnyExpression, BinaryOp, ExprVisitor } from '@internal/sql-relational-core/ast';
+import type {
+  AnyExpression,
+  AnyFromSource,
+  BinaryOp,
+  ExprVisitor,
+  JoinAst,
+  SelectAst,
+} from '@internal/sql-relational-core/ast';
 
 const binaryOperators: Record<BinaryOp, string> = {
   eq: '=',
@@ -31,6 +38,30 @@ function printKind(expr: { readonly kind: string }): string {
   return `<${expr.kind}>`;
 }
 
+function sourceOf(source: AnyFromSource | undefined): { name: string; alias: string } {
+  const name = source?.kind === 'table-source' ? source.name : '';
+  return { name, alias: source?.kind === 'table-source' ? (source.alias ?? name) : '' };
+}
+
+function printJoin(join: JoinAst, alias: string): string {
+  const { name, alias: joined } = sourceOf(join.source);
+  const source = joined === name ? name : `${name} ${joined}`;
+  const on =
+    join.on.kind === 'eq-col-join-on'
+      ? `${join.on.left.table}.${join.on.left.column} = ${join.on.right.table}.${join.on.right.column}`
+      : printExpression(join.on, alias);
+  return ` ${join.joinType} join ${source} on ${on}`;
+}
+
+function printSelect(query: SelectAst): string {
+  const { name, alias } = sourceOf(query.from);
+  const source = alias === name ? name : `${name} ${alias}`;
+  const columns = query.projection.map((item) => printExpression(item.expr, alias));
+  const joins = (query.joins ?? []).map((join) => printJoin(join, alias)).join('');
+  const where = query.where === undefined ? '' : ` where ${printExpression(query.where, alias)}`;
+  return `(select ${columns.join(', ')} from ${source}${joins}${where})`;
+}
+
 export function printExpression(expr: AnyExpression, tableName: string): string {
   const print = (inner: AnyExpression): string => inner.accept(printer);
   const printer: ExprVisitor<string> = {
@@ -45,17 +76,9 @@ export function printExpression(expr: AnyExpression, tableName: string): string 
     or: (or) => (or.exprs.length === 0 ? 'false' : `(${or.exprs.map(print).join(' or ')})`),
     not: (not) => `not (${print(not.expr)})`,
     nullCheck: (check) => `${print(check.expr)} ${check.isNull ? 'is null' : 'is not null'}`,
-    exists: printKind,
-    subquery: ({ query }) => {
-      const { from } = query;
-      const name = from?.kind === 'table-source' ? from.name : '';
-      const alias = from?.kind === 'table-source' ? (from.alias ?? name) : '';
-      const source = alias === name ? name : `${name} ${alias}`;
-      const columns = query.projection.map((item) => printExpression(item.expr, alias));
-      const where =
-        query.where === undefined ? '' : ` where ${printExpression(query.where, alias)}`;
-      return `(select ${columns.join(', ')} from ${source}${where})`;
-    },
+    exists: ({ subquery, notExists }) =>
+      `${notExists ? 'not exists' : 'exists'} ${printSelect(subquery)}`,
+    subquery: ({ query }) => printSelect(query),
     operation: printKind,
     aggregate: printKind,
     windowFunc: printKind,

@@ -1933,6 +1933,7 @@ export interface RelationMutationConnect<
 > {
   readonly kind: 'connect';
   readonly criteria: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly state?: CollectionState;
 }
 
 export interface RelationMutationDisconnect<
@@ -1941,6 +1942,7 @@ export interface RelationMutationDisconnect<
 > {
   readonly kind: 'disconnect';
   readonly criteria?: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly state?: CollectionState;
 }
 
 export type RelationMutationFilter<
@@ -2224,7 +2226,18 @@ export interface VariantRelationMutator<
   ModelName extends string,
   VariantValue extends string,
   LinkWritesDisabled extends boolean = false,
-> {
+  BareDisconnectDisabled extends boolean = false,
+  DisconnectDisabled extends boolean = false,
+> extends Pick<
+    RelationMutator<
+      TContract,
+      ModelName,
+      LinkWritesDisabled,
+      BareDisconnectDisabled,
+      DisconnectDisabled
+    >,
+    'connect' | 'disconnect'
+  > {
   create(
     data: LinkWritesDisabled extends true
       ? never
@@ -2241,12 +2254,21 @@ type RelationMutatorVariant<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   LinkWritesDisabled extends boolean,
+  BareDisconnectDisabled extends boolean,
+  VariantDisconnectDisabled extends boolean,
 > =
   IsPolymorphicBase<TContract, ModelName> extends true
     ? {
         variant<V extends DiscriminatorValues<TContract, ModelName>>(
           value: V,
-        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
+        ): VariantRelationMutator<
+          TContract,
+          ModelName,
+          V,
+          LinkWritesDisabled,
+          BareDisconnectDisabled,
+          VariantDisconnectDisabled
+        >;
       }
     : unknown;
 
@@ -2272,7 +2294,13 @@ type RelationMutationCallback<
     RelationMutatorVariant<
       TContract,
       RelatedModelName<TContract, ModelName, RelName> & string,
-      HasRequiredJunctionPayload<TContract, ModelName, RelName>
+      HasRequiredJunctionPayload<TContract, ModelName, RelName>,
+      HasJunctionThrough<TContract, ModelName, RelName>,
+      Context extends 'create'
+        ? true
+        : RelationCardinality<TContract, ModelName, RelName> extends 'N:1'
+          ? true
+          : false
     >,
 ) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
   ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>

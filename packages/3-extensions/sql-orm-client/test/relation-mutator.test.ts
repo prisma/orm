@@ -25,7 +25,11 @@ const tasks = new Collection(
 );
 
 interface PolymorphicMutator {
-  variant(value: string): { create(data: object | readonly object[]): unknown };
+  variant(value: string): {
+    create(data: object | readonly object[]): unknown;
+    connect(criteria: object | readonly object[]): unknown;
+    disconnect(criteria?: readonly object[]): unknown;
+  };
 }
 
 function variantOf(related: RelationCollection<Contract<SqlStorage>, string>, value: string) {
@@ -102,7 +106,7 @@ describe('relation-mutator', () => {
   it('variant().create() carries the variant value with one row or an array', () => {
     const bugs = variantOf(tasks, 'bug');
 
-    expect(Object.keys(bugs)).toEqual(['create']);
+    expect(Object.keys(bugs)).toEqual(['create', 'connect', 'disconnect']);
     expect(bugs.create({ title: 'Crash' })).toEqual({
       kind: 'create',
       data: [{ title: 'Crash' }],
@@ -112,6 +116,24 @@ describe('relation-mutator', () => {
       kind: 'create',
       data: [{ title: 'Crash' }, { title: 'Hang' }],
       variant: 'bug',
+    });
+  });
+
+  it('variant().connect() and disconnect() carry the state of the variant collection', () => {
+    const bugs = variantOf(tasks, 'bug');
+    const { state } = tasks.variant('bug');
+
+    expect(bugs.connect({ id: 1 })).toEqual({ kind: 'connect', criteria: [{ id: 1 }], state });
+    expect(bugs.connect([{ id: 1 }, { id: 2 }])).toEqual({
+      kind: 'connect',
+      criteria: [{ id: 1 }, { id: 2 }],
+      state,
+    });
+    expect(bugs.disconnect()).toEqual({ kind: 'disconnect', state });
+    expect(bugs.disconnect([{ id: 1 }])).toEqual({
+      kind: 'disconnect',
+      criteria: [{ id: 1 }],
+      state,
     });
   });
 

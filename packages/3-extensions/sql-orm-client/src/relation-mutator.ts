@@ -62,7 +62,8 @@ export function createRelationMutator<
       } as RelationMutationCreate<TContract, ModelName>;
     },
     variant(value: string) {
-      const { variantValue } = related.variant(value).state;
+      const { state } = related.variant(value);
+      const { variantValue } = state;
       return {
         create: (
           data:
@@ -71,6 +72,18 @@ export function createRelationMutator<
         ): RelationMutationCreate<TContract, ModelName> => ({
           ...mutator.create(data),
           ...ifDefined('variant', variantValue),
+        }),
+        connect: (
+          criteria: Record<string, unknown> | readonly Record<string, unknown>[],
+        ): RelationMutationConnect<TContract, ModelName> => ({
+          ...mutator.connect(criteria),
+          state,
+        }),
+        disconnect: (
+          criteria?: readonly Record<string, unknown>[],
+        ): RelationMutationDisconnect<TContract, ModelName> => ({
+          ...mutator.disconnect(criteria),
+          state,
         }),
       };
     },
