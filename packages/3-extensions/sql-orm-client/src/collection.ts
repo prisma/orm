@@ -1960,12 +1960,20 @@ export class CollectionBase<
             this.#on(queryable),
             this.#descriptionOptions(),
           ).toArray()
-        : this.#createAllRows([
-            blindCast<
-              ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-              'a create on an MTI variant has no nested callbacks, which createAll() refuses'
-            >(data),
-          ])(queryable);
+        : this.#createAllRows(
+            [
+              blindCast<
+                ResolvedScalarCreateInput<
+                  TContract,
+                  ModelName,
+                  State['variantValue'],
+                  State['nsId']
+                >,
+                'a create on an MTI variant has no nested callbacks, which createAll() refuses'
+              >(data),
+            ],
+            'create()',
+          )(queryable);
     const [created] = await rows;
     if (created !== undefined) {
       return created;
@@ -2050,7 +2058,7 @@ export class CollectionBase<
     return streamOrmCall(
       this.ctx.runtime,
       this.#writeCall('createAll', annotations, ormResults.rows<Row>),
-      this.#createAllRows(data, conflictSkip),
+      this.#createAllRows(data, 'createAll()', conflictSkip),
     );
   }
 
@@ -2061,6 +2069,7 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
+    method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
   ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -2074,7 +2083,7 @@ export class CollectionBase<
     >(data);
     const mtiContext = mtiCreateContextOf(this.#descriptionOptions());
     if (mtiContext) {
-      assertReturningCapability(this.contract, 'createAll()');
+      assertReturningCapability(this.contract, method);
       const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
       const graph = createAllVariantGraph(
         this.#descriptionWithoutIncludes(),

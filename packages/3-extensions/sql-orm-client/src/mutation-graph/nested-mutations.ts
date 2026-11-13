@@ -3,12 +3,18 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast, castAs } from '@internal/utils/casts';
 import {
+  assertReturningCapability,
   columnOfContractField,
   type ResolvedRelation,
   resolveModelTableName,
   resolveRelationTargetColumns,
 } from '../collection-contract';
-import { type CollectionTables, createStatementTables } from '../collection-tables';
+import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
+import {
+  type CollectionTables,
+  createStatementTables,
+  requireVariantTable,
+} from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
 import { type InsertConflictSkip, projectTableColumn } from '../mutation-statements';
 import { ormError } from '../orm-errors';
@@ -28,7 +34,7 @@ import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
 import { Assert } from './assert';
-import { addDeleteAll, addUpdateAll } from './collection-graphs';
+import { addDeleteAll, addUpdateAll, variantKeyMappings } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -47,11 +53,20 @@ import {
 } from './model-statements';
 import { Requires } from './requires';
 import { Rows } from './rows';
-import { createRowOf, updateValuesOf, withCreateDefaults } from './storage-rows';
+import {
+  createRowOf,
+  type MtiCreateContext,
+  modelOf,
+  mtiCreateContextOf,
+  updateValuesOf,
+  variantCreateRowOf,
+  withCreateDefaults,
+} from './storage-rows';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
 type CreateOrConnect = Extract<Mutation, { kind: 'create' | 'connect' }>;
 type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' }>;
+type CreateMutation = Extract<Mutation, { kind: 'create' }>;
 
 export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
@@ -97,13 +112,76 @@ function nestedCreate(
   parsed: ParsedMutationInput,
   keysFromParent: readonly KeySource[],
   returns: Returns,
+  variantValue: string | undefined,
 ): NodeId {
   return addCreateWithRelations(t, model, parsed, {
     keysFromParent,
     returns,
     shape: allColumns,
-    variantValue: undefined,
+    variantValue,
   });
+}
+
+interface OwnTableVariant {
+  readonly collection: DescribeCollectionRowsOptions;
+  readonly mti: MtiCreateContext;
+  readonly variantTable: AliasedTable;
+  readonly defaultValueCache: Map<string, unknown>;
+}
+
+function ownTableVariantOf(
+  t: Translation,
+  { relation, relatedCollection }: ParsedRelationMutation,
+  mutation: CreateMutation,
+): OwnTableVariant | undefined {
+  if (mutation.variant === undefined) {
+    return undefined;
+  }
+  const collection = {
+    context: t.context,
+    state: relatedCollection(relation).variant(mutation.variant).state,
+    modelName: relation.to,
+    namespaceId: relation.toNamespace,
+  };
+  const mti = mtiCreateContextOf(collection);
+  if (mti === undefined) {
+    return undefined;
+  }
+  assertReturningCapability(t.context.contract, 'create()');
+  return {
+    collection,
+    mti,
+    variantTable: requireVariantTable(collection.state.tables, mti.variant.value),
+    defaultValueCache: new Map(),
+  };
+}
+
+function addOwnTableVariantRow(
+  t: Translation,
+  { collection, mti, variantTable, defaultValueCache }: OwnTableVariant,
+  relatedCollection: RelatedCollection,
+  row: MutationCreateInput<Contract<SqlStorage>, string>,
+  keysFromParent: readonly KeySource[],
+): NodeId {
+  const model = modelOf(collection);
+  parseCreateInput(t, model, row, relatedCollection);
+  const { root } = model.tables;
+  const split = variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache);
+  const base = addInsert(t, root, [split.base], {
+    conflict: undefined,
+    keys: keysFromParent,
+    junction: undefined,
+    requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
+    owner: { operation: 'create', modelName: model.modelName },
+  });
+  addInsert(t, variantTable, [split.variant], {
+    conflict: undefined,
+    keys: [{ from: base, columns: variantKeyMappings(t.context.contract, root, variantTable) }],
+    junction: undefined,
+    requires: [],
+    owner: { operation: 'create', modelName: mti.variant.modelName },
+  });
+  return base;
 }
 
 export function addBeforeWrite(
@@ -190,9 +268,10 @@ function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelatio
 function addParentOwned(
   t: Translation,
   model: Model,
-  { name, relation, relatedCollection }: ParsedRelationMutation,
+  relationMutation: ParsedRelationMutation,
   mutation: CreateOrConnect,
 ): KeySource {
+  const { name, relation, relatedCollection } = relationMutation;
   const { contract } = t.context;
   const related = relatedModel(contract, relation);
   const columns = columnMappings(
@@ -211,16 +290,21 @@ function addParentOwned(
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
     }
-    return {
-      from: nestedCreate(
-        t,
-        related,
-        parseCreateInput(t, related, row, relatedCollection),
-        [],
-        'rows',
-      ),
-      columns,
-    };
+    const variant = ownTableVariantOf(t, relationMutation, mutation);
+    if (variant === undefined) {
+      return {
+        from: nestedCreate(
+          t,
+          related,
+          parseCreateInput(t, related, row, relatedCollection),
+          [],
+          'rows',
+          mutation.variant,
+        ),
+        columns,
+      };
+    }
+    return { from: addOwnTableVariantRow(t, variant, relatedCollection, row, []), columns };
   }
   const [criterion] = mutation.criteria;
   if (criterion === undefined) {
@@ -237,9 +321,10 @@ function addChildOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation, relatedCollection }: ParsedRelationMutation,
+  relationMutation: ParsedRelationMutation,
   mutation: Mutation,
 ): void {
+  const { name, relation, relatedCollection } = relationMutation;
   const { context } = t;
   const { contract } = context;
   const related = relatedModel(contract, relation);
@@ -257,16 +342,25 @@ function addChildOwned(
   }
   if (mutation.kind === 'create') {
     const keys = [{ from: parent, columns: fromParent }];
+    const variant = ownTableVariantOf(t, relationMutation, mutation);
+    if (variant !== undefined) {
+      for (const row of mutation.data) {
+        addOwnTableVariantRow(t, variant, relatedCollection, row, keys);
+      }
+      return;
+    }
+    const variantValue = mutation.variant;
     const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
     if (rows.some((row) => row.relationMutations.length > 0)) {
       for (const row of rows) {
-        nestedCreate(t, related, row, keys, 'count');
+        nestedCreate(t, related, row, keys, 'count', variantValue);
       }
       return;
     }
     addChildInserts(
       t,
       related,
+      variantValue,
       rows.map((row) => row.scalarData),
       keys,
     );
@@ -318,9 +412,10 @@ function addJunctionOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  { name, relation, relatedCollection }: JunctionRelationMutation,
+  relationMutation: JunctionRelationMutation,
   mutation: Mutation,
 ): void {
+  const { name, relation, relatedCollection } = relationMutation;
   const { context } = t;
   const { contract } = context;
   const { through } = relation;
@@ -362,9 +457,24 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
+    const variant = ownTableVariantOf(t, relationMutation, mutation);
+    if (variant !== undefined) {
+      for (const row of mutation.data) {
+        addLink(addOwnTableVariantRow(t, variant, relatedCollection, row, []), undefined);
+      }
+      return;
+    }
+    const variantValue = mutation.variant;
     for (const row of mutation.data) {
       addLink(
-        nestedCreate(t, related, parseCreateInput(t, related, row, relatedCollection), [], 'rows'),
+        nestedCreate(
+          t,
+          related,
+          parseCreateInput(t, related, row, relatedCollection),
+          [],
+          'rows',
+          variantValue,
+        ),
         undefined,
       );
     }
@@ -481,10 +591,11 @@ function sourcesOf(
 function addChildInserts(
   t: Translation,
   model: Model,
+  variantValue: string | undefined,
   rows: readonly Readonly<Record<string, unknown>>[],
   keys: readonly KeySource[],
 ): void {
-  const values = rows.map((row) => createRowOf(t.context, model, undefined, row, undefined));
+  const values = rows.map((row) => createRowOf(t.context, model, variantValue, row, undefined));
   insertRows(t, model, values, {
     conflict: undefined,
     keys,

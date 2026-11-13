@@ -342,7 +342,7 @@ await db.User.where({ id: 1 }).update({
 
 | Operation | Available in | Relations |
 | --- | --- | --- |
-| `r.create(data)` | `create()`, `update()` | all |
+| `r.create(data)` | `create()`, `update()` | all; on a polymorphic target, `r.variant(value).create(data)` |
 | `r.connect(criteria)` | `create()`, `update()` | all |
 | `r.disconnect(criteria?)` | `update()` | all |
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
@@ -369,6 +369,25 @@ await db.User.where({ id: 1 }).update({
 ```
 
 A to-one relation takes at most one operation: an array of two or more is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'to-one-relation'`). An array that holds another array or a value that is not an operation is refused with `ORM.RELATION_MUTATION_INVALID`, with the position in `index`.
+
+### Creating rows of a polymorphic model
+
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares, as a collection's `variant()` does. `r.variant(value).create(data)` creates rows of that variant, in `create()` and `update()`, with one row or an array. The data is the base model's fields and the variant's own fields, without the discriminator, which the ORM sets. As in a nested `r.create`, the fields that link the row to the record are optional.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [
+    tasks.variant('bug').create({ title: 'Crash on login', severity: 'high' }),
+    tasks.variant('feature').create([{ title: 'Dark mode', priority: 1 }]),
+  ],
+});
+```
+
+A variant stored in the base table is written as one row of that table. A variant stored in its own table is written as a row of the base table and a row of the variant table with the same key; the link to the record is on the base row. MTI variant collections need `returning` to create rows, and so does a nested create of such a variant: without it the call is refused with `ORM.CAPABILITY_MISSING`, as `create()` on the variant collection is.
+
+A relation callback inside the row behaves as it does in a collection's `variant(value).create(data)`. For a variant stored in the base table, a callback on a relation of the base model runs; a callback on a relation only the variant declares is refused with `ORM.FIELD_UNKNOWN`. For a variant stored in its own table, every relation callback in the row is refused with `ORM.FIELD_UNKNOWN`.
+
+`r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`. `r.variant(value)` has only `create`; a value the model does not declare is a type error and is refused with `ORM.ARGUMENT_INVALID`.
 
 ### Updating and deleting related rows
 
