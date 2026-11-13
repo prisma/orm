@@ -13,12 +13,16 @@ export { placeholder } from '@internal/errors/migration';
 // is forwarded so the scaffold names one package instead of two.
 export { Migration } from '@internal/family-mongo/migration';
 export {
+  castField,
   collMod,
   createCollection,
   createIndex,
   dataTransform,
   dropCollection,
   dropIndex,
+  fillField,
+  rawAggregate,
+  rawUpdateMany,
   renameCollection,
   renameField,
   setValidation,

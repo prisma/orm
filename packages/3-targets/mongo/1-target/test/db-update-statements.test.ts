@@ -36,7 +36,11 @@ function contractWithModel(storageHash: string, model: string): Contract {
     },
     domain: {
       namespaces: {
-        app: { models: { [model]: { fields: {}, relations: {}, storage: { fields: {} } } } },
+        app: {
+          models: {
+            [model]: { fields: {}, relations: {}, storage: { collection: model, fields: {} } },
+          },
+        },
       },
     },
   } as unknown as Contract;

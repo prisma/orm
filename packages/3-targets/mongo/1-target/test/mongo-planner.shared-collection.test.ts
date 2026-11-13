@@ -10,12 +10,21 @@ import {
   sharedJsonSchema,
 } from './mongo-statement-fixtures';
 
-const shared = (seed: string, admin: readonly string[], user: readonly string[]) =>
+const shared = (
+  seed: string,
+  admin: readonly string[],
+  user: readonly string[],
+  userTypes?: ModelSpec['types'],
+) =>
   contract(
     seed,
     {
       Admin: { collection: 'users', fields: ['_id', ...admin] },
-      User: { collection: 'users', fields: ['_id', ...user] },
+      User: {
+        collection: 'users',
+        fields: ['_id', ...user],
+        ...(userTypes === undefined ? {} : { types: userTypes }),
+      },
     },
     { users: { jsonSchema: sharedJsonSchema(admin, user) } },
   );
@@ -26,7 +35,9 @@ describe('MongoMigrationPlanner, a collection that stores several root models', 
       planned(
         plan({
           from: null,
-          to: shared('to', ['level'], ['email']),
+          to: shared('to', ['level'], ['email'], {
+            email: { codecId: 'mongo/string@1', nullable: true },
+          }),
           schema: [schemaCollection('users', { required: ['level'] })],
         }),
       ),

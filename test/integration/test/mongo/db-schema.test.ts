@@ -127,6 +127,34 @@ describe('db schema for Mongo (end-to-end)', { timeout: timeouts.spinUpMongoMemo
     expect(optionsNode!.label).toContain('capped');
   });
 
+  it('lists every BSON type of a validator property that admits several', async () => {
+    await db.createCollection('events', {
+      validator: {
+        $jsonSchema: {
+          bsonType: 'object',
+          required: ['payload'],
+          properties: {
+            payload: {
+              bsonType: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+            },
+            note: { bsonType: ['null', 'string'] },
+          },
+        },
+      },
+    });
+
+    const schema = await introspectSchema(db);
+    const instance = createInstance();
+    const view = instance.toSchemaView(schema);
+
+    const eventsNode = view.root.children!.find((n) => n.label === 'collection events');
+    const validatorNode = eventsNode!.children!.find((n) => n.id === 'validator-events');
+    expect(validatorNode!.children!.map((n) => n.label)).toEqual([
+      'payload: object | array | string | double | int | long | bool | null (required)',
+      'note: null | string',
+    ]);
+  });
+
   it('produces JSON-serializable output', async () => {
     await db.createCollection('users');
     await db.collection('users').createIndex({ email: 1 }, { unique: true });

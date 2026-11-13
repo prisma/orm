@@ -130,7 +130,7 @@ The re-run advice has a second gap of the same kind, found in the slice 3b PR 1 
 
 **Found:** slice 4p review, PR 2 rounds 4 and 5 (2026-10-19).
 
-`otherModelsReached` in `packages/3-mongo-target/1-mongo-target/src/core/migrations/mongo-statement-planning.ts` learns which variant a field removal selects by reading the discriminator value back out of the removal call's MongoDB filter (`discriminatorValueOf`). It is safe today, because a filter it cannot read is treated as reaching every model. Carry the selection as a typed value, the discriminator field and value, on `FieldRemoval` and on the statement outcome, and write the filter from it at the end. Do it with the next PR, which changes the discriminator to a stored key, so the filter changes shape anyway.
+`otherModelsReached` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts` learns which variant a field removal selects by reading the discriminator value back out of the removal call's MongoDB filter (`discriminatorValueOf`). It is safe today, because a filter it cannot read is treated as reaching every model. Carry the selection as a typed value, the discriminator field and value, on `FieldRemoval` and on the statement outcome, and write the filter from it at the end. Do it with the next PR, which changes the discriminator to a stored key, so the filter changes shape anyway.
 
 ## The enum refusal walks the models a second time
 

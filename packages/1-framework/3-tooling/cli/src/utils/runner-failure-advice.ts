@@ -80,6 +80,17 @@ function backfillFlags(reports: readonly RowsWithoutValueReport[]): readonly str
   ];
 }
 
+/** The way out of a cast that met a value it cannot cast without changing the migration: change that value, then `rerun`. */
+function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): RunnerAdvice {
+  return change.by === 'cast' && change.reason === 'value'
+    ? [
+        chooseAction(
+          `Change the value the failure names so the database's cast accepts it, then re-run ${rerun}`,
+        ),
+      ]
+    : [];
+}
+
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
@@ -92,6 +103,10 @@ export function dbUpdateFailedTypeChangeAdvice(
   return [
     chooseAction(
       `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    ),
+    ...changeValueAdvice(
+      change,
+      quoted(cliCommand(invocation, 'db update', invocation.rerunArgs ?? [])),
     ),
   ];
 }
@@ -406,13 +421,19 @@ function migrateFailedTypeChangeAdvice(
       chooseAction(
         `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
       ),
+      ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     ];
   }
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
   return [
     editFileAction(
-      `${changeText} ${file} has no conversion for field "${change.field}": write one there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      `${changeText} ${file} changes field "${change.field}" ${
+        change.reason === 'noCast'
+          ? 'with a cast the database does not have between these types: replace it'
+          : "with the database's cast, which met a value it cannot cast: replace that cast"
+      } with your own conversion of the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
+    ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
   ];
 }
@@ -584,7 +605,7 @@ export function migrateAdvice(
   }
   return [
     chooseAction(
-      `Fix the issue and re-run \`${cliCommand(invocation, 'db migrate', ['--to', '<contract>'])}\``,
+      `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
     ),
   ];
 }

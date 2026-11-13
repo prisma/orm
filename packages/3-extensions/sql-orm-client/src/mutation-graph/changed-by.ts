@@ -1,5 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { ReferentialAction, SqlStorage } from '@internal/sql-contract/types';
+import type { TableSource } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { cachedFor } from '../contract-cache';
 import type { TableStorageCoordinate } from '../table-scope';
 
@@ -16,6 +18,16 @@ interface Referencing {
 interface Step {
   readonly table: TableStorageCoordinate;
   readonly kind: ChangeKind;
+}
+
+export function storageOf(source: TableSource): TableStorageCoordinate {
+  return {
+    namespaceId: blindCast<
+      string,
+      'The ORM builds every table source with tableSourceForContract, which sets the namespace'
+    >(source.namespaceId),
+    tableName: source.name,
+  };
 }
 
 export function tableKey(table: TableStorageCoordinate): string {

@@ -11,7 +11,12 @@ export function appliedSummary(counts: {
   const { migrations, planned, executed, spaces } = counts;
   const operations =
     executed < planned
-      ? `${executed} of ${planned} operation(s); the other ${planned - executed} had nothing to do, since their postchecks already held`
+      ? `${executed} of ${planned} operation(s); ${skippedOperationsText(planned - executed)}`
       : `${executed} operation(s)`;
   return `Applied ${migrations} migration(s) (${operations}) across ${spaces} contract space(s)`;
+}
+
+/** Why an apply ran fewer operations than it planned: the runner skipped those whose postcheck already held. */
+export function skippedOperationsText(skipped: number): string {
+  return `the other ${skipped} had nothing to do, since their postchecks already held`;
 }

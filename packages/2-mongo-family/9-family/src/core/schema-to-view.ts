@@ -74,7 +74,7 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
     }
 
     for (const [propName, types] of fields) {
-      const bsonType = types.has('any') ? 'any' : [...types].join(',');
+      const bsonType = types.has('any') ? 'any' : [...types].join(' | ');
       const required = roots.every(
         (root) => !Object.hasOwn(root.properties, propName) || root.required.includes(propName),
       );

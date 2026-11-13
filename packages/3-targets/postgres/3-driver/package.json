@@ -22,6 +22,7 @@
     "@internal/sql-errors": "workspace:8.0.0-rc.23",
     "@internal/sql-operations": "workspace:8.0.0-rc.23",
     "@internal/sql-relational-core": "workspace:8.0.0-rc.23",
+    "@internal/target-postgres": "workspace:8.0.0-rc.23",
     "@internal/utils": "workspace:8.0.0-rc.23",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",

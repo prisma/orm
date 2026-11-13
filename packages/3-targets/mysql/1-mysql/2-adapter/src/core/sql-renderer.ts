@@ -451,11 +451,13 @@ function renderOperation(expr: OperationExpr, ctx: RenderContext): string {
   });
 }
 
-function renderSubquery(expr: SubqueryExpr, ctx: RenderContext): string {
-  if (expr.query.projection.length !== 1) {
+function renderSubquery(expr: SubqueryExpr, ctx: RenderContext, columns = 1): string {
+  if (expr.query.projection.length !== columns) {
     throw structuredError(
       'RUNTIME.AST_INVALID',
-      'Subquery expressions must project exactly one column',
+      columns === 1
+        ? 'Subquery expressions must project exactly one column'
+        : `A subquery compared with a row value of ${columns} columns must project ${columns} columns`,
       { meta: { node: 'subquery' } },
     );
   }
@@ -520,7 +522,10 @@ function renderBinary(expr: BinaryExpr, ctx: RenderContext): string {
     if (expr.op === 'notIn') return 'TRUE';
   }
   const left = grouped(expr.left, ctx);
-  const right = renderExpr(expr.right, ctx);
+  const right =
+    expr.right.kind === 'subquery' && expr.left.kind === 'list'
+      ? renderSubquery(expr.right, ctx, expr.left.values.length)
+      : renderExpr(expr.right, ctx);
   if (expr.op === 'isDistinctFrom') return `NOT (${left} <=> ${right})`;
   return `${left} ${BINARY_OPERATORS[expr.op]} ${right}`;
 }

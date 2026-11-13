@@ -100,6 +100,7 @@ export type {
   RuntimeOptions,
   RuntimeQueryable,
   RuntimeTransaction,
+  RuntimeTransactionOptions,
   TransactionContext,
 } from '../sql-runtime';
 export { SqlRuntimeBase, withTransaction, withTransactionMembers } from '../sql-runtime';

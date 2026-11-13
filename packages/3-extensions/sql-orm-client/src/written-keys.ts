@@ -11,31 +11,21 @@ export interface GeneratedKey {
   decode(insertId: string): Promise<unknown>;
 }
 
-export interface WrittenKeys {
-  readonly keys: readonly Record<string, unknown>[];
-  readonly generated: GeneratedKey | undefined;
-}
-
-/**
- * The key of each row an insert writes, for reading the rows back without `RETURNING`: the values the client supplies, and at most one auto-increment column, whose value the database reports only for a one-row insert. Refuses, before anything runs, an insert whose rows cannot be found this way.
- */
-export function writtenKeys(options: {
+export interface InsertedRows {
   readonly context: ExecutionContext<Contract<SqlStorage>>;
   readonly namespaceId: string;
   readonly tableName: string;
   readonly modelName: string;
   readonly rows: readonly Readonly<Record<string, unknown>>[];
   readonly method: string;
-}): WrittenKeys {
-  const { context, namespaceId, tableName, modelName, rows, method } = options;
-  const identity = readBackIdentity(context.contract, namespaceId, tableName, modelName, method);
-  const supplied = identity.filter((column) => rows.every((row) => row[column] !== undefined));
-  const keys = rows.map((row) =>
-    Object.fromEntries(supplied.map((column) => [column, row[column]])),
-  );
-  const [column, ...others] = identity.filter((key) => !supplied.includes(key));
+  readonly columns: readonly string[];
+}
+
+export function generatedKeyColumn(options: InsertedRows): string | undefined {
+  const { context, namespaceId, tableName, modelName, rows, method, columns } = options;
+  const [column, ...others] = columns.filter((key) => !rows.every((row) => row[key] !== undefined));
   if (column === undefined) {
-    return { keys, generated: undefined };
+    return undefined;
   }
   const refused = (problem: string) =>
     ormError('ORM.CAPABILITY_MISSING', `${method} on model "${modelName}" ${problem}`, {
@@ -54,21 +44,26 @@ export function writtenKeys(options: {
       `cannot return the rows it inserts: their key column "${column}" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.`,
     );
   }
+  return column;
+}
+
+export function generatedKey(options: InsertedRows): GeneratedKey | undefined {
+  const column = generatedKeyColumn(options);
+  if (column === undefined) {
+    return undefined;
+  }
+  const { context, namespaceId, tableName } = options;
   const codec = context.contractCodecs.forColumn(namespaceId, tableName, column);
   return {
-    keys,
-    generated: {
-      column,
-      decode: async (insertId) =>
-        codec === undefined
-          ? insertId
-          : codec.fromWire(insertId, { column: { table: tableName, name: column } }),
-    },
+    column,
+    decode: async (insertId) =>
+      codec === undefined
+        ? insertId
+        : codec.fromWire(insertId, { column: { table: tableName, name: column } }),
   };
 }
 
-/** The columns a write without `RETURNING` reads its rows back by: the table's row identity, which it must have. */
-export function readBackIdentity(
+export function rowIdentity(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
@@ -79,7 +74,7 @@ export function readBackIdentity(
   if (identity.length > 0) return identity;
   throw ormError(
     'ORM.ROW_IDENTITY_MISSING',
-    `${method} on model "${modelName}" reads the rows it wrote back by key, since the contract does not report capability "returning", so table "${tableName}" needs a primary key or unique constraint`,
+    `${method} on model "${modelName}" requires the table to have a primary key or unique constraint`,
     { meta: { model: modelName, table: tableName } },
   );
 }

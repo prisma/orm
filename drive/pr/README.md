@@ -33,13 +33,13 @@ After turning auto-merge on, confirm the PR enters the queue (`mergeQueueEntry` 
 ## PR title convention
 
 - Conventional-commit prefix: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `test:` / `build:` / `ci:`.
-- Linear ticket identifier included as `(TML-NNNN)` suffix OR in the description as `Refs: TML-NNNN` — GitHub integration auto-transitions Linear on merge if either is present.
+- The Linear ticket identifier does not go in the title. It goes in the description. Write `Fixes TML-NNNN` when the PR completes the issue: Linear then closes the issue on merge. Write `Part of TML-NNNN` when more PRs will follow: Linear links the PR and leaves the issue open.
 - One-line summary, present tense, imperative mood.
 
 Examples:
 
-- `feat(sql): add returning() to insert operations (TML-2549)`
-- `fix(emitter): handle null defaults in column codecs (TML-2487)`
+- `feat(sql): add returning() to insert operations`
+- `fix(emitter): handle null defaults in column codecs`
 
 ## PR body conventions (full mode)
 
@@ -54,7 +54,7 @@ The canonical `drive-pr-description` structure applies. Additional repo conventi
 
 For PRs routed as **direct change** by `drive-start-workflow`:
 
-- Title: conventional-commit prefix; ≤ 60 chars; Linear ticket in title.
+- Title: conventional-commit prefix; ≤ 60 chars.
 - Body: 4-line structure (intent / Linear / scope / verification) per `drive-pr-description` § Direct-change mode.
 - No `## Changes` section needed (the diff is the change).
 - No `## Why` section needed (the intent paragraph carries why).
@@ -91,8 +91,8 @@ This check fires on every PR, regardless of authoring path. Cheap to run, expens
 
 - Each slice maps to a Linear Issue.
 - Issue description links back to `projects/<project>/slices/<slice>/` (in-project) or to the orphan-slice PR description path (orphan).
-- PR title follows the convention above: conventional-commit prefix + one-line summary + `(TML-NNNN)` suffix.
-- PR description references the Linear issue (`Refs: TML-XXXX` line OR included in the title — either is enough for auto-close).
+- PR title follows the convention above: conventional-commit prefix + one-line summary.
+- PR description references the Linear issue: `Fixes TML-XXXX` when the PR completes it (Linear closes it on merge), `Part of TML-XXXX` otherwise.
 
 ## Linear state conventions
 
