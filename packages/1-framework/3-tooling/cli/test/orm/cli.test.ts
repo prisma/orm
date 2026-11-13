@@ -291,7 +291,7 @@ describe('a retired invocation', () => {
     },
   );
 
-  it('ends every Prisma 7 reason with a Prisma 7 command line that runs as written, never through npx', () => {
+  it('ends every Prisma 7 reason with a Prisma 7 command line that runs once its placeholders are filled in, never through npx', () => {
     const invocations = Object.fromEntries(
       ormCommandFamily.redirects
         .filter(({ code }) => code === 'CLI.V7_COMMAND')
