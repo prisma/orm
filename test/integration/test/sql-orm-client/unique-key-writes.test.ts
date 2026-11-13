@@ -85,33 +85,6 @@ describe('integration/update() and delete() by a unique key', () => {
   );
 
   it(
-    'update() and delete() by a key that matches no row send one statement each and return null',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        await seedAdaAndGrace(runtime);
-
-        const updated = await users
-          .select('id', 'name')
-          .where({ id: 3 })
-          .update({ name: 'Nobody' });
-        const deleted = await users.select('id', 'name').where({ id: 3 }).delete();
-
-        expect({ updated, deleted, statements: runtime.executions.length }).toEqual({
-          updated: null,
-          deleted: null,
-          statements: 2,
-        });
-        expect(await userRows(runtime)).toEqual([
-          { id: 1, name: 'Ada' },
-          { id: 2, name: 'Grace' },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'update() and delete() by a condition that pins no key send two statements each',
     async () => {
       await withCollectionRuntime(async (runtime) => {

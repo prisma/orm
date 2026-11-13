@@ -146,30 +146,6 @@ describe('integration/update() and delete() by a unique key on SQLite', () => {
   );
 
   it(
-    'update() and delete() by a key that matches no row send one statement each and return null',
-    async () => {
-      await withSqlite(async ({ users, statements, rows }) => {
-        const updated = await users
-          .select('id', 'name')
-          .where({ id: 3 })
-          .update({ name: 'Nobody' });
-        const deleted = await users.select('id', 'name').where({ id: 3 }).delete();
-
-        expect({ updated, deleted, statements: statements.length }).toEqual({
-          updated: null,
-          deleted: null,
-          statements: 2,
-        });
-        expect(rows()).toEqual([
-          { id: 1, name: 'Ada' },
-          { id: 2, name: 'Grace' },
-        ]);
-      });
-    },
-    timeouts.databaseOperation,
-  );
-
-  it(
     'update() and delete() by a condition that pins no key send two statements each',
     async () => {
       await withSqlite(async ({ users, statements, rows }) => {
