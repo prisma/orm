@@ -1139,11 +1139,11 @@ A valid ORM method was called in a configuration that does not support it: mutat
 
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, or a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, an array of operations that holds another array or a value that is not an operation (`index` gives its position), `create` without data, `connect`/`disconnect` with a missing or empty criterion, a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values, or a one-to-many `updateAll` whose data or update defaults set a field linking the related rows to their parent (`problem: 'parent-link-column'`, with the fields in `fields`). Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
-A nested relation mutation kind is not supported in this position: `disconnect()` outside `update()` nested mutations, or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`disconnect()` stays available). Payload: `kind`, `relation`.
+A nested relation mutation kind is not supported in this position: `disconnect()`, `updateAll()` or `deleteAll()` outside `update()` nested mutations, `updateAll()` or `deleteAll()` on a to-one relation (`reason: 'to-one-relation'`), an array of two or more operations on a to-one relation (`reason: 'to-one-relation'`, with `model` and the count in `operations`), or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`reason: 'junction-required-columns'`, with the table in `junction`; `disconnect()` stays available). Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
 
 ### ORM.RELATION_ROW_MISSING
 

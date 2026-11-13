@@ -329,6 +329,77 @@ const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
 
 The count variants (`createAndCount`, `updateAndCount`, `deleteAndCount`) send one statement either way. MTI variant collections still need `returning` to create rows.
 
+## Nested writes
+
+A relation field in `create()` or `update()` data takes a callback. The callback receives a mutator for that relation and returns the operation to apply to it.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  name: 'Alice',
+  posts: (posts) => posts.create({ title: 'Hello' }),
+});
+```
+
+| Operation | Available in | Relations |
+| --- | --- | --- |
+| `r.create(data)` | `create()`, `update()` | all |
+| `r.connect(criteria)` | `create()`, `update()` | all |
+| `r.disconnect(criteria?)` | `update()` | all |
+| `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
+| `r.where(w).deleteAll()`, `r.deleteAll()` | `update()` | to-many |
+
+An operation used where the table does not list it is refused with `ORM.RELATION_MUTATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error.
+
+On a many-to-many relation, `r.disconnect()` without criteria is refused with `ORM.RELATION_MUTATION_INVALID` and is a type error; pass the criteria of the rows to unlink. `r.create` and `r.connect` are refused with `ORM.RELATION_MUTATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default; `r.disconnect(criteria)` stays available.
+
+On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
+
+### Several operations on one relation
+
+A callback may return an array of operations. They are applied in array order, each after the previous one has been written. An empty array applies no operation.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => [
+    posts.where({ published: false }).deleteAll(),
+    posts.create({ title: 'Fresh start' }),
+    posts.updateAll({ featured: false }),
+  ],
+});
+```
+
+A to-one relation takes at most one operation: an array of two or more is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'to-one-relation'`). An array that holds another array or a value that is not an operation is refused with `ORM.RELATION_MUTATION_INVALID`, with the position in `index`.
+
+### Updating and deleting related rows
+
+`updateAll` and `deleteAll` change or delete only rows related to the record being updated. On a one-to-many relation, a row is related when its foreign key holds that record's key. On a many-to-many relation, a row is related when the junction table has a row that links it to that record. A row that matches the filter but is related only to another record is not changed; a row related to this record and to other records is.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.where({ published: false }).updateAll({ published: true }),
+});
+
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.where((post) => post.title.like('Draft%')).deleteAll(),
+});
+```
+
+`where` takes every input a collection's `where` takes for the related model: a callback over the related model, a field/value object, or an expression. Chained `where` calls combine with AND.
+
+Unlike a collection's `updateAll` and `deleteAll`, which need a preceding `where`, the nested forms do not: without `where` they apply to every row related to the record.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  posts: (posts) => posts.deleteAll(),
+});
+```
+
+`updateAll` data is the related model's own fields, and the related model's update defaults apply as they do for a collection's `updateAll`. On a one-to-many relation neither the data nor an update default may set the fields that link the related rows to the record; that is refused with `ORM.RELATION_MUTATION_INVALID` (`problem: 'parent-link-column'`, with the fields in `fields`), and setting them in the data is a type error. `updateAll` with no fields to set changes no rows. Neither operation is an error when no row matches.
+
+Both operations are available only in `update()` and only on a to-many relation. Inside `create()`, or on a to-one relation, they are refused with `ORM.RELATION_MUTATION_UNSUPPORTED` and are type errors.
+
+On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to the junction rows that link them is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back. When the junction table has no foreign key to the related table, the junction rows remain and hold keys of rows that no longer exist; declare a foreign key with a cascading delete on the junction table to remove them with the rows they refer to.
+
 ## Prepared row descriptions
 
 Built-in collection chains expose terminal-only `.prepared.all(configure?)`, `.prepared.first(filter?, configure?)` and `.prepared.firstOrThrow(filter?, configure?)` views. They synchronously return a `Preparable<DbRow, Result>` without executing it: a description containing a SQL `plan` and a required `consume` function. The description is not itself a `SqlQueryPlan`. Filters, projection, includes, variants and first-row limit replacement use the ordinary row pipeline. Read annotations go on the `orm-call` activity of each execution, not on the plan.
