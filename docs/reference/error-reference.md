@@ -201,7 +201,7 @@ Raised by the commander `orm init` (deleted in the S5 cutover). On the engine-ho
 
 ### CLI.INVALID_ARGUMENTS
 
-Raised by the CLI engine when a command's arguments cannot be parsed; the engine's entry is the reference: [CLI.INVALID_ARGUMENTS](https://docs.prisma.io/docs/cli/error-reference#CLI.INVALID_ARGUMENTS). `db migrate`, `db migrate --show` and `db update` also raise it when they are given `--permit-policy-change` and `--to` names no ref: a contract hash, a migration, `@db`, `@empty`, or no `--to` at all. Only a ref declares policies, so there is nothing the flag could write. The commands raise it before they connect to the database. The control API's `migrate` raises it for `permitPolicyChange` without a `target` of kind `ref`, and `dbUpdate` for `permitPolicyChange` without a `ref`, before anything runs. A ref that declares no policies is not refused: the flag then writes nothing. Payload: `command` (`db migrate` or `db update`), and `to`, the `--to` value, when one was given.
+Raised by the CLI engine when a command's arguments cannot be parsed; the engine's entry is the reference: [CLI.INVALID_ARGUMENTS](https://docs.prisma.io/docs/cli/error-reference#CLI.INVALID_ARGUMENTS). `db migrate`, `db migrate --show` and `db update` also raise it when they are given `--permit-policy-change` and `--to` names no ref: a contract hash, a migration, `@db`, `@empty`, or no `--to` at all. Only a ref declares policies, so there is nothing the flag could write. The commands raise it before they connect to the database. The control API's `migrate` raises it for `permitPolicyChange` without a `target` of kind `ref`, and `dbUpdate` for `permitPolicyChange` without a `ref`, before anything runs. A ref that declares no policies is not refused: the flag then writes nothing. Payload: `command` (`db migrate` or `db update`), and `to`, the `--to` value, when one was given. The control API's `dbUpdate` also raises it, before it reads the database, when its `ref` names a different contract than the `contract` it reconciles to: nothing was applied, and the payload is `refName`, `refHash` and `contractStorageHash`. Pass the contract the ref names, or a ref at that contract.
 
 ### CLI.INVALID_OUTPUT_FORMAT
 
@@ -1661,7 +1661,7 @@ An extension descriptor publishes a `contractSpace` whose `headRef.hash` does no
 
 ### MIGRATION.DESTINATION_CONTRACT_MISMATCH
 
-Runner-level failure during apply (`db init`, `db update`, `db migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`). The control API's `dbUpdate` also raises it, before planning, when its `ref` names a different contract than the `contract` it reconciles to; pass the contract the ref names, or a ref at that contract. Payload for this case: `refName`, `refHash`, `contractStorageHash`.
+Runner-level failure during apply (`db init`, `db update`, `db migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`). A control API `dbUpdate` call whose `ref` names a different contract than its `contract` is not a runner failure and fails with `CLI.INVALID_ARGUMENTS` instead.
 
 ### MIGRATION.DIR_EXISTS
 

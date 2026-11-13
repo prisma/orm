@@ -277,18 +277,39 @@ describe('executeDbUpdate, database policies', () => {
     expect(result.ok ? result.value : result.failure).not.toHaveProperty('databasePoliciesUpdated');
   });
 
-  it('refuses a ref that names another contract than the one it reconciles to, saying how to correct it', async () => {
-    const result = await update({
+  it('refuses a ref that names another contract than the one it reconciles to as invalid arguments, before it reads the database', async () => {
+    const readAllMarkers = vi.fn();
+    const result = await executeDbUpdate({
+      invocation: TEST_INVOCATION,
+      driver: createMockDriver(),
+      adapter: STUB_ADAPTER,
+      familyInstance: createMockFamilyInstance({ readAllMarkers }),
+      contract: dummyContract,
       mode: 'plan',
-      markers: new Map(),
+      migrations: createMockMigrations(),
+      frameworkComponents: [],
+      migrationsDir: FAKE_MIGRATIONS_DIR,
+      answerQuestions: noQuestions,
+      targetId: 'postgres',
       ref: { name: 'dev', hash: 'elsewhere', invariants: [] },
     });
 
-    expect(result.assertNotOk()).toMatchObject({
-      code: 'MIGRATION.DESTINATION_CONTRACT_MISMATCH',
-      fix: expect.stringContaining('Pass the contract the ref names'),
-      meta: { refName: 'dev', refHash: 'elsewhere' },
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual({
+      ok: false,
+      code: 'CLI.INVALID_ARGUMENTS',
+      severity: 'error',
+      summary: 'The ref names another contract than the one db update reconciles to',
+      why: 'db update was given ref "dev" at elsewhere, but the contract it reconciles to is dummy.',
+      fix: 'Pass the contract the ref names, or a ref whose hash is dummy.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'Pass the contract the ref names, or a ref whose hash is dummy.',
+        },
+      ],
+      meta: { refName: 'dev', refHash: 'elsewhere', contractStorageHash: 'dummy' },
     });
+    expect(readAllMarkers).not.toHaveBeenCalled();
   });
 
   it('refuses consent without a ref before it runs anything', async () => {
