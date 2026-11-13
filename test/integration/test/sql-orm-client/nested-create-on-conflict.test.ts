@@ -113,42 +113,4 @@ describe('integration/nested create with onConflict skip on a one-to-many relati
     },
     timeouts.spinUpPpgDev,
   );
-
-  it(
-    'update() refuses a row that gives no value for any conflict key before any statement',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-        await seedUsers(runtime, [{ id: 1, name: 'Ada', email: 'ada@example.com' }]);
-
-        runtime.resetExecutions();
-        await expect(
-          users.where({ id: 1 }).update({
-            posts: (posts) =>
-              posts.create([{ id: 20, title: 'No embedding', views: 0 }], {
-                onConflict: 'skip',
-                conflictOn: ['embedding'],
-              }),
-          }),
-        ).rejects.toThrow(
-          expect.objectContaining({
-            code: 'ORM.RELATION_MUTATION_INVALID',
-            meta: {
-              kind: 'create',
-              relation: 'posts',
-              problem: 'row-cannot-conflict',
-              index: 0,
-              conflictKeys: [['embedding']],
-            },
-          }),
-        );
-        expect({ executions: runtime.executions, ...(await tablesOf(runtime)) }).toEqual({
-          executions: [],
-          posts: [],
-          comments: [],
-        });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
 });

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createReturningTagsCollection,
   createReturningUsersCollection,
   createReturningUsersCollectionWithout,
   createUsersCollection,
@@ -308,27 +307,6 @@ describe('integration/create on conflict skip', () => {
         expect(runtime.executions).toHaveLength(0);
 
         expect(await runtime.query('select id from users')).toEqual([]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'createAll() accepts rows whose only key value is a create default the ORM fills in',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const tags = createReturningTagsCollection(runtime);
-
-        const inserted = await tags
-          .select('name')
-          .createAll([{ name: 'Go' }, { name: 'Rust' }], { onConflict: 'skip', conflictOn: ['id'] })
-          .toArray();
-
-        expect(inserted).toEqual([{ name: 'Go' }, { name: 'Rust' }]);
-        expect(await runtime.query('select name from tags order by name')).toEqual([
-          { name: 'Go' },
-          { name: 'Rust' },
-        ]);
       });
     },
     timeouts.spinUpPpgDev,

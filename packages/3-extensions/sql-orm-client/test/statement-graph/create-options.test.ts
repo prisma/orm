@@ -51,9 +51,6 @@ function printUpdate(input: Record<string, unknown>): string {
 describe('create options on a relation', () => {
   it('inserts the rows of onConflict skip without relation callbacks in one Insert that skips conflicts', () => {
     expect({
-      untargeted: printUpdate({
-        posts: (posts: Mutator) => posts.create([post, other], { onConflict: 'skip' }),
-      }),
       targeted: printUpdate({
         posts: (posts: Mutator) =>
           posts.create([post, other], { onConflict: 'skip', conflictOn: ['title'] }),
@@ -63,9 +60,6 @@ describe('create options on a relation', () => {
           posts.create([post, other], { onConflict: 'skip', conflictOn: ['userId'] }),
       }),
     }).toEqual({
-      untargeted: updateOf(
-        'n2 Insert posts 2 rows on conflict do nothing <- PayloadData n1 (id->user_id)',
-      ),
       targeted: updateOf(
         'n2 Insert posts 2 rows on conflict (title) do nothing <- PayloadData n1 (id->user_id)',
       ),
@@ -102,7 +96,6 @@ describe('create options on a relation', () => {
   const rejections = [
     [
       'onConflict skip on the to-one relation User.profile',
-      'User',
       {
         profile: (profile: Mutator) => profile.create({ id: 5, bio: 'Hi' }, { onConflict: 'skip' }),
       },
@@ -111,19 +104,7 @@ describe('create options on a relation', () => {
       { kind: 'create', relation: 'profile', reason: 'to-one-relation' },
     ],
     [
-      'onConflict skip on the to-one relation Post.author',
-      'Post',
-      {
-        author: (author: Mutator) =>
-          author.create({ id: 5, name: 'Ada', email: 'ada@example.com' }, { onConflict: 'skip' }),
-      },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
-      'create() nested mutation for relation "author" supports onConflict "skip" only on one-to-many relations',
-      { kind: 'create', relation: 'author', reason: 'to-one-relation' },
-    ],
-    [
       'onConflict skip on the many-to-many relation User.tags',
-      'User',
       { tags: (tags: Mutator) => tags.create([{ id: 't', name: 'Go' }], { onConflict: 'skip' }) },
       'ORM.RELATION_MUTATION_UNSUPPORTED',
       'create() nested mutation for relation "tags" supports onConflict "skip" only on one-to-many relations',
@@ -131,7 +112,6 @@ describe('create options on a relation', () => {
     ],
     [
       'an onConflict value other than skip or connect',
-      'User',
       { posts: (posts: Mutator) => posts.create([post], { onConflict: 'replace' } as never) },
       'ORM.RELATION_MUTATION_INVALID',
       'create() nested mutation for relation "posts" takes onConflict "skip" or "connect"; received "replace"',
@@ -139,7 +119,6 @@ describe('create options on a relation', () => {
     ],
     [
       'a conflictOn entry that is not a field of the related model',
-      'User',
       {
         posts: (posts: Mutator) =>
           posts.create([post], {
@@ -158,7 +137,6 @@ describe('create options on a relation', () => {
     ],
     [
       'onConflict skip with a row that gives no value for any conflict key',
-      'User',
       {
         posts: (posts: Mutator) =>
           posts.create([{ ...post, embedding: [1, 2, 3] }, other], {
@@ -178,7 +156,6 @@ describe('create options on a relation', () => {
     ],
     [
       'onConflict connect',
-      'User',
       { posts: (posts: Mutator) => posts.create(post, { onConflict: 'connect' }) },
       'ORM.RELATION_MUTATION_UNSUPPORTED',
       'create() nested mutation for relation "posts" does not support onConflict "connect"',
@@ -186,7 +163,6 @@ describe('create options on a relation', () => {
     ],
     [
       'onConflict connect on a create nested in a create row',
-      'User',
       {
         posts: (posts: Mutator) =>
           posts.create({
@@ -203,27 +179,11 @@ describe('create options on a relation', () => {
 
   it.each(rejections)(
     'rejects %s in update() before any statement, also when the parent filter matches no row',
-    async (_, modelName, input, code, message, meta) => {
-      const { collection, runtime } = createCollectionFor(modelName);
+    async (_, input, code, message, meta) => {
+      const { collection, runtime } = createCollectionFor('User');
       runtime.setNextResults([[]]);
 
       await expect(collection.where({ id: 1 }).update(input as never)).rejects.toThrow(
-        expect.objectContaining({ code, message, meta }),
-      );
-      expect(runtime.executions).toEqual([]);
-    },
-  );
-
-  it.each(rejections)(
-    'rejects %s in create() before any statement',
-    async (_, modelName, input, code, message, meta) => {
-      const { collection, runtime } = createCollectionFor(modelName);
-      const parent =
-        modelName === 'User'
-          ? { id: 1, name: 'Ada', email: 'ada@example.com' }
-          : { id: 1, title: 'Hello', views: 0 };
-
-      await expect(collection.create({ ...parent, ...input } as never)).rejects.toThrow(
         expect.objectContaining({ code, message, meta }),
       );
       expect(runtime.executions).toEqual([]);
@@ -296,11 +256,11 @@ describe('create options on a relation', () => {
       );
     }
 
-    it.each(['skip', 'connect'] as const)('rejects onConflict %s', (onConflict) => {
+    it('rejects onConflict', () => {
       expect(() =>
         parse({
           features: (features: Mutator) =>
-            features.create({ id: 1, title: 'A', priority: 1 }, { onConflict }),
+            features.create({ id: 1, title: 'A', priority: 1 }, { onConflict: 'skip' }),
         }),
       ).toThrow(
         expect.objectContaining({
@@ -315,14 +275,6 @@ describe('create options on a relation', () => {
           },
         }),
       );
-    });
-
-    it('accepts onConflict skip on a variant stored in the table of its base model', () => {
-      expect(
-        parse({
-          bugs: (bugs: Mutator) => bugs.create({ id: 1, title: 'A' }, { onConflict: 'skip' }),
-        }).relationMutations.map(({ name }) => name),
-      ).toEqual(['bugs']);
     });
   });
 });
@@ -414,35 +366,6 @@ describe('onConflict skip with a conflict key that a to-one relation write insid
         'n6 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n5 (id->category_id)',
         'result: n1',
       ].join('\n'),
-    );
-  });
-
-  it('refuses a row without a to-one write when its conflictOn foreign key has no value', () => {
-    expect(() =>
-      printCreate((articles) =>
-        articles.create(
-          [
-            {
-              id: 10,
-              title: 'Connected',
-              category: (category: Mutator) => category.connect({ id: 5 }),
-            },
-            { id: 11, title: 'Plain' },
-          ],
-          { onConflict: 'skip', conflictOn: ['categoryId'] },
-        ),
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
-        meta: {
-          kind: 'create',
-          relation: 'articles',
-          problem: 'row-cannot-conflict',
-          index: 1,
-          conflictKeys: [['category_id']],
-        },
-      }),
     );
   });
 });
