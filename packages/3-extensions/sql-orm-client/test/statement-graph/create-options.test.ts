@@ -111,7 +111,19 @@ describe('create options on a relation', () => {
         },
         withoutReturning,
       ),
+      byParentLink: printUpdate(
+        {
+          posts: (posts: Mutator) =>
+            posts.create({ ...post, comments }, { onConflict: 'connect', conflictOn: ['userId'] }),
+        },
+        withoutReturning,
+      ),
     }).toEqual({
+      byParentLink: updateOf(
+        'n2 Insert posts on conflict (user_id) do update <- PayloadData n1 (id->user_id)',
+        'n3 FindByKeys posts by (user_id) for create <- Rows n2',
+        'n4 Insert comments <- PayloadData n3 (id->post_id)',
+      ),
       byKey: updateOf(
         'n2 Insert posts on conflict (id) do update <- PayloadData n1 (id->user_id)',
         'n3 FindByKeys posts by (id) for create <- Rows n2',
@@ -123,6 +135,29 @@ describe('create options on a relation', () => {
         'n4 Insert comments <- PayloadData n3 (id->post_id)',
       ),
     });
+  });
+
+  it('runs a row of onConflict connect on the parent link without returning, reading it back by that column', async () => {
+    const { collection, runtime } = createCollectionFor(
+      'User',
+      withoutCapabilityKeys(baseContract, ['returning']),
+    );
+    runtime.setNextResults([[{ id: 1 }], [{ ...post, user_id: 1, embedding: null }]]);
+
+    await collection.where({ id: 1 }).update({
+      posts: (posts: Mutator) =>
+        posts.create(
+          { ...post, comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }) },
+          { onConflict: 'connect', conflictOn: ['userId'] },
+        ),
+    } as never);
+
+    expect(runtime.executions.map(({ operation }) => operation)).toEqual([
+      'query',
+      'execute',
+      'query',
+      'execute',
+    ]);
   });
 
   it('counts the parent link toward the conflict key of a row of onConflict skip', () => {
