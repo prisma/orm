@@ -1,4 +1,5 @@
 import type {
+  ConnectionInfo,
   IsolationLevel,
   SqlDriverAdapter,
   SqlMigrationAwareDriverAdapterFactory,
@@ -176,9 +177,18 @@ class BetterSQLite3Transaction extends BetterSQLite3Queryable<StdClient> impleme
 
 export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient> implements SqlDriverAdapter {
   #mutex = new Mutex()
+  readonly #maxBindValues: number | undefined
 
   constructor(client: StdClient, adapterOptions?: PrismaBetterSqlite3Options) {
     super(client, adapterOptions)
+    this.#maxBindValues = readMaxBindValues(client)
+  }
+
+  getConnectionInfo(): ConnectionInfo {
+    return {
+      maxBindValues: this.#maxBindValues,
+      supportsRelationJoins: false,
+    }
   }
 
   executeScript(script: string): Promise<void> {
@@ -253,6 +263,18 @@ export class PrismaBetterSqlite3AdapterFactory implements SqlMigrationAwareDrive
       new PrismaBetterSqlite3Adapter(createBetterSQLite3Client({ ...this.#config, url }), this.#options),
     )
   }
+}
+
+/**
+ * SQLite's bind parameter limit is set at compile time: 999 before SQLite 3.32.0, 32766 since.
+ * Read it from the loaded build so the query interpreter doesn't fall back to the old 999 default.
+ * Returns `undefined` (keeping that default) when the build doesn't report it.
+ */
+function readMaxBindValues(client: StdClient): number | undefined {
+  const options = client.pragma('compile_options') as Array<{ compile_options: string }>
+  const option = options.find(({ compile_options }) => compile_options.startsWith('MAX_VARIABLE_NUMBER='))
+  const value = Number(option?.compile_options.slice('MAX_VARIABLE_NUMBER='.length))
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
 function createBetterSQLite3Client(input: BetterSQLite3InputParams): StdClient {
