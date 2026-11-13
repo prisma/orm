@@ -55,7 +55,15 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           url,
           verifyMarker: false,
           poolOptions: { max: 1 },
-          transactionOptions: { isolationLevel: 'Serializable' },
+          transactionOptions: { isolationLevel: 'Serializable', timeout: 1 },
+          middleware: [
+            {
+              name: 'slow-implicit-work',
+              async beforeEncode() {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+              },
+            },
+          ],
         });
         expect(
           await db.orm.User.select('id', 'email', 'role').create({
@@ -66,12 +74,14 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
         ).toEqual({ id: 10, email: 'implicit@example.com', role: 'USER' });
         expect(observed.starts).toEqual([{ isolationLevel: 'ReadCommitted' }]);
         expect(
-          await db.transaction(async (tx) =>
-            tx.orm.User.select('id', 'email', 'role').create({
-              id: 11,
-              email: 'explicit@example.com',
-              role: 'ADMIN',
-            }),
+          await db.transaction(
+            async (tx) =>
+              tx.orm.User.select('id', 'email', 'role').create({
+                id: 11,
+                email: 'explicit@example.com',
+                role: 'ADMIN',
+              }),
+            { timeout: null },
           ),
         ).toEqual({ id: 11, email: 'explicit@example.com', role: 'ADMIN' });
         expect(observed.starts).toEqual([
@@ -119,6 +129,51 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
     });
   });
 
+  it('discards timed callback ORM writes and uses a fresh session', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      const observed = observeStarts();
+      try {
+        await using db = mysql({
+          contract,
+          url,
+          verifyMarker: false,
+          poolOptions: { max: 1 },
+          transactionOptions: { isolationLevel: 'RepeatableRead', timeout: 100 },
+        });
+        const identity = db.raw.sql`SELECT CONNECTION_ID() AS id`
+          .returnsRow({ id: 'mysql/bigint@1' })
+          .build();
+        const before = await db.query(identity);
+        let written = false;
+        let late: (() => Promise<unknown>) | undefined;
+        await expect(
+          db.transaction(async (tx) => {
+            await tx.orm.User.select('id', 'email', 'role').create({
+              id: 20,
+              email: 'expired@example.com',
+              role: 'USER',
+            });
+            written = true;
+            late = async () => tx.orm.User.select('id').where({ id: 20 }).all();
+            await new Promise<void>(() => {});
+          }),
+        ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT', details: { timeout: 100 } });
+        expect(written).toBe(true);
+        expect(await db.orm.User.select('id').where({ id: 20 }).all()).toEqual([]);
+        expect(await db.query(identity)).not.toEqual(before);
+        expect(observed.destroyed).toEqual([
+          expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+        ]);
+        if (late === undefined) throw new Error('Missing late ORM operation');
+        await expect(late()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+        expect(observed.starts).toEqual([{ isolationLevel: 'RepeatableRead' }]);
+        await expect(db.transaction(async () => 42, { timeout: null })).resolves.toBe(42);
+      } finally {
+        observed.restore();
+      }
+    });
+  });
+
   it('destroys a callback-owned connection after failed setup with a pending next-transaction setting', async (test) => {
     await withSeededDatabase(test, exampleDatabase, async (url) => {
       const failure = new Error('BEGIN unavailable after SET');
@@ -130,9 +185,9 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
           .build();
         const before = await db.query(identity);
         const callback = vi.fn(async () => 42);
-        await expect(db.transaction(callback, { isolationLevel: 'Serializable' })).rejects.toBe(
-          failure,
-        );
+        await expect(
+          db.transaction(callback, { isolationLevel: 'Serializable', timeout: 100 }),
+        ).rejects.toBe(failure);
         expect(callback).not.toHaveBeenCalled();
         expect(observed.destroyed).toEqual([failure]);
         expect(await db.query(identity)).not.toEqual(before);

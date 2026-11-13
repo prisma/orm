@@ -484,6 +484,7 @@ export default async function supabase<
           local?.isolationLevel !== undefined
             ? local.isolationLevel
             : transactionOptions?.isolationLevel;
+        const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
         return withTransaction(
           role,
           (txCtx) =>
@@ -504,7 +505,7 @@ export default async function supabase<
                 nativeEnums,
               }),
             ),
-          { isolationLevel },
+          { isolationLevel, timeout },
         );
       },
     };

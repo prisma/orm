@@ -14,11 +14,13 @@ test('SQLite accepts only Serializable and retains callback inference', () => {
   expectTypeOf<'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | null>().not.toExtend<
     SqliteTransactionOptions['isolationLevel']
   >();
-  expectTypeOf<SqliteTransactionOptions>().not.toHaveProperty('timeout');
+  expectTypeOf<SqliteTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: '1000' } satisfies SqliteTransactionOptions);
   const db = {} as SqliteClient<TestContract>;
-  expectTypeOf(db.transaction(async () => 42, { isolationLevel: 'Serializable' })).toEqualTypeOf<
-    Promise<number>
-  >();
+  expectTypeOf(
+    db.transaction(async () => 42, { isolationLevel: 'Serializable', timeout: null }),
+  ).toEqualTypeOf<Promise<number>>();
   expectTypeOf(db.transaction).parameter(1).toEqualTypeOf<SqliteTransactionOptions | undefined>();
 });
 

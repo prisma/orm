@@ -13,15 +13,20 @@ test('transaction options are target-specific and preserve inference on both tra
   expectTypeOf<PostgresTransactionOptions['isolationLevel']>().toEqualTypeOf<
     'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable' | undefined
   >();
-  expectTypeOf<PostgresTransactionOptions>().not.toHaveProperty('timeout');
+  expectTypeOf<PostgresTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: '1000' } satisfies PostgresTransactionOptions);
   expectTypeOf<null>().not.toExtend<PostgresTransactionOptions['isolationLevel']>();
   const pooled = {} as PostgresClient<TestContract>;
   const direct = {} as PostgresServerlessConnection<TestContract>;
   expectTypeOf(
-    pooled.transaction(async () => 42, { isolationLevel: 'Serializable' }),
+    pooled.transaction(async () => 42, { isolationLevel: 'Serializable', timeout: 1000 }),
   ).toEqualTypeOf<Promise<number>>();
   expectTypeOf(
-    direct.transaction(async () => 'value' as const, { isolationLevel: 'ReadUncommitted' }),
+    direct.transaction(async () => 'value' as const, {
+      isolationLevel: 'ReadUncommitted',
+      timeout: null,
+    }),
   ).toEqualTypeOf<Promise<'value'>>();
   expectTypeOf(direct.transaction)
     .parameter(1)

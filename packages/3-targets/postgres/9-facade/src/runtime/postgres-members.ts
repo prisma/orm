@@ -207,6 +207,7 @@ export function buildPostgresRuntimeBoundMembers<
         local?.isolationLevel !== undefined
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
+      const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
       return withTransaction(
         workRuntime,
         (txCtx) => {
@@ -224,7 +225,7 @@ export function buildPostgresRuntimeBoundMembers<
 
           return fn(tx);
         },
-        { isolationLevel },
+        { isolationLevel, timeout },
       );
     },
   };
