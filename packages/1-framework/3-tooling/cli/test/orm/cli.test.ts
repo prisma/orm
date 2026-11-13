@@ -71,7 +71,7 @@ describe('the orm command family', () => {
     expect(ormCommandFamily.docsBaseUrl?.endsWith('/')).toBe(true);
   });
 
-  it('retires the removed verb, the four removed status flags and the Prisma 7 migrate commands, naming the binary as {bin}', () => {
+  it('retires the removed verb, the four removed status flags and the Prisma 7 commands, naming the binary as {bin}', () => {
     expect(
       ormCommandFamily.redirects.map(({ from, flag, replacement }) => ({
         from,
@@ -82,30 +82,38 @@ describe('the orm command family', () => {
       {
         from: 'migration apply',
         flag: undefined,
-        replacement: '{bin} db migrate --to <contract>',
+        replacement: ['{bin} db migrate --to <contract>'],
       },
-      { from: 'migration status', flag: 'graph', replacement: '{bin} migration graph' },
+      { from: 'migration status', flag: 'graph', replacement: ['{bin} migration graph'] },
       {
         from: 'migration status',
         flag: 'all',
-        replacement: '{bin} migration log --db <url>',
+        replacement: ['{bin} migration log --db <url>'],
       },
       {
         from: 'migration status',
         flag: 'limit',
-        replacement: '{bin} migration log --db <url>',
+        replacement: ['{bin} migration log --db <url>'],
       },
       {
         from: 'migration status',
         flag: 'ref',
-        replacement: '{bin} migration status --to <contract>',
+        replacement: ['{bin} migration status --to <contract>'],
       },
-      { from: 'migrate dev', flag: undefined, replacement: '{bin} contract emit' },
-      { from: 'migrate deploy', flag: undefined, replacement: '{bin} db migrate' },
-      { from: 'migrate status', flag: undefined, replacement: '{bin} migration status' },
-      { from: 'migrate diff', flag: undefined, replacement: '{bin} db update --dry-run' },
-      { from: 'migrate reset', flag: undefined, replacement: '{bin} db update' },
-      { from: 'migrate resolve', flag: undefined, replacement: '{bin} db sign <migration>' },
+      { from: 'migrate dev', flag: undefined, replacement: ['{bin} contract emit'] },
+      { from: 'migrate deploy', flag: undefined, replacement: ['{bin} db migrate'] },
+      { from: 'migrate status', flag: undefined, replacement: ['{bin} migration status'] },
+      { from: 'migrate diff', flag: undefined, replacement: ['{bin} db update --dry-run'] },
+      { from: 'migrate reset', flag: undefined, replacement: ['{bin} db update'] },
+      { from: 'migrate resolve', flag: undefined, replacement: ['{bin} db sign <migration>'] },
+      { from: 'generate', flag: undefined, replacement: ['{bin} contract emit'] },
+      { from: 'validate', flag: undefined, replacement: [] },
+      { from: 'format', flag: undefined, replacement: ['{bin} contract format'] },
+      { from: 'studio', flag: undefined, replacement: [] },
+      { from: 'db pull', flag: undefined, replacement: ['{bin} contract infer'] },
+      { from: 'db push', flag: undefined, replacement: ['{bin} db update'] },
+      { from: 'db seed', flag: undefined, replacement: [] },
+      { from: 'db execute', flag: undefined, replacement: [] },
     ]);
   });
 });
@@ -143,6 +151,18 @@ describe("the engine's telemetry command group", () => {
   });
 });
 
+const DOCS_URL = 'https://www.prisma.io/docs/cli';
+
+const DOCS = { kind: 'open-url', label: 'Read the docs', url: DOCS_URL };
+
+function replacement(command: string) {
+  return { kind: 'run-command', label: 'Use the replacement', command };
+}
+
+function help(path: string) {
+  return { kind: 'run-command', label: 'Read its help', command: `prisma-test ${path} --help` };
+}
+
 describe('a retired invocation', () => {
   it('is answered with its replacement rather than a spelling suggestion', async () => {
     const loader = recordingLoader();
@@ -173,50 +193,100 @@ describe('a retired invocation', () => {
 
   it.each([
     {
-      verb: 'dev',
+      path: 'migrate dev',
       why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
-      command: 'prisma-test contract emit',
+      nextActions: [replacement('prisma-test contract emit'), help('contract emit')],
     },
     {
-      verb: 'deploy',
+      path: 'migrate deploy',
       why: "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
-      command: 'prisma-test db migrate',
+      nextActions: [replacement('prisma-test db migrate'), help('db migrate')],
     },
     {
-      verb: 'status',
+      path: 'migrate status',
       why: "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
-      command: 'prisma-test migration status',
+      nextActions: [replacement('prisma-test migration status'), help('migration status')],
     },
     {
-      verb: 'diff',
+      path: 'migrate diff',
       why: '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
-      command: 'prisma-test db update --dry-run',
+      nextActions: [replacement('prisma-test db update --dry-run'), help('db update')],
     },
     {
-      verb: 'reset',
+      path: 'migrate reset',
       why: "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
-      command: 'prisma-test db update',
+      nextActions: [replacement('prisma-test db update'), help('db update')],
     },
     {
-      verb: 'resolve',
+      path: 'migrate resolve',
       why: "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
-      command: 'prisma-test db sign <migration>',
+      nextActions: [replacement('prisma-test db sign <migration>'), help('db sign')],
     },
-  ])('answers Prisma 7 migrate $verb with its Prisma 8 command', async ({ verb, why, command }) => {
-    const run = await harness(recordingLoader().loadConfig).run(['migrate', verb, '--json']);
+    {
+      path: 'generate',
+      why: expect.any(String),
+      nextActions: [replacement('prisma-test contract emit'), help('contract emit')],
+    },
+    { path: 'validate', why: expect.any(String), nextActions: [DOCS] },
+    {
+      path: 'format',
+      why: expect.any(String),
+      nextActions: [replacement('prisma-test contract format'), help('contract format')],
+    },
+    { path: 'studio', why: expect.any(String), nextActions: [DOCS] },
+    {
+      path: 'db pull',
+      why: expect.any(String),
+      nextActions: [replacement('prisma-test contract infer'), help('contract infer')],
+    },
+    {
+      path: 'db push',
+      why: expect.any(String),
+      nextActions: [replacement('prisma-test db update'), help('db update')],
+    },
+    { path: 'db seed', why: expect.any(String), nextActions: [DOCS] },
+    { path: 'db execute', why: expect.any(String), nextActions: [DOCS] },
+  ])(
+    'answers Prisma 7 $path with CLI.V7_COMMAND and what to run instead',
+    async ({ path, why, nextActions }) => {
+      const run = await harness(recordingLoader().loadConfig).run([...path.split(' '), '--json']);
 
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: {
-        ok: false,
-        error: {
-          code: 'CLI.COMMAND_MOVED',
-          why,
-          nextActions: [{ kind: 'run-command', label: 'Use the replacement', command }],
+      expect(run.exitCode).toBe(2);
+      const result = run.json.at(-1);
+      expect(result).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CLI.V7_COMMAND',
+            summary: `\`prisma-test ${path}\` is a Prisma 7 command and is not available in Prisma 8`,
+            why,
+          },
         },
-      },
-    });
+      });
+      expect(
+        result?.kind === 'result' && !result.envelope.ok && result.envelope.error.nextActions,
+      ).toEqual(nextActions);
+      expect(result?.kind === 'result' && result.envelope.nextActions).toEqual(nextActions);
+    },
+  );
+
+  it('describes no new Prisma 7 path in terms of Prisma 7 itself', () => {
+    const newPaths = [
+      'generate',
+      'validate',
+      'format',
+      'studio',
+      'db pull',
+      'db push',
+      'db seed',
+      'db execute',
+    ];
+    for (const redirect of ormCommandFamily.redirects.filter(({ from }) =>
+      newPaths.includes(from),
+    )) {
+      expect(redirect.reason).not.toContain('Prisma 7');
+    }
   });
 
   it('answers a retired status flag with the command that replaced it', async () => {

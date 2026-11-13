@@ -58,8 +58,22 @@ const commands: Readonly<Record<string, AnyCommand>> = {
   'orm init': initCommand,
 };
 
+const CLI_DOCS_URL = 'https://www.prisma.io/docs/cli';
+
+function v7Command(
+  from: string,
+  entry: Omit<RedirectSpec, 'from' | 'flag' | 'code' | 'summary'>,
+): RedirectSpec {
+  return {
+    from,
+    code: 'CLI.V7_COMMAND',
+    summary: `\`{bin} ${from}\` is a Prisma 7 command and is not available in Prisma 8`,
+    ...entry,
+  };
+}
+
 /**
- * The invocations the ORM retired, and the Prisma 7 `migrate` commands, so an old command line gets the replacement rather than a spelling suggestion. Replacements name the binary as `{bin}`; the engine substitutes the shell's own name.
+ * The invocations the ORM retired, and the Prisma 7 commands, so an old command line gets the replacement or a link to the docs rather than a spelling suggestion. Replacements name the binary as `{bin}`; the engine substitutes the shell's own name.
  *
  * The four flag redirects name `migration status`, which the engine requires to be a mounted command.
  */
@@ -93,42 +107,83 @@ const redirects: readonly RedirectSpec[] = [
     replacement: '{bin} migration status --to <contract>',
     reason: 'One flag names the target contract, whether it is a ref, a hash or a migration.',
   },
-  {
-    from: 'migrate dev',
+  v7Command('migrate dev', {
     replacement: '{bin} contract emit',
     reason:
       "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
-  },
-  {
-    from: 'migrate deploy',
+    help: 'contract emit',
+  }),
+  v7Command('migrate deploy', {
     replacement: '{bin} db migrate',
     reason:
       "`db migrate` applies the planned migrations; while Prisma 7 still owns this project's migrations, run `migrate deploy` with Prisma 7's CLI instead.",
-  },
-  {
-    from: 'migrate status',
+    help: 'db migrate',
+  }),
+  v7Command('migrate status', {
     replacement: '{bin} migration status',
     reason:
       "`migration status` reports which planned migrations the database has applied; while Prisma 7 still owns this project's migrations, run `migrate status` with Prisma 7's CLI instead.",
-  },
-  {
-    from: 'migrate diff',
+    help: 'migration status',
+  }),
+  v7Command('migrate diff', {
     replacement: '{bin} db update --dry-run',
     reason:
       '`db update --dry-run` prints the changes between the contract and a live database without applying them; to write the changes between two contracts as a migration package use `migration plan`, and to report drift use `db verify`.',
-  },
-  {
-    from: 'migrate reset',
+    help: 'db update',
+  }),
+  v7Command('migrate reset', {
     replacement: '{bin} db update',
     reason:
       "Prisma 8 has no reset: `db update` moves the database to the contract without a reset and asks before losing data, on a database whose migration history does not need to be kept; a database that changes only through migrations is moved with `db migrate`; while Prisma 7 still owns this project's migrations, run `migrate reset` with Prisma 7's CLI instead.",
-  },
-  {
-    from: 'migrate resolve',
+    help: 'db update',
+  }),
+  v7Command('migrate resolve', {
     replacement: '{bin} db sign <migration>',
     reason:
       "`db sign <migration>` checks that the database already has that migration's schema and moves the database marker to that migration's contract, so `db migrate` continues after it; `migration status` does not list the migration as applied. Use it where you would run `migrate resolve --applied` after applying a migration's changes by hand. While Prisma 7 still owns this project's migrations, run `migrate resolve` with Prisma 7's CLI instead.",
-  },
+    help: 'db sign',
+  }),
+  v7Command('generate', {
+    replacement: '{bin} contract emit',
+    help: 'contract emit',
+    reason:
+      'Prisma 8 has no client generation step. `contract emit` reads your schema and writes contract.json and contract.d.ts, the contract files the ORM reads to know your data model and its types.',
+  }),
+  v7Command('validate', {
+    docsUrl: CLI_DOCS_URL,
+    reason:
+      'Prisma 8 has no separate validate command. `contract emit` reports an invalid schema when it runs, and writes the contract files when the schema is valid.',
+  }),
+  v7Command('format', {
+    replacement: '{bin} contract format',
+    help: 'contract format',
+    reason:
+      '`contract format` formats the PSL schema files your prisma.config.ts names as the contract source, in place. It leaves a schema written in TypeScript untouched.',
+  }),
+  v7Command('studio', {
+    docsUrl: CLI_DOCS_URL,
+    reason: 'Prisma 8 has no Studio command for browsing and editing your data in a browser.',
+  }),
+  v7Command('db pull', {
+    replacement: '{bin} contract infer',
+    help: 'contract infer',
+    reason:
+      '`contract infer` reads the live database, named with `--db <url>`, and writes its schema as a PSL contract file. Run `contract emit` afterwards to write the contract files the ORM reads.',
+  }),
+  v7Command('db push', {
+    replacement: '{bin} db update',
+    help: 'db update',
+    reason:
+      '`db update` changes the database to match the contract directly, without migration files, and asks before any change that would lose data. On a new database, `db init` creates what the contract declares and never removes or changes anything already there.',
+  }),
+  v7Command('db seed', {
+    docsUrl: CLI_DOCS_URL,
+    reason: 'Prisma 8 has no seed command. Run your seed script directly, for example with node.',
+  }),
+  v7Command('db execute', {
+    docsUrl: CLI_DOCS_URL,
+    reason: 'Prisma 8 has no command that runs a script file of statements against the database.',
+  }),
 ];
 
 /**
