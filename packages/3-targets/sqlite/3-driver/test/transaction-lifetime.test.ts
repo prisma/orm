@@ -29,6 +29,42 @@ it.each(['commit', 'rollback'] as const)(
   },
 );
 
+it.each(['commit', 'rollback'] as const)(
+  'closes connection-issued INSERT RETURNING on transaction %s',
+  async (ending) => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE items (id INTEGER PRIMARY KEY)');
+    const connection = new SqliteConnectionImpl(db);
+    const tx = await connection.beginTransaction();
+    const sql = 'INSERT INTO items VALUES (1), (2) RETURNING id';
+    const stmt = db.prepare(sql);
+    const iterator = stmt.iterate();
+    const returned = vi.spyOn(iterator, 'return');
+    vi.spyOn(stmt, 'iterate').mockReturnValue(iterator);
+    const prepared = vi.spyOn(db, 'prepare').mockReturnValue(stmt);
+    const rows = connection.query({ sql })[Symbol.asyncIterator]();
+    expect(await rows.next()).toEqual({ done: false, value: { id: 1 } });
+    prepared.mockRestore();
+    try {
+      await tx[ending]();
+      expect(returned).toHaveBeenCalledTimes(1);
+      await expect(rows.next()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+      expect(db.prepare('SELECT id FROM items ORDER BY id').all()).toEqual(
+        ending === 'commit' ? [{ id: 1 }, { id: 2 }] : [],
+      );
+      const outside = connection.query({ sql: 'SELECT 3 AS id' })[Symbol.asyncIterator]();
+      expect(await outside.next()).toEqual({ done: false, value: { id: 3 } });
+      await outside.return?.();
+      const next = await connection.beginTransaction();
+      await next.execute({ sql: 'INSERT INTO items VALUES (3)' });
+      await next.commit();
+    } finally {
+      await connection.destroy();
+    }
+    expect(returned).toHaveBeenCalledTimes(1);
+  },
+);
+
 it('preserves a failed COMMIT and allows rollback without reopening the transaction scope', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec(
@@ -74,18 +110,22 @@ it('unregisters a closed statement even when its return reports failure', async 
   expect(returned).toHaveBeenCalledTimes(1);
 });
 
-it('closes parked statements before database disposal and permits repeated disposal', async () => {
-  const db = new DatabaseSync(':memory:');
-  const connection = new SqliteConnectionImpl(db);
-  const stmt = db.prepare('SELECT 1 UNION ALL SELECT 2');
-  const iterator = stmt.iterate();
-  const returned = vi.spyOn(iterator, 'return');
-  vi.spyOn(stmt, 'iterate').mockReturnValue(iterator);
-  vi.spyOn(db, 'prepare').mockReturnValue(stmt);
-  const rows = connection.query({ sql: 'SELECT 1 UNION ALL SELECT 2' })[Symbol.asyncIterator]();
-  await rows.next();
-  await connection.destroy();
-  await connection.destroy();
-  expect(returned).toHaveBeenCalledTimes(1);
-  await expect(rows.next()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
-});
+it.each([false, true])(
+  'closes parked statements before database disposal, transaction %s',
+  async (active) => {
+    const db = new DatabaseSync(':memory:');
+    const connection = new SqliteConnectionImpl(db);
+    if (active) await connection.beginTransaction();
+    const stmt = db.prepare('SELECT 1 UNION ALL SELECT 2');
+    const iterator = stmt.iterate();
+    const returned = vi.spyOn(iterator, 'return');
+    vi.spyOn(stmt, 'iterate').mockReturnValue(iterator);
+    vi.spyOn(db, 'prepare').mockReturnValue(stmt);
+    const rows = connection.query({ sql: 'SELECT 1 UNION ALL SELECT 2' })[Symbol.asyncIterator]();
+    await rows.next();
+    await connection.destroy();
+    await connection.destroy();
+    expect(returned).toHaveBeenCalledTimes(1);
+    await expect(rows.next()).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
+  },
+);

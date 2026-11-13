@@ -114,9 +114,14 @@ abstract class SqliteQueryable implements SqlQueryable {
     this.db = db;
   }
 
+  protected queryScope(): SqliteScope {
+    return this.scope;
+  }
+
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     try {
-      this.scope.assertActive();
+      const scope = this.queryScope();
+      scope.assertActive();
       const stmt = this.db.prepare(request.sql);
       const iterator = stmt.iterate(...sqliteParams(request.params));
       let closed = false;
@@ -129,10 +134,10 @@ abstract class SqliteQueryable implements SqlQueryable {
           unregister();
         }
       };
-      const unregister = this.scope.register(close);
+      const unregister = scope.register(close);
       try {
         while (true) {
-          this.scope.assertActive();
+          scope.assertActive();
           const next = iterator.next();
           if (next.done) break;
           yield blindCast<Row, 'SQLite rows follow the caller query shape'>(next.value);
@@ -176,6 +181,11 @@ abstract class SqliteQueryable implements SqlQueryable {
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
   readonly #transactions: SqliteTransactionState = { current: undefined };
+
+  protected override queryScope(): SqliteScope {
+    return this.#transactions.current ?? this.scope;
+  }
+
   async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
     if (start?.isolationLevel !== undefined) {
       validateSqliteIsolationLevel(start.isolationLevel);
@@ -222,6 +232,7 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
       this.scope.close();
       this.db.exec('COMMIT');
       this.#completed = true;
+      this.transactions.current = undefined;
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
@@ -236,6 +247,7 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
       this.scope.close();
       this.db.exec('ROLLBACK');
       this.#completed = true;
+      this.transactions.current = undefined;
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
