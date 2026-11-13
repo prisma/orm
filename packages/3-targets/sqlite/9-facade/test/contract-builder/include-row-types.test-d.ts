@@ -17,7 +17,7 @@ const Post = model('Post', {
   },
 });
 const Profile = model('Profile', {
-  fields: { id: field.column(integer).id(), userId: field.column(integer) },
+  fields: { id: field.column(integer).id(), userId: field.column(integer).unique() },
 });
 const Tag = model('Tag', {
   fields: { id: field.column(integer).id(), label: field.column(text) },

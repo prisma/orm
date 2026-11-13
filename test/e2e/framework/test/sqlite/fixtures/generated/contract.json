@@ -507,7 +507,13 @@
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "user_id"
+                  ]
+                }
+              ]
             },
             "typed_rows": {
               "columns": {
@@ -583,7 +589,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "1156c66d9347736c6a9d711596aa066afcca16ac51dde115b60a6602c073302f"
+    "storageHash": "348cfda3e550656d13ba752be2b612bafe9c9ec57529992a4fcdc49e543ff2f2"
   },
   "capabilities": {
     "sql": {
