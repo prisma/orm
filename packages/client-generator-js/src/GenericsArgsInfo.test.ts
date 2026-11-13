@@ -86,6 +86,36 @@ function dmmf(inputObjectTypes: DMMF.InputType[]) {
 }
 
 describe('typeNeedsGenericModelArg', () => {
+  test.each([false, true])('traverses a wide graph with shared children (field ref: %s)', (hasFieldRef) => {
+    const leaves = Array.from({ length: 256 }, (_, i) =>
+      inputObjectType(`Leaf${i}`, hasFieldRef && i === 255 ? [field('ref', [fieldRef('IntRef')])] : []),
+    )
+    const lastLeaf = leaves[leaves.length - 1]
+    const branches = Array.from({ length: 256 }, (_, i) =>
+      inputObjectType(`Branch${i}`, [
+        field(
+          'children',
+          leaves.map((leaf) => inputObjectRef(leaf.name)),
+        ),
+      ]),
+    )
+    const root = inputObjectType('Root', [
+      field(
+        'children',
+        branches.map((branch) => inputObjectRef(branch.name)),
+      ),
+    ])
+    const argsInfo = new GenericArgsInfo(dmmf([root, ...branches, ...leaves]))
+
+    expect(argsInfo.typeNeedsGenericModelArg(root)).toBe(hasFieldRef)
+    for (const branch of branches) {
+      expect(argsInfo.typeNeedsGenericModelArg(branch)).toBe(hasFieldRef)
+    }
+    expect(argsInfo.typeNeedsGenericModelArg(leaves[0])).toBe(false)
+    expect(argsInfo.typeNeedsGenericModelArg(lastLeaf)).toBe(hasFieldRef)
+    expect(argsInfo.typeNeedsGenericModelArg(root)).toBe(hasFieldRef)
+  })
+
   test('is false for object that does not contain field refs', () => {
     const object = inputObjectType('InputType', [
       field('someField', [scalarRef('Int')]),
