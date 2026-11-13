@@ -1933,6 +1933,7 @@ export async function withTransaction<R>(
     try {
       result = await fn(txContext);
     } catch (error) {
+      invalidated = true;
       try {
         await transaction.rollback();
       } catch (rollbackError) {
