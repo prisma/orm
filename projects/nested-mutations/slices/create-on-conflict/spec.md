@@ -35,7 +35,7 @@ The conflict keys of a call:
 | `'skip'` | the named columns | every primary key and unique constraint of the table |
 | `'connect'` | the named columns | the primary key |
 
-A row can conflict when it gives a non-null value for every column of at least one conflict key. Values count when they come from the row's own data, from the parent link (the foreign key a child-held relation fills in from the parent), or from a create default the ORM fills in (a generated `cuid()`, `uuid()`, `now()` and the like). A column the database fills in (auto-increment, database default) and `null` do not count.
+A row can conflict when it gives a non-null value for every column of at least one conflict key. Values count when they come from the row's own data, from the parent link (the foreign key a child-held relation fills in from the parent), from a to-one relation write inside the row (`connect` or `create` on a relation whose key the row holds, which fills that key before the insert), or from a create default the ORM fills in (a generated `cuid()`, `uuid()`, `now()` and the like). The third source was added during dispatch 3 (2026-11-13), under the rule that only a row that cannot conflict is rejected. A column the database fills in (auto-increment, database default) and `null` do not count.
 
 A row that cannot conflict is rejected while the graph is built, before any statement runs (decided 2026-11-13):
 
@@ -59,7 +59,7 @@ The check is one function over the storage rows after defaults are applied, used
 The second and third rows assign a column its own proposed value; the costs listed under "Must be resolved before the project closes" in the project spec (triggers, row lock, `UPDATE` privilege, generated column) apply to them as to top-level `upsert`.
 
 - **One insert per row for `'connect'`.** A statement that updates on conflict cannot touch the same row twice on Postgres, so two rows of one call that collide with each other or with the same existing row would fail there and not on SQLite.
-- **`'skip'` batches as `createAll`.** Rows without relation callbacks go into one insert (or the column-set groups `addInsert` makes); rows with relation callbacks get one insert each, as nested `create` does today.
+- **`'skip'` batches as `createAll`.** When no row has relation callbacks, the rows go into one insert (or the column-set groups `addInsert` makes); when any row has relation callbacks, every row gets an insert of its own, as nested `create` does today.
 - **Reading the row.** A `'connect'` insert that a link edge or a nested child reads is followed by a read-back by its conflict columns (`FindByKeys`), as `upsertGraph` builds it, and the readers read the read-back. With capability `returning` the read-back rule collapses it into the insert. Without it, the node checks of design record D19 apply as they are: the insert is refused when a column read from it is updated or not given by the row.
 - **Without `insertOnConflictTarget`.** `'connect'` applies top-level `upsert`'s check (`requireOnlyCollidingKey`): it is refused when the row can also collide on a key other than the conflict columns.
 
