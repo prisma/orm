@@ -210,7 +210,9 @@ describe('write terminals run as one orm-call', () => {
     });
     recorded.runtime.setNextResults([[{ id: 1 }], [aliceRow]]);
 
-    const updated = await recorded.collection.where({ id: 1 }).update({ name: 'Alice' }, audited);
+    const updated = await recorded.collection
+      .where({ name: 'Ada' })
+      .update({ name: 'Alice' }, audited);
 
     expect(summary(recorded)).toEqual(
       oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }),
@@ -221,7 +223,9 @@ describe('write terminals run as one orm-call', () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
     recorded.runtime.setNextResults([[{ id: 1 }], [aliceRow]]);
 
-    const updated = await recorded.collection.where({ id: 1 }).update({ name: 'Alice' }, audited);
+    const updated = await recorded.collection
+      .where({ name: 'Ada' })
+      .update({ name: 'Alice' }, audited);
 
     expect(summary(recorded)).toEqual(
       oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }, ['committed']),
