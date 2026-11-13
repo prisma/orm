@@ -6,7 +6,7 @@
 
 MariaDB gets a runtime of its own, built from MySQL's: `mariadb()` in `@prisma/orm-mariadb/runtime`, a MariaDB runtime adapter, and a MariaDB SQL renderer that subclasses MySQL's. MariaDB loads includes with one query per relation, a strategy the ORM client gains for any database that cannot run its one-query include correctly (see the include design). The slice is delivered in two pull requests:
 
-- **6b-1, per-relation includes.** The ORM client's per-relation strategy (`'query'`), the capabilities `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation` that select it, and the SQL runtime's `secondarySelectAnnotation`, tested on Postgres with the capabilities switched off. No MariaDB code.
+- **6b-1, per-relation includes.** The ORM client's per-relation strategy (`'query'`), built as a statement graph for reads and writes, and the capabilities that select it: `sql.jsonAgg` and the new `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`. Tested on Postgres with the two new capabilities switched off. No MariaDB runtime code.
 - **6b-2, MariaDB runtime.** Everything else in this spec, on top of 6b-1.
 
 ```ts
@@ -36,7 +36,7 @@ Today, pointed at MariaDB, `mysql()` fails every connection (MariaDB 10.11 has n
 
 ### 1. Per-relation includes (6b-1)
 
-As specified in [`include-loading-design.md`](./include-loading-design.md). MariaDB's adapter reports neither `outerReferencesInDerivedTables` nor `jsonAggWithoutTruncation`, so every MariaDB include is loaded per relation.
+As specified in [`include-loading-design.md`](./include-loading-design.md). MariaDB's adapter reports `jsonAgg` but neither `outerReferencesInDerivedTables` nor `jsonAggWithoutTruncation`, so every MariaDB include is loaded per relation.
 
 ### 2. The SQL renderer
 

@@ -84,8 +84,8 @@
 
 ### 6b — MariaDB runtime
 
-- The SQL renderer becomes extensible; MariaDB renders includes with the correlation in the subquery's own `WHERE`, refuses a truncated `JSON_ARRAYAGG`, and writes `VALUES()` upserts.
-- `mariadb()` in the facade; the ORM live tests and the example's reads and writes run against MariaDB 10.11.
+- **6b-1:** the ORM client loads includes with one query per relation where the database lacks `jsonAgg`, `outerReferencesInDerivedTables` or `jsonAggWithoutTruncation`. Reads and writes with includes run as a statement graph (`Find` per relation, then `NestJoin`). No MariaDB runtime code; tested on Postgres with the two new capabilities switched off.
+- **6b-2:** the SQL renderer becomes a class that MariaDB subclasses to write `VALUES()` upserts; `mariadb()` in the facade; the ORM live tests and the example's reads and writes run against MariaDB 10.11.
 
 **Hands to close-out:** both targets proven, and the coupling register complete.
 

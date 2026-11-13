@@ -1,6 +1,6 @@
-# Handover — MySQL proof of concept (2026-11-11)
+# Handover — MySQL proof of concept (2026-11-13)
 
-Written by `donatello-73` before a rate limit. Give this file to the next agent. It covers the whole project. It replaces the handover of 2026-10-30.
+Written by `donatello-73` on 2026-11-11 before a rate limit, and updated by `aida-20` on 2026-11-13 after Will revised the 6b-1 design. Give this file to the next agent. It covers the whole project. It replaces the handover of 2026-10-30.
 
 ## Start here
 
@@ -44,23 +44,28 @@ Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,
 
 **Why.** The ORM loads includes in one query: a correlated subquery aggregating child rows into JSON, reading from a derived table that refers to the outer row. MariaDB 10.11 cannot resolve that outer reference ("Unknown column"), so every row include fails on MariaDB. MariaDB also silently truncates `JSON_ARRAYAGG` (a cut on an element boundary is valid JSON with fewer rows), so no single-query rewrite is safe.
 
-**Decision (approved by Will 2026-11-11, names accepted):** when the database cannot run the one-query include correctly, the ORM loads includes per relation (like ActiveRecord `preload`, Django `prefetch_related`): parents first, then one query per relation for all parents, keyed by the parents' identity, stitched in JavaScript. Everything is specified in `include-loading-design.md`; the names are final:
+**Decision (approved by Will 2026-11-11, revised with him 2026-11-13):** when the database cannot run the one-query include correctly, the ORM loads includes per relation: parents first, then one query per relation for all parents, keyed by the parents' identity, attached in JavaScript. Everything is specified in `include-loading-design.md`; the names are final:
 
-- capabilities `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation` (Postgres, SQLite, MySQL report both; MariaDB neither); `sql.jsonAgg` is deleted;
-- `selectIncludeStrategy(contract): 'join' | 'query'` (values follow Prisma 7's `relationLoadStrategy`);
-- `stitchKey`; chunks of at most 10 000 keys and 1 MiB of encoded keys;
-- mutation-graph node `Preload` for writes that return rows with includes;
-- `secondarySelectAnnotation` (name `'secondarySelect'`) in the SQL runtime, honoured by `budgets` and `lints`;
-- refusals use existing codes `ORM.ROW_IDENTITY_MISSING` and `ORM.CAPABILITY_MISSING`.
+- the one-query include needs three capabilities: `sql.jsonAgg` (kept; MySQL gains it, Postgres also reports it under `sql`) and the new `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`. Postgres, SQLite and MySQL report all three; MariaDB only `jsonAgg`;
+- `selectIncludeStrategy(contract): 'join' | 'query'`;
+- a read with includes is a statement graph: `Find` for the parents, one `Find` per relation fed by a filter-data edge, and a new node `NestJoin` beside `CrossJoin` and `UnionAll`. Writes add the same steps after their read-back step (`Find` or `FindByKeys`). There is no `Preload` node;
+- the folder `sql-orm-client/src/mutation-graph/` is renamed `statement-graph/`, in its own commit;
+- a graph that writes no table runs without a transaction;
+- `stitchKey`; chunks of at most 10 000 keys and 1 MiB of encoded keys, split by one helper shared with `FindByKeys`;
+- refusals use existing codes `ORM.ROW_IDENTITY_MISSING` and `ORM.CAPABILITY_MISSING`;
+- no `secondarySelectAnnotation`, and no change to the SQL runtime or its `budgets` and `lints` middleware. Completing or removing those two is stream 6, row 8 of the GA plan (branch `planning/prisma-8-ga`);
+- ADR 296 and ADR 302 are reworded in the 6b-1 PR to state their motivation: do in the database what the database can do. They do not forbid this strategy (Will, 2026-11-13).
 
 **Plan.** 6b-1 is one PR with no MariaDB code, tested by running the existing Postgres include tests a second time with both capabilities switched off through the adapter descriptor. Build it in two dispatches:
 
-1. Capabilities, `selectIncludeStrategy`, the per-relation read for every include form (design section 3's table), stitching, chunking, tests. An implementer brief for this was written (`wip/briefs/slice6b1-common.md` is gitignored; its rules are in "Rules" below) and the dispatch was started and stopped before it changed anything.
-2. Writes (`Preload`), the cache key, `secondarySelectAnnotation` and the middleware change, the prepared-read refusal.
+1. The folder rename, in its own commit. Then capabilities, `selectIncludeStrategy`, the graph read for every include form (design section 4's table), `NestJoin`, `stitchKey`, chunking, the transaction rule, tests. No code for 6b-1 exists yet.
+2. Writes with includes, the cache key, the prepared-read refusal, the docs and the two ADRs.
 
 Then `/drive-code-review`, fixes, a second review if fixes are substantial, manual QA, PR. Then **6b-2**: the MariaDB runtime (`mariadb()`, runtime target/adapter factories, `createMysqlClient`, a `MysqlSqlRenderer` class that MariaDB subclasses only to write `VALUES(c)` in upserts, true error messages, MySQL's ORM live tests run against both servers, the example's reads and writes). Then **close-out** (`.drive` `close-project.md`: final retro, DoD evidence, migrate long-lived decisions to ADRs, strip references to `projects/mysql-poc/`, delete it, mark the GA plan row done).
 
-**Rejected, do not revisit** (reasons in the design's Alternatives): a single-query MariaDB include checked for truncation via a deliberate overflow error (too fragile, 2^depth cost — Will agreed); Drizzle's no-lateral mode (still correlates inside derived tables); restoring the multi-query code removed in commit `70482700f2` as it was; redefining `jsonAgg`.
+**Rejected, do not revisit** (reasons in the design's Alternatives): a single-query MariaDB include checked for truncation via a deliberate overflow error (too fragile, 2^depth cost — Will agreed); Drizzle's no-lateral mode (still correlates inside derived tables); restoring the multi-query code removed in commit `70482700f2` as it was; a `Preload` node with a separate loader for reads; `secondarySelectAnnotation`; deleting or redefining `jsonAgg`.
+
+**Known gaps in these docs:** `research/` holds the research only, and two of its three files describe the dropped single-query design. The architect and principal-engineer design reviews were not copied. The session that revised the design (`aida-20`): `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-tml-3697-review-5b2f93/56ec0b86-ccb1-4c4c-a7d6-f35aacc9efb4.jsonl`.
 
 ## Will's standing instructions (in force)
 
@@ -69,6 +74,8 @@ Then `/drive-code-review`, fixes, a second review if fixes are substantial, manu
 - **Never change `packages/1-framework`.** Shared-code changes in the SQL family or ORM client are fine when the design says so; do not ask Will for permission ("Shut the fuck up about my go-ahead") — explain decisions instead.
 - **No target names in shared code;** capabilities state database facts precisely (MariaDB having `JSON_ARRAYAGG` is why `jsonAgg` could not mean "the one-query include works").
 - **Never say "on every target"** — capabilities exist because nothing is expected to work everywhere.
+- **Read an ADR for its motivation,** not its wording. Do not report a conflict because one sentence is no longer literally true.
+- **Be sceptical of any flag or parameter added to shared code for one caller** (`integerRepresentation`, `containsRawSql`, `holdMarkerLock` and `secondarySelectAnnotation` were all rejected).
 - **Docs and PR descriptions:** lead with the decision and a concrete example, state the design (not requirements to reverse-engineer), name the requirements it meets, alternatives last, no counts that go stale, nothing that "adds nothing meaningful". Write for a teammate without our context. Plain English, brief; never hard-wrap markdown.
 - **Don't add duplicate guidance.** When an instruction was ignored, find why (usually a conflicting doc) and fix that.
 - **Copy Postgres's patterns;** no invented names (reuse code or industry vocabulary, else leave the name to Will).
