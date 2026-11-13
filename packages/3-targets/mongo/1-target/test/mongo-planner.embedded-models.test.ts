@@ -120,7 +120,7 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     });
   });
 
-  it('fills a new required field and an optional field made required, and does not warn', async () => {
+  it('fills a new required field, leaves an optional field made required to the document check, and does not warn', async () => {
     const fill = (key: string) =>
       `Fill key "${key}" at path "$[*]" in field addresses of collection users where it is missing or null`;
     expect(
@@ -131,7 +131,7 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           schema: live,
         }),
       ),
-    ).toEqual({ operations: [fill('city'), fill('country')], dataLoss: [], warnings: [] });
+    ).toEqual({ operations: [fill('country')], dataLoss: [], warnings: [] });
   });
 
   it('plans a backfill of the field as a fill whose value is a placeholder', async () => {

@@ -125,7 +125,7 @@ describe('MongoMigrationPlanner, a required field new inside a value object', ()
     });
   });
 
-  it('fills an optional field made required, a list field with an empty list, and a value object held once', () => {
+  it('fills a list field with an empty list and a value object held once, and leaves an optional field made required to the document check', () => {
     const holders = (seed: string, address: Record<string, FieldTypeSpec>) =>
       users(seed, address, {}, { home: voField('Address', { nullable: true }) });
 
@@ -138,8 +138,6 @@ describe('MongoMigrationPlanner, a required field new inside a value object', ()
         }),
       ),
     ).toEqual([
-      'fillStoredKey({collection:"users",field:"addresses",path:"$[*].city",value:{$literal:""}})',
-      'fillStoredKey({collection:"users",field:"home",path:"$.city",value:{$literal:""}})',
       'fillStoredKey({collection:"users",field:"addresses",path:"$[*].tags",value:[]})',
       'fillStoredKey({collection:"users",field:"home",path:"$.tags",value:[]})',
     ]);

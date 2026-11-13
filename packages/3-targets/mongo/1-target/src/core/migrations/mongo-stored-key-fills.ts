@@ -65,6 +65,8 @@ interface RequiredField {
   /** The key the field is stored under. */
   readonly key: string;
   readonly field: ContractField | ContractValueObjectField;
+  /** Whether the origin lacks the field; one that was optional gets no temporary value. */
+  readonly isNew: boolean;
   readonly statement: NestedBackfillStatement | undefined;
 }
 
@@ -133,6 +135,7 @@ function valueObjectFields(
             subject,
             key: name,
             field,
+            isNew: originField === undefined,
             statement: statements.find(
               (statement): statement is ResolvedValueObjectFieldBackfillStatement =>
                 statement.kind === 'backfill' &&
@@ -177,6 +180,7 @@ function embeddedModelFields(
             subject,
             key: ownStoredNameOf(destination, name),
             field,
+            isNew: originField === undefined,
             statement: statements.find(
               (statement): statement is ResolvedFieldBackfillStatement =>
                 statement.kind === 'backfill' &&
@@ -365,7 +369,7 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
 }
 
 /**
- * The fills of keys inside fields' values a plan makes. A field of a value object or an embedded model that both contracts have is filled when the destination makes it required and the origin lacks it or makes it optional. A backfill statement fills it with a value the user writes in `migration.ts`. Without one, a field whose type has a temporary value gets it, unless a unique index covers it at one of its places; any other is left to the validator change's document check. Each fill acts at every place the destination's documents hold the type, nested or in lists, as the destination names them, and has the refusals of every rewrite. With no origin contract, nothing is known to have changed.
+ * The fills of keys inside fields' values a plan makes. A field of a value object or an embedded model that both contracts have is filled when the destination makes it required and the origin lacks it or makes it optional. A backfill statement fills it with a value the user writes in `migration.ts`. Without one, a new field whose type has a temporary value gets it, unless a unique index covers it at one of its places; any other, and a field that was optional, is left to the validator change's document check, as at the top level. Each fill acts at every place the destination's documents hold the type, nested or in lists, as the destination names them, and has the refusals of every rewrite. With no origin contract, nothing is known to have changed.
  */
 export function planStoredKeyFills(
   input: StoredKeyFillInput,
@@ -394,7 +398,9 @@ export function planStoredKeyFills(
   const fills: StoredKeyFill[] = [];
   for (const each of required) {
     const temporary =
-      each.statement === undefined ? temporaryValueOf(each.field, input.lookups) : undefined;
+      each.statement === undefined && each.isNew
+        ? temporaryValueOf(each.field, input.lookups)
+        : undefined;
     if (each.statement === undefined && temporary === undefined) continue;
     const places = placesOf(each.type);
     if (!places.ok) {
