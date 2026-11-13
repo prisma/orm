@@ -103,7 +103,10 @@ describe('errorChangePolicyForbids', () => {
     });
   });
 
-  it("names the ref when the refused change policy is the ref's declaration", () => {
+  it("names the ref when db update is refused by the ref's declaration, and applies the migration to the ref with the flag the user gave", () => {
+    const recovery =
+      'Author a migration with {bin} migration plan --config app.config.ts, then apply it with {bin} db migrate --to production --permit-policy-change --config app.config.ts --db <url>.';
+
     expect(
       errorChangePolicyForbids({
         spaceId: 'app',
@@ -111,11 +114,42 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'ref', refName: 'production' },
         targetHash: TARGET,
-        invocation,
+        invocation: { ...invocation, configPath: 'app.config.ts' },
       }).toEnvelope(),
-    ).toMatchObject({
+    ).toEqual({
+      ok: false,
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      severity: 'error',
+      summary: 'production declares a change policy that permits only migrations',
       why: 'production declares change: migrate, so db update may not move it.',
+      fix: recovery,
+      nextActions: [{ kind: 'user-choice', label: recovery }],
       meta: { spaceId: 'app', command: 'db update', change: ['migrate'] },
+    });
+  });
+
+  it("names the ref when db migrate is refused by the ref's declaration, and reconciles to the ref with the flag the user gave", () => {
+    const reconcile =
+      '{bin} db update --to production --permit-policy-change --config app.config.ts --db <url>';
+
+    expect(
+      errorChangePolicyForbids({
+        spaceId: 'app',
+        command: 'db migrate',
+        change: ['reconcile'],
+        source: { kind: 'ref', refName: 'production' },
+        targetHash: TARGET,
+        invocation: { ...invocation, configPath: 'app.config.ts' },
+      }).toEnvelope(),
+    ).toEqual({
+      ok: false,
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      severity: 'error',
+      summary: 'production declares a change policy that permits only db update',
+      why: 'production declares change: reconcile, so db migrate may not move it.',
+      fix: `Reconcile the database: ${reconcile}`,
+      nextActions: [{ kind: 'run-command', label: 'Reconcile the database', command: reconcile }],
+      meta: { spaceId: 'app', command: 'db migrate', change: ['reconcile'] },
     });
   });
 });

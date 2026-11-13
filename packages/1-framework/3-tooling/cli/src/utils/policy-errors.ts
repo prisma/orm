@@ -5,6 +5,7 @@ import {
   databasePolicyValueText,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
+import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { chooseAction, runCommandAction } from './next-actions';
 import { type CliInvocation, cliCommand } from './printed-command';
@@ -62,14 +63,22 @@ export function errorChangePolicyForbids(args: {
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
   const holder = source.kind === 'ref' ? `${source.refName} declares` : 'The marker records';
+  const policyHolder =
+    source.kind === 'ref'
+      ? `${source.refName} declares a change policy that`
+      : "This database's change policy";
   const refusal = command === 'db sign' ? 'may not sign it' : 'may not move it';
   const why = `${holder} change: ${change.join(', ')}, so ${command} ${refusal}.`;
   const meta = { spaceId, command, change };
+  const toTarget =
+    source.kind === 'ref'
+      ? ['--to', shellQuoted(source.refName), '--permit-policy-change']
+      : ['--to', args.targetHash];
   if (command === 'db migrate') {
-    const reconcile = cliCommand(invocation, 'db update', ['--to', args.targetHash]);
+    const reconcile = cliCommand(invocation, 'db update', toTarget);
     return new ActionableCliError(
       'MIGRATION.CHANGE_POLICY_FORBIDS',
-      "This database's change policy permits only db update",
+      `${policyHolder} permits only db update`,
       {
         why,
         fix: `Reconcile the database: ${reconcile}`,
@@ -78,10 +87,14 @@ export function errorChangePolicyForbids(args: {
       },
     );
   }
-  const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}, then deploy it.`;
+  const apply =
+    source.kind === 'ref'
+      ? `, then apply it with ${cliCommand(invocation, 'db migrate', toTarget)}.`
+      : ', then deploy it.';
+  const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}${apply}`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
-    "This database's change policy permits only migrations",
+    `${policyHolder} permits only migrations`,
     { why, fix: recovery, nextActions: [chooseAction(recovery)], meta },
   );
 }
