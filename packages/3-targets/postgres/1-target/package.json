@@ -39,7 +39,7 @@
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.4",
+    "@electric-sql/pglite": "0.5.15",
     "@internal/psl-printer": "workspace:8.0.0-rc.23",
     "@internal/publish-surface": "workspace:8.0.0-rc.23",
     "@repo/test-utils": "workspace:8.0.0-rc.23",

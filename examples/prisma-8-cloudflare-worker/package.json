@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",
-    "@cloudflare/workers-types": "5.20260804.1",
+    "@cloudflare/workers-types": "5.20261103.1",
     "@prisma/cli-engine": "0.10.0",
     "@repo/prisma-bin": "workspace:8.0.0-rc.23",
     "@repo/tsconfig": "workspace:8.0.0-rc.23",
@@ -37,7 +37,7 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "^4.1.10",
-    "wrangler": "4.119.0"
+    "wrangler": "4.157.0"
   },
   "version": "8.0.0-rc.23"
 }
