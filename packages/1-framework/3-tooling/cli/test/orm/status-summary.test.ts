@@ -98,6 +98,18 @@ describe('buildStatusHeadline', () => {
     ).toBe('2 pending — run `{bin} db migrate --to deadbeef`');
   });
 
+  it('names the ref the user gave as the migrate target, so the run compares its policies', () => {
+    expect(
+      buildStatusHeadline({
+        pendingCount: 2,
+        targetHash: 'deadbeef',
+        refName: 'production',
+        markerDiverged: false,
+        markerHash: 'marker',
+      }),
+    ).toBe('2 pending — run `{bin} db migrate --to production`');
+  });
+
   it('reports divergence when the marker is not in the on-disk graph', () => {
     expect(
       buildStatusHeadline({

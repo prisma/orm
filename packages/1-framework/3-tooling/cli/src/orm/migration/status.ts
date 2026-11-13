@@ -54,6 +54,7 @@ import {
   resolveContractRef,
 } from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
+import { shellQuoted } from '../../control-api/statements/statement-flag';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
 import { ALL_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { renderMigrationGraphLegend } from '../../utils/formatters/migration-graph-labels';
@@ -183,6 +184,8 @@ export function buildNoPathSummary(args: {
 export function buildStatusHeadline(args: {
   readonly pendingCount: number;
   readonly targetHash: string;
+  /** The ref `--to` named, which the suggested run names too, so it checks the ref's policies. */
+  readonly refName?: string | undefined;
   readonly markerDiverged: boolean;
   readonly markerHash: string | undefined;
 }): string {
@@ -192,7 +195,9 @@ export function buildStatusHeadline(args: {
   if (args.pendingCount === 0) {
     return 'Up to date';
   }
-  return `${args.pendingCount} pending — run \`{bin} db migrate --to ${shortDisplayHash(args.targetHash)}\``;
+  const to =
+    args.refName === undefined ? shortDisplayHash(args.targetHash) : shellQuoted(args.refName);
+  return `${args.pendingCount} pending — run \`{bin} db migrate --to ${to}\``;
 }
 
 interface SpaceSection {
@@ -616,6 +621,7 @@ export const migrationStatusCommand = defineOrmCommand({
         : buildStatusHeadline({
             pendingCount: totalPending,
             targetHash: headlineTargetHash,
+            refName: activeRefName,
             markerDiverged: divergedMarker !== undefined,
             markerHash: divergedMarker?.markerHash,
           });
