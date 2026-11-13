@@ -18,7 +18,8 @@ describe('PrismaPgAdapterFactory', () => {
     shutdownError.line = '3197'
     shutdownError.file = 'postgres.c'
 
-    adapter['client'].emit('error', shutdownError)
+    const pool = adapter['client'] as pg.Pool
+    pool.emit('error', shutdownError)
     await adapter.dispose()
     const debug = getLogs()
     expect(debug).toContain('terminating connection due to administrator command')
@@ -30,7 +31,8 @@ describe('PrismaPgAdapterFactory', () => {
     const factory = new PrismaPgAdapterFactory(config, { onPoolError })
     const adapter = await factory.connect()
     const error = new Error('Pool error')
-    adapter['client'].emit('error', error)
+    const pool = adapter['client'] as pg.Pool
+    pool.emit('error', error)
     expect(onPoolError).toHaveBeenCalledWith(error)
     await adapter.dispose()
   })
