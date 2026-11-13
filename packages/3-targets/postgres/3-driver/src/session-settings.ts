@@ -1,6 +1,7 @@
 import type { SessionSettings } from '@internal/framework-components/components';
 import { Client, type ClientBase, type ClientConfig, Pool, type PoolConfig } from 'pg';
 import { parse } from 'pg-connection-string';
+import { normalizePostgresAuthority, omittedPostgresHost } from './pg-url-authority';
 
 /** The settings pg's `ConnectionParameters` reads from a parsed connection string, except `binary`, which a pg client also applies to every query when it is in the client's own settings. Any other query parameter is not a connection setting, and pg ignores it in a connection string. */
 const CONNECTION_SETTINGS = [
@@ -22,6 +23,7 @@ const CONNECTION_SETTINGS = [
   'query_timeout',
 ] as const;
 
+/** Formats each session setting as a `-c name=value` startup option, escaping backslashes and spaces. */
 function startupOptions(sessionSettings: SessionSettings): string {
   return Object.entries(sessionSettings)
     .map(([name, value]) => `-c ${name}=${value.replace(/[\\ ]/g, '\\$&')}`)
@@ -38,9 +40,38 @@ export function pgConnectionConfig(
   const { connectionString, ...rest } = config;
   const merged: ClientConfig = { ...rest };
   if (connectionString !== undefined) {
-    const parsed = parse(connectionString);
+    const { connectionString: normalized, hostWasOmitted } = normalizePostgresAuthority(connectionString);
+    const queryHostGiven = /[?&]host=/.test(connectionString);
+    const queryHost = queryHostGiven
+      ? new URLSearchParams(connectionString.slice(connectionString.indexOf('?'))).get('host')
+      : undefined;
+    let explicitAuthorityHost = false;
+    try {
+      explicitAuthorityHost = Reflect.get(parse(connectionString), 'host') === omittedPostgresHost;
+    } catch {
+      // a hostless URL throws in the WHATWG-based parser; the host is then not explicit
+    }
+    const parsed = parse(normalized);
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
+      if (setting === 'host' && queryHostGiven) {
+        if (
+          value !== undefined &&
+          value !== '' &&
+          (value !== omittedPostgresHost || value === queryHost)
+        ) {
+          Object.assign(merged, { host: value });
+        }
+        continue;
+      }
+      if (
+        (setting === 'host' || setting === 'user') &&
+        (value === '' ||
+          (value === omittedPostgresHost && queryHost !== value && !explicitAuthorityHost) ||
+          (hostWasOmitted && setting === 'host'))
+      ) {
+        continue;
+      }
       if (value !== undefined) Object.assign(merged, { [setting]: value });
     }
   }

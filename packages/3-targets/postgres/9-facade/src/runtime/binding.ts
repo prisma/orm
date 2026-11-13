@@ -1,7 +1,9 @@
 import {
   createPgPool,
-  type PostgresBinding as DriverPostgresBinding,
+  normalizePostgresAuthority,
+  omittedPostgresHost,
   suppressIdleConnectionErrors,
+  type PostgresBinding as DriverPostgresBinding,
 } from '@internal/driver-postgres/runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
@@ -45,6 +47,11 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+/**
+ * Checks that `url` is a libpq-valid postgres URL, and returns it unchanged. A URL WHATWG's parser
+ * rejects only because its authority omits the host is accepted via the placeholder normalization;
+ * anything else, including a multi-host authority, throws `RUNTIME.BINDING_INVALID`.
+ */
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -57,9 +64,19 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension, reason: 'unparseable url' },
-    });
+    const { connectionString: normalized, hostWasOmitted } = normalizePostgresAuthority(trimmed);
+    if (!hostWasOmitted) {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
+    try {
+      parsed = new URL(normalized);
+    } catch {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
@@ -75,6 +92,16 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
         },
       },
     );
+  }
+
+  if (parsed.hostname === omittedPostgresHost) {
+    return trimmed;
+  }
+
+  if (parsed.hostname.includes(',')) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'multi-host URLs are not supported', {
+      meta: { extension, reason: 'multi-host url' },
+    });
   }
 
   return trimmed;
