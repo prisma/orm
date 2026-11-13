@@ -89,7 +89,9 @@ describe('an ORM write whose transaction activityEnded hook throws after COMMIT'
         namespaceId,
       });
 
-      await expect(users.where({ id: 1 }).update({ name: 'Updated' })).rejects.toBe(hookError);
+      await expect(users.where({ name: 'Stale' }).update({ name: 'Updated' })).rejects.toBe(
+        hookError,
+      );
 
       expect(transactionStatements.length).toBeGreaterThan(0);
       const check = new DatabaseSync(path);
