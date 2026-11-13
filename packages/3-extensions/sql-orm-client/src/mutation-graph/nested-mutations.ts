@@ -374,7 +374,7 @@ function addChildOwned(
     const values = rows.map((row) =>
       createRowOf(context, related, variantValue, row.scalarData, undefined),
     );
-    const conflict = conflictSkipOf(t, related, name, targetColumns, mutation, values);
+    const conflict = conflictSkipOf(t, related, name, targetColumns, mutation, rows, values);
     if (rows.some((row) => row.relationMutations.length > 0)) {
       rows.forEach((row, index) => {
         insertWithRelations(
@@ -621,13 +621,26 @@ function sourcesOf(
   };
 }
 
+function columnsFilledBeforeWrite(
+  contract: Contract<SqlStorage>,
+  model: Model,
+  relationMutations: readonly ParsedRelationMutation[],
+): string[] {
+  return partitionByOwnership(relationMutations).parentOwned.flatMap(({ relation, mutations }) =>
+    mutations.some(({ kind }) => kind === 'create' || kind === 'connect')
+      ? localColumnsOf(contract, model, relation)
+      : [],
+  );
+}
+
 function conflictSkipOf(
   t: Translation,
   model: Model,
   name: string,
   parentLinkColumns: readonly string[],
   { options }: RelationMutationCreate<Contract<SqlStorage>, string>,
-  rows: readonly Readonly<Record<string, unknown>>[],
+  rows: readonly ParsedMutationInput[],
+  values: readonly Readonly<Record<string, unknown>>[],
 ): InsertConflictSkip | undefined {
   if (options === undefined) {
     return undefined;
@@ -647,8 +660,18 @@ function conflictSkipOf(
   );
   const { namespaceId, tableName } = model.tables.root.storage;
   const conflictKeys = conflictKeysOf(contract, namespaceId, tableName, 'skip', columns);
-  const index = rowThatCannotConflict(rows, conflictKeys, new Set(parentLinkColumns));
-  if (index !== undefined) {
+  const index = values.findIndex(
+    (row, at) =>
+      rowThatCannotConflict(
+        [row],
+        conflictKeys,
+        new Set([
+          ...parentLinkColumns,
+          ...columnsFilledBeforeWrite(contract, model, rows[at]?.relationMutations ?? []),
+        ]),
+      ) !== undefined,
+  );
+  if (index !== -1) {
     throw ormError(
       'ORM.RELATION_MUTATION_INVALID',
       `create() nested mutation for relation "${name}" row ${index} gives no value for any conflict key: ${conflictKeys.map((key) => `(${key.join(', ')})`).join(', ')}`,

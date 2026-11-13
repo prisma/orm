@@ -1,15 +1,18 @@
+import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
-import { updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
+import { createCollectionTables } from '../../src/collection-tables';
+import { createGraph, updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
-import type { RelationMutator } from '../../src/types';
+import { emptyState, type RelationMutator } from '../../src/types';
 import {
   baseContract,
   createCollectionFor,
   relatedCollectionOf,
   withoutCapabilityKeys,
 } from '../collection-fixtures';
+import { defineContract, field, model, rel } from '../contract-builder';
 import {
   buildMixedPolyContract,
   buildTestContextFromContract,
@@ -321,5 +324,125 @@ describe('create options on a relation', () => {
         }).relationMutations.map(({ name }) => name),
       ).toEqual(['bugs']);
     });
+  });
+});
+
+describe('onConflict skip with a conflict key that a to-one relation write inside the row fills', () => {
+  const Category = model('Category', {
+    fields: { id: field.column(int4Column).id(), name: field.column(textColumn) },
+  }).sql({ table: 'categories' });
+  const AuthorBase = model('Author', { fields: { id: field.column(int4Column).id() } });
+  const ArticleBase = model('Article', {
+    fields: {
+      id: field.column(int4Column).id(),
+      authorId: field.column(int4Column).column('author_id'),
+      categoryId: field.column(int4Column).column('category_id').optional(),
+      title: field.column(textColumn),
+    },
+    relations: {
+      category: rel.belongsTo(Category, { from: 'categoryId', to: 'id' }),
+    },
+  }).sql({ table: 'articles' });
+  const contract: Contract<SqlStorage> = {
+    ...defineContract({
+      models: {
+        Author: AuthorBase.relations({
+          articles: rel.hasMany(() => ArticleBase, { by: 'authorId' }),
+        }).sql({ table: 'authors' }),
+        Article: ArticleBase,
+        Category,
+      },
+    }),
+    capabilities: {
+      sql: {
+        defaultInInsert: true,
+        returning: true,
+        insertOnConflictSkip: true,
+        insertOnConflictTarget: true,
+        insertOnConflictWithoutTarget: true,
+      },
+    },
+  };
+  const context = { ...buildTestContextFromContract(contract), contract };
+
+  function printCreate(articles: (mutator: Mutator) => unknown): string {
+    return printGraph(
+      createGraph(
+        {
+          context,
+          state: emptyState(createCollectionTables(contract, 'public', 'Author')),
+          modelName: 'Author',
+          namespaceId: 'public',
+        },
+        parseMutationInput(
+          contract,
+          'public',
+          'Author',
+          { id: 1, articles } as never,
+          relatedCollectionOf(context),
+        ),
+      ),
+    );
+  }
+
+  it('accepts a row whose conflictOn foreign key comes from a nested connect or create', () => {
+    expect(
+      printCreate((articles) =>
+        articles.create(
+          [
+            {
+              id: 10,
+              title: 'Connected',
+              category: (category: Mutator) => category.connect({ id: 5 }),
+            },
+            {
+              id: 11,
+              title: 'Created',
+              category: (category: Mutator) => category.create({ id: 6, name: 'New' }),
+            },
+          ],
+          { onConflict: 'skip', conflictOn: ['categoryId'] },
+        ),
+      ),
+    ).toBe(
+      [
+        'n1 Insert authors',
+        'n2 Find categories where id = 5 limit 1',
+        'n3 Assert <- Rows n2',
+        'n4 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n2 (id->category_id)',
+        'n5 Insert categories',
+        'n6 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n5 (id->category_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('refuses a row without a to-one write when its conflictOn foreign key has no value', () => {
+    expect(() =>
+      printCreate((articles) =>
+        articles.create(
+          [
+            {
+              id: 10,
+              title: 'Connected',
+              category: (category: Mutator) => category.connect({ id: 5 }),
+            },
+            { id: 11, title: 'Plain' },
+          ],
+          { onConflict: 'skip', conflictOn: ['categoryId'] },
+        ),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.RELATION_MUTATION_INVALID',
+        meta: {
+          kind: 'create',
+          relation: 'articles',
+          problem: 'row-cannot-conflict',
+          index: 1,
+          conflictKeys: [['category_id']],
+        },
+      }),
+    );
   });
 });
