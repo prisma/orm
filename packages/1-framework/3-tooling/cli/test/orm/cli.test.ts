@@ -100,7 +100,15 @@ describe('the orm command family', () => {
         flag: 'ref',
         replacement: ['{bin} migration status --to <contract>'],
       },
-      { from: 'migrate dev', flag: undefined, replacement: ['{bin} contract emit'] },
+      {
+        from: 'migrate dev',
+        flag: undefined,
+        replacement: [
+          '{bin} contract emit',
+          '{bin} migration plan --name <name>',
+          '{bin} db migrate --advance-ref db',
+        ],
+      },
       { from: 'migrate deploy', flag: undefined, replacement: ['{bin} db migrate'] },
       { from: 'migrate status', flag: undefined, replacement: ['{bin} migration status'] },
       { from: 'migrate diff', flag: undefined, replacement: ['{bin} db update --dry-run'] },
@@ -159,6 +167,10 @@ function replacement(command: string) {
   return { kind: 'run-command', label: 'Use the replacement', command };
 }
 
+function step(index: number, command: string) {
+  return { kind: 'run-command', label: `Step ${index}`, command };
+}
+
 function help(path: string) {
   return { kind: 'run-command', label: 'Read its help', command: `prisma-test ${path} --help` };
 }
@@ -195,7 +207,12 @@ describe('a retired invocation', () => {
     {
       path: 'migrate dev',
       why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
-      nextActions: [replacement('prisma-test contract emit'), help('contract emit')],
+      nextActions: [
+        step(1, 'prisma-test contract emit'),
+        step(2, 'prisma-test migration plan --name <name>'),
+        step(3, 'prisma-test db migrate --advance-ref db'),
+        help('contract emit'),
+      ],
     },
     {
       path: 'migrate deploy',

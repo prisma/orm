@@ -108,7 +108,11 @@ const redirects: readonly RedirectSpec[] = [
     reason: 'One flag names the target contract, whether it is a ref, a hash or a migration.',
   },
   v7Command('migrate dev', {
-    replacement: '{bin} contract emit',
+    replacement: [
+      '{bin} contract emit',
+      '{bin} migration plan --name <name>',
+      '{bin} db migrate --advance-ref db',
+    ],
     reason:
       "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`; while Prisma 7 still owns this project's migrations, run `migrate dev` with Prisma 7's CLI instead.",
     help: 'contract emit',
@@ -168,13 +172,13 @@ const redirects: readonly RedirectSpec[] = [
     replacement: '{bin} contract infer',
     help: 'contract infer',
     reason:
-      '`contract infer` reads the live database, named with `--db <url>`, and writes its schema as a PSL contract file. Run `contract emit` afterwards to write the contract files the ORM reads.',
+      '`contract infer` reads the live database, named with `--db <url>`, and writes its schema as a PSL contract file. Run `contract emit` afterwards to write the contract files the ORM reads, then `db sign` to record that the database matches the contract, so queries can run against it.',
   }),
   v7Command('db push', {
     replacement: '{bin} db update',
     help: 'db update',
     reason:
-      '`db update` changes the database to match the contract directly, without migration files, and asks before any change that would lose data. On a new database, `db init` creates what the contract declares and never removes or changes anything already there.',
+      '`db update` changes the database to match the contract directly, without migration files, and asks before any change that would lose data. On a new database, `db init` creates what the contract declares and never removes or changes anything already there. Both read the contract files `contract emit` writes, so run `contract emit` after changing the schema.',
   }),
   v7Command('db seed', {
     docsUrl: CLI_DOCS_URL,
