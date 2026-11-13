@@ -11,6 +11,7 @@ import {
 } from '../collection-contract';
 import {
   type CollectionTables,
+  createCollectionTables,
   createStatementTables,
   requireVariantTable,
 } from '../collection-tables';
@@ -587,12 +588,16 @@ function addFindAndAssert(
 ): NodeId {
   const { graph, context } = t;
   const where = requiredCriterion(context, related, name, kind, criterion);
+  const withVariants = {
+    ...related,
+    tables: createCollectionTables(context.contract, related.namespaceId, related.modelName),
+  };
   const find = findRows(
     t,
     selectAstOf(
       context,
-      related,
-      { ...emptyState(related.tables), filters: [where], limit: 1 },
+      withVariants,
+      { ...emptyState(withVariants.tables), filters: [where], limit: 1 },
       'selection',
     ),
     { filter: [], requires: parentRowRequired(t) },
