@@ -1,0 +1,90 @@
+// use prisma-8
+
+// Real emitted SQLite fixture for the nested creates of a polymorphic target.
+//
+//   Task (base, table `tasks`, discriminator `type`)
+//     Bug     — single-table inheritance (own field `severity`)
+//     Feature — multi-table inheritance (`@@map("features")`, field `priority`)
+//
+// Parent models, one per relation layout to Task:
+//   Project     --tasks(1:N)--> Task
+//   Person      --pinnedTask(1:1)--> Task
+//   TaskComment --task(N:1)--> Task
+//   Label       --tasks(M:N, through TaskLabel)--> Task
+
+model Task {
+  id         Int    @id @default(autoincrement())
+  title      String
+  type       String
+  projectId  Int?   @map("project_id")
+  pinnedById Int?   @unique @map("pinned_by_id")
+
+  project  Project?      @relation(fields: [projectId], references: [id])
+  pinnedBy Person?       @relation(fields: [pinnedById], references: [id])
+  comments TaskComment[]
+  labels   Label[]
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("features")
+}
+
+model Project {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  tasks Task[]
+
+  @@map("projects")
+}
+
+model Person {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  pinnedTask Task?
+
+  @@map("people")
+}
+
+model TaskComment {
+  id     Int    @id @default(autoincrement())
+  body   String
+  taskId Int?   @map("task_id")
+
+  task Task? @relation(fields: [taskId], references: [id])
+
+  @@map("task_comments")
+}
+
+model Label {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  tasks Task[]
+
+  @@map("labels")
+}
+
+model TaskLabel {
+  taskId  Int @map("task_id")
+  labelId Int @map("label_id")
+
+  task  Task  @relation(fields: [taskId], references: [id])
+  label Label @relation(fields: [labelId], references: [id])
+
+  @@id([taskId, labelId])
+  @@map("task_labels")
+}
