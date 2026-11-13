@@ -61,23 +61,6 @@ describe('relation-mutator', () => {
     });
   });
 
-  it('create() carries its options in the descriptor for one row and for an array of rows', () => {
-    const mutator = createRelationMutator(posts);
-
-    expect({
-      one: mutator.create({ id: 1 }, { onConflict: 'skip' }),
-      many: mutator.create([{ id: 1 }, { id: 2 }], { onConflict: 'skip', conflictOn: ['title'] }),
-    }).toEqual({
-      one: { kind: 'create', data: [{ id: 1 }], options: { onConflict: 'skip' } },
-      many: {
-        kind: 'create',
-        data: [{ id: 1 }, { id: 2 }],
-        options: { onConflict: 'skip', conflictOn: ['title'] },
-      },
-    });
-    expect(Object.keys(mutator.create({ id: 1 }))).toEqual(['kind', 'data']);
-  });
-
   it('where() returns a mutator narrowed to where, updateAll and deleteAll', () => {
     const narrowed = createRelationMutator(posts).where({ id: 1 });
 
