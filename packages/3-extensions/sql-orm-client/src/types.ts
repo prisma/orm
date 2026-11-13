@@ -1918,6 +1918,7 @@ export interface RelationMutationConnect<
 > {
   readonly kind: 'connect';
   readonly criteria: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly state?: CollectionState;
 }
 
 export interface RelationMutationDisconnect<
@@ -1926,15 +1927,17 @@ export interface RelationMutationDisconnect<
 > {
   readonly kind: 'disconnect';
   readonly criteria?: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly state?: CollectionState;
 }
 
 export type RelationMutationFilter<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  VariantValue extends string | undefined = undefined,
 > =
   | WhereArg
   | ((
-      model: ModelAccessor<TContract, ModelName>,
+      model: VariantAwareModelAccessor<TContract, ModelName, VariantValue>,
       tools: ModelCallbackTools<TContract, ModelName>,
     ) => WhereCallbackResult)
   | ShorthandWhereFilter<TContract, never, ModelName>;
@@ -2130,10 +2133,11 @@ export interface FilteredRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
+  VariantValue extends string | undefined = undefined,
 > {
   where(
-    filter: RelationMutationFilter<TContract, ModelName>,
-  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields>;
+    filter: RelationMutationFilter<TContract, ModelName, VariantValue>,
+  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>;
   updateAll(
     data: RelationMutationUpdateAllData<TContract, ModelName, ParentLinkFields>,
   ): RelationMutationUpdateAll<TContract, ModelName>;
@@ -2204,7 +2208,28 @@ export interface VariantRelationMutator<
   ModelName extends string,
   VariantValue extends string,
   LinkWritesDisabled extends boolean = false,
-> {
+  BareDisconnectDisabled extends boolean = false,
+  DisconnectDisabled extends boolean = false,
+  FilteredWritesDisabled extends boolean = false,
+  ParentLinkFields extends string = never,
+> extends Pick<
+    RelationMutatorMethods<
+      TContract,
+      ModelName,
+      LinkWritesDisabled,
+      BareDisconnectDisabled,
+      DisconnectDisabled,
+      FilteredWritesDisabled,
+      ParentLinkFields,
+      true
+    >,
+    'connect' | 'disconnect' | 'updateAll' | 'deleteAll'
+  > {
+  readonly where: FilteredWritesDisabled extends true
+    ? (
+        input: never,
+      ) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>['where'];
   create(
     data: LinkWritesDisabled extends true
       ? never
@@ -2225,6 +2250,7 @@ export type RelationMutator<
   DisconnectDisabled extends boolean = false,
   FilteredWritesDisabled extends boolean = false,
   ParentLinkFields extends string = never,
+  VariantDisconnectDisabled extends boolean = DisconnectDisabled,
 > = RelationMutatorMethods<
   TContract,
   ModelName,
@@ -2239,7 +2265,16 @@ export type RelationMutator<
     ? {
         variant<V extends DiscriminatorValues<TContract, ModelName>>(
           value: V,
-        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
+        ): VariantRelationMutator<
+          TContract,
+          ModelName,
+          V,
+          LinkWritesDisabled,
+          BareDisconnectDisabled,
+          VariantDisconnectDisabled,
+          FilteredWritesDisabled,
+          ParentLinkFields
+        >;
       }
     : unknown);
 
@@ -2260,7 +2295,12 @@ type RelationMutationCallback<
       : RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
         ? true
         : false,
-    RelationParentLinkFields<TContract, ModelName, RelName>
+    RelationParentLinkFields<TContract, ModelName, RelName>,
+    Context extends 'create'
+      ? true
+      : RelationCardinality<TContract, ModelName, RelName> extends 'N:1'
+        ? true
+        : false
   >,
 ) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
   ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>

@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type {
   CollectionState,
@@ -37,17 +38,60 @@ function createRows<TContract extends Contract<SqlStorage>, ModelName extends st
   return isList(data) ? [...data] : [data];
 }
 
+function connectOf<TContract extends Contract<SqlStorage>, ModelName extends string>(
+  criteria: Record<string, unknown> | readonly Record<string, unknown>[],
+  state: CollectionState | undefined,
+): RelationMutationConnect<TContract, ModelName> {
+  return {
+    kind: 'connect',
+    criteria: castAs<RelationMutationConnect<TContract, ModelName>['criteria']>(
+      isList(criteria) ? [...criteria] : [criteria],
+    ),
+    ...ifDefined('state', state),
+  };
+}
+
+function disconnectOf<TContract extends Contract<SqlStorage>, ModelName extends string>(
+  criteria: readonly Record<string, unknown>[] | undefined,
+  state: CollectionState | undefined,
+): RelationMutationDisconnect<TContract, ModelName> {
+  return {
+    kind: 'disconnect',
+    ...ifDefined(
+      'criteria',
+      criteria === undefined
+        ? undefined
+        : castAs<NonNullable<RelationMutationDisconnect<TContract, ModelName>['criteria']>>([
+            ...criteria,
+          ]),
+    ),
+    ...ifDefined('state', state),
+  };
+}
+
 function createVariantRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
->(variant: string | undefined) {
+>(variantCollection: RelationCollection<TContract, ModelName>) {
+  const { state } = variantCollection;
   return {
+    ...createFilteredRelationMutator<TContract, ModelName>(variantCollection),
     create(
       data:
         | MutationCreateInput<TContract, ModelName>
         | readonly MutationCreateInput<TContract, ModelName>[],
     ): RelationMutationCreate<TContract, ModelName> {
-      return { kind: 'create', data: createRows(data), ...ifDefined('variant', variant) };
+      return {
+        kind: 'create',
+        data: createRows(data),
+        ...ifDefined('variant', state.variantValue),
+      };
+    },
+    connect(criteria: Record<string, unknown> | readonly Record<string, unknown>[]) {
+      return connectOf<TContract, ModelName>(criteria, state);
+    },
+    disconnect(criteria?: readonly Record<string, unknown>[]) {
+      return disconnectOf<TContract, ModelName>(criteria, state);
     },
   };
 }
@@ -85,28 +129,13 @@ export function createRelationMutator<
       return { kind: 'create', data: createRows(data) };
     },
     variant(value: string) {
-      return createVariantRelationMutator<TContract, ModelName>(
-        related.variant(value).state.variantValue,
-      );
+      return createVariantRelationMutator<TContract, ModelName>(related.variant(value));
     },
     connect(criteria: Record<string, unknown> | readonly Record<string, unknown>[]) {
-      const values = Array.isArray(criteria) ? [...criteria] : [criteria];
-      return {
-        kind: 'connect',
-        criteria: values,
-      } as RelationMutationConnect<TContract, ModelName>;
+      return connectOf<TContract, ModelName>(criteria, undefined);
     },
     disconnect(criteria?: readonly Record<string, unknown>[]) {
-      if (!criteria) {
-        return {
-          kind: 'disconnect',
-        } as RelationMutationDisconnect<TContract, ModelName>;
-      }
-
-      return {
-        kind: 'disconnect',
-        criteria: [...criteria],
-      } as RelationMutationDisconnect<TContract, ModelName>;
+      return disconnectOf<TContract, ModelName>(criteria, undefined);
     },
   } as RelationMutator<TContract, ModelName>;
 }

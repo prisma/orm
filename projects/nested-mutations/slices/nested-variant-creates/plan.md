@@ -29,7 +29,7 @@ Slice spec: `projects/nested-mutations/slices/nested-variant-creates/spec.md`. B
 
 ### Dispatch 4: `connect` and `disconnect` on a variant
 
-- **Outcome:** The variant mutator has `connect` on every layout and `disconnect` on 1:N, 1:1 and M:N, each limited to rows of the variant with the condition the variant collection builds (discriminator `eq`, or `pk IN (subquery over the variant table)`). `connect` to a row of another variant raises `ORM.RELATION_ROW_MISSING`; `disconnect` leaves a related row of another variant linked. `disconnect` on N:1 takes `never` on the variant mutator. Covered by type tests, graph tests, and integration tests on Postgres and SQLite for both storage layouts.
+- **Outcome:** The variant mutator has `connect` on every layout and `disconnect` on 1:N, 1:1 and M:N, each limited to rows of the variant with the condition the variant collection builds (discriminator `eq`, or `pk IN (subquery over the variant table)`). `connect` to a row of another variant behaves as `connect` to a missing row on that layout (`ORM.RELATION_ROW_MISSING` on N:1 and M:N; nothing linked and no error on 1:N and 1:1); `disconnect` leaves a related row of another variant linked. `disconnect` on N:1 takes `never` on the variant mutator. Covered by type tests, graph tests, and integration tests on Postgres and SQLite for both storage layouts.
 - **Builds on:** Dispatch 1's variant mutator and descriptor field (the descriptor for `connect`/`disconnect` gains the same field).
 - **Hands to:** Variant `connect` and `disconnect`; the N:1 `disconnect` slot left for the rebase onto `single-row-writes`.
 - **Focus:** `addParentOwned`, `addChildOwned`, `addJunctionOwned`, `addFindAndAssert`, `requiredCriterion`.
