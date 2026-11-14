@@ -38,6 +38,11 @@ export interface PostgresCursorOptions {
  */
 export interface PostgresExecutionOptions extends SqlExecutionOptions<PostgresTargetId> {
   readonly cursor?: PostgresCursorOptions;
+  /**
+   * Where statements from `prepare()` are prepared. Defaults to `"database"`.
+   * `"client"` keeps framework-level pre-lowering and reuse but opts out of database-level prepared statements, for poolers that do not support them.
+   */
+  readonly prepare?: 'client' | 'database' | undefined;
   readonly transactionOptions?: PostgresTransactionOptions | undefined;
 }
 
