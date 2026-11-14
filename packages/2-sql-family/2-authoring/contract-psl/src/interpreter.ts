@@ -2039,9 +2039,17 @@ function materializeStiVariantStorageColumns(
   baseDeclarations: ReadonlyMap<string, BaseDeclaration>,
   stiVariantKeys: ReadonlySet<string>,
   defaultNamespaceId: string,
-): { modelNodes: ModelNode[]; stiBaseFieldsByBase: Map<string, readonly string[]> } {
+): {
+  modelNodes: ModelNode[];
+  stiBaseFieldsByBase: Map<string, readonly string[]>;
+  unscopedUniquesByVariant: Map<string, readonly string[]>;
+} {
   if (stiVariantKeys.size === 0) {
-    return { modelNodes: [...modelNodes], stiBaseFieldsByBase: new Map() };
+    return {
+      modelNodes: [...modelNodes],
+      stiBaseFieldsByBase: new Map(),
+      unscopedUniquesByVariant: new Map(),
+    };
   }
 
   const keyOf = (node: ModelNode) =>
@@ -2053,6 +2061,16 @@ function materializeStiVariantStorageColumns(
     string,
     Required<Pick<ModelNode, 'uniques' | 'indexes' | 'foreignKeys'>>
   >();
+  const unscopedUniquesByVariant = new Map<string, readonly string[]>();
+  const variantCountByBaseColumn = new Map<string, number>();
+  for (const variantKey of stiVariantKeys) {
+    const baseKey = baseDeclarations.get(variantKey)?.base.key;
+    const columns = new Set(nodeByModel.get(variantKey)?.fields.map((field) => field.columnName));
+    for (const columnName of columns) {
+      const key = `${baseKey}\0${columnName}`;
+      variantCountByBaseColumn.set(key, (variantCountByBaseColumn.get(key) ?? 0) + 1);
+    }
+  }
 
   for (const variantKey of stiVariantKeys) {
     const variantNode = nodeByModel.get(variantKey);
@@ -2073,6 +2091,24 @@ function materializeStiVariantStorageColumns(
       claimed.push({ ...field, nullable: true });
     }
     stiColumnsByBase.set(baseDecl.base.key, claimed);
+
+    // Its unique is added to the base table unscoped, so it must cover a column the base's other rows leave NULL.
+    const ownColumns = new Set(
+      variantNode.fields
+        .map((field) => field.columnName)
+        .filter(
+          (columnName) =>
+            !baseColumns.has(columnName) &&
+            variantCountByBaseColumn.get(`${baseDecl.base.key}\0${columnName}`) === 1,
+        ),
+    );
+    const unscoped = [
+      ...(variantNode.uniques ?? []),
+      ...(variantNode.indexes ?? []).filter(
+        (index) => index.unique === true && index.where === undefined,
+      ),
+    ].find((unique) => !(unique.columns ?? []).some((columnName) => ownColumns.has(columnName)));
+    if (unscoped !== undefined) unscopedUniquesByVariant.set(variantKey, unscoped.columns ?? []);
 
     const constraints = stiConstraintsByBase.get(baseDecl.base.key) ?? {
       uniques: [],
@@ -2121,7 +2157,7 @@ function materializeStiVariantStorageColumns(
     };
   });
 
-  return { modelNodes: enriched, stiBaseFieldsByBase };
+  return { modelNodes: enriched, stiBaseFieldsByBase, unscopedUniquesByVariant };
 }
 
 /**
@@ -2817,13 +2853,27 @@ export function interpretPslDocumentToSqlContract(
       stiVariantKeys,
       defaultNamespaceId,
     );
-  const { modelNodes: stiColumnModelNodes, stiBaseFieldsByBase } =
-    materializeStiVariantStorageColumns(
-      mtiLinkedModelNodes,
-      baseDeclarations,
-      stiVariantKeys,
-      defaultNamespaceId,
-    );
+  const {
+    modelNodes: stiColumnModelNodes,
+    stiBaseFieldsByBase,
+    unscopedUniquesByVariant,
+  } = materializeStiVariantStorageColumns(
+    mtiLinkedModelNodes,
+    baseDeclarations,
+    stiVariantKeys,
+    defaultNamespaceId,
+  );
+  for (const [variantKey, columns] of unscopedUniquesByVariant) {
+    const baseDecl = baseDeclarations.get(variantKey);
+    if (baseDecl === undefined) continue;
+    const variantName = baseDecl.model.name;
+    const baseName = baseDecl.base.model.name;
+    diagnostics.push({
+      code: 'PSL_STI_VARIANT_UNIQUE_NOT_SCOPED',
+      message: `Model "${variantName}" shares its base model "${baseName}"'s storage table (single-table inheritance via @@base), and its unique on (${columns.join(', ')}) would also constrain the rows of "${baseName}" and its other variants. Include a column only "${variantName}" declares, or declare a partial unique index on "${baseName}".`,
+      ...baseDecl.source.at(baseDecl.span),
+    });
+  }
 
   if (
     diagnostics.length > 0 ||

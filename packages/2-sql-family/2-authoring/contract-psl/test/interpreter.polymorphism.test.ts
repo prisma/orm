@@ -929,6 +929,42 @@ model HumanActor {
       expect(actor?.uniques).toMatchObject([{ columns: ['email'] }]);
       expect(actor?.indexes).toMatchObject([{ columns: ['contactId'] }]);
     });
+
+    it('diagnoses an STI variant unique that would constrain its siblings', () => {
+      const schema = `model Actor {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+  @@map("actor")
+}
+
+model HumanActor {
+  email String? @unique
+  @@base(Actor, "human")
+}
+
+model BotActor {
+  email String?
+  @@base(Actor, "bot")
+}`;
+      const result = interpretPostgresSchema(schema, {
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_STI_VARIANT_UNIQUE_NOT_SCOPED',
+          message:
+            'Model "HumanActor" shares its base model "Actor"\'s storage table (single-table inheritance via @@base), and its unique on (email) would also constrain the rows of "Actor" and its other variants. Include a column only "HumanActor" declares, or declare a partial unique index on "Actor".',
+          span: expect.objectContaining({
+            start: expect.objectContaining({ offset: schema.indexOf('@@base(Actor, "human")') }),
+          }),
+        }),
+      ]);
+    });
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {

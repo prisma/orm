@@ -27,7 +27,7 @@ function isTableProperty(key: string): key is keyof TableProperties {
 /**
  * Collects the tables the models and table nodes describe, one per namespace and table name: the models' tables in model order, then the tables only table nodes declare.
  *
- * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its unique constraints, indexes and foreign keys to its base's table; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. A variant whose table no model owns is not checked.
+ * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its unique constraints, indexes and foreign keys to its base's table; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. Each of the variant's uniques must cover a nullable column no other variant maps, so that it cannot reject the rows of the base or another variant. A variant whose table no model owns is not checked.
  *
  * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them, followed by those of its single-table variants.
  */
@@ -87,6 +87,7 @@ export function mergeTables(
     const table = tables.get(key);
     if (table === undefined) continue;
     assertVariantColumnsOnBaseTable(variant, table);
+    assertVariantUniquesOwnAColumn(variant, table, variants);
     tables.set(key, {
       ...table,
       uniques: [...table.uniques, ...variant.uniques],
@@ -184,6 +185,53 @@ function assertVariantColumnsOnBaseTable(variant: VariantStorage, table: TableDe
         namespaceId: variant.namespaceId,
         tableName: variant.tableName,
         columnName: missing.columnName,
+      },
+    },
+  );
+}
+
+/** The other rows of a shared table hold NULL in a nullable column only this variant maps, so a unique covering such a column constrains only this variant's rows. A partial unique index is scoped by its own predicate. */
+function assertVariantUniquesOwnAColumn(
+  variant: VariantStorage,
+  table: TableDescription,
+  variants: readonly VariantStorage[],
+): void {
+  const nullable = new Set(
+    table.columns.filter((column) => column.nullable).map((column) => column.columnName),
+  );
+  const siblingColumns = new Set(
+    variants
+      .filter(
+        (other) =>
+          other !== variant &&
+          other.namespaceId === variant.namespaceId &&
+          other.tableName === variant.tableName,
+      )
+      .flatMap((other) => other.columns.map((column) => column.columnName)),
+  );
+  const owned = new Set(
+    variant.columns
+      .map((column) => column.columnName)
+      .filter((name) => nullable.has(name) && !siblingColumns.has(name)),
+  );
+  const uniques = [
+    ...variant.uniques,
+    ...variant.indexes.filter((index) => index.unique === true && index.where === undefined),
+  ];
+  const unscoped = uniques.find(
+    (unique) => !(unique.columns ?? []).some((name) => owned.has(name)),
+  );
+  if (unscoped === undefined) return;
+  const columns = unscoped.columns?.join(', ') ?? 'an expression';
+  throw contractError(
+    'CONTRACT.VARIANT_UNIQUE_NOT_SCOPED',
+    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), and its unique on (${columns}) would also constrain the rows of the base model and its other variants. Include a nullable column only "${variant.modelName}" maps, or declare a partial unique index on the base model.`,
+    {
+      meta: {
+        modelName: variant.modelName,
+        namespaceId: variant.namespaceId,
+        tableName: variant.tableName,
+        columns: unscoped.columns ?? [],
       },
     },
   );

@@ -121,6 +121,25 @@ describe('mergeTables', () => {
     ).toEqual([{ ...task, ...constraints }]);
   });
 
+  it('refuses a variant unique that would constrain the rows of other variants', () => {
+    const task = table('task', [column('Task', 'id', false), column('Task', 'email')]);
+
+    for (const storages of [
+      [baseTable('Bug', 'task', [column('Bug', 'id')], { uniques: [{ columns: ['id'] }] })],
+      [
+        baseTable('Bug', 'task', [column('Bug', 'email')], { uniques: [{ columns: ['email'] }] }),
+        baseTable('Feature', 'task', [column('Feature', 'email')]),
+      ],
+    ]) {
+      expect(() => mergeTables([ownTable(task), ...storages], [])).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.VARIANT_UNIQUE_NOT_SCOPED',
+          meta: expect.objectContaining({ modelName: 'Bug', tableName: 'task' }),
+        }),
+      );
+    }
+  });
+
   it('adds nothing for a variant whose base table no model owns', () => {
     const user = table('user', [column('User', 'id')]);
 
