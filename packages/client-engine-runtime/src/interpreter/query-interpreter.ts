@@ -221,7 +221,7 @@ export class QueryInterpreter {
 
       case 'reverse': {
         const { value, lastInsertId } = await this.interpretNode(node.args, context)
-        return { value: Array.isArray(value) ? value.reverse() : value, lastInsertId }
+        return { value: Array.isArray(value) ? value.slice().reverse() : value, lastInsertId }
       }
 
       case 'unique': {
@@ -394,7 +394,7 @@ export class QueryInterpreter {
 
       case 'reverse': {
         const { value, lastInsertId } = this.#interpretPureNode(node.args, scope, generators)
-        return { value: Array.isArray(value) ? value.reverse() : value, lastInsertId }
+        return { value: Array.isArray(value) ? value.slice().reverse() : value, lastInsertId }
       }
 
       case 'unique': {

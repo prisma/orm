@@ -399,4 +399,46 @@ describe('purifyQueryPlan', () => {
     // Must return the exact row array reference without performing a redundant copy or map
     expect(result).toBe(rows)
   })
+
+  test('evaluating reverse on a purified plan does not mutate cached rows on repeated runs', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const plan: QueryPlanNode = {
+      type: 'reverse',
+      args: queryNode('SELECT "id", "name" FROM "User"'),
+    }
+
+    const evalNode = vi.fn().mockResolvedValue({ value: rows })
+    const purified = await purifyQueryPlan(plan, evalNode)
+    expect(purified).toBeDefined()
+
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const context = {
+      queryable: {
+        provider: 'postgres' as const,
+        adapterName: 'mock',
+        queryRaw: vi.fn(),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    }
+
+    const firstRun = await interpreter.run(purified!, context)
+    expect(firstRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+    expect(rows[1].id).toBe(2)
+
+    const secondRun = await interpreter.run(purified!, context)
+    expect(secondRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+  })
 })
