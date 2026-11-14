@@ -43,6 +43,27 @@ const notIdenticalUris = [
   'mongodb+srv://root:randompassword@cluster0.ab1cd.mongodb.net/mydb?retryWrites=true&w=majority',
 ]
 
+describe('blank user and/or host in DATABASE_URL (#8230)', () => {
+  const blankHostOrUserUris = [
+    'postgresql:///mydb',
+    'postgresql://user@/mydb',
+    'postgresql://:secret@/mydb',
+    'postgresql://user:secret@/mydb',
+    'postgresql:///mydb?host=/var/run/postgresql',
+    'mysql://root@/mydb?socket=/var/run/mysqld/mysqld.sock',
+  ]
+
+  for (const uri of blankHostOrUserUris) {
+    test(`parses and round-trips ${uri} without throwing`, () => {
+      const credentials = uriToCredentials(uri)
+      expect(credentials.host).toBeUndefined()
+      expect(credentials.database).toBe('mydb')
+      const roundTripped = credentialsToUri(credentials)
+      expect(roundTripped).toBeDefined()
+    })
+  }
+})
+
 for (const uri of notIdenticalUris) {
   test(`Convert ${uri}`, () => {
     const credentials = uriToCredentials(uri)
