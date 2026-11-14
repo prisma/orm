@@ -887,6 +887,48 @@ model Feature {
       expect(tables['features']?.columns['priority']).toMatchObject({ nullable: false });
       expect(Object.keys(tables).sort()).toEqual(['features', 'tasks']);
     });
+
+    it("puts an STI variant's foreign keys, uniques and indexes on the base table", () => {
+      const result = interpretPostgresSchema(
+        `model Contact {
+  id          Int          @id
+  humanActors HumanActor[] @relation("Human")
+
+  @@map("contact")
+}
+
+model Actor {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+  @@map("actor")
+}
+
+model HumanActor {
+  contact   Contact? @relation("Human", fields: [contactId], references: [id])
+  contactId Int?
+  email     String?
+
+  @@unique([email])
+  @@index([contactId])
+  @@base(Actor, "human")
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const actor = tablesOf(result.value)['actor'];
+      expect(actor?.foreignKeys).toMatchObject([
+        { source: { columns: ['contactId'] }, target: { tableName: 'contact', columns: ['id'] } },
+      ]);
+      expect(actor?.uniques).toMatchObject([{ columns: ['email'] }]);
+      expect(actor?.indexes).toMatchObject([{ columns: ['contactId'] }]);
+    });
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {

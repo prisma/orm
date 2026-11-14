@@ -27,9 +27,9 @@ function isTableProperty(key: string): key is keyof TableProperties {
 /**
  * Collects the tables the models and table nodes describe, one per namespace and table name: the models' tables in model order, then the tables only table nodes declare.
  *
- * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds nothing: each of its columns must already be on its base's table, which the base owns, and no table node may declare a column a variant's field maps. A variant whose table no model owns is not checked.
+ * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its unique constraints, indexes and foreign keys to its base's table; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. A variant whose table no model owns is not checked.
  *
- * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them.
+ * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them, followed by those of its single-table variants.
  */
 export function mergeTables(
   storages: readonly ModelStorage[],
@@ -83,8 +83,16 @@ export function mergeTables(
   }
 
   for (const variant of variants) {
-    const table = tables.get(tableKey(variant.namespaceId, variant.tableName));
-    if (table !== undefined) assertVariantColumnsOnBaseTable(variant, table);
+    const key = tableKey(variant.namespaceId, variant.tableName);
+    const table = tables.get(key);
+    if (table === undefined) continue;
+    assertVariantColumnsOnBaseTable(variant, table);
+    tables.set(key, {
+      ...table,
+      uniques: [...table.uniques, ...variant.uniques],
+      indexes: [...table.indexes, ...variant.indexes],
+      foreignKeys: [...table.foreignKeys, ...variant.foreignKeys],
+    });
   }
 
   return [...tables.values()];

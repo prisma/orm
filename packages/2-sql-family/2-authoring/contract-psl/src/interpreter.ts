@@ -2049,6 +2049,10 @@ function materializeStiVariantStorageColumns(
   const nodeByModel = new Map(modelNodes.map((node) => [keyOf(node), node]));
   type StiColumn = ModelNode['fields'][number];
   const stiColumnsByBase = new Map<string, StiColumn[]>();
+  const stiConstraintsByBase = new Map<
+    string,
+    Required<Pick<ModelNode, 'uniques' | 'indexes' | 'foreignKeys'>>
+  >();
 
   for (const variantKey of stiVariantKeys) {
     const variantNode = nodeByModel.get(variantKey);
@@ -2069,6 +2073,17 @@ function materializeStiVariantStorageColumns(
       claimed.push({ ...field, nullable: true });
     }
     stiColumnsByBase.set(baseDecl.base.key, claimed);
+
+    const constraints = stiConstraintsByBase.get(baseDecl.base.key) ?? {
+      uniques: [],
+      indexes: [],
+      foreignKeys: [],
+    };
+    stiConstraintsByBase.set(baseDecl.base.key, {
+      uniques: [...constraints.uniques, ...(variantNode.uniques ?? [])],
+      indexes: [...constraints.indexes, ...(variantNode.indexes ?? [])],
+      foreignKeys: [...constraints.foreignKeys, ...(variantNode.foreignKeys ?? [])],
+    });
   }
 
   // The materialised columns exist on the base STORAGE table so the variants'
@@ -2087,11 +2102,23 @@ function materializeStiVariantStorageColumns(
   const enriched = modelNodes.map((node): ModelNode => {
     // STI variant: contributes a domain model but no storage table of its own.
     if (stiVariantKeys.has(keyOf(node))) {
-      return { ...node, sharesBaseTable: true };
+      const { uniques: _uniques, indexes: _indexes, foreignKeys: _foreignKeys, ...variant } = node;
+      return { ...variant, sharesBaseTable: true };
     }
-    const stiColumns = stiColumnsByBase.get(keyOf(node));
-    if (!stiColumns || stiColumns.length === 0) return node;
-    return { ...node, fields: [...node.fields, ...stiColumns] };
+    const stiColumns = stiColumnsByBase.get(keyOf(node)) ?? [];
+    const constraints = stiConstraintsByBase.get(keyOf(node));
+    if (stiColumns.length === 0 && constraints === undefined) return node;
+    return {
+      ...node,
+      fields: [...node.fields, ...stiColumns],
+      ...(constraints === undefined
+        ? {}
+        : {
+            uniques: [...(node.uniques ?? []), ...constraints.uniques],
+            indexes: [...(node.indexes ?? []), ...constraints.indexes],
+            foreignKeys: [...(node.foreignKeys ?? []), ...constraints.foreignKeys],
+          }),
+    };
   });
 
   return { modelNodes: enriched, stiBaseFieldsByBase };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergeTables } from '../src/merge-tables';
 import type { ColumnDescription, ModelStorage, TableDescription } from '../src/storage-description';
+import { columnIndex } from './table-node-helpers';
 
 function column(modelName: string, columnName: string, nullable = true): ColumnDescription {
   return {
@@ -41,8 +42,19 @@ function baseTable(
   modelName: string,
   tableName: string,
   columns: readonly ColumnDescription[],
+  constraints: Partial<Pick<TableDescription, 'uniques' | 'indexes' | 'foreignKeys'>> = {},
 ): ModelStorage {
-  return { kind: 'baseTable', modelName, namespaceId: 'public', tableName, columns };
+  return {
+    kind: 'baseTable',
+    modelName,
+    namespaceId: 'public',
+    tableName,
+    columns,
+    uniques: [],
+    indexes: [],
+    foreignKeys: [],
+    ...constraints,
+  };
 }
 
 describe('mergeTables', () => {
@@ -84,6 +96,29 @@ describe('mergeTables', () => {
         [],
       ),
     ).toEqual([task]);
+  });
+
+  it("adds a variant's uniques, indexes and foreign keys to the base table", () => {
+    const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
+    const constraints = {
+      uniques: [{ columns: ['ownerId'] }],
+      indexes: [columnIndex(['ownerId'])],
+      foreignKeys: [
+        {
+          source: { namespaceId: 'public', tableName: 'task', columns: ['ownerId'] },
+          target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
+          constraint: true,
+          index: true,
+        },
+      ],
+    } satisfies Partial<TableDescription>;
+
+    expect(
+      mergeTables(
+        [ownTable(task), baseTable('Bug', 'task', [column('Bug', 'ownerId')], constraints)],
+        [],
+      ),
+    ).toEqual([{ ...task, ...constraints }]);
   });
 
   it('adds nothing for a variant whose base table no model owns', () => {
