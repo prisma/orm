@@ -520,7 +520,8 @@ export class TransactionManager {
 
   #requiredCreateSavepoint(transaction: Transaction): (name: string) => Promise<void> {
     if (transaction.createSavepoint) {
-      return transaction.createSavepoint.bind(transaction)
+      const createSavepoint = transaction.createSavepoint.bind(transaction)
+      return (name) => createSavepoint(name).catch(rethrowAsUserFacing)
     }
 
     throw new TransactionManagerError(
@@ -530,7 +531,8 @@ export class TransactionManager {
 
   #requiredRollbackToSavepoint(transaction: Transaction): (name: string) => Promise<void> {
     if (transaction.rollbackToSavepoint) {
-      return transaction.rollbackToSavepoint.bind(transaction)
+      const rollbackToSavepoint = transaction.rollbackToSavepoint.bind(transaction)
+      return (name) => rollbackToSavepoint(name).catch(rethrowAsUserFacing)
     }
 
     throw new TransactionManagerError(
@@ -540,7 +542,7 @@ export class TransactionManager {
 
   async #releaseSavepoint(transaction: Transaction, name: string): Promise<void> {
     if (transaction.releaseSavepoint) {
-      await transaction.releaseSavepoint(name)
+      await transaction.releaseSavepoint(name).catch(rethrowAsUserFacing)
     }
   }
 
@@ -653,6 +655,8 @@ export class TransactionManager {
             }
           }
         }
+      } catch (error) {
+        rethrowAsUserFacing(error)
       } finally {
         tx.status = outcome
         clearTimeout(tx.timer)

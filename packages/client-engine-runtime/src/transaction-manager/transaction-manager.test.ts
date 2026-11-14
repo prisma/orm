@@ -1,5 +1,6 @@
 import timers from 'node:timers/promises'
 
+import { DriverAdapterError } from '@prisma/driver-adapter-utils'
 import { expect, test, vi } from 'vitest'
 
 import { noopTracingHelper } from '../tracing'
@@ -440,6 +441,71 @@ test('when driver adapter requires phantom queries does not execute transaction 
 
   await expect(transactionManager.commitTransaction(id)).rejects.toBeInstanceOf(TransactionClosedError)
   await expect(transactionManager.rollbackTransaction(id)).rejects.toBeInstanceOf(TransactionClosedError)
+})
+
+test.each([
+  { usePhantomQuery: true, fails: 'commit()' },
+  { usePhantomQuery: false, fails: 'the COMMIT statement' },
+])('a driver adapter error from $fails is rethrown as a user-facing error', async ({ usePhantomQuery }) => {
+  const driverAdapter = new MockDriverAdapter({ usePhantomQuery })
+  const conflict = new DriverAdapterError({ kind: 'TransactionWriteConflict' })
+  if (usePhantomQuery) {
+    driverAdapter.commitMock.mockRejectedValueOnce(conflict)
+  } else {
+    driverAdapter.executeRawMock.mockRejectedValueOnce(conflict)
+  }
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  const id = await startTransaction(transactionManager)
+
+  await expect(transactionManager.commitTransaction(id)).rejects.toMatchObject({
+    name: 'UserFacingError',
+    code: 'P2034',
+  })
+})
+
+test.each([
+  { operation: 'commit', fails: 'releaseSavepoint' },
+  { operation: 'rollback', fails: 'rollbackToSavepoint' },
+] as const)(
+  'a driver adapter error from $fails in a nested $operation is rethrown as a user-facing error',
+  async ({ operation, fails }) => {
+    const conflict = new DriverAdapterError({ kind: 'TransactionWriteConflict' })
+    const driverAdapter = new MockDriverAdapter({ [fails]: () => Promise.reject(conflict) })
+    const transactionManager = new TransactionManager({
+      driverAdapter,
+      transactionOptions: TRANSACTION_OPTIONS,
+      tracingHelper: noopTracingHelper,
+    })
+
+    const id = await startTransaction(transactionManager)
+    await transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, newTxId: id })
+
+    const close =
+      operation === 'commit' ? transactionManager.commitTransaction(id) : transactionManager.rollbackTransaction(id)
+    await expect(close).rejects.toMatchObject({ name: 'UserFacingError', code: 'P2034' })
+  },
+)
+
+test('a driver adapter error from createSavepoint is rethrown as a user-facing error', async () => {
+  const conflict = new DriverAdapterError({ kind: 'TransactionWriteConflict' })
+  const driverAdapter = new MockDriverAdapter({ createSavepoint: () => Promise.reject(conflict) })
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  const id = await startTransaction(transactionManager)
+
+  await expect(transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, newTxId: id })).rejects.toMatchObject({
+    name: 'UserFacingError',
+    code: 'P2034',
+  })
 })
 
 test('with explicit isolation level', async () => {
