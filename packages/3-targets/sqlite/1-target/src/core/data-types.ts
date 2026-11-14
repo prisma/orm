@@ -26,6 +26,10 @@ import {
 } from '@internal/framework-components/codec';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { sqlDataType, sqlRawDataType } from '@internal/sql-contract/data-type';
+import {
+  withoutZerosBelowAMillisecond,
+  withThreeFractionDigits,
+} from '@internal/type-implementations/date';
 import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
@@ -148,19 +152,6 @@ const readDatetime: DataTypeReader = (json) =>
 /** An instant is stored in UTC with three fraction digits. */
 const spellDatetime: DataTypeSpelling = (json) =>
   typeof json === 'string' ? (storedDatetime(json) ?? json) : json;
-
-/** The fraction of `text` with any zeros past its third digit removed, so `09:30:00.500000` is the millisecond it names. */
-function withoutZerosBelowAMillisecond(text: string): string {
-  return text.replace(/(\.\d{3})0+(?!\d)/, '$1');
-}
-
-/** The fraction of stored text padded to exactly three digits, as `toISOString()` and SQLite's `%f` write it. */
-function withThreeFractionDigits(text: string): string {
-  return text.replace(
-    /(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?(?=Z?$)/,
-    (_whole, clock: string, fraction?: string) => `${clock}.${(fraction ?? '').padEnd(3, '0')}`,
-  );
-}
 
 /** The years SQLite's date and time functions read, which are also the years whose text sorts in date order. */
 const SQLITE_DATE_RANGE = { earliest: '0000-01-01', latest: '9999-12-31' } as const;

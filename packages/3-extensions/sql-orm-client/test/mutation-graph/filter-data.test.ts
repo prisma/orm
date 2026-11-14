@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FilterData } from '../../src/mutation-graph/filter-data';
 import { printExpression } from './print-expression';
-import { columnPairs, positions } from './statements';
+import { columnMappings, positions } from './statements';
 
 const [from] = positions();
 
-const idToUserId = columnPairs('users', 'posts', [['id', 'user_id']]);
-const idAndName = columnPairs('users', 'posts', [
+const idToUserId = columnMappings('users', 'posts', [['id', 'user_id']]);
+const idAndName = columnMappings('users', 'posts', [
   ['id', 'user_id'],
   ['name', 'title'],
 ]);
@@ -20,13 +20,13 @@ describe('FilterData', () => {
   });
 
   it('gives target = value for one source row', () => {
-    const condition = new FilterData(from, idToUserId).output({ id: 7, name: 'Ada' });
+    const { condition } = new FilterData(from, idToUserId).output({ id: 7, name: 'Ada' });
 
     expect(printExpression(condition, 'posts')).toBe('user_id = 7');
   });
 
-  it('gives an and of target = value for several column pairs', () => {
-    const condition = new FilterData(from, idAndName).output({ id: 7, name: 'Ada' });
+  it('gives an and of target = value for several column mappings', () => {
+    const { condition } = new FilterData(from, idAndName).output({ id: 7, name: 'Ada' });
 
     expect(printExpression(condition, 'posts')).toBe("(user_id = 7 and title = 'Ada')");
   });
@@ -34,12 +34,19 @@ describe('FilterData', () => {
   it('builds the value as a parameter with the name and the codec of the target column', () => {
     const [[, target] = []] = idToUserId;
 
-    expect(new FilterData(from, idToUserId).output({ id: 7 })).toMatchObject({
+    expect(new FilterData(from, idToUserId).output({ id: 7 }).condition).toMatchObject({
       kind: 'binary',
       op: 'eq',
       left: { kind: 'column-ref', table: 'posts', column: 'user_id' },
       right: { kind: 'param-ref', value: 7, name: 'user_id', codec: target?.codec },
     });
     expect(target?.codec).toBeDefined();
+  });
+
+  it('gives the key of the row it matches, by target column', () => {
+    expect(new FilterData(from, idAndName).output({ id: 7, name: 'Ada', email: 'a' }).key).toEqual({
+      user_id: 7,
+      title: 'Ada',
+    });
   });
 });

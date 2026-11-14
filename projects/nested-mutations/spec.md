@@ -161,7 +161,7 @@ This is a breaking change for TypeScript-authored contracts that declare such a 
 
 ### Adapter impact
 
-Postgres and SQLite adapters: both render the insert conflict clause and must render its new condition. Both must render `IN` over a subquery, which the SQL AST expresses for one column today; the row-value form for composite keys is added by slice `filtered-many-writes`. The Mongo adapter and the Mongo ORM are not affected.
+Postgres, SQLite and MySQL adapters: they render the insert conflict clause and must render its new condition. They render `IN` over a subquery; slice `filtered-many-writes` lets them render a multi-column subquery for the row-value form `(a, b) IN (SELECT …)`, which the SQL AST already expresses. The Mongo adapter and the Mongo ORM are not affected.
 
 ## Cross-cutting requirements
 
@@ -196,6 +196,7 @@ Postgres and SQLite adapters: both render the insert conflict clause and must re
 - [ ] Nested `create` accepts `{ onConflict: 'skip', conflictOn? }` on one-to-many relations in `create()` and `update()`.
 - [ ] Nested `create` accepts `{ onConflict: 'connect', conflictOn? }` on every relation layout in `create()` and `update()`.
 - [ ] TypeScript authoring rejects a `hasOne` over a foreign key with no unique constraint, with an error that names the relation and the fields; the in-repo fixtures that declared one are fixed; the upgrade instructions describe the change.
+- [ ] A relation's mutator has `variant(value)`, and a nested create through it writes a complete row for a variant stored in the base table and for one stored in its own table, in `create()` and `update()`, shown by integration tests on Postgres and SQLite.
 - [ ] A relation callback may return an array, in both `create()` and `update()`, and operations run in array order.
 - [ ] For each of the three operations, an integration test on Postgres and on SQLite shows an unrelated row that matches the filter or conflict columns is left unchanged.
 - [ ] A nested to-many upsert that conflicts with an unrelated row throws `ORM.NESTED_UPSERT_CONFLICT`, documented in the error reference.
@@ -207,7 +208,7 @@ Postgres and SQLite adapters: both render the insert conflict clause and must re
 
 None open. The questions raised by the 2026-10-09 discussion and their decisions, kept until each is reflected in a slice spec:
 
-1. **Row-value `IN` for composite keys.** Decided: the column-list form of `IN` is added to the SQL AST and both adapters in the slice that adds many-to-many `updateAll` / `deleteAll`. One statement form for every key shape; no `EXISTS` variant.
+1. **Row-value `IN` for composite keys.** Decided: a `ListExpression` of the key columns `IN` a `SubqueryExpr`, which the SQL AST already expresses; the adapters render a subquery of as many columns, in the slice that adds many-to-many `updateAll` / `deleteAll` (2026-11-12, replacing a new AST form). One statement form for every key shape; no `EXISTS` variant.
 2. **Junction `connect` in stage 1.** Decided: slice `graph-nested` takes the already-decided behaviour: a conflict clause where the junction has a key over exactly its link columns, a plain insert otherwise, no duplicate check, no wrapped error; `ORM.RELATION_LINK_DUPLICATE` is removed. It is the one deliberate behaviour change in stage 1. No test on main asserts either of main's errors.
 3. **Rejection timing in stage 1.** Decided: the graph rejects invalid nested input while it is built, before any statement, including when the filter matches no row, where main resolves `null`. This matches Prisma 7 and is the second deliberate behaviour change in stage 1. An integration test on main that asserts the `null` result, if one exists, is edited in slice `graph-nested`; that has not been checked yet.
 4. **`createAll` batching.** Decided: an `Insert` node is exactly one statement and holds one or many rows. The translation decides the batching: rows that can go into one statement become one node; rows that cannot (different column sets without the `defaultInInsert` capability, own-table variants, a row with nested operations of its own) become several nodes. The node never splits itself into statements, and no peephole merges inserts. How the rows of several `Insert` nodes are combined into the call's result, in input order, is settled in the design of slice `graph-creates`.

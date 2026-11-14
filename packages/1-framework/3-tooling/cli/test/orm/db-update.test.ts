@@ -44,6 +44,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -243,12 +244,12 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows got '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
     });
     expect(applied.presented?.data).toMatchObject({ temporaryValues });
   });
@@ -269,7 +270,7 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
   });
@@ -578,7 +579,7 @@ describe('db update --rename', () => {
         (block) =>
           block.kind === 'summary' &&
           typeof block.text === 'string' &&
-          block.text.startsWith('Existing rows'),
+          block.text.includes('the temporary value'),
       ),
     }).toEqual({
       next: [
@@ -592,7 +593,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email --config 'my app/prisma.config.ts' instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email --config 'my app/prisma.config.ts' instead.`,
       },
     });
   });
@@ -742,10 +743,14 @@ describe('db update', () => {
     expect(run.stdout).toBe('');
   });
 
-  it('shows the planner`s warnings without failing the run', async () => {
+  it('shows each planner warning with its why as a warning, as migration plan does', async () => {
     mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
       options.onPlannerWarnings?.([
-        { kind: 'suppressed', summary: 'Column user.legacy is dropped without a backfill' },
+        {
+          kind: 'suppressed',
+          summary: 'Column user.legacy is dropped without a backfill',
+          why: 'Its values are lost.',
+        },
       ]);
       return ok(applySuccess());
     });
@@ -755,13 +760,42 @@ describe('db update', () => {
       isTty: { stdout: true },
     });
 
-    const blocks = run.presented?.presentation.human ?? [];
+    expect({
+      exitCode: run.exitCode,
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      warnings: (run.presented?.presentation.human ?? []).filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
+      ),
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      warnings: [
+        {
+          kind: 'summary',
+          status: 'warn',
+          text: 'Column user.legacy is dropped without a backfill. Its values are lost.',
+        },
+      ],
+    });
+  });
 
-    expect(run.exitCode).toBe(0);
-    expect(blocks[2]).toEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
-    expect(blocks[3]).toEqual({
-      kind: 'list',
-      items: ['Column user.legacy is dropped without a backfill'],
+  it('says how many operations had nothing to do when fewer ran than were planned', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({ ...applySuccess(), execution: { operationsPlanned: 2, operationsExecuted: 1 } }),
+    );
+
+    const run = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect((run.presented?.presentation.human ?? [])[1]).toEqual({
+      kind: 'summary',
+      status: 'ok',
+      text: 'Applied 1 of 2 operation(s) across 1 contract space; the other 1 had nothing to do, since their postchecks already held',
     });
   });
 
@@ -968,7 +1002,7 @@ describe('db update', () => {
     });
   });
 
-  it('lists the planner`s warnings in the --json result of a successful run', async () => {
+  it('lists the planner`s warnings in the --json result of a successful run as plannerWarnings', async () => {
     mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
       options.onPlannerWarnings?.([WARNING]);
       return ok(applySuccess());
@@ -980,9 +1014,16 @@ describe('db update', () => {
     expect({
       exitCode: run.exitCode,
       messages: frames.filter((frame) => frame['kind'] === 'message'),
-      warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
-        .warnings,
-    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+      result: (frames.at(-1) as { envelope: { result: Record<string, unknown> } }).envelope.result,
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      result: expect.not.objectContaining({ warnings: expect.anything() }),
+    });
+    expect(
+      (frames.at(-1) as { envelope: { result: { plannerWarnings: unknown } } }).envelope.result
+        .plannerWarnings,
+    ).toEqual([WARNING]);
   });
 
   it('writes the planner`s warnings of a failed run as warn frames before the --json error', async () => {
@@ -1153,7 +1194,7 @@ describe('db update', () => {
         mocks.connect.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(projectDir, 'migrations'), MARKER_HASH);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before connecting when the contract types cannot be rendered', async () => {

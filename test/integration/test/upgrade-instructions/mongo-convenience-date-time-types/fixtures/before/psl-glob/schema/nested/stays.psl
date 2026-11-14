@@ -1,0 +1,8 @@
+// use prisma-8
+
+model Stay {
+  id ObjectId @id @map("_id")
+  from Date
+
+  @@map("stays")
+}

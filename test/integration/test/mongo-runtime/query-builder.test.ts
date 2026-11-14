@@ -6,6 +6,7 @@
 
 import { crossRef, type NamespaceId } from '@internal/contract/types';
 import mongoFamilyPack from '@internal/family-mongo/pack';
+import { type } from '@internal/mongo/contract-builder';
 import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import type {
   AnyMongoTypeMaps,
@@ -151,19 +152,19 @@ const contractJson = {
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
-    name: field.string(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    name: field.scalar(type.String()),
+    email: field.scalar(type.String()),
   },
 });
 
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    _id: field.objectId(),
-    title: field.string(),
-    type: field.string(),
-    assigneeId: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
+    title: field.scalar(type.String()),
+    type: field.scalar(type.String()),
+    assigneeId: field.scalar(type.ObjectId()),
   },
   relations: {
     assignee: rel.belongsTo(User, {

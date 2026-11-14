@@ -1,5 +1,9 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
-import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
+import type {
+  ContractConfig,
+  FormatterConfig,
+  PrismaNextConfig,
+} from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -27,6 +31,7 @@ export interface PostgresConfigOptions {
   readonly migrations?: {
     readonly dir?: string;
   };
+  readonly formatter?: FormatterConfig;
 }
 
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
@@ -70,5 +75,6 @@ export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'
     contract: contractConfig,
     ...ifDefined('db', options.db),
     ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }

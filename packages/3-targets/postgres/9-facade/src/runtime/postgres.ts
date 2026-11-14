@@ -35,6 +35,7 @@ import {
   type PostgresPoolOptions,
   toDriverCursorOptions,
   validateCursorOptions,
+  validateTransactionOptions,
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
@@ -90,6 +91,7 @@ export default function postgres<
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(options: PostgresOptions<TContract, TCollections>): PostgresClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgres');
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validatePostgresContract(options.contract);
   let binding = resolveOptionalPostgresBinding(options, postgresBindingRules);
 
@@ -200,6 +202,7 @@ export default function postgres<
     toSql,
     getRuntime,
     getRuntimeForWork: getRuntime,
+    transactionOptions,
   });
 
   return {

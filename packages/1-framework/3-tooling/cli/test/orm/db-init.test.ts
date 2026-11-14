@@ -46,6 +46,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -558,7 +559,7 @@ describe('db init', () => {
     });
   }
 
-  it('shows the planner`s warnings when the apply succeeds', async () => {
+  it('shows the planner`s warnings as warnings when the apply succeeds', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init'], {
@@ -567,12 +568,23 @@ describe('db init', () => {
     });
     const blocks = run.presented?.presentation.human ?? [];
 
-    expect(run.exitCode).toBe(0);
-    expect(blocks).toContainEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
-    expect(blocks).toContainEqual({ kind: 'list', items: [WARNING.summary] });
+    expect({
+      exitCode: run.exitCode,
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      warnings: blocks.filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
+      ),
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      warnings: [{ kind: 'summary', status: 'warn', text: WARNING.summary }],
+    });
   });
 
-  it('lists the planner`s warnings in the --json result of a successful apply', async () => {
+  it('lists the planner`s warnings in the --json result of a successful apply as plannerWarnings', async () => {
     succeedWithPlannerWarning();
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -581,9 +593,16 @@ describe('db init', () => {
     expect({
       exitCode: run.exitCode,
       messages: frames.filter((frame) => frame['kind'] === 'message'),
-      warnings: (frames.at(-1) as { envelope: { result: { warnings: unknown } } }).envelope.result
-        .warnings,
-    }).toEqual({ exitCode: 0, messages: [], warnings: [WARNING] });
+      result: (frames.at(-1) as { envelope: { result: Record<string, unknown> } }).envelope.result,
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      result: expect.not.objectContaining({ warnings: expect.anything() }),
+    });
+    expect(
+      (frames.at(-1) as { envelope: { result: { plannerWarnings: unknown } } }).envelope.result
+        .plannerWarnings,
+    ).toEqual([WARNING]);
   });
 
   it('shows the planner`s warnings when the apply fails', async () => {
@@ -701,7 +720,7 @@ describe('db init', () => {
         mocks.connect.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(projectDir, 'migrations'), MARKER_HASH);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before connecting when the contract types cannot be rendered', async () => {

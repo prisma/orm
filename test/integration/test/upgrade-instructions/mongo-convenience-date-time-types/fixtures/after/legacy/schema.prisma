@@ -1,0 +1,13 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+type Date {
+  day Int
+}
+
+model Event {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  on Date
+}

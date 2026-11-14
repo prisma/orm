@@ -21,6 +21,7 @@ import type {
   RuntimeConnection,
   RuntimeQueryable,
   RuntimeTransaction,
+  RuntimeTransactionOptions,
 } from '@internal/sql-runtime';
 import { activitySource } from '@internal/sql-runtime';
 import type {
@@ -154,8 +155,8 @@ export class SupabaseRuntimeImpl<
         return self.runPreparedExecuteAgainstRoleQueryable(prepared, params, conn, options);
       },
 
-      async transaction(): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(conn, session, undefined);
+      async transaction(options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
+        return self.beginTransactionOn(conn, session, undefined, options);
       },
 
       /**
@@ -234,7 +235,7 @@ export class SupabaseRuntimeImpl<
           scope[preparedStatementQuery](statement, params, options),
         preparedExecute: (statement, params, options) =>
           scope[preparedStatementExecute](statement, params, options),
-        transaction: (parent) => runtime().beginRoleTransaction(binding, parent),
+        transaction: (parent, options) => runtime().beginRoleTransaction(binding, parent, options),
       };
       return scope;
     };
@@ -243,9 +244,12 @@ export class SupabaseRuntimeImpl<
   private async beginRoleTransaction(
     binding: SupabaseRoleBinding,
     parent: ActivityParent,
+    options?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
     const { conn, session } = await this.openRoleConnection(binding, { activityParent: parent });
-    return this.ownTransaction(session, () => this.beginTransactionOn(conn, session, parent));
+    return this.ownTransaction(session, () =>
+      this.beginTransactionOn(conn, session, parent, options),
+    );
   }
 
   private runPreparedExecuteAgainstRoleQueryable<Params>(

@@ -86,7 +86,7 @@ function pslToContract(schema: string): MongoContract {
     ['String', 'mongo/string@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
-    ['Date', 'mongo/date@1'],
+    ['DateTime', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
     ['Double', 'mongo/double@1'],
   ]);
@@ -308,7 +308,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Post {
         id        ObjectId @id @map("_id")
         title     String
-        createdAt Date
+        createdAt DateTime
         @@index([createdAt])
       }
     `);
@@ -393,7 +393,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Events {
         id        ObjectId @id @map("_id")
         status    String
-        createdAt Date
+        createdAt DateTime
         @@index([status, sort(createdAt, Desc)])
       }
     `);

@@ -33,6 +33,7 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
+import { type PostgresTransactionOptions, validateTransactionOptions } from './postgres-options';
 import type { PostgresTargetId } from './postgres-target-id';
 
 type OrmClient<
@@ -120,6 +121,7 @@ export interface PostgresRuntimeBoundMembers<
   runtime(): Runtime;
   transaction<R>(
     fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
 
@@ -139,6 +141,7 @@ export interface PostgresRuntimeBoundMembersOptions<
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
   readonly toSql: ToSqlMember['toSql'];
+  readonly transactionOptions?: PostgresTransactionOptions | undefined;
   readonly getRuntime: () => Runtime;
   // The runtime that ORM queries, transaction() and prepare() run on. An owner whose close() should let continuing work finish returns its runtime even after close(), so the runtime's own rule decides; otherwise it is getRuntime.
   readonly getRuntimeForWork: () => Runtime;
@@ -160,6 +163,7 @@ export function buildPostgresRuntimeBoundMembers<
     toSql,
     getRuntime,
     getRuntimeForWork,
+    transactionOptions,
   } = options;
 
   const workRuntime = delegatingRuntime(getRuntimeForWork);
@@ -194,24 +198,35 @@ export function buildPostgresRuntimeBoundMembers<
 
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      localOptions?: PostgresTransactionOptions,
     ): Promise<R> {
-      return withTransaction(workRuntime, (txCtx) => {
-        const tx: PostgresTransactionContext<TContract, TCollections> = withTransactionMembers(
-          txCtx,
-          {
-            ...buildPostgresQueryMembers(
-              { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
-              txCtx,
-            ),
-            enums,
-            nativeEnums,
-          },
-        );
+      const local = validateTransactionOptions(localOptions);
+      const isolationLevel =
+        local?.isolationLevel !== undefined
+          ? local.isolationLevel
+          : transactionOptions?.isolationLevel;
+      const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
+      return withTransaction(
+        workRuntime,
+        (txCtx) => {
+          const tx: PostgresTransactionContext<TContract, TCollections> = withTransactionMembers(
+            txCtx,
+            {
+              ...buildPostgresQueryMembers(
+                { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
+                txCtx,
+              ),
+              enums,
+              nativeEnums,
+            },
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        },
+        { isolationLevel, timeout },
+      );
     },
   };
 }

@@ -1,4 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type { MongoQueryExecutor } from '@internal/mongo-query-ast/execution';
 import {
   MongoAndExpr,
   MongoFieldFilter,
@@ -9,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import { collectionContext } from './collection-context';
 
 const contract = ormContractJson as unknown as Contract;

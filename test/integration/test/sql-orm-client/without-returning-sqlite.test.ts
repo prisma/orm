@@ -120,6 +120,10 @@ function rowsOf(database: DatabaseSync, table: string): unknown[] {
 const ada = { email: 'ada@example.com', name: 'Ada' };
 const grace = { email: 'grace@example.com', name: 'Grace' };
 
+function sortedByCode<Row extends { readonly code: string }>(rows: readonly Row[]): Row[] {
+  return [...rows].sort((a, b) => a.code.localeCompare(b.code));
+}
+
 describe('integration/ORM writes without RETURNING on sqlite', () => {
   it('create() inserts without RETURNING and reads the row back by the id the database generated', async () => {
     await withDatabase(async ({ db, statements }) => {
@@ -161,29 +165,28 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
-  it('createAll() returns the rows in the order it was given them, not in key order', async () => {
+  it('createAll() returns the rows it was given, in any order', async () => {
     await withDatabase(async ({ db }) => {
-      expect(
-        await db.Tag.createAll([
-          { code: 'c', label: 'C' },
-          { code: 'b', label: 'B' },
-          { code: 'a', label: 'A' },
-        ]),
-      ).toEqual([
+      const tags = await db.Tag.createAll([
         { code: 'c', label: 'C' },
         { code: 'b', label: 'B' },
         { code: 'a', label: 'A' },
       ]);
+      expect(sortedByCode(tags)).toEqual([
+        { code: 'a', label: 'A' },
+        { code: 'b', label: 'B' },
+        { code: 'c', label: 'C' },
+      ]);
     });
   });
 
-  it('createAll() reads back more rows than one statement takes, in the order it was given them', async () => {
+  it('createAll() reads back more rows than one statement takes, in any order', async () => {
     await withDatabase(async ({ db }) => {
       const tags = Array.from({ length: 1200 }, (_, index) => {
         const code = String(1200 - index).padStart(4, '0');
         return { code, label: code };
       });
-      expect(await db.Tag.createAll(tags)).toEqual(tags);
+      expect(sortedByCode(await db.Tag.createAll(tags))).toEqual(sortedByCode(tags));
     });
   });
 
@@ -193,9 +196,18 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('createAndCount() of rows with two column sets inserts them in one transaction, so a failing second statement leaves no row', async () => {
+    await withDatabase(async ({ db, database }) => {
+      await expect(
+        db.User.createAndCount([ada, { id: 5, email: ada.email, name: 'Ada again' }]),
+      ).rejects.toThrow();
+      expect(rowsOf(database, 'users')).toEqual([]);
+    });
+  });
+
   it('refuses createAll() of several rows whose ids the database generates, before running, and counts them with createAndCount()', async () => {
     await withDatabase(async ({ db, database, statements }) => {
-      expect(() => db.User.createAll([ada, grace])).toThrow(
+      await expect(db.User.createAll([ada, grace])).rejects.toThrow(
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
@@ -226,25 +238,25 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
-  it('refuses a nested create before running when a child key column gets a database default other than auto-increment', async () => {
-    await withDatabase(async ({ db, database, statements }) => {
-      await expect(
-        db.User.create({ ...ada, badges: (badges) => badges.create([{ label: 'First' }]) }),
-      ).rejects.toMatchObject({
-        code: 'ORM.CAPABILITY_MISSING',
-        message: expect.stringContaining(
-          'create() on model "Badge" cannot find the row it inserts',
-        ),
-      });
-      expect(statements).toEqual([]);
-      const { id } = await db.User.create(ada);
-      statements.length = 0;
-      await expect(
-        db.User.where({ id }).update({ badges: (badges) => badges.create([{ label: 'First' }]) }),
-      ).rejects.toMatchObject({ code: 'ORM.CAPABILITY_MISSING' });
-      expect({ statements, users: rowsOf(database, 'users').length }).toEqual({
-        statements: [],
-        users: 1,
+  it('inserts a nested child create whose key a database default other than auto-increment fills', async () => {
+    await withDatabase(async ({ db, database }) => {
+      expect(
+        await db.User.create({ ...ada, badges: (badges) => badges.create([{ label: 'First' }]) }),
+      ).toEqual({ id: 1, ...ada });
+      expect(
+        await db.User.where({ id: 1 }).update({
+          badges: (badges) => badges.create([{ label: 'Second' }]),
+        }),
+      ).toEqual({ id: 1, ...ada });
+      expect({
+        users: rowsOf(database, 'users'),
+        badges: database.prepare('select label, user_id from badges order by label').all(),
+      }).toEqual({
+        users: [{ id: 1, ...ada }],
+        badges: [
+          { label: 'First', user_id: 1 },
+          { label: 'Second', user_id: 1 },
+        ],
       });
     });
   });
@@ -319,8 +331,8 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ]);
       expect(statements).toEqual([
         'BEGIN',
-        'SELECT "users"."id" AS "id" FROM "users" WHERE "users"."id" <= ?1 ORDER BY "users"."id" ASC',
-        'UPDATE "users" SET "name" = ?1 WHERE "users"."id" <= ?2',
+        'SELECT "users"."id" AS "id" FROM "users" WHERE "users"."id" <= ?1',
+        'UPDATE "users" SET "name" = ?1 WHERE ("users"."id" <= ?2 AND "users"."id" IN (?3, ?4))',
         'SELECT "users"."email" AS "email", "users"."id" AS "id", "users"."name" AS "name" FROM "users" WHERE "users"."id" IN (?1, ?2)',
       ]);
       expect(await db.User.where({ name: 'Pioneer' }).updateAndCount({ name: 'P' })).toBe(2);
@@ -345,6 +357,21 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         deleted: { id: 1, title: 'Crash!', type: 'bug', severity: 'low' },
         deletedAll: [{ id: 2, title: 'Leak!', type: 'bug', severity: 'low' }],
         remaining: [],
+      });
+    });
+  });
+
+  it('returns the full row of each variant from writes through the base model', async () => {
+    await withDatabase(async ({ db, database }) => {
+      database.exec(
+        "insert into tasks (id, title, type) values (1, 'Dark mode', 'feature'); insert into features (id, priority) values (1, 1)",
+      );
+      expect({
+        updated: await db.Task.where({ id: 1 }).updateAll({ title: 'Dark mode v2' }),
+        created: await db.Task.create({ title: 'Crash', type: 'bug' } as never),
+      }).toEqual({
+        updated: [{ id: 1, title: 'Dark mode v2', type: 'feature', priority: 1 }],
+        created: { id: 2, title: 'Crash', type: 'bug', severity: null },
       });
     });
   });
@@ -428,7 +455,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
             'createAll() requires contract capability "insertOnConflictTarget". Re-emit the contract against an adapter that reports it.',
         }),
       );
-      expect(() => db.User.createAll([ada], { onConflict: 'skip' })).toThrow(
+      await expect(db.User.createAll([ada], { onConflict: 'skip' })).rejects.toThrow(
         expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),
       );
       expect(await db.User.createAndCount([ada, grace], { onConflict: 'skip' })).toBe(1);

@@ -35,7 +35,6 @@
     "pluralize": "^8.0.0"
   },
   "devDependencies": {
-    "@internal/driver-postgres": "workspace:8.0.0-rc.23",
     "@internal/ids": "workspace:8.0.0-rc.23",
     "@internal/psl-printer": "workspace:8.0.0-rc.23",
     "@repo/test-utils": "workspace:8.0.0-rc.23",

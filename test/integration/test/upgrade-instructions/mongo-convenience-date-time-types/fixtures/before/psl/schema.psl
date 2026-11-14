@@ -1,0 +1,8 @@
+// use prisma-8
+
+model Visit {
+  id ObjectId @id @map("_id")
+  at Date
+
+  @@map("visits")
+}

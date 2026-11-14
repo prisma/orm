@@ -9,7 +9,10 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
+import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { closeDatabase, wasClosedByDriver } from './database-state';
 import { normalizeSqliteError } from './normalize-error';
@@ -72,7 +75,7 @@ abstract class SqliteQueryable implements SqlQueryable {
     try {
       const stmt = this.db.prepare(request.sql);
       for (const row of stmt.iterate(...sqliteParams(request.params))) {
-        yield row as Row;
+        yield blindCast<Row, 'SQLite rows follow the caller query shape'>(row);
       }
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -98,9 +101,7 @@ abstract class SqliteQueryable implements SqlQueryable {
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
       const stmt = this.db.prepare(`EXPLAIN QUERY PLAN ${request.sql}`);
-      const rows = stmt.all(...sqliteParams(request.params)) as ReadonlyArray<
-        Record<string, unknown>
-      >;
+      const rows = stmt.all(...sqliteParams(request.params));
       return { rows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -109,7 +110,10 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
-  async beginTransaction(): Promise<SqlTransaction> {
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
+    if (start?.isolationLevel !== undefined) {
+      validateSqliteIsolationLevel(start.isolationLevel);
+    }
     try {
       this.db.exec('BEGIN');
       return new SqliteTransactionImpl(this.db);

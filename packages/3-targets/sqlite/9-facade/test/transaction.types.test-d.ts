@@ -1,9 +1,28 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
+import type { SqliteTransactionOptions } from '../src/exports/runtime';
 import type { SqliteClient, SqliteTransactionContext } from '../src/runtime/sqlite';
 
 type TestContract = Contract<SqlStorage>;
+
+test('SQLite accepts only Serializable and retains callback inference', () => {
+  expectTypeOf<SqliteTransactionOptions>().not.toBeAny();
+  expectTypeOf<SqliteTransactionOptions['isolationLevel']>().toEqualTypeOf<
+    'Serializable' | undefined
+  >();
+  expectTypeOf<'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | null>().not.toExtend<
+    SqliteTransactionOptions['isolationLevel']
+  >();
+  expectTypeOf<SqliteTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: '1000' } satisfies SqliteTransactionOptions);
+  const db = {} as SqliteClient<TestContract>;
+  expectTypeOf(
+    db.transaction(async () => 42, { isolationLevel: 'Serializable', timeout: null }),
+  ).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(db.transaction).parameter(1).toEqualTypeOf<SqliteTransactionOptions | undefined>();
+});
 
 test('transaction context does not expose a transaction method', () => {
   type HasTransaction = 'transaction' extends keyof SqliteTransactionContext<TestContract>

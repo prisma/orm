@@ -1,0 +1,31 @@
+{
+  "name": "prisma-8-demo-mariadb",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "emit": "prisma contract emit",
+    "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
+    "migration:plan": "prisma migration plan",
+    "db:migrate": "prisma db migrate",
+    "db:verify": "prisma db verify",
+    "db:sign": "prisma db sign",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings"
+  },
+  "dependencies": {
+    "@prisma/orm-mariadb": "workspace:8.0.0-rc.23"
+  },
+  "devDependencies": {
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.23",
+    "@repo/tsconfig": "workspace:8.0.0-rc.23",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "version": "8.0.0-rc.23"
+}

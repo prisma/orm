@@ -31,6 +31,7 @@ import {
   type PostgresExecutionOptions,
   toDriverCursorOptions,
   validateCursorOptions,
+  validateTransactionOptions,
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
@@ -112,6 +113,7 @@ export default function postgresServerless<
   options: PostgresServerlessOptions<TContract, TCollections>,
 ): PostgresServerlessClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validatePostgresContract(options.contract);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
@@ -142,6 +144,7 @@ export default function postgresServerless<
       toSql,
       getRuntime,
       getRuntimeForWork,
+      transactionOptions,
     });
 
   // The ORM checks the execution context when it is built. Building the members once here makes

@@ -1,8 +1,10 @@
-import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoExecutionContext,
+  MongoQueryExecutor,
+} from '@internal/mongo-query-ast/execution';
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import { createMongoCollection, type MongoEnumAccessors } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
 import { mongoRaw } from '../src/mongo-raw';
 
