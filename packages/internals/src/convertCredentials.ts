@@ -49,6 +49,15 @@ export function credentialsToUri(credentials: DatabaseCredentials): string {
     url.searchParams.set('sslmode', 'prefer')
   }
 
+  const hasEmptyHostWithAuth =
+    !credentials.host &&
+    !credentials.socket &&
+    Boolean(credentials.user || credentials.password || credentials.port)
+
+  if (hasEmptyHostWithAuth) {
+    url.hostname = '__prisma_empty_host__'
+  }
+
   if (credentials.user) {
     url.username = credentials.user
   }
@@ -74,21 +83,47 @@ export function credentialsToUri(credentials: DatabaseCredentials): string {
     url.pathname = ''
   }
 
-  return url.toString()
+  const serialized = url.toString()
+  if (hasEmptyHostWithAuth) {
+    return serialized.replace('__prisma_empty_host__', '')
+  }
+  return serialized
 }
 
 // opposite of credentialsToUri
 // maybe rename, since it's about returning a parsed uri object? connection info?
-export function uriToCredentials(connectionString: string): DatabaseCredentials {
-  // rename to url everywhere?
-  let uri: NodeURL.URL
+const EMPTY_HOST_PLACEHOLDER = '__prisma_empty_host__'
+
+function parseUrlAllowingBlankHost(connectionString: string): {
+  uri: NodeURL.URL
+  usedPlaceholderHost: boolean
+} {
   try {
-    uri = new NodeURL.URL(connectionString)
+    return { uri: new NodeURL.URL(connectionString), usedPlaceholderHost: false }
   } catch (e) {
+    // Handle connection strings where user/password/port is provided with a blank host
+    // (e.g. postgresql://user@/mydb, postgresql://:pass@/mydb, postgresql://@/mydb, postgresql://:5432/mydb)
+    const normalized = connectionString
+      .replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*@)(?=[/?#]|$)/, `$1${EMPTY_HOST_PLACEHOLDER}`)
+      .replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(:\d+)(?=[/?#]|$)/, `$1${EMPTY_HOST_PLACEHOLDER}$2`)
+
+    if (normalized !== connectionString) {
+      try {
+        return { uri: new NodeURL.URL(normalized), usedPlaceholderHost: true }
+      } catch {
+        // Fall through to standard error below
+      }
+    }
+
     throw new Error(
       'Invalid data source URL, see https://www.prisma.io/docs/reference/database-reference/connection-urls',
     )
   }
+}
+
+export function uriToCredentials(connectionString: string): DatabaseCredentials {
+  // rename to url everywhere?
+  const { uri, usedPlaceholderHost } = parseUrlAllowingBlankHost(connectionString)
 
   const type = protocolToConnectorType(uri.protocol)
 
@@ -129,9 +164,11 @@ export function uriToCredentials(connectionString: string): DatabaseCredentials 
     }
   }
 
+  const rawHostname = usedPlaceholderHost && uri.hostname === EMPTY_HOST_PLACEHOLDER ? '' : uri.hostname
+
   return {
     type,
-    host: exists(uri.hostname) ? uri.hostname : undefined,
+    host: exists(rawHostname) ? rawHostname : undefined,
     user: exists(uri.username) ? uri.username : undefined,
     port: exists(uri.port) ? Number(uri.port) : undefined,
     password: exists(uri.password) ? uri.password : undefined,
