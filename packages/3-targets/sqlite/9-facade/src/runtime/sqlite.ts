@@ -395,6 +395,7 @@ export default function sqlite<
         local?.isolationLevel !== undefined
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
+      const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
       return withTransaction(
         workRuntime,
         (txCtx) => {
@@ -415,7 +416,7 @@ export default function sqlite<
 
           return fn(tx);
         },
-        { isolationLevel },
+        { isolationLevel, timeout },
       );
     },
 

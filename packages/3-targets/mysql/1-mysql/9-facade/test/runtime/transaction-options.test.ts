@@ -1,6 +1,7 @@
 import mysqlDriver from '@internal/driver-mysql/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import { describe, expect, it, vi } from 'vitest';
+import type { RuntimeConnection } from '@internal/sql-runtime';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import mysql, { type MysqlTransactionOptions } from '../../src/exports/runtime';
 import { contractFromJson } from '../../src/exports/static';
 import type { Contract } from '../fixtures/generated/contract.d';
@@ -8,7 +9,76 @@ import contractJson from '../fixtures/generated/contract.json' with { type: 'jso
 
 const contract = contractFromJson<Contract>(contractJson);
 
+afterEach(() => vi.useRealTimers());
+
+function deferred() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('MySQL callback isolation options', () => {
+  it.each([
+    [10, undefined, true],
+    [10, null, false],
+    [null, 1, true],
+    [undefined, undefined, false],
+    [2147483647, null, false],
+  ] as const)(
+    'resolves global timeout %s and local %s independently of isolation',
+    async (global, local, expires) => {
+      const db = mysql({
+        contract,
+        transactionOptions: { isolationLevel: 'RepeatableRead', timeout: global },
+      });
+      const controller = new AbortController();
+      const tx = {
+        signal: controller.signal,
+        query: () => new AsyncIterableResult((async function* () {})()),
+        execute: async () => ({ affectedRows: 0 }),
+        commit: vi.fn(async () => {}),
+        rollback: vi.fn(async () => {}),
+      };
+      const connection = {
+        ...tx,
+        transaction: vi.fn(async (_options: Parameters<RuntimeConnection['transaction']>[0]) => tx),
+        release: vi.fn(async () => {}),
+        destroy: vi.fn(async () => {}),
+      };
+      vi.spyOn(db.runtime(), 'connection').mockResolvedValue(connection);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+      const entered = deferred();
+      const resume = deferred();
+      const run = db.transaction(
+        async () => {
+          entered.resolve();
+          await resume.promise;
+          return 42;
+        },
+        { isolationLevel: 'Serializable', timeout: local },
+      );
+      const outcome = expires
+        ? expect(run).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' })
+        : expect(run).resolves.toBe(42);
+      await entered.promise;
+      await vi.advanceTimersByTimeAsync(20);
+      if (expires) controller.abort({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
+      resume.resolve();
+      await outcome;
+      expect(connection.transaction.mock.calls[0]?.[0]).toEqual({
+        isolationLevel: 'Serializable',
+        timeout: local === undefined ? global : local,
+      });
+      expect(tx.rollback).not.toHaveBeenCalled();
+      expect(connection.destroy).toHaveBeenCalledTimes(expires ? 1 : 0);
+      expect(tx.commit).toHaveBeenCalledTimes(expires ? 0 : 1);
+      expect(connection.release).toHaveBeenCalledTimes(expires ? 0 : 1);
+      expect(vi.getTimerCount()).toBe(0);
+      await db.close();
+    },
+  );
   it.each([
     [undefined, undefined, undefined],
     [{}, {}, undefined],
@@ -22,6 +92,7 @@ describe('MySQL callback isolation options', () => {
   ] as const)('resolves global %j and local %j', async (global, local, isolationLevel) => {
     const db = mysql({ contract, transactionOptions: global });
     const transaction = {
+      signal: new AbortController().signal,
       query: () => new AsyncIterableResult((async function* () {})()),
       execute: async () => ({ affectedRows: 0 }),
       commit: vi.fn(async () => undefined),
@@ -36,13 +107,19 @@ describe('MySQL callback isolation options', () => {
     vi.spyOn(db.runtime(), 'connection').mockResolvedValue(connection);
     try {
       expect(await db.transaction(async () => 42, local)).toBe(42);
-      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({ isolationLevel });
+      expect(connection.transaction).toHaveBeenCalledExactlyOnceWith({
+        isolationLevel,
+        timeout: undefined,
+      });
     } finally {
       await db.close();
     }
   });
 
   const invalid = [
+    ...[0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 2147483648].map(
+      (timeout) => ({ timeout }),
+    ),
     null,
     1,
     'Serializable',

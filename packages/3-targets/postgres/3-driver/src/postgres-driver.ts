@@ -172,7 +172,18 @@ class AsyncMutex {
 // concurrent streams on a shared client from interleaving their wraps.
 const clientQueryLocks = new WeakMap<object, AsyncMutex>();
 
-function acquireClientQueryLock(client: object): Promise<() => void> {
+const clientStreams = new WeakMap<ClientBase, Set<() => Promise<void>>>();
+
+function assertClientUsable(client: ClientBase): void {
+  if (hasLostConnection(client))
+    throw driverError('DRIVER.NOT_CONNECTED', 'Postgres connection is no longer usable.');
+}
+
+async function closeClientStreams(client: ClientBase): Promise<void> {
+  await Promise.all([...(clientStreams.get(client) ?? [])].map((close) => close()));
+}
+
+function acquireClientQueryLock(client: ClientBase): Promise<() => void> {
   let mutex = clientQueryLocks.get(client);
   if (mutex === undefined) {
     mutex = new AsyncMutex();
@@ -288,6 +299,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     try {
       const releaseLock = await acquireClientQueryLock(client);
       try {
+        assertClientUsable(client);
         const result = await client.query({
           name,
           text: request.sql,
@@ -326,14 +338,43 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
         // on completion, stream error, and consumer abandonment — and before
         // the buffered fallback below, which takes its own per-statement lock.
         const releaseLock = await acquireClientQueryLock(client);
+        const stream = this.streamWithPortalProtection(
+          client,
+          request,
+          this.options.cursorBatchSize,
+          name,
+        )[Symbol.asyncIterator]();
+        let onEnd = () => {};
+        const ended = new Promise<void>((resolve) => {
+          onEnd = resolve;
+        });
+        client.on('end', onEnd);
+        let streams = clientStreams.get(client);
+        if (streams === undefined) {
+          streams = new Set();
+          clientStreams.set(client, streams);
+        }
+        const registered = streams;
+        let closing: Promise<void> | undefined;
+        const close = () =>
+          (closing ??= (async () => {
+            try {
+              await Promise.race([stream.return?.(), ended]);
+            } finally {
+              registered.delete(close);
+              client.removeListener?.('end', onEnd);
+              releaseLock();
+            }
+          })());
+        registered.add(close);
         try {
-          for await (const row of this.streamWithPortalProtection(
-            client,
-            request,
-            this.options.cursorBatchSize,
-            name,
-          )) {
-            yield blindCast<Row, 'postgres cursor rows are dynamically shaped'>(row);
+          assertClientUsable(client);
+          while (true) {
+            assertClientUsable(client);
+            const next = await stream.next();
+            assertClientUsable(client);
+            if (next.done) break;
+            yield blindCast<Row, 'postgres cursor rows are dynamically shaped'>(next.value);
           }
           return;
         } catch (cursorError) {
@@ -347,7 +388,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
             throw cursorError;
           }
         } finally {
-          releaseLock();
+          await close();
         }
       }
 
@@ -370,6 +411,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     try {
       const releaseLock = await acquireClientQueryLock(client);
       try {
+        assertClientUsable(client);
         const result = await client
           .query(text, request.params === undefined ? undefined : [...request.params])
           .catch(rethrowClientError(client));
@@ -496,6 +538,7 @@ abstract class PostgresQueryable<C extends PoolClient | Client = PoolClient | Cl
     const releaseLock = await acquireClientQueryLock(client);
     let result: PgQueryResult;
     try {
+      assertClientUsable(client);
       result = await client.query(config);
     } finally {
       releaseLock();
@@ -565,6 +608,7 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
         : 'BEGIN';
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      assertClientUsable(this.#connection);
       await this.#connection.query(sql).catch(rethrowClientError(this.#connection));
     } finally {
       releaseLock();
@@ -601,6 +645,8 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     this.#onRelease = undefined;
 
     const conn = this.#connection;
+    markClientAbandoned(conn);
+    void closeClientStreams(conn).catch(() => undefined);
     if ('release' in conn) {
       // Pass a truthy Error to pg's PoolClient.release so the pool evicts the
       // client instead of returning it for reuse. A connection that reaches
@@ -664,6 +710,7 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   async commit(): Promise<void> {
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      assertClientUsable(this.#connection);
       await this.#connection.query('COMMIT').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
@@ -675,6 +722,7 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   async rollback(): Promise<void> {
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
+      assertClientUsable(this.#connection);
       await this.#connection.query('ROLLBACK').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
@@ -849,7 +897,7 @@ class PostgresDirectDriverImpl
     }
     this.#closed = true;
     if (!this.#ownedByDriver) {
-      if (!options.waitForStatement) this.#giveUpSuppliedClient();
+      if (!options.waitForStatement) await this.#giveUpSuppliedClient();
       return;
     }
     if (this.#connectFailure !== undefined) {
@@ -868,13 +916,11 @@ class PostgresDirectDriverImpl
     this.#connected = false;
   }
 
-  // The caller owns this client, so the driver does not end it. It rolls back a transaction it may
-  // have left open, without waiting, and records the client as one no driver may use again.
-  #giveUpSuppliedClient(): void {
+  async #giveUpSuppliedClient(): Promise<void> {
     markClientAbandoned(this.directClient);
-    if (this.#txState.unfinishedOnServer) {
-      void this.#rollbackUnderQueryLock().catch(() => undefined);
-    }
+    await closeClientStreams(this.directClient).catch(() => undefined);
+    if (this.#txState.unfinishedOnServer)
+      await this.#rollbackUnderQueryLock().catch(() => undefined);
   }
 
   async #rollbackUnderQueryLock(): Promise<void> {

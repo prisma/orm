@@ -409,6 +409,7 @@ export default function mysql<
         local?.isolationLevel !== undefined
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
+      const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
       return withTransaction(
         workRuntime,
         (txCtx) => {
@@ -429,7 +430,7 @@ export default function mysql<
 
           return fn(tx);
         },
-        { isolationLevel },
+        { isolationLevel, timeout },
       );
     },
 
