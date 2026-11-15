@@ -2,9 +2,9 @@
 
 Which model tier should this dispatch run on? Per [`docs/drive/principles/decomposition-and-cost.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/decomposition-and-cost.md), the cost-vs-capability decision is dispatch-shape-dependent, not size-dependent. A judgment-heavy M dispatch belongs on the orchestrator tier; a mechanical M dispatch belongs on the cheap tier.
 
-## Operator override (2026-09-24)
+## Operator override (2026-09-24, changed 2026-11-15)
 
-Every subagent dispatch in this repo runs on **Opus**: implementers, reviewers, and spikes. Pass `model: "opus"` explicitly on every dispatch. The routing table below records the earlier trial of cheaper tiers and is kept for history; it does not govern dispatches until the operator lifts this override.
+Implementer and spike dispatches in this repo run on **Opus**. Reviewer dispatches run on **Fable**: the in-loop reviewer, design reviews, and both passes of `/drive-code-review`. Pass the model explicitly on every dispatch. The routing table below records the earlier trial of cheaper tiers and is kept for history; it does not govern dispatches until the operator lifts this override.
 
 ## Routing table
 
