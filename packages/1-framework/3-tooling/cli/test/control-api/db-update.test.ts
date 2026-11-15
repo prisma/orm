@@ -291,7 +291,7 @@ describe('executeDbUpdate', () => {
         code: 'MIGRATION.MARKER_ORIGIN_MISMATCH',
         message: 'Origin mismatch',
         why: 'Marker drifted',
-        fix: 'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`.',
+        fix: 'Resolve the cause the failure names, then re-run `{bin} db update`.',
         meta: { drift: true, failingSpace: 'app' },
       });
       expect(result.failure.cause).toBe(runnerFailure);

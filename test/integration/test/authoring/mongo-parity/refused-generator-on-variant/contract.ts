@@ -15,7 +15,7 @@ export function buildContract() {
         Task,
         Bug: model('Bug', {
           base: Task,
-          fields: { seenAt: field.scalar(type.Date()).onCreate(gen.now()) },
+          fields: { seenAt: field.scalar(type.DateTime()).onCreate(gen.now()) },
         }),
       },
     };

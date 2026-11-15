@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { ListCollectionsCommand, ListIndexesCommand } from '../src/inspection-commands';
 import { buildIndexOpId, keysToKeySpec } from '../src/migration-helpers';
-import { isMongoDmlOperation } from '../src/migration-operation-types';
+import {
+  isInspectionCheckSource,
+  isMongoDmlOperation,
+  type MongoMigrationCheckSource,
+} from '../src/migration-operation-types';
+import { RawAggregateCommand } from '../src/raw-commands';
 
 describe('buildIndexOpId', () => {
   it('names the collection, the verb and the index name', () => {
@@ -46,5 +52,27 @@ describe('isMongoDmlOperation', () => {
       }),
       isMongoDmlOperation({ ...common, operationClass: 'data', name: 'data', run: [] }),
     ]).toEqual([false, true, true]);
+  });
+});
+
+describe('isInspectionCheckSource', () => {
+  it("tells a catalog inspection from a read of documents by the inspection command's kind", () => {
+    const documents = {
+      collection: 'users',
+      command: new RawAggregateCommand('users', [{ $limit: 1 }]),
+      meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
+    };
+    const inspectionWithACommandField = {
+      kind: 'listIndexes',
+      collection: 'users',
+      command: 'listIndexes',
+      accept: () => [],
+    } as unknown as MongoMigrationCheckSource;
+    expect([
+      isInspectionCheckSource(new ListCollectionsCommand()),
+      isInspectionCheckSource(new ListIndexesCommand('users')),
+      isInspectionCheckSource(inspectionWithACommandField),
+      isInspectionCheckSource(documents),
+    ]).toEqual([true, true, true, false]);
   });
 });

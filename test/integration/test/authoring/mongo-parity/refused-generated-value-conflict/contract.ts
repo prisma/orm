@@ -7,14 +7,14 @@ export function buildContract() {
         collection: 'people',
         fields: {
           id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
-          seenAt: field.scalar(type.Date()).onCreate(gen.now()),
+          seenAt: field.scalar(type.DateTime()).onCreate(gen.now()),
         },
       }),
       Admin: model('Admin', {
         collection: 'people',
         fields: {
           id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
-          seenAt: field.scalar(type.Date()).onUpdate(gen.now()),
+          seenAt: field.scalar(type.DateTime()).onUpdate(gen.now()),
         },
       }),
     },

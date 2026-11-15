@@ -28,7 +28,8 @@ function diagnosticsOf(field: string, scalars: ReadonlyMap<string, string>) {
 
 const scalars = new Map([
   ['ObjectId', 'mongo/objectId@1'],
-  ['Date', 'mongo/date@1'],
+  ['DateTime', 'mongo/date@1'],
+  ['Date', 'mongo/date-string@1'],
 ]);
 
 function removed(call: string, rewrite: string) {
@@ -46,11 +47,11 @@ describe('a removed field preset in a Mongo schema', () => {
     ['temporal.updatedAt()', 'Write temporal.UpdatedAt.'],
     [
       'temporal.timestamp(onCreate: now, onUpdate: now)',
-      'Write Date @onCreate(now()) @onUpdate(now()).',
+      'Write DateTime @onCreate(now()) @onUpdate(now()).',
     ],
-    ['temporal.timestamp(onUpdate: now)', 'Write Date @onUpdate(now()).'],
-    ['temporal.timestamp(now)', 'Write Date @onCreate(now()).'],
-    ['temporal.timestamp()', 'Write Date.'],
+    ['temporal.timestamp(onUpdate: now)', 'Write DateTime @onUpdate(now()).'],
+    ['temporal.timestamp(now)', 'Write DateTime @onCreate(now()).'],
+    ['temporal.timestamp()', 'Write DateTime.'],
   ])('refuses %s with its rewrite', (call, rewrite) => {
     expect(diagnosticsOf(call, scalars)).toEqual(removed(call, rewrite));
   });
@@ -59,7 +60,7 @@ describe('a removed field preset in a Mongo schema', () => {
     expect(diagnosticsOf('temporal.timestamp(onUpdate: later)', scalars)).toEqual(
       removed(
         'temporal.timestamp(onUpdate: later)',
-        'Write Date with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.',
+        'Write DateTime with @onCreate(now()) and @onUpdate(now()) for the phases the preset set.',
       ),
     );
   });

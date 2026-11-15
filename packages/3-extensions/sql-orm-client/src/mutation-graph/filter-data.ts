@@ -25,17 +25,24 @@ export function keyCondition(
   return first !== undefined && others.length === 0 ? first : AndExpr.of(conditions);
 }
 
-/** Matches each source row's row in the reading statement. `changed` holds new values, by source column, that a write between the two gave every row. */
-export class FilterData extends DataEdge<AnyExpression> {
-  readonly changed: Readonly<StorageRow>;
+export interface KeyMatch {
+  readonly condition: AnyExpression;
+  readonly key: Readonly<StorageRow>;
+}
 
-  constructor(from: NodeId, columns: readonly ColumnMapping[], changed: Readonly<StorageRow> = {}) {
+/** Matches each source row's row in the reading statement: the condition that selects it, and its key by target column. */
+export class FilterData extends DataEdge<KeyMatch> {
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
     super(from, columns);
-    this.changed = changed;
     Object.freeze(this);
   }
 
-  override output(sourceRow: StorageRow): AnyExpression {
-    return keyCondition(this.columns, { ...sourceRow, ...this.changed });
+  override output(sourceRow: StorageRow): KeyMatch {
+    return {
+      condition: keyCondition(this.columns, sourceRow),
+      key: Object.fromEntries(
+        this.columns.map(([source, target]) => [target.alias, sourceRow[source.alias]]),
+      ),
+    };
   }
 }

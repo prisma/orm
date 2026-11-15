@@ -859,3 +859,49 @@ describe('Postgres adapter', () => {
     expect(sql).toContain('"user"."email" IS NULL');
   });
 });
+
+describe('Postgres adapter of a row value IN a subquery', () => {
+  const rowValueInSubquery = SelectAst.from(TableSource.named('tag'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+    .withWhere(
+      BinaryExpr.in(
+        ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+        SubqueryExpr.of(
+          SelectAst.from(TableSource.named('user_tags', 'ut'))
+            .withProjection([
+              ProjectionItem.of('tenant_id', ColumnRef.of('ut', 'tenant_id')),
+              ProjectionItem.of('tag_id', ColumnRef.of('ut', 'tag_id')),
+            ])
+            .withWhere(BinaryExpr.eq(ColumnRef.of('ut', 'user_id'), LiteralExpr.of(1))),
+        ),
+      ),
+    );
+
+  it('renders the row value and the subquery', () => {
+    expect(createPostgresAdapter().lower(rowValueInSubquery, { contract }).sql).toBe(
+      'SELECT "tag"."id" AS "id" FROM "tag" WHERE ("tag"."tenant_id", "tag"."id") IN (SELECT "ut"."tenant_id" AS "tenant_id", "ut"."tag_id" AS "tag_id" FROM "user_tags" AS "ut" WHERE "ut"."user_id" = 1)',
+    );
+  });
+
+  it('refuses a subquery whose columns do not match the row value', () => {
+    const ast = SelectAst.from(TableSource.named('tag'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+      .withWhere(
+        BinaryExpr.in(
+          ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+          SubqueryExpr.of(
+            SelectAst.from(TableSource.named('user_tags')).withProjection([
+              ProjectionItem.of('tag_id', ColumnRef.of('user_tags', 'tag_id')),
+            ]),
+          ),
+        ),
+      );
+
+    expect(() => createPostgresAdapter().lower(ast, { contract })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: 'A subquery compared with a row value of 2 columns must project 2 columns',
+      }),
+    );
+  });
+});

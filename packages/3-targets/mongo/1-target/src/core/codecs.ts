@@ -72,6 +72,15 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
+import {
+  mongoDateInstantCodec,
+  mongoDateInstantStringCodec,
+  mongoDateStringCodec,
+  mongoDateTemporalCodec,
+  mongoDurationStringCodec,
+  mongoTimeStringCodec,
+  mongoTimeTemporalCodec,
+} from './date-time-codecs';
 import { decodeJsonValue, encodeJsonValue } from './json-codec-helpers';
 
 export const mongoObjectIdCodec = mongoCodec({
@@ -272,6 +281,31 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   }),
   mongoCodecDescriptor(mongoBsonCodec, {
     traits: [],
+  }),
+  mongoCodecDescriptor(mongoDateInstantCodec, {
+    traits: ['equality', 'order'],
+  }),
+  mongoCodecDescriptor(mongoDateInstantStringCodec, {
+    traits: ['equality', 'order'],
+    renderValueLiteral: renderTsLiteral,
+  }),
+  mongoCodecDescriptor(mongoDateStringCodec, {
+    traits: ['equality', 'order'],
+    renderValueLiteral: renderTsLiteral,
+  }),
+  mongoCodecDescriptor(mongoDateTemporalCodec, {
+    traits: ['equality', 'order'],
+  }),
+  mongoCodecDescriptor(mongoTimeStringCodec, {
+    traits: ['equality', 'order'],
+    renderValueLiteral: renderTsLiteral,
+  }),
+  mongoCodecDescriptor(mongoTimeTemporalCodec, {
+    traits: ['equality', 'order'],
+  }),
+  mongoCodecDescriptor(mongoDurationStringCodec, {
+    traits: ['equality'],
+    renderValueLiteral: renderTsLiteral,
   }),
 ];
 

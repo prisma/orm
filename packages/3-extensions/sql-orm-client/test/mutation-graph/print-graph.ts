@@ -1,7 +1,6 @@
 import type {
   AnyExpression,
   DeleteAst,
-  InsertAst,
   LimitOffsetValue,
   SelectAst,
   UpdateAst,
@@ -13,13 +12,11 @@ import {
   type Edge,
   type NodeId,
 } from '../../src/mutation-graph/edge';
-import { FilterData } from '../../src/mutation-graph/filter-data';
 import { Find } from '../../src/mutation-graph/find';
 import { FindByKeys } from '../../src/mutation-graph/find-by-keys';
 import type { Graph } from '../../src/mutation-graph/graph';
 import { Insert } from '../../src/mutation-graph/insert';
-import { InsertChunked } from '../../src/mutation-graph/insert-chunked';
-import { InsertReportingKeys } from '../../src/mutation-graph/insert-reporting-keys';
+import { JunctionFilterData } from '../../src/mutation-graph/junction-filter-data';
 import type { Node } from '../../src/mutation-graph/node';
 import { Requires } from '../../src/mutation-graph/requires';
 import { Rows } from '../../src/mutation-graph/rows';
@@ -82,7 +79,14 @@ function printDelete(ast: DeleteAst): string {
   return `Delete ${ast.table.name}${printWhere(ast.where, ast.table.name)}`;
 }
 
-function printInsert(ast: InsertAst): string {
+function printInsert({ asts }: Insert): string {
+  const [ast, ...others] = asts;
+  if (ast === undefined) {
+    return 'Insert nothing';
+  }
+  if (others.length > 0) {
+    return `Insert ${ast.table.name} (${asts.length} statements)`;
+  }
   const rows = ast.rows.length === 1 ? '' : ` ${ast.rows.length} rows`;
   const conflict = ast.onConflict;
   if (conflict === undefined) {
@@ -102,18 +106,9 @@ function printFindByKeys(node: FindByKeys): string {
   return `${find} by (${keys}) for ${node.owner.operation}`;
 }
 
-function printInsertReportingKeys(node: InsertReportingKeys): string {
-  const statements = node.asts.map(printInsert).join('; ');
-  const generated = node.generated === undefined ? '' : `, generated ${node.generated.column}`;
-  return `InsertReportingKeys ${statements} keys ${JSON.stringify(node.keys)}${generated}`;
-}
-
 function printNode(node: Node): string {
   if (node instanceof FindByKeys) {
     return printFindByKeys(node);
-  }
-  if (node instanceof InsertReportingKeys) {
-    return printInsertReportingKeys(node);
   }
   if (node instanceof Find) {
     return printFind(node.ast);
@@ -122,16 +117,16 @@ function printNode(node: Node): string {
     return printUpdate(node.ast);
   }
   if (node instanceof Insert) {
-    return printInsert(node.ast);
-  }
-  if (node instanceof InsertChunked) {
-    const count = node.asts.length;
-    return `InsertChunked ${node.asts[0]?.table.name} (${count} ${count === 1 ? 'statement' : 'statements'})`;
+    return printInsert(node);
   }
   if (node instanceof State) {
     return `State ${node.table.tableName}`;
   }
   return node instanceof Delete ? printDelete(node.ast) : node.constructor.name;
+}
+
+function printMappings(columns: readonly ColumnMapping[]): string {
+  return columns.map(([source, target]) => `${source.alias}->${target.alias}`).join(', ');
 }
 
 function printEdge(names: NodeNames, edge: Edge<unknown>): string {
@@ -144,14 +139,11 @@ function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (!(edge instanceof DataEdge)) {
     return `state ${names.get(edge.from)}`;
   }
-  const mappings = edge.columns.map(
-    ([source, target]: ColumnMapping) => `${source.alias}->${target.alias}`,
-  );
-  const changed =
-    edge instanceof FilterData && Object.keys(edge.changed).length > 0
-      ? ` with ${JSON.stringify(edge.changed)}`
+  const through =
+    edge instanceof JunctionFilterData
+      ? `; ${edge.junction.name} ${printMappings(edge.targets)}`
       : '';
-  return `${edge.constructor.name} ${names.get(edge.from)} (${mappings.join(', ')})${changed}`;
+  return `${edge.constructor.name} ${names.get(edge.from)} (${printMappings(edge.columns)}${through})`;
 }
 
 function printInputs(names: NodeNames, inputs: readonly Edge<unknown>[]): string {
@@ -171,10 +163,9 @@ export interface PrintOptions {
 }
 
 export function printGraph(graph: Graph, options: PrintOptions = { state: false }): string {
-  const nodes = graph.nodes().filter(([, node]) => options.state || !(node instanceof State));
-  const names: NodeNames = new Map(nodes.map(([id], index) => [id, `n${index + 1}`]));
-  const lines = nodes.map(([id, node]) => {
-    const slots = graph.inputsOf(id);
+  const nodes = graph.entries().filter(({ node }) => options.state || !(node instanceof State));
+  const names: NodeNames = new Map(nodes.map(({ id }, index) => [id, `n${index + 1}`]));
+  const lines = nodes.map(({ id, node, inputs: slots }) => {
     const inputs = Object.keys(node.slots)
       .flatMap((name) => [slots[name] ?? []].flat())
       .filter((edge) => options.state || !(edge instanceof StateEdge));

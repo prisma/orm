@@ -472,7 +472,7 @@ describe('migration plan --convert and --backfill', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows get '' in field "User.email". To choose the value, plan again with --backfill User.email.`,
+      text: `Field "User.email" gets the temporary value '' where existing data has none. To choose the value, plan again with --backfill User.email.`,
     });
   });
 

@@ -206,10 +206,24 @@
                   "plane": "storage"
                 }
               },
+              "availableFrom": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
+                }
+              },
               "bio": {
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "birthday": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/date-string@1",
                   "kind": "scalar"
                 }
               },
@@ -271,8 +285,14 @@
                 "address": {
                   "field": "address"
                 },
+                "availableFrom": {
+                  "field": "availableFrom"
+                },
                 "bio": {
                   "field": "bio"
+                },
+                "birthday": {
+                  "field": "birthday"
                 },
                 "email": {
                   "field": "email"
@@ -490,10 +510,22 @@
                         }
                       ]
                     },
+                    "availableFrom": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "bio": {
                       "bsonType": [
                         "null",
                         "string"
+                      ]
+                    },
+                    "birthday": {
+                      "bsonType": [
+                        "null",
+                        "date"
                       ]
                     },
                     "email": {
@@ -573,7 +605,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "61c3f027c298b11d22e875ed76ab6460d2b4396afa94bdf58d85e26aded3416c"
+    "storageHash": "4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595"
   },
   "capabilities": {},
   "extensions": {},

@@ -40,4 +40,3 @@ expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
 expectTypeOf(type).not.toHaveProperty('Int');
 expectTypeOf(type).not.toHaveProperty('Float');
 expectTypeOf(type).not.toHaveProperty('Boolean');
-expectTypeOf(type).not.toHaveProperty('DateTime');

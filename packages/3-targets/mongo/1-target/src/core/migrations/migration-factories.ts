@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
@@ -8,6 +9,7 @@ import type {
   MongoDmlOperation,
   MongoFilterExpr,
   MongoIndexKey,
+  MongoMigrationCheck,
 } from '@internal/mongo-query-ast/control';
 import {
   buildIndexOpId,
@@ -38,6 +40,7 @@ import type { Document, MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
+import { convertKeepsEveryValue, isConvertTarget } from './bson-convert';
 import type { CollModMeta } from './op-factory-call';
 
 type StringField = { readonly codecId: 'mongo/string@1'; readonly nullable: false };
@@ -116,11 +119,40 @@ export function dataTransform(
   };
 }
 
+/** A raw `aggregate` on a collection, as a data transform's check reads documents. */
+export function rawAggregate(
+  collectionName: string,
+  pipeline: readonly Document[],
+): MongoQueryPlan {
+  return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
+}
+
+/**
+ * A raw `updateMany` on a collection, which a data transform's run can make skip document
+ * validation. `update` is an update document, such as `{ $set: { age: 0 } }`, or an aggregation
+ * pipeline, such as `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own
+ * values.
+ */
+export function rawUpdateMany(
+  collectionName: string,
+  filter: Document,
+  update: Document | readonly Document[],
+  options?: { readonly bypassDocumentValidation?: boolean },
+): MongoQueryPlan {
+  return rewritePlan(
+    collectionName,
+    new RawUpdateManyCommand(
+      collectionName,
+      filter,
+      update,
+      ifDefined('bypassDocumentValidation', options?.bypassDocumentValidation),
+    ),
+  );
+}
+
 export interface FieldRewriteOptions {
   readonly filter?: Document;
 }
-
-const REWRITE_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
 
 function documentsHolding(fields: readonly string[], filter: Document | undefined): Document {
   const conditions: Document[] = [
@@ -152,6 +184,9 @@ export function unrewritableFieldNameReason(field: string): string | undefined {
   return UNREWRITABLE_FIELD_NAMES.find((rule) => rule.matches(field))?.reason;
 }
 
+/** The plan meta of the raw queries a migration's operations run and check with. */
+const RAW_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
+
 function assertRewritableField(collectionName: string, field: string): void {
   const reason = unrewritableFieldNameReason(field);
   if (reason === undefined) return;
@@ -163,7 +198,7 @@ function assertRewritableField(collectionName: string, field: string): void {
 }
 
 function rewritePlan(collectionName: string, command: RawAggregateCommand | RawUpdateManyCommand) {
-  return { collection: collectionName, command, meta: { ...REWRITE_PLAN_META } };
+  return { collection: collectionName, command, meta: { ...RAW_PLAN_META } };
 }
 
 function noDocumentHolds(
@@ -284,6 +319,178 @@ export function unsetField(
     precheck: [],
     run: [rewriteUpdate(collectionName, field, filter, { $unset: { [field]: '' } })],
     postcheck: [noDocumentHolds(collectionName, [field], filter)],
+  };
+}
+
+export interface CastFieldOptions {
+  readonly collection: string;
+  readonly field: string;
+  /** The BSON types the field held before, which say whether the cast keeps every value. */
+  readonly from: readonly string[];
+  /** The BSON type `$convert` casts the field to. */
+  readonly to: string;
+  /** Whether the field is a list, whose elements are cast one by one. */
+  readonly list?: boolean;
+  readonly filter?: Document;
+}
+
+/**
+ * The documents whose field holds a value of none of the BSON types `types`, or, for a list, an
+ * element of none of them. A single value is read with `$expr`, since a query's `$type` and `$ne`
+ * look at the elements of a list.
+ */
+export function documentsNotOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  if (shape.list) {
+    return { [field]: { $elemMatch: { $ne: null, $not: { $type: [...shape.types] } } } };
+  }
+  return {
+    $expr: { $not: { $in: [{ $type: `$${field}` }, ['missing', 'null', ...shape.types]] } },
+  };
+}
+
+/** The documents where the field is missing or holds `null`, read with `$expr` so a list holding `null` is not one. */
+export function documentsMissingOrNull(field: string): Document {
+  return { $expr: { $in: [{ $type: `$${field}` }, ['missing', 'null']] } };
+}
+
+const NUMBER_TYPES: readonly string[] = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * The documents whose field holds a value of one of the BSON types `types`, or, for a list, an
+ * element of one of them. A single value is read with `$expr`, since a query's `$type` looks at the
+ * elements of a list.
+ */
+function documentsOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  if (shape.list) return { [field]: { $elemMatch: { $type: [...shape.types] } } };
+  return { $expr: { $in: [{ $type: `$${field}` }, [...shape.types]] } };
+}
+
+/**
+ * The documents the cast changes: those holding a value of a type it is planned from, other than
+ * `to`. A value of any other type is left as it is, for the validator change's document check to
+ * name. A cast planned from no type casts every value that is not of type `to`.
+ */
+function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
+  const list = options.list === true;
+  const from = [
+    ...new Set(options.from.flatMap((type) => (type === 'number' ? NUMBER_TYPES : [type]))),
+  ].filter((type) => type !== to);
+  const condition =
+    options.from.length === 0
+      ? documentsNotOfType(field, { types: [to], list })
+      : documentsOfType(field, { types: from, list });
+  return options.filter === undefined ? condition : { $and: [options.filter, condition] };
+}
+
+function castExpression(field: string, to: string, list: boolean): Document {
+  return list
+    ? {
+        $map: {
+          input: `$${field}`,
+          as: 'value',
+          in: { $convert: { input: '$$value', to } },
+        },
+      }
+    : { $convert: { input: `$${field}`, to } };
+}
+
+/**
+ * Casts a field to the BSON type `to` with `$convert`, in the documents where it holds another
+ * type. A value `$convert` cannot cast fails the update. Widening when every type in `from` casts
+ * to `to` keeping its value, destructive otherwise.
+ */
+export function castField(options: CastFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, to, filter } = options;
+  assertRewritableField(collectionName, field);
+  if (!isConvertTarget(to)) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `castField casts field "${field}" in collection ${collectionName} to "${to}", which $convert cannot cast to.`,
+      { meta: { context: 'castField', collection: collectionName, field, to } },
+    );
+  }
+  const listOf = (types: string) => (options.list === true ? `list of ${types}` : types);
+  const id = `field.${collectionName}.${field}.cast(${to})${idSuffix(filter)}`;
+  const toCast = documentsToCast(field, to, options);
+  return {
+    id,
+    meta: { rewrite: { kind: 'cast', collection: collectionName, field, to } },
+    label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${listOf(options.from.join(', '))}`} to ${listOf(to)}${labelSuffix(filter)}`,
+    operationClass:
+      options.from.length > 0 && options.from.every((from) => convertKeepsEveryValue(from, to))
+        ? 'widening'
+        : 'destructive',
+    name: id,
+    precheck: [],
+    run: [
+      rewritePlan(
+        collectionName,
+        new RawUpdateManyCommand(
+          collectionName,
+          toCast,
+          [{ $set: { [field]: castExpression(field, to, options.list === true) } }],
+          { bypassDocumentValidation: true },
+        ),
+      ),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} holds ${field} as ${options.from.length === 0 ? `another type than ${to}` : `a type it is cast from, ${options.from.join(', ')}`}`,
+        source: rewritePlan(
+          collectionName,
+          new RawAggregateCommand(collectionName, [{ $match: toCast }, { $limit: 1 }]),
+        ),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
+  };
+}
+
+export interface FillFieldOptions {
+  readonly collection: string;
+  readonly field: string;
+  /** An aggregation expression for the value, so it is stored with its BSON type: `{ $toLong: 0 }` stores a long. */
+  readonly value: JsonValue;
+  readonly filter?: Document;
+}
+
+/**
+ * Sets a field to `value` in the documents where it is missing or `null`, skipping document
+ * validation, as a migration fills a new required field with a temporary value.
+ */
+export function fillField(options: FillFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, value, filter } = options;
+  assertRewritableField(collectionName, field);
+  const id = `field.${collectionName}.${field}.fill${idSuffix(filter)}`;
+  const unfilled = documentsMissingOrNull(field);
+  const toFill = filter === undefined ? unfilled : { $and: [filter, unfilled] };
+  return {
+    id,
+    meta: { rewrite: { kind: 'fill', collection: collectionName, field } },
+    label: `Fill field ${field} in collection ${collectionName} where it is missing or null${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      rawUpdateMany(collectionName, toFill, [{ $set: { [field]: value } }], {
+        bypassDocumentValidation: true,
+      }),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} has ${field} missing or null`,
+        source: rawAggregate(collectionName, [{ $match: toFill }, { $limit: 1 }]),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
   };
 }
 
@@ -615,24 +822,34 @@ export function renameCollection(from: string, to: string): MongoMigrationPlanOp
 export function setValidation(
   collectionName: string,
   schema: Record<string, unknown>,
-  options?: { validationLevel?: 'strict' | 'moderate'; validationAction?: 'error' | 'warn' },
+  options?: {
+    validationLevel?: 'strict' | 'moderate';
+    validationAction?: 'error' | 'warn';
+    /** Whether to check first that every document fits the new validator, and stop if one does not. */
+    checkDocuments?: boolean;
+  },
 ): MongoMigrationPlanOperation {
+  const validator: CollModOptions = {
+    validator: { $jsonSchema: schema },
+    ...ifDefined('validationLevel', options?.validationLevel),
+    ...ifDefined('validationAction', options?.validationAction),
+  };
+  const checks =
+    options?.checkDocuments === true
+      ? collMod(collectionName, validator, { checkDocuments: true })
+      : { precheck: [], postcheck: [] };
   return {
     id: `collection.${collectionName}.setValidation`,
     label: `Set validation on ${collectionName}`,
     operationClass: 'widening',
-    precheck: [],
+    precheck: checks.precheck,
     execute: [
       {
         description: `set validation on ${collectionName}`,
-        command: new CollModCommand(collectionName, {
-          validator: { $jsonSchema: schema },
-          ...ifDefined('validationLevel', options?.validationLevel),
-          ...ifDefined('validationAction', options?.validationAction),
-        }),
+        command: new CollModCommand(collectionName, validator),
       },
     ],
-    postcheck: [],
+    postcheck: checks.postcheck,
   };
 }
 
@@ -651,12 +868,42 @@ function validatorBodyFilter(validator: Readonly<Record<string, unknown>>): Mong
     : MongoFieldFilter.eq('options.validator', documentValue(validator));
 }
 
+/**
+ * A check that no document of `collection` fails `validator`: an aggregate that matches the
+ * documents the validator rejects.
+ */
+function documentsFitValidator(
+  collection: string,
+  validator: Readonly<Record<string, unknown>>,
+): MongoMigrationCheck {
+  return {
+    description: `every document in ${collection} fits the new validator`,
+    source: {
+      collection,
+      command: new RawAggregateCommand(collection, [
+        { $match: { $nor: [validator] } },
+        { $limit: 1 },
+      ]),
+      meta: { ...RAW_PLAN_META },
+    },
+    filter: MongoExistsExpr.exists('_id'),
+    expect: 'notExists',
+  };
+}
+
 export function collMod(
   collectionName: string,
   options: CollModOptions,
   meta?: CollModMeta,
 ): MongoMigrationPlanOperation {
   const hasValidator = options.validator != null && Object.keys(options.validator).length > 0;
+  if (meta?.checkDocuments === true && !hasValidator) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `collMod of collection ${collectionName} checks the documents, but sets no validator to check them against.`,
+      { meta: { context: 'collMod', collection: collectionName } },
+    );
+  }
 
   return {
     id: meta?.id ?? `collection.${collectionName}.collMod`,
@@ -672,6 +919,9 @@ export function collMod(
               expect: 'exists' as const,
               object: `collection "${collectionName}"`,
             },
+            ...(meta?.checkDocuments === true
+              ? [documentsFitValidator(collectionName, options.validator)]
+              : []),
           ]
         : [],
     execute: [

@@ -320,8 +320,10 @@ test('each User facet rejects the other namespace fields in select/distinct/curs
   });
 });
 
-test('the auth-namespace User facet resolves upsert update input to its own field `token`', async () => {
-  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'tok-2' } });
+test('the auth-namespace User facet resolves upsert update inputs to its own field `token`', async () => {
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'next' } });
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { email: 'a@example.com' } });
 });
 
 test('each User facet resolves upsert conflictOn and whereUnique within its own namespace', async () => {

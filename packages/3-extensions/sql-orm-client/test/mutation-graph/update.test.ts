@@ -12,7 +12,7 @@ describe('Update with a payload', () => {
 
     expect(
       await update.execute(
-        { filter: null, payload: [[userIdOf7], [views]], state: null, requires: null },
+        { filter: null, payload: [[userIdOf7], [views]], link: null, state: null, requires: null },
         run,
       ),
     ).toEqual({ affectedRows: 2 });
@@ -28,7 +28,7 @@ describe('Update with a payload', () => {
 
     expect(
       await update.execute(
-        { filter: null, payload: [[userIdOf7], []], state: null, requires: null },
+        { filter: null, payload: [[userIdOf7], []], link: null, state: null, requires: null },
         run,
       ),
     ).toEqual([]);

@@ -48,6 +48,7 @@ import {
   getModelFieldColumns,
   hasCompleteUniqueKey,
   isToOneCardinality,
+  type ResolvedRelation,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -157,6 +158,7 @@ import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import { parseMutationInput } from './relation-mutations';
+import type { RelationCollection } from './relation-mutator';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -1965,32 +1967,23 @@ export class CollectionBase<
         MutationCreateInput<Contract<SqlStorage>, string>,
         'create overload inputs are model-field records whose relation fields are callbacks'
       >(data),
+      this.#relatedCollection,
     );
-    if (parsed.relationMutations.length > 0) {
-      const graph = createGraph(this.#descriptionOptions(), parsed);
-      const [created] = await queryGraph<Row>(
-        graph,
-        this.#on(queryable),
-        this.#descriptionOptions(),
-      ).toArray();
-      if (created === undefined) {
-        throw ormError(
-          'ORM.MUTATION_ROW_MISSING',
-          `create() for model "${this.modelName}" did not return a row`,
-          { meta: { operation: 'create', model: this.modelName } },
-        );
-      }
-      return created;
-    }
-
-    const rows = await this.#createAllRows([
-      blindCast<
-        ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-        'absence of nested callbacks selects the scalar create overload input'
-      >(data),
-    ])(queryable);
-    const created = rows[0];
-    if (created) {
+    const rows =
+      mtiCreateContextOf(this.#descriptionOptions()) === undefined
+        ? queryGraph<Row>(
+            createGraph(this.#descriptionOptions(), parsed),
+            this.#on(queryable),
+            this.#descriptionOptions(),
+          ).toArray()
+        : this.#createAllRows([
+            blindCast<
+              ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
+              'a create on an MTI variant has no nested callbacks, which createAll() refuses'
+            >(data),
+          ])(queryable);
+    const [created] = await rows;
+    if (created !== undefined) {
       return created;
     }
 
@@ -2422,7 +2415,13 @@ export class CollectionBase<
       MutationUpdateInput<Contract<SqlStorage>, string>,
       'update input is a model-field record whose relation fields are callbacks'
     >(data);
-    const parsed = parseMutationInput(this.contract, this.namespaceId, this.modelName, input);
+    const parsed = parseMutationInput(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
+      input,
+      this.#relatedCollection,
+    );
     if (parsed.relationMutations.length > 0) {
       assertRelationUpdateIgnoresNothing(this.state, this.modelName);
     }
@@ -2687,6 +2686,14 @@ export class CollectionBase<
       }),
     );
   }
+
+  #relatedCollection = (
+    relation: ResolvedRelation,
+  ): RelationCollection<Contract<SqlStorage>, string> =>
+    this.#createCollection(relation.to, {
+      namespaceId: relation.toNamespace,
+      includeRefinementMode: false,
+    });
 
   #createCollection<
     ModelNameInner extends string,

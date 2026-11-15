@@ -12,7 +12,9 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
+import { validateMysqlIsolationLevel } from '@internal/target-mysql/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
@@ -65,7 +67,7 @@ function startStream(
     const { sql, values } = statementFor(client, request.sql, request.params ?? []);
     return client.queryStream(sql, values);
   } catch (error) {
-    throw settle(error, outcome);
+    settle(error, outcome);
   }
 }
 
@@ -88,16 +90,16 @@ interface Outcome {
 }
 
 /** The error to report for `error`, after noting in `outcome` whether it left the client unusable. */
-function settle(error: unknown, outcome: Outcome): unknown {
+function settle(error: unknown, outcome: Outcome): never {
   if (isFatal(error)) outcome.destroy = true;
-  return normalizeMysqlError(error);
+  throw normalizeMysqlError(error);
 }
 
 /**
  * Whether the package has received the end of the result, so that any rows the caller has not read are already in the stream's buffer. The package pushes the end of the stream when MySQL's last packet arrives; Node records that in `_readableState.ended`, and its public API reports the end only after the caller has read every row.
  */
 function resultReceived(rows: Readable): boolean {
-  const state: unknown = Reflect.get(rows, '_readableState');
+  const state: unknown = '_readableState' in rows ? rows._readableState : undefined;
   return typeof state === 'object' && state !== null && 'ended' in state && state.ended === true;
 }
 
@@ -206,7 +208,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         releaseLock();
       }
     } catch (error) {
-      throw settle(error, outcome);
+      settle(error, outcome);
     } finally {
       await this.releaseClient(client, outcome);
     }
@@ -240,7 +242,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
       } catch (error) {
         settled = true;
-        throw settle(error, outcome);
+        settle(error, outcome);
       } finally {
         if (!settled && !this.handedBack) await this.#stopEarly(client, rows, outcome);
         if (outcome.destroy) rows.destroy();
@@ -415,8 +417,21 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     onRelease?.();
   }
 
-  async beginTransaction(): Promise<SqlTransaction> {
-    await this.underLock(() => this.client.beginTransaction());
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
+    const isolationLevel =
+      start?.isolationLevel === undefined
+        ? undefined
+        : validateMysqlIsolationLevel(start.isolationLevel);
+    const statements = {
+      ReadUncommitted: 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
+      ReadCommitted: 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
+      RepeatableRead: 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+      Serializable: 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
+    };
+    await this.underLock(async () => {
+      if (isolationLevel !== undefined) await this.client.query(statements[isolationLevel]);
+      await this.client.beginTransaction();
+    });
     return new MysqlTransactionImpl(this.client, this.held, this.streams);
   }
 

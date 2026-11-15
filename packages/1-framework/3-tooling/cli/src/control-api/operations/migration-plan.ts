@@ -131,6 +131,8 @@ type PlannerSuccess = {
   readonly temporaryValues: readonly TemporaryValueReport[];
   /** The namespaces the plan removes and adds, when the planner reports them. */
   readonly namespaces?: MigrationPlanNamespaces;
+  /** What the planner flagged without refusing to plan it. */
+  readonly plannerWarnings: readonly MigrationPlannerConflict[];
 };
 
 function placeholderSummary(
@@ -275,6 +277,7 @@ async function runPlannerLeg(
     ),
     temporaryValues: reportTemporaryValues(plannerResult.temporaryValues, contract),
     ...ifDefined('namespaces', plannerResult.namespaces),
+    plannerWarnings: plannerResult.warnings ?? [],
   });
 }
 
@@ -452,6 +455,8 @@ export interface MigrationPlanResult {
    * presentation and carried verbatim for JSON consumers.
    */
   readonly warnings?: readonly string[];
+  /** What the planner flagged without refusing to plan it, as `db update` and `db init` list it. */
+  readonly plannerWarnings?: readonly MigrationPlannerConflict[];
   /**
    * When true, `migration.ts` was written but contains unfilled
    * `placeholder(...)` calls. The user must edit the file and then run
@@ -610,6 +615,7 @@ async function executeMigrationPlanCommandInner(
   }
 
   const warnings: string[] = [];
+  const plannerWarnings: MigrationPlannerConflict[] = [];
   const warnForks = (forks: {
     readonly refName: string;
     readonly refHash: string;
@@ -746,6 +752,7 @@ async function executeMigrationPlanCommandInner(
       operations: [],
       emittedExtensionDirs,
       ...(warnings.length > 0 ? { warnings } : {}),
+      ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
       appliedStatements: [],
       temporaryValues: [],
       changedStorageEntities: [],
@@ -898,6 +905,10 @@ async function executeMigrationPlanCommandInner(
       const deltaLeg =
         plannedDelta === undefined ? undefined : (answered.value.delta ?? plannedDelta.value);
       const deletes = answered.value.deletes;
+      plannerWarnings.push(
+        ...baselineLeg.value.plannerWarnings,
+        ...(deltaLeg?.plannerWarnings ?? []),
+      );
 
       await writePlannedMigrationPackage(
         baselinePackageDir,
@@ -927,6 +938,7 @@ async function executeMigrationPlanCommandInner(
             operations: baselineLeg.value.listedOps,
             emittedExtensionDirs,
             ...(warnings.length > 0 ? { warnings } : {}),
+            ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
             pendingPlaceholders: true,
             placeholderDirs: [baselineDir],
             appliedStatements: [...statementsWithoutOperations, ...deletes],
@@ -955,6 +967,7 @@ async function executeMigrationPlanCommandInner(
           emittedExtensionDirs,
           ...(preview !== undefined ? { preview } : {}),
           ...(warnings.length > 0 ? { warnings } : {}),
+          ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
           appliedStatements: [...statementsWithoutOperations, ...deletes],
           temporaryValues: baselineLeg.value.temporaryValues,
           changedStorageEntities: changedStorageEntities(fromContract, toContract),
@@ -989,6 +1002,7 @@ async function executeMigrationPlanCommandInner(
           baselineOperations: baselineLeg.value.listedOps,
           emittedExtensionDirs,
           ...(warnings.length > 0 ? { warnings } : {}),
+          ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
           pendingPlaceholders: true,
           placeholderDirs: [
             ...(baselineLeg.value.hasPlaceholders ? [relative(cwd, baselinePackageDir)] : []),
@@ -1032,6 +1046,7 @@ async function executeMigrationPlanCommandInner(
         emittedExtensionDirs,
         ...(preview !== undefined ? { preview } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
         appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
         temporaryValues: deltaLeg.temporaryValues,
         ...withNoOperationsReport(
@@ -1082,6 +1097,7 @@ async function executeMigrationPlanCommandInner(
     }
     const deltaLeg = answered.value.delta ?? plannedDelta.value;
     const deletes = answered.value.deletes;
+    plannerWarnings.push(...deltaLeg.plannerWarnings);
 
     if (
       !deltaLeg.hasPlaceholders &&
@@ -1096,6 +1112,7 @@ async function executeMigrationPlanCommandInner(
         operations: [],
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
         appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
         temporaryValues: deltaLeg.temporaryValues,
         changedStorageEntities: [],
@@ -1119,6 +1136,7 @@ async function executeMigrationPlanCommandInner(
         operations: deltaLeg.listedOps,
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
         pendingPlaceholders: true,
         placeholderDirs: [relative(cwd, packageDir)],
         ...(fromDefaulted ? { fromDefaulted } : {}),
@@ -1150,6 +1168,7 @@ async function executeMigrationPlanCommandInner(
       ...(preview !== undefined ? { preview } : {}),
       ...(fromDefaulted ? { fromDefaulted } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
+      ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
       appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
       temporaryValues: deltaLeg.temporaryValues,
       ...withNoOperationsReport(

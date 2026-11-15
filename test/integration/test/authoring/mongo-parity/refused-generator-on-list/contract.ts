@@ -7,7 +7,7 @@ export function buildContract() {
         collection: 'docs',
         fields: {
           id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
-          stamps: field.scalar(type.Date()).many().onCreate(gen.now()),
+          stamps: field.scalar(type.DateTime()).many().onCreate(gen.now()),
         },
       }),
     },

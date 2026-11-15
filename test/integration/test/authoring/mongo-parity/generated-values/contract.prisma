@@ -1,7 +1,7 @@
 // use prisma-8
 
 types {
-  TouchedAt = Date @onUpdate(now())
+  TouchedAt = DateTime @onUpdate(now())
 }
 
 model Post {
@@ -9,9 +9,9 @@ model Post {
   title     String             @map("t")
   createdAt temporal.CreatedAt
   updatedAt temporal.UpdatedAt @map("updated_at")
-  seenAt    Date               @onCreate(now())
+  seenAt    DateTime               @onCreate(now())
   touchedAt TouchedAt
-  stamp     Date
+  stamp     DateTime
 
   @@map("posts")
 }

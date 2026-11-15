@@ -33,10 +33,10 @@ describe('createAllGraph', () => {
     );
 
     expect(printGraph(graph)).toBe(['n1 Insert users 3 rows', 'result: n1'].join('\n'));
-    expect(returnedAt(graph, 0)).toEqual([]);
+    expect(returnedAt(graph, 0)).toEqual(['id', 'name']);
   });
 
-  it('builds an InsertChunked of one statement when the rows set the same columns, without DEFAULT in a row', () => {
+  it('builds an Insert of one statement when the rows set the same columns, without DEFAULT in a row', () => {
     const graph = createAllGraph(
       targetOf(users.state, contextWithoutDefault),
       [ada, grace],
@@ -44,12 +44,10 @@ describe('createAllGraph', () => {
       'rows',
     );
 
-    expect(printGraph(graph)).toBe(
-      ['n1 InsertChunked users (1 statement)', 'result: n1'].join('\n'),
-    );
+    expect(printGraph(graph)).toBe(['n1 Insert users 2 rows', 'result: n1'].join('\n'));
   });
 
-  it('builds an InsertChunked of the runs of rows that set the same columns, in their order', () => {
+  it('builds an Insert of a statement for each run of rows that set the same columns, in their order', () => {
     const graph = createAllGraph(
       targetOf(users.state, contextWithoutDefault),
       [ada, { id: 3, name: 'Edsger' }, grace],
@@ -57,9 +55,7 @@ describe('createAllGraph', () => {
       'rows',
     );
 
-    expect(printGraph(graph)).toBe(
-      ['n1 InsertChunked users (3 statements)', 'result: n1'].join('\n'),
-    );
+    expect(printGraph(graph)).toBe(['n1 Insert users (3 statements)', 'result: n1'].join('\n'));
   });
 
   it('asks the database to skip rows that collide with the conflict columns', () => {
@@ -70,13 +66,15 @@ describe('createAllGraph', () => {
     );
   });
 
-  it('adds a Find that reads the inserted rows with their includes, as the result', () => {
+  it('adds a FindByKeys that reads the inserted rows with their includes, as the result', () => {
     const graph = createAllGraph(targetWithIncludes, [ada, grace], undefined, 'rows');
 
     expect(printGraph(graph)).toBe(
-      ['n1 Insert users 2 rows', 'n2 Find users <- FilterData n1 (id->id)', 'result: n2'].join(
-        '\n',
-      ),
+      [
+        'n1 Insert users 2 rows',
+        'n2 FindByKeys users by (id) for createAll <- Rows n1',
+        'result: n2',
+      ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id']);
     expect(returnedAt(graph, 1)).toEqual(['id', 'name', 'posts']);
@@ -113,13 +111,13 @@ describe('upsertGraph', () => {
     );
   });
 
-  it('adds a Find that reads the upserted row with its includes, as the result', () => {
+  it('adds a FindByKeys that reads the upserted row by its conflict columns with its includes, as the result', () => {
     const graph = upsertGraph(targetWithIncludes, ada, { name: 'Ada L.' }, ['email']);
 
     expect(printGraph(graph)).toBe(
       [
         'n1 Insert users on conflict (email) do update',
-        'n2 Find users <- FilterData n1 (id->id)',
+        'n2 FindByKeys users by (email) for upsert <- Rows n1',
         'result: n2',
       ].join('\n'),
     );

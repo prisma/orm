@@ -298,6 +298,17 @@ export function consentDescription(
     : `${verb} ${kind} "${text}"`;
 }
 
+const DELETE_CASTS =
+  '--delete keeps the field and lets the database cast its values, which can change or lose some.';
+
+/** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
+function typeChangeNote(loss: PlannedDataLoss, canConvert: boolean): readonly string[] {
+  if (loss.loss !== 'typeChange') return [];
+  return loss.subject.kind === 'field' && canConvert
+    ? [`--convert writes a conversion for you to fill in; ${DELETE_CASTS}`]
+    : [DELETE_CASTS];
+}
+
 function lossText(
   subject: MigrationSubject,
   text: string,
@@ -315,10 +326,17 @@ function lossText(
       return `would lose enum value "${text}" from the data that holds it`;
     case 'valueObjectField':
       return `would lose the values of value object field "${text}"`;
-    case 'storage':
+    case 'storage': {
+      const named = originKnown
+        ? 'which no model of the origin contract stores'
+        : 'named by its storage name because the origin contract is unknown';
+      if (loss === 'typeChange') {
+        return `would change the type of "${text}", ${named}, and can change or lose its values`;
+      }
       return originKnown
-        ? `would lose the data in "${text}", which no model of the origin contract stores`
-        : `would lose the data in "${text}", named by its storage name because the origin contract is unknown; --delete loses that data`;
+        ? `would lose the data in "${text}", ${named}`
+        : `would lose the data in "${text}", ${named}; --delete loses that data`;
+    }
   }
 }
 
@@ -671,6 +689,7 @@ export function dataLossQuestion(
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
+    ...typeChangeNote(loss, contracts.canConvert),
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
     ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
