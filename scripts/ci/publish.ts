@@ -585,7 +585,7 @@ async function publish() {
     console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
     tag = args['--custom-dist-tag']
   }
-  const prismaTag = getPackageDistTag('prisma', tag)
+  const prismaTag = isSkipped('prisma') ? undefined : getPackageDistTag('prisma', tag)
 
   console.log({
     patchBranch,
@@ -794,7 +794,7 @@ async function publishPackages(
       const pkgDir = path.dirname(pkg.path)
 
       const newVersion = prismaVersion
-      const packageTag = getPackageDistTag(pkgName, tag)
+      const packageTag = isSkipped(pkgName) ? tag : getPackageDistTag(pkgName, tag)
 
       console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${packageTag}`)}`)
 
