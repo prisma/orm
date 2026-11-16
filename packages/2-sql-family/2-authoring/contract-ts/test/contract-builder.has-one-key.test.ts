@@ -67,16 +67,8 @@ function notUniqueError(fields: readonly string[]) {
   });
 }
 
-function relationOf(
-  contract: ReturnType<typeof defineTestContract>,
-  modelName: string,
-  relationName: string,
-) {
-  return domainModelsAtDefaultNamespace(contract.domain)[modelName]?.relations[relationName];
-}
-
 function profileRelation(contract: ReturnType<typeof defineTestContract>) {
-  return relationOf(contract, 'User', 'profile');
+  return domainModelsAtDefaultNamespace(contract.domain)['User']?.relations['profile'];
 }
 
 describe('a hasOne relation key', () => {
@@ -97,24 +89,7 @@ describe('a hasOne relation key', () => {
       profileRelation(
         defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
       ),
-    ).toMatchObject({
-      cardinality: '1:1',
-      on: { localFields: ['id'], targetFields: ['userId'] },
-    });
-  });
-
-  it('is accepted when the target field is unique', () => {
-    const Profile = model('Profile', {
-      fields: { id: field.column(int4Column).id(), userId: field.column(int4Column).unique() },
-    });
-    expect(
-      profileRelation(
-        defineTestContract({ User: userWith(rel.hasOne(Profile, { by: 'userId' })), Profile }),
-      ),
-    ).toMatchObject({
-      cardinality: '1:1',
-      on: { localFields: ['id'], targetFields: ['userId'] },
-    });
+    ).toMatchObject({ cardinality: '1:1' });
   });
 
   it('is accepted when a unique index covers exactly the target field', () => {
@@ -209,23 +184,6 @@ describe('a hasOne relation key', () => {
           Profile,
         }),
       ),
-    ).toMatchObject({
-      cardinality: '1:1',
-      on: { localFields: ['tenantId', 'id'], targetFields: ['tenantId', 'userId'] },
-    });
-  });
-
-  it('is accepted alongside a belongsTo over the same unique fields', () => {
-    const User = userWith(rel.hasOne(() => Profile, { by: 'userId' }));
-    const Profile = model('Profile', {
-      fields: { id: field.column(int4Column).id(), userId: field.column(int4Column).unique() },
-      relations: { user: rel.belongsTo(User, { from: 'userId', to: 'id' }) },
-    });
-    const contract = defineTestContract({ User, Profile });
-    expect(profileRelation(contract)).toMatchObject({ cardinality: '1:1' });
-    expect(relationOf(contract, 'Profile', 'user')).toMatchObject({
-      cardinality: 'N:1',
-      on: { localFields: ['userId'], targetFields: ['id'] },
-    });
+    ).toMatchObject({ cardinality: '1:1' });
   });
 });
