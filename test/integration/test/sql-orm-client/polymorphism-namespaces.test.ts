@@ -1,4 +1,3 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import postgres from '@internal/postgres/runtime';
 import { orm } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -10,17 +9,27 @@ import type { Contract } from './fixtures/polymorphism-namespaces/generated/cont
 import contractJson from './fixtures/polymorphism-namespaces/generated/contract.json' with {
   type: 'json',
 };
-import { timeouts, withPushedContractRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withPushedContractRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
-const context: ExecutionContext<Contract> = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy): ExecutionContext<Contract> {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
-function tasksOf(runtime: PgIntegrationRuntime) {
-  return orm({ runtime, context }).a.Task;
+function tasksOf(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return orm({ runtime, context: contextOf(strategy) }).a.Task;
 }
 
 const crash = { id: 1, title: 'Crash', type: 'bug', projectId: 1, severity: 'high' };
@@ -38,6 +47,7 @@ const roadmap = { id: 5, title: 'Roadmap', type: 'b-epic', projectId: 1, size: 8
 const vision = { id: 6, title: 'Vision', type: 'c-epic', projectId: null, size: 'large' };
 
 async function withTasks(
+  strategy: IncludeStrategy,
   fn: (
     runtime: PgIntegrationRuntime,
     tasks: ReturnType<typeof tasksOf>,
@@ -63,15 +73,16 @@ async function withTasks(
     await runtime.query('insert into b.epics (id, size) values (5, 8)');
     await runtime.query(`insert into c.epics (id, size) values (6, 'large')`);
     runtime.resetExecutions();
-    await fn(runtime, tasksOf(runtime), connectionString);
+    await fn(runtime, tasksOf(runtime, strategy), connectionString);
   });
 }
 
-describe('integration/polymorphism-namespaces', () => {
+describe.each(includeStrategies)('integration/polymorphism-namespaces (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'default projection: the base collection reads every variant from the table in its own namespace',
     async () => {
-      await withTasks(async (runtime, tasks) => {
+      await withTasks(strategy, async (runtime, tasks) => {
         const rows = await tasks.orderBy((task) => task.id.asc()).all();
 
         expect(rows).toEqual([crash, search, dishes, laundry, roadmap, vision]);
@@ -90,7 +101,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: variant() reads each variant with its own fields',
     async () => {
-      await withTasks(async (_runtime, tasks) => {
+      await withTasks(strategy, async (_runtime, tasks) => {
         expect({
           bug: await tasks.variant('bug').all(),
           feature: await tasks.variant('feature').all(),
@@ -115,7 +126,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: where() and orderBy() use a field and a relation of a variant in another namespace',
     async () => {
-      await withTasks(async (_runtime, tasks) => {
+      await withTasks(strategy, async (_runtime, tasks) => {
         expect(
           await tasks
             .variant('chore')
@@ -137,7 +148,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'select() reads a field two variants in other namespaces declare, each from its own table',
     async () => {
-      await withTasks(async (_runtime, tasks) => {
+      await withTasks(strategy, async (_runtime, tasks) => {
         const untyped = tasks as unknown as { select(...fields: string[]): typeof tasks };
         expect(
           await untyped
@@ -160,13 +171,13 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: include() of the base reads variants in other namespaces',
     async () => {
-      await withTasks(async (runtime) => {
-        expect(
-          await orm({ runtime, context })
-            .a.Project.select('name')
-            .include('tasks', (tasks) => tasks.orderBy((task) => task.id.asc()))
-            .all(),
-        ).toEqual([{ name: 'Apollo', tasks: [crash, search, roadmap] }]);
+      await withTasks(strategy, async (runtime) => {
+        const rows = await orm({ runtime, context })
+          .a.Project.select('name')
+          .include('tasks', (tasks) => tasks.orderBy((task) => task.id.asc()))
+          .all();
+        expectPerRelationStatements(runtime, strategy, 2);
+        expect(rows).toEqual([{ name: 'Apollo', tasks: [crash, search, roadmap] }]);
       });
     },
     timeouts.spinUpPpgDev,
@@ -175,14 +186,14 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: include() reads a relation a variant in another namespace declares',
     async () => {
-      await withTasks(async (_runtime, tasks) => {
-        expect(
-          await tasks
-            .variant('chore')
-            .orderBy((task) => task.id.asc())
-            .include('owner', (owner) => owner.select('name'))
-            .all(),
-        ).toEqual([
+      await withTasks(strategy, async (runtime, tasks) => {
+        const rows = await tasks
+          .variant('chore')
+          .orderBy((task) => task.id.asc())
+          .include('owner', (owner) => owner.select('name'))
+          .all();
+        expectPerRelationStatements(runtime, strategy, 2);
+        expect(rows).toEqual([
           { ...dishes, owner: { name: 'Ada' } },
           { ...laundry, owner: null },
         ]);
@@ -194,7 +205,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'aggregate() reduces over rows filtered by a field of a variant in another namespace',
     async () => {
-      await withTasks(async (_runtime, tasks) => {
+      await withTasks(strategy, async (_runtime, tasks) => {
         expect(
           await tasks
             .variant('chore')
@@ -209,7 +220,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: a prepared query filters by a field of a variant in another namespace',
     async () => {
-      await withTasks(async (_runtime, _tasks, connectionString) => {
+      await withTasks(strategy, async (_runtime, _tasks, connectionString) => {
         const client = new Client({ connectionString });
         await client.connect();
         const db = postgres({ contract, pg: client, verifyMarker: false });
@@ -235,7 +246,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: create() and createAll() insert the variant row into the table in its own namespace',
     async () => {
-      await withTasks(async (runtime, tasks) => {
+      await withTasks(strategy, async (runtime, tasks) => {
         const ironing = {
           id: 7,
           title: 'Ironing',
@@ -280,7 +291,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'default projection: update() and delete() change one row of a variant in another namespace',
     async () => {
-      await withTasks(async (runtime, tasks) => {
+      await withTasks(strategy, async (runtime, tasks) => {
         await tasks.variant('chore').where({ id: 3 }).update({ title: 'Dishes again' });
         await tasks.variant('b-epic').where({ id: 5 }).delete();
 
@@ -305,7 +316,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'updateAndCount() and deleteAndCount() filter by a field of a variant in another namespace',
     async () => {
-      await withTasks(async (runtime, tasks) => {
+      await withTasks(strategy, async (runtime, tasks) => {
         expect(
           await tasks
             .variant('chore')
@@ -335,7 +346,7 @@ describe('integration/polymorphism-namespaces', () => {
   it(
     'whereUnique() refuses the inherited key on a variant model whose base table has the same name in another namespace',
     async () => {
-      await withTasks(async (runtime) => {
+      await withTasks(strategy, async (runtime) => {
         const db = orm({ runtime, context });
         const incompleteKey = expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' });
         expect(() => db.a.Feature.whereUnique({ id: 2 })).toThrow(incompleteKey);

@@ -13,8 +13,12 @@
 // correlated path regardless of the flag.
 
 import { describe, expect, it } from 'vitest';
-import { isSelectAst } from './helpers';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { includeStrategies, isSelectAst } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import {
   CORRELATED_CAPABILITIES,
   collectionWithCapabilities,
@@ -22,7 +26,7 @@ import {
 } from './nested-includes-helpers';
 import { type PgIntegrationRuntime, seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
-describe('integration/nested-includes/strategy', () => {
+describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (strategy) => {
   // ===========================================================================
   // Correctness: the correlated builder must yield the canonical result
   // tree. This is the strongest guarantee we offer downstream consumers.
@@ -99,7 +103,13 @@ describe('integration/nested-includes/strategy', () => {
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedBlog(runtime);
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
+          runtime.resetExecutions();
           const rows = await users
             .orderBy((u) => u.id.asc())
             .include('posts', (posts) =>
@@ -108,6 +118,7 @@ describe('integration/nested-includes/strategy', () => {
                 .include('comments', (c) => c.orderBy((cc) => cc.id.asc())),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
           expect(rows).toEqual(expectedRows);
         });
       },
@@ -123,7 +134,7 @@ describe('integration/nested-includes/strategy', () => {
   // ===========================================================================
 
   describe('lateral capability flag is inert for include codegen', () => {
-    it(
+    it.skipIf(strategy === 'query')(
       'a lateral-capable contract resolves a depth-2 include in one execution with no lateral join',
       async () => {
         await withCollectionRuntime(async (runtime) => {
@@ -131,7 +142,7 @@ describe('integration/nested-includes/strategy', () => {
           await seedPosts(runtime, [{ id: 10, title: 'A1', userId: 1, views: 1 }]);
           await seedComments(runtime, [{ id: 100, body: 'c', postId: 10 }]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
           await users.include('posts', (posts) => posts.include('comments')).all();
 
@@ -173,10 +184,15 @@ describe('integration/nested-includes/strategy', () => {
           ]);
           await seedComments(runtime, [{ id: 100, body: 'c', postId: 10 }]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           await users.include('posts', (posts) => posts.include('comments')).all();
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,
@@ -193,14 +209,19 @@ describe('integration/nested-includes/strategy', () => {
           await seedPosts(runtime, [{ id: 10, title: 'P', userId: 2, views: 1 }]);
           await seedComments(runtime, [{ id: 100, body: 'c', postId: 10 }]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           await users
             .include('invitedUsers', (inv) =>
               inv.include('posts', (posts) => posts.include('comments')),
             )
             .all();
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
         });
       },
       timeouts.spinUpPpgDev,
@@ -220,10 +241,15 @@ describe('integration/nested-includes/strategy', () => {
             { id: 3, name: 'Grandchild', email: 'gc@example.com', invitedById: 2 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           await users.include('invitedUsers', (inv) => inv.include('invitedUsers')).all();
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,
@@ -252,7 +278,12 @@ describe('integration/nested-includes/strategy', () => {
           // whose FROM cross-joins per-branch derived tables and projects
           // json_build_object over them. The whole tree rolls up into a
           // single SQL execution.
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .include('posts', (p) =>
@@ -279,7 +310,7 @@ describe('integration/nested-includes/strategy', () => {
               },
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,
@@ -301,7 +332,12 @@ describe('integration/nested-includes/strategy', () => {
             { id: 101, body: 'c2', postId: 10 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) => posts.include('comments', (c) => c.count()))
@@ -317,7 +353,7 @@ describe('integration/nested-includes/strategy', () => {
               posts: [{ id: 10, title: 'A', userId: 1, views: 1, embedding: null, comments: 2 }],
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,
@@ -337,7 +373,12 @@ describe('integration/nested-includes/strategy', () => {
             { id: 12, title: 'C', userId: 2, views: 3 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .orderBy((u) => u.id.asc())
@@ -362,7 +403,7 @@ describe('integration/nested-includes/strategy', () => {
               posts: 1,
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
         });
       },
       timeouts.spinUpPpgDev,
@@ -380,7 +421,12 @@ describe('integration/nested-includes/strategy', () => {
             { id: 13, title: 'D', userId: 1, views: 400 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) =>
@@ -403,7 +449,7 @@ describe('integration/nested-includes/strategy', () => {
               posts: 2,
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
         });
       },
       timeouts.spinUpPpgDev,
@@ -422,7 +468,12 @@ describe('integration/nested-includes/strategy', () => {
             { id: 14, title: 'C', userId: 1, views: 400 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) =>
@@ -445,7 +496,7 @@ describe('integration/nested-includes/strategy', () => {
               posts: 700,
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
         });
       },
       timeouts.spinUpPpgDev,
@@ -463,7 +514,12 @@ describe('integration/nested-includes/strategy', () => {
             { id: 13, title: 'D', userId: 1, views: 4 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) =>
@@ -490,7 +546,7 @@ describe('integration/nested-includes/strategy', () => {
               },
             },
           ]);
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,
@@ -523,7 +579,12 @@ describe('integration/nested-includes/strategy', () => {
           ]);
           await seedComments(runtime, [{ id: 100, body: 'c', postId: 10 }]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
           await users
             .include('posts', (posts) =>
@@ -535,7 +596,7 @@ describe('integration/nested-includes/strategy', () => {
             )
             .orderBy((u) => u.id.asc())
             .all();
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
         });
       },
       timeouts.spinUpPpgDev,

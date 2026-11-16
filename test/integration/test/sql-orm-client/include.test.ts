@@ -12,7 +12,7 @@ import { getTestContext, getTestContract, includeStrategies, isSelectAst } from 
 import {
   createPostsCollection,
   createUsersCollection,
-  expectStatementsPerInclude,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -68,7 +68,7 @@ type NumericPostField = import('@internal/sql-orm-client').NumericFieldNames<
   'Post'
 >;
 
-describe('integration/include', () => {
+describe.each(includeStrategies)('integration/include (%s)', (strategy) => {
   it(
     'depth-1 include against an emitted contract fires a single SQL execution (regression guard for namespaced capability lookup)',
     async () => {
@@ -78,7 +78,7 @@ describe('integration/include', () => {
       // depth-1 include must resolve in one SQL execution, not two,
       // against a real driver.
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [{ id: 10, title: 'Post A', userId: 1, views: 100 }]);
@@ -97,72 +97,70 @@ describe('integration/include', () => {
           },
         ]);
         // The point of the test: 1 execution, not N+1.
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
       });
     },
     timeouts.spinUpPpgDev,
   );
 
-  describe.each(includeStrategies)('with the %s include strategy', (strategy) => {
-    it(
-      'include() stitches one-to-many and one-to-one relations from real rows',
-      async () => {
-        await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime, strategy);
+  it(
+    'include() stitches one-to-many and one-to-one relations from real rows',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime, strategy);
 
-          await seedUsers(runtime, [
-            { id: 1, name: 'Alice', email: 'alice@example.com' },
-            { id: 2, name: 'Bob', email: 'bob@example.com' },
-          ]);
-          await seedPosts(runtime, [
-            { id: 10, title: 'Post A', userId: 1, views: 100 },
-            { id: 11, title: 'Post B', userId: 1, views: 200 },
-            { id: 12, title: 'Post C', userId: 2, views: 300 },
-          ]);
-          await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Primary profile' }]);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'Post A', userId: 1, views: 100 },
+          { id: 11, title: 'Post B', userId: 1, views: 200 },
+          { id: 12, title: 'Post C', userId: 2, views: 300 },
+        ]);
+        await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Primary profile' }]);
 
-          runtime.resetExecutions();
-          const rows = await users
-            .orderBy((user) => user.id.asc())
-            .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
-            .include('profile')
-            .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+        runtime.resetExecutions();
+        const rows = await users
+          .orderBy((user) => user.id.asc())
+          .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
+          .include('profile')
+          .all();
+        expectPerRelationStatements(runtime, strategy, 3);
 
-          expect(rows).toEqual([
-            {
-              id: 1,
-              name: 'Alice',
-              email: 'alice@example.com',
-              invitedById: null,
-              address: null,
-              posts: [
-                { id: 10, title: 'Post A', userId: 1, views: 100, embedding: null },
-                { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
-              ],
-              profile: { id: 100, userId: 1, bio: 'Primary profile' },
-            },
-            {
-              id: 2,
-              name: 'Bob',
-              email: 'bob@example.com',
-              invitedById: null,
-              address: null,
-              posts: [{ id: 12, title: 'Post C', userId: 2, views: 300, embedding: null }],
-              profile: null,
-            },
-          ]);
-        });
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
+        expect(rows).toEqual([
+          {
+            id: 1,
+            name: 'Alice',
+            email: 'alice@example.com',
+            invitedById: null,
+            address: null,
+            posts: [
+              { id: 10, title: 'Post A', userId: 1, views: 100, embedding: null },
+              { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
+            ],
+            profile: { id: 100, userId: 1, bio: 'Primary profile' },
+          },
+          {
+            id: 2,
+            name: 'Bob',
+            email: 'bob@example.com',
+            invitedById: null,
+            address: null,
+            posts: [{ id: 12, title: 'Post C', userId: 2, views: 300, embedding: null }],
+            profile: null,
+          },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 
   it(
     'include() supports scalar count() on to-many relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const posts = createPostsCollection(runtime);
+        const posts = createPostsCollection(runtime, strategy);
 
         await seedPosts(runtime, [
           { id: 10, title: 'Post A', userId: 1, views: 100 },
@@ -189,7 +187,7 @@ describe('integration/include', () => {
         // Scalar `count()` lowers to a correlated subquery `(SELECT
         // json_build_object('value', count(*)) ...)` — the whole
         // parent + counts roll up into one SQL execution.
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
       });
     },
     timeouts.spinUpPpgDev,
@@ -205,7 +203,7 @@ describe('integration/include', () => {
     'pagination composes through to scalar aggregate scope',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [
@@ -239,7 +237,7 @@ describe('integration/include', () => {
             posts: 2,
           },
         ]);
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
       });
     },
     timeouts.spinUpPpgDev,
@@ -256,7 +254,7 @@ describe('integration/include', () => {
     'distinct(cols).orderBy().limit().sum() aggregates the ordered top-N deduped rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         // Two pairs of posts share a title; dedup by title picks the
@@ -297,7 +295,7 @@ describe('integration/include', () => {
             posts: 700,
           },
         ]);
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
       });
     },
     timeouts.spinUpPpgDev,
@@ -307,7 +305,7 @@ describe('integration/include', () => {
     'include() supports scalar sum() on to-many relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -322,6 +320,7 @@ describe('integration/include', () => {
 
         runtime.resetExecutions();
         const numericField: NumericPostField = 'views';
+        runtime.resetExecutions();
         const rows = await users
           .orderBy((user) => user.id.asc())
           .include('posts', (posts) => posts.sum(numericField))
@@ -355,7 +354,7 @@ describe('integration/include', () => {
         ]);
         // Same single-execution roll-up as count(): scalar sum/avg/
         // min/max emit through the same lateral path.
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 2);
       });
     },
     timeouts.spinUpPpgDev,
@@ -365,7 +364,7 @@ describe('integration/include', () => {
     'include() supports scalar avg(), min(), and max() on to-many relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -380,6 +379,7 @@ describe('integration/include', () => {
 
         runtime.resetExecutions();
         const numericField: NumericPostField = 'views';
+        runtime.resetExecutions();
         const rows = await users
           .orderBy((user) => user.id.asc())
           .include('posts', (posts) =>
@@ -420,7 +420,7 @@ describe('integration/include', () => {
         // All three scalar branches now pack into a single correlated
         // subquery (json_build_object packing three sub-envelopes); the
         // parent SELECT rolls up everything into one round-trip.
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
       });
     },
     timeouts.spinUpPpgDev,
@@ -435,7 +435,7 @@ describe('integration/include', () => {
     'include().combine({ recent: limit(N), count: count() }) resolves in a single execution',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -491,7 +491,7 @@ describe('integration/include', () => {
             },
           },
         ]);
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
       });
     },
     timeouts.spinUpPpgDev,
@@ -501,7 +501,7 @@ describe('integration/include', () => {
     'include() combine() evaluates branches independently',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -552,12 +552,101 @@ describe('integration/include', () => {
           },
         ]);
         // Three branches (two row + one scalar) pack into one correlated subquery.
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
       });
     },
     timeouts.spinUpPpgDev,
   );
 
+  it(
+    'include() supports nested 2-level includes (users -> posts -> comments)',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime, strategy);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'Post A', userId: 1, views: 100 },
+          { id: 11, title: 'Post B', userId: 1, views: 200 },
+          { id: 12, title: 'Post C', userId: 2, views: 300 },
+        ]);
+        await seedComments(runtime, [
+          { id: 100, body: 'Comment A', postId: 10 },
+          { id: 101, body: 'Comment B', postId: 10 },
+          { id: 102, body: 'Comment C', postId: 11 },
+        ]);
+
+        runtime.resetExecutions();
+        const rows = await users
+          .orderBy((user) => user.id.asc())
+          .include('posts', (posts) =>
+            posts
+              .orderBy((post) => post.id.asc())
+              .include('comments', (comments) => comments.orderBy((c) => c.id.asc())),
+          )
+          .all();
+        expectPerRelationStatements(runtime, strategy, 3);
+
+        expect(rows).toEqual([
+          {
+            id: 1,
+            name: 'Alice',
+            email: 'alice@example.com',
+            invitedById: null,
+            address: null,
+            posts: [
+              {
+                id: 10,
+                title: 'Post A',
+                userId: 1,
+                views: 100,
+                embedding: null,
+                comments: [
+                  { id: 100, body: 'Comment A', postId: 10 },
+                  { id: 101, body: 'Comment B', postId: 10 },
+                ],
+              },
+              {
+                id: 11,
+                title: 'Post B',
+                userId: 1,
+                views: 200,
+                embedding: null,
+                comments: [{ id: 102, body: 'Comment C', postId: 11 }],
+              },
+            ],
+          },
+          {
+            id: 2,
+            name: 'Bob',
+            email: 'bob@example.com',
+            invitedById: null,
+            address: null,
+            posts: [
+              {
+                id: 12,
+                title: 'Post C',
+                userId: 2,
+                views: 300,
+                embedding: null,
+                comments: [],
+              },
+            ],
+          },
+        ]);
+        // Depth-2 on the default postgres test contract must collapse to
+        // a single SQL execution via nested correlated subqueries.
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('integration/include, one-query include', () => {
   it(
     'a lateral-capable contract still lowers an include to a correlated subquery',
     async () => {
@@ -853,92 +942,6 @@ describe('integration/include', () => {
 
         const sql = runtime.executions[0]?.sql;
         expect(sql).toContain('"users_2"."invited_by_id" = "users"."id"');
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'include() supports nested 2-level includes (users -> posts -> comments)',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com' },
-        ]);
-        await seedPosts(runtime, [
-          { id: 10, title: 'Post A', userId: 1, views: 100 },
-          { id: 11, title: 'Post B', userId: 1, views: 200 },
-          { id: 12, title: 'Post C', userId: 2, views: 300 },
-        ]);
-        await seedComments(runtime, [
-          { id: 100, body: 'Comment A', postId: 10 },
-          { id: 101, body: 'Comment B', postId: 10 },
-          { id: 102, body: 'Comment C', postId: 11 },
-        ]);
-
-        runtime.resetExecutions();
-        const rows = await users
-          .orderBy((user) => user.id.asc())
-          .include('posts', (posts) =>
-            posts
-              .orderBy((post) => post.id.asc())
-              .include('comments', (comments) => comments.orderBy((c) => c.id.asc())),
-          )
-          .all();
-
-        expect(rows).toEqual([
-          {
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            invitedById: null,
-            address: null,
-            posts: [
-              {
-                id: 10,
-                title: 'Post A',
-                userId: 1,
-                views: 100,
-                embedding: null,
-                comments: [
-                  { id: 100, body: 'Comment A', postId: 10 },
-                  { id: 101, body: 'Comment B', postId: 10 },
-                ],
-              },
-              {
-                id: 11,
-                title: 'Post B',
-                userId: 1,
-                views: 200,
-                embedding: null,
-                comments: [{ id: 102, body: 'Comment C', postId: 11 }],
-              },
-            ],
-          },
-          {
-            id: 2,
-            name: 'Bob',
-            email: 'bob@example.com',
-            invitedById: null,
-            address: null,
-            posts: [
-              {
-                id: 12,
-                title: 'Post C',
-                userId: 2,
-                views: 300,
-                embedding: null,
-                comments: [],
-              },
-            ],
-          },
-        ]);
-        // Depth-2 on the default postgres test contract must collapse to
-        // a single SQL execution via nested correlated subqueries.
-        expect(runtime.executions).toHaveLength(1);
       });
     },
     timeouts.spinUpPpgDev,

@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { includeStrategies } from './helpers';
 import {
   createUsersCollection,
-  expectStatementsPerInclude,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -71,7 +71,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('comments', (comments) => comments.orderBy((c) => c.id.asc())),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -151,7 +151,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
             .orderBy((user) => user.id.asc())
             .include('posts', (posts) => posts.orderBy((post) => post.id.asc()).include('author'))
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -240,7 +240,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
             .orderBy((user) => user.id.asc())
             .include('profile', (profile) => profile.include('user'))
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -303,7 +303,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('invitedUsers', (deeper) => deeper.orderBy((u) => u.id.asc())),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -370,7 +370,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
             .orderBy((user) => user.id.asc())
             .include('invitedBy', (inviter) => inviter.include('invitedBy'))
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -450,7 +450,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('posts', (p) => p.orderBy((post) => post.id.asc())),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -526,7 +526,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
             .include('posts', (posts) => posts.include('comments'))
             .include('profile')
             .all();
-          expectStatementsPerInclude(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 4);
 
           expect(rows).toEqual([
             {
@@ -577,7 +577,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('author'),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 4);
 
           expect(rows).toEqual([
             {
@@ -652,7 +652,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('author'),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 4);
 
           expect(rows).toEqual([
             {
@@ -754,7 +754,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 .include('author', (author) => author.include('profile')),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 4);
 
           expect(rows).toEqual([
             {
@@ -841,7 +841,7 @@ describe.each(includeStrategies)('integration/nested-includes (%s)', (strategy) 
                 ),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 4);
 
           expect(rows).toEqual([
             {

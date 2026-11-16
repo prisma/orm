@@ -4,7 +4,6 @@ import {
   timestampTemporalColumn,
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   type CodecCallContext,
   CodecDescriptorImpl,
@@ -25,7 +24,12 @@ import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgr
 import { pgText } from '@internal/target-postgres/data-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 const TEST_INCLUDED_TEXT_CODEC_ID = 'test/included-text@1' as const;
@@ -124,14 +128,16 @@ const contract = defineContract({
   codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
   models: { Project, Branch },
 });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [includedTextExtension],
-  }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [includedTextExtension],
+    }),
+  });
+}
 
 async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('drop table if exists codec_branches');
@@ -153,7 +159,8 @@ async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
   `);
 }
 
-describe('integration/include codecs', () => {
+describe.each(includeStrategies)('integration/include codecs (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'reads JSON values with codec.fromWire',
     async () => {
@@ -199,12 +206,14 @@ describe('integration/include codecs', () => {
           const branches = new Collection({ runtime, context }, 'Branch', {
             namespaceId: 'public',
           });
+          runtime.resetExecutions();
           const rows = await branches
             .select('id')
             .include('project', (project) =>
               project.select('wrappedDek', 'deletedAt', 'deletedAtTz', 'customText'),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {
@@ -224,7 +233,10 @@ describe('integration/include codecs', () => {
     },
     timeouts.spinUpPpgDev,
   );
+});
 
+describe('integration/include codecs, one-query include', () => {
+  const context = contextOf('join');
   it(
     'omits raw database values from include decode errors',
     async () => {

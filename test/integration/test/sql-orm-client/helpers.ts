@@ -156,6 +156,38 @@ export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionCon
   return testContexts[strategy];
 }
 
+const includeCapabilityKeys = [
+  'jsonAgg',
+  'outerReferencesInDerivedTables',
+  'jsonAggWithoutTruncation',
+] as const;
+
+/**
+ * The shared context of `strategy` around a contract a test built itself. The contract keeps its own capabilities, except the three that choose the include strategy, which come from `postgresAdapterFor(strategy)` as the runtime would merge them.
+ */
+export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  strategy: IncludeStrategy,
+): ExecutionContext<TContract> {
+  const reported =
+    (postgresAdapterFor(strategy).capabilities as Record<string, Record<string, boolean>>)['sql'] ??
+    {};
+  const capabilities = contract.capabilities as Record<string, Record<string, boolean>>;
+  return {
+    ...getTestContext(strategy),
+    contract: {
+      ...contract,
+      capabilities: {
+        ...capabilities,
+        sql: {
+          ...capabilities['sql'],
+          ...Object.fromEntries(includeCapabilityKeys.map((key) => [key, reported[key] === true])),
+        },
+      },
+    },
+  } as unknown as ExecutionContext<TContract>;
+}
+
 export type { PolyContract };
 
 export function deserializePolyContract(json: unknown = polyContractJson): PolyContract {
@@ -175,17 +207,26 @@ export function getExecutionDefaultedTagsContract(): ExecutionDefaultedTagsContr
 
 const polyTestContract = deserializePolyContract();
 
-const polyTestContext: ExecutionContext<PolyContract> = createExecutionContext({
-  contract: polyTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+function polyTestContextFor(strategy: IncludeStrategy): ExecutionContext<PolyContract> {
+  return createExecutionContext({
+    contract: polyTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
 
-export function getPolyTestContext(): ExecutionContext<PolyContract> {
-  return polyTestContext;
+const polyTestContexts: Record<IncludeStrategy, ExecutionContext<PolyContract>> = {
+  join: polyTestContextFor('join'),
+  query: polyTestContextFor('query'),
+};
+
+export function getPolyTestContext(
+  strategy: IncludeStrategy = 'join',
+): ExecutionContext<PolyContract> {
+  return polyTestContexts[strategy];
 }
 
 export interface MockExecution {

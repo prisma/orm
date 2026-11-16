@@ -1,13 +1,17 @@
 import { Collection } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
-import { getPolyTestContext } from './helpers';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { getPolyTestContext, type IncludeStrategy, includeStrategies } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
-const polyContext = getPolyTestContext();
-
-function tasksOf(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: polyContext }, 'Task', { namespaceId: 'public' });
+function tasksOf(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: getPolyTestContext(strategy) }, 'Task', {
+    namespaceId: 'public',
+  });
 }
 
 async function setupVariantAssigneeSchema(runtime: PgIntegrationRuntime): Promise<void> {
@@ -57,68 +61,75 @@ async function setupVariantAssigneeSchema(runtime: PgIntegrationRuntime): Promis
   `);
 }
 
-describe('integration/polymorphism-variant-include-relationships', () => {
-  it(
-    'an STI Bug includes its variant-declared assignee from the tasks table',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupVariantAssigneeSchema(runtime);
+describe.each(includeStrategies)(
+  'integration/polymorphism-variant-include-relationships (%s)',
+  (strategy) => {
+    it(
+      'an STI Bug includes its variant-declared assignee from the tasks table',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupVariantAssigneeSchema(runtime);
 
-        const rows = await tasksOf(runtime)
-          .variant('bug')
-          .select('id', 'title', 'type')
-          .orderBy((task) => task.id.asc())
-          .include('assignee', (person) => person.select('id', 'name'))
-          .all();
+          runtime.resetExecutions();
+          const rows = await tasksOf(runtime, strategy)
+            .variant('bug')
+            .select('id', 'title', 'type')
+            .orderBy((task) => task.id.asc())
+            .include('assignee', (person) => person.select('id', 'name'))
+            .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          {
-            id: 1,
-            title: 'Crash',
-            type: 'bug',
-            assignee: { id: 101, name: 'Ada' },
-          },
-          {
-            id: 2,
-            title: 'Layout glitch',
-            type: 'bug',
-            assignee: null,
-          },
-        ]);
-      }, polyContext.contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
+          expect(rows).toEqual([
+            {
+              id: 1,
+              title: 'Crash',
+              type: 'bug',
+              assignee: { id: 101, name: 'Ada' },
+            },
+            {
+              id: 2,
+              title: 'Layout glitch',
+              type: 'bug',
+              assignee: null,
+            },
+          ]);
+        }, getPolyTestContext().contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-  it(
-    'an MTI Feature includes its variant-declared assignee from the features table',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupVariantAssigneeSchema(runtime);
+    it(
+      'an MTI Feature includes its variant-declared assignee from the features table',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupVariantAssigneeSchema(runtime);
 
-        const rows = await tasksOf(runtime)
-          .variant('feature')
-          .select('id', 'title', 'type')
-          .orderBy((task) => task.id.asc())
-          .include('assignee', (person) => person.select('id', 'name'))
-          .all();
+          runtime.resetExecutions();
+          const rows = await tasksOf(runtime, strategy)
+            .variant('feature')
+            .select('id', 'title', 'type')
+            .orderBy((task) => task.id.asc())
+            .include('assignee', (person) => person.select('id', 'name'))
+            .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          {
-            id: 3,
-            title: 'Dark mode',
-            type: 'feature',
-            assignee: { id: 102, name: 'Grace' },
-          },
-          {
-            id: 4,
-            title: 'Audit log',
-            type: 'feature',
-            assignee: null,
-          },
-        ]);
-      }, polyContext.contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+          expect(rows).toEqual([
+            {
+              id: 3,
+              title: 'Dark mode',
+              type: 'feature',
+              assignee: { id: 102, name: 'Grace' },
+            },
+            {
+              id: 4,
+              title: 'Audit log',
+              type: 'feature',
+              assignee: null,
+            },
+          ]);
+        }, getPolyTestContext().contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

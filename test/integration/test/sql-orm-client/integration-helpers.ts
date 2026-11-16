@@ -6,13 +6,13 @@ import { APP_SPACE_ID, createControlStack } from '@internal/framework-components
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { SqlMiddleware, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withDevDatabase } from '@repo/test-utils';
 import { afterAll, expect } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
 import {
+  contextFor,
   getTestContext,
   getTestContract,
   type IncludeStrategy,
@@ -63,20 +63,21 @@ export function createUsersCollection(
   });
 }
 
-/** Under `'query'`, a read with includes sends the parent statement and at least one statement per include. */
-export function expectStatementsPerInclude(
+/** Under `'query'`, a read with includes sends the parent statement and one statement per include and level with parent rows: `statements` in all. */
+export function expectPerRelationStatements(
   runtime: PgIntegrationRuntime,
   strategy: IncludeStrategy,
-  includes: number,
+  statements: number,
 ): void {
   if (strategy === 'query') {
-    expect(runtime.executions.length).toBeGreaterThanOrEqual(1 + includes);
+    expect(runtime.executions).toHaveLength(statements);
   }
 }
 
 export function createReturningUsersCollectionWithout(
   runtime: PgIntegrationRuntime,
   capabilityKeys: readonly string[],
+  strategy: IncludeStrategy = 'join',
 ) {
   const base = withReturningCapability(getTestContract());
   const capabilities: Record<string, Record<string, unknown>> = {};
@@ -87,8 +88,7 @@ export function createReturningUsersCollectionWithout(
       ),
     );
   }
-  const contract = { ...base, capabilities } as TestContract;
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+  const context = contextFor({ ...base, capabilities } as TestContract, strategy);
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
@@ -103,21 +103,27 @@ export function createPostsCollection(
 
 // Shallow spread is intentional — withReturningCapability only adds capabilities
 // without changing codec structure, so codecs/operations registries remain valid.
-export function createReturningUsersCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningUsersCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
-export function createReturningPostsCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningPostsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
 }
 
-export function createReturningTagsCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningTagsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'Tag', { namespaceId: 'public' });
 }
 

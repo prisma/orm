@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { includeStrategies } from './helpers';
 import {
   createUsersCollection,
-  expectStatementsPerInclude,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -233,7 +233,7 @@ describe('integration/self-relations', () => {
               invitedUsers.orderBy((invitedUser) => invitedUser.id.asc()),
             )
             .all();
-          expectStatementsPerInclude(runtime, strategy, 1);
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {
@@ -296,7 +296,7 @@ describe('integration/self-relations', () => {
             .orderBy((user) => user.id.asc())
             .include('invitedBy')
             .all();
-          expectStatementsPerInclude(runtime, strategy, 1);
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {
@@ -359,7 +359,7 @@ describe('integration/self-relations', () => {
             .include('invitedUsers', (invitedUsers) => invitedUsers.select('id'))
             .include('invitedBy', (invitedBy) => invitedBy.select('id'))
             .all();
-          expectStatementsPerInclude(runtime, strategy, 2);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             { id: 1, invitedUsers: [{ id: 2 }], invitedBy: null },

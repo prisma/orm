@@ -6,8 +6,7 @@
 
 import type { Contract } from '@internal/contract/types';
 import { Collection } from '@internal/sql-orm-client';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { getTestContext, getTestContract, type TestContract } from './helpers';
+import { contextFor, getTestContract, type IncludeStrategy, type TestContract } from './helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 type SoleNamespaceModels<T extends Contract> =
@@ -27,10 +26,9 @@ export function collectionWithCapabilities<
   runtime: PgIntegrationRuntime,
   modelName: ModelName,
   capabilities: Record<string, Record<string, boolean>>,
+  strategy: IncludeStrategy = 'join',
 ): Collection<TestContract, ModelName & string> {
-  const base = getTestContract();
-  const contract = { ...base, capabilities } as TestContract;
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+  const context = contextFor({ ...getTestContract(), capabilities } as TestContract, strategy);
   return new Collection({ runtime, context }, modelName as ModelName & string, {
     namespaceId: 'public',
   });
