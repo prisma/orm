@@ -40,7 +40,7 @@ import {
   storedPlacesOf,
   type UnlistedPlace,
 } from './mongo-stored-places';
-import { RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
+import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
 import { jsonPathText } from './stored-key-path';
 
 /** A rewrite of one stored value of an enum in one place, with the enum value and the statement it carries out. */
@@ -266,15 +266,6 @@ function valueExpression(value: StoredValue, bsonTypes: readonly string[]): Json
   if (bsonTypes.includes('long')) return { $toLong: value };
   if (bsonTypes.includes('decimal')) return { $toDecimal: String(value) };
   return value;
-}
-
-/** A call as an edit names it inside a sentence: on one line, without trailing commas. */
-function oneLine(call: ReplaceStoredValueCall | RemoveStoredValueCall): string {
-  return call
-    .renderTypeScript()
-    .replace(/\s*\n\s*/g, ' ')
-    .replace(/,\s*([}\]])/g, ' $1')
-    .replace(/\(\s+/g, '(');
 }
 
 function enumValueText(contract: ContractWithDomain, value: EnumValueCoordinate): string {
@@ -558,7 +549,10 @@ function planEnum(
         statement: undefined,
         keepDataEdit:
           keepsDataBy === 'edit' && change.to !== undefined
-            ? { remove: oneLine(call), replaceWith: oneLine(replacementCall(change.to)) }
+            ? {
+                remove: callInSentence(call),
+                replaceWith: callInSentence(replacementCall(change.to)),
+              }
             : undefined,
         keepDataAdvice: keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, change) : undefined,
       });

@@ -79,6 +79,10 @@ export type MongoFieldRewriteMeta =
       readonly path?: string;
       /** The value removed. */
       readonly value: string | number | boolean;
+      /** Whether the place must hold a value, so a check stops the removal while a document holds it there. */
+      readonly required?: boolean;
+      /** The documents the removal selects, when it selects only some. */
+      readonly filter?: Readonly<Record<string, unknown>>;
       /** The enum value whose stored value is removed, which a failed check names. */
       readonly enumValue?: {
         readonly namespaceId?: string;

@@ -369,6 +369,12 @@ describe('MongoMigrationRunner, removeStoredValue', () => {
             value: 'archived',
             rows: 2,
             operationIndex: 0,
+            keepDataEdit: {
+              remove:
+                'removeStoredValue({ collection: "users", field: "profile", path: "$.status", value: "archived", required: true, enumValue: { enum: "Status", member: "ARCHIVED" } })',
+              replaceWith:
+                'replaceStoredValue({ collection: "users", field: "profile", path: "$.status", from: "archived", to: "<stored value>" })',
+            },
           },
         ],
         documents: [
@@ -383,6 +389,51 @@ describe('MongoMigrationRunner, removeStoredValue', () => {
           .find(JSON.parse(find?.[2] ?? '{}'), { projection: { _id: 0, name: 1 } })
           .toArray(),
       ).toEqual([{ name: 'Ada' }, { name: 'Bo' }]);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a migration that stops after a replacement', () => {
+  it(
+    'skips the replacement on the re-run once the documents are fixed, and finishes',
+    async () => {
+      await db.collection('users').insertMany([
+        { name: 'Ada', status: 'archived', kind: 'old' },
+        { name: 'Bo', status: 'active', kind: 'x' },
+      ]);
+      const operations = [
+        replaceStoredValue({
+          collection: 'users',
+          field: 'status',
+          from: 'archived',
+          to: { $literal: 'retired' },
+        }),
+        removeStoredValue({ collection: 'users', field: 'kind', value: 'old', required: true }),
+      ];
+
+      const stopped = await run(operations);
+      const afterStop = await documents();
+      await db.collection('users').updateOne({ name: 'Ada' }, { $set: { kind: 'x' } });
+      const rerun = await run(operations);
+
+      expect({
+        stopped: stopped.ok ? 'applied' : stopped.failure.code,
+        afterStop,
+        rerun: executed(rerun),
+        documents: await documents(),
+      }).toEqual({
+        stopped: 'MIGRATION.PRECHECK_FAILED',
+        afterStop: [
+          { name: 'Ada', status: 'retired', kind: 'old' },
+          { name: 'Bo', status: 'active', kind: 'x' },
+        ],
+        rerun: 0,
+        documents: [
+          { name: 'Ada', status: 'retired', kind: 'x' },
+          { name: 'Bo', status: 'active', kind: 'x' },
+        ],
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );

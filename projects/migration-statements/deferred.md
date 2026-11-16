@@ -303,3 +303,9 @@ When rows hold an enum value `db update` removes from a member that takes no nul
 **Found:** slice 4b PR 2 review of dispatch 3 (2026-11-14).
 
 When a value object loses a field and gains a required one, the question about the removal says whether the new field gets a temporary value or still needs `--backfill` (`newRequiredFieldNote` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`). A MongoDB embedded model that loses `Line.sku` and gains a required `Line.code` gets no such note, because its fields are `field` subjects, and the note reads only `valueObjectField` subjects. Giving `field` subjects the note would also give it to every root model's removed field beside a new required one, on SQL too, whose plans word that case through their own refusals. Telling an embedded model apart in the CLI needs the domain's owner relation, which no other part of the question reads. The plan itself is right either way: `--delete Line.sku` plans the removal, and the new field is filled or left to the document check, whose advice names `--backfill Line.code`.
+
+## A boolean enum value held by a required MongoDB field gets no rename advice when its removal stops
+
+**Found:** slice 4b PR 2 review of dispatch 4 (2026-11-17).
+
+When `removeStoredValue` stops because a required field holds the value, the MongoDB runner writes the framework's `rowsHoldingValue` fact, and the CLI then advises renaming the enum value. The fact's `value` is typed `string | number` (`RowsHoldingValue` in `packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`), so for an enum whose stored values are booleans the runner leaves the fact out. The failure's own text still counts the documents, names one `_id` and says to rename the value or change the documents, but the CLI prints no `--rename` command for it. Widening the fact's type to `boolean` is a framework change, so it waits for a ruling.

@@ -549,6 +549,15 @@ export class ReplaceStoredValueCall extends OpFactoryCallNode {
   }
 }
 
+/** A call as an edit names it inside a sentence: on one line, without trailing commas. */
+export function callInSentence(call: TsExpression): string {
+  return call
+    .renderTypeScript()
+    .replace(/\s*\n\s*/g, ' ')
+    .replace(/,\s*([}\]])/g, ' $1')
+    .replace(/\(\s+/g, '(');
+}
+
 /** What `migration.ts` imports for a `removeStoredValue` call beside the call itself. */
 export interface RemoveStoredValueImports {
   /** Whether an edit that keeps the data can replace the call with `replaceStoredValue` calls: the plan's own edit, or the one a failed check of a required field gives. */

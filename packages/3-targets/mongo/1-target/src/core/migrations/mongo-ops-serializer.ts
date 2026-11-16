@@ -338,6 +338,8 @@ const OperationMetaJson = type({
       field: 'string',
       'path?': 'string',
       value: 'string | number | boolean',
+      'required?': 'boolean',
+      'filter?': 'Record<string, unknown>',
       'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
     }),
 });

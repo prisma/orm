@@ -994,6 +994,8 @@ export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOp
         field,
         ...ifDefined('path', path),
         value,
+        ...ifDefined('required', required),
+        ...ifDefined('filter', filter),
         ...ifDefined('enumValue', enumValue),
       },
     },

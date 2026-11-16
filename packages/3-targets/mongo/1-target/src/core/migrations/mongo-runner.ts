@@ -16,6 +16,7 @@ import {
   failedPostcheckWhy,
   failedPrecheckWhy,
   fieldStatementText,
+  type KeepDataEdit,
   type MigrationOperationPolicy,
   type MigrationPlan,
   type MigrationPlanOperation,
@@ -71,10 +72,15 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
-import { unrewritableFieldNameReason, unrewritableKeyReason } from './migration-factories';
+import {
+  type RemoveStoredValueOptions,
+  unrewritableFieldNameReason,
+  unrewritableKeyReason,
+} from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
+import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
 import {
   documentsWithObject,
   type JsonPathStep,
@@ -865,6 +871,17 @@ function rewriteFailure(
   );
 }
 
+/** The edit that keeps the documents a failed removal found: the removal, replaced by a replacement whose new value is the placeholder `"<stored value>"`. */
+function keepRemovedValueEdit(options: RemoveStoredValueOptions): KeepDataEdit {
+  const { value, required: _required, enumValue: _enumValue, ...at } = options;
+  return {
+    remove: callInSentence(new RemoveStoredValueCall(options)),
+    replaceWith: callInSentence(
+      new ReplaceStoredValueCall({ ...at, from: value, to: '<stored value>' }),
+    ),
+  };
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -1236,7 +1253,7 @@ export class MongoMigrationRunner {
     const documents = Number(counted?.['documents'] ?? 0);
     if (documents === 0) return undefined;
     const one = documents === 1;
-    const { collection, field, path, value, enumValue } = rewrite;
+    const { collection, field, path, value, enumValue, required, filter } = rewrite;
     const place =
       path === undefined
         ? `in field ${field}`
@@ -1280,6 +1297,15 @@ export class MongoMigrationRunner {
                     value,
                     rows: documents,
                     operationIndex: position.operationIndex,
+                    keepDataEdit: keepRemovedValueEdit({
+                      collection,
+                      field,
+                      ...ifDefined('path', path),
+                      ...ifDefined('filter', filter),
+                      value,
+                      ...ifDefined('required', required),
+                      ...ifDefined('enumValue', enumValue),
+                    }),
                   },
                 ],
               }),
