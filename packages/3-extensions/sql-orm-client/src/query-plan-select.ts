@@ -817,7 +817,9 @@ function pagePerParent(
     ProjectionItem.of(item.alias, ColumnRef.of(rowsAlias, item.alias), item.codec),
   );
   const level: RowsLevel = {
-    select: SelectAst.from(DerivedTableSource.as(rowsAlias, childRows)).withProjection(visible),
+    select: SelectAst.from(
+      DerivedTableSource.as(rowsAlias, childRows.withOrderBy([])),
+    ).withProjection(visible),
     keys: parentKeys.map((key) => ColumnRef.of(rowsAlias, key.alias)),
     order: aggregateOrderBy ?? [],
   };
@@ -837,7 +839,7 @@ function pagePerParent(
     scope,
     `${rowsAlias}__limit`,
     {
-      select: kept.select,
+      select: kept.select.withOrderBy([]),
       keys: parentKeys.map((key) => ColumnRef.of(kept.alias, key.alias)),
       order: [OrderByItem.asc(ColumnRef.of(kept.alias, ROW_NUMBER_ALIAS))],
     },
@@ -1214,7 +1216,9 @@ function buildIncludeChildScalarSelect(
       resultLowering,
       inputCodec,
     );
-    return SelectAst.from(DerivedTableSource.as(scalarAlias, pagePerParent(scope, rows, state)))
+    return SelectAst.from(
+      DerivedTableSource.as(scalarAlias, pagePerParent(scope, rows, state).withOrderBy([])),
+    )
       .withProjection([
         ...groupKeys,
         ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
