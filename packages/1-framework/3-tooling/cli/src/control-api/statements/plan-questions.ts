@@ -464,6 +464,31 @@ function backfilledValueObjectFields(
   );
 }
 
+/**
+ * The field a model's field can only have been renamed to: the one field of the destination model
+ * that the origin model does not have and no rename of the plan names.
+ */
+function onlyNewModelField(
+  subject: FieldCoordinate,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  const model = renamedModel(subject, contracts) ?? subject;
+  const originFields = Object.keys(
+    contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model]?.fields ?? {},
+  );
+  const renamedTo = new Set(
+    resolvedRenames(contracts).flatMap((statement) =>
+      statement.kind === 'rename' && statement.entity === 'field' && sameModel(statement.to, model)
+        ? [statement.to.field]
+        : [],
+    ),
+  );
+  const added = Object.keys(
+    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {},
+  ).filter((name) => !renamedTo.has(name) && !originFields.includes(name));
+  return added.length === 1 ? added[0] : undefined;
+}
+
 function renameForm(
   subject: MigrationSubject,
   text: string,
@@ -484,7 +509,7 @@ function renameForm(
       ? onlyNewMember(subject, contracts)
       : subject.kind === 'valueObjectField'
         ? onlyNewValueObjectField(subject, contracts)
-        : undefined;
+        : onlyNewModelField(subject, contracts);
   return `${text}:${parent}.${only ?? '<new name>'}`;
 }
 

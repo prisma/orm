@@ -263,7 +263,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     }).toEqual({
       subject: 'Person.nickname',
       verbs: ['rename', 'delete'],
-      forms: { rename: 'Person.nickname:Person.<new name>' },
+      forms: { rename: 'Person.nickname:Person.alias' },
       accepted: undefined,
     });
   });
