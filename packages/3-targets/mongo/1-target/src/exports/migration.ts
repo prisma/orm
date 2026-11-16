@@ -18,6 +18,7 @@ export {
   createCollection,
   createIndex,
   dataTransform,
+  deleteDocuments,
   dropCollection,
   dropIndex,
   fillField,

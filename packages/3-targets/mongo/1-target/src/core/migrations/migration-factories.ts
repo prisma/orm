@@ -33,6 +33,7 @@ import {
 import {
   type MongoQueryPlan,
   RawAggregateCommand,
+  RawDeleteManyCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { createFieldAccessor } from '@internal/mongo-query-builder';
@@ -215,7 +216,10 @@ function assertRewritableField(collectionName: string, field: string): void {
   );
 }
 
-function rewritePlan(collectionName: string, command: RawAggregateCommand | RawUpdateManyCommand) {
+function rewritePlan(
+  collectionName: string,
+  command: RawAggregateCommand | RawUpdateManyCommand | RawDeleteManyCommand,
+) {
   return { collection: collectionName, command, meta: { ...RAW_PLAN_META } };
 }
 
@@ -1033,6 +1037,42 @@ export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOp
       ),
     ],
     postcheck: [noDocumentMatches(collectionName, holding, holdingDescription(options, value))],
+  };
+}
+
+export interface DeleteDocumentsOptions {
+  readonly collection: string;
+  readonly filter: Document;
+}
+
+/** The documents a filter selects, in words where the planner wrote it, for an operation's label. */
+function selectedText(filter: Document): string {
+  const words = Object.entries(filter).map(([field, condition]) =>
+    conditionInWords(field, condition),
+  );
+  return words.length > 0 && words.every((word) => word !== undefined)
+    ? `whose ${words.join(' and ')}`
+    : `matching ${JSON.stringify(filter)}`;
+}
+
+/** Deletes the documents of a collection that `filter` selects, as a variant's documents are deleted. */
+export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperation {
+  const { collection: collectionName, filter } = options;
+  const id = `documents.${collectionName}.delete${idSuffix(filter)}`;
+  return {
+    id,
+    label: `Delete the documents of collection ${collectionName} ${selectedText(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck: [],
+    run: [rewritePlan(collectionName, new RawDeleteManyCommand(collectionName, filter))],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        filter,
+        `no document in ${collectionName} matches ${JSON.stringify(filter)}`,
+      ),
+    ],
   };
 }
 

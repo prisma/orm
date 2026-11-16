@@ -53,6 +53,8 @@ import {
   collMod,
   createCollection,
   createIndex,
+  type DeleteDocumentsOptions,
+  deleteDocuments,
   dropCollection,
   dropIndex,
   type FillFieldOptions,
@@ -600,6 +602,28 @@ export class RemoveStoredValueCall extends OpFactoryCallNode {
   }
 }
 
+export class DeleteDocumentsCall extends OpFactoryCallNode {
+  readonly factoryName = 'deleteDocuments' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly options: DeleteDocumentsOptions;
+  readonly label: string;
+
+  constructor(options: DeleteDocumentsOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return deleteDocuments(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `deleteDocuments(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -645,6 +669,7 @@ export type OpFactoryCall =
   | FillStoredKeyCall
   | ReplaceStoredValueCall
   | RemoveStoredValueCall
+  | DeleteDocumentsCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {
