@@ -18,6 +18,9 @@ function setup(failure?: Error, middleware: readonly SqlMiddleware[] = []) {
     ...queryable,
     commit: vi.fn(async () => undefined),
     rollback: vi.fn(async () => undefined),
+    savepoint: vi.fn(async (): Promise<never> => {
+      throw new Error('savepoint is not stubbed');
+    }),
   };
   const connection = {
     ...queryable,

@@ -11,6 +11,7 @@ import type {
   SqlTransaction,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
+import { validateSavepointName } from '@internal/sql-relational-core/ast';
 import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -136,20 +137,39 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 }
 
 class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
-  async commit(): Promise<void> {
+  readonly #commitSql: string;
+  readonly #rollbackSql: string;
+
+  constructor(db: DatabaseSync, commitSql = 'COMMIT', rollbackSql = 'ROLLBACK') {
+    super(db);
+    this.#commitSql = commitSql;
+    this.#rollbackSql = rollbackSql;
+  }
+
+  #exec(sql: string): void {
     try {
-      this.db.exec('COMMIT');
+      this.db.exec(sql);
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
+  async commit(): Promise<void> {
+    this.#exec(this.#commitSql);
+  }
+
   async rollback(): Promise<void> {
-    try {
-      this.db.exec('ROLLBACK');
-    } catch (error) {
-      throw normalizeSqliteError(error, wasClosedByDriver(this.db));
-    }
+    this.#exec(this.#rollbackSql);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    const validated = validateSavepointName(name);
+    this.#exec(`SAVEPOINT ${validated}`);
+    return new SqliteTransactionImpl(
+      this.db,
+      `RELEASE SAVEPOINT ${validated}`,
+      `ROLLBACK TO SAVEPOINT ${validated}`,
+    );
   }
 }
 

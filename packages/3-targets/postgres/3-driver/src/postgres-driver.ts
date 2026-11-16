@@ -12,6 +12,7 @@ import type {
   SqlTransaction,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
+import { validateSavepointName } from '@internal/sql-relational-core/ast';
 import { validatePostgresIsolationLevel } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
@@ -618,6 +619,7 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     return new PostgresTransactionImpl(
       this.#connection,
       this.options,
+      { commit: 'COMMIT', rollback: 'ROLLBACK' },
       () => {
         this.#txState.open = false;
       },
@@ -669,17 +671,20 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
 
 class PostgresTransactionImpl extends PostgresQueryable implements SqlTransaction {
   #connection: PoolClient | Client;
+  readonly #statements: { readonly commit: string; readonly rollback: string };
   #onSettled: (() => void) | undefined;
   readonly #onEnded: () => void;
 
   constructor(
     connection: PoolClient | Client,
     options: ConnectionOptions,
+    statements: { readonly commit: string; readonly rollback: string },
     onSettled: () => void,
     onEnded: () => void,
   ) {
     super(options);
     this.#connection = connection;
+    this.#statements = statements;
     this.#onSettled = onSettled;
     this.#onEnded = onEnded;
   }
@@ -711,7 +716,9 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
       assertClientUsable(this.#connection);
-      await this.#connection.query('COMMIT').catch(rethrowClientError(this.#connection));
+      await this.#connection
+        .query(this.#statements.commit)
+        .catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
       releaseLock();
@@ -723,12 +730,37 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
       assertClientUsable(this.#connection);
-      await this.#connection.query('ROLLBACK').catch(rethrowClientError(this.#connection));
+      await this.#connection
+        .query(this.#statements.rollback)
+        .catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
       releaseLock();
       this.#settle();
     }
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    const validated = validateSavepointName(name);
+    const releaseLock = await acquireClientQueryLock(this.#connection);
+    try {
+      assertClientUsable(this.#connection);
+      await this.#connection
+        .query(`SAVEPOINT ${validated}`)
+        .catch(rethrowClientError(this.#connection));
+    } finally {
+      releaseLock();
+    }
+    return new PostgresTransactionImpl(
+      this.#connection,
+      this.options,
+      {
+        commit: `RELEASE SAVEPOINT ${validated}`,
+        rollback: `ROLLBACK TO SAVEPOINT ${validated}`,
+      },
+      () => undefined,
+      () => undefined,
+    );
   }
 }
 
