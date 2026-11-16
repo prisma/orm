@@ -10,7 +10,7 @@ This page lists the projects in priority order, by stream. Work the streams in p
 
 **Progress column:** one symbol, then done/total where the row has countable units. ✅ done · 🟡 code done, waiting on review or docs · 🔄 in progress · ⏳ not started · ❓ needs a decision from Will. The units are the slices, pull requests, tickets or items the Status column names; a row with no units yet has no count.
 
-States were last checked against GitHub and Linear on 2026-11-14.
+States were last checked against GitHub and Linear on 2026-11-17.
 
 ## How far from GA
 
@@ -21,10 +21,10 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Foundations and breaking changes | 7 of 8 (88%) | `█████████░` | 1 | 0 |
 | Upgrade path from Prisma 7 | 6 of 7 (86%) | `█████████░` | 1 | 0 |
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
-| Query features | 9 of 11 (82%) | `████████░░` | 1 | 1 |
+| Query features | 9 of 11 (82%) | `████████░░` | 2 | 0 |
 | Docs and the new user's first hour | 1 of 5 (20%) | `██░░░░░░░░` | 3 | 1 |
 | Work found along the way | 4 of 7 (57%) | `██████░░░░` | 1 | 2 |
-| **All streams** | **30 of 44 (68%)** | `███████░░░` | **8** | **6** |
+| **All streams** | **30 of 44 (68%)** | `███████░░░` | **9** | **5** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -78,15 +78,15 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 
 ## Stream 4: Query features
 
-**GA readiness:** 9 of 11 Must projects done (82%). 1 in progress, 1 not started.
+**GA readiness:** 9 of 11 Must projects done (82%). 2 in progress, 0 not started.
 
 Everything here is additive, so nothing here can block a breaking change.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 2/2 | Transaction options: isolation levels and timeouts | Must | Serhii | Done 2026-11-13. Isolation levels merged 2026-11-11, and timeouts for callback transactions 2026-11-13 |  |
-| 1b | ⏳ | Nested transactions | Must | Serhii | Not designed |  |
-| 2 | 🔄 5/9 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 9 slices in `projects/nested-mutations/`. Merged: every write runs through one mutation graph, nested `create()` and `update()` included (2026-11-10); one write graph for every database (2026-11-12); a relation callback returns an array of operations, and `update()` updates and deletes filtered related rows on one-to-many and many-to-many relations (2026-11-13). Open PRs, not yet reviewed: `variant(value).create()` in relation callbacks, skipping colliding rows in a nested create, and refusing a `hasOne` relation whose child key is not unique. Left after them: nested `upsert` | Review the three open PRs |
+| 1b | 🔄 2/6 | Nested transactions | Must | Serhii | Started; 6 slices in `projects/nested-transactions/`. Merged 2026-11-16: `savepoint()` on the Postgres, MySQL and SQLite drivers, and a transaction inside a transaction is an activity that finalizes as a savepoint. In review: `savepoint()` on runtime transactions. Left: `tx.transaction(cb)` on Postgres, the other clients, and ORM writes inside savepoints | Review the runtime savepoints PR |
+| 2 | 🔄 7/11 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 11 slices in `projects/nested-mutations/`. Merged since 2026-11-14: `update()` and `delete()` by a unique key send one statement, and a `hasOne` relation whose child key is not unique is refused (both 2026-11-16). In review: `variant(value).create()` in relation callbacks, with connect, disconnect and filtered writes on a variant, and skipping colliding rows in a nested create. Left: nested `upsert`, and nested single-row `update` and `delete` | Review the three open PRs |
 | 3 | ✅ 1/1 | Design the replacement for `omit` | Must (design only) | Will | Design done (Will, 2026-10-07) |  |
 | 4 | ⏳ | Expressions in updates (what `increment` and `decrement` did in Prisma 7) | When there is time | Serhii | Not designed | |
 | 5 | ✅ 1/1 | A query that fails when nothing matches (what `firstOrThrow` did in Prisma 7) | Must | Serhii | `firstOrThrow` on collections merged 2026-10-08 |  |
@@ -130,8 +130,9 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 4 | ⏳ | Maturity per package: design the policy and document it publicly. The framework and each database package have their own maturity level, and a package's public API is its public exports | Must | Will | Decided 2026-10-30. Not started. The design decides how a package's version number relates to its maturity, since every package shares one version today. The docs to update: `docs/oss/versioning.md`, and in prisma/web `orm/release-status.mdx` and `orm/supported-databases.mdx` |  |
 | 5 | 🔄 1/5 | Database change policies: a database records whether `db update` may change it and whether a change may lose data, and the commands obey it | Must | Will | Started 2026-10-27. Slice 1 merged. Slice 3, the policy recorded in the database and obeyed by `db migrate`, `db update` and `db sign`, is in review. Left: slice 4 and two Composer slices | Review slice 3 (TML-3727) |
 | 6 | ✅ 4/4 | Convenience date and time types (`DateTime`, `Date`, `Time`, `Duration`) on SQLite, MySQL and MongoDB, as PostgreSQL has them | Must | Will | Done 2026-11-11. SQLite merged 2026-11-02, MySQL 2026-11-06, MongoDB fields typed with `type.X()` 2026-11-10, and the MongoDB convenience types, with `Date` becoming a calendar date, 2026-11-11. The close-out merged 2026-11-11 |  |
-| 7 | ✅ 2/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Done 2026-11-06. Dropping the plan to deprecate these names merged 2026-11-05, and the convenience types merged 2026-11-06. Not in this row: `Json` (TML-3789, approved) and the other databases (TML-3790, backlog) |  |
+| 7 | ✅ 2/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Done 2026-11-06. Dropping the plan to deprecate these names merged 2026-11-05, and the convenience types merged 2026-11-06. Not in this row: the other databases (TML-3790, backlog). `Json` stays `json` (decided 2026-11-11); TML-3789 was cancelled |  |
 | 8 | ⏳ | Complete or remove the `budgets` and `lints` middleware of the SQL runtime. Both check one statement at a time, so they flag any `SELECT` without a `LIMIT`, including ones the ORM client sends itself | Must | Will | Added 2026-11-13. Not started. Will leans to removing them | Decide: complete or remove |
+| 9 | ⏳ | Decimals, dates, times and durations read as values the application can compute with, not as strings | Not decided | Will | Not started. TML-3825 (`Decimal`, To-do) and TML-3828 (`Date`, `Time`, `Duration`, backlog). Changing what a field reads as is breaking, so it has to land before GA if it lands at all |  |
 
 ## Databases
 
@@ -141,7 +142,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | PostgreSQL | Ready |
 | SQLite, MongoDB, MySQL/MariaDB | Can finish after GA. Labelled release candidate or early access until ready. They start once stream 1 has stopped changing what targets build on. |
 
-Outside the streams: MongoDB contracts written in TypeScript, PSL or Prisma 6 build through one builder (TML-3616), merged 2026-10-23; its close-out merged 2026-10-28. Follow-ups to client surfaces (row 8 of stream 1), all merged: a Supabase client shuts down like a Postgres client (prisma/orm#30828, 2026-10-22); a closed client's members reject instead of throwing at the call (prisma/orm#30840, 2026-10-23); MongoDB queries take an execution context like SQL queries (TML-3686, prisma/orm#30865, 2026-10-29); `mongo()` creates its driver from the execution stack like `postgres()` (TML-3763, prisma/orm#30906, 2026-10-30). Plans for ORM writes (TML-3684) cancelled 2026-10-30 (Will): no user need. Left in the backlog until a user asks: TML-3682 (Supabase cannot stream large reads) and TML-3683 (MongoDB has no `prepare` or `extensions`).
+Outside the streams: MongoDB contracts written in TypeScript, PSL or Prisma 6 build through one builder (TML-3616), merged 2026-10-23; its close-out merged 2026-10-28. Follow-ups to client surfaces (row 8 of stream 1), all merged: a Supabase client shuts down like a Postgres client (prisma/orm#30828, 2026-10-22); a closed client's members reject instead of throwing at the call (prisma/orm#30840, 2026-10-23); MongoDB queries take an execution context like SQL queries (TML-3686, prisma/orm#30865, 2026-10-29); `mongo()` creates its driver from the execution stack like `postgres()` (TML-3763, prisma/orm#30906, 2026-10-30). Plans for ORM writes (TML-3684) cancelled 2026-10-30 (Will): no user need. Left in the backlog until a user asks: TML-3682 (Supabase cannot stream large reads). MongoDB's `prepare` (TML-3792) was started: slice 1 merged 2026-11-11, and slice 2, prepared ORM reads, is in review (prisma/orm#31054).
 
 ## Beside the streams
 
