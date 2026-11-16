@@ -80,6 +80,7 @@ import {
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
+  ReplaceStoredValueCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
 } from './op-factory-call';
@@ -607,9 +608,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
       ),
       collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+      enumReplacements: valueReplacements.flatMap(({ call }) =>
+        call instanceof ReplaceStoredValueCall ? [call] : [],
+      ),
     });
     if (!variants.ok) return { kind: 'failure', conflicts: [...variants.failure] };
     const { deletes: variantDeletes, replacements: variantReplacements } = variants.value;
+    const variantCalls = new Set<OpFactoryCall>(variantReplacements.map(({ call }) => call));
     const removals: readonly FieldRemoval[] =
       fromContract === null
         ? planValidatorFieldRemovals({ origin: schema, destination: destinationIR, contract })
@@ -785,7 +790,9 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...variantDeletes.map((rewrite) => rewrite.call),
           ...variantReplacements.map((rewrite) => rewrite.call),
           ...storedKeys.value.renames.map((rewrite) => rewrite.call),
-          ...valueReplacements.map((rewrite) => rewrite.call),
+          ...valueReplacements.flatMap((rewrite) =>
+            variantCalls.has(rewrite.call) ? [] : [rewrite.call],
+          ),
           ...castCalls,
           ...transformCalls('convert'),
           ...fills.map((fill) => fill.call),

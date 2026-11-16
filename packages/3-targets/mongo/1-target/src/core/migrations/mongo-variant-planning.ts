@@ -1,4 +1,4 @@
-import type { ContractWithDomain } from '@internal/contract/types';
+import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
 import {
   describeMigrationStatement,
   type MigrationPlannerConflict,
@@ -9,17 +9,29 @@ import {
   type ResolvedVariantConvertStatement,
 } from '@internal/framework-components/control';
 import {
+  canonicalize,
   collectionOfModel,
   embeddingModelOf,
   type MongoContract,
+  otherModelsReached,
+  ownStoredNameOf,
   selectedVariantOf,
   variantFilter,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { ONE_AT_A_TIME } from './mongo-enum-value-planning';
-import { TIME_SERIES_UPDATES } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
+import {
+  SEPARATE_THE_MODELS,
+  sharedCollectionWhy,
+  TIME_SERIES_UPDATES,
+} from './mongo-rewrite-refusals';
+import {
+  collectionControlPolicy,
+  embeddedModelReason,
+  modelAt,
+  modelCoordinates,
+} from './mongo-statement-planning';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -56,9 +68,16 @@ export interface VariantInput {
   /** The collections the destination keeps. */
   readonly keptCollections: ReadonlySet<string>;
   readonly collectionAfterRenames: (collection: string) => string;
+  /** The plan's replacements of enum values, one of which may already move a variant's discriminator value. */
+  readonly enumReplacements: readonly ReplaceStoredValueCall[];
 }
 
-type VariantChange = Omit<VariantDocumentRewrite, 'call'>;
+interface VariantChange extends Omit<VariantDocumentRewrite, 'call'> {
+  /** The stored name of the discriminator in the origin. */
+  readonly originField: string;
+  /** The enum value replacement that already moves the value, when the discriminator is an enum. */
+  readonly byEnum: ReplaceStoredValueCall | undefined;
+}
 
 function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
   return a.namespaceId === b.namespaceId && a.model === b.model;
@@ -89,6 +108,47 @@ function destinationOf(origin: ModelCoordinate, input: VariantInput): ModelCoord
   return modelAt(input.contract, origin) === undefined ? undefined : origin;
 }
 
+function baseOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoordinate | undefined {
+  const base = modelAt(contract, model)?.base;
+  return base === undefined
+    ? undefined
+    : { namespaceId: asNamespaceId(base.namespace), model: base.model };
+}
+
+/** The stored name of the discriminator of the destination's base, when it still has one, as SQL finds the column. */
+function destinationDiscriminator(
+  origin: ModelCoordinate,
+  destination: ModelCoordinate | undefined,
+  fromContract: ContractWithDomain,
+  input: VariantInput,
+): string | undefined {
+  const originBase = baseOf(fromContract, origin);
+  const base =
+    (destination === undefined ? undefined : baseOf(input.contract, destination)) ??
+    (originBase === undefined ? undefined : destinationOf(originBase, input));
+  const model = base === undefined ? undefined : modelAt(input.contract, base);
+  const field = model?.discriminator?.field;
+  return model === undefined || field === undefined ? undefined : ownStoredNameOf(model, field);
+}
+
+/** The enum value replacement that rewrites `from` to `to` in the discriminator field itself. */
+function enumReplacementOf(
+  input: VariantInput,
+  at: { readonly collection: string; readonly field: string },
+  from: string,
+  to: string,
+): ReplaceStoredValueCall | undefined {
+  return input.enumReplacements.find(
+    ({ options }) =>
+      options.collection === at.collection &&
+      options.field === at.field &&
+      options.path === undefined &&
+      options.filter === undefined &&
+      options.from === from &&
+      canonicalize(options.to) === canonicalize({ $literal: to }),
+  );
+}
+
 /** What changes for the documents of one variant of the origin, if anything does. */
 function changeOf(
   origin: ModelCoordinate,
@@ -105,18 +165,24 @@ function changeOf(
   const after =
     destination === undefined ? undefined : selectedVariantOf(input.contract.domain, destination);
   if (destination !== undefined && after === undefined) return undefined;
+  const field = destinationDiscriminator(origin, destination, fromContract, input);
+  if (field === undefined) return undefined;
   const from = String(before.value);
   const to = after === undefined ? undefined : String(after.value);
   if (to === from) return undefined;
   const statement =
     destination === undefined ? undefined : statementOf(origin, destination, input.statements);
+  const byEnum =
+    to === undefined ? undefined : enumReplacementOf(input, { collection, field }, from, to);
   return {
     model: origin,
     collection,
-    field: after?.field ?? before.field,
+    field,
+    originField: before.field,
     from,
-    to: statement === undefined ? undefined : to,
+    to: statement === undefined && byEnum === undefined ? undefined : to,
     statement,
+    byEnum,
   };
 }
 
@@ -218,7 +284,7 @@ function collectionRefusal(
     );
   }
   if (input.schema.collection(change.collection)?.options?.timeseries === undefined) {
-    return undefined;
+    return sharedCollectionRefusal(change, label, fromContract);
   }
   return refusedChange(
     change,
@@ -228,7 +294,62 @@ function collectionRefusal(
   );
 }
 
+/**
+ * The refusal of a change whose documents another root model stored in the same collection can
+ * share: a model with the same discriminator field and value, whose documents the delete or
+ * replacement would reach too.
+ */
+function sharedCollectionRefusal(
+  change: VariantChange,
+  label: string,
+  fromContract: ContractWithDomain,
+): MigrationPlannerConflict | undefined {
+  const originCollection = collectionOfModel(fromContract.domain, change.model);
+  if (originCollection === undefined) return undefined;
+  const others = otherModelsReached(
+    fromContract.domain,
+    change.model,
+    originCollection,
+    { field: change.originField, value: change.from },
+    undefined,
+  );
+  if (others.length === 0) return undefined;
+  const named = others.map(quoted).join(', ');
+  const effect =
+    change.to === undefined
+      ? 'deleting the documents with that value would delete the documents'
+      : 'replacing the value would replace it in the documents';
+  return refusedChange(
+    change,
+    label,
+    `model ${named} ${others.length === 1 ? 'is' : 'are'} stored in collection ${quoted(change.collection)} and its documents can hold ${change.originField} ${quoted(change.from)}`,
+    `${sharedCollectionWhy(change.collection, others, effect)} To change only the documents of ${variantText(change.model)}, ${SEPARATE_THE_MODELS}.`,
+  );
+}
+
+/** The refusal of a `--convert` of a variant of an embedded model, whose documents are inside another model's. */
+function embeddedConvertRefusals(
+  input: VariantInput,
+  fromContract: ContractWithDomain,
+): readonly MigrationPlannerConflict[] {
+  return input.statements.flatMap((statement) => {
+    if (statement.kind !== 'convert' || statement.entity !== 'model') return [];
+    const embedded = embeddedModelReason(input.contract, statement.model);
+    return embedded === undefined
+      ? []
+      : [
+          {
+            kind: 'statementRefused',
+            summary: `Cannot ${describeMigrationStatement(statement, fromContract, input.contract)}: ${embedded}`,
+            why: 'The plan rewrites discriminator values only in the collection of a base, not inside the documents of another model. Rewrite them in a dataTransform operation of migration.ts, or leave out this statement.',
+            refusedStatement: statement,
+          },
+        ];
+  });
+}
+
 function callOf(change: VariantChange): ReplaceStoredValueCall | DeleteDocumentsCall {
+  if (change.byEnum !== undefined) return change.byEnum;
   return change.to === undefined
     ? new DeleteDocumentsCall({
         collection: change.collection,
@@ -249,19 +370,25 @@ function callOf(change: VariantChange): ReplaceStoredValueCall | DeleteDocuments
  * destination no longer has, delete the documents that hold the old value, which the plan asks about.
  * Deletes run first. MongoDB applies operations one at a time and a re-run repeats every operation
  * whose postcheck does not hold, so a plan where one operation writes a value another frees is
- * refused. In a collection whose control policy is not `managed`, a statement is refused and a delete
- * left out. With no origin contract, nothing is known to have changed.
+ * refused, as is a rewrite that would reach the documents of another root model in the same
+ * collection. In a collection whose control policy is not `managed`, a statement is refused and a
+ * delete left out. The discriminator is read from the destination's base, so a base that renames it
+ * is followed, and a base that no longer has one keeps every document. A replacement of an enum value
+ * that already moves a variant's value is that variant's replacement. With no origin contract,
+ * nothing is known to have changed.
  */
 export function planVariantDocumentRewrites(
   input: VariantInput,
 ): Result<VariantDocumentRewrites, readonly MigrationPlannerConflict[]> {
   const { fromContract } = input;
   if (fromContract === null) return ok({ deletes: [], replacements: [] });
+  const embedded = embeddedConvertRefusals(input, fromContract);
+  if (embedded.length > 0) return notOk(embedded);
   const changes = modelCoordinates(fromContract).flatMap((origin) => {
     const change = changeOf(origin, fromContract, input);
     if (change === undefined) return [];
     const unmanagedDelete =
-      change.statement === undefined &&
+      change.to === undefined &&
       collectionControlPolicy(input.contract, change.collection) !== 'managed';
     return unmanagedDelete ? [] : [change];
   });
