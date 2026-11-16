@@ -1487,7 +1487,7 @@ Rolling back after callback failure itself failed; the connection is destroyed r
 
 ### RUNTIME.TRANSACTION_SUSPENDED
 
-A statement or `commit()` was sent on a transaction or savepoint while a savepoint opened on it is still open. Work sent on the parent while a savepoint is open would be undone by the savepoint's `ROLLBACK TO SAVEPOINT`. The message names the open savepoint. Nothing is sent to the database, and the level can be used again once the savepoint commits or rolls back. `rollback()` on the parent is allowed and closes the open savepoint. Payload: `savepointId`, the open savepoint's activity ID.
+A statement or `commit()` was sent on a transaction or savepoint while a savepoint opened on it is still open, or a statement was sent on the connection while its transaction has an open savepoint. Work sent on the parent while a savepoint is open would be undone by the savepoint's `ROLLBACK TO SAVEPOINT`. The message names the open savepoint. Nothing is sent to the database, and the level can be used again once the savepoint commits or rolls back. `rollback()` on the parent is allowed and closes the open savepoint. Payload: `savepointId`, the open savepoint's activity ID.
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 
