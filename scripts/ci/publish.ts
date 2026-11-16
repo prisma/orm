@@ -12,6 +12,8 @@ import { blue, bold, cyan, dim, magenta, red, underline } from 'kleur/colors'
 import pRetry from 'p-retry'
 import semver from 'semver'
 
+import { getNextMinorStable, getPackageDistTag, getPublishChannel, PRISMA_STABLE_DIST_TAG } from './publish-channel'
+
 const onlyPackages = process.env.ONLY_PACKAGES ? process.env.ONLY_PACKAGES.split(',') : null
 const skipPackages = process.env.SKIP_PACKAGES ? process.env.SKIP_PACKAGES.split(',') : null
 
@@ -217,12 +219,6 @@ export function getPublishOrder(packages: Packages): string[][] {
   return topo(dag) // TODO: this is now done by pnpm (top sort), can we remove?
 }
 
-function zeroOutPatch(version: string): string {
-  const parts = version.split('.')
-  parts[parts.length - 1] = '0'
-  return parts.join('.')
-}
-
 /**
  * Takes the max dev version + 1
  * For now supporting X.Y.Z-dev.#
@@ -231,10 +227,7 @@ function zeroOutPatch(version: string): string {
 async function getNewDevVersion(packages: Packages): Promise<string> {
   const before = Math.round(performance.now())
   console.log('\nCalculating new dev version...')
-  // Why are we calling zeroOutPatch?
-  // Because here we're only interested in the 2.5.0 <- the next minor stable version
-  // If the current version would be 2.4.7, we would end up with 2.5.7
-  const nextStable = zeroOutPatch((await getNextMinorStable())!)
+  const nextStable = await fetchNextMinorStable()
 
   console.log(`getNewDevVersion: Next minor stable: ${nextStable}`)
 
@@ -254,10 +247,7 @@ async function getNewDevVersion(packages: Packages): Promise<string> {
 async function getNewIntegrationVersion(packages: Packages, branch: string): Promise<string> {
   const before = Math.round(performance.now())
   console.log('\nCalculating new integration version...')
-  // Why are we calling zeroOutPatch?
-  // Because here we're only interested in the 2.5.0 <- the next minor stable version
-  // If the current version would be 2.4.7, we would end up with 2.5.7
-  const nextStable = zeroOutPatch((await getNextMinorStable())!)
+  const nextStable = await fetchNextMinorStable()
 
   console.log(`getNewIntegrationVersion: Next minor stable: ${nextStable}`)
 
@@ -447,18 +437,14 @@ export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string
 }
 
 /**
- * Only used when publishing to the `dev` and `integration` npm channels
- * (see `getNewDevVersion()` and `getNewIntegrationVersion()`)
- * @returns The next minor version for the `latest` channel
- * Example: If latest is `4.9.0` it will return `4.10.0`
+ * Only used for dev and integration versions (see `getNewDevVersion()` and `getNewIntegrationVersion()`)
+ * @returns The next minor version after `prisma@prev`, e.g. `7.11.0` when `prev` is `7.10.1`
  */
-async function getNextMinorStable() {
-  // We check the Prisma CLI `latest` version
-  // We retry a few times if it fails
-  // npm can have some hiccups
+async function fetchNextMinorStable(): Promise<string> {
+  // `prisma@latest` is the Prisma 8 CLI from prisma/prisma-cli, so the newest Prisma 7 release is read from `prev`.
   const remoteVersionString = await pRetry(
     async () => {
-      return await runResult('.', `npm info prisma version`)
+      return await runResult('.', `npm info prisma@${PRISMA_STABLE_DIST_TAG} version`)
     },
     {
       retries: 6,
@@ -467,7 +453,7 @@ async function getNextMinorStable() {
       },
     },
   )
-  return increaseMinor(remoteVersionString)
+  return getNextMinorStable(remoteVersionString)
 }
 
 // TODO: could probably use the semver package
@@ -556,10 +542,6 @@ async function publish() {
     throw new Error(`Oops, there are circular dependencies: ${circles}`)
   }
 
-  let prismaVersion: undefined | string
-  let tag: undefined | string
-  let tagForEcosystemTestsCheck: undefined | string
-
   const patchBranch = getPatchBranch()
   console.log({ patchBranch })
 
@@ -567,28 +549,29 @@ async function publish() {
   const branch = await getPrismaBranch()
   console.log({ branch })
 
-  // For branches that are named "integration/" we publish to the integration npm tag
-  if (branch && (process.env.FORCE_INTEGRATION_RELEASE === 'true' || branch.startsWith('integration/'))) {
-    prismaVersion = await getNewIntegrationVersion(packages, branch)
-    tag = 'integration'
-  }
-  // Is it a patch branch? (Like 2.20.x)
-  else if (patchBranch) {
-    prismaVersion = await getNewPatchDevVersion(packages, patchBranch)
-    tag = 'patch-dev'
-    if (args['--release']) {
-      tagForEcosystemTestsCheck = 'patch-dev' //?
-      prismaVersion = args['--release']
-      tag = 'latest'
-    }
-  } else if (args['--release']) {
-    // TODO:Where each patch branch goes
-    prismaVersion = args['--release']
-    tag = 'latest'
-    tagForEcosystemTestsCheck = 'dev'
-  } else {
-    prismaVersion = await getNewDevVersion(packages)
-    tag = 'dev'
+  const channel = getPublishChannel({
+    branch,
+    patchBranch,
+    releaseVersion: args['--release'],
+    forceIntegrationRelease: process.env.FORCE_INTEGRATION_RELEASE === 'true',
+  })
+  const { tagForEcosystemTestsCheck } = channel
+  let tag = channel.tag
+
+  let prismaVersion: string
+  switch (channel.version) {
+    case 'integration':
+      prismaVersion = await getNewIntegrationVersion(packages, branch!)
+      break
+    case 'patch-dev':
+      prismaVersion = await getNewPatchDevVersion(packages, patchBranch!)
+      break
+    case 'release':
+      prismaVersion = args['--release']!
+      break
+    case 'dev':
+      prismaVersion = await getNewDevVersion(packages)
+      break
   }
 
   if (args['--custom-dist-tag']) {
@@ -708,15 +691,6 @@ function intersection<T>(arr1: T[], arr2: T[]): T[] {
 const semverRegex =
   /^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
 
-function increaseMinor(version: string) {
-  const match = semverRegex.exec(version)
-  if (match?.groups) {
-    return `${match.groups.major}.${Number(match.groups.minor) + 1}.${match.groups.patch}`
-  }
-
-  return undefined
-}
-
 function filterPublishOrder(publishOrder: string[][], packages: string[]): string[][] {
   return publishOrder.reduce<string[][]>((acc, curr) => {
     if (Array.isArray(curr)) {
@@ -811,7 +785,7 @@ async function publishPackages(
       const pkgDir = path.dirname(pkg.path)
 
       const newVersion = prismaVersion
-      const packageTag = pkgName === 'prisma' && tag === 'latest' ? 'prev' : tag
+      const packageTag = getPackageDistTag(pkgName, tag)
 
       console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${packageTag}`)}`)
 
