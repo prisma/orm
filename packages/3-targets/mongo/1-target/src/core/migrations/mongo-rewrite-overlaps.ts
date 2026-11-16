@@ -377,18 +377,13 @@ function filterConflictOf(
   return undefined;
 }
 
-function distinct<T>(items: readonly T[]): readonly T[] {
-  return [...new Set(items)];
-}
-
 function refusal(
   involved: readonly OrderedRewrite[],
   reason: string,
   why: string,
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: ContractWithDomain },
 ): MigrationPlannerConflict {
-  const statements = distinct(involved.flatMap((rewrite) => rewrite.statements));
-  const [refused] = statements;
+  const [refused] = involved.flatMap((rewrite) => rewrite.statements);
   if (refused === undefined) {
     return { kind: 'unsupportedOperation', summary: `Cannot plan the migration: ${reason}`, why };
   }
@@ -397,7 +392,6 @@ function refusal(
     summary: `Cannot ${describeMigrationStatement(refused, contracts.fromContract, contracts.contract)}: ${reason}`,
     why,
     refusedStatement: refused,
-    leaveOut: statements,
   };
 }
 
@@ -411,7 +405,8 @@ function refusal(
  * Two operations that select different variants by a discriminator field the plan does not change
  * never meet. Also refused: an operation whose filter reads what an earlier operation empties or a
  * later one writes, an order `inFilterOrder` could not avoid. The refusal names the first statement
- * involved, lists the operations, and leaves out every statement involved.
+ * involved and lists the operations. It does not offer to leave the statements out and write the
+ * operations by hand, since one hand-written migration would meet the same re-run.
  */
 export function overlapRefusal(
   rewrites: readonly OrderedRewrite[],

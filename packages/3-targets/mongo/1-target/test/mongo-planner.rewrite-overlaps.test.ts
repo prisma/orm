@@ -79,10 +79,11 @@ const renameFieldLabel = (from: string, to: string) =>
 
 function refused(result: ReturnType<typeof plan>) {
   if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
-  return result.conflicts.map(({ kind, summary, why, leaveOut }) => ({
+  return result.conflicts.map(({ kind, summary, why, refusedStatement, leaveOut }) => ({
     kind,
     summary,
     why,
+    refusedStatement,
     leaveOut,
   }));
 }
@@ -98,20 +99,17 @@ describe('MongoMigrationPlanner, renames of keys inside a value object that read
           statements,
         }),
       );
-    const expected = (first: ResolvedMigrationStatement, second: ResolvedMigrationStatement) => [
+    const expected = [
       {
         kind: 'statementRefused',
         summary: `Cannot rename value object field "Address.a" to "Address.b": the migration writes a key that another of its operations reads (${renameKeyLabel('a', 'b')}; ${renameKeyLabel('b', 'c')})`,
         why: why('key', RENAME_ADVICE),
-        leaveOut: [first, second],
+        refusedStatement: renameAddress('a', 'b'),
+        leaveOut: undefined,
       },
     ];
-    expect(chain([renameAddress('a', 'b'), renameAddress('b', 'c')])).toEqual(
-      expected(renameAddress('a', 'b'), renameAddress('b', 'c')),
-    );
-    expect(chain([renameAddress('b', 'c'), renameAddress('a', 'b')])).toEqual(
-      expected(renameAddress('a', 'b'), renameAddress('b', 'c')),
-    );
+    expect(chain([renameAddress('a', 'b'), renameAddress('b', 'c')])).toEqual(expected);
+    expect(chain([renameAddress('b', 'c'), renameAddress('a', 'b')])).toEqual(expected);
   });
 
   it('refuses a swap', () => {
@@ -129,7 +127,8 @@ describe('MongoMigrationPlanner, renames of keys inside a value object that read
         kind: 'statementRefused',
         summary: `Cannot rename value object field "Address.a" to "Address.b": the migration writes a key that another of its operations reads (${renameKeyLabel('a', 'b')}; ${renameKeyLabel('b', 'a')})`,
         why: why('key', RENAME_ADVICE),
-        leaveOut: [renameAddress('a', 'b'), renameAddress('b', 'a')],
+        refusedStatement: renameAddress('a', 'b'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -164,7 +163,8 @@ describe('MongoMigrationPlanner, renames of fields that read what another writes
         kind: 'statementRefused',
         summary: `Cannot rename field "User.a" to "User.b": the migration writes a field that another of its operations reads (${renameFieldLabel('a', 'b')}; ${renameFieldLabel('b', 'c')})`,
         why: why('field', RENAME_ADVICE),
-        leaveOut: [renameUser('a', 'b'), renameUser('b', 'c')],
+        refusedStatement: renameUser('a', 'b'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -214,7 +214,8 @@ describe('MongoMigrationPlanner, a new required field under the name a rename mo
         kind: 'statementRefused',
         summary: `Cannot rename value object field "Address.street" to "Address.line1": the migration writes a key that another of its operations reads (${renameKeyLabel('street', 'line1')}; Fill key "street" at path "$[*]" in field addresses of collection users where it is missing or null)`,
         why: why('key', FILL_ADVICE),
-        leaveOut: [renameAddress('street', 'line1')],
+        refusedStatement: renameAddress('street', 'line1'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -233,8 +234,8 @@ describe('MongoMigrationPlanner, a new required field under the name a rename mo
           schema: live,
           statements: [renameAddress('street', 'line1'), backfill],
         }),
-      ).map(({ leaveOut }) => leaveOut),
-    ).toEqual([[renameAddress('street', 'line1'), backfill]]);
+      ).map(({ refusedStatement, leaveOut }) => ({ refusedStatement, leaveOut })),
+    ).toEqual([{ refusedStatement: renameAddress('street', 'line1'), leaveOut: undefined }]);
   });
 
   it('refuses a fill of the field', () => {
@@ -252,7 +253,8 @@ describe('MongoMigrationPlanner, a new required field under the name a rename mo
         kind: 'statementRefused',
         summary: `Cannot rename field "User.street" to "User.line1": the migration writes a field that another of its operations reads (${renameFieldLabel('street', 'line1')}; Fill field street in collection users where it is missing or null)`,
         why: why('field', FILL_ADVICE),
-        leaveOut: [renameUser('street', 'line1')],
+        refusedStatement: renameUser('street', 'line1'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -307,7 +309,8 @@ describe('MongoMigrationPlanner, a new required field under a stored name a rena
         kind: 'statementRefused',
         summary: `Cannot rename field "User.name" to "User.fullName": the migration writes a field that another of its operations reads (${renameFieldLabel('nm', 'fn')}; Fill field nm in collection users where it is missing or null)`,
         why: why('field', FILL_ADVICE),
-        leaveOut: [renameUser('name', 'fullName')],
+        refusedStatement: renameUser('name', 'fullName'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -332,7 +335,8 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         kind: 'statementRefused',
         summary: `Cannot rename field "User.b" to "User.a": the migration writes a field that another of its operations reads (${renameFieldLabel('b', 'a')}; Remove field a from collection users)`,
         why: why('field', REMOVE_ADVICE('field')),
-        leaveOut: [renameUser('b', 'a')],
+        refusedStatement: renameUser('b', 'a'),
+        leaveOut: undefined,
       },
     ]);
   });
@@ -352,7 +356,8 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         kind: 'statementRefused',
         summary: `Cannot rename value object field "Address.b" to "Address.a": the migration writes a key that another of its operations reads (${renameKeyLabel('b', 'a')}; Remove key "a" at path "$[*]" in field addresses of collection users)`,
         why: why('key', REMOVE_ADVICE('key')),
-        leaveOut: [renameAddress('b', 'a')],
+        refusedStatement: renameAddress('b', 'a'),
+        leaveOut: undefined,
       },
     ]);
   });

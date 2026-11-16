@@ -344,9 +344,11 @@ describe('Journeys (MongoDB): variant statements', {
     expect({
       exitCode: refused.exitCode === 0 ? 0 : 'failed',
       text: JSON.stringify(failure),
+      byHand: JSON.stringify(failure).includes('To write the rewrites by hand'),
     }).toEqual({
       exitCode: 'failed',
       text: expect.stringContaining('Make the change in two migrations'),
+      byHand: false,
     });
 
     await emit(ctx, REMOVED, 'V4.05');

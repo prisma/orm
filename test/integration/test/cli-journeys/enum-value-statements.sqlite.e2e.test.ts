@@ -658,6 +658,9 @@ model Job {
         expect(engineError(refused)?.code, 'S11.04').toBe('MIGRATION.PLANNING_FAILED');
         expect(nextActionLabels(refused)).toEqual([
           expect.stringMatching(
+            /^Leave out the renames in the cycle, and write the rewrites by hand/,
+          ),
+          expect.stringMatching(
             /^To write the rewrites by hand, plan the change without --rename Status\.ACTIVE:Status\.X and --rename Status\.ARCHIVED:Status\.Y with `prisma-test migration plan --from \S+`, add the rewrites the message describes to the migration\.ts it writes, run `node <migration directory>\/migration\.ts` for the directory it writes, and apply it with `prisma-test db migrate`$/,
           ),
         ]);

@@ -462,11 +462,16 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     });
     if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
     expect(
-      result.conflicts.map(({ summary, leaveOut }) => ({ summary, leaveOut: leaveOut?.length })),
+      result.conflicts.map(({ summary, refusedStatement, leaveOut }) => ({
+        summary,
+        refusedStatement,
+        leaveOut,
+      })),
     ).toEqual([
       {
         summary: `Cannot rename enum value "Status.A" to "Status.B": the migration writes a value that another of its operations reads (${replacementsOf(['a', 'b'], ['b', 'c'])})`,
-        leaveOut: 2,
+        refusedStatement: renameValue('A', 'B'),
+        leaveOut: undefined,
       },
     ]);
   });

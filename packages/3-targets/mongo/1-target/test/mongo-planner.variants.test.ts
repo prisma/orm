@@ -263,9 +263,16 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
         why: TWO_MIGRATIONS,
       },
     ]);
-    expect(result.kind === 'failure' ? result.conflicts[0]?.leaveOut : undefined).toEqual([
-      convert('Epic'),
-    ]);
+    expect(
+      result.kind === 'failure'
+        ? { ...result.conflicts[0], summary: undefined, why: undefined }
+        : undefined,
+    ).toEqual({
+      kind: 'statementRefused',
+      summary: undefined,
+      why: undefined,
+      refusedStatement: convert('Epic'),
+    });
   });
 
   it('refuses two variants that swap values', () => {
@@ -605,10 +612,11 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
     });
     if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
     expect(
-      result.conflicts.map(({ kind, summary, why, leaveOut }) => ({
+      result.conflicts.map(({ kind, summary, why, refusedStatement, leaveOut }) => ({
         kind,
         summary,
         why,
+        refusedStatement,
         leaveOut,
       })),
     ).toEqual([
@@ -616,7 +624,8 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
         kind: 'statementRefused',
         summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${replaceLabel('epic', 'bug')}; ${deleteLabel('bug')}; Remove value "bug" from field type of collection tasks)`,
         why: TWO_MIGRATIONS,
-        leaveOut: [renameEpic],
+        refusedStatement: renameEpic,
+        leaveOut: undefined,
       },
     ]);
   });
