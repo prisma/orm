@@ -239,6 +239,10 @@ Catch-all for an unanticipated failure inside a CLI command: an unclassified exc
 
 The migration-file CLI (`prisma migration`) received a flag it does not recognise; wraps clipanion's unknown-syntax error at the parser boundary so consumers can build "did you mean" suggestions from meta instead of parsing the message. Payload: `flag`, `knownFlags`.
 
+### CLI.V7_COMMAND
+
+Settled by `@prisma/cli-engine` from the redirect table in `family.ts`, not raised by a command: the user typed a Prisma 7 command path that Prisma 8 does not have, such as `prisma generate`, `prisma db push` or `prisma migrate dev`; instead of failing as unknown, the run settles with the summary "`prisma <path>` is a Prisma 7 command and is not available in Prisma 8". `why` says what the suggested Prisma 8 commands do and what they do not cover, and ends with how to install Prisma 7's CLI (`npm install --save-dev @prisma/prisma7@7`) and run the same command as `prisma7 <path>`, with a placeholder for every value Prisma 7 requires (for example `prisma7 db execute --file <path>`); for the `migrate` commands except `migrate diff`, that sentence applies while Prisma 7 still owns the project's migrations. Next actions, in order: the replacement commands as run-command actions (labelled "Use the replacement" for one, "Step 1", "Step 2", … for several), a run-command pointing at the suggested command's `--help`, and an open-url action to the CLI docs when Prisma 8 has no equivalent. The engine's entry is the reference: [CLI.V7_COMMAND](https://docs.prisma.io/docs/cli/error-reference#CLI.V7_COMMAND). Exits 2. Payload: none.
+
 ## CONTRACT
 
 ### CONTRACT.ARGUMENT_INVALID
@@ -1075,7 +1079,7 @@ A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSL
 
 ### ORM.CAPABILITY_MISSING
 
-The requested operation requires a contract capability the contract does not declare: the `returning` capability for an MTI variant `createAll()`, or, without it, a write whose rows cannot be read back by key: a `create()` whose key column has a database default other than auto-increment, a `createAll()` of several rows whose keys the database generates, a `createAll()` with `onConflict: 'skip'`, or an `upsert()` whose update sets a conflict column or whose create leaves one out (payload `capability`, `action`); `insertOnConflictTarget` for `upsert()` when the create values can collide on another unique key, and for `onConflict: 'skip'` with `conflictOn`; or, on the `sql()` builder or an ORM collection, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`), and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options; the ORM's four row-locking methods also need `sql.lockOf`, because the ORM has no `of` option and always renders `OF` the model's table (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
+The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`.
 
 ### ORM.COLUMN_UNKNOWN
 
@@ -1139,11 +1143,11 @@ A valid ORM method was called in a configuration that does not support it: mutat
 
 ### ORM.RELATION_MUTATION_INVALID
 
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, `create` without data, `connect`/`disconnect` with a missing or empty criterion, or a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values. Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`.
+A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, an array of operations that holds another array or a value that is not an operation (`index` gives its position), `create` without data, `connect`/`disconnect` with a missing or empty criterion, a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values, or a one-to-many `updateAll` whose data or update defaults set a field linking the related rows to their parent (`problem: 'parent-link-column'`, with the fields in `fields`). Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
-A nested relation mutation kind is not supported in this position: `disconnect()` outside `update()` nested mutations, or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`disconnect()` stays available). Payload: `kind`, `relation`.
+A nested relation mutation kind is not supported in this position: `disconnect()`, `updateAll()` or `deleteAll()` outside `update()` nested mutations, `updateAll()` or `deleteAll()` on a to-one relation (`reason: 'to-one-relation'`), an array of two or more operations on a to-one relation (`reason: 'to-one-relation'`, with `model` and the count in `operations`), or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`reason: 'junction-required-columns'`, with the table in `junction`; `disconnect()` stays available). Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
 
 ### ORM.RELATION_ROW_MISSING
 
@@ -1457,13 +1461,17 @@ This error never occurs in the control plane. The CLI commands, `node migration.
 
 In the application, install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or write the column as a convenience type at its default, which needs no Temporal at all: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` and need none either.
 
+### RUNTIME.INVALID_TRANSACTION_TIMEOUT
+
+The SQL runtime callback helper received a timeout outside integer milliseconds 1..2147483647. Rejected before acquisition; omission, undefined and null disable the internal deadline. Public facades validate their options earlier with `RUNTIME.ARGUMENT_INVALID`. Payload: `timeout`.
+
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
 `transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
-A query result created inside a transaction was read after the transaction ended. Await the result or call `.toArray()` inside the transaction callback.
+Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
@@ -1471,7 +1479,11 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
-Rolling back a transaction after the callback threw itself failed; the connection is destroyed rather than returned to the pool. The original callback error is attached as `cause`. Payload: `rollbackError`.
+Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
+
+### RUNTIME.TRANSACTION_TIMEOUT
+
+The runtime transaction exceeded its configured deadline before commit admission. Transaction access is invalidated and its signal aborts with this error. The callback helper destroys the connection without rollback or release, then rejects with this timeout even if disposal fails, without waiting for callback JavaScript; a manual runtime transaction's caller owns cleanup. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-options.md#timeout).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 

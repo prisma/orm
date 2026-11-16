@@ -79,10 +79,16 @@ type NumericOps<Operand> = {
   mul(value: Operand): FieldOperation;
 };
 
-type NumericOperandOf<T> = [T] extends [number] ? number : [T] extends [bigint] ? bigint : never;
+type NumericOperandOf<T> = [NonNullable<T>] extends [never]
+  ? never
+  : [NonNullable<T>] extends [number]
+    ? number
+    : [NonNullable<T>] extends [bigint]
+      ? bigint
+      : never;
 
 /**
- * The update operations on a field whose value is `T`. `inc` and `mul` exist when `NumericOperand` is not `never`, and take it as their operand; by default a `number` field takes a `number` and a `bigint` field a `bigint`.
+ * The update operations on a field whose value is `T`. `inc` and `mul` exist when `NumericOperand` is not `never`, and take it as their operand; by default a `number` field takes a `number` and a `bigint` field a `bigint`, whether or not the field is nullable.
  */
 export type FieldExpression<T = unknown, NumericOperand = NumericOperandOf<T>> = {
   set(value: T): FieldOperation;
@@ -179,16 +185,16 @@ export type ResolveDotPathType<
   : never;
 
 /**
- * The operand of `inc` and `mul` on a required, single-valued scalar field: the codec's input type when its codec has the `numeric` trait, or, for a codec map without traits, a `number` or `bigint` output. A codec entry typed `never` gives no operand.
+ * The operand of `inc` and `mul` on a single-valued scalar field, required or nullable: the codec's input type when its codec has the `numeric` trait, or, for a codec map without traits, a `number` or `bigint` output. A codec entry typed `never` gives no operand.
  */
 type ScalarNumericOperand<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
   K extends keyof MongoModelsMap<TContract>[ModelName]['fields'] & string,
   TCodecTypes extends Record<string, { output: unknown }>,
-> = MongoModelsMap<TContract>[ModelName]['fields'][K] extends
-  | { readonly nullable: true }
-  | { readonly many: { readonly elementNullable: boolean } }
+> = MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
+  readonly many: { readonly elementNullable: boolean };
+}
   ? never
   : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
         readonly type: {

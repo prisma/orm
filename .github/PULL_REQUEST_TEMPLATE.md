@@ -28,16 +28,14 @@ Before you submit:
 <!-- If this PR changes any user-facing surface (CLI commands or flags, public
      TypeScript APIs, `prisma.config.ts` fields, error codes, glossary
      terminology, etc.), describe the skill update made in this PR (typically
-     under `packages/0-shared/skills/`) or state why no update is required.
+     under `skills/`) or state why no update is required.
      If the change is purely internal / refactor with no user-visible delta,
      write "n/a — internal only". -->
 
 ## Checklist
 
 - [ ] All commits are signed off (`git commit -s`) per the [DCO](../CONTRIBUTING.md#developer-certificate-of-origin-dco). The DCO status check will block merge if any commit is missing a `Signed-off-by:` trailer.
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) and the change is scoped to one logical concern.
 - [ ] Tests are updated (or `n/a` if the change is doc-only / refactor with no behavioural delta).
-- [ ] The PR title is in `TML-NNNN: <sentence-case title>` form (Linear ticket prefix + concise title naming the concrete deliverable). See `.claude/skills/create-pr/SKILL.md` for the full convention.
 - [ ] The **Skill update** section above is filled in (or stated `n/a — internal only`).
 
 ## Notes for the reviewer

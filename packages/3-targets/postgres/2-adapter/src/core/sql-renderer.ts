@@ -472,11 +472,13 @@ function renderSource(
   }
 }
 
-function assertScalarSubquery(query: SelectAst): void {
-  if (query.projection.length !== 1) {
+function assertSubqueryColumns(query: SelectAst, columns: number): void {
+  if (query.projection.length !== columns) {
     throw adapterError(
       'RUNTIME.AST_INVALID',
-      'Subquery expressions must project exactly one column',
+      columns === 1
+        ? 'Subquery expressions must project exactly one column'
+        : `A subquery compared with a row value of ${columns} columns must project ${columns} columns`,
       { meta: { node: 'subquery-expr' } },
     );
   }
@@ -486,8 +488,9 @@ function renderSubqueryExpr(
   expr: SubqueryExpr,
   contract: PostgresContract,
   pim: ParamIndexMap,
+  columns = 1,
 ): string {
-  assertScalarSubquery(expr.query);
+  assertSubqueryColumns(expr.query, columns);
   return `(${renderSelect(expr.query, contract, pim)})`;
 }
 
@@ -559,6 +562,14 @@ function renderBinary(expr: BinaryExpr, contract: PostgresContract, pim: ParamIn
   switch (rightNode.kind) {
     case 'list':
       right = renderListLiteral(rightNode, contract, pim);
+      break;
+    case 'subquery':
+      right = renderSubqueryExpr(
+        rightNode,
+        contract,
+        pim,
+        leftExpr.kind === 'list' ? leftExpr.values.length : 1,
+      );
       break;
     case 'literal':
       right = renderLiteral(rightNode);
@@ -715,18 +726,27 @@ function projectJsonThroughCodec(
   return descriptor.projectJson(value, codec);
 }
 
+// A PostgreSQL function takes at most 100 arguments, two per entry. A wider object joins the members of several calls as text, which keeps the entries in order; merging jsonb would sort the keys.
+const JSON_BUILD_OBJECT_MAX_ENTRIES = 50;
+
 function renderJsonObjectExpr(
   expr: JsonObjectExpr,
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
-  const args = expr.entries
-    .flatMap((entry): [string, string] => {
-      const key = `'${escapeLiteral(entry.key)}'`;
-      return [key, renderJsonValueProjection(entry.value, contract, pim)];
-    })
-    .join(', ');
-  return `json_build_object(${args})`;
+  const pairs = expr.entries.map((entry) => {
+    const key = `'${escapeLiteral(entry.key)}'`;
+    return `${key}, ${renderJsonValueProjection(entry.value, contract, pim)}`;
+  });
+  if (pairs.length <= JSON_BUILD_OBJECT_MAX_ENTRIES) {
+    return `json_build_object(${pairs.join(', ')})`;
+  }
+  const members: string[] = [];
+  for (let start = 0; start < pairs.length; start += JSON_BUILD_OBJECT_MAX_ENTRIES) {
+    const chunk = pairs.slice(start, start + JSON_BUILD_OBJECT_MAX_ENTRIES);
+    members.push(`left(substr(json_build_object(${chunk.join(', ')})::text, 2), -1)`);
+  }
+  return `('{' || ${members.join(" || ', ' || ")} || '}')::json`;
 }
 
 function renderOrderByItems(

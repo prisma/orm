@@ -96,12 +96,13 @@ If `contract:` ends in `.prisma`, the source is PSL; if it ends in `.ts`, the so
 
 ## Workflow — Edit a model / field / relation (PSL)
 
-The concept: PSL models lower to tables (or collections, on Mongo); fields lower to columns; `@relation(...)` declares the FK side. Add the relation only on the owning side — the framework derives the back-reference automatically.
+The concept: PSL models lower to tables (or collections, on Mongo); fields lower to columns; `@relation(...)` declares the FK side. The other model gets a relation, and something to `include` from, only when it declares the back-reference itself with no `fields`/`references`: a list field (`posts Post[]`), or an optional singular field for a one-to-one (`profile Profile?`). A singular back-reference needs the FK fields to be unique (`@unique`, or `@@unique([...])` on the FK side); otherwise emit fails with `PSL_NON_UNIQUE_BACKRELATION`.
 
 ```prisma
 model User {
   id    Int    @id @default(autoincrement())
   email String @unique
+  posts Post[]
 }
 
 model Post {
@@ -525,6 +526,7 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 - **Lifecycle callbacks** (`beforeSave`, `afterCreate`, etc.). Not supported. Use middleware (`references/runtime.md`) or app code. The maintainers decided it stays out of the core; an extension may provide it (prisma/orm ADR 293).
 - **Soft delete / `paranoid: true`.** No built-in soft-delete column. Add a nullable `deletedAt DateTime?` and filter explicitly in queries (or in middleware). The maintainers decided it stays out of the core; an extension may provide it (prisma/orm ADR 293).
 - **Scopes / default filters.** No ActiveRecord-style scopes. Compose query helpers yourself. To request scopes, file via `references/feedback.md`.
+- **Derived back-references.** A model has a relation back only when it declares the field itself (`posts Post[]`); nothing adds it for you, and it is optional. The maintainers decided this (prisma/orm ADR 319). `prisma contract infer` writes both sides when it reads an existing database.
 - **Implicit Prisma-ORM many-to-many.** List navigation on both sides without an explicit join model is rejected. Author the join model explicitly. To request implicit M2M, file via `references/feedback.md`.
 
 ## Reference

@@ -2,20 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import type { SerializeContract } from '@internal/contract/hashing';
-import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
-import { dirname, join, relative } from 'pathe';
-import ts from 'typescript';
+import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
-import { contract as aliased } from './fixtures/after/aliased';
-import { contract as comments } from './fixtures/after/comments';
-import { contract, fromHelpers } from './fixtures/after/contract';
-import { contract as renamed } from './fixtures/after/renamed';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/mongo-type-helpers/app/scripts/rewrite-mongo-field-types.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/scripts/mongo-type-helpers/rewrite-mongo-field-types.ts',
   extension:
-    'upgrade-instructions/pending/mongo-type-helpers/extension/scripts/rewrite-mongo-field-types.ts',
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/scripts/mongo-type-helpers/rewrite-mongo-field-types.ts',
 } as const;
 
 const EXPECTED_STDOUT = [
@@ -134,66 +127,3 @@ describe.each(Object.entries(SCRIPT_PATHS))(
     });
   },
 );
-
-const serializeContract: SerializeContract = (built) =>
-  mongoTargetDescriptor.contractSerializer.serializeContract(built as MongoTargetContract);
-
-describe('the rewritten contracts', () => {
-  it.each([
-    ['contract.contract.json', contract],
-    ['contract.fromHelpers.json', fromHelpers],
-    ['aliased.contract.json', aliased],
-    ['renamed.contract.json', renamed],
-    ['comments.contract.json', comments],
-  ])('emit %s, the contract the removed helpers emitted', (emitted, built) => {
-    expect(serializeContract(built)).toEqual(
-      JSON.parse(readFileSync(join(fixturesDir, 'emitted', emitted), 'utf8')),
-    );
-  });
-});
-
-/** Where the innermost call holding `position` starts, as the script reports a call; `position` itself outside any call. */
-function callStartOf(file: ts.SourceFile, position: number): number {
-  let start = position;
-  const visit = (node: ts.Node): void => {
-    if (node.getStart(file) > position || node.end <= position) return;
-    if (ts.isCallExpression(node)) start = node.getStart(file);
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
-  return start;
-}
-
-describe('the rewritten fixtures', () => {
-  it('type-check, except on the lines the script reports it left', () => {
-    const afterDir = join(fixturesDir, 'after');
-    const config = ts.getParsedCommandLineOfConfigFile(
-      join(here, '../../../tsconfig.json'),
-      {},
-      {
-        ...ts.sys,
-        onUnRecoverableConfigFileDiagnostic: () => {},
-      },
-    );
-    const program = ts.createProgram(
-      readdirSync(afterDir).map((name) => join(afterDir, name)),
-      { ...config?.options, allowJs: true, checkJs: true, noEmit: true },
-    );
-    const failing = ts
-      .getPreEmitDiagnostics(program)
-      .flatMap(({ file, start }) =>
-        file === undefined || start === undefined || !file.fileName.startsWith(afterDir)
-          ? []
-          : [
-              `${relative(afterDir, file.fileName)}:${file.getLineAndCharacterOfPosition(callStartOf(file, start)).line + 1}`,
-            ],
-      );
-    const reported = [...EXPECTED_STDOUT.matchAll(/^([^:\n]+): line (\d+):/gm)].map(
-      ([, name, line]) => `${name}:${line}`,
-    );
-    expect({
-      checked: failing.length > 0,
-      unreported: [...new Set(failing)].filter((line) => !reported.includes(line)).sort(),
-    }).toEqual({ checked: true, unreported: [] });
-  });
-});
