@@ -123,21 +123,66 @@ function propertiesOf(schema: Record<string, unknown>): Record<string, string> {
   );
 }
 
+interface PropertyChanges {
+  readonly changed: readonly string[];
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+}
+
+function propertyChanges(
+  origin: Readonly<Record<string, unknown>>,
+  dest: Readonly<Record<string, unknown>>,
+): PropertyChanges {
+  return {
+    changed: Object.keys(dest).filter(
+      (field) => Object.hasOwn(origin, field) && origin[field] !== dest[field],
+    ),
+    added: Object.keys(dest).filter((field) => !Object.hasOwn(origin, field)),
+    removed: Object.keys(origin).filter((field) => !Object.hasOwn(dest, field)),
+  };
+}
+
+/** The property changes of each kind of document both validators describe that the collection-wide changes do not name, each in the words of the documents it applies to. */
+function shapeChanges(
+  origin: MongoSchemaValidator,
+  dest: MongoSchemaValidator,
+  named: PropertyChanges,
+): PropertyChanges {
+  const canonical = (properties: Readonly<Record<string, unknown>>) =>
+    Object.fromEntries(
+      Object.entries(properties).map(([field, schema]) => [field, canonicalize(schema)]),
+    );
+  const shapesBefore = validatorDocumentShapesOf(origin.jsonSchema);
+  const changes = validatorDocumentShapesOf(dest.jsonSchema).flatMap((shape) => {
+    const before = shapesBefore.find(({ key }) => key === shape.key);
+    if (before === undefined || shape.discriminator === undefined) return [];
+    const { field, value } = shape.discriminator;
+    const where = ` in documents whose ${field} is ${JSON.stringify(value)}`;
+    const found = propertyChanges(canonical(before.properties), canonical(shape.properties));
+    const unnamed = (kind: keyof PropertyChanges) =>
+      found[kind].filter((each) => !named[kind].includes(each)).map((each) => `${each}${where}`);
+    return [{ changed: unnamed('changed'), added: unnamed('added'), removed: unnamed('removed') }];
+  });
+  return {
+    changed: changes.flatMap(({ changed }) => changed),
+    added: changes.flatMap(({ added }) => added),
+    removed: changes.flatMap(({ removed }) => removed),
+  };
+}
+
 /**
- * A label naming the properties whose schema changed, so a dry run shows what a validator update does: `Update validator on items (changed: meta; added: note)`.
+ * A label naming the properties whose schema changed, so a dry run shows what a validator update does: `Update validator on items (changed: meta; added: note)`. A change of a variant's properties that the collection's properties as a whole do not show names the variant's documents.
  */
 function validatorUpdateLabel(
   collName: string,
   origin: MongoSchemaValidator,
   dest: MongoSchemaValidator,
 ): string {
-  const originProps = propertiesOf(origin.jsonSchema);
-  const destProps = propertiesOf(dest.jsonSchema);
-  const changed = Object.keys(destProps).filter(
-    (field) => Object.hasOwn(originProps, field) && originProps[field] !== destProps[field],
-  );
-  const added = Object.keys(destProps).filter((field) => !Object.hasOwn(originProps, field));
-  const removed = Object.keys(originProps).filter((field) => !Object.hasOwn(destProps, field));
+  const whole = propertyChanges(propertiesOf(origin.jsonSchema), propertiesOf(dest.jsonSchema));
+  const ofVariants = shapeChanges(origin, dest, whole);
+  const changed = [...whole.changed, ...ofVariants.changed];
+  const added = [...whole.added, ...ofVariants.added];
+  const removed = [...whole.removed, ...ofVariants.removed];
   const parts = [
     ...(changed.length > 0 ? [`changed: ${changed.join(', ')}`] : []),
     ...(added.length > 0 ? [`added: ${added.join(', ')}`] : []),
