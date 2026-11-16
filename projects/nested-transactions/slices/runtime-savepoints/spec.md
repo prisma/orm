@@ -1,0 +1,118 @@
+# Slice: runtime-savepoints
+
+**Project:** `projects/nested-transactions/` (slice 3 of 6). **Linear:** skipped by the operator.
+
+## Outcome
+
+The SQL runtime opens savepoints on an open transaction, enforces the fail-fast guard of project spec decision 3, and settles savepoints with the error behaviour of decision 9. Nothing above the runtime calls it yet: the facades (slices 4 and 5) and the ORM (slice 6) are the first callers.
+
+## At a glance
+
+```ts
+const tx = await connection.transaction()      // BEGIN
+const sp = await tx.savepoint()                // SAVEPOINT sp_1, a 'transaction' activity beneath tx's
+await sp.execute(plan)                         // runs on the driver savepoint
+await tx.execute(plan)                         // rejects RUNTIME.TRANSACTION_SUSPENDED (sp_1 is open)
+await tx.savepoint()                           // rejects RUNTIME.TRANSACTION_ALREADY_OPEN (names sp_1)
+await sp.rollback()                            // ROLLBACK TO SAVEPOINT sp_1, activity rolled-back at once
+await tx.execute(plan)                         // allowed again
+await tx.commit()                              // COMMIT
+```
+
+## Chosen design
+
+All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtime.ts`, `activity-handle.ts`, `transaction-state.ts`, and a new file if the savepoint code reads better on its own).
+
+1. **`RuntimeTransaction.savepoint(): Promise<RuntimeTransaction>`** (project spec decision 8). Required, no options. The returned level is a `RuntimeTransaction` itself, so `savepoint()` on it stacks another savepoint.
+   - It calls the driver's `SqlTransaction.savepoint(name)` (slice 1) on the level's driver transaction.
+   - On the returned level, `commit()` calls the driver savepoint's `commit()` (`RELEASE SAVEPOINT`) and `rollback()` calls its `rollback()` (`ROLLBACK TO SAVEPOINT`).
+   - Statements on the level run on the driver savepoint and are parented to the savepoint's activity, as statements on a transaction are parented to the transaction's activity today.
+   - `signal` is the outer transaction's signal.
+2. **The savepoint activity** (project spec decision 6, slice 2). `startTransactionActivity` runs with the parent level's activity as parent, before `SAVEPOINT` is sent. Settlements:
+   - `commit()` succeeds or fails: `{ by: 'release', outcome }`.
+   - `rollback()` succeeds or fails: `{ by: 'rollback', outcome, commitAttempted }`, where `commitAttempted` is true when `commit()` was called first.
+   - `SAVEPOINT` fails: `{ by: 'rollback', outcome: 'failed', commitAttempted: false }`, and `savepoint()` rejects with the driver error. The parent level stays usable.
+   - An `activityStarted` hook throws: no `SAVEPOINT` is sent, `savepoint()` rejects, and the parent level stays usable (decision 9).
+3. **`savepoint()` on an activity handle** opened on a transaction or on a savepoint. The new savepoint's activity is a child of the handle's activity. Handles opened on the runtime or on a connection have no `savepoint`. `ActivityHandle` gains an optional `savepoint?: () => Promise<RuntimeTransaction>`, documented like the existing optional `transaction`.
+4. **Names.** `sp_<n>`, from a counter per connection that starts at 1 and only goes up. Only one savepoint is open per level, so names never collide.
+5. **The guard** (decision 3). Each level tracks its open child savepoint, at most one.
+   - `savepoint()` on a level that has an open child rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`. The message names the open savepoint (`sp_<n>`). No `SAVEPOINT` is sent and no activity is started.
+   - A statement or `commit()` on a level that has an open child rejects with the new `RUNTIME.TRANSACTION_SUSPENDED`. Its details carry the open savepoint's activity ID. Nothing is sent to the driver. The level is usable again once the child has settled.
+   - `rollback()` on a level that has an open child is allowed. The driver rollback of the level also undoes the open descendants. Each open descendant is closed first, innermost first: its activity ends `{ by: 'rollback', outcome, commitAttempted: false }`, with the outcome of the level's rollback, and later work on it rejects with `RUNTIME.TRANSACTION_CLOSED`. This is the path `withTransaction` takes when a callback throws, or a timeout fires, while a savepoint is open.
+6. **Closed levels.** A savepoint refuses work with `RUNTIME.TRANSACTION_CLOSED` once it has settled, or once any enclosing level has settled, been invalidated, or been closed by the outer transaction's timeout. This covers the note slice 2 left for this slice: the framework accepts work beneath a savepoint after the outer `commit()` or `rollback()` has been called, so the runtime must refuse it.
+7. **A failed `ROLLBACK TO` invalidates every level** up to and including the outer transaction (decision 9).
+   - The savepoint's `rollback()` rejects with the driver error.
+   - Every enclosing level then refuses statements, `savepoint()` and `commit()` with `RUNTIME.TRANSACTION_CLOSED`, without sending anything.
+   - The outer transaction's `rollback()` rejects with `RUNTIME.TRANSACTION_CLOSED`, without sending `ROLLBACK`, and its activity ends `{ by: 'rollback', outcome: 'failed', commitAttempted }`. The settle code that exists today then destroys the connection: `withTransaction` after a failed rollback, and the owned transaction (`owned-transaction.ts`) after a failed rollback.
+8. **A failed `RELEASE`.** The savepoint's `commit()` rejects with the driver error, and the savepoint is still open. `rollback()` on it then sends `ROLLBACK TO`. If that succeeds, the parent level is usable again. The decision 9 sequence for a nested callback (rollback after a failed release, then throw `RUNTIME.TRANSACTION_COMMIT_FAILED`) is `withSavepoint`'s job in slice 4; this slice provides the level operations it needs.
+9. **Top-level behaviour is unchanged.** `withTransaction`, its options, timeout, abort handling and error codes stay as they are. Its guarded handle drops `savepoint` as it drops `transaction`; slices 4 and 6 decide how a guarded context exposes it.
+
+### Errors
+
+- `RUNTIME.TRANSACTION_SUSPENDED`: new factory next to `transactionClosedError` and `transactionAlreadyOpenError`. Message names the open savepoint. Details: `{ savepointId }`, the open savepoint's activity ID.
+- `RUNTIME.TRANSACTION_ALREADY_OPEN`: the existing code and factory; the savepoint case gets its own message that names the open savepoint.
+
+## Coherence rationale
+
+The savepoint level, its activity, the guard and the invalidation rules are one state machine on one transaction. Splitting them would ship a `savepoint()` that lets a sibling's `ROLLBACK TO` undo another sibling's work. The error-reference entries describe the codes this slice adds, and the subsystem doc and ADR statements that "transactions do not nest" stop being true in this slice.
+
+## Scope
+
+**In:**
+
+- `packages/2-sql-family/5-runtime/src`: everything in § Chosen design.
+- `packages/2-sql-family/5-runtime/test`: a new test file (or files) for savepoints, and `savepoint` support in `test/transaction-activity-fixtures.ts`'s stub driver (records `SAVEPOINT`, `RELEASE`, `ROLLBACK TO` events; configurable failures for each).
+- Other implementers of `RuntimeTransaction` or `ActivityHandle` in the workspace, if any, gain the member so the workspace typechecks. Test stubs only.
+- `docs/reference/error-reference.md`: a `RUNTIME.TRANSACTION_SUSPENDED` entry; savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN` (it now says transactions do not nest).
+- `docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md` and ADR 271: the statements that a handle opened under a transaction has no `transaction`, so transactions do not nest. They now say that such a handle has `savepoint()` instead. Slice 2's spec left these to this slice.
+
+**Out:**
+
+- `withSavepoint`, any facade, `tx.transaction(cb)`, the ORM, and `withTransaction`'s settle code (slices 4, 5 and 6).
+- `packages/1-framework/**`. If the design needs a framework change, stop and surface it.
+- Drivers (slice 1).
+
+## Slice done conditions
+
+Beyond CI, review and the project DoD. Each is a runtime test with the stub driver, as the existing `transaction-activity.*` tests are:
+
+- [ ] Released savepoint: `SAVEPOINT sp_1`, statement, `RELEASE SAVEPOINT sp_1`; middleware sees a `'transaction'` activity beneath the outer one, finalized with the outer outcome. Rolled-back savepoint: finalized `rolled-back` before `rollback()` resolves, and the outer commit is `committed`.
+- [ ] A savepoint inside a savepoint gets the next name, and the counter is per connection.
+- [ ] `savepoint()` with an open sibling rejects `TRANSACTION_ALREADY_OPEN` naming it, with nothing sent.
+- [ ] A statement and `commit()` on a level with an open child reject `TRANSACTION_SUSPENDED` with the child's activity ID; the level works again after the child settles.
+- [ ] `rollback()` on a level with an open child closes the child; later work on it rejects `TRANSACTION_CLOSED`.
+- [ ] Work on a savepoint after the outer transaction settled rejects `TRANSACTION_CLOSED`.
+- [ ] A failed `ROLLBACK TO` invalidates every level; on an owned transaction (`runtime.transaction()`), the connection is destroyed when the outer rolls back.
+- [ ] A failed `RELEASE` followed by a successful `rollback()` leaves the parent usable and its commit `committed`.
+- [ ] A refused start (`activityStarted` throws) and a failed `SAVEPOINT` both reject `savepoint()` and leave the parent usable.
+- [ ] `savepoint()` on an activity handle under a transaction and under a savepoint; absent on runtime and connection handles.
+- [ ] Existing `sql-runtime` tests pass unchanged.
+
+## Edge cases investigated
+
+- **The branch base.** Slice 1's branch was merged with a `main` from before slice 2. `origin/main` (with slice 2) was merged into this branch before planning. The rebase before the PR drops that merge commit.
+- **`RuntimeConnection.transaction()` with an open transaction** has no guard today (only the connection-route handle has one). Unchanged in this slice.
+- **The outer transaction's timeout** closes the outer level; rule 6 extends that to its savepoints. An outer `rollback()` from the timeout path closes open savepoints by rule 5.
+
+## Plan (one dispatch)
+
+**D1: runtime savepoints, with docs.**
+
+- **Outcome:** everything in § Chosen design and § Slice done conditions.
+- **Builds on:** this branch: slice 1 (driver `savepoint()`) and `origin/main` with slice 2.
+- **Hands to:** slice 4 (`withSavepoint`, Postgres facade) and slice 6 (ORM).
+- **Focus:** tests first, then the implementation, then the docs. Suggested commits:
+  1. Stub-driver support and tests, with the implementation.
+  2. Docs.
+  3. Slice artifacts: the orchestrator commits these.
+- **Validation gate:**
+  - `pnpm build`, then `pnpm typecheck`.
+  - `pnpm --filter @internal/sql-runtime test` and `pnpm --filter @internal/sql-runtime lint`.
+  - `pnpm --filter` test for every other package whose stubs changed.
+  - `pnpm lint:deps`.
+- **Size:** about 570 changed lines (about 200 production, 350 tests, 20 docs). Cap: about 570.
+
+## References
+
+- Project spec: decisions 3, 6, 8, 9; cross-cutting requirements.
+- Slice 1: `slices/driver-savepoints/spec.md`. Slice 2: `slices/nested-transaction-activity/spec.md` (§ Notes for slice 3).
