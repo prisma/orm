@@ -709,7 +709,7 @@ function buildIncludeChildRowsSelect(
   };
 }
 
-interface Tied {
+interface IncludeTieArtifacts {
   readonly parentKey: ReadonlyArray<ProjectionItem>;
   /** Whether nested includes are subqueries of this statement, rather than statements of their own. */
   readonly nestsIncludes: boolean;
@@ -728,7 +728,7 @@ function tieToParent(
   parent: IncludeParent,
   include: IncludeExpr,
   child: AliasedTable,
-): Tied {
+): IncludeTieArtifacts {
   if (tie === 'outerReference') {
     return {
       parentKey: [],
@@ -841,7 +841,7 @@ function pagePerParent(
     {
       select: kept.select.withOrderBy([]),
       keys: parentKey.map((key) => ColumnRef.of(kept.alias, key.alias)),
-      order: [OrderByItem.asc(ColumnRef.of(kept.alias, ROW_NUMBER_ALIAS))],
+      order: [OrderByItem.asc(ColumnRef.of(kept.alias, PAGE_ROW_NUMBER_ALIAS))],
     },
     parentKey,
     (rowNumber) => BinaryExpr.lte(rowNumber, limitOffsetExpr(limit)),
@@ -861,7 +861,7 @@ interface RowsLevel {
   readonly order: readonly OrderByItem[];
 }
 
-const ROW_NUMBER_ALIAS = '__prisma_row_number';
+const PAGE_ROW_NUMBER_ALIAS = '__prisma_page_rn';
 
 function pagesOrRemovesDuplicates(state: CollectionState): boolean {
   return (
@@ -905,21 +905,21 @@ function numberedRows(
   keep: (rowNumber: AnyExpression) => AnyExpression,
 ): { readonly select: SelectAst; readonly alias: string } {
   const alias = scope.alias(preferredAlias);
-  const visible = level.select.projection.filter((item) => item.alias !== ROW_NUMBER_ALIAS);
+  const visible = level.select.projection.filter((item) => item.alias !== PAGE_ROW_NUMBER_ALIAS);
   const numbered = level.select.withProjection([
     ...visible,
     ProjectionItem.of(
-      ROW_NUMBER_ALIAS,
+      PAGE_ROW_NUMBER_ALIAS,
       WindowFuncExpr.rowNumber({ partitionBy: [...level.keys], orderBy: [...level.order] }),
     ),
   ]);
-  const rowNumber = ColumnRef.of(alias, ROW_NUMBER_ALIAS);
+  const rowNumber = ColumnRef.of(alias, PAGE_ROW_NUMBER_ALIAS);
   const select = SelectAst.from(DerivedTableSource.as(alias, numbered))
     .withProjection([
       ...visible.map((item) =>
         ProjectionItem.of(item.alias, ColumnRef.of(alias, item.alias), item.codec),
       ),
-      ProjectionItem.of(ROW_NUMBER_ALIAS, rowNumber),
+      ProjectionItem.of(PAGE_ROW_NUMBER_ALIAS, rowNumber),
     ])
     .withWhere(keep(rowNumber))
     .withOrderBy([

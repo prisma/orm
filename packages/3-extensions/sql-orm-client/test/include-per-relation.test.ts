@@ -94,7 +94,7 @@ describe('a read with includes, one query per relation', () => {
     const { collection, runtime } = createCollectionFor('User', perRelationContract);
     runtime.setNextResults([
       [{ id: 1, name: 'Ada' }],
-      [{ __prisma_parent_key_0: 1, id: 10, title: 'A', __prisma_row_number: 1 }],
+      [{ __prisma_parent_key_0: 1, id: 10, title: 'A', __prisma_page_rn: 1 }],
       [{ __prisma_parent_key_0: 10, body: 'Nice' }],
     ]);
 
@@ -112,7 +112,7 @@ describe('a read with includes, one query per relation', () => {
       rows: [{ name: 'Ada', posts: [{ title: 'A', comments: [{ body: 'Nice' }] }] }],
       projections: [
         ['name', 'id'],
-        ['__prisma_parent_key_0', 'title', '__prisma_row_number', 'id'],
+        ['__prisma_parent_key_0', 'title', '__prisma_page_rn', 'id'],
         ['__prisma_parent_key_0', 'body'],
       ],
     });

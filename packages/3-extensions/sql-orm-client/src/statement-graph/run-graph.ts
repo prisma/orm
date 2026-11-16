@@ -8,7 +8,7 @@ import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
 import {
   consumeCollectionRows,
-  consumeRelatedRows,
+  consumeRowsWithAttachedIncludes,
   type DescribeCollectionRowsOptions,
 } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
@@ -190,7 +190,11 @@ function shapeRows<Row>(
   const { context, namespaceId, modelName, state } = callerRows;
   const { contract } = context;
   if (loadsIncludesPerRelation(contract, state.includes)) {
-    return consumeRelatedRows<Row>(callerRows, storageRows, hiddenColumnsOf(graph, id, state));
+    return consumeRowsWithAttachedIncludes<Row>(
+      callerRows,
+      storageRows,
+      hiddenColumnsOf(graph, id, state),
+    );
   }
   const { tableName } = state.tables.root.storage;
   const selected =

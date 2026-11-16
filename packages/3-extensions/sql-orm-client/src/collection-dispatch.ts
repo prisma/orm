@@ -159,14 +159,14 @@ export function readsNoRows(read: RelatedRead): boolean {
   return read.include.nested.limit === 0;
 }
 
-export function consumeRelatedRows<Row>(
+export function consumeRowsWithAttachedIncludes<Row>(
   options: DescribeCollectionRowsOptions,
   rows: AsyncIterableResult<Record<string, unknown>>,
   hidden: HiddenColumns,
 ): AsyncIterableResult<Row> {
   const { context, state, modelName, namespaceId } = options;
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const shape = await relatedRowShaper(context, namespaceId, modelName, state, hidden);
+    const shape = await attachedIncludeRowShaper(context, namespaceId, modelName, state, hidden);
     for await (const row of rows) {
       yield blindCast<Row, 'collection row generic matches the selected model shape'>(shape(row));
     }
@@ -177,7 +177,7 @@ export function consumeRelatedRows<Row>(
 type RowShaper = (row: Record<string, unknown>) => Record<string, unknown>;
 type ReadShaper = (row: Record<string, unknown>) => unknown;
 
-async function relatedRowShaper(
+async function attachedIncludeRowShaper(
   context: CodecExecutionContext,
   namespaceId: string,
   modelName: string,
@@ -241,7 +241,7 @@ async function relatedReadShaper(
       return value === null || value === undefined ? empty : value;
     };
   }
-  const shapeChild = await relatedRowShaper(
+  const shapeChild = await attachedIncludeRowShaper(
     context,
     include.relatedNamespaceId,
     include.relatedModelName,
