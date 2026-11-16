@@ -24,30 +24,67 @@ export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): Keep
   });
 }
 
-/** The run's statements, without the delete that answers `subject`. */
-function otherStatements(invocation: CliInvocation, subject: string): readonly string[] {
-  const answer = statementFlag({ verb: 'delete', text: subject });
-  return (invocation.statementArgs ?? []).filter((flag) => flag !== answer);
+/** The run's statements, without the deletes that answer `subjects`. */
+function otherStatements(
+  invocation: CliInvocation,
+  subjects: readonly string[],
+): readonly string[] {
+  const answers = subjects.map((text) => statementFlag({ verb: 'delete', text }));
+  return (invocation.statementArgs ?? []).filter((flag) => !answers.includes(flag));
 }
 
-/** Two runs of `db update`: one renames the member to a new member with the new stored value, and the next renames it back. */
-function twoRuns(invocation: CliInvocation, subject: string): string {
+function enumAndMember(subject: string): { readonly enumName: string; readonly member: string } {
   const dot = subject.lastIndexOf('.');
-  const enumName = subject.slice(0, dot);
-  const member = subject.slice(dot + 1);
+  return { enumName: subject.slice(0, dot), member: subject.slice(dot + 1) };
+}
+
+function listed(words: readonly string[]): string {
+  return words.length < 2
+    ? words.join('')
+    : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/**
+ * Two runs of `db update` that end at the contract with every member under its own name: the first
+ * renames the members to temporary members with stored values the enum does not use, and the second
+ * renames them back with their new stored values. Each run changes stored values, so the database
+ * records the names of both.
+ */
+function twoRuns(invocation: CliInvocation, subject: string, others: readonly string[]): string {
+  const { enumName } = enumAndMember(subject);
+  const subjects = [
+    subject,
+    ...others.filter((other) => enumAndMember(other).enumName === enumName),
+  ];
+  const members = subjects.map((each) => enumAndMember(each).member);
+  const one = members.length === 1;
+  const temporary = (member: string) =>
+    `${enumName}.<temporary member${one ? '' : ` for ${member}`}>`;
   const emit = quoted(cliCommand(invocation, 'contract emit'));
-  const rename = statementFlag({ verb: 'rename', text: `${subject}:${enumName}.<new member>` });
   const first = cliCommand(invocation, 'db update', [
-    ...otherStatements(invocation, subject),
-    rename,
+    ...otherStatements(invocation, subjects),
+    ...members.map((member) =>
+      statementFlag({ verb: 'rename', text: `${enumName}.${member}:${temporary(member)}` }),
+    ),
   ]);
-  return `To keep it with db update, rename member ${member} of enum ${enumName} in the contract source to a name the enum does not have, keep its new stored value, run ${emit}, and run ${quoted(first)}. Then rename the member back to ${member}, run ${emit}, and run ${quoted(cliCommand(invocation, 'db update'))} again.`;
+  const second = cliCommand(
+    invocation,
+    'db update',
+    members.map((member) =>
+      statementFlag({ verb: 'rename', text: `${temporary(member)}:${enumName}.${member}` }),
+    ),
+  );
+  const names = listed(members);
+  return one
+    ? `To keep it with db update, change it in two runs. First rename member ${names} of enum ${enumName} in the contract source to a name the enum does not have and give it a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename that member back to ${names} with its new stored value, run ${emit}, and run ${quoted(second)}.`
+    : `To keep it with db update, change them in two runs. First rename members ${names} of enum ${enumName} in the contract source to names the enum does not have and give each a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename those members back to ${names} with their new stored values, run ${emit}, and run ${quoted(second)}.`;
 }
 
 /**
  * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change
  * with `migration plan` from the contract the database is at, when a migration ends there, or
- * renames the member to a new member and back in two runs.
+ * changes the stored values in two runs through temporary members; members that swap values do
+ * that only when no migration ends there.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
@@ -57,26 +94,20 @@ export function dbUpdateKeepDataEditAdvice(
     const deleteFlag = statementFlag({ verb: 'delete', text: subject });
     const swaps = edits.some(({ swapsValues }) => swapsValues === true);
     const lead = swaps
-      ? `db update cannot keep that data, because members of the enum swap stored values, and ${deleteFlag} removes it.`
+      ? `db update cannot keep that data in one run, because members of the enum swap stored values, and ${deleteFlag} removes it.`
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
-    if (databaseStorageHash === undefined) {
-      return swaps
-        ? {
-            lead: `${lead} Only a migration can keep it, and no migration ends at the contract the database is at.`,
-            ways: [],
-          }
-        : { lead, ways: [twoRuns(invocation, subject)] };
-    }
+    const runs = twoRuns(invocation, subject, others);
+    if (databaseStorageHash === undefined) return { lead, ways: [runs] };
     const deletes = [subject, ...others].map((text) => statementFlag({ verb: 'delete', text }));
     const plan = printedPlanCommand(invocation, databaseStorageHash, [
-      ...otherStatements(invocation, subject).filter((flag) => !deletes.includes(flag)),
+      ...otherStatements(invocation, [subject]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
     return {
       lead,
       ways: [
         `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
-        ...(swaps ? [] : [twoRuns(invocation, subject)]),
+        ...(swaps ? [] : [runs]),
       ],
     };
   };
