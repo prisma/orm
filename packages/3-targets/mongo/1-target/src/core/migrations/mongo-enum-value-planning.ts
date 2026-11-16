@@ -53,6 +53,8 @@ export interface EnumValueRewrite {
   readonly keepDataEdit: KeepDataEdit | undefined;
   /** For a removal whose data no edit of this migration can keep safely, how to keep it instead. */
   readonly keepDataAdvice: string | undefined;
+  /** How to make a change of this enum's stored values in two migrations, when one migration cannot make it safely. */
+  readonly twoMigrationsAdvice: string;
 }
 
 /** The stored value rewrites of a plan: replacements, run in the replacement step, and removals, run last. */
@@ -226,9 +228,9 @@ function valueChanges(
 }
 
 /**
- * The changes of an enum whose replacement reads a stored value another replacement of the same
- * migration writes, or writes one another replacement reads: swaps and chains. Re-running such a
- * migration after a later operation stops would apply the replacement a second time.
+ * The changes of an enum whose new value another change reads, or whose old value another change
+ * writes: swaps and chains. A removal among them cannot keep its data with a replacement in the
+ * same migration, which the plan would refuse.
  */
 function overlappingChanges(changes: readonly ValueChange[]): readonly ValueChange[] {
   const replacing = changes.filter((change) => change.to !== undefined);
@@ -242,20 +244,28 @@ function overlappingChanges(changes: readonly ValueChange[]): readonly ValueChan
   );
 }
 
-function overlapList(changes: readonly ValueChange[]): string {
-  const moves = changes.map(
-    ({ from, to }) => `${JSON.stringify(from)} with ${JSON.stringify(to ?? null)}`,
-  );
-  return moves.length === 1
-    ? (moves[0] ?? '')
-    : `${moves.slice(0, -1).join(', ')} and ${moves.at(-1)}`;
+function isBooleanEnum(enums: EnumComparison): boolean {
+  return enums.originEnum.members.some(({ value }) => typeof value === 'boolean');
 }
 
-export const ONE_AT_A_TIME =
-  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
+const NO_THIRD_BOOLEAN =
+  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two migrations.';
+
+const SWAP_IN_ONE_UPDATE =
+  'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
 
 function twoMigrationsAdvice(enums: EnumComparison, change: ValueChange): string {
+  if (isBooleanEnum(enums)) {
+    return `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
+  }
   return `To keep that data, make the change in two migrations: first change the stored value of ${enumValueText(enums.fromContract, change.enumValue)} to one the enum does not use and apply it, then change it to ${JSON.stringify(change.to ?? null)}. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
+}
+
+/** How to make a change of the enum's stored values that one migration cannot make safely. */
+function enumTwoMigrationsAdvice(enums: EnumComparison): string {
+  return isBooleanEnum(enums)
+    ? `${NO_THIRD_BOOLEAN} Leave out these statements, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from the migration.ts that migration plan writes before you apply it.`
+    : 'Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.';
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -341,24 +351,6 @@ function mergingRefusal(
   );
 }
 
-function overlapRefusal(
-  enums: EnumComparison,
-  statement: ResolvedEnumValueRenameStatement,
-  overlapping: readonly ValueChange[],
-): MigrationPlannerConflict {
-  return {
-    ...refused(
-      enums,
-      { enumValue: statement.from, statement },
-      `the migration replaces stored values that its other replacements write (${overlapList(overlapping)})`,
-      `${ONE_AT_A_TIME} If a later operation stops and the migration runs again, a replacement whose old value another replacement wrote would replace it a second time. Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.`,
-    ),
-    leaveOut: overlapping.flatMap((change) =>
-      change.statement === undefined ? [] : [change.statement],
-    ),
-  };
-}
-
 function unlistedRefusal(
   enums: EnumComparison,
   change: Pick<ValueChange, 'enumValue' | 'statement'>,
@@ -394,9 +386,9 @@ export interface EnumValueInput {
  * The rewrites of stored enum values a plan makes, as SQL plans them. Enums are compared by the
  * stored value of each member (see `valueChanges`). A changed value is rewritten at every place the
  * destination's documents hold the enum: a rename statement replaces it, and any other change
- * removes it, which the plan asks about, with the replacements that would keep its data. Changes are
- * ordered so none overwrites a value another still has to read; rename statements that move values
- * in a cycle, merge two values, or leave a value another member stores are refused. A rename in a
+ * removes it, which the plan asks about, with the replacements that would keep its data. Rename
+ * statements that merge two values, or leave a value another member stores, are refused; the
+ * planner refuses swaps and chains for the whole plan (see `overlapRefusal`). A rename in a
  * collection whose control policy is not `managed` is refused, and a removal there is left out. With
  * no origin contract, nothing is known to have changed.
  */
@@ -475,10 +467,7 @@ function planEnum(
   }
   if (checked.length === 0) return ok({ replacements: [], removals: [] });
   const overlapping = overlappingChanges(checked);
-  const overlappingStatement = overlapping.find((change) => change.statement !== undefined);
-  if (overlappingStatement?.statement !== undefined) {
-    return notOk([overlapRefusal(enums, overlappingStatement.statement, overlapping)]);
-  }
+  const advice = enumTwoMigrationsAdvice(enums);
   const places = placesOfEnum(contract, namespaceId, enumName);
   if (!places.ok) {
     const [first] = checked;
@@ -531,6 +520,7 @@ function planEnum(
           statement: change.statement,
           keepDataEdit: undefined,
           keepDataAdvice: undefined,
+          twoMigrationsAdvice: advice,
         });
         continue;
       }
@@ -555,6 +545,7 @@ function planEnum(
               }
             : undefined,
         keepDataAdvice: keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, change) : undefined,
+        twoMigrationsAdvice: advice,
       });
     }
   }

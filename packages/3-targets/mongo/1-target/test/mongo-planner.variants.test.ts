@@ -89,7 +89,13 @@ function rendered(result: ReturnType<typeof plan>): readonly string[] {
 const ONE_AT_A_TIME =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
-const TWO_MIGRATIONS = `${ONE_AT_A_TIME} If a later operation stops and the migration runs again, an operation whose discriminator value another operation wrote would delete or rewrite those documents a second time. Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.`;
+const TWO_MIGRATIONS = `${ONE_AT_A_TIME} An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.`;
+
+const replaceLabel = (from: string, to: string, field = 'type') =>
+  `Replace value "${from}" with "${to}" in field ${field} of collection tasks`;
+
+const deleteLabel = (value: string, field = 'type') =>
+  `Delete the documents of collection tasks whose ${field} is "${value}"`;
 
 describe('MongoMigrationPlanner, a variant whose discriminator value changes', () => {
   const changed = tasks('to', { Bug: { ...BUG, value: 'defect' }, Epic: EPIC });
@@ -253,8 +259,7 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
     expect(refusal(result)).toEqual([
       {
         kind: 'statementRefused',
-        summary:
-          'Cannot convert variant "Epic": other operations of the migration free the discriminator value it writes, or write the value it frees (variant "Bug" deletes its documents with "bug" and variant "Epic" moves "epic" to "bug")',
+        summary: `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')})`,
         why: TWO_MIGRATIONS,
       },
     ]);
@@ -276,8 +281,7 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
     ).toEqual([
       {
         kind: 'statementRefused',
-        summary:
-          'Cannot convert variant "Bug": other operations of the migration free the discriminator value it writes, or write the value it frees (variant "Bug" moves "bug" to "epic" and variant "Epic" moves "epic" to "bug")',
+        summary: `Cannot convert variant "Bug": the migration writes a value that another of its operations reads (${replaceLabel('bug', 'epic')}; ${replaceLabel('epic', 'bug')})`,
         why: TWO_MIGRATIONS,
       },
     ]);
@@ -294,7 +298,7 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
         }),
       )[0]?.summary,
     ).toBe(
-      'Cannot convert variant "Bug": other operations of the migration free the discriminator value it writes, or write the value it frees (variant "Bug" moves "bug" to "defect" and variant "Epic" moves "epic" to "bug")',
+      `Cannot convert variant "Bug": the migration writes a value that another of its operations reads (${replaceLabel('bug', 'defect')}; ${replaceLabel('epic', 'bug')})`,
     );
   });
 });
@@ -399,7 +403,7 @@ describe('MongoMigrationPlanner, a removed variant whose base renames its discri
         }),
       ).map(({ summary }) => summary),
     ).toEqual([
-      'Cannot convert variant "Epic": other operations of the migration free the discriminator value it writes, or write the value it frees (variant "Bug" deletes its documents with "bug" and variant "Epic" moves "epic" to "bug")',
+      `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${deleteLabel('bug', 'kind')}; ${replaceLabel('epic', 'bug', 'kind')})`,
     ]);
   });
 });
@@ -508,6 +512,45 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
       dataLoss: [],
       rendered: [REPLACE],
     });
+  });
+
+  it('refuses an enum value rename that takes the value of a removed variant, with no variant statement', () => {
+    const renameEpic: ResolvedMigrationStatement = {
+      kind: 'rename',
+      entity: 'enumValue',
+      from: { namespaceId: NS, enum: 'Kind', member: 'EPIC' },
+      to: { namespaceId: NS, enum: 'Kind', member: 'ISSUE' },
+    };
+    const result = plan({
+      from,
+      to: tasks(
+        'to',
+        { Epic: { ...EPIC, value: 'bug' } },
+        {},
+        {
+          discriminatorType: { codecId: 'mongo/string@1', valueSet: 'Kind' },
+          enums: kind({ BUG: 'old', ISSUE: 'bug' }),
+        },
+      ),
+      schema: live,
+      statements: [renameEpic],
+    });
+    if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
+    expect(
+      result.conflicts.map(({ kind, summary, why, leaveOut }) => ({
+        kind,
+        summary,
+        why,
+        leaveOut,
+      })),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')}; Remove value "bug" from field type of collection tasks)`,
+        why: TWO_MIGRATIONS,
+        leaveOut: [renameEpic],
+      },
+    ]);
   });
 });
 

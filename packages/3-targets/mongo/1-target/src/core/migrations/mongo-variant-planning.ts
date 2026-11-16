@@ -20,7 +20,6 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { ONE_AT_A_TIME } from './mongo-enum-value-planning';
 import {
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
@@ -53,7 +52,7 @@ export interface VariantDocumentRewrite {
   readonly statement: VariantStatement | undefined;
 }
 
-/** The variant rewrites of a plan: deletes, run before replacements, so a value a delete frees could be taken. */
+/** The variant rewrites of a plan: deletes, run before replacements so that later rewrites read fewer documents, and replacements. */
 export interface VariantDocumentRewrites {
   readonly deletes: readonly VariantDocumentRewrite[];
   readonly replacements: readonly VariantDocumentRewrite[];
@@ -194,18 +193,6 @@ function variantText(model: ModelCoordinate): string {
   return `variant ${quoted(modelDisplayName(model))}`;
 }
 
-function moveText(change: VariantChange): string {
-  return change.to === undefined
-    ? `${variantText(change.model)} deletes its documents with ${quoted(change.from)}`
-    : `${variantText(change.model)} moves ${quoted(change.from)} to ${quoted(change.to)}`;
-}
-
-function listText(items: readonly string[]): string {
-  return items.length <= 1
-    ? items.join('')
-    : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
-}
-
 function changeLabel(change: VariantChange, input: VariantInput, fromContract: ContractWithDomain) {
   return change.statement === undefined
     ? `Cannot delete the documents of ${variantText(change.model)}`
@@ -228,44 +215,9 @@ function refusedChange(
       };
 }
 
-/**
- * The changes in one collection's discriminator field that read a value another change writes, or
- * write one another change frees: a delete whose value a replacement takes, swaps, and chains.
- */
-function overlapping(changes: readonly VariantChange[]): readonly VariantChange[] {
-  const sameField = (a: VariantChange, b: VariantChange) =>
-    a.collection === b.collection && a.field === b.field;
-  return changes.filter((change) =>
-    changes.some(
-      (other) =>
-        other !== change &&
-        sameField(change, other) &&
-        ((other.to !== undefined && other.to === change.from) ||
-          (change.to !== undefined && change.to === other.from)),
-    ),
-  );
-}
-
-const TWO_MIGRATIONS = `${ONE_AT_A_TIME} If a later operation stops and the migration runs again, an operation whose discriminator value another operation wrote would delete or rewrite those documents a second time. Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.`;
-
-function overlapRefusal(
-  changes: readonly VariantChange[],
-  input: VariantInput,
-  fromContract: ContractWithDomain,
-): MigrationPlannerConflict | undefined {
-  const found = overlapping(changes);
-  const writer = found.find((change) => change.statement !== undefined);
-  if (writer?.statement === undefined) return undefined;
-  return {
-    ...refusedChange(
-      writer,
-      changeLabel(writer, input, fromContract),
-      `other operations of the migration free the discriminator value it writes, or write the value it frees (${listText(found.map(moveText))})`,
-      TWO_MIGRATIONS,
-    ),
-    leaveOut: found.flatMap((change) => (change.statement === undefined ? [] : [change.statement])),
-  };
-}
+/** How to change discriminator values that one migration cannot change safely. */
+export const VARIANT_TWO_MIGRATIONS =
+  'Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.';
 
 /** Why a change cannot be planned in its collection: a time-series collection, or, for a statement, one whose control policy is not `managed`. */
 function collectionRefusal(
@@ -368,10 +320,10 @@ function callOf(change: VariantChange): ReplaceStoredValueCall | DeleteDocuments
  * destination changes or drops, as SQL plans their rows. A rename or convert statement replaces a
  * changed value in the base's collection; a changed value with no statement, and a variant the
  * destination no longer has, delete the documents that hold the old value, which the plan asks about.
- * Deletes run first. MongoDB applies operations one at a time and a re-run repeats every operation
- * whose postcheck does not hold, so a plan where one operation writes a value another frees is
- * refused, as is a rewrite that would reach the documents of another root model in the same
- * collection. In a collection whose control policy is not `managed`, a statement is refused and a
+ * Deletes run first, so later rewrites read fewer documents; a delete and a replacement of the same
+ * value are refused for the whole plan (see `overlapRefusal`), so the order does not decide what the
+ * documents end as. A rewrite that would reach the documents of another root model in the same
+ * collection is refused. In a collection whose control policy is not `managed`, a statement is refused and a
  * delete left out. The discriminator is read from the destination's base, so a base that renames it
  * is followed, and a base that no longer has one keeps every document. A replacement of an enum value
  * that already moves a variant's value is that variant's replacement. With no origin contract,
@@ -397,8 +349,6 @@ export function planVariantDocumentRewrites(
     return refusal === undefined ? [] : [refusal];
   });
   if (refusals.length > 0) return notOk(refusals);
-  const overlap = overlapRefusal(changes, input, fromContract);
-  if (overlap !== undefined) return notOk([overlap]);
   const rewrites = changes.map((change) => ({ ...change, call: callOf(change) }));
   return ok({
     deletes: rewrites.filter(({ to }) => to === undefined),

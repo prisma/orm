@@ -95,6 +95,20 @@ function sameField(a: FieldCoordinate, b: FieldCoordinate) {
   return a.namespaceId === b.namespaceId && a.model === b.model && a.field === b.field;
 }
 
+/**
+ * The name the origin gives a destination field: the field a rename statement renames to it, else
+ * the field of the same name, unless a rename statement moves that field away, which makes the
+ * destination's field a new one.
+ */
+function originNameOf(
+  name: string,
+  renamedTo: { readonly from: { readonly field: string } } | undefined,
+  movedAway: boolean,
+): string | undefined {
+  if (renamedTo !== undefined) return renamedTo.from.field;
+  return movedAway ? undefined : name;
+}
+
 /** Whether a field is new to the destination, or was optional in the origin. */
 function newlyRequired(
   field: ContractField | ContractValueObjectField,
@@ -120,16 +134,19 @@ function valueObjectFields(
           valueObject: coordinate.entityName,
           field: name,
         };
-        const originName =
-          statements.find(
-            (statement): statement is ResolvedValueObjectFieldRenameStatement =>
-              statement.kind === 'rename' &&
-              statement.entity === 'valueObjectField' &&
-              sameValueObjectField(statement.to, subject),
-          )?.from.field ?? name;
-        const originField = Object.hasOwn(origin.fields, originName)
-          ? origin.fields[originName]
-          : undefined;
+        const renames = statements.filter(
+          (statement): statement is ResolvedValueObjectFieldRenameStatement =>
+            statement.kind === 'rename' && statement.entity === 'valueObjectField',
+        );
+        const originName = originNameOf(
+          name,
+          renames.find((rename) => sameValueObjectField(rename.to, subject)),
+          renames.some((rename) => sameValueObjectField(rename.from, subject)),
+        );
+        const originField =
+          originName !== undefined && Object.hasOwn(origin.fields, originName)
+            ? origin.fields[originName]
+            : undefined;
         if (!newlyRequired(field, originField)) return [];
         return [
           {
@@ -165,16 +182,19 @@ function embeddedModelFields(
       .sort(byName)
       .flatMap(([name, field]): RequiredField[] => {
         const subject = { kind: 'field' as const, ...coordinate, field: name };
-        const originName =
-          statements.find(
-            (statement): statement is ResolvedFieldRenameStatement =>
-              statement.kind === 'rename' &&
-              statement.entity === 'field' &&
-              sameField(statement.to, subject),
-          )?.from.field ?? name;
-        const originField = Object.hasOwn(origin.fields, originName)
-          ? origin.fields[originName]
-          : undefined;
+        const renames = statements.filter(
+          (statement): statement is ResolvedFieldRenameStatement =>
+            statement.kind === 'rename' && statement.entity === 'field',
+        );
+        const originName = originNameOf(
+          name,
+          renames.find((rename) => sameField(rename.to, subject)),
+          renames.some((rename) => sameField(rename.from, subject)),
+        );
+        const originField =
+          originName !== undefined && Object.hasOwn(origin.fields, originName)
+            ? origin.fields[originName]
+            : undefined;
         if (!newlyRequired(field, originField)) return [];
         return [
           {

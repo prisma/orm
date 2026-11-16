@@ -23,6 +23,7 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
   collectionControlPolicy,
+  destinationFieldOf,
   type ModelMatchInput,
   modelAt,
   modelCoordinates,
@@ -78,7 +79,7 @@ function backfilled(statements: readonly ResolvedMigrationStatement[], field: Fi
   );
 }
 
-/** Whether the origin stored the field: in the origin model, or, without an origin contract, in the origin validator. */
+/** Whether the origin stored the field: in the origin model, unless a rename moves the origin's field of that name away, or, without an origin contract, in the origin validator. */
 function inOrigin(
   input: FillInput,
   field: FieldCoordinate,
@@ -91,11 +92,14 @@ function inOrigin(
   }
   const origin = originModelOf(field, input.match);
   const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
+  if (origin === undefined || model === undefined) return true;
+  const originField = originFieldOf(field, input.match.statements);
+  const movedAway =
+    destinationFieldOf({ ...origin, field: originField }, input.match.statements) !== field.field;
   return (
-    origin === undefined ||
-    model === undefined ||
-    Object.hasOwn(model.fields, originFieldOf(field, input.match.statements)) ||
-    storedFieldsOf(input.match.fromContract, origin).has(storedName)
+    !movedAway &&
+    (Object.hasOwn(model.fields, originField) ||
+      storedFieldsOf(input.match.fromContract, origin).has(storedName))
   );
 }
 

@@ -69,8 +69,27 @@ function users(
 
 const live = [schemaCollection('users')];
 
-const OVERLAP_WHY =
-  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. If a later operation stops and the migration runs again, a replacement whose old value another replacement wrote would replace it a second time. Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.";
+const OVERLAP_WHY = (advice: string) =>
+  `MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${advice}`;
+
+const ENUM_TWO_MIGRATIONS =
+  'Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.';
+
+const NO_THIRD_BOOLEAN =
+  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two migrations.';
+
+const SWAP_IN_ONE_UPDATE =
+  'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
+
+/** The replacements of the plan's fields `status` and `tags`, as a refusal lists them. */
+const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
+  moves
+    .flatMap(([from, to]) =>
+      ['status', 'tags'].map(
+        (field) => `Replace value "${from}" with "${to}" in field ${field} of collection users`,
+      ),
+    )
+    .join('; ');
 
 const TWO_MIGRATIONS = (member: string, value: string) =>
   `To keep that data, make the change in two migrations: first change the stored value of enum value "${member}" to one the enum does not use and apply it, then change it to ${value}. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
@@ -320,7 +339,8 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     ]);
   });
 
-  it('advises two migrations for a boolean enum whose values trade places', () => {
+  it('advises a boolean enum whose values trade places to swap them in one update, which two migrations cannot do', () => {
+    const BOOLEAN_SWAP_ADVICE = `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
       users(seed, statuses(members, 'mongo/bool@1'), {
         flag: { codecId: 'mongo/bool@1', valueSet: 'Status', nullable: true },
@@ -334,8 +354,8 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     expect(
       result.dataLoss.map(({ keepDataEdit, keepDataAdvice }) => ({ keepDataEdit, keepDataAdvice })),
     ).toEqual([
-      { keepDataEdit: undefined, keepDataAdvice: TWO_MIGRATIONS('Status.YES', 'false') },
-      { keepDataEdit: undefined, keepDataAdvice: TWO_MIGRATIONS('Status.NO', 'true') },
+      { keepDataEdit: undefined, keepDataAdvice: BOOLEAN_SWAP_ADVICE },
+      { keepDataEdit: undefined, keepDataAdvice: BOOLEAN_SWAP_ADVICE },
     ]);
   });
 
@@ -427,9 +447,8 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     expect(refusal(result)).toEqual([
       {
         kind: 'statementRefused',
-        summary:
-          'Cannot rename enum value "Status.A" to "Status.C": the migration replaces stored values that its other replacements write ("a" with "b" and "b" with "a")',
-        why: OVERLAP_WHY,
+        summary: `Cannot rename enum value "Status.A" to "Status.C": the migration writes a value that another of its operations reads (${replacementsOf(['a', 'b'], ['b', 'a'])})`,
+        why: OVERLAP_WHY(ENUM_TWO_MIGRATIONS),
       },
     ]);
   });
@@ -446,14 +465,13 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
       result.conflicts.map(({ summary, leaveOut }) => ({ summary, leaveOut: leaveOut?.length })),
     ).toEqual([
       {
-        summary:
-          'Cannot rename enum value "Status.A" to "Status.B": the migration replaces stored values that its other replacements write ("a" with "b" and "b" with "c")',
+        summary: `Cannot rename enum value "Status.A" to "Status.B": the migration writes a value that another of its operations reads (${replacementsOf(['a', 'b'], ['b', 'c'])})`,
         leaveOut: 2,
       },
     ]);
   });
 
-  it('refuses renames that swap the values of a boolean enum', () => {
+  it('refuses renames that swap the values of a boolean enum, with advice to swap them in one update', () => {
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
       users(seed, statuses(members, 'mongo/bool@1'), {
         flag: { codecId: 'mongo/bool@1', valueSet: 'Status' },
@@ -464,7 +482,11 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
       schema: live,
       statements: [renameValue('YES', 'ON'), renameValue('NO', 'OFF')],
     });
-    expect(refusal(result).map(({ why }) => why)).toEqual([OVERLAP_WHY]);
+    expect(refusal(result).map(({ why }) => why)).toEqual([
+      OVERLAP_WHY(
+        `${NO_THIRD_BOOLEAN} Leave out these statements, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from the migration.ts that migration plan writes before you apply it.`,
+      ),
+    ]);
   });
 
   it('refuses an enum whose values are lists', () => {

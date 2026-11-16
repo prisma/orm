@@ -48,6 +48,7 @@ import {
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
+import { overlapRefusal } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
@@ -72,7 +73,7 @@ import {
   unrewritableTypeChangeRefusals,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
-import { planVariantDocumentRewrites } from './mongo-variant-planning';
+import { planVariantDocumentRewrites, VARIANT_TWO_MIGRATIONS } from './mongo-variant-planning';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -780,28 +781,56 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       transforms.flatMap(({ statement, outcome }) =>
         statement.kind === kind && outcome.kind === 'transform' ? [outcome.call] : [],
       );
+    const rewriteCalls = [
+      ...fieldRenames,
+      ...variantDeletes.map((rewrite) => rewrite.call),
+      ...variantReplacements.map((rewrite) => rewrite.call),
+      ...storedKeys.value.renames.map((rewrite) => rewrite.call),
+      ...valueReplacements.flatMap((rewrite) =>
+        variantCalls.has(rewrite.call) ? [] : [rewrite.call],
+      ),
+      ...castCalls,
+      ...transformCalls('convert'),
+      ...fills.map((fill) => fill.call),
+      ...storedKeyFills.value.map((fill) => fill.call),
+      ...transformCalls('backfill'),
+      ...removals.map((removal) => removal.call),
+      ...storedKeys.value.removals.map((rewrite) => rewrite.call),
+      ...valueRemovals.map((rewrite) => rewrite.call),
+    ];
+    const twoMigrationsAdvice = new Map<OpFactoryCall, string>([
+      ...[...valueReplacements, ...valueRemovals].map(
+        (rewrite) => [rewrite.call, rewrite.twoMigrationsAdvice] as const,
+      ),
+      ...[...variantDeletes, ...variantReplacements].map(
+        (rewrite) => [rewrite.call, VARIANT_TWO_MIGRATIONS] as const,
+      ),
+    ]);
+    const backfilledFields = new Map<OpFactoryCall, string>(
+      transforms.flatMap(({ statement, outcome }) =>
+        statement.kind === 'backfill' && outcome.kind === 'transform'
+          ? [[outcome.call, outcome.rewrite.field] as const]
+          : [],
+      ),
+    );
+    const overlap = overlapRefusal(
+      rewriteCalls.map((call) => ({
+        call,
+        statements: options.statements.filter((statement) =>
+          (callsOf.get(statement) ?? []).includes(call),
+        ),
+        twoMigrationsAdvice: twoMigrationsAdvice.get(call),
+        backfilledField: backfilledFields.get(call),
+      })),
+      contracts,
+    );
+    if (overlap !== undefined) return { kind: 'failure', conflicts: [overlap] };
     const result = this.planCalls({
       ...options,
       statementCalls: {
         schema,
         collectionRenames,
-        rewrites: [
-          ...fieldRenames,
-          ...variantDeletes.map((rewrite) => rewrite.call),
-          ...variantReplacements.map((rewrite) => rewrite.call),
-          ...storedKeys.value.renames.map((rewrite) => rewrite.call),
-          ...valueReplacements.flatMap((rewrite) =>
-            variantCalls.has(rewrite.call) ? [] : [rewrite.call],
-          ),
-          ...castCalls,
-          ...transformCalls('convert'),
-          ...fills.map((fill) => fill.call),
-          ...storedKeyFills.value.map((fill) => fill.call),
-          ...transformCalls('backfill'),
-          ...removals.map((removal) => removal.call),
-          ...storedKeys.value.removals.map((rewrite) => rewrite.call),
-          ...valueRemovals.map((rewrite) => rewrite.call),
-        ],
+        rewrites: rewriteCalls,
       },
     });
     if (result.kind === 'failure') return result;
