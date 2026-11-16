@@ -126,6 +126,7 @@ import {
   isIncludeCombine,
   isIncludeScalar,
 } from './include-descriptors';
+import { assertPreparableIncludes } from './include-strategy';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
@@ -1586,6 +1587,7 @@ export class CollectionBase<
     > = {
       aggregate: (fn, configure) => this.#preparedAggregate(fn, configure),
       all: (configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'all');
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
         const description = describeCollectionRows<Row>(this.#descriptionOptions());
         return asPreparedOrmCall(
@@ -1594,6 +1596,7 @@ export class CollectionBase<
         );
       },
       first: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'first');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
         const description = describeCollectionFirst<Row>(scoped.#descriptionOptions());
@@ -1603,6 +1606,7 @@ export class CollectionBase<
         );
       },
       firstOrThrow: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'firstOrThrow');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
         const description = describeCollectionFirstOrThrow<Row>(scoped.#descriptionOptions());
