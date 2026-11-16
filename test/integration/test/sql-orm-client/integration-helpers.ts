@@ -10,9 +10,14 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import type { SqlMiddleware, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withDevDatabase } from '@repo/test-utils';
-import { afterAll } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
-import { getTestContext, getTestContract, type TestContract } from './helpers';
+import {
+  getTestContext,
+  getTestContract,
+  type IncludeStrategy,
+  type TestContract,
+} from './helpers';
 import {
   createPgIntegrationRuntime,
   type PgIntegrationRuntime,
@@ -49,8 +54,24 @@ async function getCollectionDatabase(): Promise<DevDatabase> {
   return collectionDatabase;
 }
 
-export function createUsersCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: getTestContext() }, 'User', { namespaceId: 'public' });
+export function createUsersCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  return new Collection({ runtime, context: getTestContext(strategy) }, 'User', {
+    namespaceId: 'public',
+  });
+}
+
+/** Under `'query'`, a read with includes sends the parent statement and at least one statement per include. */
+export function expectStatementsPerInclude(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy,
+  includes: number,
+): void {
+  if (strategy === 'query') {
+    expect(runtime.executions.length).toBeGreaterThanOrEqual(1 + includes);
+  }
 }
 
 export function createReturningUsersCollectionWithout(
@@ -71,8 +92,13 @@ export function createReturningUsersCollectionWithout(
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
-export function createPostsCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: getTestContext() }, 'Post', { namespaceId: 'public' });
+export function createPostsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  return new Collection({ runtime, context: getTestContext(strategy) }, 'Post', {
+    namespaceId: 'public',
+  });
 }
 
 // Shallow spread is intentional — withReturningCapability only adds capabilities

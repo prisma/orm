@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   domainModelsAtDefaultNamespace,
@@ -112,17 +113,47 @@ function unboundDomainModels(raw: {
   >;
 }
 
-const testContext: ExecutionContext<TestContract> = createExecutionContext({
-  contract: baseTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+/** How the ORM loads includes: in one query (`'join'`), or with one query per relation (`'query'`). */
+export type IncludeStrategy = 'join' | 'query';
 
-export function getTestContext(): ExecutionContext<TestContract> {
-  return testContext;
+export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
+
+/** The Postgres adapter, reporting under `'query'` that the database cannot run the one-query include. */
+export function postgresAdapterFor(strategy: IncludeStrategy): typeof postgresAdapter {
+  if (strategy === 'join') {
+    return postgresAdapter;
+  }
+  return {
+    ...postgresAdapter,
+    capabilities: {
+      ...postgresAdapterCapabilities,
+      sql: {
+        ...postgresAdapterCapabilities.sql,
+        outerReferencesInDerivedTables: false,
+        jsonAggWithoutTruncation: false,
+      },
+    },
+  };
+}
+
+const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {
+  join: testContextFor('join'),
+  query: testContextFor('query'),
+};
+
+function testContextFor(strategy: IncludeStrategy): ExecutionContext<TestContract> {
+  return createExecutionContext({
+    contract: baseTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
+
+export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionContext<TestContract> {
+  return testContexts[strategy];
 }
 
 export type { PolyContract };

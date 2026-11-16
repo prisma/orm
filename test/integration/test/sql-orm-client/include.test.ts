@@ -8,10 +8,11 @@ import {
   type SubqueryExpr,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { getTestContext, getTestContract, isSelectAst } from './helpers';
+import { getTestContext, getTestContract, includeStrategies, isSelectAst } from './helpers';
 import {
   createPostsCollection,
   createUsersCollection,
+  expectStatementsPerInclude,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -102,56 +103,60 @@ describe('integration/include', () => {
     timeouts.spinUpPpgDev,
   );
 
-  it(
-    'include() stitches one-to-many and one-to-one relations from real rows',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+  describe.each(includeStrategies)('with the %s include strategy', (strategy) => {
+    it(
+      'include() stitches one-to-many and one-to-one relations from real rows',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          const users = createUsersCollection(runtime, strategy);
 
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com' },
-        ]);
-        await seedPosts(runtime, [
-          { id: 10, title: 'Post A', userId: 1, views: 100 },
-          { id: 11, title: 'Post B', userId: 1, views: 200 },
-          { id: 12, title: 'Post C', userId: 2, views: 300 },
-        ]);
-        await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Primary profile' }]);
+          await seedUsers(runtime, [
+            { id: 1, name: 'Alice', email: 'alice@example.com' },
+            { id: 2, name: 'Bob', email: 'bob@example.com' },
+          ]);
+          await seedPosts(runtime, [
+            { id: 10, title: 'Post A', userId: 1, views: 100 },
+            { id: 11, title: 'Post B', userId: 1, views: 200 },
+            { id: 12, title: 'Post C', userId: 2, views: 300 },
+          ]);
+          await seedProfiles(runtime, [{ id: 100, userId: 1, bio: 'Primary profile' }]);
 
-        const rows = await users
-          .orderBy((user) => user.id.asc())
-          .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
-          .include('profile')
-          .all();
+          runtime.resetExecutions();
+          const rows = await users
+            .orderBy((user) => user.id.asc())
+            .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
+            .include('profile')
+            .all();
+          expectStatementsPerInclude(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          {
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            invitedById: null,
-            address: null,
-            posts: [
-              { id: 10, title: 'Post A', userId: 1, views: 100, embedding: null },
-              { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
-            ],
-            profile: { id: 100, userId: 1, bio: 'Primary profile' },
-          },
-          {
-            id: 2,
-            name: 'Bob',
-            email: 'bob@example.com',
-            invitedById: null,
-            address: null,
-            posts: [{ id: 12, title: 'Post C', userId: 2, views: 300, embedding: null }],
-            profile: null,
-          },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+          expect(rows).toEqual([
+            {
+              id: 1,
+              name: 'Alice',
+              email: 'alice@example.com',
+              invitedById: null,
+              address: null,
+              posts: [
+                { id: 10, title: 'Post A', userId: 1, views: 100, embedding: null },
+                { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
+              ],
+              profile: { id: 100, userId: 1, bio: 'Primary profile' },
+            },
+            {
+              id: 2,
+              name: 'Bob',
+              email: 'bob@example.com',
+              invitedById: null,
+              address: null,
+              posts: [{ id: 12, title: 'Post C', userId: 2, views: 300, embedding: null }],
+              profile: null,
+            },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
 
   it(
     'include() supports scalar count() on to-many relations',

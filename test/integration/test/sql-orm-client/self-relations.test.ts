@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createUsersCollection, timeouts, withCollectionRuntime } from './integration-helpers';
+import { includeStrategies } from './helpers';
+import {
+  createUsersCollection,
+  expectStatementsPerInclude,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
 
 function findEmittedSql(executions: readonly { sql: string }[]): string {
@@ -9,70 +15,6 @@ function findEmittedSql(executions: readonly { sql: string }[]): string {
 }
 
 describe('integration/self-relations', () => {
-  it(
-    'include() resolves users -> invitedUsers (1:N) on the same model',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
-          { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 1 },
-          { id: 4, name: 'Dan', email: 'dan@example.com', invitedById: 2 },
-        ]);
-
-        const rows = await users
-          .orderBy((user) => user.id.asc())
-          .include('invitedUsers', (invitedUsers) =>
-            invitedUsers.orderBy((invitedUser) => invitedUser.id.asc()),
-          )
-          .all();
-
-        expect(rows).toEqual([
-          {
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            invitedById: null,
-            address: null,
-            invitedUsers: [
-              { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1, address: null },
-              { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 1, address: null },
-            ],
-          },
-          {
-            id: 2,
-            name: 'Bob',
-            email: 'bob@example.com',
-            invitedById: 1,
-            address: null,
-            invitedUsers: [
-              { id: 4, name: 'Dan', email: 'dan@example.com', invitedById: 2, address: null },
-            ],
-          },
-          {
-            id: 3,
-            name: 'Cara',
-            email: 'cara@example.com',
-            invitedById: 1,
-            address: null,
-            invitedUsers: [],
-          },
-          {
-            id: 4,
-            name: 'Dan',
-            email: 'dan@example.com',
-            invitedById: 2,
-            address: null,
-            invitedUsers: [],
-          },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
   it(
     'orderBy on a depth-1 self-relation include applies against the aliased child table (regression: aliased orderBy remap)',
     async () => {
@@ -124,65 +66,6 @@ describe('integration/self-relations', () => {
     timeouts.spinUpPpgDev,
   );
 
-  it(
-    'include() resolves users -> invitedBy (N:1) on the same model',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
-          { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 2 },
-        ]);
-
-        const rows = await users
-          .orderBy((user) => user.id.asc())
-          .include('invitedBy')
-          .all();
-
-        expect(rows).toEqual([
-          {
-            id: 1,
-            name: 'Alice',
-            email: 'alice@example.com',
-            invitedById: null,
-            address: null,
-            invitedBy: null,
-          },
-          {
-            id: 2,
-            name: 'Bob',
-            email: 'bob@example.com',
-            invitedById: 1,
-            address: null,
-            invitedBy: {
-              id: 1,
-              name: 'Alice',
-              email: 'alice@example.com',
-              invitedById: null,
-              address: null,
-            },
-          },
-          {
-            id: 3,
-            name: 'Cara',
-            email: 'cara@example.com',
-            invitedById: 2,
-            address: null,
-            invitedBy: {
-              id: 2,
-              name: 'Bob',
-              email: 'bob@example.com',
-              invitedById: 1,
-              address: null,
-            },
-          },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
   it(
     'include() on a self-relation applies the refinement filter to the included rows only',
     async () => {
@@ -283,32 +166,6 @@ describe('integration/self-relations', () => {
   );
 
   it(
-    'two sibling includes of the same table each return their own rows',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Alice', email: 'alice@example.com' },
-          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
-        ]);
-
-        const rows = await users
-          .select('id')
-          .orderBy((user) => user.id.asc())
-          .include('invitedUsers', (invitedUsers) => invitedUsers.select('id'))
-          .include('invitedBy', (invitedBy) => invitedBy.select('id'))
-          .all();
-
-        expect(rows).toEqual([
-          { id: 1, invitedUsers: [{ id: 2 }], invitedBy: null },
-          { id: 2, invitedUsers: [], invitedBy: { id: 1 } },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-  it(
     'combine() branches that each filter by a relation return their own rows next to a sibling include of the same table',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -354,4 +211,163 @@ describe('integration/self-relations', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  describe.each(includeStrategies)('with the %s include strategy', (strategy) => {
+    it(
+      'include() resolves users -> invitedUsers (1:N) on the same model',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          const users = createUsersCollection(runtime, strategy);
+
+          await seedUsers(runtime, [
+            { id: 1, name: 'Alice', email: 'alice@example.com' },
+            { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+            { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 1 },
+            { id: 4, name: 'Dan', email: 'dan@example.com', invitedById: 2 },
+          ]);
+
+          runtime.resetExecutions();
+          const rows = await users
+            .orderBy((user) => user.id.asc())
+            .include('invitedUsers', (invitedUsers) =>
+              invitedUsers.orderBy((invitedUser) => invitedUser.id.asc()),
+            )
+            .all();
+          expectStatementsPerInclude(runtime, strategy, 1);
+
+          expect(rows).toEqual([
+            {
+              id: 1,
+              name: 'Alice',
+              email: 'alice@example.com',
+              invitedById: null,
+              address: null,
+              invitedUsers: [
+                { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1, address: null },
+                { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 1, address: null },
+              ],
+            },
+            {
+              id: 2,
+              name: 'Bob',
+              email: 'bob@example.com',
+              invitedById: 1,
+              address: null,
+              invitedUsers: [
+                { id: 4, name: 'Dan', email: 'dan@example.com', invitedById: 2, address: null },
+              ],
+            },
+            {
+              id: 3,
+              name: 'Cara',
+              email: 'cara@example.com',
+              invitedById: 1,
+              address: null,
+              invitedUsers: [],
+            },
+            {
+              id: 4,
+              name: 'Dan',
+              email: 'dan@example.com',
+              invitedById: 2,
+              address: null,
+              invitedUsers: [],
+            },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'include() resolves users -> invitedBy (N:1) on the same model',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          const users = createUsersCollection(runtime, strategy);
+
+          await seedUsers(runtime, [
+            { id: 1, name: 'Alice', email: 'alice@example.com' },
+            { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+            { id: 3, name: 'Cara', email: 'cara@example.com', invitedById: 2 },
+          ]);
+
+          runtime.resetExecutions();
+          const rows = await users
+            .orderBy((user) => user.id.asc())
+            .include('invitedBy')
+            .all();
+          expectStatementsPerInclude(runtime, strategy, 1);
+
+          expect(rows).toEqual([
+            {
+              id: 1,
+              name: 'Alice',
+              email: 'alice@example.com',
+              invitedById: null,
+              address: null,
+              invitedBy: null,
+            },
+            {
+              id: 2,
+              name: 'Bob',
+              email: 'bob@example.com',
+              invitedById: 1,
+              address: null,
+              invitedBy: {
+                id: 1,
+                name: 'Alice',
+                email: 'alice@example.com',
+                invitedById: null,
+                address: null,
+              },
+            },
+            {
+              id: 3,
+              name: 'Cara',
+              email: 'cara@example.com',
+              invitedById: 2,
+              address: null,
+              invitedBy: {
+                id: 2,
+                name: 'Bob',
+                email: 'bob@example.com',
+                invitedById: 1,
+                address: null,
+              },
+            },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'two sibling includes of the same table each return their own rows',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          const users = createUsersCollection(runtime, strategy);
+
+          await seedUsers(runtime, [
+            { id: 1, name: 'Alice', email: 'alice@example.com' },
+            { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+          ]);
+
+          runtime.resetExecutions();
+          const rows = await users
+            .select('id')
+            .orderBy((user) => user.id.asc())
+            .include('invitedUsers', (invitedUsers) => invitedUsers.select('id'))
+            .include('invitedBy', (invitedBy) => invitedBy.select('id'))
+            .all();
+          expectStatementsPerInclude(runtime, strategy, 2);
+
+          expect(rows).toEqual([
+            { id: 1, invitedUsers: [{ id: 2 }], invitedBy: null },
+            { id: 2, invitedUsers: [], invitedBy: { id: 1 } },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
 });
