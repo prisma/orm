@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -290,12 +292,7 @@ export function createAllVariantGraph(
     root.storage.namespaceId,
     root.storage.tableName,
   );
-  const keyMappings = keyColumns.map(
-    (column): ColumnMapping => [
-      projectTableColumn(contract, root, column),
-      projectTableColumn(contract, variantTable, column),
-    ],
-  );
+  const keyMappings = variantKeyMappings(contract, root, variantTable);
   const baseColumns = returningProjection(contract, modelName, root, undefined);
   const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
 
@@ -330,6 +327,19 @@ export function createAllVariantGraph(
     );
   }
   return graph;
+}
+
+export function variantKeyMappings(
+  contract: Contract<SqlStorage>,
+  root: AliasedTable,
+  variantTable: AliasedTable,
+): ColumnMapping[] {
+  return resolvePrimaryKeyColumns(contract, root.storage.namespaceId, root.storage.tableName).map(
+    (column): ColumnMapping => [
+      projectTableColumn(contract, root, column),
+      projectTableColumn(contract, variantTable, column),
+    ],
+  );
 }
 
 function sameColumns(columns: readonly ProjectionItem[]): ColumnMapping[] {
