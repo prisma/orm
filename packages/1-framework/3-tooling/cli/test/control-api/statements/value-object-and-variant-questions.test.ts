@@ -297,6 +297,8 @@ describe('a question about a variant whose discriminator value changed', () => {
       subject: 'Bug',
       verbs: ['convert', 'delete'],
       forms: { convert: 'Bug' },
+      question:
+        'Delete rows of "task" whose "type" is "bug" would lose the data of model "Bug". Its discriminator value changes from "bug" to "defect": --convert Bug rewrites the stored value to "defect" and keeps the data.',
     });
     expect(question?.validate('convert', 'Bug')).toBeUndefined();
     expect(question?.validate('convert', 'Epic')).toContain('--convert Bug');

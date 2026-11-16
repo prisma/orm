@@ -30,7 +30,7 @@ import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { newVariantsOfBase, variantValueChanged } from './variants';
+import { newVariantsOfBase, variantValue, variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -611,6 +611,24 @@ function missingFieldModel(
     : undefined;
 }
 
+/** What changed for a variant whose discriminator value changed, and what `--convert` does about it. */
+function changedVariantNote(
+  subject: MigrationSubject,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): readonly string[] {
+  const variant = changedVariant(subject, contracts);
+  if (variant === undefined || subject.kind !== 'model') return [];
+  const from = variantValue(contracts.origin, subject);
+  const to = variantValue(contracts.destination, variant);
+  const convert = statementFlag({
+    verb: 'convert',
+    text: modelStatementText(contracts.destination, variant),
+  });
+  return [
+    `Its discriminator value changes from ${JSON.stringify(from)} to ${JSON.stringify(to)}: ${convert} rewrites the stored value to ${JSON.stringify(to)} and keeps the data.`,
+  ];
+}
+
 /**
  * The variant a model subject is in the destination, under the name a rename of the plan gives it,
  * when it is a variant in both contracts whose discriminator value changed: a convert rewrites its
@@ -728,6 +746,7 @@ export function dataLossQuestion(
   const operations = [...new Set(labels)];
   const advice = [
     ...typeChangeNote(loss, contracts.canConvert),
+    ...changedVariantNote(loss.subject, contracts),
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
     ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
