@@ -178,5 +178,25 @@ describe.each(includeStrategies)('writes that return rows with includes (%s)', (
       },
       timeouts.spinUpPpgDev,
     );
+
+    it(
+      'deleteAll() deletes only the rows it found and returns',
+      async () => {
+        await withOwners(strategy, returning, async (runtime, { owners }) => {
+          const deleted = await owners
+            .where((owner) => owner.name.eq('Ada'))
+            .select('id', 'name')
+            .include('items', (items) => items.select('label').orderBy((item) => item.id.asc()))
+            .deleteAll();
+          const deleteStatement = runtime.executions.find((plan) => /^delete/i.test(plan.sql));
+
+          expect({ deleted, deleteParams: deleteStatement?.params }).toEqual({
+            deleted: [{ id: 1, name: 'Ada', items: [{ label: 'pen' }, { label: 'cup' }] }],
+            deleteParams: expect.arrayContaining([expect.objectContaining({ value: 1 })]),
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
   });
 });

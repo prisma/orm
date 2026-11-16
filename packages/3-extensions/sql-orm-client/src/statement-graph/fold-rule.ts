@@ -8,7 +8,7 @@ import { Update } from './update';
 /**
  * `updateAll()` and `deleteAll()` returning rows first find the rows matching the caller's condition and then limit the write to their keys, so that on a database without `RETURNING` the write changes exactly the rows the call reports.
  *
- * With `RETURNING` the write reports the rows it changed itself, so the keys are not needed: the write runs on the caller's condition alone.
+ * With `RETURNING` the write reports the rows it changed itself, so the keys are not needed: the write runs on the caller's condition alone. When another node already reads the found rows, the call reports those rows, so the write keeps their keys.
  */
 export function foldRule(contract: Contract<SqlStorage>): Rule {
   return (graph, node, inputs) => {
@@ -19,6 +19,7 @@ export function foldRule(contract: Contract<SqlStorage>): Rule {
     const read = keyEdgeFromFind(graph, contract, table, inputs);
     if (
       read === undefined ||
+      graph.readersOf(read.id).length > 0 ||
       !foldsIntoCondition(graph, read, where) ||
       !readsTableAsFound(graph, inputs, read, table)
     ) {
