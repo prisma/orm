@@ -1,5 +1,3 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -64,7 +62,6 @@ import {
   mappedUpdateRow,
   modelOf,
   updateValuesOf,
-  type VariantCreateRow,
   variantCreateRowsOf,
   withUpdateDefaults,
 } from './storage-rows';
@@ -278,108 +275,81 @@ export function createGraph(
   return b.graph;
 }
 
+export interface NestedVariantCreate {
+  readonly graph: Graph;
+  readonly keys: readonly KeySource[];
+  readonly requires: readonly Requires[];
+  readonly added: (base: NodeId) => void;
+}
+
 export function createAllVariantGraph(
   collection: DescribeCollectionRowsOptions,
   variantTable: AliasedTable,
   mti: MtiCreateContext,
   data: readonly Readonly<Record<string, unknown>>[],
+  nested?: NestedVariantCreate,
 ): Graph {
   const { context, modelName, state } = collection;
+  const variantModelName = mti.variant.modelName;
+  const rows = variantCreateRowsOf(collection, mti, variantTable, data);
   const { contract } = context;
   const { root } = state.tables;
-  const graph = new Graph(contract);
+  const graph = nested?.graph ?? new Graph(contract);
   const keyColumns = resolvePrimaryKeyColumns(
     contract,
     root.storage.namespaceId,
     root.storage.tableName,
   );
-  const returning = {
-    base: returningProjection(contract, modelName, root, undefined),
-    variant: variantReturning(contract, variantTable, mti.variant.modelName, keyColumns),
-  };
-  const joins = variantCreateRowsOf(collection, mti, variantTable, data).map((row) => {
-    const { base, variant } = addVariantRowInserts(
-      { graph, context },
-      collection,
-      mti,
-      variantTable,
-      row,
-      {
-        operation: 'createAll',
-        keys: [],
-        requires: [],
-        returning,
-      },
+  const keyMappings = keyColumns.map(
+    (column): ColumnMapping => [
+      projectTableColumn(contract, root, column),
+      projectTableColumn(contract, variantTable, column),
+    ],
+  );
+  const baseColumns = returningProjection(contract, modelName, root, undefined);
+  const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
+
+  const owner = { operation: 'createAll', modelName };
+  const joins = rows.flatMap((row) => {
+    const baseInsert = new Insert(
+      [insertAst(contract, root, [row.base], undefined).withReturning(baseColumns)],
+      owner,
     );
-    return graph.add(new CrossJoin(), {
-      left: new Rows(base, sameColumns(returning.base)),
-      right: new Rows(variant, sameColumns(returning.variant)),
+    const base = graph.add(baseInsert, {
+      payload: (nested?.keys ?? []).map(({ from, columns }) => new PayloadData(from, columns)),
+      state: graph.stateEdgesFor(baseInsert),
+      requires: [...(nested?.requires ?? [])],
     });
+    const variantInsert = new Insert(
+      [insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns)],
+      { operation: 'createAll', modelName: variantModelName },
+    );
+    const variant = graph.add(variantInsert, {
+      payload: [new PayloadData(base, keyMappings)],
+      state: graph.stateEdgesFor(variantInsert),
+    });
+    if (nested !== undefined) {
+      nested.added(base);
+      return [];
+    }
+    return [
+      graph.add(new CrossJoin(), {
+        left: new Rows(base, sameColumns(baseColumns)),
+        right: new Rows(variant, sameColumns(variantColumns)),
+      }),
+    ];
   });
 
   const [only, ...others] = joins;
   if (only !== undefined && others.length === 0) {
     graph.setResult(only);
   } else if (only !== undefined) {
-    const joined = sameColumns([...returning.base, ...returning.variant]);
+    const joined = sameColumns([...baseColumns, ...variantColumns]);
     graph.setResult(
       graph.add(new UnionAll(), { rows: joins.map((join) => new Rows(join, joined)) }),
     );
   }
   return graph;
-}
-
-interface VariantRowWrite {
-  readonly operation: string;
-  readonly keys: readonly KeySource[];
-  readonly requires: readonly Requires[];
-  readonly returning: {
-    readonly base: readonly ProjectionItem[];
-    readonly variant: readonly ProjectionItem[];
-  };
-}
-
-export function addVariantRowInserts(
-  { graph, context }: Builder,
-  collection: DescribeCollectionRowsOptions,
-  mti: MtiCreateContext,
-  variantTable: AliasedTable,
-  row: VariantCreateRow,
-  { operation, keys, requires, returning }: VariantRowWrite,
-): { readonly base: NodeId; readonly variant: NodeId } {
-  const { contract } = context;
-  const { root } = collection.state.tables;
-  const baseInsert = new Insert(
-    [insertAst(contract, root, [row.base], undefined).withReturning(returning.base)],
-    { operation, modelName: collection.modelName },
-  );
-  const base = graph.add(baseInsert, {
-    payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
-    state: graph.stateEdgesFor(baseInsert),
-    requires: [...requires],
-  });
-  const variantInsert = new Insert(
-    [insertAst(contract, variantTable, [row.variant], undefined).withReturning(returning.variant)],
-    { operation, modelName: mti.variant.modelName },
-  );
-  const variant = graph.add(variantInsert, {
-    payload: [new PayloadData(base, variantKeyMappings(contract, root, variantTable))],
-    state: graph.stateEdgesFor(variantInsert),
-  });
-  return { base, variant };
-}
-
-export function variantKeyMappings(
-  contract: Contract<SqlStorage>,
-  root: AliasedTable,
-  variantTable: AliasedTable,
-): ColumnMapping[] {
-  return resolvePrimaryKeyColumns(contract, root.storage.namespaceId, root.storage.tableName).map(
-    (column): ColumnMapping => [
-      projectTableColumn(contract, root, column),
-      projectTableColumn(contract, variantTable, column),
-    ],
-  );
 }
 
 function sameColumns(columns: readonly ProjectionItem[]): ColumnMapping[] {

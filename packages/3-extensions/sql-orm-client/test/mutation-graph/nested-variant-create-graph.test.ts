@@ -301,15 +301,11 @@ describe('a nested create of a variant stored in its own table', () => {
     });
   });
 
-  it('refuses a relation callback in the row with the error of the top-level variant create', () => {
-    const row = {
-      ...darkMode,
-      comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
-    };
+  function topLevelFeatureCreate(row: Record<string, unknown>) {
     const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
       namespaceId: 'public',
     }).variant('feature');
-    const topLevel = thrownBy(() => {
+    return thrownBy(() => {
       parsed('Task', row);
       const mti = mtiCreateContextOf({
         context,
@@ -327,16 +323,39 @@ describe('a nested create of a variant stored in its own table', () => {
         [row],
       );
     });
-    const nested = thrownBy(() =>
+  }
+
+  function nestedFeatureCreate(row: Record<string, unknown>) {
+    return thrownBy(() =>
       createOf('Project', {
         id: 1,
         name: 'Launch',
         tasks: (tasks: VariantMutator) => tasks.variant('feature').create(row),
       }),
     );
+  }
+
+  it('refuses a relation callback in the row with the error of the top-level variant create', () => {
+    const row = {
+      ...darkMode,
+      comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
+    };
+    const topLevel = topLevelFeatureCreate(row);
 
     expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
-    expect(nested).toMatchObject({
+    expect(nestedFeatureCreate(row)).toMatchObject({
+      code: topLevel.code,
+      message: topLevel.message,
+      meta: topLevel.meta,
+    });
+  });
+
+  it('refuses a relation callback that returns no operation with the error of the top-level variant create', () => {
+    const row = { ...darkMode, comments: () => 'not an operation' };
+    const topLevel = topLevelFeatureCreate(row);
+
+    expect(topLevel).toMatchObject({ code: 'ORM.RELATION_MUTATION_INVALID' });
+    expect(nestedFeatureCreate(row)).toMatchObject({
       code: topLevel.code,
       message: topLevel.message,
       meta: topLevel.meta,

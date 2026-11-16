@@ -9,7 +9,6 @@ import {
   resolveModelTableName,
   resolveRelationTargetColumns,
 } from '../collection-contract';
-import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import {
   type CollectionTables,
   createStatementTables,
@@ -34,7 +33,7 @@ import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
 import { Assert } from './assert';
-import { addDeleteAll, addUpdateAll, addVariantRowInserts } from './collection-graphs';
+import { addDeleteAll, addUpdateAll, createAllVariantGraph } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -55,18 +54,15 @@ import { Requires } from './requires';
 import { Rows } from './rows';
 import {
   createRowOf,
-  type MtiCreateContext,
   modelOf,
   mtiCreateContextOf,
   updateValuesOf,
-  variantCreateRowOf,
   withCreateDefaults,
 } from './storage-rows';
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
 type CreateOrConnect = Extract<Mutation, { kind: 'create' | 'connect' }>;
 type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' }>;
-type CreateMutation = Extract<Mutation, { kind: 'create' }>;
 
 export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
@@ -122,61 +118,38 @@ function nestedCreate(
   });
 }
 
-interface OwnTableVariant {
-  readonly collection: DescribeCollectionRowsOptions;
-  readonly mti: MtiCreateContext;
-  readonly variantTable: AliasedTable;
-  readonly defaultValueCache: Map<string, unknown>;
-}
-
-function ownTableVariantOf(
+function addVariantInOwnTable(
   t: Translation,
-  { relation, relatedCollection }: ParsedRelationMutation,
-  mutation: CreateMutation,
-): OwnTableVariant | undefined {
-  if (mutation.variant === undefined) {
-    return undefined;
+  { relation, relatedCollection }: Pick<ParsedRelationMutation, 'relation' | 'relatedCollection'>,
+  { data, variant }: Extract<Mutation, { kind: 'create' }>,
+  keys: readonly KeySource[],
+  added: (base: NodeId) => void,
+): boolean {
+  if (variant === undefined) {
+    return false;
   }
   const collection = {
     context: t.context,
-    state: relatedCollection(relation).variant(mutation.variant).state,
+    state: relatedCollection(relation).variant(variant).state,
     modelName: relation.to,
     namespaceId: relation.toNamespace,
   };
   const mti = mtiCreateContextOf(collection);
   if (mti === undefined) {
-    return undefined;
+    return false;
+  }
+  for (const row of data) {
+    parseCreateInput(t, modelOf(collection), row, relatedCollection);
   }
   assertReturningCapability(t.context.contract, 'create()');
-  return {
+  createAllVariantGraph(
     collection,
+    requireVariantTable(collection.state.tables, mti.variant.value),
     mti,
-    variantTable: requireVariantTable(collection.state.tables, mti.variant.value),
-    defaultValueCache: new Map(),
-  };
-}
-
-function addOwnTableVariantRow(
-  t: Translation,
-  { collection, mti, variantTable, defaultValueCache }: OwnTableVariant,
-  relatedCollection: RelatedCollection,
-  row: MutationCreateInput<Contract<SqlStorage>, string>,
-  keysFromParent: readonly KeySource[],
-): NodeId {
-  parseCreateInput(t, modelOf(collection), row, relatedCollection);
-  return addVariantRowInserts(
-    t,
-    collection,
-    mti,
-    variantTable,
-    variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache),
-    {
-      operation: 'create',
-      keys: keysFromParent,
-      requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
-      returning: { base: [], variant: [] },
-    },
-  ).base;
+    data,
+    { graph: t.graph, keys, requires: keys.length === 0 ? parentRowRequired(t) : [], added },
+  );
+  return true;
 }
 
 export function addBeforeWrite(
@@ -204,7 +177,7 @@ export function addBeforeWrite(
           nullColumns[column] = null;
         }
       } else {
-        keys.push(addParentOwned(t, model, relationMutation, mutation));
+        keys.push(...addParentOwned(t, model, relationMutation, mutation));
       }
     }
   }
@@ -263,10 +236,9 @@ function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelatio
 function addParentOwned(
   t: Translation,
   model: Model,
-  relationMutation: ParsedRelationMutation,
+  { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: CreateOrConnect,
-): KeySource {
-  const { name, relation, relatedCollection } = relationMutation;
+): KeySource[] {
   const { contract } = t.context;
   const related = relatedModel(contract, relation);
   const columns = columnMappings(
@@ -285,9 +257,21 @@ function addParentOwned(
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
     }
-    const variant = ownTableVariantOf(t, relationMutation, mutation);
-    if (variant === undefined) {
-      return {
+    const keys: KeySource[] = [];
+    const added = (from: NodeId) => keys.push({ from, columns });
+    if (
+      addVariantInOwnTable(
+        t,
+        { relation, relatedCollection },
+        { ...mutation, data: [row] },
+        [],
+        added,
+      )
+    ) {
+      return keys;
+    }
+    return [
+      {
         from: nestedCreate(
           t,
           related,
@@ -297,9 +281,8 @@ function addParentOwned(
           mutation.variant,
         ),
         columns,
-      };
-    }
-    return { from: addOwnTableVariantRow(t, variant, relatedCollection, row, []), columns };
+      },
+    ];
   }
   const [criterion] = mutation.criteria;
   if (criterion === undefined) {
@@ -309,17 +292,16 @@ function addParentOwned(
       { meta: { kind: 'connect', relation: name, problem: 'missing-criterion' } },
     );
   }
-  return { from: addFindAndAssert(t, related, name, 'connect', criterion, columns), columns };
+  return [{ from: addFindAndAssert(t, related, name, 'connect', criterion, columns), columns }];
 }
 
 function addChildOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  relationMutation: ParsedRelationMutation,
+  { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: Mutation,
 ): void {
-  const { name, relation, relatedCollection } = relationMutation;
   const { context } = t;
   const { contract } = context;
   const related = relatedModel(contract, relation);
@@ -337,25 +319,20 @@ function addChildOwned(
   }
   if (mutation.kind === 'create') {
     const keys = [{ from: parent, columns: fromParent }];
-    const variant = ownTableVariantOf(t, relationMutation, mutation);
-    if (variant !== undefined) {
-      for (const row of mutation.data) {
-        addOwnTableVariantRow(t, variant, relatedCollection, row, keys);
-      }
+    if (addVariantInOwnTable(t, { relation, relatedCollection }, mutation, keys, () => undefined)) {
       return;
     }
-    const variantValue = mutation.variant;
     const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
     if (rows.some((row) => row.relationMutations.length > 0)) {
       for (const row of rows) {
-        nestedCreate(t, related, row, keys, 'count', variantValue);
+        nestedCreate(t, related, row, keys, 'count', mutation.variant);
       }
       return;
     }
     addChildInserts(
       t,
       related,
-      variantValue,
+      mutation.variant,
       rows.map((row) => row.scalarData),
       keys,
     );
@@ -407,10 +384,9 @@ function addJunctionOwned(
   t: Translation,
   model: Model,
   parent: NodeId,
-  relationMutation: JunctionRelationMutation,
+  { name, relation, relatedCollection }: JunctionRelationMutation,
   mutation: Mutation,
 ): void {
-  const { name, relation, relatedCollection } = relationMutation;
   const { context } = t;
   const { contract } = context;
   const { through } = relation;
@@ -452,14 +428,13 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
-    const variant = ownTableVariantOf(t, relationMutation, mutation);
-    if (variant !== undefined) {
-      for (const row of mutation.data) {
-        addLink(addOwnTableVariantRow(t, variant, relatedCollection, row, []), undefined);
-      }
+    if (
+      addVariantInOwnTable(t, { relation, relatedCollection }, mutation, [], (base) =>
+        addLink(base, undefined),
+      )
+    ) {
       return;
     }
-    const variantValue = mutation.variant;
     for (const row of mutation.data) {
       addLink(
         nestedCreate(
@@ -468,7 +443,7 @@ function addJunctionOwned(
           parseCreateInput(t, related, row, relatedCollection),
           [],
           'rows',
-          variantValue,
+          mutation.variant,
         ),
         undefined,
       );

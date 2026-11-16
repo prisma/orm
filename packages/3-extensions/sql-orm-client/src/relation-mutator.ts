@@ -25,33 +25,6 @@ export interface RelationCollection<
   variant(value: string): RelationCollection<TContract, ModelName>;
 }
 
-function isList<T>(data: T | readonly T[]): data is readonly T[] {
-  return Array.isArray(data);
-}
-
-function createRows<TContract extends Contract<SqlStorage>, ModelName extends string>(
-  data:
-    | MutationCreateInput<TContract, ModelName>
-    | readonly MutationCreateInput<TContract, ModelName>[],
-): MutationCreateInput<TContract, ModelName>[] {
-  return isList(data) ? [...data] : [data];
-}
-
-function createVariantRelationMutator<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
->(variant: string | undefined) {
-  return {
-    create(
-      data:
-        | MutationCreateInput<TContract, ModelName>
-        | readonly MutationCreateInput<TContract, ModelName>[],
-    ): RelationMutationCreate<TContract, ModelName> {
-      return { kind: 'create', data: createRows(data), ...ifDefined('variant', variant) };
-    },
-  };
-}
-
 function createFilteredRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -75,19 +48,31 @@ export function createRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
 >(related: RelationCollection<TContract, ModelName>): RelationMutator<TContract, ModelName> {
-  return {
+  const mutator = {
     ...createFilteredRelationMutator<TContract, ModelName>(related),
     create(
       data:
         | MutationCreateInput<TContract, ModelName>
         | readonly MutationCreateInput<TContract, ModelName>[],
-    ): RelationMutationCreate<TContract, ModelName> {
-      return { kind: 'create', data: createRows(data) };
+    ) {
+      const rows = Array.isArray(data) ? [...data] : [data];
+      return {
+        kind: 'create',
+        data: rows,
+      } as RelationMutationCreate<TContract, ModelName>;
     },
     variant(value: string) {
-      return createVariantRelationMutator<TContract, ModelName>(
-        related.variant(value).state.variantValue,
-      );
+      const { variantValue } = related.variant(value).state;
+      return {
+        create: (
+          data:
+            | MutationCreateInput<TContract, ModelName>
+            | readonly MutationCreateInput<TContract, ModelName>[],
+        ): RelationMutationCreate<TContract, ModelName> => ({
+          ...mutator.create(data),
+          ...ifDefined('variant', variantValue),
+        }),
+      };
     },
     connect(criteria: Record<string, unknown> | readonly Record<string, unknown>[]) {
       const values = Array.isArray(criteria) ? [...criteria] : [criteria];
@@ -108,7 +93,8 @@ export function createRelationMutator<
         criteria: [...criteria],
       } as RelationMutationDisconnect<TContract, ModelName>;
     },
-  } as RelationMutator<TContract, ModelName>;
+  };
+  return mutator as RelationMutator<TContract, ModelName>;
 }
 
 export function isRelationMutationDescriptor(
