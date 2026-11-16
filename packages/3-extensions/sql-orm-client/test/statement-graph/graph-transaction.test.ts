@@ -1,3 +1,4 @@
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import type { Graph } from '../../src/statement-graph/graph';
 import { executeGraph, queryGraph } from '../../src/statement-graph/run-graph';
@@ -126,5 +127,52 @@ describe('the transaction a graph runs in', () => {
       throughTransaction: throughTransaction.length,
       committed: commit.mock.calls.length,
     }).toEqual({ statements: 3, throughTransaction: 3, committed: 1 });
+  });
+
+  it('rolls the write back when a statement of its includes fails', async () => {
+    const { collection, runtime } = createCollectionFor(
+      'User',
+      withoutCapabilityKeys(baseContract, [
+        'outerReferencesInDerivedTables',
+        'jsonAggWithoutTruncation',
+      ]),
+    );
+    const commit = vi.fn(async () => undefined);
+    const rollback = vi.fn(async () => undefined);
+    let statements = 0;
+    const failingThird = <Row>(sent: () => AsyncIterableResult<Row>): AsyncIterableResult<Row> => {
+      statements += 1;
+      if (statements < 3) {
+        return sent();
+      }
+      return new AsyncIterableResult(
+        (async function* (): AsyncGenerator<Row, void, unknown> {
+          yield* [];
+          throw new Error('the include statement failed');
+        })(),
+      );
+    };
+    Object.assign(runtime, {
+      transaction: vi.fn(async () => ({
+        query: (...args: Parameters<MockRuntime['query']>) =>
+          failingThird(() => runtime.query(...args)),
+        execute: (...args: Parameters<MockRuntime['execute']>) => {
+          statements += 1;
+          return runtime.execute(...args);
+        },
+        commit,
+        rollback,
+      })),
+    });
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
+    const users = collection.include('posts').where({ id: 1 }) as unknown as {
+      update(data: unknown): Promise<unknown>;
+    };
+
+    await expect(users.update({ name: 'Bea' })).rejects.toThrow('the include statement failed');
+    expect({
+      committed: commit.mock.calls.length,
+      rolledBack: rollback.mock.calls.length,
+    }).toEqual({ committed: 0, rolledBack: 1 });
   });
 });
