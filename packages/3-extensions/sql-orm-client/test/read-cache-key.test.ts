@@ -81,10 +81,10 @@ describe('the cache key of a read with includes, one query per relation', () => 
   });
 
   it('differs by the fields the caller selected in an include', async () => {
-    expect(
-      await hashInputOf(collection.include('posts', (posts) => posts.select('title')).state),
-    ).not.toEqual(
-      await hashInputOf(collection.include('posts', (posts) => posts.select('title', 'id')).state),
+    const postsSelecting = (...fields: ['title'] | ['title', 'id']) =>
+      collection.include('posts', (posts) => posts.select(...fields).include('comments')).state;
+    expect(await hashInputOf(postsSelecting('title'))).not.toEqual(
+      await hashInputOf(postsSelecting('title', 'id')),
     );
   });
 
