@@ -1180,10 +1180,6 @@ function resolveValueObjectFieldRename(
   });
 }
 
-/**
- * Two names that trade places: each is an old name and a new name, which one plan cannot do.
- * Statements resolve against contracts, so the swap takes three plans through a temporary name.
- */
 /** How to rename a field onto a name another field of the origin holds: free the name in one migration, then rename. */
 function newNameTakenFix(statement: ParsedRename, oldName: string, newName: string): string {
   return `${CHECK_NAMES_FIX} If another field holds the name "${newName}" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "${oldName}" the name "${newName}" and plan it with ${statementFlag(statement)}.`;
@@ -1194,6 +1190,10 @@ function oldNameReusedFix(statement: ParsedRename, oldName: string, newName: str
   return `${CHECK_NAMES_FIX} If "${oldName}" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "${oldName}" is renamed to "${newName}" and no field has the name "${oldName}", and plan it with ${statementFlag(statement)}; then add or rename the field that takes the name "${oldName}" and plan that.`;
 }
 
+/**
+ * Two names that trade places: each is an old name and a new name, which one plan cannot do.
+ * Statements resolve against contracts, so the swap takes three plans through a temporary name.
+ */
 function swapRefusal(
   statement: ParsedRename,
   entity: 'model' | 'field' | 'enumValue' | 'valueObjectField',
