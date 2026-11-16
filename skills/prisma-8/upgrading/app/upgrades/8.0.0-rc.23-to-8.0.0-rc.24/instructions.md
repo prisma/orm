@@ -85,7 +85,8 @@ changes:
       matches:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-family-sql/relational-core/(?:ast|expression)[\x27"])(?=[\s\S]*(?<![\w$])(?:RawExpr|RawQueryAst|RawPart)(?![\w$]))[\s\S]*\.parts(?![\w$])'
   - id: mysql-explicit-isolation-default
-    summary: Configure ReadCommitted explicitly if MySQL callbacks relied on the previous session-wide override.  - id: contract-artifacts-restamp
+    summary: Configure ReadCommitted explicitly if MySQL callbacks relied on the previous session-wide override.
+  - id: contract-artifacts-restamp
     summary: |
       An extension that writes its own package version into the contracts it emits, such as the Supabase extension, now writes 8.0.0-rc.24. Run `contract emit` once after upgrading so the emitted `contract.json` and `contract.d.ts` match the installed extension.
     detection:
