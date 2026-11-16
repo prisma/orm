@@ -28,7 +28,7 @@ Behaviour of every driver:
 | `rollback()` | `ROLLBACK` (unchanged) | `ROLLBACK TO SAVEPOINT name` |
 | `query` / `execute` | unchanged | run on the same connection, as the transaction does |
 
-The savepoint name is checked before anything is sent. A name that is not a plain identifier (`/^[A-Za-z_][A-Za-z0-9_]*$/`) is rejected with an error and no statement reaches the database. The runtime (slice 3) generates names from a counter, so this check never fails for runtime-generated names; it exists so that no string reaches the SQL text unchecked. Put the check in one function next to the interface in `@internal/sql-relational-core` (all three drivers already depend on that package at runtime), and throw an error of the same kind the drivers use for other invalid arguments (compare `validatePostgresIsolationLevel`).
+Savepoint names are not checked by the driver. They are internal: the runtime (slice 3) generates them from a counter, and a bad name fails with the database's own error (operator review on the PR).
 
 Class structure, the same in every driver:
 
@@ -52,9 +52,9 @@ The interface method and its three implementations are one change: making the me
 
 **In:**
 
-- `SqlTransaction.savepoint` and the name check in `relational-core`.
+- `SqlTransaction.savepoint` in `relational-core`.
 - `savepoint()` on the Postgres, MySQL and SQLite driver transactions, and on their savepoints.
-- Driver tests on PGlite (Postgres), live MySQL (`*.live.test.ts`, like `transaction-isolation.live.test.ts`) and SQLite. On each: a released savepoint keeps its work, a rolled-back savepoint loses its work while the outer transaction's work commits, a savepoint inside a savepoint, and a rejected name sends nothing. On Postgres also: a failing statement inside a savepoint puts the transaction in the aborted state, `rollback()` on the savepoint recovers it, and the outer transaction then runs a statement and commits; and the outer transaction's state (`open`) is still set after a savepoint settles.
+- Driver tests on PGlite (Postgres), live MySQL (`*.live.test.ts`, like `transaction-isolation.live.test.ts`) and SQLite. On each: a released savepoint keeps its work, a rolled-back savepoint loses its work while the outer transaction's work commits, and a savepoint inside a savepoint. On Postgres also: a failing statement inside a savepoint puts the transaction in the aborted state, `rollback()` on the savepoint recovers it, and the outer transaction then runs a statement and commits; and the outer transaction's state (`open`) is still set after a savepoint settles.
 - Test stubs that must implement the new method.
 
 **Out:**
@@ -68,7 +68,7 @@ The interface method and its three implementations are one change: making the me
 
 | Edge case | Disposition | Notes |
 | --------- | ----------- | ----- |
-| Savepoint name interpolated into SQL text | Rejected unless a plain identifier, before sending | `drive/calibration/failure-modes.md` F34: a string interpolated into SQL with only the type system as a check. |
+| Savepoint name interpolated into SQL text | Not checked; names are internal and runtime-generated | Operator decision on PR review: a database error is enough. |
 | Postgres aborted transaction (`25P02`) after a failed statement | `ROLLBACK TO SAVEPOINT` recovers it | The project DoD requires this recovery; the driver test proves the primitive works. |
 | Postgres `SharedTransactionState` | Unchanged by savepoints | A savepoint that cleared `open` would let the cursor wrap send its own `BEGIN…COMMIT` inside the user's transaction. |
 
@@ -86,7 +86,7 @@ One dispatch.
 
 ### D1 — driver savepoints
 
-- **Outcome:** the interface method, the name check, the three driver implementations and their tests, as described above.
+- **Outcome:** the interface method, the three driver implementations and their tests, as described above.
 - **Builds on:** `origin/main`.
 - **Hands to:** slice 3, `runtime-savepoints`.
 - **Focus:** the files named in Chosen design and their test directories.
