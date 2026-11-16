@@ -314,8 +314,7 @@ describe('executeDbUpdate, database policies', () => {
   });
 
   it('refuses consent without a ref before it runs anything', async () => {
-    const recovery =
-      'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+    const recovery = 'Pass the ref whose policies to write, or leave out permitPolicyChange.';
     const execute = vi.fn();
     const result = await update({
       mode: 'apply',
@@ -328,11 +327,11 @@ describe('executeDbUpdate, database policies', () => {
       ok: false,
       code: 'CLI.INVALID_ARGUMENTS',
       severity: 'error',
-      summary: '--permit-policy-change needs --to <ref>',
+      summary: 'permitPolicyChange needs a ref',
       why: 'No ref was given, so there are no policies to write.',
       fix: recovery,
       nextActions: [{ kind: 'user-choice', label: recovery }],
-      meta: { command: 'db update' },
+      meta: {},
     });
     expect(execute).not.toHaveBeenCalled();
   });

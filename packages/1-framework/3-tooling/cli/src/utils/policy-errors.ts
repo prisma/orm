@@ -107,27 +107,52 @@ export function errorChangePolicyForbids(args: {
   );
 }
 
-/** `CLI.INVALID_ARGUMENTS`: `--permit-policy-change` was given, but `to` names no ref whose policies it could write. */
-export function errorPermitPolicyChangeNeedsRef(args: {
-  readonly command: 'db migrate' | 'db update';
-  readonly to: string | undefined;
-}): ActionableCliError {
-  const { command, to } = args;
-  const recovery =
-    'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
-  return new ActionableCliError(
-    'CLI.INVALID_ARGUMENTS',
-    '--permit-policy-change needs --to <ref>',
-    {
-      why:
-        to === undefined
-          ? 'No ref was given, so there are no policies to write.'
-          : `${to} is not a ref, so it declares no policies to write.`,
-      fix: recovery,
-      nextActions: [chooseAction(recovery)],
-      meta: { command, ...(to === undefined ? {} : { to }) },
-    },
-  );
+/**
+ * `CLI.INVALID_ARGUMENTS`: consent to write policies was given without a ref whose policies it could
+ * write. `command` names the CLI command that was run, whose flags the error names; without it, the
+ * error names the control API option `refOption` (`target` for `migrate`, `ref` for `dbUpdate`).
+ */
+export function errorPermitPolicyChangeNeedsRef(
+  args:
+    | { readonly command: 'db migrate' | 'db update'; readonly to: string | undefined }
+    | { readonly refOption: 'target' | 'ref'; readonly to: string | undefined },
+): ActionableCliError {
+  const { to } = args;
+  const why =
+    to === undefined
+      ? 'No ref was given, so there are no policies to write.'
+      : `${to} is not a ref, so it declares no policies to write.`;
+  const toMeta = to === undefined ? {} : { to };
+  if ('command' in args) {
+    const recovery =
+      'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+    return new ActionableCliError(
+      'CLI.INVALID_ARGUMENTS',
+      '--permit-policy-change needs --to <ref>',
+      {
+        why,
+        fix: recovery,
+        nextActions: [chooseAction(recovery)],
+        meta: { command: args.command, ...toMeta },
+      },
+    );
+  }
+  const [summary, recovery] =
+    args.refOption === 'target'
+      ? [
+          'permitPolicyChange needs a target of kind ref',
+          'Pass a target of kind ref whose policies to write, or leave out permitPolicyChange.',
+        ]
+      : [
+          'permitPolicyChange needs a ref',
+          'Pass the ref whose policies to write, or leave out permitPolicyChange.',
+        ];
+  return new ActionableCliError('CLI.INVALID_ARGUMENTS', summary, {
+    why,
+    fix: recovery,
+    nextActions: [chooseAction(recovery)],
+    meta: toMeta,
+  });
 }
 
 /** `MIGRATION.MARKER_CAS_FAILURE` for `db sign`: the database's policies changed after it checked them, so it did not sign the application space. */

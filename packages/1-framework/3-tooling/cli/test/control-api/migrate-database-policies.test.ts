@@ -319,7 +319,7 @@ describe('executeMigrate, database policies', () => {
     'refuses consent without a ref target before it runs anything: hash $hash',
     async ({ hash, why }) => {
       const recovery =
-        'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+        'Pass a target of kind ref whose policies to write, or leave out permitPolicyChange.';
       const { result, runnerCalls } = await migrate({
         markers: new Map(),
         ...(hash === undefined ? {} : { hash }),
@@ -330,11 +330,11 @@ describe('executeMigrate, database policies', () => {
         ok: false,
         code: 'CLI.INVALID_ARGUMENTS',
         severity: 'error',
-        summary: '--permit-policy-change needs --to <ref>',
+        summary: 'permitPolicyChange needs a target of kind ref',
         why,
         fix: recovery,
         nextActions: [{ kind: 'user-choice', label: recovery }],
-        meta: { command: 'db migrate', ...(hash === undefined ? {} : { to: hash }) },
+        meta: hash === undefined ? {} : { to: hash },
       });
       expect(runnerCalls).toEqual([]);
     },

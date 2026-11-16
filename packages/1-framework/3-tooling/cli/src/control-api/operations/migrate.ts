@@ -149,7 +149,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   if (options.permitPolicyChange === true && ref === undefined) {
     return notOk(
       errorPermitPolicyChangeNeedsRef({
-        command: 'db migrate',
+        refOption: 'target',
         to: target?.kind === 'hash' ? target.hash : undefined,
       }),
     );

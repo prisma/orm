@@ -74,7 +74,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
   options: ExecuteDbUpdateOptions<TFamilyId, TTargetId>,
 ): Promise<DbUpdateResult> {
   if (options.permitPolicyChange === true && options.ref === undefined) {
-    return notOk(errorPermitPolicyChangeNeedsRef({ command: 'db update', to: undefined }));
+    return notOk(errorPermitPolicyChangeNeedsRef({ refOption: 'ref', to: undefined }));
   }
   const contractStorageHash = options.contract.storage.storageHash;
   if (options.ref !== undefined && options.ref.hash !== contractStorageHash) {
