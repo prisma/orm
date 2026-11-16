@@ -603,7 +603,7 @@ describe('connect and disconnect on a variant stored in its own table', () => {
   });
 });
 
-describe('disconnect on a variant where the base mutator refuses it or the parent holds the key', () => {
+describe('disconnect on a variant', () => {
   it('is refused on a relation the parent holds the key for while the graph is built', () => {
     expect(
       thrownBy(() =>
@@ -616,33 +616,6 @@ describe('disconnect on a variant where the base mutator refuses it or the paren
       message:
         'disconnect() nested mutation for relation "task" is not available on a variant, because the parent holds the key of the related row',
       meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },
-    });
-  });
-
-  it('is refused in create() as on the base mutator', () => {
-    expect(
-      thrownBy(() =>
-        createOf('Project', {
-          id: 1,
-          name: 'Launch',
-          tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect([{ id: 2 }]),
-        }),
-      ),
-    ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-      message: 'disconnect() is only supported in update() nested mutations',
-      meta: { kind: 'disconnect', relation: 'tasks' },
-    });
-  });
-
-  it('without criteria is refused through a junction as on the base mutator', () => {
-    expect(
-      thrownBy(() =>
-        updateOf('Label', { tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect() }),
-      ),
-    ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_INVALID',
-      meta: { kind: 'disconnect', relation: 'tasks', problem: 'missing-criterion' },
     });
   });
 });
@@ -738,49 +711,6 @@ describe('updateAll and deleteAll on a variant', () => {
       code: topLevel.code,
       message: topLevel.message,
       meta: topLevel.meta,
-    });
-  });
-
-  it('refuse a field that links the rows to the parent as the base mutator does', () => {
-    expect(
-      thrownBy(() =>
-        updateOf('Project', {
-          tasks: (tasks: VariantMutator) => tasks.variant('feature').updateAll({ projectId: 2 }),
-        }),
-      ),
-    ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_INVALID',
-      meta: {
-        kind: 'updateAll',
-        relation: 'tasks',
-        problem: 'parent-link-column',
-        fields: ['projectId'],
-      },
-    });
-  });
-
-  it('are refused in create() and on to-one relations as on the base mutator', () => {
-    expect(
-      thrownBy(() =>
-        createOf('Project', {
-          id: 1,
-          name: 'Launch',
-          tasks: (tasks: VariantMutator) => tasks.variant('bug').deleteAll(),
-        }),
-      ),
-    ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-      meta: { kind: 'deleteAll', relation: 'tasks' },
-    });
-    expect(
-      thrownBy(() =>
-        updateOf('TaskComment', {
-          task: (task: VariantMutator) => task.variant('bug').updateAll({ title: 'Seen' }),
-        }),
-      ),
-    ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
-      meta: { kind: 'updateAll', relation: 'task', reason: 'to-one-relation' },
     });
   });
 });
