@@ -527,6 +527,7 @@ const ANY_VALUE = canonicalize({});
 interface RequiredKey {
   readonly field: string;
   readonly path: string;
+  readonly steps: readonly JsonPathStep[];
 }
 
 /** What a validator change touches: the fields and nested keys it makes required, each by its dotted stored path such as `home.seen`, and the fields whose accepted values it changes. */
@@ -636,7 +637,7 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
         const names = steps.flatMap((step) => (step.kind === 'member' ? [step.name] : []));
         const dotted = [field, ...names].join('.');
         requires.add(dotted);
-        keys.set(dotted, { field, path: jsonPathText(steps) });
+        keys.set(dotted, { field, path: jsonPathText(steps), steps });
       }
     }
   }
@@ -654,20 +655,65 @@ function quotedList(fields: readonly string[]): string {
     : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
 }
 
+/** What a document holds at the objects a required key's steps lead to: an object without the key, or a list element that is not an object. */
+function keyFindingsOf(
+  value: unknown,
+  steps: readonly JsonPathStep[],
+): ReadonlySet<'lacks' | 'notObject'> {
+  const [step, ...rest] = steps;
+  if (step === undefined) return new Set();
+  if (step.kind === 'wildcard') {
+    if (!Array.isArray(value)) return new Set();
+    return new Set(
+      value.flatMap((element): ('lacks' | 'notObject')[] =>
+        rest[0]?.kind === 'member' && !isRecord(element)
+          ? ['notObject']
+          : [...keyFindingsOf(element, rest)],
+      ),
+    );
+  }
+  if (!isRecord(value)) return new Set();
+  if (!Object.hasOwn(value, step.name)) return new Set(rest.length === 0 ? ['lacks'] : []);
+  return keyFindingsOf(value[step.name], rest);
+}
+
 /**
- * What a validator change touches, in words: `This validator change makes "plan" required.` Of the
- * fields it makes required, only those the document shown lacks are named; a nested key is always
- * named.
+ * Of the nested keys a validator change makes required, those the document shown lacks, and the
+ * fields whose list elements the keys are required in hold an element that is not an object.
  */
-function touchedSentence(touched: TouchedFields, shown: ReadonlyMap<string, unknown>): string {
-  const lacking = touched.requires.filter((field) => field.includes('.') || !shown.has(field));
+function nestedFindings(
+  touched: TouchedFields,
+  shown: ReadonlyMap<string, DocumentField>,
+): { readonly lacking: readonly string[]; readonly notObjects: readonly string[] } {
+  const lacking: string[] = [];
+  const notObjects = new Set<string>();
+  for (const [dotted, key] of touched.keys) {
+    const findings = keyFindingsOf(shown.get(key.field)?.value, key.steps);
+    if (findings.has('lacks')) lacking.push(dotted);
+    if (findings.has('notObject')) notObjects.add(key.field);
+  }
+  return { lacking, notObjects: [...notObjects].sort() };
+}
+
+/**
+ * What a validator change touches, in words: `This validator change makes "plan" required.` Only
+ * what the document shown breaks is named: the fields and nested keys it lacks, and the fields it
+ * holds whose accepted values change.
+ */
+function touchedSentence(
+  touched: TouchedFields,
+  shown: ReadonlyMap<string, DocumentField>,
+): string {
+  const lackingNested = new Set(nestedFindings(touched, shown).lacking);
+  const lacking = touched.requires.filter((field) =>
+    touched.keys.has(field) ? lackingNested.has(field) : !shown.has(field),
+  );
+  const retypes = touched.retypes.filter((field) => shown.has(field));
   const parts = [
     ...(lacking.length === 0 ? [] : [`makes ${quotedList(lacking)} required`]),
-    ...(touched.retypes.length === 0
+    ...(retypes.length === 0
       ? []
-      : [
-          `changes what ${quotedList(touched.retypes)} ${touched.retypes.length === 1 ? 'accepts' : 'accept'}`,
-        ]),
+      : [`changes what ${quotedList(retypes)} ${retypes.length === 1 ? 'accepts' : 'accept'}`]),
   ];
   return parts.length === 0 ? '' : `This validator change ${parts.join(' and ')}. `;
 }
@@ -1371,12 +1417,19 @@ export class MongoMigrationRunner {
             shape,
             '',
           );
+    const shownProblems = [
+      ...problems,
+      ...nestedFindings(touched, fields).notObjects.map((field) => ({
+        text: `holds an element in ${JSON.stringify(field)} that is not an object`,
+        uncheckable: false,
+      })),
+    ];
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
       `${touchedSentence(touched, fields)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
-      ...(problems.length === 0
+      ...(shownProblems.length === 0
         ? []
-        : [`That document ${joinedList(problems.map(({ text }) => text))}.`]),
+        : [`That document ${joinedList(shownProblems.map(({ text }) => text))}.`]),
       `Find them all with ${query} in mongosh.`,
     ];
     const uncheckable = problems.length > 0 && problems.every((problem) => problem.uncheckable);

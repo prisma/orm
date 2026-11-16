@@ -282,6 +282,47 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
   );
 
   it(
+    'names no nested key a document does not lack, for a list element that is not an object and a missing object',
+    async () => {
+      const address = (required: readonly string[]) => ({
+        bsonType: 'object',
+        ...(required.length === 0 ? {} : { required }),
+        properties: { line1: { bsonType: 'string' } },
+      });
+      const schema = (required: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          addresses: { bsonType: 'array', items: address(required) },
+          home: address(required),
+        },
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: schema([]) } });
+      await db
+        .collection('users')
+        .insertOne(
+          { _id: new ObjectId('64b7f0c2a1b2c3d4e5f60719'), addresses: [{ line1: 'a' }, null] },
+          { bypassDocumentValidation: true },
+        );
+
+      const result = await run([
+        setValidation('users', schema(['line1']), {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'This validator change changes what "addresses" accepts. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60719"). That document holds an element in "addresses" that is not an object.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'applies the validator when every document fits',
     async () => {
       await db.createCollection('users');
