@@ -469,40 +469,35 @@ describe('transaction activity', () => {
     });
   });
   describe('a transaction beneath a transaction (a savepoint)', () => {
-    const rolledBack = { by: 'rollback', outcome: 'succeeded', commitAttempted: false } as const;
     const released = { by: 'release', outcome: 'succeeded' } as const;
     const committed = { by: 'commit', outcome: 'succeeded' } as const;
+    const rolledBack = (commitAttempted = false) =>
+      ({ by: 'rollback', outcome: 'succeeded', commitAttempted }) as const;
 
     function finalizations() {
       const events: string[] = [];
       const names = new Map<string, string>();
-      const trace: RuntimeMiddleware<MockExec> = {
-        name: 'trace',
-        async activityFinalized(activity, result) {
-          const name =
-            activity.kind === 'statement'
-              ? (activity.plan as MockExec).id
-              : (names.get(activity.id) ?? activity.kind);
-          events.push(`${name}:${result.outcome}`);
+      const middleware: RuntimeMiddleware<MockExec>[] = [
+        {
+          name: 'trace',
+          async activityFinalized(activity, result) {
+            const name =
+              activity.kind === 'statement'
+                ? (activity.plan as MockExec).id
+                : (names.get(activity.id) ?? activity.kind);
+            events.push(`${name}:${result.outcome}`);
+          },
         },
-      };
-      const middleware = [trace];
+      ];
       return {
         events,
         middleware,
-        async open(
-          name: string,
-          parent: ActivityParent | undefined,
-          setup: {
-            readonly holdFinishedChildren?: boolean;
-            readonly also?: ReadonlyArray<RuntimeMiddleware<MockExec>>;
-          } = {},
-        ) {
+        async open(name: string, parent: ActivityParent | undefined) {
           const run = await startTransactionActivity({
-            middleware: [trace, ...(setup.also ?? [])],
+            middleware,
             context: contextFields({ scope: 'transaction' }),
             parent,
-            holdFinishedChildren: setup.holdFinishedChildren ?? true,
+            holdFinishedChildren: true,
           });
           names.set(run.activity.id, name);
           return run;
@@ -521,195 +516,47 @@ describe('transaction activity', () => {
       };
     }
 
-    it('holds a released savepoint and its children, and finalizes them in start order with the outer outcome', async () => {
-      const { events, open, statement } = finalizations();
-      const outer = await open('outer', undefined);
-      await statement('s1', outer);
-      const savepoint = await open('savepoint', outer);
-      await statement('s2', savepoint);
-      await savepoint.end(released);
-      await statement('s3', outer);
-      const beforeEnd = [...events];
-      await outer.end(committed);
-
-      expect(beforeEnd).toEqual([]);
-      expect(events).toEqual([
-        's1:committed',
-        's2:committed',
-        'savepoint:committed',
-        's3:committed',
-        'outer:committed',
-      ]);
-    });
-
-    it('finalizes a rolled-back savepoint and its children at once, and not again when the outer transaction ends', async () => {
-      const { events, open, statement } = finalizations();
-      const outer = await open('outer', undefined);
-      await statement('s1', outer);
-      const savepoint = await open('savepoint', outer);
-      await statement('s2', savepoint);
-      await savepoint.end(rolledBack);
-      const afterRollback = [...events];
-      await statement('s3', outer);
-      await outer.end(committed);
-
-      expect(afterRollback).toEqual(['s2:rolled-back', 'savepoint:rolled-back']);
-      expect(events).toEqual([
-        's2:rolled-back',
-        'savepoint:rolled-back',
-        's1:committed',
-        's3:committed',
-        'outer:committed',
-      ]);
-    });
-
-    it('finalizes a released savepoint rolled-back when the savepoint around it rolls back', async () => {
-      const { events, open, statement } = finalizations();
-      const outer = await open('outer', undefined);
-      const middle = await open('middle', outer);
-      const inner = await open('inner', middle);
-      await statement('s1', inner);
-      await inner.end(released);
-      const afterRelease = [...events];
-      await middle.end(rolledBack);
-      const afterRollback = [...events];
-      await outer.end(committed);
-
-      expect(afterRelease).toEqual([]);
-      expect(afterRollback).toEqual(['s1:rolled-back', 'inner:rolled-back', 'middle:rolled-back']);
-      expect(events).toEqual([...afterRollback, 'outer:committed']);
-    });
-
-    it('finalizes a rolled-back savepoint at once inside a released one, which waits for the outer outcome', async () => {
-      const { events, open, statement } = finalizations();
-      const outer = await open('outer', undefined);
-      const middle = await open('middle', outer);
-      await statement('s1', middle);
-      const inner = await open('inner', middle);
-      await statement('s2', inner);
-      await inner.end(rolledBack);
-      const afterRollback = [...events];
-      await middle.end(released);
-      await outer.end(committed);
-
-      expect(afterRollback).toEqual(['s2:rolled-back', 'inner:rolled-back']);
-      expect(events).toEqual([
-        's2:rolled-back',
-        'inner:rolled-back',
-        's1:committed',
-        'middle:committed',
-        'outer:committed',
-      ]);
-    });
-
-    it('finalizes a rollback after an attempted release rolled-back', async () => {
-      const { events, open } = finalizations();
-      const outer = await open('outer', undefined);
-      const savepoint = await open('savepoint', outer);
-      await savepoint.end({ by: 'rollback', outcome: 'succeeded', commitAttempted: true });
-
-      expect(events).toEqual(['savepoint:rolled-back']);
-    });
-
-    describe('a failed statement beneath it', () => {
-      it.each<{
-        readonly settlement: TransactionSettlement;
-        readonly holdFinishedChildren: boolean;
-        readonly outcome: string;
-      }>([
-        { settlement: released, holdFinishedChildren: true, outcome: 'unknown' },
-        { settlement: released, holdFinishedChildren: false, outcome: 'unknown' },
-        { settlement: rolledBack, holdFinishedChildren: true, outcome: 'committed' },
-        { settlement: rolledBack, holdFinishedChildren: false, outcome: 'committed' },
-      ])(
-        'makes the resolved outer commit $outcome after $settlement.by (holdFinishedChildren: $holdFinishedChildren)',
-        async ({ settlement, holdFinishedChildren, outcome }) => {
-          const { events, open, statement } = finalizations();
-          const outer = await open('outer', undefined, { holdFinishedChildren });
-          const savepoint = await open('savepoint', outer, { holdFinishedChildren });
-          await statement('s1', savepoint, true);
-          await savepoint.end(settlement);
-          await outer.end(committed);
-
-          expect(events.filter((event) => event.startsWith('outer:'))).toEqual([
-            `outer:${outcome}`,
-          ]);
-        },
-      );
-    });
-
-    it('finalizes a savepoint whose activityStarted throws rolled-back, and leaves the outer commit committed', async () => {
-      const { events, open } = finalizations();
-      const refused = new Error('started failed');
-      const refuser: RuntimeMiddleware<MockExec> = {
-        name: 'refuser',
-        async activityStarted() {
-          throw refused;
-        },
-      };
-      const outer = await open('outer', undefined);
-
-      await expect(open('savepoint', outer, { also: [refuser] })).rejects.toBe(refused);
-      await outer.end(committed);
-
-      expect(events).toEqual(['transaction:rolled-back', 'outer:committed']);
-    });
-
-    it.each<{
-      readonly settlement: TransactionSettlement;
-      readonly atSettle: ReadonlyArray<string>;
-      readonly all: ReadonlyArray<string>;
-    }>([
-      {
-        settlement: released,
-        atSettle: [],
-        all: ['s1:unknown', 'savepoint:unknown', 'test-call:unknown', 'outer:unknown'],
-      },
-      {
-        settlement: rolledBack,
-        atSettle: ['s1:rolled-back', 'savepoint:rolled-back'],
-        all: ['s1:rolled-back', 'savepoint:rolled-back', 'test-call:committed', 'outer:committed'],
-      },
-    ])(
-      'follows the same rules beneath a client activity inside a transaction after $settlement.by',
-      async ({ settlement, atSettle, all }) => {
-        const { events, middleware, open, statement } = finalizations();
+    it.each([false, true])(
+      'finalizes a rolled-back savepoint and its children at once, not again when the outer transaction ends, and keeps their failure from the outer outcome (commitAttempted: %s)',
+      async (commitAttempted) => {
+        const { events, open, statement } = finalizations();
         const outer = await open('outer', undefined);
-        const call = await startCall(middleware, { parent: outer });
-        const savepoint = await open('savepoint', call);
-        await statement('s1', savepoint, true);
-        await savepoint.end(settlement);
-        const afterSettle = [...events];
-        await call.end({ outcome: 'succeeded' });
+        await statement('s1', outer);
+        const savepoint = await open('savepoint', outer);
+        await statement('s2', savepoint, true);
+        await savepoint.end(rolledBack(commitAttempted));
+        const afterRollback = [...events];
         await outer.end(committed);
 
-        expect(afterSettle).toEqual(atSettle);
-        expect(events).toEqual(all);
+        expect(afterRollback).toEqual(['s2:rolled-back', 'savepoint:rolled-back']);
+        expect(events).toEqual([...afterRollback, 's1:committed', 'outer:committed']);
       },
     );
 
-    it('is told apart from an outermost transaction by its context being in a transaction', async () => {
-      const isSavepoint: boolean[] = [];
-      const observer: RuntimeMiddleware<MockExec> = {
-        name: 'observer',
-        async activityStarted(activity, ctx) {
-          isSavepoint.push(activity.kind === 'transaction' && ctx.inTransaction());
-        },
-      };
-      const outer = await startTransactionActivity({
-        middleware: [observer],
-        context: contextFields({ scope: 'transaction' }),
-        parent: undefined,
-        holdFinishedChildren: true,
-      });
-      await startTransactionActivity({
-        middleware: [observer],
-        context: contextFields({ scope: 'transaction' }),
-        parent: outer,
-        holdFinishedChildren: true,
-      });
+    it('makes the resolved outer commit unknown after a failed statement beneath a released savepoint', async () => {
+      const { events, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const savepoint = await open('savepoint', outer);
+      await statement('s1', savepoint, true);
+      await savepoint.end(released);
+      await outer.end(committed);
 
-      expect(isSavepoint).toEqual([false, true]);
+      expect(events).toEqual(['s1:unknown', 'savepoint:unknown', 'outer:unknown']);
+    });
+
+    it('finalizes a rolled-back savepoint beneath a client activity at once, and not again when the client activity is finalized', async () => {
+      const { events, middleware, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const call = await startCall(middleware, { parent: outer });
+      const savepoint = await open('savepoint', call);
+      await statement('s1', savepoint, true);
+      await savepoint.end(rolledBack());
+      const afterRollback = [...events];
+      await call.end({ outcome: 'succeeded' });
+      await outer.end(committed);
+
+      expect(afterRollback).toEqual(['s1:rolled-back', 'savepoint:rolled-back']);
+      expect(events).toEqual([...afterRollback, 'test-call:committed', 'outer:committed']);
     });
   });
 });

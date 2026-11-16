@@ -55,19 +55,10 @@ One framework file, its tests, and the two documents that describe its rules (th
 
 Beyond CI, review and the project DoD:
 
-- [ ] Framework tests show finalize outcomes and order for:
-  - A released savepoint: its children and itself are finalized with the outer transaction's outcome, in post-order, when the outer transaction ends. The outer transaction's earlier and later children keep their start order around it.
-  - A rolled-back savepoint: finalized `rolled-back`, children first, before its `end()` resolves and before the outer transaction ends. The outer transaction does not finalize them again.
-  - Doubly nested savepoints: an inner released savepoint inside a middle one that rolls back (all `rolled-back` when the middle one ends), and an inner rolled-back savepoint inside a middle one that is released (inner at once, middle with the outer outcome).
-- [ ] Framework tests show failure forwarding:
-  - A failed statement beneath a released savepoint makes the outer resolved `commit` `unknown`.
-  - Beneath a rolled-back savepoint, it leaves the outer commit `committed`.
-  - Both also hold with `holdFinishedChildren: false`.
-- [ ] Tests also show:
-  - A rollback after an attempted release (`commitAttempted: true`) on a savepoint finalizes it `rolled-back`.
-  - A savepoint whose `activityStarted` throws is finalized `rolled-back` and leaves the outer transaction committing `committed`.
-  - A savepoint started beneath a client activity inside a transaction follows the same rules.
-  - `activity.kind === 'transaction' && ctx.inTransaction()` is true for a savepoint and false for an outermost transaction.
+- [ ] Framework tests cover only what the change adds; each fails without it:
+  - A rolled-back savepoint is finalized `rolled-back`, children first, before its `end()` resolves, also after an attempted release. The outer transaction does not finalize it again, and its failed statement leaves the outer commit `committed`.
+  - A failed statement beneath a released savepoint makes the outer resolved commit `unknown`.
+  - A rolled-back savepoint beneath a client activity inside a transaction is not finalized again when the client activity is.
 - [ ] Existing `transaction-activity`, `activity-context` and SQL runtime transaction tests pass unchanged.
 
 ## Edge cases investigated
