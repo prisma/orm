@@ -39,6 +39,8 @@ All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtim
 5. **The guard** (decision 3). Each level tracks its open child savepoint, at most one.
    - `savepoint()` on a level that has an open child rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`. The message names the open savepoint (`sp_<n>`). No `SAVEPOINT` is sent and no activity is started.
    - A statement or `commit()` on a level that has an open child rejects with the new `RUNTIME.TRANSACTION_SUSPENDED`. Its details carry the open savepoint's activity ID. Nothing is sent to the driver. The level is usable again once the child has settled.
+   - A statement sent on the connection while its transaction is open counts as a statement on the outer level, so it is refused the same way. Otherwise it would run inside the savepoint on the database while being parented to the outer activity.
+   - Once a level is closed (settled, invalidated or timed out), work on it reports that, not `RUNTIME.TRANSACTION_SUSPENDED`.
    - `rollback()` on a level that has an open child is allowed. The driver rollback of the level also undoes the open descendants. Each open descendant is closed first, innermost first: its activity ends `{ by: 'rollback', outcome, commitAttempted: false }`, with the outcome of the level's rollback, and later work on it rejects with `RUNTIME.TRANSACTION_CLOSED`. This is the path `withTransaction` takes when a callback throws, or a timeout fires, while a savepoint is open.
 6. **Closed levels.** A savepoint refuses work with `RUNTIME.TRANSACTION_CLOSED` once it has settled, or once any enclosing level has settled, been invalidated, or been closed by the outer transaction's timeout. This covers the note slice 2 left for this slice: the framework accepts work beneath a savepoint after the outer `commit()` or `rollback()` has been called, so the runtime must refuse it.
 7. **A failed `ROLLBACK TO` invalidates every level** up to and including the outer transaction (decision 9).
@@ -50,7 +52,7 @@ All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtim
 
 ### Errors
 
-- `RUNTIME.TRANSACTION_SUSPENDED`: new factory next to `transactionClosedError` and `transactionAlreadyOpenError`. Message names the open savepoint. Details: `{ savepointId }`, the open savepoint's activity ID.
+- `RUNTIME.TRANSACTION_SUSPENDED`: new factory next to `transactionClosedError` and `transactionAlreadyOpenError`. Message names the open savepoint. Details: `{ savepointId }`, the open savepoint's activity ID. While the savepoint's `activityStarted` hooks are still running it has no activity ID yet, and `savepointId` is `undefined`; the message still names it.
 - `RUNTIME.TRANSACTION_ALREADY_OPEN`: the existing code and factory; the savepoint case gets its own message that names the open savepoint.
 
 ## Coherence rationale
@@ -115,6 +117,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 ## Amendments
 
 - **D1 R1 → R2: a failed `RELEASE` does not end the savepoint activity.** The first version of rule 2 ended it `{ by: 'release', outcome: 'failed' }`. That contradicts slice 2's rule 3: after a failed `RELEASE` and a successful `ROLLBACK TO`, the work was undone, so the savepoint must finalize `rolled-back`. Corrected by the orchestrator against slice 2's spec; the implementation followed the earlier text.
+- **D1 review R1: the connection is guarded too.** Rule 5 now covers statements sent on the connection while its transaction is open (reviewer F1), closed levels report their closed state ahead of `TRANSACTION_SUSPENDED` (F3), and § Errors states when `savepointId` is `undefined`. The orchestrator had first told the implementer to leave connection statements for slice 4; that was wrong, because the statement is finalized with the wrong outcome.
 
 ## References
 
