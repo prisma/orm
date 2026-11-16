@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = {
-  app: 'upgrade-instructions/pending/mongo-type-helpers/app/instructions.md',
-  extension: 'upgrade-instructions/pending/mongo-type-helpers/extension/instructions.md',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
+  extension: 'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
 } as const;
 
 const builderImport =

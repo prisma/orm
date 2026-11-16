@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
-const EXTENSION_NOTE = 'upgrade-instructions/pending/mongo-prepare/extension/instructions.md';
+const EXTENSION_NOTE = 'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md';
 
 const matcher = (id: string) => (content: string) =>
   detectionPatterns(EXTENSION_NOTE, id).some((pattern) => pattern.test(content));
