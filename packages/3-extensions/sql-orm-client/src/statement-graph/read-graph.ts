@@ -18,7 +18,7 @@ import { collectionSelectAst, relatedRowsSelect } from '../query-plan-select';
 import type { IncludeExpr } from '../types';
 import { requireIdentityColumnsForIncludes } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
-import { FindRelated } from './find-related';
+import { FindRelated, RELATED_KEY_LIMITS } from './find-related';
 import { Graph } from './graph';
 import { type Builder, findRows } from './model-statements';
 import { type Nest, NestJoin } from './nest-join';
@@ -97,7 +97,7 @@ function addIncludes(
       parentTables,
       include,
     );
-    const found = new FindRelated(ast, keyColumns);
+    const found = new FindRelated(ast, keyColumns, RELATED_KEY_LIMITS);
     const read = graph.add(found, {
       keys: new Rows(parent, keyColumns),
       state: graph.stateEdgesFor(found),

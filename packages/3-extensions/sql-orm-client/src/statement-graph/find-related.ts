@@ -21,17 +21,19 @@ import { stitchKey } from './stitch-key';
 
 type Keyed = { keys: Rows; state: StateEdge[]; requires: Requires[] };
 
-const KEY_LIMITS: ChunkLimits = { parameters: 10_000, bytes: 1024 * 1024 };
+export const RELATED_KEY_LIMITS: ChunkLimits = { parameters: 10_000, bytes: 1024 * 1024 };
 
 export class FindRelated extends StatementNode<Keyed> {
   readonly slots = { keys: 'one', state: 'list', requires: 'list' } as const;
   readonly ast: SelectAst;
   readonly keyColumns: readonly ColumnMapping[];
+  readonly limits: ChunkLimits;
 
-  constructor(ast: SelectAst, keyColumns: readonly ColumnMapping[]) {
+  constructor(ast: SelectAst, keyColumns: readonly ColumnMapping[], limits: ChunkLimits) {
     super();
     this.ast = ast;
     this.keyColumns = Object.freeze([...keyColumns]);
+    this.limits = limits;
     Object.freeze(this);
   }
 
@@ -47,7 +49,7 @@ export class FindRelated extends StatementNode<Keyed> {
     if (requirementUnmet(inputs.requires)) {
       return rowsResult([]);
     }
-    const chunks = chunkKeys(this.#uniqueKeys(inputs.keys), KEY_LIMITS);
+    const chunks = chunkKeys(this.#uniqueKeys(inputs.keys), this.limits);
     const statementFor = (chunk: readonly StorageRow[]) => this.#statementFor(chunk);
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const chunk of chunks) {
@@ -73,7 +75,11 @@ export class FindRelated extends StatementNode<Keyed> {
   }
 
   override withReturning(columns: readonly ProjectionItem[]): FindRelated {
-    return new FindRelated(withColumnsThroughLayers(this.ast, columns), this.keyColumns);
+    return new FindRelated(
+      withColumnsThroughLayers(this.ast, columns),
+      this.keyColumns,
+      this.limits,
+    );
   }
 }
 

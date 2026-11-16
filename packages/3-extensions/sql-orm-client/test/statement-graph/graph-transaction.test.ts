@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Graph } from '../../src/statement-graph/graph';
 import { executeGraph, queryGraph } from '../../src/statement-graph/run-graph';
+import { createCollectionFor } from '../collection-fixtures';
 import { createMockRuntime, type MockRuntime } from '../helpers';
 import {
   addFiltered,
@@ -69,5 +70,23 @@ describe('the transaction a graph runs in', () => {
     await executeGraph(readThenWrite(), contextOf(transactional.runtime));
 
     expect(transactional.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens none for an update with includes that writes nothing, which only reads', async () => {
+    const { collection, runtime } = createCollectionFor('User');
+    const transactional = withTransaction(runtime);
+    transactional.runtime.setNextResults([[{ id: 1 }], [{ id: 1, posts: '[]' }]]);
+    const users = collection.include('posts').where({ id: 1 }) as unknown as {
+      update(data: unknown): Promise<unknown>;
+    };
+
+    await users.update({
+      posts: (posts: { connect(rows: unknown[]): unknown }) => posts.connect([]),
+    });
+
+    expect({
+      opened: transactional.open.mock.calls.length,
+      statements: transactional.runtime.executions.length,
+    }).toEqual({ opened: 0, statements: 2 });
   });
 });
