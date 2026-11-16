@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
@@ -41,33 +42,26 @@ const contract = defineContract({ models: { Owner, Item } });
 
 type Returning = 'with returning' | 'without returning';
 
+const withoutReturning = {
+  ...postgresAdapterCapabilities,
+  postgres: { ...postgresAdapterCapabilities.postgres, returning: false },
+  sql: { ...postgresAdapterCapabilities.sql, returning: false },
+};
+
 function contextOf(
   strategy: IncludeStrategy,
   returning: Returning,
 ): ExecutionContext<typeof contract> {
-  const context = createExecutionContext({
+  return createExecutionContext({
     contract,
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter:
+        returning === 'with returning'
+          ? postgresAdapterFor(strategy)
+          : postgresAdapterFor(strategy, withoutReturning),
     }),
   });
-  if (returning === 'with returning') {
-    return context;
-  }
-  const capabilities = Object.fromEntries(
-    Object.entries(context.contract.capabilities).map(([group, entries]) => [
-      group,
-      Object.fromEntries(Object.entries(entries).filter(([key]) => key !== 'returning')),
-    ]),
-  );
-  return {
-    ...context,
-    contract: {
-      ...context.contract,
-      capabilities: capabilities as typeof context.contract.capabilities,
-    },
-  };
 }
 
 async function withOwners(
