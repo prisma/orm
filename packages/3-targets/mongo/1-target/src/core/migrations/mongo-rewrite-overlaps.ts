@@ -65,20 +65,54 @@ export function variantDiscriminatorFilter(
   return variant === undefined ? undefined : { kind: 'variant', ...variant };
 }
 
-/** One rewrite of a plan, with what the planner that built it knows about what it reads and writes. */
-export interface OrderedRewrite {
-  readonly call: RewriteCall;
-  /** The statements the call carries out. */
-  readonly statements: readonly ResolvedMigrationStatement[];
-  /** How to make a change of stored values in two migrations; `undefined` for keys and fields. */
-  readonly twoMigrationsAdvice: string | undefined;
-  /** The stored value a replacement writes; `undefined` for any other call. */
-  readonly writtenValue: unknown;
-  /** The stored name of the field a data transform writes; `undefined` for any other call. */
-  readonly transformedField: string | undefined;
-  /** The discriminator values the call's filter selects documents by; for a delete, the variant whose documents it deletes. */
+type RewriteCallNamed<Name extends RewriteCall['factoryName']> = Extract<
+  RewriteCall,
+  { readonly factoryName: Name }
+>;
+
+interface Selecting {
+  /** The discriminator values the call's filter selects documents by. */
   readonly discriminatorFilter: DiscriminatorFilter | undefined;
 }
+
+/** What the planner that built a call knows about what it reads and writes, beyond the call itself. */
+interface FactsByCall {
+  readonly replaceStoredValue: Selecting & {
+    /** The stored value the replacement writes. */
+    readonly writtenValue: unknown;
+  };
+  readonly dataTransform: Selecting & {
+    /** The stored name of the field the data transform writes. */
+    readonly transformedField: string;
+  };
+  readonly deleteDocuments: {
+    /** The variant whose documents the delete deletes. */
+    readonly deletedVariant: SelectedVariant;
+  };
+}
+
+type FactsOf<Name extends RewriteCall['factoryName']> = Name extends keyof FactsByCall
+  ? FactsByCall[Name]
+  : Selecting;
+
+/** One rewrite of a plan, keyed by its call's kind, with the facts that kind needs. */
+export type OrderedRewrite = {
+  readonly [Name in RewriteCall['factoryName']]: {
+    readonly kind: Name;
+    readonly call: RewriteCallNamed<Name>;
+    /** The statements the call carries out. */
+    readonly statements: readonly ResolvedMigrationStatement[];
+    /** How to make a change of stored values in two migrations; `undefined` for keys and fields. */
+    readonly twoMigrationsAdvice: string | undefined;
+  } & FactsOf<Name>;
+}[RewriteCall['factoryName']];
+
+/** An `OrderedRewrite` without what the planner adds to every call: the statements and the advice. */
+export type RewriteFacts = OrderedRewrite extends infer Each
+  ? Each extends OrderedRewrite
+    ? Omit<Each, 'statements' | 'twoMigrationsAdvice'>
+    : never
+  : never;
 
 /** A field of a collection's documents, or, with a `path`, a key inside one. */
 interface KeyPlace {
@@ -108,7 +142,7 @@ type Role = 'moves' | 'empties' | 'writes';
  */
 interface Access {
   readonly role: Role;
-  readonly reads: readonly Place[];
+  readonly empties: readonly Place[];
   readonly writes: readonly Place[];
   readonly filterReads: readonly Place[];
 }
@@ -158,42 +192,42 @@ function filterReadsOf(collection: string, filter: DiscriminatorFilter | undefin
   ];
 }
 
-function plannerFact<T>(fact: T | undefined, what: string, call: RewriteCall): T {
-  if (fact === undefined) {
-    throw new InternalError(`The planner did not say ${what} of ${call.label}`);
-  }
-  return fact;
-}
-
 function accessOf(rewrite: OrderedRewrite): Access {
-  const { call } = rewrite;
-  const access = (role: Role, collection: string, reads: Place[], writes: Place[]): Access => ({
+  const selecting = (
+    role: Role,
+    collection: string,
+    empties: Place[],
+    writes: Place[],
+  ): Access => ({
     role,
-    reads,
+    empties,
     writes,
-    filterReads: filterReadsOf(collection, rewrite.discriminatorFilter),
+    filterReads:
+      rewrite.kind === 'deleteDocuments'
+        ? []
+        : filterReadsOf(collection, rewrite.discriminatorFilter),
   });
-  switch (call.factoryName) {
-    case 'renameField':
-      return access(
-        'moves',
-        call.collection,
-        [key(call.collection, call.from)],
-        [key(call.collection, call.to)],
-      );
-    case 'unsetField':
-      return access('empties', call.collection, [key(call.collection, call.field)], []);
+  switch (rewrite.kind) {
+    case 'renameField': {
+      const { collection, from, to } = rewrite.call;
+      return selecting('moves', collection, [key(collection, from)], [key(collection, to)]);
+    }
+    case 'unsetField': {
+      const { collection, field } = rewrite.call;
+      return selecting('empties', collection, [key(collection, field)], []);
+    }
     case 'fillField':
-      return access('writes', call.collection, [], [key(call.collection, call.field)]);
-    case 'castField':
-      return access('writes', call.collection, [], [key(call.collection, call.field)]);
+    case 'castField': {
+      const { collection, field } = rewrite.call;
+      return selecting('writes', collection, [], [key(collection, field)]);
+    }
     case 'dataTransform': {
-      const field = plannerFact(rewrite.transformedField, 'the field written', call);
-      return access('writes', call.collection, [], [key(call.collection, field)]);
+      const { collection } = rewrite.call;
+      return selecting('writes', collection, [], [key(collection, rewrite.transformedField)]);
     }
     case 'renameStoredKey': {
-      const { collection, field, path, to } = call.options;
-      return access(
+      const { collection, field, path, to } = rewrite.call.options;
+      return selecting(
         'moves',
         collection,
         [key(collection, field, path)],
@@ -201,42 +235,38 @@ function accessOf(rewrite: OrderedRewrite): Access {
       );
     }
     case 'removeStoredKey': {
-      const { collection, field, path } = call.options;
-      return access('empties', collection, [key(collection, field, path)], []);
+      const { collection, field, path } = rewrite.call.options;
+      return selecting('empties', collection, [key(collection, field, path)], []);
     }
     case 'fillStoredKey': {
-      const { collection, field, path } = call.options;
-      return access('writes', collection, [], [key(collection, field, path)]);
+      const { collection, field, path } = rewrite.call.options;
+      return selecting('writes', collection, [], [key(collection, field, path)]);
     }
     case 'replaceStoredValue': {
-      const written = plannerFact(rewrite.writtenValue, 'the value written', call);
-      return access(
+      const { options } = rewrite.call;
+      return selecting(
         'moves',
-        call.options.collection,
-        [value(call.options, call.options.from)],
-        [value(call.options, written)],
+        options.collection,
+        [value(options, options.from)],
+        [value(options, rewrite.writtenValue)],
       );
     }
-    case 'removeStoredValue':
-      return access(
-        'empties',
-        call.options.collection,
-        [value(call.options, call.options.value)],
-        [],
-      );
+    case 'removeStoredValue': {
+      const { options } = rewrite.call;
+      return selecting('empties', options.collection, [value(options, options.value)], []);
+    }
     case 'deleteDocuments': {
-      const deleted = plannerFact(rewrite.discriminatorFilter, 'the variant deleted', call);
-      const { collection } = call.options;
-      const [field, ...values] = filterReadsOf(collection, deleted);
+      const { collection } = rewrite.call.options;
+      const { field, value: deleted } = rewrite.deletedVariant;
       return {
         role: 'empties',
-        reads: values,
+        empties: [value({ collection, field }, deleted)],
         writes: [],
-        filterReads: field === undefined ? [] : [field],
+        filterReads: [key(collection, field)],
       };
     }
     default: {
-      const unmodelled: never = call;
+      const unmodelled: never = rewrite;
       throw new InternalError(`No reads and writes are known for ${String(unmodelled)}`);
     }
   }
@@ -267,11 +297,17 @@ interface Accessed {
 function touchedFieldsOf(accessed: readonly Accessed[]): ReadonlySet<string> {
   return new Set(
     accessed.flatMap(({ access }) =>
-      [...access.reads, ...access.writes].flatMap((place) =>
+      [...access.empties, ...access.writes].flatMap((place) =>
         place.path === undefined ? [`${place.collection}\0${place.field}`] : [],
       ),
     ),
   );
+}
+
+function discriminatorFilterOf(rewrite: OrderedRewrite): DiscriminatorFilter | undefined {
+  return rewrite.kind === 'deleteDocuments'
+    ? { kind: 'variant', ...rewrite.deletedVariant }
+    : rewrite.discriminatorFilter;
 }
 
 /**
@@ -285,8 +321,8 @@ function selectDifferentVariants(
   collection: string,
   touched: ReadonlySet<string>,
 ): boolean {
-  const first = a.discriminatorFilter;
-  const second = b.discriminatorFilter;
+  const first = discriminatorFilterOf(a);
+  const second = discriminatorFilterOf(b);
   return (
     first?.kind === 'variant' &&
     second?.kind === 'variant' &&
@@ -309,7 +345,7 @@ function overlapsOf(accessed: readonly Accessed[]): readonly Overlap[] {
       if (writer.rewrite.call === reader.rewrite.call) return [];
       const place = writer.access.writes.find(
         (write) =>
-          reader.access.reads.some((read) => samePlace(write, read)) &&
+          reader.access.empties.some((emptied) => samePlace(write, emptied)) &&
           !selectDifferentVariants(writer.rewrite, reader.rewrite, write.collection, touched),
       );
       return place === undefined ? [] : [{ writer, reader, place }];
@@ -341,29 +377,10 @@ function filterNeedsFirst(before: Accessed, after: Accessed): boolean {
     (before.access.writes.some((write) =>
       after.access.filterReads.some((read) => samePlace(write, read)),
     ) ||
-      after.access.reads.some((emptied) =>
+      after.access.empties.some((emptied) =>
         before.access.filterReads.some((read) => samePlace(emptied, read)),
       ))
   );
-}
-
-/**
- * The rewrites in the order given, except that an operation whose filter reads a field or value
- * runs after any operation that writes it and before any operation that empties it, so the filter
- * selects the documents it was written for. Run again after a later operation stops, such an
- * operation finds the documents as its postcheck expects.
- */
-export function inFilterOrder(rewrites: readonly OrderedRewrite[]): readonly OrderedRewrite[] {
-  const pending = rewrites.map((rewrite) => ({ rewrite, access: accessOf(rewrite) }));
-  const ordered: OrderedRewrite[] = [];
-  while (pending.length > 0) {
-    const next =
-      pending.find((each) => !pending.some((other) => filterNeedsFirst(other, each))) ?? pending[0];
-    if (next === undefined) break;
-    ordered.push(next.rewrite);
-    pending.splice(pending.indexOf(next), 1);
-  }
-  return ordered;
 }
 
 /** The first pair in which an operation runs before another that must run first, because of what their filters read. */
@@ -404,7 +421,7 @@ function refusal(
  * operation whose postcheck does not hold, so such an operation would act on what the other wrote.
  * Two operations that select different variants by a discriminator field the plan does not change
  * never meet. Also refused: an operation whose filter reads what an earlier operation empties or a
- * later one writes, an order `inFilterOrder` could not avoid. The refusal names the first statement
+ * later one writes, which the planner's order of the rewrites does not avoid. The refusal names the first statement
  * involved and lists the operations. It does not offer to leave the statements out and write the
  * operations by hand, since one hand-written migration would meet the same re-run.
  */

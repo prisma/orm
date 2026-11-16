@@ -45,8 +45,12 @@ import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from '.
 import { jsonPathText } from './stored-key-path';
 
 /** A rewrite of one stored value of an enum in one place, with the enum value and the statement it carries out. */
-export interface EnumValueRewrite {
-  readonly call: ReplaceStoredValueCall | RemoveStoredValueCall;
+export interface EnumValueRewrite<
+  Call extends ReplaceStoredValueCall | RemoveStoredValueCall =
+    | ReplaceStoredValueCall
+    | RemoveStoredValueCall,
+> {
+  readonly call: Call;
   /** The enum value whose stored value is rewritten, as the origin contract names it. */
   readonly enumValue: EnumValueCoordinate;
   readonly statement: ResolvedEnumValueRenameStatement | undefined;
@@ -56,16 +60,19 @@ export interface EnumValueRewrite {
   readonly keepDataAdvice: string | undefined;
   /** How to make a change of this enum's stored values in two migrations, when one migration cannot make it safely. */
   readonly twoMigrationsAdvice: string;
-  /** The stored value a replacement writes; `undefined` for a removal. */
-  readonly writtenValue: StoredValue | undefined;
   /** The variant whose documents the call selects; `undefined` for a root model's documents. */
   readonly variant: SelectedVariant | undefined;
 }
 
 /** The stored value rewrites of a plan: replacements, run in the replacement step, and removals, run last. */
 export interface EnumValueRewrites {
-  readonly replacements: readonly EnumValueRewrite[];
-  readonly removals: readonly EnumValueRewrite[];
+  readonly replacements: readonly EnumValueReplacement[];
+  readonly removals: readonly EnumValueRewrite<RemoveStoredValueCall>[];
+}
+
+/** A replacement of one stored value of an enum in one place, with the stored value it writes. */
+export interface EnumValueReplacement extends EnumValueRewrite<ReplaceStoredValueCall> {
+  readonly writtenValue: StoredValue;
 }
 
 /** A place documents hold values of an enum: a root field, or a key at a path inside one. */
@@ -412,8 +419,8 @@ export function planEnumValueRewrites(
   const valueRenames = input.statements.filter(
     (statement): statement is ResolvedEnumValueRenameStatement => statement.entity === 'enumValue',
   );
-  const replacements: EnumValueRewrite[] = [];
-  const removals: EnumValueRewrite[] = [];
+  const replacements: EnumValueReplacement[] = [];
+  const removals: EnumValueRewrite<RemoveStoredValueCall>[] = [];
   const conflicts: MigrationPlannerConflict[] = [];
   for (const [namespaceId, namespace] of Object.entries(fromContract.domain?.namespaces ?? {})) {
     for (const [enumName, originEnum] of Object.entries(namespace.enum ?? {})) {
@@ -499,8 +506,8 @@ function planEnum(
   const conflicts = placeRefusals(enums, checked, live, input);
   if (conflicts.length > 0) return notOk(conflicts);
   const bsonTypes = bsonTypesOfCodec(destinationEnum.codecId, input.lookups) ?? [];
-  const replacements: EnumValueRewrite[] = [];
-  const removals: EnumValueRewrite[] = [];
+  const replacements: EnumValueReplacement[] = [];
+  const removals: EnumValueRewrite<RemoveStoredValueCall>[] = [];
   for (const change of checked) {
     const keepsDataBy =
       change.statement !== undefined || change.to === undefined || merging(change.to) !== undefined
@@ -561,7 +568,6 @@ function planEnum(
         keepDataAdvice:
           keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, overlapping) : undefined,
         twoMigrationsAdvice: advice,
-        writtenValue: undefined,
         variant: enumPlace.place.variant,
       });
     }

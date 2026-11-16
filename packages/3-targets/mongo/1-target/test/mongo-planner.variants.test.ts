@@ -259,7 +259,7 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
     expect(refusal(result)).toEqual([
       {
         kind: 'statementRefused',
-        summary: `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${replaceLabel('epic', 'bug')}; ${deleteLabel('bug')})`,
+        summary: `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')})`,
         why: TWO_MIGRATIONS,
       },
     ]);
@@ -622,52 +622,10 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
     ).toEqual([
       {
         kind: 'statementRefused',
-        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${replaceLabel('epic', 'bug')}; ${deleteLabel('bug')}; Remove value "bug" from field type of collection tasks)`,
+        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')}; Remove value "bug" from field type of collection tasks)`,
         why: TWO_MIGRATIONS,
         refusedStatement: renameEpic,
         leaveOut: undefined,
-      },
-    ]);
-  });
-});
-
-describe('MongoMigrationPlanner, a variant of an embedded model', () => {
-  const items = (seed: string, value: string) =>
-    contract(
-      seed,
-      {
-        User: {
-          collection: 'users',
-          fields: ['_id'],
-          embeds: { items: { field: 'items', model: 'Item', cardinality: '1:N' } },
-        },
-        Item: {
-          owner: 'User',
-          fields: ['kind'],
-          discriminator: 'kind',
-          variants: { Photo: value },
-        },
-        Photo: { fields: ['url'], base: 'Item' },
-      },
-      { users: {} },
-    );
-
-  it('refuses --convert, since the plan rewrites discriminator values only in a collection', () => {
-    expect(
-      refusal(
-        plan({
-          from: items('from', 'photo'),
-          to: items('to', 'image'),
-          schema: [schemaCollection('users')],
-          statements: [convert('Photo')],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'Cannot convert variant "Photo": model "Photo" is embedded in the documents of model "User"',
-        why: 'The plan rewrites discriminator values only in the collection of a base, not inside the documents of another model. Rewrite them in a dataTransform operation of migration.ts, or leave out this statement.',
       },
     ]);
   });

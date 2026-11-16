@@ -86,16 +86,17 @@ Today every row of this table is planned as a validator change and nothing else.
 
 4a's plan order stays: renames, creates, index drops, rewrites, index creates, validator changes, option changes, drops. Inside the rewrite step:
 
-1. Field renames.
+1. Field renames of one variant's documents, whose filter names the origin's discriminator and value, then field renames with no filter, which include renames of the discriminator.
 2. Variant document deletes. Running them first only means later rewrites read fewer documents: a delete and a replacement of the same value are refused (decision 8), so the order does not decide what the documents end as.
 3. Discriminator value replacements.
-4. Key renames. They come after the discriminator replacements because a variant's filter names its new value.
-5. Enum value replacements.
-6. Casts and scaffolded conversions.
-7. Fills and scaffolded backfills.
-8. Removals of fields, keys and enum values.
+4. Base field renames whose filter selects the documents of every variant but some, by the destination's discriminator and values.
+5. Key renames. They come after the discriminator replacements because a variant's filter names its new value.
+6. Enum value replacements.
+7. Casts and scaffolded conversions.
+8. Fills and scaffolded backfills.
+9. Removals of fields, keys and enum values.
 
-Within this order, an operation whose filter reads a discriminator field or value runs after any operation that writes it and before any that empties it, so the filter selects the documents it was written for. For example, a variant field rename filtered on the origin's discriminator runs before the rename of the discriminator, and a base field rename filtered on the destination's discriminator runs after it. A plan whose filters need two operations each to run before the other is refused (decision 8).
+This order is the only one the planner uses. It puts an operation whose filter reads a discriminator field or value after any operation that writes it and before any that empties it, so the filter selects the documents it was written for: a variant field rename filtered on the origin's discriminator runs before the rename of the discriminator, and a base field rename filtered on the destination's discriminator and values runs after it and after the value replacements. The plan-wide check refuses a plan in which this order still puts a filter on the wrong side of such an operation (decision 8).
 
 Then, per collection, the validator change with its document check. All rewrites skip document validation, as 4a's do. Classes: renames, casts that keep every value, replacements and fills are `widening`; removals, document deletes and `--delete` casts are `destructive`; scaffolds are `data`. So `db update` runs all but the scaffolds, which it refuses with `MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE`. Every operation is something a user could write in `migration.ts`, and re-running the file reproduces `ops.json`.
 

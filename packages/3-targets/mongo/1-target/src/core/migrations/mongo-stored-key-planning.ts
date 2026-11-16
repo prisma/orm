@@ -58,8 +58,12 @@ interface KeyChange {
 }
 
 /** A key rewrite the plan makes: its call, the field it is about, and the statement it carries out. */
-export interface StoredKeyRewrite {
-  readonly call: RenameStoredKeyCall | RemoveStoredKeyCall;
+export interface StoredKeyRewrite<
+  Call extends RenameStoredKeyCall | RemoveStoredKeyCall =
+    | RenameStoredKeyCall
+    | RemoveStoredKeyCall,
+> {
+  readonly call: Call;
   readonly subject: MigrationSubject;
   readonly statement: KeyChange['statement'];
   /** The variant whose documents the call selects; `undefined` for a root model's documents. */
@@ -68,8 +72,8 @@ export interface StoredKeyRewrite {
 
 /** The key rewrites of a plan: renames, run first in the rewrite step, and removals, run last. */
 export interface StoredKeyRewrites {
-  readonly renames: readonly StoredKeyRewrite[];
-  readonly removals: readonly StoredKeyRewrite[];
+  readonly renames: readonly StoredKeyRewrite<RenameStoredKeyCall>[];
+  readonly removals: readonly StoredKeyRewrite<RemoveStoredKeyCall>[];
 }
 
 interface StoredKeyInput {
@@ -420,8 +424,12 @@ export function planStoredKeyRewrites(
       variant: each.place.variant,
     }));
   return ok({
-    renames: rewrites.filter((rewrite) => rewrite.call instanceof RenameStoredKeyCall),
-    removals: rewrites.filter((rewrite) => rewrite.call instanceof RemoveStoredKeyCall),
+    renames: rewrites.flatMap(({ call, ...rewrite }) =>
+      call instanceof RenameStoredKeyCall ? [{ ...rewrite, call }] : [],
+    ),
+    removals: rewrites.flatMap(({ call, ...rewrite }) =>
+      call instanceof RemoveStoredKeyCall ? [{ ...rewrite, call }] : [],
+    ),
   });
 }
 
@@ -485,7 +493,7 @@ function declaredKeysOf(jsonSchema: unknown) {
  */
 function validatorKeyRemovals(
   input: StoredKeyInput,
-): readonly (StoredKeyRewrite & { readonly key: string })[] {
+): readonly (StoredKeyRewrite<RemoveStoredKeyCall> & { readonly key: string })[] {
   return input.schema.collections.flatMap((origin) => {
     const collection = origin.name;
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];

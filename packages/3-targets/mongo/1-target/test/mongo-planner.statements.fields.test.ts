@@ -469,6 +469,41 @@ describe('MongoMigrationPlanner, removed fields', () => {
     }).toEqual({ noteFirst: expected, typeFirst: expected });
   });
 
+  it('renames a base field filtered on a converted discriminator value after the replacement, past operations of other fields', () => {
+    const converted = contract(
+      'to',
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', 'type', 'remark', 'y'],
+          discriminator: 'type',
+          variants: { Bug: 'defect' },
+        },
+        Bug: { collection: 'tasks', fields: ['note'], base: 'Task' },
+      },
+      { tasks: {} },
+    );
+    expect(
+      planned(
+        plan({
+          from: tasks('from', ['note', 'x'], [], []),
+          to: converted,
+          schema: [schemaCollection('tasks')],
+          statements: [
+            renameField('Task', 'note', 'Task', 'remark'),
+            renameField('Task', 'x', 'Task', 'y'),
+            { kind: 'convert', entity: 'model', model: { namespaceId: NS, model: 'Bug' } },
+          ],
+        }),
+      ).labels,
+    ).toEqual([
+      'Rename field x to y in collection tasks',
+      'Delete the documents of collection tasks whose type is "feature"',
+      'Replace value "bug" with "defect" in field type of collection tasks',
+      'Rename field note to remark in collection tasks in documents whose type is not "defect"',
+    ]);
+  });
+
   it('keeps a variant field its base now stores, and fills it in the documents of the other variants', () => {
     expect(
       planned(

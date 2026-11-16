@@ -25,12 +25,7 @@ import {
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
-import {
-  collectionControlPolicy,
-  embeddedModelReason,
-  modelAt,
-  modelCoordinates,
-} from './mongo-statement-planning';
+import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -39,8 +34,12 @@ type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertSta
  * A rewrite of the documents of one variant of the origin, in its base's collection: its
  * discriminator value `from` becomes `to`, or, with no `to`, its documents are deleted.
  */
-export interface VariantDocumentRewrite {
-  readonly call: ReplaceStoredValueCall | DeleteDocumentsCall;
+export interface VariantDocumentRewrite<
+  Call extends ReplaceStoredValueCall | DeleteDocumentsCall =
+    | ReplaceStoredValueCall
+    | DeleteDocumentsCall,
+> {
+  readonly call: Call;
   /** The variant, as the origin contract names it. */
   readonly model: ModelCoordinate;
   readonly collection: string;
@@ -54,8 +53,8 @@ export interface VariantDocumentRewrite {
 
 /** The variant rewrites of a plan: deletes, run before replacements so that later rewrites read fewer documents, and replacements. */
 export interface VariantDocumentRewrites {
-  readonly deletes: readonly VariantDocumentRewrite[];
-  readonly replacements: readonly VariantDocumentRewrite[];
+  readonly deletes: readonly VariantDocumentRewrite<DeleteDocumentsCall>[];
+  readonly replacements: readonly VariantDocumentRewrite<ReplaceStoredValueCall>[];
 }
 
 export interface VariantInput {
@@ -279,27 +278,6 @@ function sharedCollectionRefusal(
   );
 }
 
-/** The refusal of a `--convert` of a variant of an embedded model, whose documents are inside another model's. */
-function embeddedConvertRefusals(
-  input: VariantInput,
-  fromContract: ContractWithDomain,
-): readonly MigrationPlannerConflict[] {
-  return input.statements.flatMap((statement) => {
-    if (statement.kind !== 'convert' || statement.entity !== 'model') return [];
-    const embedded = embeddedModelReason(input.contract, statement.model);
-    return embedded === undefined
-      ? []
-      : [
-          {
-            kind: 'statementRefused',
-            summary: `Cannot ${describeMigrationStatement(statement, fromContract, input.contract)}: ${embedded}`,
-            why: 'The plan rewrites discriminator values only in the collection of a base, not inside the documents of another model. Rewrite them in a dataTransform operation of migration.ts, or leave out this statement.',
-            refusedStatement: statement,
-          },
-        ];
-  });
-}
-
 function callOf(change: VariantChange): ReplaceStoredValueCall | DeleteDocumentsCall {
   if (change.byEnum !== undefined) return change.byEnum;
   return change.to === undefined
@@ -334,8 +312,6 @@ export function planVariantDocumentRewrites(
 ): Result<VariantDocumentRewrites, readonly MigrationPlannerConflict[]> {
   const { fromContract } = input;
   if (fromContract === null) return ok({ deletes: [], replacements: [] });
-  const embedded = embeddedConvertRefusals(input, fromContract);
-  if (embedded.length > 0) return notOk(embedded);
   const changes = modelCoordinates(fromContract).flatMap((origin) => {
     const change = changeOf(origin, fromContract, input);
     if (change === undefined) return [];
@@ -351,7 +327,11 @@ export function planVariantDocumentRewrites(
   if (refusals.length > 0) return notOk(refusals);
   const rewrites = changes.map((change) => ({ ...change, call: callOf(change) }));
   return ok({
-    deletes: rewrites.filter(({ to }) => to === undefined),
-    replacements: rewrites.filter(({ to }) => to !== undefined),
+    deletes: rewrites.flatMap(({ call, ...rewrite }) =>
+      call instanceof DeleteDocumentsCall ? [{ ...rewrite, call }] : [],
+    ),
+    replacements: rewrites.flatMap(({ call, ...rewrite }) =>
+      call instanceof ReplaceStoredValueCall ? [{ ...rewrite, call }] : [],
+    ),
   });
 }
