@@ -1,6 +1,11 @@
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { CollectionRowOf, CollectionTypeStateOf, Ordered } from '../src/collection-types';
+import type {
+  CollectionRowOf,
+  CollectionTypeStateOf,
+  Ordered,
+  Paged,
+} from '../src/collection-types';
 import type { Contract as PolyContract } from './fixtures/polymorphism/generated/contract';
 
 class TaskCollection extends Collection<PolyContract, 'Task'> {
@@ -33,7 +38,7 @@ describe('variant', () => {
   test('keeps the established order', () => {
     const bugs = tasks.newestFirst().variant('bug');
     expectTypeOf<CollectionTypeStateOf<typeof bugs>['hasOrderBy']>().toEqualTypeOf<true>();
-    expectTypeOf(bugs.cursor({ id: 1 })).toEqualTypeOf(bugs);
+    expectTypeOf(bugs.cursor({ id: 1 })).toEqualTypeOf<Paged<typeof bugs>>();
   });
 
   test('without an order, cursor stays refused', () => {
@@ -75,7 +80,9 @@ describe('variant', () => {
   });
 
   test('the class survives cursor', () => {
-    expectTypeOf(tasks.newestFirst().cursor({ id: 1 })).toEqualTypeOf<Ordered<TaskCollection>>();
+    expectTypeOf(tasks.newestFirst().cursor({ id: 1 })).toEqualTypeOf<
+      Paged<Ordered<TaskCollection>>
+    >();
   });
 });
 

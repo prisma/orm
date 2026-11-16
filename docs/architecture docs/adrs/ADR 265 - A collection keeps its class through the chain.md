@@ -49,19 +49,21 @@ A collection's type is its class plus what the chain has established. Every meth
 ```ts
 export type Filtered<C> = C & HasWhere;
 export type Ordered<C> = C & HasOrderBy;
+export type Paged<C> = C & HasPaging;
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
 export type QueryFragment<In, Out> = (collection: In) => Out;
 ```
 
 `QueryFragment` places no constraint between `In` and `Out`, because a fragment written for one model may narrow the row, for example with `select`, so its output is not always a subtype of its input.
 
-Each fact has three names. The flag `hasWhere` in the type state is set to `true` by the interface `HasWhere`, and `Filtered<C>` is `C & HasWhere`. Users write `Filtered<C>`; TypeScript prints `HasWhere` when it explains why a type does not match. `hasOrderBy`, `HasOrderBy` and `Ordered<C>` are the same fact for an order.
+Each fact has three names. The flag `hasWhere` in the type state is set to `true` by the interface `HasWhere`, and `Filtered<C>` is `C & HasWhere`. Users write `Filtered<C>`; TypeScript prints `HasWhere` when it explains why a type does not match. `hasOrderBy`, `HasOrderBy` and `Ordered<C>` are the same fact for an order, and `hasPaging`, `HasPaging` and `Paged<C>` for paging.
 
 | Method | Returns | Class kept | What the type gains |
 | --- | --- | --- | --- |
 | `where` | `Filtered<Self>` | yes | a filter has been applied |
 | `orderBy` | `Ordered<Self>` | yes | an order has been applied |
-| `limit`, `offset`, `distinct`, `distinctOn`, `cursor` | `Self` | yes | nothing |
+| `limit`, `offset`, `cursor` | `Paged<Self>` | yes | paging has been applied |
+| `distinct`, `distinctOn` | `Self` | yes | nothing |
 | `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | `Self` | yes | nothing; the contract's capabilities decide which arguments each accepts |
 | `include` | `Including<Self, { [K in Rel]: ... }>` | yes | each row has the included relation |
 | `with(fn)` | whatever `fn(this)` returns | as the function | as the function |
@@ -73,7 +75,7 @@ Each fact has three names. The flag `hasWhere` in the type state is set to `true
 
 The facts live in two declared properties on the class, the **type state** and the **row**:
 
-- The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not been established is `boolean`, meaning not known; a method that establishes it sets it to `true`. The same object also holds `variantValue` and `nsId`, which are not facts: they are fixed by the collection's type argument and select the model accessor.
+- The type state holds the flags `hasWhere`, `hasOrderBy` and `hasPaging`. A flag that has not been established is `boolean`, meaning not known; a method that establishes it sets it to `true`. The same object also holds `variantValue` and `nsId`, which are not facts: they are fixed by the collection's type argument and select the model accessor.
 - The row records the shape of the rows the collection produces, including the relations and values `include` adds.
 
 The methods that depend on a fact read it from the receiver. `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` require `hasWhere`; `cursor` and `distinctOn` require `hasOrderBy`.
@@ -122,6 +124,7 @@ export interface HasTypeState<State = CollectionTypeState> {
 
 export interface HasWhere extends HasTypeState<{ readonly hasWhere: true }> {}
 export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> {}
+export interface HasPaging extends HasTypeState<{ readonly hasPaging: true }> {}
 
 export type CollectionTypeStateOf<C extends HasTypeState> = C[typeof TypeState];
 
@@ -141,7 +144,7 @@ class CollectionBase<TContract, ModelName, Row, State> {
 
   where<Self>(this: Self, filters: ShorthandWhereFilter<...>): Filtered<Self>;
   orderBy<Self>(this: Self, selection: ...): Ordered<Self>;
-  limit<Self>(this: Self, n: number): Self;
+  limit<Self>(this: Self, n: number): Paged<Self>;
   include<RelName extends ..., ..., Self extends HasRow = never>(
     this: Self,
     relationName: RelName,
@@ -157,7 +160,7 @@ class CollectionBase<TContract, ModelName, Row, State> {
   first(filter: WhereInput<...>): Promise<CollectionRowOf<this> | null>;
   update<Self extends HasWhere>(this: Self, data: MutationUpdateInput<...>): Promise<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>> | null>;
   deleteAll<Self extends HasWhere>(this: Self): AsyncIterableResult<CollectionRowOf<Self & HasRow<CollectionRowOf<this>>>>;
-  cursor<Self extends HasOrderBy>(this: Self, cursorValues: Partial<...>): Self;
+  cursor<Self extends HasOrderBy>(this: Self, cursorValues: Partial<...>): Paged<Self>;
 }
 ```
 

@@ -10,6 +10,7 @@ import type {
   DeclaredFieldsFragment,
   Filtered,
   Ordered,
+  Paged,
   UniquelyFiltered,
 } from '@prisma/orm-postgres/orm-client';
 import { expectTypeOf } from 'vitest';
@@ -71,10 +72,10 @@ export async function chainingMethods() {
   expectTypeOf(posts.with(searched('zebra'))).toEqualTypeOf<
     ReturnType<ReturnType<typeof searched>>
   >();
-  expectTypeOf(posts.paged()).toEqualTypeOf<PostLibrary>();
+  expectTypeOf(posts.paged()).toEqualTypeOf<Paged<PostLibrary>>();
   expectTypeOf(posts.distinctTitles()).toEqualTypeOf<PostLibrary>();
   expectTypeOf(posts.distinctOnTitle()).toEqualTypeOf<Ordered<PostLibrary>>();
-  expectTypeOf(posts.after('p1')).toEqualTypeOf<Ordered<PostLibrary>>();
+  expectTypeOf(posts.after('p1')).toEqualTypeOf<Paged<Ordered<PostLibrary>>>();
   expectTypeOf(posts.applied()).toEqualTypeOf<Filtered<Ordered<PostLibrary>>>();
   expectTypeOf(posts.filteredAndOrdered()).toEqualTypeOf<Filtered<Ordered<PostLibrary>>>();
   expectTypeOf<keyof CollectionRowOf<ReturnType<PostLibrary['titles']>>>().toEqualTypeOf<
@@ -112,7 +113,7 @@ export async function includedRows() {
   expectTypeOf(withUser!.user.email).toEqualTypeOf<string>();
 
   const withUserEmail = await posts.firstWithUserEmail();
-  expectTypeOf(withUserEmail!.user).toEqualTypeOf<{ id: string; email: string } | null>();
+  expectTypeOf(withUserEmail!.user).toEqualTypeOf<{ id: string; email: string }>();
 
   const withTagCount = await posts.firstWithTagCount();
   expectTypeOf(withTagCount!.tags).toEqualTypeOf<number>();

@@ -22,6 +22,9 @@ export interface HasWhere extends HasTypeState<{ readonly hasWhere: true }> {}
 /** The fact that an order has been applied: the type-state flag `hasOrderBy` is `true`. Write `Ordered<C>` for an ordered collection; error messages print `HasOrderBy`. */
 export interface HasOrderBy extends HasTypeState<{ readonly hasOrderBy: true }> {}
 
+/** The fact that `limit`, `offset` or `cursor` has been applied: the type-state flag `hasPaging` is `true`. Write `Paged<C>` for a paged collection; error messages print `HasPaging`. */
+export interface HasPaging extends HasTypeState<{ readonly hasPaging: true }> {}
+
 /** The fact that no variant has been selected: the type-state field `variantValue` is `undefined`. `variant()` needs it; error messages print `HasNoVariant`. */
 export interface HasNoVariant extends HasTypeState<{ readonly variantValue: undefined }> {}
 
@@ -49,6 +52,9 @@ export type UniquelyFiltered<C> = C & HasWhere & HasUniqueFilter;
 
 /** A collection with an order applied: `C & HasOrderBy`. */
 export type Ordered<C> = C & HasOrderBy;
+
+/** A collection with paging applied: `C & HasPaging`. */
+export type Paged<C> = C & HasPaging;
 
 /** A collection whose rows also have the fields of `Added`, such as an included relation. */
 export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
