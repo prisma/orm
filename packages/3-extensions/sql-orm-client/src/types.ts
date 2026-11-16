@@ -1924,6 +1924,7 @@ export interface RelationMutationCreate<
 > {
   readonly kind: 'create';
   readonly data: readonly MutationCreateInput<TContract, ModelName>[];
+  readonly variant?: string;
 }
 
 export interface RelationMutationConnect<
@@ -2164,10 +2165,12 @@ export interface RelationMutator<
   ParentLinkFields extends string = never,
 > {
   create(
-    data: LinkWritesDisabled extends true ? never : MutationCreateInput<TContract, ModelName>,
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled> extends true
+      ? never
+      : MutationCreateInput<TContract, ModelName>,
   ): RelationMutationCreate<TContract, ModelName>;
   create(
-    data: LinkWritesDisabled extends true
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled> extends true
       ? never
       : readonly MutationCreateInput<TContract, ModelName>[],
   ): RelationMutationCreate<TContract, ModelName>;
@@ -2200,6 +2203,53 @@ export interface RelationMutator<
     : FilteredRelationMutator<TContract, ModelName, ParentLinkFields>['deleteAll'];
 }
 
+type CreateDisabled<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  LinkWritesDisabled extends boolean,
+> = LinkWritesDisabled extends true ? true : IsPolymorphicBase<TContract, ModelName>;
+
+type NestedVariantCreateInput<
+  TContract extends Contract<SqlStorage>,
+  BaseModelName extends string,
+  VariantValue extends string,
+> = Omit<
+  MutationCreateInput<TContract, BaseModelName>,
+  DiscriminatorFieldName<TContract, BaseModelName>
+> &
+  CreateInput<TContract, VariantModelName<TContract, BaseModelName, VariantValue>>;
+
+export interface VariantRelationMutator<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  VariantValue extends string,
+  LinkWritesDisabled extends boolean = false,
+> {
+  create(
+    data: LinkWritesDisabled extends true
+      ? never
+      : NestedVariantCreateInput<TContract, ModelName, VariantValue>,
+  ): RelationMutationCreate<TContract, ModelName>;
+  create(
+    data: LinkWritesDisabled extends true
+      ? never
+      : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue>[],
+  ): RelationMutationCreate<TContract, ModelName>;
+}
+
+type RelationMutatorVariant<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  LinkWritesDisabled extends boolean,
+> =
+  IsPolymorphicBase<TContract, ModelName> extends true
+    ? {
+        variant<V extends DiscriminatorValues<TContract, ModelName>>(
+          value: V,
+        ): VariantRelationMutator<TContract, ModelName, V, LinkWritesDisabled>;
+      }
+    : unknown;
+
 type RelationMutationCallback<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -2218,7 +2268,12 @@ type RelationMutationCallback<
         ? true
         : false,
     RelationParentLinkFields<TContract, ModelName, RelName>
-  >,
+  > &
+    RelationMutatorVariant<
+      TContract,
+      RelatedModelName<TContract, ModelName, RelName> & string,
+      HasRequiredJunctionPayload<TContract, ModelName, RelName>
+    >,
 ) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
   ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>
   : RelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>;

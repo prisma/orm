@@ -38,6 +38,7 @@ import {
   deleteRows,
   findRows,
   insertRows,
+  type KeySource,
   type Returns,
   readBack,
   type Shape,
@@ -52,6 +53,7 @@ import {
   type Translation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
+import type { Requires } from './requires';
 import { Rows } from './rows';
 import {
   createRowOf,
@@ -273,18 +275,26 @@ export function createGraph(
   return b.graph;
 }
 
+export interface NestedVariantCreate {
+  readonly graph: Graph;
+  readonly keys: readonly KeySource[];
+  readonly requires: readonly Requires[];
+  readonly added: (base: NodeId) => void;
+}
+
 export function createAllVariantGraph(
   collection: DescribeCollectionRowsOptions,
   variantTable: AliasedTable,
   mti: MtiCreateContext,
   data: readonly Readonly<Record<string, unknown>>[],
+  nested?: NestedVariantCreate,
 ): Graph {
   const { context, modelName, state } = collection;
   const variantModelName = mti.variant.modelName;
   const rows = variantCreateRowsOf(collection, mti, variantTable, data);
   const { contract } = context;
   const { root } = state.tables;
-  const graph = new Graph(contract);
+  const graph = nested?.graph ?? new Graph(contract);
   const keyColumns = resolvePrimaryKeyColumns(
     contract,
     root.storage.namespaceId,
@@ -300,12 +310,16 @@ export function createAllVariantGraph(
   const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
 
   const owner = { operation: 'createAll', modelName };
-  const joins = rows.map((row) => {
+  const joins = rows.flatMap((row) => {
     const baseInsert = new Insert(
       [insertAst(contract, root, [row.base], undefined).withReturning(baseColumns)],
       owner,
     );
-    const base = graph.add(baseInsert, { state: graph.stateEdgesFor(baseInsert) });
+    const base = graph.add(baseInsert, {
+      payload: (nested?.keys ?? []).map(({ from, columns }) => new PayloadData(from, columns)),
+      state: graph.stateEdgesFor(baseInsert),
+      requires: [...(nested?.requires ?? [])],
+    });
     const variantInsert = new Insert(
       [insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns)],
       { operation: 'createAll', modelName: variantModelName },
@@ -314,10 +328,16 @@ export function createAllVariantGraph(
       payload: [new PayloadData(base, keyMappings)],
       state: graph.stateEdgesFor(variantInsert),
     });
-    return graph.add(new CrossJoin(), {
-      left: new Rows(base, sameColumns(baseColumns)),
-      right: new Rows(variant, sameColumns(variantColumns)),
-    });
+    if (nested !== undefined) {
+      nested.added(base);
+      return [];
+    }
+    return [
+      graph.add(new CrossJoin(), {
+        left: new Rows(base, sameColumns(baseColumns)),
+        right: new Rows(variant, sameColumns(variantColumns)),
+      }),
+    ];
   });
 
   const [only, ...others] = joins;
