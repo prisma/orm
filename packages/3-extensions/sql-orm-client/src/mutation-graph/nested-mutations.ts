@@ -34,7 +34,7 @@ import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { emptyState } from '../types';
 import { Assert } from './assert';
-import { addDeleteAll, addUpdateAll, variantKeyMappings } from './collection-graphs';
+import { addDeleteAll, addUpdateAll, addVariantRowInserts } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -163,25 +163,20 @@ function addOwnTableVariantRow(
   row: MutationCreateInput<Contract<SqlStorage>, string>,
   keysFromParent: readonly KeySource[],
 ): NodeId {
-  const model = modelOf(collection);
-  parseCreateInput(t, model, row, relatedCollection);
-  const { root } = model.tables;
-  const split = variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache);
-  const base = addInsert(t, root, [split.base], {
-    conflict: undefined,
-    keys: keysFromParent,
-    junction: undefined,
-    requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
-    owner: { operation: 'create', modelName: model.modelName },
-  });
-  addInsert(t, variantTable, [split.variant], {
-    conflict: undefined,
-    keys: [{ from: base, columns: variantKeyMappings(t.context.contract, root, variantTable) }],
-    junction: undefined,
-    requires: [],
-    owner: { operation: 'create', modelName: mti.variant.modelName },
-  });
-  return base;
+  parseCreateInput(t, modelOf(collection), row, relatedCollection);
+  return addVariantRowInserts(
+    t,
+    collection,
+    mti,
+    variantTable,
+    variantCreateRowOf(collection, mti, variantTable, row, defaultValueCache),
+    {
+      operation: 'create',
+      keys: keysFromParent,
+      requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
+      returning: { base: [], variant: [] },
+    },
+  ).base;
 }
 
 export function addBeforeWrite(
