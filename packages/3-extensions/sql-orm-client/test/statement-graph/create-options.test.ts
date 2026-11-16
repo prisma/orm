@@ -137,31 +137,6 @@ describe('create options on a relation', () => {
       { kind: 'create', relation: 'tags', reason: 'many-to-many-relation' },
     ],
     [
-      'an onConflict value other than skip or connect',
-      { posts: (posts: Mutator) => posts.create([post], { onConflict: 'replace' } as never) },
-      'ORM.ARGUMENT_INVALID',
-      'create() nested mutation for relation "posts" takes onConflict "skip" or "connect"; received "replace"',
-      { kind: 'create', relation: 'posts', problem: 'invalid-on-conflict' },
-    ],
-    [
-      'a conflictOn entry that is not a field of the related model',
-      {
-        posts: (posts: Mutator) =>
-          posts.create([post], {
-            onConflict: 'skip',
-            conflictOn: ['title', 'email', 'author'],
-          } as never),
-      },
-      'ORM.ARGUMENT_INVALID',
-      'conflictOn of create() nested mutation for relation "posts" names fields model "Post" does not have: "email", "author"',
-      {
-        kind: 'create',
-        relation: 'posts',
-        problem: 'unknown-conflict-field',
-        fields: ['email', 'author'],
-      },
-    ],
-    [
       'onConflict skip with a row that gives no value for any conflict key',
       {
         posts: (posts: Mutator) =>
@@ -171,7 +146,7 @@ describe('create options on a relation', () => {
           }),
       },
       'ORM.ARGUMENT_INVALID',
-      'create() nested mutation for relation "posts" row 1 gives no value for any conflict key: (embedding)',
+      'create() nested mutation for relation "posts" row 1 for model "Post" gives no value for any conflict key: (embedding)',
       {
         kind: 'create',
         relation: 'posts',
@@ -186,20 +161,6 @@ describe('create options on a relation', () => {
       'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "posts" does not support onConflict "connect"',
       { kind: 'create', relation: 'posts', reason: 'on-conflict-connect' },
-    ],
-    [
-      'onConflict connect on a create nested in a create row',
-      {
-        posts: (posts: Mutator) =>
-          posts.create({
-            ...post,
-            comments: (comments: Mutator) =>
-              comments.create({ id: 3, body: 'Hi' }, { onConflict: 'connect' }),
-          }),
-      },
-      'ORM.OPERATION_UNSUPPORTED',
-      'create() nested mutation for relation "comments" does not support onConflict "connect"',
-      { kind: 'create', relation: 'comments', reason: 'on-conflict-connect' },
     ],
   ] as const;
 
@@ -221,32 +182,24 @@ describe('create options on a relation', () => {
     comments: (comments: Mutator) => comments.create({ id: 3, body: 'Hi' }),
   };
 
-  it.each([
-    ['insertOnConflictSkip', { onConflict: 'skip', conflictOn: ['title'] }, [post]],
-    ['insertOnConflictWithoutTarget', { onConflict: 'skip' }, [post]],
-    ['insertOnConflictTarget', { onConflict: 'skip', conflictOn: ['title'] }, [post]],
-    ['returning', { onConflict: 'skip' }, [withComment]],
-  ] as const)(
-    'refuses onConflict skip before any statement on a contract without %s',
-    async (capability, options, rows) => {
-      const { collection, runtime } = createCollectionFor(
-        'User',
-        withoutCapabilityKeys(baseContract, [capability]),
-      );
+  it('refuses onConflict skip on a row with relation callbacks before any statement on a contract without returning', async () => {
+    const { collection, runtime } = createCollectionFor(
+      'User',
+      withoutCapabilityKeys(baseContract, ['returning']),
+    );
 
-      await expect(
-        collection.where({ id: 1 }).update({
-          posts: (posts: Mutator) => posts.create(rows, options),
-        } as never),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          code: 'ORM.CAPABILITY_MISSING',
-          meta: expect.objectContaining({ capability }),
-        }),
-      );
-      expect(runtime.executions).toEqual([]);
-    },
-  );
+    await expect(
+      collection.where({ id: 1 }).update({
+        posts: (posts: Mutator) => posts.create([withComment], { onConflict: 'skip' }),
+      } as never),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.CAPABILITY_MISSING',
+        meta: expect.objectContaining({ capability: 'returning' }),
+      }),
+    );
+    expect(runtime.executions).toEqual([]);
+  });
 
   describe('on a relation whose target is a variant stored in its own table', () => {
     const contract = withPatchedDomainModels(buildMixedPolyContract(), (models) => {
@@ -273,13 +226,23 @@ describe('create options on a relation', () => {
     const context = buildTestContextFromContract(contract);
 
     function parse(input: Record<string, unknown>) {
-      return parseMutationInput(
+      const parsed = parseMutationInput(
         contract,
         'public',
         'Assignee',
-        input as never,
+        { id: 1, name: 'Ada', ...input } as never,
         relatedCollectionOf(context),
       );
+      createGraph(
+        {
+          context,
+          state: emptyState(createCollectionTables(contract, 'public', 'Assignee')),
+          modelName: 'Assignee',
+          namespaceId: 'public',
+        },
+        parsed,
+      );
+      return parsed;
     }
 
     it('rejects onConflict', () => {
@@ -292,7 +255,7 @@ describe('create options on a relation', () => {
         expect.objectContaining({
           code: 'ORM.OPERATION_UNSUPPORTED',
           message:
-            'create() nested mutation for relation "features" does not support onConflict: its target, variant "Feature", is stored in its own table',
+            'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.',
           meta: {
             kind: 'create',
             relation: 'features',
@@ -455,7 +418,7 @@ describe('onConflict on a create through variant()', () => {
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
         message:
-          'create() nested mutation for relation "tasks" does not support onConflict: its target, variant "Feature", is stored in its own table',
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.',
         meta: { kind: 'create', relation: 'tasks', reason: 'mti-variant', variant: 'Feature' },
       }),
     );

@@ -294,7 +294,13 @@ describe('integration/create on conflict skip', () => {
           expect.objectContaining({
             code: 'ORM.ARGUMENT_INVALID',
             message: `${method} row 1 for model "User" gives no value for any conflict key: (invited_by_id)`,
-            meta: { method, model: 'User', index: 1, conflictKeys: [['invited_by_id']] },
+            meta: {
+              method,
+              model: 'User',
+              problem: 'row-cannot-conflict',
+              index: 1,
+              conflictKeys: [['invited_by_id']],
+            },
           });
 
         runtime.resetExecutions();

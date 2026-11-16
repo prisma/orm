@@ -1,6 +1,11 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { resolveUniqueKeyColumnSets } from '../collection-contract';
+import {
+  assertInsertConflictSkipCapability,
+  resolveInsertConflictColumns,
+  resolveUniqueKeyColumnSets,
+} from '../collection-contract';
+import { ormError } from '../orm-errors';
 import { storageTableForContract } from '../storage-resolution';
 import type { NestedCreateConflictAction } from '../types';
 
@@ -38,4 +43,80 @@ export function rowThatCannotConflict(
       ),
   );
   return index === -1 ? undefined : index;
+}
+
+export interface ConflictCall {
+  readonly action: string;
+  readonly modelName: string;
+  readonly meta: Readonly<Record<string, unknown>>;
+}
+
+export interface ConflictOption {
+  readonly onConflict: unknown;
+  readonly conflictOn?: readonly string[] | undefined;
+}
+
+export interface VariantInOwnTable {
+  readonly variant: string;
+  readonly model: string;
+}
+
+export interface ResolvedConflict {
+  readonly onConflict: NestedCreateConflictAction;
+  readonly columns: readonly string[];
+}
+
+export function resolveConflict(
+  contract: Contract<SqlStorage>,
+  call: ConflictCall,
+  namespaceId: string,
+  { onConflict, conflictOn }: ConflictOption,
+  accepted: readonly NestedCreateConflictAction[],
+  variantInOwnTable: VariantInOwnTable | undefined,
+): ResolvedConflict {
+  const action = accepted.find((value) => value === onConflict);
+  if (action === undefined) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `${call.action} takes onConflict ${accepted.map((value) => `"${value}"`).join(' or ')}; received ${JSON.stringify(onConflict)}`,
+      { meta: { ...call.meta, problem: 'invalid-on-conflict' } },
+    );
+  }
+  if (variantInOwnTable !== undefined) {
+    throw ormError(
+      'ORM.OPERATION_UNSUPPORTED',
+      `The onConflict option is not supported on variant "${variantInOwnTable.variant}" of model "${variantInOwnTable.model}" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.`,
+      { meta: { ...call.meta, variant: variantInOwnTable.variant, reason: 'mti-variant' } },
+    );
+  }
+  const fields = conflictOn ?? [];
+  if (action === 'skip') {
+    assertInsertConflictSkipCapability(contract, call.action, fields.length > 0);
+  }
+  return {
+    onConflict: action,
+    columns: resolveInsertConflictColumns(contract, namespaceId, call.modelName, fields),
+  };
+}
+
+export function requireRowsThatCanConflict(
+  contract: Contract<SqlStorage>,
+  call: ConflictCall,
+  { namespaceId, tableName }: { readonly namespaceId: string; readonly tableName: string },
+  { onConflict, columns }: ResolvedConflict,
+  rows: readonly Readonly<Record<string, unknown>>[],
+  filledColumns: (index: number) => Iterable<string>,
+): ConflictKeys {
+  const keys = conflictKeysOf(contract, namespaceId, tableName, onConflict, columns);
+  const index = rows.findIndex(
+    (row, at) => rowThatCannotConflict([row], keys, new Set(filledColumns(at))) !== undefined,
+  );
+  if (index !== -1) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `${call.action} row ${index} for model "${call.modelName}" gives no value for any conflict key: ${keys.map((key) => `(${key.join(', ')})`).join(', ')}`,
+      { meta: { ...call.meta, problem: 'row-cannot-conflict', index, conflictKeys: keys } },
+    );
+  }
+  return keys;
 }

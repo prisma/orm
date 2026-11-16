@@ -4,12 +4,12 @@ import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast, castAs } from '@internal/utils/casts';
 import {
-  assertInsertConflictSkipCapability,
   assertReturningCapability,
   columnOfContractField,
+  modelOf as contractModelOf,
   type ResolvedRelation,
-  resolveInsertConflictColumns,
   resolveModelTableName,
+  resolvePolymorphismInfo,
   resolveRelationTargetColumns,
 } from '../collection-contract';
 import {
@@ -28,6 +28,7 @@ import { ormError } from '../orm-errors';
 import {
   assertJunctionMetadataShape,
   assertJunctionPayloadWritable,
+  hasThrough,
   type JunctionRelation,
   type JunctionRelationMutation,
   type ParsedMutationInput,
@@ -38,16 +39,17 @@ import {
 } from '../relation-mutations';
 import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
-import type {
-  MutationCreateInput,
-  MutationUpdateInput,
-  RelationMutation,
-  RelationMutationCreate,
-} from '../types';
+import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { type CollectionState, emptyState } from '../types';
 import { Assert } from './assert';
 import { addDeleteAll, addUpdateAll, createAllVariantGraph } from './collection-graphs';
-import { conflictKeysOf, rowThatCannotConflict } from './conflict-keys';
+import {
+  type ConflictCall,
+  type ResolvedConflict,
+  requireRowsThatCanConflict,
+  resolveConflict,
+  type VariantInOwnTable,
+} from './conflict-keys';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -298,6 +300,7 @@ function addParentOwned(
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
     }
+    nestedConflictOf(t, name, relation, mutation);
     const keys: KeySource[] = [];
     const added = (from: NodeId) => keys.push({ from, columns });
     if (
@@ -365,6 +368,7 @@ function addChildOwned(
   }
   if (mutation.kind === 'create') {
     const keys = [{ from: parent, columns: fromParent }];
+    const resolved = nestedConflictOf(t, name, relation, mutation);
     if (addVariantInOwnTable(t, { relation, relatedCollection }, mutation, keys, () => undefined)) {
       return;
     }
@@ -373,7 +377,7 @@ function addChildOwned(
     const values = rows.map((row) =>
       createRowOf(context, related, variantValue, row.scalarData, undefined),
     );
-    const conflict = conflictSkipOf(t, related, name, targetColumns, mutation, rows, values);
+    const conflict = conflictSkipOf(t, related, name, targetColumns, resolved, rows, values);
     if (rows.some((row) => row.relationMutations.length > 0)) {
       rows.forEach((row, index) => {
         insertWithRelations(
@@ -486,6 +490,7 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
+    nestedConflictOf(t, name, relation, mutation);
     if (
       addVariantInOwnTable(t, { relation, relatedCollection }, mutation, [], (base) =>
         addLink(base, undefined),
@@ -628,60 +633,109 @@ function columnsFilledBeforeWrite(
   );
 }
 
+function nestedCall(name: string, modelName: string): ConflictCall {
+  return {
+    action: `create() nested mutation for relation "${name}"`,
+    modelName,
+    meta: { kind: 'create', relation: name },
+  };
+}
+
+function nestedConflictOf(
+  t: Translation,
+  name: string,
+  relation: ResolvedRelation,
+  { options, variant }: Extract<Mutation, { kind: 'create' }>,
+): ResolvedConflict | undefined {
+  if (options === undefined) {
+    return undefined;
+  }
+  const { contract } = t.context;
+  const resolved = resolveConflict(
+    contract,
+    nestedCall(name, relation.to),
+    relation.toNamespace,
+    options,
+    ['skip', 'connect'],
+    variantInOwnTableOf(contract, relation, variant),
+  );
+  if (resolved.onConflict === 'skip') {
+    const reason = hasThrough(relation)
+      ? 'many-to-many-relation'
+      : relation.cardinality === 'N:1' || relation.cardinality === '1:1'
+        ? 'to-one-relation'
+        : undefined;
+    if (reason !== undefined) {
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `create() nested mutation for relation "${name}" supports onConflict "skip" only on one-to-many relations`,
+        { meta: { kind: 'create', relation: name, reason } },
+      );
+    }
+    return resolved;
+  }
+  throw ormError(
+    'ORM.OPERATION_UNSUPPORTED',
+    `create() nested mutation for relation "${name}" does not support onConflict "connect"`,
+    { meta: { kind: 'create', relation: name, reason: 'on-conflict-connect' } },
+  );
+}
+
+function variantInOwnTableOf(
+  contract: Contract<SqlStorage>,
+  relation: ResolvedRelation,
+  variantValue: string | undefined,
+): VariantInOwnTable | undefined {
+  if (variantValue !== undefined) {
+    const variant = resolvePolymorphismInfo(
+      contract,
+      relation.toNamespace,
+      relation.to,
+    )?.variants.get(variantValue);
+    return variant?.strategy === 'mti'
+      ? { variant: variant.modelName, model: relation.to }
+      : undefined;
+  }
+  const base = contractModelOf(contract, relation.toNamespace, relation.to)?.base;
+  if (base === undefined) {
+    return undefined;
+  }
+  const variants = resolvePolymorphismInfo(contract, base.namespace, base.model)?.variants;
+  return [...(variants?.values() ?? [])].some(
+    (variant) =>
+      variant.modelName === relation.to &&
+      variant.namespaceId === relation.toNamespace &&
+      variant.strategy === 'mti',
+  )
+    ? { variant: relation.to, model: base.model }
+    : undefined;
+}
+
 function conflictSkipOf(
   t: Translation,
   model: Model,
   name: string,
   parentLinkColumns: readonly string[],
-  { options }: RelationMutationCreate<Contract<SqlStorage>, string>,
+  resolved: ResolvedConflict | undefined,
   rows: readonly ParsedMutationInput[],
   values: readonly Readonly<Record<string, unknown>>[],
 ): InsertConflictSkip | undefined {
-  if (options === undefined) {
+  if (resolved === undefined) {
     return undefined;
   }
   const { contract } = t.context;
-  const conflictOn = options.conflictOn ?? [];
-  assertInsertConflictSkipCapability(
+  requireRowsThatCanConflict(
     contract,
-    `create() nested mutation for relation "${name}"`,
-    conflictOn.length > 0,
+    nestedCall(name, model.modelName),
+    model.tables.root.storage,
+    resolved,
+    values,
+    (at) => [
+      ...parentLinkColumns,
+      ...columnsFilledBeforeWrite(contract, model, rows[at]?.relationMutations ?? []),
+    ],
   );
-  const columns = resolveInsertConflictColumns(
-    contract,
-    model.namespaceId,
-    model.modelName,
-    conflictOn,
-  );
-  const { namespaceId, tableName } = model.tables.root.storage;
-  const conflictKeys = conflictKeysOf(contract, namespaceId, tableName, 'skip', columns);
-  const index = values.findIndex(
-    (row, at) =>
-      rowThatCannotConflict(
-        [row],
-        conflictKeys,
-        new Set([
-          ...parentLinkColumns,
-          ...columnsFilledBeforeWrite(contract, model, rows[at]?.relationMutations ?? []),
-        ]),
-      ) !== undefined,
-  );
-  if (index !== -1) {
-    throw ormError(
-      'ORM.ARGUMENT_INVALID',
-      `create() nested mutation for relation "${name}" row ${index} gives no value for any conflict key: ${conflictKeys.map((key) => `(${key.join(', ')})`).join(', ')}`,
-      {
-        meta: {
-          kind: 'create',
-          relation: name,
-          problem: 'row-cannot-conflict',
-          index,
-          conflictKeys,
-        },
-      },
-    );
-  }
-  return { columns };
+  return { columns: resolved.columns };
 }
 
 function addFindAndAssert(

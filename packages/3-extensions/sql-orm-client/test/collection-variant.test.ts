@@ -644,7 +644,7 @@ describe('MTI variant mutation guards', () => {
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
         message:
-          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.',
       }),
     );
   });
