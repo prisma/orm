@@ -23,7 +23,7 @@ await tx.commit()                              // COMMIT
 
 All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtime.ts`, `activity-handle.ts`, `transaction-state.ts`, and a new file if the savepoint code reads better on its own).
 
-**One wrapper for every level** (project spec decision 4). The driver gives a transaction and a savepoint the same shape, `SqlTransaction`, so the runtime wraps both with the same code. One function builds the `RuntimeTransaction` for a level from its driver `SqlTransaction`, and its `commit()`, `rollback()`, `savepoint()` and statement members serve the outer transaction and every savepoint. The guard state of a level (its open child, settled, invalidated) is kept in that wrapper, not in a separate copy beside it. Only the real differences between the outer transaction and a savepoint branch inside it:
+**One wrapper for every level** (project spec decision 4). The driver gives a transaction and a savepoint the same shape, `SqlTransaction`, so the runtime wraps both with the same code. One function builds the `RuntimeTransaction` for a level from its driver `SqlTransaction`, and its `commit()`, `rollback()`, `savepoint()` and statement members serve the outer transaction and every savepoint. Only the real differences between the outer transaction and a savepoint branch inside it:
 
 - the settlement of a successful `commit()`: `{ by: 'commit' }` on the outer transaction, `{ by: 'release' }` on a savepoint;
 - a failed `commit()`: the outer transaction ends its activity `failed`, a savepoint stays open (rule 8);
@@ -43,6 +43,15 @@ All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtim
    - An `activityStarted` hook throws: no `SAVEPOINT` is sent, `savepoint()` rejects, and the parent level stays usable (decision 9).
 3. **`savepoint()` on an activity handle** opened on a transaction or on a savepoint. The new savepoint's activity is a child of the handle's activity. Handles opened on the runtime or on a connection have no `savepoint`. `ActivityHandle` gains an optional `savepoint?: () => Promise<RuntimeTransaction>`, documented like the existing optional `transaction`.
 4. **Names.** `sp_<n>`, from a counter per connection that starts at 1 and only goes up. Only one savepoint is open per level, so names never collide.
+**One stack per connection.** Only one savepoint is open per level, so the open levels on a connection always form one chain: the outer transaction, then `sp_1`, then `sp_2`. The runtime keeps that chain as a stack on one object per connection, with an invalidated flag, instead of a record per level linked to its enclosing level and its open child. A level is an entry on the stack: its driver queryable, its name and its activity. Rules 5–7 read the stack:
+
+- a level may send work only while it is the top of the stack;
+- a level lower in the stack is suspended;
+- a level no longer on the stack is closed;
+- `savepoint()` on a level that is not the top rejects with `TRANSACTION_ALREADY_OPEN`;
+- settling a level removes it and every entry above it;
+- a failed `ROLLBACK TO` sets the invalidated flag, which closes every level at once.
+
 5. **The guard** (decision 3). Each level tracks its open child savepoint, at most one.
    - `savepoint()` on a level that has an open child rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`. The message names the open savepoint (`sp_<n>`). No `SAVEPOINT` is sent and no activity is started.
    - A statement or `commit()` on a level that has an open child rejects with the new `RUNTIME.TRANSACTION_SUSPENDED`. Its details carry the open savepoint's activity ID. Nothing is sent to the driver. The level is usable again once the child has settled.
@@ -126,6 +135,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 - **D1 R1 → R2: a failed `RELEASE` does not end the savepoint activity.** The first version of rule 2 ended it `{ by: 'release', outcome: 'failed' }`. That contradicts slice 2's rule 3: after a failed `RELEASE` and a successful `ROLLBACK TO`, the work was undone, so the savepoint must finalize `rolled-back`. Corrected by the orchestrator against slice 2's spec; the implementation followed the earlier text.
 - **D1 review R1: the connection is guarded too.** Rule 5 now covers statements sent on the connection while its transaction is open (reviewer F1), closed levels report their closed state ahead of `TRANSACTION_SUSPENDED` (F3), and § Errors states when `savepointId` is `undefined`. The orchestrator had first told the implementer to leave connection statements for slice 4; that was wrong, because the statement is finalized with the wrong outcome.
 - **After the PR opened: one wrapper for every level.** The first implementation had a separate savepoint wrapper with its own settle code, and a `TransactionLevel` class that kept a second copy of state the transaction wrapper already held. That did not use the single `SqlTransaction` shape decision 4 chose so the settle logic is written once. The operator asked for one wrapper; § Chosen design now requires it.
+- **After the PR opened: one stack per connection.** The per-level records with links to the enclosing level and the open child were replaced by one stack of open levels per connection, which the project plan described as "tracking of the innermost open level per connection". Requested by the operator.
 
 ## References
 
