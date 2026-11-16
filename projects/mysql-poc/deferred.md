@@ -86,3 +86,11 @@ MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 1
 ## A key column whose codec cannot reproduce the stored value (slice 6b-1 design review, 2026-11-14)
 
 The ORM reads a key, decodes it, and sends it back encoded: in the write graphs' read-back today, and in every per-relation include from slice 6b-1. A `timestamptz(6)` or `datetime(6)` key read with a `Date` codec loses the digits below a millisecond, so the key sent back matches nothing, and the row or its children are missing without an error. Fix belongs with the codecs: a codec for a key column must reproduce the stored value, or the ORM must be able to ask whether it does. That needs a codec property the framework does not have.
+
+## Reads with includes do not stream (slice 6b-1, 2026-11-17)
+
+A read with includes reads every row before returning any, under both include strategies: one query per relation holds the parents and every level of children in memory until the read completes. Reads without includes still stream. Streaming with includes in batches, a parent query per page of identities followed by that page's children, can be added without changing the design.
+
+## `budgets` and `lints` see each per-relation statement as a bare `SELECT` (slice 6b-1, 2026-11-17)
+
+`lints` warns about a `SELECT` without a `LIMIT`, and `budgets`, where installed, fails it by default. Where includes load with one query per relation, each child statement is such a `SELECT`, so a read that passes on a database that runs the one-query include can fail with `BUDGET.ROWS_EXCEEDED` on MariaDB, as the ORM's read-backs after a write already can. Completing or removing the two middleware is stream 6, row 8 of the GA plan.
