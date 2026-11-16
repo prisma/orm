@@ -72,13 +72,14 @@ SQLite's column types are `text`, `integer`, `real` and `blob`.
 | `BigInt(as?, storage?)` | `bigint` (default) | `integer` | `IntegerBigInt` | `sqlite/bigint@1` | `BigInt` |
 | | `number` | `integer` | `IntegerSafeNumber` (open) | `sqlite/bigintnumber@1` | `BigIntNumber` |
 | `Float(storage?)` | | `real` | `Real` | `sqlite/real@1` | `Float` |
-| `Decimal(storage?)` | | `text` | `Text` | `sqlite/text@1` | `Decimal` |
+| `Decimal(storage?)` | | `text` | `DecimalString` | new, `sqlite/decimal@1` | `Decimal`, as `sqlite/text@1` |
 | `String(storage?)` | | `text` | `Text` | `sqlite/text@1` | `String` |
+| `Boolean(storage?)` | | `integer` | `IntegerBoolean` | new | none |
 | `Bytes(storage?)` | | `blob` | `Blob` | `sqlite/blob@1` | `Bytes` |
 | `Json(storage?)` | | `text` | `PlainJson` (open) | `sqlite/json@1` | `Json` |
 
-- `Decimal` and `String` are one codec today, so both become `Text`, and the tools write a `text` column as `String`. A decimal codec for SQLite is not part of this project.
-- SQLite declares no `Boolean` today, so it gets none here. Adding a type is a separate change.
+- **`Decimal` gets its own data type, `sqlite/decimal`, stored as text.** Today it is the same codec as `String`, so nothing in the contract says the column holds a decimal, and a new required `Decimal` field is filled with `''`. This is TML-3562, which this slice closes. It is the one place where rule 3 is broken: the contract of every SQLite project with a `Decimal` field changes, with an upgrade instruction. The stored text does not change, so no data moves.
+- **`Boolean` is new on SQLite,** stored as `integer` 0 or 1, which is what SQLite's own `TRUE` and `FALSE` are.
 - `BigIntNumber` stays as a deprecated alias of its new name.
 
 ## MySQL
@@ -125,6 +126,16 @@ MongoDB's explicit types are already named after BSON types, so most rows only a
 - **The deprecation warning fires wherever a deprecated name is written,** as the SQL family's does: with or without arguments, in a field, a value object member or a `types {}` alias. Today MongoDB's fires only for a bare name in a field.
 - The Prisma 6 schema reader keeps its bindings; it names codecs, not PSL names.
 
+## Code the targets share
+
+The new codecs repeat value logic across targets: decimal text on PostgreSQL, MySQL, MongoDB and now SQLite; a boolean read from an integer on SQLite and MySQL; the check that a value is plain JSON on all four. ADR 314 says where such code goes: value logic that depends on no database and no family lives in `@internal/type-implementations`, and codec classes, errors and SQL stay in the target or the family.
+
+Each slice that adds a codec applies that rule, and records what it found:
+
+- Decimal text handling moves into `@internal/type-implementations` when the second new decimal codec is written. This is TML-3782, which the MySQL slice closes.
+- The plain-JSON check is TML-3783. The MySQL JSON codec uses the shared check from the start.
+- Where two SQL targets need the same codec class, not only the same value logic, the slice says so in its PR and does not invent a new shared home. Whether the SQL family should hold codec classes is a question for Will, with the cases in hand.
+
 ## The SQL family's `sql.String(n)` and `sql.Char(n)`
 
 `sql.String(n)` is a `varchar(n)` column on every SQL target. It now shares a name with the `String` convenience type and means something else. It is renamed `sql.Varchar(n)`, and `sql.String` stays for one release line as a deprecated alias. `sql.Char(n)` keeps its name.
@@ -149,7 +160,7 @@ Also in scope, because main is wrong today: main has two ADRs numbered 316. The 
 Out of scope:
 
 - The type choice mechanism, and anything else under `packages/1-framework`.
-- New codecs on SQLite and MongoDB: a SQLite decimal or boolean, a MongoDB JSON string. MySQL's missing codecs are in scope.
+- A MongoDB JSON string storage. The codecs SQLite and MySQL lack are in scope.
 - Convenience types for single-concept types such as `Uuid`, `ObjectId`, `Vector` and `Bson`.
 - Clearer errors for `json` limits on PostgreSQL.
 
@@ -157,7 +168,7 @@ Out of scope:
 
 - [ ] On each target, each row of its table resolves to its explicit type in PSL and in a TypeScript contract.
 - [ ] On each target, a schema written with the convenience types and one written with the explicit types emit the same `contract.json`.
-- [ ] Existing fixtures and examples emit byte-identical `contract.json` files.
+- [ ] Existing fixtures and examples emit byte-identical `contract.json` files, except SQLite fields written `Decimal`.
 - [ ] `contract infer` and `contract print` write the convenience calls, and the print round-trip tests pass.
 - [ ] Each removed explicit name is a deprecated alias that warns and emits the same contract. MongoDB's `Int`, `Float` and `Boolean` no longer warn.
 - [ ] Every rename a user must act on has an upgrade instruction with a detection pattern.
