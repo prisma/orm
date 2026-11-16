@@ -1479,12 +1479,15 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       throw error;
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
-    const level: TransactionLevel = { enclosing: undefined, activity };
-    return this.wrapTransaction(
+    const level = createLevel(undefined, activity);
+    const { scope, outer } = this.outerTransaction(
       driverTx,
+      connection,
       level,
-      this.outerTransaction(driverTx, connection, level, endTransactionWork, timeout),
+      endTransactionWork,
+      timeout,
     );
+    return this.wrapTransaction(driverTx, level, scope, outer);
   }
 
   private outerTransaction(
@@ -1493,7 +1496,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     level: TransactionLevel,
     endTransactionWork: () => void,
     timeout: number | undefined,
-  ): OuterTransaction {
+  ): { readonly scope: TransactionScope; readonly outer: OuterTransaction } {
     const { activity } = level;
     this.#openTransactions.set(connection, activity);
     this.#transactionLevels.set(connection, level);
@@ -1510,10 +1513,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
     const settlement: TransactionSettlementState = {
       get committed() {
-        return level.committed === true;
+        return level.committed;
       },
       get rolledBack() {
-        return level.settled === true && level.committed !== true;
+        return level.settled && !level.committed;
       },
       logDroppedError(error: unknown): void {
         try {
@@ -1560,7 +1563,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             await activity.end({
               by: 'rollback',
               outcome: 'failed',
-              commitAttempted: level.commitAttempted === true,
+              commitAttempted: level.commitAttempted,
             });
           }
         } catch (error) {
@@ -1571,18 +1574,24 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       });
     }
     return {
-      signal: controller.signal,
-      settlement,
-      check,
-      stop: () => {
-        stopDeadline();
-        stopAcceptingChildren();
+      scope: {
+        signal: controller.signal,
+        check,
+        nextSavepointName: () => {
+          const count = (this.#savepointCounts.get(connection) ?? 0) + 1;
+          this.#savepointCounts.set(connection, count);
+          return `sp_${count}`;
+        },
+        logDroppedError: settlement.logDroppedError,
       },
-      endWork: endTransactionWork,
-      nextSavepointName: () => {
-        const count = (this.#savepointCounts.get(connection) ?? 0) + 1;
-        this.#savepointCounts.set(connection, count);
-        return `sp_${count}`;
+      outer: {
+        settlement,
+        check,
+        stop: () => {
+          stopDeadline();
+          stopAcceptingChildren();
+        },
+        endWork: endTransactionWork,
       },
     };
   }
@@ -1590,13 +1599,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private wrapTransaction(
     driverTx: SqlTransaction,
     level: TransactionLevel,
-    outer: OuterTransaction,
+    scope: TransactionScope,
+    outer?: OuterTransaction,
   ): RuntimeTransaction {
     const { activity, enclosing } = level;
-    const own = enclosing === undefined ? outer : undefined;
     this.#openTransactions.set(driverTx, activity);
     this.#transactionLevels.set(driverTx, level);
-    this.#transactionChecks.set(driverTx, outer.check);
+    this.#transactionChecks.set(driverTx, scope.check);
     let commitEnding: Promise<void> | undefined;
     const self = this;
     const wrappedTransaction: RuntimeTransaction &
@@ -1604,42 +1613,45 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       ActivitySourceTarget &
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
-      ...(own === undefined ? {} : { [transactionSettlement]: own.settlement }),
-      signal: outer.signal,
+      ...(outer === undefined ? {} : { [transactionSettlement]: outer.settlement }),
+      signal: scope.signal,
       async commit(): Promise<void> {
-        own?.check();
+        outer?.check();
         assertAcceptsWork(level);
-        own?.stop();
+        outer?.stop();
         level.commitAttempted = true;
         try {
           await self.#inFlight.track(() => driverTx.commit());
         } catch (error) {
-          if (own !== undefined) {
-            own.endWork();
+          if (outer !== undefined) {
+            outer.endWork();
             await activity.end({ by: 'commit', outcome: 'failed' });
           }
           throw error;
         }
         level.committed = true;
         settle(level);
-        commitEnding = activity.end({ by: own ? 'commit' : 'release', outcome: 'succeeded' });
+        commitEnding = activity.end({
+          by: outer === undefined ? 'release' : 'commit',
+          outcome: 'succeeded',
+        });
         try {
           await commitEnding;
         } finally {
-          own?.endWork();
+          outer?.endWork();
         }
       },
       async rollback(): Promise<void> {
-        own?.stop();
+        outer?.stop();
         if (level.committed) {
           await commitEnding?.catch(() => undefined);
           return;
         }
         if (level.settled) return;
-        const commitAttempted = level.commitAttempted === true;
-        const endSavepoints = closeOpenSavepoints(level, outer.settlement.logDroppedError);
+        const { commitAttempted } = level;
+        const endSavepoints = closeOpenSavepoints(level, scope.logDroppedError);
         if (level.invalidated || isClosed(enclosing)) {
-          own?.endWork();
+          outer?.endWork();
           await endSavepoints('failed');
           await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           throw transactionClosedError();
@@ -1656,7 +1668,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
               above = above.enclosing;
             }
           }
-          own?.endWork();
+          outer?.endWork();
           await endSavepoints('failed');
           await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           throw error;
@@ -1666,10 +1678,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           await endSavepoints('succeeded');
           await activity.end({ by: 'rollback', outcome: 'succeeded', commitAttempted });
         } finally {
-          own?.endWork();
+          outer?.endWork();
         }
       },
-      savepoint: () => self.openSavepoint(level, driverTx, activity, outer),
+      savepoint: () => self.openSavepoint(level, driverTx, activity, scope),
       [activitySource]: {
         startActivity: <K extends ClientActivityKind>(
           clientActivity: StartActivity<K>,
@@ -1682,7 +1694,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           return self.startActivityOnRoute(
             self.queryableRoute(driverTx, 'transaction', () => activity, {
               transaction: undefined,
-              savepoint: (parent) => self.openSavepoint(level, driverTx, parent, outer),
+              savepoint: (parent) => self.openSavepoint(level, driverTx, parent, scope),
               runtimeWork: false,
             }),
             clientActivity,
@@ -1748,11 +1760,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     enclosing: TransactionLevel,
     enclosingTx: SqlTransaction,
     parent: ActivityParent,
-    outer: OuterTransaction,
+    scope: TransactionScope,
   ): Promise<RuntimeTransaction> {
     if (isClosed(enclosing)) throw transactionClosedError();
     if (enclosing.openChild !== undefined) throw savepointAlreadyOpenError(enclosing.openChild);
-    const open: OpenSavepoint = { name: outer.nextSavepointName() };
+    const open: OpenSavepoint = { name: scope.nextSavepointName() };
     enclosing.openChild = open;
     const leave = () => {
       if (enclosing.openChild === open) enclosing.openChild = undefined;
@@ -1780,8 +1792,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       throw error;
     }
     if (this.#heldQueryables.has(enclosingTx)) this.#heldQueryables.add(driverSavepoint);
-    open.level = { enclosing, activity };
-    return this.wrapTransaction(driverSavepoint, open.level, outer);
+    open.level = createLevel(enclosing, activity);
+    return this.wrapTransaction(driverSavepoint, open.level, scope);
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
@@ -1916,12 +1928,12 @@ function transactionAlreadyOpenError(
 interface TransactionLevel {
   readonly enclosing: TransactionLevel | undefined;
   readonly activity: TransactionActivityRun<SqlMiddlewareContext>;
-  openChild?: OpenSavepoint | undefined;
-  closed?: boolean;
-  settled?: boolean;
-  committed?: boolean;
-  commitAttempted?: boolean;
-  invalidated?: boolean;
+  openChild: OpenSavepoint | undefined;
+  closed: boolean;
+  settled: boolean;
+  committed: boolean;
+  commitAttempted: boolean;
+  invalidated: boolean;
 }
 
 interface OpenSavepoint {
@@ -1930,13 +1942,34 @@ interface OpenSavepoint {
   level?: TransactionLevel;
 }
 
-interface OuterTransaction {
+interface TransactionScope {
   readonly signal: AbortSignal;
+  check(): void;
+  nextSavepointName(): string;
+  logDroppedError(error: unknown): void;
+}
+
+interface OuterTransaction {
   readonly settlement: TransactionSettlementState;
   check(): void;
   stop(): void;
   endWork(): void;
-  nextSavepointName(): string;
+}
+
+function createLevel(
+  enclosing: TransactionLevel | undefined,
+  activity: TransactionActivityRun<SqlMiddlewareContext>,
+): TransactionLevel {
+  return {
+    enclosing,
+    activity,
+    openChild: undefined,
+    closed: false,
+    settled: false,
+    committed: false,
+    commitAttempted: false,
+    invalidated: false,
+  };
 }
 
 function isClosed(level: TransactionLevel | undefined): boolean {
