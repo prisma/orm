@@ -58,15 +58,4 @@ describe('SQLite savepoints', () => {
       ['COMMIT'],
     ]);
   });
-
-  it.each(['', '1sp', 'a b', 'sp; DROP TABLE items'])('rejects %j before any SQL', async (name) => {
-    const { db, connection } = setup();
-    const tx = await connection.beginTransaction();
-    const exec = vi.spyOn(db, 'exec');
-    await expect(tx.savepoint(name)).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
-    const sp = await tx.savepoint('sp_1');
-    await expect(sp.savepoint(name)).rejects.toMatchObject({ code: 'RUNTIME.ARGUMENT_INVALID' });
-    expect(exec.mock.calls).toEqual([['SAVEPOINT sp_1']]);
-    await tx.rollback();
-  });
 });

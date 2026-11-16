@@ -12,7 +12,6 @@ import type {
   SqlTransaction,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
-import { validateSavepointName } from '@internal/sql-relational-core/ast';
 import { validatePostgresIsolationLevel } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
@@ -787,9 +786,8 @@ async function openPostgresSavepoint(
   options: ConnectionOptions,
   name: string,
 ): Promise<PostgresSavepointImpl> {
-  const validated = validateSavepointName(name);
-  await sendSavepointStatement(connection, `SAVEPOINT ${validated}`);
-  return new PostgresSavepointImpl(connection, options, validated);
+  await sendSavepointStatement(connection, `SAVEPOINT ${name}`);
+  return new PostgresSavepointImpl(connection, options, name);
 }
 
 class PostgresPoolDriverImpl

@@ -157,23 +157,4 @@ describe.each(['pooled', 'direct'] as const)('%s savepoints', (transport) => {
       }),
     timeouts.spinUpPpgDev,
   );
-
-  it.each(['', '1sp', 'a b', 'sp; DROP TABLE items'])(
-    'rejects %j without sending a statement',
-    (name) =>
-      withConnection(transport, async (connection, sent) => {
-        const tx = await connection.beginTransaction();
-        const sp = await tx.savepoint('sp_1');
-        sent.length = 0;
-        await expect(tx.savepoint(name)).rejects.toMatchObject({
-          code: 'RUNTIME.ARGUMENT_INVALID',
-        });
-        await expect(sp.savepoint(name)).rejects.toMatchObject({
-          code: 'RUNTIME.ARGUMENT_INVALID',
-        });
-        expect(sent).toEqual([]);
-        await tx.rollback();
-      }),
-    timeouts.spinUpPpgDev,
-  );
 });

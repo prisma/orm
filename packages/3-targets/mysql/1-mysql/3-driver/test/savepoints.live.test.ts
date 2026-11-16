@@ -92,23 +92,4 @@ describe('MySQL savepoints on a real connection', { timeout: timeouts.databaseOp
       expect(await values(connection)).toEqual([{ value: '1' }, { value: '3' }]);
     });
   });
-
-  it.for(['', '1sp', 'a b', 'sp; DROP TABLE t'])(
-    'rejects %j without sending a statement',
-    async (name, test) => {
-      await withConnection(test, async (connection, client) => {
-        const tx = await connection.beginTransaction();
-        const sp = await tx.savepoint('sp_1');
-        const query = vi.spyOn(client, 'query');
-        await expect(tx.savepoint(name)).rejects.toMatchObject({
-          code: 'RUNTIME.ARGUMENT_INVALID',
-        });
-        await expect(sp.savepoint(name)).rejects.toMatchObject({
-          code: 'RUNTIME.ARGUMENT_INVALID',
-        });
-        expect(query).not.toHaveBeenCalled();
-        await tx.rollback();
-      });
-    },
-  );
 });

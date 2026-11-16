@@ -14,7 +14,6 @@ import type {
   SqlTransaction,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
-import { validateSavepointName } from '@internal/sql-relational-core/ast';
 import { validateMysqlIsolationLevel } from '@internal/target-mysql/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { createPool, type Pool, type PoolConnection } from 'mariadb';
@@ -493,9 +492,8 @@ class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction 
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    const validated = validateSavepointName(name);
-    await this.underLock(() => this.client.query(`SAVEPOINT ${validated}`));
-    return new MysqlSavepointImpl(this.client, this.held, this.streams, validated);
+    await this.underLock(() => this.client.query(`SAVEPOINT ${name}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, name);
   }
 }
 
@@ -518,9 +516,8 @@ class MysqlSavepointImpl extends MysqlHeldQueryable implements SqlTransaction {
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    const validated = validateSavepointName(name);
-    await this.underLock(() => this.client.query(`SAVEPOINT ${validated}`));
-    return new MysqlSavepointImpl(this.client, this.held, this.streams, validated);
+    await this.underLock(() => this.client.query(`SAVEPOINT ${name}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, name);
   }
 }
 

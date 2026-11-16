@@ -11,7 +11,6 @@ import type {
   SqlTransaction,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
-import { validateSavepointName } from '@internal/sql-relational-core/ast';
 import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -188,9 +187,8 @@ function execSavepointStatement(db: DatabaseSync, sql: string): void {
 }
 
 function openSqliteSavepoint(db: DatabaseSync, name: string): SqliteSavepointImpl {
-  const validated = validateSavepointName(name);
-  execSavepointStatement(db, `SAVEPOINT ${validated}`);
-  return new SqliteSavepointImpl(db, validated);
+  execSavepointStatement(db, `SAVEPOINT ${name}`);
+  return new SqliteSavepointImpl(db, name);
 }
 
 interface ConnectedState {
