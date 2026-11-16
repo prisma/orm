@@ -220,6 +220,51 @@ describe('integration/nested-variant-creates', () => {
       },
       timeouts.spinUpPpgDev,
     );
+
+    it(
+      'create() and update() with a callback on a base relation in the row write the row with the discriminator and the rows of that relation',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupSchema(runtime);
+          const { projects } = collectionsOf(runtime);
+
+          const created = await projects.create({
+            name: 'Launch',
+            tasks: (tasks) =>
+              tasks.variant('bug').create({
+                ...crash,
+                comments: (comments) => comments.create({ body: 'Seen it' }),
+              }),
+          });
+          const updated = await projects.where({ id: 1 }).update({
+            tasks: (tasks) =>
+              tasks
+                .variant('bug')
+                .create([
+                  hang,
+                  { ...crash, comments: (comments) => comments.create([{ body: 'Again' }]) },
+                ]),
+          });
+
+          expect([created, updated]).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, name: 'Launch' },
+          ]);
+          expect(await storedTasks(runtime)).toEqual([
+            { id: 1, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
+            { id: 2, title: 'Hang', type: 'bug', severity: 'low', project_id: 1 },
+            { id: 3, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
+          ]);
+          expect(
+            await runtime.query('select id, body, task_id from task_comments order by id'),
+          ).toEqual([
+            { id: 1, body: 'Seen it', task_id: 1 },
+            { id: 2, body: 'Again', task_id: 3 },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
   });
 
   it(
