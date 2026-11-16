@@ -63,6 +63,12 @@ export interface ModelSpec {
   readonly variants?: Readonly<Record<string, string>>;
 }
 
+/** An enum: its codec, a string by default, and the stored value of each member. */
+export interface EnumSpec {
+  readonly codecId?: string;
+  readonly members: Readonly<Record<string, unknown>>;
+}
+
 export interface CollectionSpec {
   readonly unique?: readonly string[];
   readonly required?: readonly string[];
@@ -136,6 +142,7 @@ export function contract(
   models: Readonly<Record<string, ModelSpec>>,
   collections: Readonly<Record<string, CollectionSpec>>,
   valueObjects: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>> = {},
+  enums: Readonly<Record<string, EnumSpec>> = {},
 ): MongoContract {
   return {
     target: 'mongo',
@@ -148,6 +155,22 @@ export function contract(
     domain: {
       namespaces: {
         __unbound__: {
+          ...(Object.keys(enums).length === 0
+            ? {}
+            : {
+                enum: Object.fromEntries(
+                  Object.entries(enums).map(([name, spec]) => [
+                    name,
+                    {
+                      codecId: spec.codecId ?? 'mongo/string@1',
+                      members: Object.entries(spec.members).map(([member, value]) => ({
+                        name: member,
+                        value,
+                      })),
+                    },
+                  ]),
+                ),
+              }),
           models: Object.fromEntries(
             Object.entries(models).map(([name, spec]) => [
               name,

@@ -40,33 +40,6 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it('refuses renaming an enum value', () => {
-    expect(
-      refusal(
-        plan({
-          from: profiles,
-          to: profiles,
-          schema: profilesSchema,
-          statements: [
-            {
-              kind: 'rename',
-              entity: 'enumValue',
-              from: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'ARCHIVED' },
-              to: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'RETIRED' },
-            },
-          ],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": MongoDB does not rename enum values in this release',
-        why: 'Leave out this statement.',
-      },
-    ]);
-  });
-
   it('refuses converting a variant', () => {
     const app = asNamespaceId('app');
     expect(

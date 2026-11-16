@@ -47,6 +47,7 @@ import {
   type PlannedTransform,
 } from './mongo-data-transforms';
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
+import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
@@ -616,6 +617,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     });
     if (!storedKeys.ok) return { kind: 'failure', conflicts: [...storedKeys.failure] };
     const storedKeyRewrites = [...storedKeys.value.renames, ...storedKeys.value.removals];
+    const enumValues = planEnumValueRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      lookups: mongoTypeLookupsOf(options.frameworkComponents),
+    });
+    if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
+    const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
     const removals: readonly FieldRemoval[] =
       fromContract === null
@@ -756,7 +766,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const callsOf = new Map<ResolvedMigrationStatement, readonly OpFactoryCall[]>([
       ...renames.map((statement, index) => {
         const call = callOfStatement[index];
-        const keyCalls = storedKeyRewrites.flatMap((rewrite) =>
+        const keyCalls = [...storedKeyRewrites, ...valueReplacements].flatMap((rewrite) =>
           rewrite.statement === statement ? [rewrite.call] : [],
         );
         return [statement, call === undefined ? keyCalls : [call, ...keyCalls]] as const;
@@ -785,6 +795,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         rewrites: [
           ...fieldRenames,
           ...storedKeys.value.renames.map((rewrite) => rewrite.call),
+          ...valueReplacements.map((rewrite) => rewrite.call),
           ...castCalls,
           ...transformCalls('convert'),
           ...fills.map((fill) => fill.call),
@@ -792,6 +803,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           ...transformCalls('backfill'),
           ...removals.map((removal) => removal.call),
           ...storedKeys.value.removals.map((rewrite) => rewrite.call),
+          ...valueRemovals.map((rewrite) => rewrite.call),
         ],
       },
     });
@@ -814,6 +826,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         loss: 'drop' as const,
         label: removal.call.label,
       })),
+      ...valueRemovals.map(
+        (removal): MigrationDataLoss => ({
+          operationIndex: calls.indexOf(removal.call),
+          subject: { kind: 'enumValue', ...removal.enumValue },
+          loss: 'drop',
+          label: removal.call.label,
+          ...ifDefined('keepDataEdit', removal.keepDataEdit),
+        }),
+      ),
       ...casts.flatMap(({ call, subject }): MigrationDataLoss[] =>
         call.operationClass !== 'destructive'
           ? []

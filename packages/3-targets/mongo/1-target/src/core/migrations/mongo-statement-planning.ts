@@ -56,9 +56,11 @@ import {
   type FillStoredKeyCall,
   type OpFactoryCall,
   type RemoveStoredKeyCall,
+  type RemoveStoredValueCall,
   RenameCollectionCall,
   RenameFieldCall,
   type RenameStoredKeyCall,
+  type ReplaceStoredValueCall,
   UnsetFieldCall,
 } from './op-factory-call';
 
@@ -202,6 +204,8 @@ export interface StatementCalls {
     | RenameStoredKeyCall
     | RemoveStoredKeyCall
     | FillStoredKeyCall
+    | ReplaceStoredValueCall
+    | RemoveStoredValueCall
   )[];
 }
 
@@ -261,21 +265,11 @@ export function planStatements(input: {
               LEAVE_OUT,
             ),
           }
-        : statement.entity === 'enumValue'
-          ? {
-              kind: 'refused',
-              conflict: refused(
-                statement,
-                label,
-                'MongoDB does not rename enum values in this release',
-                LEAVE_OUT,
-              ),
-            }
-          : statement.entity === 'valueObjectField'
-            ? { kind: 'unchanged' }
-            : statement.entity === 'model'
-              ? planModelStatement(statement, label, schema, input)
-              : planFieldStatement(statement, label, renamedCollections, schema, input);
+        : statement.entity === 'enumValue' || statement.entity === 'valueObjectField'
+          ? { kind: 'unchanged' }
+          : statement.entity === 'model'
+            ? planModelStatement(statement, label, schema, input)
+            : planFieldStatement(statement, label, renamedCollections, schema, input);
     if (outcome.kind === 'refused') {
       conflicts.push(outcome.conflict);
       callOfStatement.push(undefined);
