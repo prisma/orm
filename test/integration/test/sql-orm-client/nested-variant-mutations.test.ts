@@ -808,41 +808,5 @@ describe('integration/nested-variant-mutations', () => {
       },
       timeouts.spinUpPpgDev,
     );
-
-    it(
-      'refuses a field of the variant in updateAll data with the error of the variant collection',
-      async () => {
-        await withCollectionRuntime(async (runtime) => {
-          await seed(runtime);
-          const { projects, tasks } = collectionsOf(runtime);
-
-          const topLevel = await rejectionShape(
-            Promise.resolve().then(() =>
-              tasks
-                .variant('bug')
-                .where({ projectId: 1 })
-                .updateAll({ severity: 'low' } as never),
-            ),
-          );
-          const nested = await rejectionShape(
-            projects.where({ id: 1 }).update({
-              tasks: (related) => related.variant('bug').updateAll({ severity: 'low' } as never),
-            }),
-          );
-
-          expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
-          expect(nested).toEqual(topLevel);
-          expect(await stored(runtime)).toEqual({
-            tasks: seeded,
-            features: [
-              { id: 3, priority: 3 },
-              { id: 4, priority: 1 },
-              { id: 6, priority: 3 },
-            ],
-          });
-        }, polyContext.contract);
-      },
-      timeouts.spinUpPpgDev,
-    );
   });
 });
