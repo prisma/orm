@@ -97,6 +97,7 @@ function isStoredValue(value: JsonValue): value is StoredValue {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 }
 
+/** Whether the field takes the enum's values: a model field names the enum, and a value object field its storage value set, which has the enum's name. */
 function typedBy(
   field: ContractField | ContractValueObjectField,
   namespaceId: string,
@@ -105,7 +106,6 @@ function typedBy(
   const ref = field.valueSet;
   return (
     ref !== undefined &&
-    ref.entityKind === 'enum' &&
     ref.spaceId === undefined &&
     ref.namespaceId === namespaceId &&
     ref.entityName === enumName
@@ -311,6 +311,15 @@ function valueExpression(value: StoredValue, bsonTypes: readonly string[]): Json
   if (bsonTypes.includes('long')) return { $toLong: value };
   if (bsonTypes.includes('decimal')) return { $toDecimal: String(value) };
   return value;
+}
+
+/** A call as an edit names it inside a sentence: on one line, without trailing commas. */
+function oneLine(call: ReplaceStoredValueCall | RemoveStoredValueCall): string {
+  return call
+    .renderTypeScript()
+    .replace(/\s*\n\s*/g, ' ')
+    .replace(/,\s*([}\]])/g, ' $1')
+    .replace(/\(\s+/g, '(');
 }
 
 function enumValueText(contract: ContractWithDomain, value: EnumValueCoordinate): string {
@@ -596,9 +605,9 @@ function planEnum(
             keepData === undefined
               ? undefined
               : {
-                  remove: call.renderTypeScript(),
+                  remove: oneLine(call),
                   replaceWith: keepData
-                    .map((replacement) => replacementCall(replacement).renderTypeScript())
+                    .map((replacement) => oneLine(replacementCall(replacement)))
                     .join(', '),
                   ...(group.cycle ? { swapsValues: true } : {}),
                 },

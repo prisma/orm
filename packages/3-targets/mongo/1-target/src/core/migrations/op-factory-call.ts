@@ -569,6 +569,14 @@ export class RemoveStoredValueCall extends OpFactoryCallNode {
   renderTypeScript(): string {
     return `removeStoredValue(${jsonToTsSource(this.options)})`;
   }
+
+  /** Imports `replaceStoredValue` too, so the edit that keeps the data, which replaces this call with replacements, needs no new import. */
+  override importRequirements(): readonly ImportRequirement[] {
+    return [
+      ...super.importRequirements(),
+      { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'replaceStoredValue' },
+    ];
+  }
 }
 
 export class CollModCall extends OpFactoryCallNode {
