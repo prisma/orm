@@ -108,7 +108,7 @@ Paging is the most common prepared query, and SQL accepts placeholders there, so
 
 `MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. The rule is the one ad-hoc `execute` uses: a raw `updateOne` lowers to an `updateOne` wire command, which `runtime.execute` gives statistics for, so its prepared handle has `execute` too. The raw lane's plans carry their raw command type, so the type agrees. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
 
-The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. Each method sends the command on its own: `execute` reduces its own driver response to `{ affectedRows }`, the same row `query` would yield. They are two ways to run the statement, not two steps, so calling `query` and then `execute` runs a delete twice. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. Each method sends the command on its own: `query` yields the driver's result row (for an update, `{ matchedCount, modifiedCount, upsertedCount }`), and `execute` reduces that same response to `{ affectedRows }`. They are two ways to run the statement, not two steps, so calling `query` and then `execute` runs a delete twice. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
 
 ## ORM reads
 
@@ -122,7 +122,7 @@ A MongoDB ORM collection has `.prepared.all()`, `.prepared.first()` and `.prepar
 - **Filter-expression `where`** (`where(MongoFieldFilter.eq('status', p.status))`): only the operand of a comparison (`$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`) or an item of a `$in`/`$nin` list, on a scalar field, including a scalar inside a value object (`address.city`). An indexed list path (`tags.0`) names one item: the placeholder takes the element codec and may be nullable exactly when the list's items may be null. This holds under `$and`, `$or` and `$not` too.
 - **`limit` and `offset`**, with the `PagingCount` rule above.
 
-Every other position is refused with `ORM.ARGUMENT_INVALID` when the `where` is built: any other operator (`$type`, `$exists`, `$regex`, `$size`, `$elemMatch`, …), a `$in`/`$nin` whose whole value is a placeholder, an array holding a placeholder (a whole-list equality), a `MongoParamRef` wrapping a placeholder, anything inside `$expr` (the error then has `meta: { name, operator: '$expr' }`), a whole value object or a path the contract does not know, and a placeholder inside a value-object literal. Includes, `orderBy` and `select` carry names and directions, not values.
+Every other position is refused with `ORM.ARGUMENT_INVALID` when the `where` is built: any other operator (`$type`, `$exists`, `$regex`, `$size`, `$elemMatch`, …), a `$in`/`$nin` whose whole value is a placeholder, an array holding a placeholder (a whole-list equality, or `where({ tags: [p.tag] })` in the object form; the error names the list field and says a declaration has no list form), a `MongoParamRef` wrapping a placeholder, anything inside `$expr` (the error then has `meta: { name, operator: '$expr' }`), a whole value object, a path below a value object that the contract does not know (`address.planet`), and a placeholder inside a value-object literal. A path whose first segment is not a field of the model is refused earlier, with `ORM.FIELD_UNKNOWN`, whatever its value, as in a `where` without placeholders. Includes, `orderBy` and `select` carry names and directions, not values.
 
 ### The codec is checked when the `where` is built
 
@@ -130,7 +130,7 @@ A placeholder kept on a scalar field is checked against it, in both `where` form
 
 ### Writes refuse a placeholder
 
-ORM writes run at once, so they cannot take a placeholder. `ormParam`, which every ORM value passes through, refuses one at any depth. A write on a collection whose `where` kept a placeholder (`where({ name: p.name }).deleteAll()`, and likewise `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAndCount` and `upsert`) is refused with `ORM.ARGUMENT_INVALID` when the write is called, before anything is sent. A placeholder in `limit` or `offset` never reaches a write, because writes refuse `limit` and `offset` with `ORM.OPERATION_UNSUPPORTED`.
+ORM writes run at once, so they cannot take a placeholder. `ormParam`, which every ORM value passes through, refuses one at any depth. A write on a collection whose `where` kept a placeholder (`where({ name: p.name }).deleteAll()`, and likewise `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAndCount` and `upsert`) is refused with `ORM.ARGUMENT_INVALID` when the write is called, before anything is sent. The error names the write and the parameter (`meta: { name, method }`) and says to use the parameter only with `.prepared.all()`, `.prepared.first()` or `.prepared.firstOrThrow()`. A placeholder in `limit` or `offset` never reaches a write, because writes refuse `limit` and `offset` with `ORM.OPERATION_UNSUPPORTED`.
 
 ## The runtime is the only target, and the bridge is internal
 

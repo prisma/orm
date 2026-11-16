@@ -65,7 +65,6 @@ describe('a placeholder in a filter-expression where', () => {
     ['$elemMatch', MongoFieldFilter.of('tags', '$elemMatch', { $eq: text }), text, 'tags'],
     ['$in whose value is not a list', MongoFieldFilter.of('name', '$in', text), text, 'name'],
     ['$nin whose value is not a list', MongoFieldFilter.of('name', '$nin', text), text, 'name'],
-    ['a whole-list equality', MongoFieldFilter.eq('tags', [text]), text, 'tags'],
     [
       'a parameter that wraps it',
       MongoFieldFilter.eq('name', new MongoParamRef(text, { codecId: 'mongo/string@1' })),
@@ -116,6 +115,41 @@ describe('a placeholder in a filter-expression where', () => {
           ]),
         ),
       ]),
+    );
+  });
+
+  it('is refused with ORM.FIELD_UNKNOWN when the first segment is not a field, as any value is', () => {
+    expect(() => users().where(MongoFieldFilter.eq('planet', text))).toThrow(
+      expect.objectContaining({
+        code: 'ORM.FIELD_UNKNOWN',
+        meta: { model: 'User', field: 'planet' },
+      }),
+    );
+  });
+
+  it('is refused with ORM.ARGUMENT_INVALID on a path below a value object that the contract does not know', () => {
+    expect(() => users().where(MongoFieldFilter.eq('homeAddress.planet', text))).toThrow(
+      expect.objectContaining(refused(text, 'homeAddress.planet')),
+    );
+  });
+});
+
+describe('a list holding a placeholder', () => {
+  const listRefused = (field: string) => ({
+    code: 'ORM.ARGUMENT_INVALID',
+    message: `The prepared parameter 'text' cannot be an item of a list for '${field}'. A declaration has no list form, so a list of prepared parameters is not possible; on a list field, one prepared parameter matches one item.`,
+    meta: { name: 'text', field },
+  });
+
+  it('is refused in an object-form where, naming the list field', () => {
+    expect(() => users().where({ tags: [text as unknown as string] })).toThrow(
+      expect.objectContaining(listRefused('tags')),
+    );
+  });
+
+  it('is refused in a filter-expression equality, naming the list field', () => {
+    expect(() => users().where(MongoFieldFilter.eq('tags', [text]))).toThrow(
+      expect.objectContaining(listRefused('tags')),
     );
   });
 });

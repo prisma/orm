@@ -61,7 +61,11 @@ import {
   type PagingCount,
 } from '@internal/mongo-query-builder';
 import type { MongoValue } from '@internal/mongo-value';
-import { isMongoPreparedParamRef, MongoParamRef } from '@internal/mongo-value';
+import {
+  isMongoPreparedParamRef,
+  MongoParamRef,
+  type MongoPreparedParamRef,
+} from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -89,8 +93,11 @@ import { ormError } from './orm-errors';
 import { ormParam } from './orm-param';
 import type { MongoPreparedCollection } from './prepared-collection';
 import {
+  findPlaceholder,
   rejectExprPlaceholder,
   rejectPlaceholder,
+  rejectPlaceholderList,
+  rejectPreparedWrite,
   type WherePlaceholderField,
   wherePlaceholder,
 } from './prepared-placeholders';
@@ -293,17 +300,24 @@ function rejectLiteralPlaceholder(literal: MongoAggLiteral): MongoAggLiteral {
   return literal;
 }
 
-function rejectFilterPlaceholders(filter: MongoFilterExpr): void {
+function placeholderInFilter(filter: MongoFilterExpr): MongoPreparedParamRef | undefined {
+  let found: MongoPreparedParamRef | undefined;
   filter.rewrite({
     field: (fieldFilter) => {
-      rejectPlaceholder(fieldFilter.value, fieldFilter.field);
+      found ??= findPlaceholder(fieldFilter.value);
       return fieldFilter;
     },
     expr: (exprFilter) => {
-      exprFilter.aggExpr.rewrite({ literal: rejectLiteralPlaceholder });
+      exprFilter.aggExpr.rewrite({
+        literal: (literal) => {
+          found ??= findPlaceholder(literal.value);
+          return literal;
+        },
+      });
       return exprFilter;
     },
   });
+  return found;
 }
 
 export class MongoCollectionImpl<
@@ -651,7 +665,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('update');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('update');
     this.#rejectWindowing('update');
     this.#rejectIncludes('update');
     const filter = this.#mergeFilters();
@@ -673,7 +687,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('updateAll');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('updateAll');
     this.#rejectWindowing('updateAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -700,7 +714,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<number> {
     this.#requireFilters('updateAndCount');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('updateAndCount');
     this.#rejectWindowing('updateAndCount');
     this.#rejectIncludes('updateAndCount');
     const filter = this.#mergeFilters();
@@ -712,7 +726,7 @@ export class MongoCollectionImpl<
 
   async delete(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('delete');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('delete');
     this.#rejectWindowing('delete');
     this.#rejectIncludes('delete');
     const filter = this.#mergeFilters();
@@ -729,7 +743,7 @@ export class MongoCollectionImpl<
 
   deleteAll(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('deleteAll');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('deleteAll');
     this.#rejectWindowing('deleteAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -747,7 +761,7 @@ export class MongoCollectionImpl<
 
   async deleteAndCount(): Promise<number> {
     this.#requireFilters('deleteAndCount');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('deleteAndCount');
     this.#rejectWindowing('deleteAndCount');
     this.#rejectIncludes('deleteAndCount');
     const filter = this.#mergeFilters();
@@ -763,7 +777,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]);
   }): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('upsert');
-    this.#rejectFilterPlaceholders();
+    this.#rejectFilterPlaceholders('upsert');
     this.#rejectWindowing('upsert');
     this.#rejectIncludes('upsert');
     const filter = this.#mergeFilters();
@@ -1110,6 +1124,7 @@ export class MongoCollectionImpl<
       if (value === undefined) continue;
       const storedName = storedNameOfCallerField(this.#storedNames(), key);
       const field = fields[key];
+      if (Array.isArray(value)) rejectPlaceholderList(value, key);
       const compared =
         isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
           ? wherePlaceholder(value, this.#placeholderField(key, field, field.type.codecId), key)
@@ -1145,6 +1160,7 @@ export class MongoCollectionImpl<
     const operand = (value: MongoValue): MongoValue => {
       if (isMongoPreparedParamRef(value))
         return wherePlaceholder(value, placeholderField, filter.field);
+      if (Array.isArray(value)) rejectPlaceholderList(value, filter.field);
       rejectPlaceholder(value, filter.field);
       return encode(value);
     };
@@ -1522,8 +1538,11 @@ export class MongoCollectionImpl<
   }
 
   /** A write runs at once, so a placeholder a `where` kept is refused before it is sent. */
-  #rejectFilterPlaceholders(): void {
-    for (const filter of this.#state.filters) rejectFilterPlaceholders(filter);
+  #rejectFilterPlaceholders(methodName: string): void {
+    for (const filter of this.#state.filters) {
+      const placeholder = placeholderInFilter(filter);
+      if (placeholder !== undefined) rejectPreparedWrite(methodName, placeholder);
+    }
   }
 
   #rejectWindowing(methodName: string): void {

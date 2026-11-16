@@ -51,12 +51,12 @@ describe('a prepared placeholder in the Mongo ORM', () => {
     expect(plans).toEqual([]);
   });
 
-  it('is refused as a top-level scalar field in an object-form update, which a where accepts', async () => {
+  it('is refused as a top-level scalar field in an object-form update, though a where accepts one there', async () => {
     const { executor, plans } = recordingExecutor();
     const users = createMongoCollection(collectionContext(contract, executor), 'User');
     const name = placeholder as unknown as string;
 
-    await expect(users.where({ name }).update({ name })).rejects.toMatchObject({
+    await expect(users.where({ email: 'a@b.c' }).update({ name })).rejects.toMatchObject({
       code: 'ORM.ARGUMENT_INVALID',
       meta: { name: 'value', field: 'name' },
     });
@@ -156,14 +156,23 @@ describe('a prepared placeholder in the Mongo ORM', () => {
     const usersOf = (executor: MongoQueryExecutor) =>
       createMongoCollection(collectionContext(contract, executor), 'User');
 
-    it.each<[string, (users: ReturnType<typeof usersOf>) => Promise<unknown>]>([
-      ['update', (users) => users.where({ name }).update({ loginCount: 1 })],
-      ['updateAll', async (users) => users.where({ name }).updateAll({ loginCount: 1 }).toArray()],
-      ['updateAndCount', (users) => users.where({ name }).updateAndCount({ loginCount: 1 })],
-      ['delete', (users) => users.where({ name }).delete()],
-      ['deleteAll', async (users) => users.where({ name }).deleteAll().toArray()],
-      ['deleteAndCount', (users) => users.where({ name }).deleteAndCount()],
+    it.each<[string, string, (users: ReturnType<typeof usersOf>) => Promise<unknown>]>([
+      ['update', 'update', (users) => users.where({ name }).update({ loginCount: 1 })],
       [
+        'updateAll',
+        'updateAll',
+        async (users) => users.where({ name }).updateAll({ loginCount: 1 }).toArray(),
+      ],
+      [
+        'updateAndCount',
+        'updateAndCount',
+        (users) => users.where({ name }).updateAndCount({ loginCount: 1 }),
+      ],
+      ['delete', 'delete', (users) => users.where({ name }).delete()],
+      ['deleteAll', 'deleteAll', async (users) => users.where({ name }).deleteAll().toArray()],
+      ['deleteAndCount', 'deleteAndCount', (users) => users.where({ name }).deleteAndCount()],
+      [
+        'upsert',
         'upsert',
         (users) =>
           users.where({ name }).upsert({
@@ -173,13 +182,18 @@ describe('a prepared placeholder in the Mongo ORM', () => {
       ],
       [
         'a write after a filter expression',
+        'deleteAndCount',
         (users) =>
           users.where(MongoOrExpr.of([MongoFieldFilter.eq('email', placeholder)])).deleteAndCount(),
       ],
-    ])('is refused by %s when it is called, and nothing is sent', async (_label, write) => {
+    ])('is refused by %s when it is called, and nothing is sent', async (_label, method, write) => {
       const { executor, plans } = recordingExecutor();
 
-      await expect((async () => write(usersOf(executor)))()).rejects.toMatchObject(refused);
+      await expect((async () => write(usersOf(executor)))()).rejects.toMatchObject({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `${method}() cannot run because the collection's where holds the prepared parameter 'value'. ORM writes run at once and cannot be prepared; use a prepared parameter only with .prepared.all(), .prepared.first() or .prepared.firstOrThrow().`,
+        meta: { name: 'value', method },
+      });
       expect(plans).toEqual([]);
     });
   });
