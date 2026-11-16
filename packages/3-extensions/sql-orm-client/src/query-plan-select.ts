@@ -1123,6 +1123,102 @@ function buildDistinctNonLeafChildRowsSelect(options: {
 }
 
 /**
+ * The aggregate of a scalar include, after the checks its `distinctOn` needs. The reducer's result is a value in its own right, so it enters the result under the codec the target declares for it (without which a count past 2^53 would arrive as a rounded JSON number) and through whatever expression that target wants built for it.
+ */
+function scalarAggregateOf(
+  contract: Contract<SqlStorage>,
+  aggregates: SqlAggregateDescriptorRegistry,
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+) {
+  const { state } = scalar;
+  if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
+    assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
+  }
+  return resolveAggregate({
+    aggregates,
+    contract,
+    namespaceId: include.relatedNamespaceId,
+    tableName: include.relatedTableName,
+    fn: scalar.fn,
+    column: scalar.column,
+  });
+}
+
+/** The statement of a scalar include read one query per relation: the aggregate of each parent's rows, grouped by the parent key. */
+function relatedScalarSelect(
+  contract: Contract<SqlStorage>,
+  aggregates: SqlAggregateDescriptorRegistry,
+  scope: TableScope,
+  parent: IncludeParent,
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+): SelectAst {
+  const {
+    codec: resultCodec,
+    input: inputCodec,
+    lower: resultLowering,
+  } = scalarAggregateOf(contract, aggregates, include, scalar);
+  const state = scalar.state;
+  const child = state.tables.root;
+  const rows = buildIncludeChildRowsSelect(
+    contract,
+    aggregates,
+    scope,
+    parent,
+    {
+      ...include,
+      nested: {
+        ...state,
+        selectedFields: scalar.column === undefined ? [] : [scalar.column],
+        includes: [],
+      },
+      scalar: undefined,
+      combine: undefined,
+    },
+    'parentJoin',
+  );
+  const { parentKey } = rows;
+  if (!pagesOrRemovesDuplicates(state)) {
+    const aggregate = buildIncludeAggregateExpr(
+      scalar,
+      scalar.column === undefined ? undefined : child.column(scalar.column),
+      resultLowering,
+      inputCodec,
+    );
+    return rows.childRows
+      .withProjection([
+        ...parentKey,
+        ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
+      ])
+      .withGroupBy(parentKey.map((key) => key.expr))
+      .withOrderBy([]);
+  }
+  const scalarAlias = scope.alias(`${include.relationName}__scalar`);
+  const groupKeys = parentKey.map((key) =>
+    ProjectionItem.of(key.alias, ColumnRef.of(scalarAlias, key.alias), key.codec),
+  );
+  const aggregate = buildIncludeAggregateExpr(
+    scalar,
+    scalar.column === undefined ? undefined : ColumnRef.of(scalarAlias, scalar.column),
+    resultLowering,
+    inputCodec,
+  );
+  return SelectAst.from(
+    DerivedTableSource.as(
+      scalarAlias,
+      withoutOrderUnlessDistinctOn(pagePerParent(scope, rows, state), state),
+    ),
+  )
+    .withProjection([
+      ...groupKeys,
+      ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
+    ])
+    .withGroupBy(groupKeys.map((key) => key.expr));
+}
+
+/**
  * Build the inner SELECT for a scalar include reducer (any operation the aggregate registry
  * contributes).
  *
@@ -1155,86 +1251,14 @@ function buildIncludeChildScalarSelect(
   parent: IncludeParent,
   include: IncludeExpr,
   scalar: IncludeScalar<unknown>,
-  tie: IncludeTie,
 ): SelectAst {
-  // The reducer's result is a value in its own right, so it enters the JSON
-  // envelope under the codec the target declares for it — without which a count
-  // past 2^53 would arrive as a rounded JSON number — and through whatever
-  // expression that target wants built for it.
   const {
     codec: resultCodec,
     input: inputCodec,
     lower: resultLowering,
-  } = resolveAggregate({
-    aggregates,
-    contract,
-    namespaceId: include.relatedNamespaceId,
-    tableName: include.relatedTableName,
-    fn: scalar.fn,
-    column: scalar.column,
-  });
+  } = scalarAggregateOf(contract, aggregates, include, scalar);
   const state = scalar.state;
   const child = state.tables.root;
-  if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
-    assertDistinctOnCapability(contract, 'distinctOn');
-    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
-  }
-  if (tie === 'parentJoin') {
-    const rows = buildIncludeChildRowsSelect(
-      contract,
-      aggregates,
-      scope,
-      parent,
-      {
-        ...include,
-        nested: {
-          ...state,
-          selectedFields: scalar.column === undefined ? [] : [scalar.column],
-          includes: [],
-        },
-        scalar: undefined,
-        combine: undefined,
-      },
-      'parentJoin',
-    );
-    const { parentKey } = rows;
-    if (!pagesOrRemovesDuplicates(state)) {
-      const aggregate = buildIncludeAggregateExpr(
-        scalar,
-        scalar.column === undefined ? undefined : child.column(scalar.column),
-        resultLowering,
-        inputCodec,
-      );
-      return rows.childRows
-        .withProjection([
-          ...parentKey,
-          ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
-        ])
-        .withGroupBy(parentKey.map((key) => key.expr))
-        .withOrderBy([]);
-    }
-    const scalarAlias = scope.alias(`${include.relationName}__scalar`);
-    const groupKeys = parentKey.map((key) =>
-      ProjectionItem.of(key.alias, ColumnRef.of(scalarAlias, key.alias), key.codec),
-    );
-    const aggregate = buildIncludeAggregateExpr(
-      scalar,
-      scalar.column === undefined ? undefined : ColumnRef.of(scalarAlias, scalar.column),
-      resultLowering,
-      inputCodec,
-    );
-    return SelectAst.from(
-      DerivedTableSource.as(
-        scalarAlias,
-        withoutOrderUnlessDistinctOn(pagePerParent(scope, rows, state), state),
-      ),
-    )
-      .withProjection([
-        ...groupKeys,
-        ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
-      ])
-      .withGroupBy(groupKeys.map((key) => key.expr));
-  }
   const parentLocalRefs = resolveParentLocalRefs(
     parent,
     include,
@@ -1488,7 +1512,6 @@ function buildIncludeChildCombineBranchSelect(
       parent,
       include,
       branch.selector,
-      'outerReference',
     );
   }
   // Row branch: synthesize an IncludeExpr whose `nested` is the
@@ -1563,7 +1586,6 @@ function buildCorrelatedIncludeProjection(
       parent,
       include,
       include.scalar,
-      'outerReference',
     );
     return {
       projection: ProjectionItem.of(include.relationName, SubqueryExpr.of(scalarSelect)),
@@ -1804,15 +1826,7 @@ export function relatedRowsSelect(
           buildIncludeChildRowsSelect(contract, aggregates, scope, parent, include, 'parentJoin'),
           include.nested,
         )
-      : buildIncludeChildScalarSelect(
-          contract,
-          aggregates,
-          scope,
-          parent,
-          include,
-          include.scalar,
-          'parentJoin',
-        );
+      : relatedScalarSelect(contract, aggregates, scope, parent, include, include.scalar);
   return {
     ast,
     parentKey: parentKeyOf(contract, parentTables.root).map((key) => key.alias),
