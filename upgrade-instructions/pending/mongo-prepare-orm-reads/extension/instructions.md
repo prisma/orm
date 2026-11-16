@@ -8,13 +8,14 @@ changes:
       matches:
         - ':\s{0,20}MongoCollection<[^<>]{0,200}(?:<[^<>]{0,200}>[^<>]{0,200}){0,4}>\s{0,20}=\s{0,20}\{'
         - '\bimplements\s{1,20}MongoCollection\b'
-  - id: mongo-prepare-member-removed
+  - id: mongo-prepare-member-moved
     summary: |
-      `MongoPrepareMember`, from `@prisma/orm-mongo/family-runtime`, is removed. `prepare` is declared on `MongoRuntime` itself, and `MongoClient`, from `@prisma/orm-mongo/runtime`, declares its own `prepare`, which also takes an ORM read and returns `MongoPreparedFrom<Params, Q>`.
+      `MongoPrepareMember` moved and changed meaning. It is no longer exported from `@prisma/orm-mongo/family-runtime`; it is exported from `@prisma/orm-mongo/runtime`, takes the contract as its type argument instead of codec types, and is the client's `prepare`, which also takes an ORM read and returns `MongoPreparedFrom<Params, Q>`. `MongoRuntime` declares its own `prepare`, which takes plans only.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\bMongoPrepareMember\b'
+        - 'import[^;]{0,300}\bMongoPrepareMember\b[^;]{0,300}from\s{0,20}[''"]@prisma/orm-mongo/family-runtime[''"]'
+        - ':\s{0,20}MongoPrepareMember\b(?!\s{0,20}<)'
   - id: mongo-where-filter-takes-placeholders
     summary: |
       `MongoWhereFilter`, from `@prisma/orm-mongo/orm`, lets each scalar field's value also be a `MongoPreparedParamRef`, the placeholder a `prepare` callback receives. Code that takes a `MongoWhereFilter` and reads a field's value as the field's type must handle the placeholder first.
@@ -50,9 +51,9 @@ const users: MongoCollection<Contract, 'User'> = {
 };
 ```
 
-## `mongo-prepare-member-removed`
+## `mongo-prepare-member-moved`
 
-Replace `MongoPrepareMember` with the type that has the `prepare` you call: `MongoRuntime` for a runtime, `MongoClient<Contract>` for a `mongo()` client. To name only the method, write `MongoRuntime['prepare']`.
+Import `MongoPrepareMember` from `@prisma/orm-mongo/runtime` and give it the contract: `MongoPrepareMember<Contract>` is the `prepare` of a `mongo()` client. Where you meant the runtime's `prepare`, write `MongoRuntime['prepare']`, or type the value as `MongoRuntime`.
 
 ## `mongo-where-filter-takes-placeholders`
 

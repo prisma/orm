@@ -1,5 +1,11 @@
 import type { RuntimeExecuteOptions } from '@internal/framework-components/runtime';
-import type { MongoCodecTypesBase } from '@internal/mongo-contract';
+import type {
+  AnyMongoTypeMaps,
+  ExtractMongoCodecTypes,
+  MongoCodecTypesBase,
+  MongoContract,
+  MongoContractWithTypeMaps,
+} from '@internal/mongo-contract';
 import type { MongoPreparable, MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-orm';
 import type {
   MongoDeclaration,
@@ -23,6 +29,23 @@ export type MongoPreparedFrom<Params, Q> =
     : Q extends MongoQueryPlan<infer Row, infer Command>
       ? MongoPreparedFor<Params, Row, Command>
       : never;
+
+/** The `prepare` member a client offers, typed by the client's contract. */
+export interface MongoPrepareMember<
+  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
+> {
+  /**
+   * Builds a reusable prepared statement from a plan or an ORM read (`.prepared.all()`, `.prepared.first()`, `.prepared.firstOrThrow()`). The callback runs once with one placeholder per declared name. A plan gives a `MongoPreparedStatement`, or a `MongoPreparedExecution` for updates and deletes; an ORM read gives a `MongoPreparedRowQuery` whose `query` returns the read's result.
+   */
+  prepare<
+    D extends MongoDeclaration<CT>,
+    Q extends MongoQueryPlan | MongoPreparable<unknown, unknown>,
+    CT extends MongoCodecTypesBase = ExtractMongoCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (placeholders: MongoPlaceholders<D>) => Q,
+  ): Promise<MongoPreparedFrom<MongoParamsFromDeclaration<D, CT>, Q>>;
+}
 
 export async function prepareMongoQuery<
   D extends MongoDeclaration<CT>,

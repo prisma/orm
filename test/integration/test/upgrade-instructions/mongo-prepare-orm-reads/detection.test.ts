@@ -21,16 +21,21 @@ describe('the mongo-collection-has-prepared detection', () => {
   });
 });
 
-describe('the mongo-prepare-member-removed detection', () => {
-  const matches = matcher('mongo-prepare-member-removed');
+describe('the mongo-prepare-member-moved detection', () => {
+  const matches = matcher('mongo-prepare-member-moved');
 
-  it('matches MongoPrepareMember, and not the prepared handle types', () => {
+  it('matches the old import and a use without the contract, and not the new client member', () => {
     expect([
-      matches('const prepare: MongoPrepareMember = runtime;'),
       matches("import type { MongoPrepareMember } from '@prisma/orm-mongo/family-runtime';"),
+      matches(
+        "import type {\n  MongoDeclaration,\n  MongoPrepareMember,\n} from '@prisma/orm-mongo/family-runtime';",
+      ),
+      matches('const prepare: MongoPrepareMember = runtime;'),
+      matches("import type { MongoPrepareMember } from '@prisma/orm-mongo/runtime';"),
+      matches('const member: MongoPrepareMember<Contract> = db;'),
+      matches('interface Db extends MongoPrepareMember<Contract> {}'),
       matches('let statement: MongoPreparedStatement<Params, Row>;'),
-      matches('let rows: MongoPreparedRowQuery<Params, Row[]>;'),
-    ]).toEqual([true, true, false, false]);
+    ]).toEqual([true, true, true, false, false, false, false]);
   });
 });
 

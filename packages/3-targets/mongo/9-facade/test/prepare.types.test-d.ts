@@ -3,6 +3,7 @@ import type { MongoQueryExecutor } from '@internal/mongo-orm';
 import type { MongoRuntime } from '@internal/mongo-runtime';
 import { describe, expectTypeOf, test } from 'vitest';
 import { defineContract, field, model, type } from '../src/exports/contract-builder';
+import type { MongoClient, MongoPrepareMember } from '../src/exports/runtime';
 import mongo from '../src/runtime/mongo';
 import mongoStatic from '../src/static/mongo-static';
 
@@ -144,6 +145,41 @@ describe('the handle db.prepare returns for an ORM read', () => {
       // @ts-expect-error -- email is a string field
       db.orm.accounts.where({ email: p.id }).prepared.all(),
     );
+  });
+});
+
+describe('MongoPrepareMember', () => {
+  type Contract = typeof contract;
+
+  test('is the prepare a client offers', () => {
+    expectTypeOf<MongoClient<Contract>>().toExtend<MongoPrepareMember<Contract>>();
+  });
+
+  test('types an ORM read and a plan as db.prepare does', async () => {
+    const member: MongoPrepareMember<Contract> = db;
+    const read = await member.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.first(),
+    );
+    const plan = await member.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.query
+        .from('accounts')
+        .match((f) => f.email.eq(p.email))
+        .build(),
+    );
+    const viaClientRead = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.first(),
+    );
+    const viaClientPlan = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.query
+        .from('accounts')
+        .match((f) => f.email.eq(p.email))
+        .build(),
+    );
+
+    expectTypeOf(read).toEqualTypeOf(viaClientRead);
+    expectTypeOf(plan).toEqualTypeOf(viaClientPlan);
+    // @ts-expect-error -- 'mongo/missing@1' is not one of the contract's codecs
+    void member.prepare({ email: 'mongo/missing@1' }, () => db.query.from('accounts').build());
   });
 });
 

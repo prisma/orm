@@ -3,25 +3,12 @@ import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/ru
 import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
-  ExtractMongoCodecTypes,
-  MongoCodecTypesBase,
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
-import type {
-  MongoOrmClient,
-  MongoPreparable,
-  MongoQueryPlan,
-  MongoRawClient,
-} from '@internal/mongo-orm';
+import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
-import type {
-  MongoDeclaration,
-  MongoMiddleware,
-  MongoParamsFromDeclaration,
-  MongoPlaceholders,
-  MongoRuntime,
-} from '@internal/mongo-runtime';
+import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
 import {
   createMongoExecutionStack,
   createMongoRuntime,
@@ -40,7 +27,7 @@ import {
 } from './binding';
 import { mongoError } from './mongo-errors';
 import type { MongoTargetId } from './mongo-target-id';
-import { type MongoPreparedFrom, prepareMongoQuery } from './prepared-row-query';
+import { type MongoPrepareMember, prepareMongoQuery } from './prepared-row-query';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
@@ -50,7 +37,7 @@ type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, Any
  */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> {
+> extends MongoPrepareMember<TContract> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -59,17 +46,6 @@ export interface MongoClient<
   readonly context: MongoExecutionContext<TContract>;
   connect(bindingInput?: MongoBindingInput): Promise<MongoRuntime>;
   runtime(): Promise<MongoRuntime>;
-  /**
-   * Builds a reusable prepared statement from a plan or an ORM read (`.prepared.all()`, `.prepared.first()`, `.prepared.firstOrThrow()`). The callback runs once with one placeholder per declared name. A plan gives a `MongoPreparedStatement`, or a `MongoPreparedExecution` for updates and deletes; an ORM read gives a `MongoPreparedRowQuery` whose `query` returns the read's result.
-   */
-  prepare<
-    D extends MongoDeclaration<CT>,
-    Q extends MongoQueryPlan | MongoPreparable<unknown, unknown>,
-    CT extends MongoCodecTypesBase = ExtractMongoCodecTypes<TContract>,
-  >(
-    declaration: D,
-    callback: (placeholders: MongoPlaceholders<D>) => Q,
-  ): Promise<MongoPreparedFrom<MongoParamsFromDeclaration<D, CT>, Q>>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
 }
