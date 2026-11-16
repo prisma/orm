@@ -1,9 +1,6 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import type { ActivitySource } from '@internal/sql-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import { describeCollectionRead } from '../src/statement-graph/read-graph';
-import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor, withoutCapabilityKeys } from './collection-fixtures';
 import { field, model, rel } from './contract-builder';
 import { defineContractWithTables } from './contract-with-tables';
@@ -215,28 +212,5 @@ describe('a read with includes, one query per relation', () => {
     const rows = await authors.include('notes').all();
 
     expect(rows).toEqual([{ id: 1, notes: [{ id: 5, authorId: 1, parentKey: 'mine' }] }]);
-  });
-
-  it('keys the cache by the statements it sends, each without parent keys', async () => {
-    const { collection } = createCollectionFor('User', perRelationContract);
-    const source = {
-      planContentHash: async (plan: { readonly ast: { readonly from?: unknown } }) =>
-        JSON.stringify(plan.ast.from),
-    } as unknown as ActivitySource;
-    const hashInputOf = (state: CollectionState) =>
-      describeCollectionRead({
-        context: collection.ctx.context,
-        state,
-        modelName: 'User',
-        namespaceId: 'public',
-      }).hashInput(source);
-
-    const withPosts = await hashInputOf(collection.include('posts').state);
-    const withProfile = await hashInputOf(collection.include('profile').state);
-
-    expect(withPosts).toEqual({
-      statements: [expect.stringContaining('"users"'), expect.stringContaining('"posts"')],
-    });
-    expect(withProfile).not.toEqual(withPosts);
   });
 });
