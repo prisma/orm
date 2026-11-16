@@ -6,6 +6,7 @@ import type { WrittenRowOwner } from '../written-keys';
 import type { ColumnMapping, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
 import { anyOf, withColumns } from './filtered-statement';
+import { chunkKeys } from './key-chunks';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import { type Requires, requirementUnmet } from './requires';
 import type { Rows } from './rows';
@@ -49,9 +50,10 @@ export class FindByKeys extends StatementNode<Keyed> {
     if (requirementUnmet(inputs.requires) || keys.length === 0) {
       return rowsResult([]);
     }
-    const chunks = Array.from({ length: Math.ceil(keys.length / KEYS_PER_STATEMENT) }, (_, index) =>
-      keys.slice(index * KEYS_PER_STATEMENT, (index + 1) * KEYS_PER_STATEMENT),
-    );
+    const chunks = chunkKeys(keys, {
+      parameters: KEYS_PER_STATEMENT * this.keyColumns.length,
+      bytes: Number.POSITIVE_INFINITY,
+    });
     const { owner } = this;
     const statementFor = (chunk: readonly StorageRow[]) => this.#statementFor(chunk);
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
