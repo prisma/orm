@@ -253,11 +253,12 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
     timeout,
   );
 
-  it.for([
+  it.for<{ readonly flags: readonly string[]; readonly given: string }>([
     { flags: [], given: 'without --permit-policy-change' },
     { flags: ['--permit-policy-change'], given: 'with --permit-policy-change' },
   ])(
     'applies a ref without policies to a database with none, $given, and records none',
+    { timeout },
     async ({ flags }, test) => {
       await withProject(test, async (project) => {
         await planTo(project, 'base', 'initial');
@@ -286,7 +287,6 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         });
       });
     },
-    timeout,
   );
 
   it(
