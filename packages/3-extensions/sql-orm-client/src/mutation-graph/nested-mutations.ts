@@ -6,6 +6,7 @@ import {
   columnOfContractField,
   type ResolvedRelation,
   resolveModelTableName,
+  resolvePolymorphismInfo,
   resolveRelationTargetColumns,
 } from '../collection-contract';
 import { type CollectionTables, createStatementTables } from '../collection-tables';
@@ -97,13 +98,47 @@ function nestedCreate(
   parsed: ParsedMutationInput,
   keysFromParent: readonly KeySource[],
   returns: Returns,
+  variantValue: string | undefined,
 ): NodeId {
   return addCreateWithRelations(t, model, parsed, {
     keysFromParent,
     returns,
     shape: allColumns,
-    variantValue: undefined,
+    variantValue,
   });
+}
+
+function baseTableVariantOf(
+  contract: Contract<SqlStorage>,
+  related: Model,
+  name: string,
+  mutation: Extract<Mutation, { kind: 'create' }>,
+): string | undefined {
+  const { variant: value } = mutation;
+  if (value === undefined) {
+    return undefined;
+  }
+  const variant = resolvePolymorphismInfo(
+    contract,
+    related.namespaceId,
+    related.modelName,
+  )?.variants.get(value);
+  if (variant?.strategy === 'mti') {
+    throw ormError(
+      'ORM.OPERATION_UNSUPPORTED',
+      `create() nested mutation for relation "${name}" cannot create variant "${variant.modelName}" of model "${related.modelName}" because the variant is stored in its own table`,
+      {
+        meta: {
+          kind: 'create',
+          relation: name,
+          model: related.modelName,
+          variant: variant.modelName,
+          reason: 'mti-variant',
+        },
+      },
+    );
+  }
+  return value;
 }
 
 export function addBeforeWrite(
@@ -218,6 +253,7 @@ function addParentOwned(
         parseCreateInput(t, related, row, relatedCollection),
         [],
         'rows',
+        baseTableVariantOf(contract, related, name, mutation),
       ),
       columns,
     };
@@ -256,17 +292,19 @@ function addChildOwned(
     return;
   }
   if (mutation.kind === 'create') {
+    const variantValue = baseTableVariantOf(contract, related, name, mutation);
     const keys = [{ from: parent, columns: fromParent }];
     const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
     if (rows.some((row) => row.relationMutations.length > 0)) {
       for (const row of rows) {
-        nestedCreate(t, related, row, keys, 'count');
+        nestedCreate(t, related, row, keys, 'count', variantValue);
       }
       return;
     }
     addChildInserts(
       t,
       related,
+      variantValue,
       rows.map((row) => row.scalarData),
       keys,
     );
@@ -362,9 +400,17 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
+    const variantValue = baseTableVariantOf(contract, related, name, mutation);
     for (const row of mutation.data) {
       addLink(
-        nestedCreate(t, related, parseCreateInput(t, related, row, relatedCollection), [], 'rows'),
+        nestedCreate(
+          t,
+          related,
+          parseCreateInput(t, related, row, relatedCollection),
+          [],
+          'rows',
+          variantValue,
+        ),
         undefined,
       );
     }
@@ -481,10 +527,11 @@ function sourcesOf(
 function addChildInserts(
   t: Translation,
   model: Model,
+  variantValue: string | undefined,
   rows: readonly Readonly<Record<string, unknown>>[],
   keys: readonly KeySource[],
 ): void {
-  const values = rows.map((row) => createRowOf(t.context, model, undefined, row, undefined));
+  const values = rows.map((row) => createRowOf(t.context, model, variantValue, row, undefined));
   insertRows(t, model, values, {
     conflict: undefined,
     keys,

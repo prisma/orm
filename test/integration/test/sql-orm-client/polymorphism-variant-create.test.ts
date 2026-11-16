@@ -24,6 +24,7 @@ async function setupPolySchema(runtime: PgIntegrationRuntime): Promise<void> {
       severity text,
       project_id integer,
       reporter_id integer,
+      pinned_by_id integer unique,
       bug_assignee_person_id integer
     )
   `);
@@ -68,6 +69,7 @@ describe('integration/polymorphism-variant-create', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 1,
             assigneeId: null,
           },
@@ -77,6 +79,7 @@ describe('integration/polymorphism-variant-create', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 3,
             assigneeId: null,
           },

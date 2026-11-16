@@ -1,14 +1,36 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
+import { Collection } from '../src/collection';
 import {
   createRelationMutator,
   isRelationMutationCallback,
   isRelationMutationDescriptor,
+  type RelationCollection,
 } from '../src/relation-mutator';
 import type { RelationMutator } from '../src/types';
 import { createCollectionFor } from './collection-fixtures';
-import type { TestContract } from './helpers';
+import {
+  buildMixedPolyContract,
+  buildTestContextFromContract,
+  createMockRuntime,
+  type TestContract,
+} from './helpers';
 
 const posts = createCollectionFor('Post').collection;
+const tasks = new Collection(
+  { runtime: createMockRuntime(), context: buildTestContextFromContract(buildMixedPolyContract()) },
+  'Task',
+  { namespaceId: 'public' },
+);
+
+interface PolymorphicMutator {
+  variant(value: string): { create(data: object | readonly object[]): unknown };
+}
+
+function variantOf(related: RelationCollection<Contract<SqlStorage>, string>, value: string) {
+  return (createRelationMutator(related) as unknown as PolymorphicMutator).variant(value);
+}
 
 describe('relation-mutator', () => {
   it('createRelationMutator() normalizes create/connect/disconnect payloads', () => {
@@ -75,6 +97,22 @@ describe('relation-mutator', () => {
     base.where({ id: 2 });
 
     expect(base.deleteAll()).toEqual({ kind: 'deleteAll', state: posts.where({ id: 1 }).state });
+  });
+
+  it('variant().create() carries the variant value with one row or an array', () => {
+    const bugs = variantOf(tasks, 'bug');
+
+    expect(Object.keys(bugs)).toEqual(['create']);
+    expect(bugs.create({ title: 'Crash' })).toEqual({
+      kind: 'create',
+      data: [{ title: 'Crash' }],
+      variant: 'bug',
+    });
+    expect(bugs.create([{ title: 'Crash' }, { title: 'Hang' }])).toEqual({
+      kind: 'create',
+      data: [{ title: 'Crash' }, { title: 'Hang' }],
+      variant: 'bug',
+    });
   });
 
   it('descriptor and callback guards validate mutation values', () => {
