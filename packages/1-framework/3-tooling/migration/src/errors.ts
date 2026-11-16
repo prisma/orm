@@ -3,6 +3,8 @@ import {
   ACCESS_WIDENING_LEVELS,
   CHANGE_STRATEGIES,
   DATA_LOSS_LEVELS,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
   type DeclaredDatabasePoliciesIssue,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
@@ -256,25 +258,41 @@ function alternatives(values: readonly string[], conjunction: 'or' | 'and' = 'or
 const REF_FILE_SHAPE =
   'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.';
 
-const POLICY_VALUES: Readonly<Record<string, readonly string[]>> = {
-  'dataProtection.dataLoss': DATA_LOSS_LEVELS,
-  'dataProtection.accessWidening': ACCESS_WIDENING_LEVELS,
+type DatabasePoliciesKey = (typeof DATABASE_POLICIES_KEYS)[number];
+type DataProtectionKey = (typeof DATA_PROTECTION_KEYS)[number];
+
+const DATA_PROTECTION_VALUES: Readonly<Record<DataProtectionKey, readonly string[]>> = {
+  dataLoss: DATA_LOSS_LEVELS,
+  accessWidening: ACCESS_WIDENING_LEVELS,
 };
+
+/** How to correct each top-level key of a ref's `policies`, given its key path as printed. */
+const POLICY_KEY_FIXES: Readonly<Record<DatabasePoliciesKey, (key: string) => string>> = {
+  change: (key) =>
+    `Set ${key} to a non-empty list whose items are ${alternatives(CHANGE_STRATEGIES)}.`,
+  dataProtection: (key) =>
+    `Set ${key} to an object with ${alternatives(DATA_PROTECTION_KEYS, 'and')}, each optional.`,
+};
+
+function isOneOf<T extends string>(values: readonly T[], value: string | undefined): value is T {
+  return values.some((candidate) => candidate === value);
+}
 
 /** How to correct one invalid key of a ref's `policies`: its allowed values, or its removal when the key is not one a declaration has. */
 function policyIssueFix({ path }: DeclaredDatabasePoliciesIssue): string {
-  const key = path === '' ? 'policies' : `policies.${path}`;
-  if (path === '')
-    return `Set ${key} to an object with "change" and "dataProtection", each optional.`;
-  if (path === 'change') {
-    return `Set ${key} to a non-empty list of ${alternatives(CHANGE_STRATEGIES, 'and')}.`;
+  if (path === '') {
+    return `Set policies to an object with ${alternatives(DATABASE_POLICIES_KEYS, 'and')}, each optional.`;
   }
+  const key = `policies.${path}`;
+  const [first, second, ...rest] = path.split('.');
   if (/^change\[\d+\]$/.test(path)) return `Set ${key} to ${alternatives(CHANGE_STRATEGIES)}.`;
-  if (path === 'dataProtection') {
-    return `Set ${key} to an object with "dataLoss" and "accessWidening", each optional.`;
+  if (second === undefined && isOneOf(DATABASE_POLICIES_KEYS, first)) {
+    return POLICY_KEY_FIXES[first](key);
   }
-  const values = POLICY_VALUES[path];
-  return values === undefined ? `Remove ${key}.` : `Set ${key} to ${alternatives(values)}.`;
+  if (first === 'dataProtection' && rest.length === 0 && isOneOf(DATA_PROTECTION_KEYS, second)) {
+    return `Set ${key} to ${alternatives(DATA_PROTECTION_VALUES[second])}.`;
+  }
+  return `Remove ${key}.`;
 }
 
 /** `MIGRATION.INVALID_REF_FILE`; `policyIssues` are the invalid keys of the ref's `policies`, which the fix names. */

@@ -75,7 +75,7 @@ describe('a ref that declares policies', () => {
     [
       'an empty change policy',
       { change: [] },
-      'Set policies.change to a non-empty list of "migrate" and "reconcile".',
+      'Set policies.change to a non-empty list whose items are "migrate" or "reconcile".',
     ],
     [
       'an unknown level',

@@ -329,7 +329,7 @@ describe('errorInvalidRefFile', () => {
     },
     {
       path: 'change',
-      fix: 'Set policies.change to a non-empty list of "migrate" and "reconcile".',
+      fix: 'Set policies.change to a non-empty list whose items are "migrate" or "reconcile".',
     },
     {
       path: 'dataProtection.dataLoss',
