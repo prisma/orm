@@ -112,6 +112,7 @@
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",
