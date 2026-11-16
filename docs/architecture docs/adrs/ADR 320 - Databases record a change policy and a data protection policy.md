@@ -91,11 +91,11 @@ A command given a ref (`db migrate --to <ref>`, `db update --to <ref>`, a Compos
 - **They differ:** the command fails with `MIGRATION.POLICY_MISMATCH`.
 - **They differ and the command was given `--permit-policy-change`** (Composer: `permitPolicyChange`): the run is checked against the ref's policies, runs, and writes them into the marker when it succeeds. If the policies are the only difference, it writes the policies and nothing else.
 
-A command given no ref, or a ref that declares nothing, never changes a policy.
+A command given no ref, or a ref that declares nothing, never changes a policy. A ref that declares nothing is accepted with `--permit-policy-change` and changes nothing. Given `--permit-policy-change` (Composer: `permitPolicyChange`) without a ref, the command fails with `CLI.INVALID_ARGUMENTS` before it connects, because there is nothing it could write.
 
 The consent is explicit because a command that enforced a policy and also rewrote it from whatever ref it was handed would override the policy it enforces: an agent with an edited ref, or a branch deploying to a shared database, would loosen it without anyone deciding to. The consent is a flag on the deploy, not a separate command, because a CI/CD pipeline can only deploy what is committed: a reviewed change to the ref and the migration it allows ship in the same deploy.
 
-No error ever suggests the flag. An agent that has run out of ideas acts on whatever an error offers it, and an error that offered `--permit-policy-change` would have that agent loosen production's policy to get its deploy through. The flag is documented in the command's help and in the `prisma-8` skill.
+No error or advice offers the flag unless the user gave it in the command being repeated. Advice that repeats the user's command, or names the command the ref's policy permits, repeats the flag the user gave, and never adds it. An agent that has run out of ideas acts on whatever an error offers it, and an error that offered `--permit-policy-change` would have that agent loosen production's policy to get its deploy through. The flag is documented in the command's help and in the `prisma-8` skill.
 
 The policies are written when the run succeeds, so a failed deploy never leaves a database with a loosened policy and none of the change that needed it. On Postgres, SQLite and MySQL the write is part of the run's transaction. MongoDB has no transaction around a run, so it writes the policies with the application space's marker after the last migration.
 
