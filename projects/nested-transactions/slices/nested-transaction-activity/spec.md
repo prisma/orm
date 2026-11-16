@@ -40,7 +40,7 @@ One framework file, its tests, and the two documents that describe its rules (th
 ## Scope
 
 **In:**
-- `packages/1-framework/1-core/framework-components/src/execution/transaction-activity.ts`: the settlement type, the savepoint rules above, and updated docstrings (`TransactionSettlement`, `TransactionActivityRun.end`, `startTransactionActivity`, `TransactionActivityOptions.parent`).
+- `packages/1-framework/1-core/framework-components/src/execution/transaction-activity.ts`: the settlement type and the savepoint rules above. Existing comments stay unchanged and no new comments are added.
 - `packages/1-framework/1-core/framework-components/test/transaction-activity.test.ts`: new tests. Existing fixtures from `test/client-activity-fixtures.ts` may be used. Adding fixtures there is allowed if it keeps the tests short.
 - `docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md`: "When an activity is finalized" (savepoint rules) and the `startTransactionActivity` paragraph (release settlement, transaction parent).
 - `docs/architecture docs/adrs/ADR 271 - …md`: amend the finalization section and the "Nested transactions, when built, …" consequence bullet to record decision 6: released savepoints wait for the outermost transaction, rolled-back savepoints finalize at once, failure forwarding by settlement, and how a middleware recognizes a savepoint.

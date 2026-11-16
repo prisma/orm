@@ -17,16 +17,14 @@ import type {
   TransactionActivity,
 } from './runtime-middleware';
 
-/**
- * How a transaction settled. An outermost transaction settles by `commit` or `rollback`; a savepoint, a transaction started beneath a transaction, by `release` (`RELEASE SAVEPOINT`) or `rollback` (`ROLLBACK TO SAVEPOINT`). A `commit` on a savepoint, or a `release` on an outermost transaction, is outside the contract and is not checked.
- */
+/** How a transaction's `commit()` or `rollback()` settled. */
 export type TransactionSettlement =
   | { readonly by: 'commit'; readonly outcome: 'succeeded' | 'failed' }
   | { readonly by: 'release'; readonly outcome: 'succeeded' | 'failed' }
   | {
       readonly by: 'rollback';
       readonly outcome: 'succeeded' | 'failed';
-      /** Whether `commit()`, or on a savepoint the release, was attempted before this rollback. */
+      /** Whether `commit()` was called before this rollback. */
       readonly commitAttempted: boolean;
     };
 
@@ -39,8 +37,6 @@ export interface TransactionActivityRun<TContext extends ActivityContext = Activ
   stopAcceptingChildren(): void;
   /**
    * Ends the transaction: its `activityEnded` hooks, then the `activityFinalized` hooks of the activities beneath it that have ended, in post-order (each activity's children in the order they started, depth first, then the activity), then its own. Resolves after those hooks have run. An activity still open is finalized when it ends, with this transaction's outcome; `end` does not wait for it. A second call does nothing. An `activityEnded` error after a successful settlement is rethrown once finalization has run.
-   *
-   * A savepoint that rolls back is finalized this way at once, `rolled-back`, and passes no statement failure up. A released savepoint passes a statement failure beneath it up, and its parent holds it and its subtree for the enclosing transaction to finalize with its own outcome.
    */
   end(settlement: TransactionSettlement): Promise<void>;
 }
@@ -48,14 +44,14 @@ export interface TransactionActivityRun<TContext extends ActivityContext = Activ
 export interface TransactionActivityOptions<TContext extends ActivityContext> {
   readonly middleware: ReadonlyArray<ActivityObserver>;
   readonly context: ActivityContextFields<TContext>;
-  /** The open activity the transaction starts beneath, such as a client activity. Beneath a transaction, or a client activity inside one, the transaction is a savepoint. */
+  /** The open activity the transaction starts beneath, such as a client activity. */
   readonly parent: ActivityParent | undefined;
   /** Whether the transaction keeps its finished children to finalize them when it ends. A runtime decides this once, when it is created: only when a middleware implements `activityFinalized`. Without it, the transaction keeps nothing but whether a statement beneath it failed. */
   readonly holdFinishedChildren: boolean;
 }
 
 /**
- * Starts a transaction activity and runs its `activityStarted` hooks. When one of them throws, the transaction ends `failed`, is finalized `rolled-back`, and the error is rethrown; a savepoint refused this way leaves its enclosing transaction's outcome unchanged. Rejects at once, running no hook, when `parent` no longer accepts children.
+ * Starts a transaction activity and runs its `activityStarted` hooks. When one of them throws, the transaction ends `failed`, is finalized `rolled-back`, and the error is rethrown. Rejects at once, running no hook, when `parent` no longer accepts children.
  */
 export async function startTransactionActivity<TContext extends ActivityContext>(
   options: TransactionActivityOptions<TContext>,
