@@ -386,7 +386,7 @@ A to-one relation takes at most one operation: an array of two or more is refuse
 
 ### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares, as a collection's `variant()` does. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
 
 #### Creating rows
 
@@ -405,7 +405,7 @@ await db.Project.where({ id: 1 }).update({
 
 #### Connecting and disconnecting rows
 
-`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` take the same criteria as `r.connect` and `r.disconnect` and find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error, as for a missing row. `r.variant(value).disconnect()` without criteria unlinks every related row of the variant and leaves rows of other variants linked.
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
@@ -417,7 +417,7 @@ On a relation the record holds the key for, `disconnect` is not available on a v
 
 #### Updating and deleting rows of a variant
 
-`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. The `where` callback receives the fields of the base model and of the variant, as a variant collection's `where` does; the object form takes the base model's fields. `updateAll` data takes the base model's fields only, as `updateAll` on a variant collection does: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`.
+`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. `updateAll` data takes the base model's fields only: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
@@ -428,7 +428,7 @@ await db.Project.where({ id: 1 }).update({
 });
 ```
 
-`deleteAll` on a variant stored in its own table deletes the base rows, as `deleteAll` on a variant collection does; the variant rows are removed by the variant table's foreign key to the base table, which a PSL contract declares with a cascading delete for every variant stored in its own table. PSL is the contract source that declares variants; the TypeScript contract builder does not.
+`deleteAll` on a variant stored in its own table deletes the base rows; the variant rows are removed by the variant table's foreign key to the base table, which the PSL contract declares with a cascading delete.
 
 ### Updating and deleting related rows
 
