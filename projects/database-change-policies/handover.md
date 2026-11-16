@@ -4,7 +4,7 @@ Written 2026-11-11 by the agent eratosthenes-31, ahead of a rate limit. It repla
 
 ## Where things stand, in one paragraph
 
-Slice 1 is merged. Slice 3 is finished and waits only for Will's review: [prisma/orm#30926](https://github.com/prisma/orm/pull/30926), branch `tml-3727-policies`, head `51aebff741`. At that head, CI passes, the PR has no merge conflicts, every review thread is resolved and Auto-fix is on. Slices 4 (orm), 2 and 5 (composer) have not started. Will wants to talk the whole project through with Serhii next; the documents to give Serhii are listed under "Read these first".
+Slice 1 is merged. Slice 3 is finished and waits only for Will's review: [prisma/orm#30926](https://github.com/prisma/orm/pull/30926), branch `tml-3727-policies`. On 2026-11-17 the agent aslan-59 merged main three times, ran two more rounds of `/drive-code-review` and a full manual QA through the real CLI on Postgres and SQLite (`wip/qa/transcript.md` in its worktree), and fixed what they found: advice that repeats a command now repeats the flags the user gave, a refusal that comes from the ref names the ref and prints the command that works, `--permit-policy-change` without a ref is refused with `CLI.INVALID_ARGUMENTS`, and the ADR became 320. The review records are in `slices/3-policies/reviews/`. Slices 4 (orm), 2 and 5 (composer) have not started. Will wants to talk the whole project through with Serhii next; the documents to give Serhii are listed under "Read these first".
 
 ## Read these first
 
