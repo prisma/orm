@@ -30,6 +30,12 @@ Behaviour of every driver:
 
 The savepoint name is checked before anything is sent. A name that is not a plain identifier (`/^[A-Za-z_][A-Za-z0-9_]*$/`) is rejected with an error and no statement reaches the database. The runtime (slice 3) generates names from a counter, so this check never fails for runtime-generated names; it exists so that no string reaches the SQL text unchecked. Put the check in one function next to the interface in `@internal/sql-relational-core` (all three drivers already depend on that package at runtime), and throw an error of the same kind the drivers use for other invalid arguments (compare `validatePostgresIsolationLevel`).
 
+Class structure, the same in every driver:
+
+- Each driver has a **separate savepoint class** that implements `SqlTransaction`. Its `commit()` sends `RELEASE SAVEPOINT name`, its `rollback()` sends `ROLLBACK TO SAVEPOINT name`, and its `savepoint(name)` opens another savepoint and returns a new instance of the savepoint class.
+- The existing transaction class stays as it is on `main`. Its constructor takes no statements, settle functions or hooks for savepoints. The only change is a new `savepoint(name)` method that sends `SAVEPOINT name` and returns an instance of the savepoint class.
+- The savepoint class never touches the connection's transaction state, so it needs no no-op hooks.
+
 Per driver:
 
 - **Postgres** (`packages/3-targets/postgres/3-driver/src/postgres-driver.ts`): each of the three statements takes the client query lock (`acquireClientQueryLock`), checks the client with `assertClientUsable` and maps errors with `rethrowClientError`, exactly as `BEGIN`, `COMMIT` and `ROLLBACK` do. Settling a savepoint never touches `SharedTransactionState`: `open` stays `true` and `unfinishedOnServer` is unchanged, so the cursor portal-protection wrap and connection release behave as they do inside a plain transaction. Only the outer transaction's `commit()`/`rollback()` clears that state.
