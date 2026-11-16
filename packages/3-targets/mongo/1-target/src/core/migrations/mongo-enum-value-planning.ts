@@ -35,10 +35,6 @@ import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { collectionControlPolicy, modelCoordinates } from './mongo-statement-planning';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
-  CANNOT_PICK_VARIANT_OBJECTS,
-  insideVariantText,
-  insideVariantWarning,
-  isInsideVariant,
   type StoredPlace,
   type StoredType,
   storedPlacesOf,
@@ -65,8 +61,6 @@ export interface EnumValueRewrite {
 export interface EnumValueRewrites {
   readonly replacements: readonly EnumValueRewrite[];
   readonly removals: readonly EnumValueRewrite[];
-  /** One for each removal the plan leaves out because the enum is inside a variant of an embedded model. */
-  readonly warnings: readonly MigrationPlannerConflict[];
 }
 
 /** A place documents hold values of an enum: a root field, or a key at a path inside one. */
@@ -363,14 +357,6 @@ function unlistedRefusal(
   unlisted: UnlistedPlace,
 ): MigrationPlannerConflict {
   const where = `field "${unlisted.field}" of collection "${unlisted.collection}"`;
-  if (isInsideVariant(unlisted)) {
-    return refused(
-      enums,
-      change,
-      insideVariantText(unlisted),
-      `${CANNOT_PICK_VARIANT_OBJECTS} Rewrite ${where} in a dataTransform operation of migration.ts.`,
-    );
-  }
   return unlisted.reach.kind === 'containsItself'
     ? refused(
         enums,
@@ -410,13 +396,12 @@ export function planEnumValueRewrites(
   input: EnumValueInput,
 ): Result<EnumValueRewrites, readonly MigrationPlannerConflict[]> {
   const { fromContract, contract } = input;
-  if (fromContract === null) return ok({ replacements: [], removals: [], warnings: [] });
+  if (fromContract === null) return ok({ replacements: [], removals: [] });
   const valueRenames = input.statements.filter(
     (statement): statement is ResolvedEnumValueRenameStatement => statement.entity === 'enumValue',
   );
   const replacements: EnumValueRewrite[] = [];
   const removals: EnumValueRewrite[] = [];
-  const warnings: MigrationPlannerConflict[] = [];
   const conflicts: MigrationPlannerConflict[] = [];
   for (const [namespaceId, namespace] of Object.entries(fromContract.domain?.namespaces ?? {})) {
     for (const [enumName, originEnum] of Object.entries(namespace.enum ?? {})) {
@@ -430,10 +415,9 @@ export function planEnumValueRewrites(
       }
       replacements.push(...found.value.replacements);
       removals.push(...found.value.removals);
-      warnings.push(...found.value.warnings);
     }
   }
-  return conflicts.length > 0 ? notOk(conflicts) : ok({ replacements, removals, warnings });
+  return conflicts.length > 0 ? notOk(conflicts) : ok({ replacements, removals });
 }
 
 function planEnum(
@@ -481,27 +465,14 @@ function planEnum(
       return notOk([mergingRefusal(enums, statement, from, to, merged.name)]);
     }
   }
-  if (checked.length === 0) return ok({ replacements: [], removals: [], warnings: [] });
+  if (checked.length === 0) return ok({ replacements: [], removals: [] });
   const overlapping = overlappingChanges(checked);
   const advice = enumTwoMigrationsAdvice(enums);
   const places = placesOfEnum(contract, namespaceId, enumName);
   if (!places.ok) {
-    const unlisted = places.failure;
-    if (isInsideVariant(unlisted) && checked.every((change) => change.statement === undefined)) {
-      return ok({
-        replacements: [],
-        removals: [],
-        warnings: checked.map((change) =>
-          insideVariantWarning(
-            `remove ${enumValueText(enums.fromContract, change.enumValue)}`,
-            unlisted,
-          ),
-        ),
-      });
-    }
     const [first] = checked;
     return first === undefined
-      ? ok({ replacements: [], removals: [], warnings: [] })
+      ? ok({ replacements: [], removals: [] })
       : notOk([
           unlistedRefusal(
             enums,
@@ -578,7 +549,7 @@ function planEnum(
       });
     }
   }
-  return ok({ replacements, removals, warnings: [] });
+  return ok({ replacements, removals });
 }
 
 /** The refusals of the places a change rewrites: keys MongoDB cannot rewrite, unmanaged collections for a rename, time-series and shared collections. */

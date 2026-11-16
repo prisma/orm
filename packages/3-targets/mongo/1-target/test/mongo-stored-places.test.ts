@@ -154,6 +154,30 @@ describe('storedPlacesOf', () => {
     ]);
   });
 
+  it('throws for an embedded model with variants, which contract validation refuses', () => {
+    expect(() =>
+      placesOf(
+        LINE,
+        'embedded variants',
+        {
+          Order: {
+            collection: 'orders',
+            fields: ['_id'],
+            embeds: { lines: { field: 'lines', model: 'Line', cardinality: '1:N' } },
+          },
+          Line: {
+            owner: 'Order',
+            fields: ['kind'],
+            discriminator: 'kind',
+            variants: { Gift: 'gift' },
+          },
+          Gift: { base: 'Line', fields: ['note'] },
+        },
+        { orders: {} },
+      ),
+    ).toThrow('Embedded model "Line" has variants, which contract validation refuses');
+  });
+
   it('refuses a root field that holds the type through a value object that contains itself', () => {
     expect(
       placesOf(

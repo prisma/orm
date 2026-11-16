@@ -37,10 +37,6 @@ import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
-  CANNOT_PICK_VARIANT_OBJECTS,
-  insideVariantText,
-  insideVariantWarning,
-  isInsideVariant,
   type StoredPlace,
   type StoredType,
   storedPlacesOf,
@@ -62,12 +58,6 @@ export interface StoredKeyFill {
   /** The temporary value as the target writes it; `undefined` for a backfill. */
   readonly text: string | undefined;
   readonly statement: NestedBackfillStatement | undefined;
-}
-
-/** The fills of keys a plan makes, and a warning for each fill it leaves out because the key is inside a variant of an embedded model. */
-export interface StoredKeyFills {
-  readonly fills: readonly StoredKeyFill[];
-  readonly warnings: readonly MigrationPlannerConflict[];
 }
 
 /** A field of a value object or an embedded model that the destination makes required, new or once optional. */
@@ -284,14 +274,6 @@ function unlistedRefusal(
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
     `Fill the key in ${placeText(place)} in a dataTransform operation of migration.ts, or ${advice}.`;
-  if (isInsideVariant(place)) {
-    return refused(
-      required,
-      contracts,
-      insideVariantText(place),
-      (advice) => `${CANNOT_PICK_VARIANT_OBJECTS} ${byHand(advice)}`,
-    );
-  }
   if (place.reach.kind === 'containsItself') {
     return refused(
       required,
@@ -413,7 +395,7 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
  */
 export function planStoredKeyFills(
   input: StoredKeyFillInput,
-): Result<StoredKeyFills, readonly MigrationPlannerConflict[]> {
+): Result<readonly StoredKeyFill[], readonly MigrationPlannerConflict[]> {
   const { fromContract, contract } = input;
   const required =
     fromContract === null
@@ -432,13 +414,10 @@ export function planStoredKeyFills(
         refusedStatement: statement,
       }),
     );
-  if (fromContract === null) {
-    return conflicts.length > 0 ? notOk(conflicts) : ok({ fills: [], warnings: [] });
-  }
+  if (fromContract === null) return conflicts.length > 0 ? notOk(conflicts) : ok([]);
   const contracts = { fromContract, contract };
   const placesOf = storedPlacesOf(contract);
   const fills: StoredKeyFill[] = [];
-  const warnings: MigrationPlannerConflict[] = [];
   for (const each of required) {
     const temporary =
       each.statement === undefined && each.isNew
@@ -447,10 +426,6 @@ export function planStoredKeyFills(
     if (each.statement === undefined && temporary === undefined) continue;
     const places = placesOf(each.type);
     if (!places.ok) {
-      if (each.statement === undefined && isInsideVariant(places.failure)) {
-        warnings.push(insideVariantWarning(`fill ${fieldText(each, contract)}`, places.failure));
-        continue;
-      }
       conflicts.push(unlistedRefusal(each, places.failure, contracts));
       continue;
     }
@@ -490,7 +465,7 @@ export function planStoredKeyFills(
       });
     }
   }
-  return conflicts.length > 0 ? notOk(conflicts) : ok({ fills, warnings });
+  return conflicts.length > 0 ? notOk(conflicts) : ok(fills);
 }
 
 /** A field of a value object or an embedded model at one place documents hold it. */
