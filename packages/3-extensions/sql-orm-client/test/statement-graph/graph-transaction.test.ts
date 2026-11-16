@@ -116,7 +116,7 @@ describe('the transaction a graph runs in', () => {
       })),
     });
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
-    const users = collection.include('posts').where({ id: 1 }) as unknown as {
+    const users = collection.include('posts').where({ name: 'Ada' }) as unknown as {
       update(data: unknown): Promise<unknown>;
     };
 
@@ -165,7 +165,7 @@ describe('the transaction a graph runs in', () => {
       })),
     });
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
-    const users = collection.include('posts').where({ id: 1 }) as unknown as {
+    const users = collection.include('posts').where({ name: 'Ada' }) as unknown as {
       update(data: unknown): Promise<unknown>;
     };
 
