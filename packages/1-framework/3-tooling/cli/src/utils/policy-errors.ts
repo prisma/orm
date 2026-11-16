@@ -59,6 +59,8 @@ export function errorChangePolicyForbids(args: {
   readonly source: ChangePolicySource;
   /** The contract the refused command was moving the database to. */
   readonly targetHash: string;
+  /** The ref the user named, and whether they gave `--permit-policy-change`, which the advised command repeats. */
+  readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -70,12 +72,21 @@ export function errorChangePolicyForbids(args: {
   const refusal = command === 'db sign' ? 'may not sign it' : 'may not move it';
   const why = `${holder} change: ${change.join(', ')}, so ${command} ${refusal}.`;
   const meta = { spaceId, command, change };
-  const toTarget =
-    source.kind === 'ref'
-      ? ['--to', shellQuoted(source.refName), '--permit-policy-change']
-      : ['--to', args.targetHash];
+  const ref = source.kind === 'ref' ? { name: source.refName, permitPolicyChange: true } : args.ref;
+  const toRef =
+    ref === undefined
+      ? []
+      : [
+          '--to',
+          shellQuoted(ref.name),
+          ...(ref.permitPolicyChange ? ['--permit-policy-change'] : []),
+        ];
   if (command === 'db migrate') {
-    const reconcile = cliCommand(invocation, 'db update', toTarget);
+    const reconcile = cliCommand(
+      invocation,
+      'db update',
+      ref === undefined ? ['--to', args.targetHash] : toRef,
+    );
     return new ActionableCliError(
       'MIGRATION.CHANGE_POLICY_FORBIDS',
       `${policyHolder} permits only db update`,
@@ -87,7 +98,7 @@ export function errorChangePolicyForbids(args: {
       },
     );
   }
-  const migrate = cliCommand(invocation, 'db migrate', source.kind === 'ref' ? toTarget : []);
+  const migrate = cliCommand(invocation, 'db migrate', toRef);
   const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}, then apply it with ${migrate}.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',

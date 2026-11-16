@@ -69,4 +69,29 @@ describe('checkRunPolicies', () => {
       toWrite: undefined,
     });
   });
+
+  it("advises db update to the ref the user named when the marker's policy refuses db migrate", () => {
+    const result = checkRunPolicies({
+      command: 'db migrate',
+      appSpaceId: 'app',
+      inForce: { ...DEFAULT_DATABASE_POLICIES, change: ['reconcile'] },
+      ref: {
+        name: 'production',
+        hash: TARGET,
+        invariants: [],
+        policies: { dataProtection: { dataLoss: 'data-loss-forbidden' } },
+      },
+      permitPolicyChange: true,
+      targetHash: TARGET,
+      invocation: undefined,
+    });
+    const reconcile = '{bin} db update --to production --permit-policy-change';
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
+      summary: "This database's change policy permits only db update",
+      why: 'The marker records change: reconcile, so db migrate may not move it.',
+      nextActions: [{ kind: 'run-command', label: 'Reconcile the database', command: reconcile }],
+    });
+  });
 });

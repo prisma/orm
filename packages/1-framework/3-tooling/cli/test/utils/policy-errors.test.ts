@@ -153,4 +153,49 @@ describe('errorChangePolicyForbids', () => {
       meta: { spaceId: 'app', command: 'db migrate', change: ['reconcile'] },
     });
   });
+
+  it.each([
+    {
+      permitPolicyChange: true,
+      reconcile: '{bin} db update --to production --permit-policy-change --db <url>',
+    },
+    { permitPolicyChange: false, reconcile: '{bin} db update --to production --db <url>' },
+  ])(
+    "names the ref the user gave when the marker's policy refuses db migrate, repeating --permit-policy-change only when given: $permitPolicyChange",
+    ({ permitPolicyChange, reconcile }) => {
+      expect(
+        errorChangePolicyForbids({
+          spaceId: 'app',
+          command: 'db migrate',
+          change: ['reconcile'],
+          source: { kind: 'marker' },
+          targetHash: TARGET,
+          ref: { name: 'production', permitPolicyChange },
+          invocation,
+        }).toEnvelope(),
+      ).toMatchObject({
+        summary: "This database's change policy permits only db update",
+        why: 'The marker records change: reconcile, so db migrate may not move it.',
+        fix: `Reconcile the database: ${reconcile}`,
+        nextActions: [{ kind: 'run-command', label: 'Reconcile the database', command: reconcile }],
+      });
+    },
+  );
+
+  it("names the ref the user gave when the marker's policy refuses db update", () => {
+    const recovery =
+      'Author a migration with {bin} migration plan, then apply it with {bin} db migrate --to production --db <url>.';
+
+    expect(
+      errorChangePolicyForbids({
+        spaceId: 'app',
+        command: 'db update',
+        change: ['migrate'],
+        source: { kind: 'marker' },
+        targetHash: TARGET,
+        ref: { name: 'production', permitPolicyChange: false },
+        invocation,
+      }).toEnvelope(),
+    ).toMatchObject({ fix: recovery, nextActions: [{ kind: 'user-choice', label: recovery }] });
+  });
 });

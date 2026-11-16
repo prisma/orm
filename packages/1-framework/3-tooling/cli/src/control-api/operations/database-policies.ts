@@ -94,6 +94,10 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
+        ref:
+          ref === undefined
+            ? undefined
+            : { name: ref.name, permitPolicyChange: args.permitPolicyChange },
         invocation: args.invocation,
       }),
     );
