@@ -218,6 +218,25 @@ The runner needs to know what some operations are: which field a cast changes an
 
 This `meta` is unrelated to the third argument of `collMod(collection, options, meta)`, which sets the operation's `id`, `label`, `operationClass` and `checkDocuments` when it is built and is not written as `meta`. `castField` and `fillField` write `rewrite`, whose `kind` is the kind the planner's rewrite refusals use. The runner reads these, rather than working the facts out of the operation's pipelines. A data transform is known by its class, `data`. `renameField` and `unsetField` write no `meta`, so committed migrations that hold them emit the same `ops.json`; the runner still reads their `$rename` and `$unset`.
 
+#### Rewrites below the top level
+
+Value objects and embedded models live inside a document's fields, and enum values and discriminator values live in fields at any depth. The planner rewrites them with operations that take SQL's names and shape, with the root field in the column's place:
+
+```ts
+renameStoredKey({ collection: 'users', field: 'addresses', path: '$[*].street', to: 'line1' })
+removeStoredKey({ collection: 'users', field: 'addresses', path: '$[*].street' })
+fillStoredKey({ collection: 'users', field: 'home', path: '$.zip', value: { $literal: '' } })
+replaceStoredValue({ collection: 'tasks', field: 'status', from: 'open', to: { $literal: 'active' } })
+removeStoredValue({ collection: 'tasks', field: 'tags', value: 'old' })
+deleteDocuments({ collection: 'tasks', filter: { type: 'bug' } })
+```
+
+`path` is a JSONPath in SQL's grammar: member names and wildcards from `$`, ending at a key. A wildcard selects the elements of a list. Each key, value and fill operation is one `updateMany` whose update is a pipeline built from one walk of the path. The same walk builds its filter, precheck and postcheck. Every step leaves a missing or `null` value, or a value of another shape, as it is, and a list step uses `$map`, so a missing list is not turned into `null`. Filters read lists with `$expr` and `$anyElementTrue`, not dot paths, since a dot path matches across different elements. Every constant is wrapped in `$literal`. A pipeline is used rather than `arrayFilters` because `$rename` takes no positional operators, and one pipeline expresses a conditional rename, fill or removal per element at any depth. Every rewrite skips document validation, as `renameField` does, and takes an optional `filter` that limits it to one variant's documents.
+
+`renameStoredKey`, `fillStoredKey` and `replaceStoredValue` are `widening`. `removeStoredKey`, `removeStoredValue` and `deleteDocuments` are `destructive`. Each key and value operation writes `meta.rewrite` with its kind, collection, field and path, as `castField` does. `removeStoredValue` with `required: true` gets a precheck that no document holds the value outside a list, and its `meta.rewrite` carries the value and the enum value, so the runner counts the documents and names the edit that keeps them. A rename's precheck stops when an object holds both keys. Each postcheck holds once no document needs the rewrite, so a re-run skips it.
+
+The planner refuses enum value swaps and chains, and variant changes where one operation frees a discriminator value another takes. SQL plans these through a temporary value in one transaction. MongoDB applies a migration's operations one at a time, without a transaction, and a re-run after a later operation stops runs again every operation whose postcheck does not hold. In a swap of `a` and `b`, the first replacement moves `a` away and a later one writes `a` back. The first replacement's postcheck, that no document holds `a`, fails both before the swap starts and after it finishes, so it cannot tell them apart, and a re-run would apply it a second time. Recording which operations finished would break the rule that each operation is self-contained, so the planner refuses these plans and says to make the change in two migrations.
+
 #### DML execution
 
 DML `run` commands execute via `MongoAdapter.lower()` → `MongoDriver.execute()` — the same adapter+driver transport used for runtime queries. No bespoke DML executor is needed; the adapter lowers each `MongoQueryPlan` to a wire command, and the driver executes it against the database.
