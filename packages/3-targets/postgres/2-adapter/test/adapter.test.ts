@@ -648,6 +648,9 @@ describe('Postgres adapter', () => {
     expect(adapter.profile.capabilities['sql']).toMatchObject({
       returning: true,
       insertOnConflictTarget: true,
+      jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
     });
     expect(typeof adapter.profile.readMarker).toBe('function');
   });

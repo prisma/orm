@@ -15,7 +15,7 @@ const stack = createControlStack({
 });
 
 describe('the MariaDB control adapter descriptor', () => {
-  it('names MariaDB, its own codec types module, and MySQL capabilities with returning off', () => {
+  it('names MariaDB, its own codec types module, and MySQL capabilities without returning or the one-query include', () => {
     expect({
       targetId: mariadbAdapter.targetId,
       id: mariadbAdapter.id,
@@ -25,7 +25,15 @@ describe('the MariaDB control adapter descriptor', () => {
     }).toEqual({
       targetId: 'mariadb',
       id: 'mariadb',
-      capabilities: { sql: { ...mysqlAdapterCapabilities.sql, returning: false } },
+      capabilities: {
+        sql: {
+          ...mysqlAdapterCapabilities.sql,
+          returning: false,
+          jsonAgg: true,
+          outerReferencesInDerivedTables: false,
+          jsonAggWithoutTruncation: false,
+        },
+      },
       codecTypesImport: {
         package: '@internal/adapter-mariadb/codec-types',
         named: 'CodecTypes',
