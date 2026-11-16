@@ -114,7 +114,7 @@ describe.each(tables)(
 
     it('counts the deleted rows on a database without RETURNING', async () => {
       const { rows, runtime } = rowsOf(modelName, 'join', 'without RETURNING');
-      runtime.setNextStats([{ rowCount: 0 }]);
+      runtime.setNextStats([{ affectedRows: 0 }]);
 
       await rows.deleteAndCount();
 
