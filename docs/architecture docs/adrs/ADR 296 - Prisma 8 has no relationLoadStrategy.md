@@ -12,7 +12,7 @@ Never. Prisma 8 has no switch between loading relations with database joins and 
 
 ## Context
 
-Prisma 7's `relationLoadStrategy: 'join' | 'query'` chooses between one statement with database joins and one query per relation. Will Madden decided on 2026-10-22: never. In his words: "relationLoadStrategy was a hack in old versions of prisma which performed in-memory joins and relationLoadStrategy was the feature flag to get newer behavior using DB joins. there's no use case to support it in prisma 8." The motivation is to avoid the in-memory joins of Prisma 5 to 7, not to forbid more than one statement: the ORM client "is a client, not a query builder, it orchestrates multiple queries. the middleware activity representation allows us to express this as a tree similar to otel."
+Prisma 7's `relationLoadStrategy: 'join' | 'query'` chooses between one statement with database joins and one query per relation. Will Madden decided on 2026-10-22: never. In his words: "relationLoadStrategy was a hack in old versions of prisma which performed in-memory joins and relationLoadStrategy was the feature flag to get newer behavior using DB joins. there's no use case to support it in prisma 8." The motivation is that the database does whatever it can do: joining, filtering, ordering, paging and aggregating. The ORM client attaches rows to their parents in memory only where the database cannot run the one-query include. Prisma 5 to 7 paged, filtered and aggregated related rows in memory; Prisma 8 never does. The ORM client still sends several statements where it needs to: it "is a client, not a query builder, it orchestrates multiple queries. the middleware activity representation allows us to express this as a tree similar to otel."
 
 ## Consequences
 

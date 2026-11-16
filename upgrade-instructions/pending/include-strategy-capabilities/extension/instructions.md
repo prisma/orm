@@ -32,8 +32,8 @@ A MariaDB contract gains only `"jsonAgg": true`: MariaDB does not report the oth
 Add the three keys to your adapter's `sql` capability group, each set to `true` only where your database meets it:
 
 - `jsonAgg`: the database aggregates rows into a JSON array.
-- `outerReferencesInDerivedTables`: a subquery in a `FROM` clause can refer to a column of the outer query.
-- `jsonAggWithoutTruncation`: a JSON aggregate never truncates its result, whatever the server's settings.
+- `outerReferencesInDerivedTables`: a reference to the outer query resolves inside a derived table in a subquery.
+- `jsonAggWithoutTruncation`: an oversized JSON aggregate fails or cannot be decoded, and never comes back as a shorter valid array.
 
 ```ts
 export const myAdapterCapabilities = {
