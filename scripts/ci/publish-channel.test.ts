@@ -69,9 +69,11 @@ describe('getPackageDistTag', () => {
     })
   }
 
-  test('refuses to publish prisma under dev', () => {
-    assert.throws(() => getPackageDistTag('prisma', 'dev'), /prisma\/prisma-cli owns it.*"prev-dev"/)
-  })
+  for (const tag of ['dev', 'next']) {
+    test(`refuses to publish prisma under ${tag}`, () => {
+      assert.throws(() => getPackageDistTag('prisma', tag), /prisma\/prisma-cli owns it.*"prev-dev"/)
+    })
+  }
 })
 
 describe('getNextMinorStable', () => {

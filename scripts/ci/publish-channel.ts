@@ -11,6 +11,8 @@ export const PRISMA_STABLE_DIST_TAG = 'prev'
 
 const PRISMA_MAJOR = 7
 
+const PRISMA_CLI_OWNED_DIST_TAGS: ReadonlySet<string> = new Set(['latest', 'dev', 'next'])
+
 export type PublishChannelInput = {
   branch: string | undefined
   patchBranch: string | null
@@ -46,14 +48,14 @@ export function getPublishChannel({
 
 /**
  * Returns the npm dist-tag to publish `pkgName` under. Every publish goes through this, including a custom dist tag.
- * Throws if `prisma` would land on `dev`, which prisma/prisma-cli owns.
+ * Throws if `prisma` would land on a tag prisma/prisma-cli owns.
  */
 export function getPackageDistTag(pkgName: string, tag: string): string {
   if (pkgName !== 'prisma') return tag
   if (tag === 'latest') return PRISMA_STABLE_DIST_TAG
-  if (tag === 'dev') {
+  if (PRISMA_CLI_OWNED_DIST_TAGS.has(tag)) {
     throw new Error(
-      `Refusing to publish prisma under the "dev" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 dev builds use "${DEV_DIST_TAG}".`,
+      `Refusing to publish prisma under the "${tag}" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 dev builds use "${DEV_DIST_TAG}".`,
     )
   }
   return tag
