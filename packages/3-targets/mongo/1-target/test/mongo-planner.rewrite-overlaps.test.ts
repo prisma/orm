@@ -341,6 +341,87 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
     ]);
   });
 
+  describe('when a variant stores that name itself', () => {
+    const tasks = (
+      seed: string,
+      base: Record<string, FieldTypeSpec>,
+      bug: Record<string, FieldTypeSpec>,
+      storedAs: { readonly base?: Record<string, string>; readonly bug?: Record<string, string> },
+    ) =>
+      contract(
+        seed,
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'type', ...Object.keys(base)],
+            types: { _id: OBJECT_ID, ...base },
+            ...(storedAs.base === undefined ? {} : { storedAs: storedAs.base }),
+            discriminator: 'type',
+            variants: { Bug: 'bug', Epic: 'epic' },
+          },
+          Bug: {
+            collection: 'tasks',
+            fields: Object.keys(bug),
+            types: bug,
+            ...(storedAs.bug === undefined ? {} : { storedAs: storedAs.bug }),
+            base: 'Task',
+          },
+          Epic: { collection: 'tasks', fields: [], base: 'Task' },
+        },
+        { tasks: {} },
+      );
+    const renameTask = renameField('Task', 'b', 'Task', 'a');
+
+    it("removes the variant's field, and refuses a base field renamed onto its name", () => {
+      expect(
+        refused(
+          plan({
+            from: tasks('from', { b: OPTIONAL_STRING }, { a: OPTIONAL_STRING }, {}),
+            to: tasks('to', { a: OPTIONAL_STRING }, {}, {}),
+            schema: [schemaCollection('tasks')],
+            statements: [renameTask],
+          }),
+        ),
+      ).toEqual([
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename field "Task.b" to "Task.a": the migration writes a field that another of its operations reads (Rename field b to a in collection tasks; Remove field a from collection tasks in documents whose type is "bug")',
+          why: why('field', REMOVE_ADVICE('field')),
+          refusedStatement: renameTask,
+          leaveOut: undefined,
+        },
+      ]);
+    });
+
+    it("removes the variant's field stored under the name the rename takes through @map", () => {
+      expect(
+        refused(
+          plan({
+            from: tasks(
+              'from',
+              { b: OPTIONAL_STRING },
+              { c: OPTIONAL_STRING },
+              { base: { b: 'sb' }, bug: { c: 'sa' } },
+            ),
+            to: tasks('to', { a: OPTIONAL_STRING }, {}, { base: { a: 'sa' } }),
+            schema: [schemaCollection('tasks')],
+            statements: [renameTask],
+          }),
+        ),
+      ).toEqual([
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename field "Task.b" to "Task.a": the migration writes a field that another of its operations reads (Rename field sb to sa in collection tasks; Remove field sa from collection tasks in documents whose type is "bug")',
+          why: why('field', REMOVE_ADVICE('field')),
+          refusedStatement: renameTask,
+          leaveOut: undefined,
+        },
+      ]);
+    });
+  });
+
   it('removes the key a value object stores under that name, and refuses the plan', () => {
     expect(
       refused(

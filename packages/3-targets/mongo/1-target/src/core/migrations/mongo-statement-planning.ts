@@ -747,16 +747,47 @@ function rootDocumentsLosing(
   };
 }
 
-/** The renames of fields of the origin model at `origin` whose stored name changes: from the origin's stored name to the destination's. */
+function modelAndBaseCoordinatesOf(
+  contract: ContractWithDomain,
+  model: ModelCoordinate,
+): readonly ModelCoordinate[] {
+  const chain: ModelCoordinate[] = [];
+  let current: ModelCoordinate | undefined = model;
+  while (current !== undefined) {
+    const next: ModelCoordinate = current;
+    if (chain.some((seen) => sameModel(seen, next))) break;
+    chain.push(next);
+    const base = modelAt(contract, next)?.base;
+    current =
+      base === undefined
+        ? undefined
+        : { namespaceId: asNamespaceId(base.namespace), model: base.model };
+  }
+  return chain;
+}
+
+/**
+ * The renames that move a field the documents of the origin model at `origin` store, from the
+ * origin's stored name to the destination's: of its own fields, and of its bases' fields unless its
+ * destination model stores the field itself, so the rename leaves its documents alone.
+ */
 function storedNameMoves(
   input: ModelMatchInput,
   origin: ModelCoordinate,
 ): readonly { readonly from: string; readonly to: string }[] {
+  const bases = modelAndBaseCoordinatesOf(input.fromContract, origin).slice(1);
+  const destination = destinationModelOf(origin, input);
+  const destinationModel =
+    destination === undefined ? undefined : modelAt(input.contract, destination);
   return input.statements.flatMap((statement) => {
-    if (statement.entity !== 'field' || !sameModel(statement.from, origin)) return [];
+    if (statement.entity !== 'field') return [];
     const from = storedFieldNameAt(input.fromContract, statement.from);
     const to = storedFieldNameAt(input.contract, statement.to);
-    return from === undefined || to === undefined || from === to ? [] : [{ from, to }];
+    if (from === undefined || to === undefined || from === to) return [];
+    if (sameModel(statement.from, origin)) return [{ from, to }];
+    const ofABase = bases.some((base) => sameModel(statement.from, base));
+    const keptByDestination = destinationModel !== undefined && ownStores(destinationModel, from);
+    return ofABase && !keptByDestination ? [{ from, to }] : [];
   });
 }
 
