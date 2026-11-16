@@ -1208,7 +1208,9 @@ export class MongoCollectionImpl<
     if (field === undefined && this.#modelFields()[head] !== undefined) {
       rejectUnknownPathPlaceholder(value, path);
     }
-    if (field?.type.kind === 'valueObject') rejectValueObjectPlaceholder(value, path);
+    if (field?.type.kind === 'valueObject') {
+      rejectValueObjectPlaceholder(value, path, Boolean(field.many));
+    }
     rejectPlaceholder(value, path);
   }
 
@@ -1245,7 +1247,7 @@ export class MongoCollectionImpl<
     }
 
     if (field.type.kind === 'valueObject') {
-      rejectValueObjectPlaceholder(value, path);
+      rejectValueObjectPlaceholder(value, path, Boolean(field.many));
       const voDef = this.#valueObjectAt(field.type);
       if (!voDef) return ormParam(value, path);
 

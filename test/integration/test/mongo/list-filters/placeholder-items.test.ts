@@ -39,3 +39,20 @@ describe('a placeholder on one item of a list, in a filter-expression where', ()
     },
   );
 });
+
+describe('a placeholder as an item of a value-object list', () => {
+  it('is refused at the item path', async () => {
+    const db = mongo({ contract });
+    const filter = MongoFieldFilter.eq('optionalEntries', [nullableItem]);
+
+    expect(() => db.orm.lists.where(filter)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          "A prepared parameter stands for one scalar value, so the prepared parameter 'item' cannot stand for the value object at 'optionalEntries.0'.",
+        meta: { name: 'item', field: 'optionalEntries.0' },
+      }),
+    );
+    await db.close();
+  });
+});

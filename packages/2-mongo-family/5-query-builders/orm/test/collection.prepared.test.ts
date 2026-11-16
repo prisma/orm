@@ -306,11 +306,18 @@ describe('a placeholder in a filter-expression where', () => {
       'home',
     ],
     [
-      'an item of a value-object list',
+      'an array given for a single value object',
       'home',
       [city],
-      "A prepared parameter stands for one scalar value, so the prepared parameter 'city' cannot stand for the value object at 'home.0'.",
-      'home.0',
+      "A prepared parameter stands for one scalar value, so the prepared parameter 'city' cannot stand for the value object at 'home'.",
+      'home',
+    ],
+    [
+      'a path through an embed relation',
+      'addresses.city',
+      { city },
+      "The prepared parameter 'city' cannot be used for 'addresses.city'. A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset.",
+      'addresses.city',
     ],
   ])('is refused on %s when the where is built', (_label, path, value, message, field) => {
     const { executor } = recordingExecutor();

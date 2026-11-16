@@ -29,6 +29,12 @@ function recordingExecutor() {
 }
 
 const placeholder = new MongoPreparedParamRef('value', 'mongo/string@1', false);
+const valueRefused = (field: string) => ({
+  code: 'ORM.ARGUMENT_INVALID',
+  message: `The prepared parameter 'value' cannot be used for '${field}'. ORM writes run at once, and a value-object literal is built with the query, so neither can take a prepared parameter. In a read, compare the scalar field with it directly in a filter expression, such as where(MongoFieldFilter.eq('${field}', ...)).`,
+  meta: { name: 'value', field },
+});
+
 const refused = {
   code: 'ORM.ARGUMENT_INVALID',
   meta: { name: 'value', field: expect.any(String) },
@@ -47,7 +53,7 @@ describe('a prepared placeholder in the Mongo ORM', () => {
         tags: [],
         homeAddress: null,
       }),
-    ).rejects.toMatchObject(refused);
+    ).rejects.toMatchObject(valueRefused('name'));
     expect(plans).toEqual([]);
   });
 
@@ -81,7 +87,7 @@ describe('a prepared placeholder in the Mongo ORM', () => {
 
     expect(() =>
       users.where({ homeAddress: { city: placeholder as unknown as string, country: 'FR' } }),
-    ).toThrow(expect.objectContaining(refused));
+    ).toThrow(expect.objectContaining(valueRefused('homeAddress.city')));
     expect(plans).toEqual([]);
   });
 

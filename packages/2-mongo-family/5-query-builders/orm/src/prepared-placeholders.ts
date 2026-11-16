@@ -31,6 +31,17 @@ export function rejectPlaceholder(value: unknown, path: string): void {
   );
 }
 
+/** Refuses a prepared placeholder in a value the ORM wraps as a parameter, which is a write payload or a value-object literal, with `ORM.ARGUMENT_INVALID`. */
+export function rejectPlaceholderValue(value: unknown, path: string): void {
+  const placeholder = findPlaceholder(value);
+  if (placeholder === undefined) return;
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `The prepared parameter '${placeholder.name}' cannot be used for '${path}'. ORM writes run at once, and a value-object literal is built with the query, so neither can take a prepared parameter. In a read, compare the scalar field with it directly in a filter expression, such as where(MongoFieldFilter.eq('${path}', ...)).`,
+    { meta: { name: placeholder.name, field: path } },
+  );
+}
+
 /** Refuses a list that holds a prepared placeholder as an item with `ORM.ARGUMENT_INVALID`: a declaration has no list form. */
 export function rejectPlaceholderList(value: readonly unknown[], path: string): void {
   const placeholder = value.find(isMongoPreparedParamRef);
@@ -53,11 +64,13 @@ export function rejectUnknownPathPlaceholder(value: unknown, path: string): void
   );
 }
 
-/** Refuses a prepared placeholder given as a whole value object, or as an item of a value-object list, with `ORM.ARGUMENT_INVALID`. */
-export function rejectValueObjectPlaceholder(value: unknown, path: string): void {
-  const items = Array.isArray(value)
-    ? value.map((item, index) => [item, `${path}.${index}`] as const)
-    : [[value, path] as const];
+/** Refuses a prepared placeholder given as a whole value object, or as an item of a value-object list, with `ORM.ARGUMENT_INVALID`. An array given for a single value object is reported at the field's path. */
+export function rejectValueObjectPlaceholder(value: unknown, path: string, list: boolean): void {
+  const items = !Array.isArray(value)
+    ? [[value, path] as const]
+    : list
+      ? value.map((item, index) => [item, `${path}.${index}`] as const)
+      : value.map((item) => [item, path] as const);
   for (const [item, itemPath] of items) {
     if (!isMongoPreparedParamRef(item)) continue;
     throw ormError(
