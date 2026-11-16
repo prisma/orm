@@ -101,8 +101,8 @@ describe('nested write graphs on a contract without capability "returning"', () 
       printGraph(updateFirstGraph(targetOf('User'), { name: 'Ada' }, parsed.relationMutations)),
     ).toBe(
       [
-        'n1 Find users where id = 1 limit 1',
-        "n2 Update users set name = 'Ada' <- FilterData n1 (id->id)",
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1 <- FilterData n1 (id->id)",
         'n3 Update posts set nothing where id = 10 <- PayloadData n2 (id->user_id)',
         'n4 Find users <- FilterData n2 (id->id)',
         'result: n4',
