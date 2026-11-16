@@ -44,7 +44,7 @@ describe('a relation callback that returns an array of operations', () => {
       }),
     ).toBe(
       [
-        'n1 Find users where id = 1 limit 1',
+        'n1 Find users where id = 1',
         'n2 Insert posts <- PayloadData n1 (id->user_id)',
         'n3 Update posts set nothing where id = 11 <- PayloadData n1 (id->user_id)',
         'n4 Update posts set user_id = null where id = 12 <- FilterData n1 (id->user_id)',
@@ -55,7 +55,7 @@ describe('a relation callback that returns an array of operations', () => {
 
   it('adds nothing for an empty array', () => {
     expect(printUpdate({ posts: () => [] })).toBe(
-      ['n1 Find users where id = 1 limit 1', 'result: n1'].join('\n'),
+      ['n1 Find users where id = 1', 'result: n1'].join('\n'),
     );
   });
 

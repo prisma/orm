@@ -490,6 +490,35 @@ class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction 
   async rollback(): Promise<void> {
     await this.underLock(() => this.client.rollback());
   }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    await this.underLock(() => this.client.query(`SAVEPOINT ${name}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, name);
+  }
+}
+
+class MysqlSavepointImpl extends MysqlHeldQueryable implements SqlTransaction {
+  constructor(
+    client: PoolConnection,
+    held: HeldState,
+    streams: boolean,
+    private readonly name: string,
+  ) {
+    super(client, held, streams);
+  }
+
+  async commit(): Promise<void> {
+    await this.underLock(() => this.client.query(`RELEASE SAVEPOINT ${this.name}`));
+  }
+
+  async rollback(): Promise<void> {
+    await this.underLock(() => this.client.query(`ROLLBACK TO SAVEPOINT ${this.name}`));
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    await this.underLock(() => this.client.query(`SAVEPOINT ${name}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, name);
+  }
 }
 
 /** How many clients the driver has handed out and not had back, a held connection or one lent to a single statement, so `close()` can wait until every one is back. */

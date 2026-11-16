@@ -66,7 +66,7 @@ export const contract = defineContract(
     const Profile = model('Profile', {
       fields: {
         id: field.column(type.sql.Char(27)).id().onCreate(gen.ksuid()),
-        userId: field.column(type.sql.Char(36)),
+        userId: field.column(type.sql.Char(36)).unique(),
         rank: field.column(integerColumn),
       },
     });

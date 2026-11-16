@@ -460,7 +460,13 @@
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "user_id"
+                  ]
+                }
+              ]
             },
             "users": {
               "columns": {
@@ -500,7 +506,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "bf2dd61ac8400278f86fa7290811312b35e2a75d886cbd507840748f14d515b6"
+    "storageHash": "601954881b042c891f3eac26ac3827a1c79730457a39a56eedd1135195393eec"
   },
   "execution": {
     "executionHash": "551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84",
