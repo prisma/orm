@@ -118,20 +118,23 @@ export type IncludeStrategy = 'join' | 'query';
 
 export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
 
-/** The Postgres adapter, reporting under `'query'` that the database cannot run the one-query include. */
-export function postgresAdapterFor(strategy: IncludeStrategy): typeof postgresAdapter {
-  if (strategy === 'join') {
-    return postgresAdapter;
-  }
+type CapabilityMatrix = Readonly<Record<string, Readonly<Record<string, boolean>>>>;
+
+const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
+  join: { jsonAgg: true, outerReferencesInDerivedTables: true, jsonAggWithoutTruncation: true },
+  query: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
+};
+
+/** The Postgres adapter reporting `reported`, and under `'query'` that the database cannot run the one-query include. */
+export function postgresAdapterFor(
+  strategy: IncludeStrategy,
+  reported: CapabilityMatrix = postgresAdapterCapabilities,
+): typeof postgresAdapter {
   return {
     ...postgresAdapter,
     capabilities: {
-      ...postgresAdapterCapabilities,
-      sql: {
-        ...postgresAdapterCapabilities.sql,
-        outerReferencesInDerivedTables: false,
-        jsonAggWithoutTruncation: false,
-      },
+      ...reported,
+      sql: { ...reported['sql'], ...strategyCapabilities[strategy] },
     },
   };
 }
@@ -156,47 +159,19 @@ export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionCon
   return testContexts[strategy];
 }
 
-const includeCapabilityKeys = [
-  'jsonAgg',
-  'outerReferencesInDerivedTables',
-  'jsonAggWithoutTruncation',
-] as const;
-
-/**
- * `context` with the three capabilities that choose the include strategy as `postgresAdapterFor(strategy)` reports them, as the runtime would merge them over the contract's.
- */
-export function withIncludeStrategy<TContract extends FrameworkContract<SqlStorage>>(
-  context: ExecutionContext<TContract>,
-  strategy: IncludeStrategy,
-): ExecutionContext<TContract> {
-  const reported =
-    (postgresAdapterFor(strategy).capabilities as Record<string, Record<string, boolean>>)['sql'] ??
-    {};
-  const capabilities = context.contract.capabilities as Record<string, Record<string, boolean>>;
-  return {
-    ...context,
-    contract: {
-      ...context.contract,
-      capabilities: {
-        ...capabilities,
-        sql: {
-          ...capabilities['sql'],
-          ...Object.fromEntries(includeCapabilityKeys.map((key) => [key, reported[key] === true])),
-        },
-      },
-    },
-  };
-}
-
-/** The shared context of `strategy` around a contract a test built itself. */
+/** A context for a contract a test built itself, whose capabilities the adapter reports, with the include strategy's. */
 export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
   contract: TContract,
   strategy: IncludeStrategy,
 ): ExecutionContext<TContract> {
-  return withIncludeStrategy(
-    { ...getTestContext(strategy), contract } as unknown as ExecutionContext<TContract>,
-    strategy,
-  );
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy, contract.capabilities),
+      extensions: [pgvectorRuntime],
+    }),
+  });
 }
 
 export type { PolyContract };

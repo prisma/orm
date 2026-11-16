@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Contract } from '../sql-builder/fixtures/generated/contract';
 import { type PlannedIndex, plannedExpressionIndexes } from '../sql-builder/full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from '../sql-builder/setup';
-import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
+import { contextFor, type IncludeStrategy, includeStrategies } from './helpers';
 import { withPlanRecording } from './runtime-helpers';
 
 const QUERY = 'zebra';
@@ -37,7 +37,7 @@ class PostCollection extends Collection<Contract, 'Post'> {
 describe('contributed collection methods', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  const { runtime, client, contract, context, lower } = setupIntegrationTest();
+  const { runtime, client, contract, lower } = setupIntegrationTest();
 
   let searchIndex: PlannedIndex;
 
@@ -68,7 +68,7 @@ describe('contributed collection methods', {
     });
     const client = orm({
       runtime: recording,
-      context: withIncludeStrategy(context(), strategy),
+      context: contextFor(contract(), strategy),
       collections: { Document: DocumentCollection, Post: PostCollection },
     });
     return { db: client.public, captured };

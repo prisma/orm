@@ -108,12 +108,17 @@ function buildStiIncludeContract(): TestContract {
   const tables = tablesOf(raw);
 
   const user = models['User']!;
-  user.fields['accountId'] = { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
+  user.fields['accountId'] = {
+    nullable: true,
+    many: false,
+    type: { kind: 'scalar', codecId: 'pg/int4@1' },
+  };
   user.storage.fields['accountId'] = { column: 'account_id' };
   tables['users']!.columns['account_id'] = {
     dataType: 'pg/int4',
     codecId: 'pg/int4@1',
     nullable: true,
+    many: false,
   };
 
   models['Account'] = {
@@ -132,8 +137,8 @@ function buildStiIncludeContract(): TestContract {
   };
   tables['accounts'] = {
     columns: {
-      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
-      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false, many: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -151,12 +156,17 @@ function buildMtiIncludeContract(): TestContract {
   const tables = tablesOf(raw);
 
   const task = models['Task']!;
-  task.fields['projectId'] = { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
+  task.fields['projectId'] = {
+    nullable: true,
+    many: false,
+    type: { kind: 'scalar', codecId: 'pg/int4@1' },
+  };
   task.storage.fields['projectId'] = { column: 'project_id' };
   tables['tasks']!.columns['project_id'] = {
     dataType: 'pg/int4',
     codecId: 'pg/int4@1',
     nullable: true,
+    many: false,
   };
 
   models['Project'] = {
@@ -175,8 +185,8 @@ function buildMtiIncludeContract(): TestContract {
   };
   tables['projects_tbl'] = {
     columns: {
-      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
-      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false, many: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
