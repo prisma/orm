@@ -37,6 +37,24 @@ describe('the mongo-prepare-member-moved detection', () => {
       matches('let statement: MongoPreparedStatement<Params, Row>;'),
     ]).toEqual([true, true, true, false, false, false, false]);
   });
+
+  it('matches a re-export from family-runtime', () => {
+    expect([
+      matches("export type { MongoPrepareMember } from '@prisma/orm-mongo/family-runtime';"),
+      matches("export { type MongoPrepareMember } from '@prisma/orm-mongo/family-runtime'"),
+    ]).toEqual([true, true]);
+  });
+
+  it('stays inside one import list in code without semicolons', () => {
+    const fixed = [
+      "import type { MongoPrepareMember } from '@prisma/orm-mongo/runtime'",
+      "import type { MongoDeclaration } from '@prisma/orm-mongo/family-runtime'",
+      '',
+      'export const member: MongoPrepareMember<Contract> = db',
+    ].join('\n');
+
+    expect(matches(fixed)).toBe(false);
+  });
 });
 
 describe('the mongo-where-filter-takes-placeholders detection', () => {

@@ -30,7 +30,7 @@ export type MongoPreparedFrom<Params, Q> =
       ? MongoPreparedFor<Params, Row, Command>
       : never;
 
-/** The `prepare` member a client offers, typed by the client's contract. */
+/** An object type that has the `prepare` method a client offers, typed by the client's contract. */
 export interface MongoPrepareMember<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 > {

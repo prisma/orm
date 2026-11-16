@@ -1,9 +1,18 @@
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { MongoQueryExecutor } from '@internal/mongo-orm';
-import type { MongoRuntime } from '@internal/mongo-runtime';
+import type { UpdateResult } from '@internal/mongo-query-builder';
+import type {
+  MongoPreparedExecution,
+  MongoPreparedStatement,
+  MongoRuntime,
+} from '@internal/mongo-runtime';
 import { describe, expectTypeOf, test } from 'vitest';
 import { defineContract, field, model, type } from '../src/exports/contract-builder';
-import type { MongoClient, MongoPrepareMember } from '../src/exports/runtime';
+import type {
+  MongoClient,
+  MongoPreparedRowQuery,
+  MongoPrepareMember,
+} from '../src/exports/runtime';
 import mongo from '../src/runtime/mongo';
 import mongoStatic from '../src/static/mongo-static';
 
@@ -151,14 +160,24 @@ describe('the handle db.prepare returns for an ORM read', () => {
 describe('MongoPrepareMember', () => {
   type Contract = typeof contract;
 
-  test('is the prepare a client offers', () => {
+  test('a client has the prepare it describes', () => {
     expectTypeOf<MongoClient<Contract>>().toExtend<MongoPrepareMember<Contract>>();
   });
 
-  test('types an ORM read and a plan as db.prepare does', async () => {
+  test('types an ORM read, a plan and an update plan', async () => {
+    type Params = { readonly email: string };
+    type AccountRow = Awaited<ReturnType<typeof db.orm.accounts.firstOrThrow>>;
+    type PlanRow = { readonly _id: string; readonly email: string };
+    expectTypeOf<AccountRow>().toExtend<{ _id: string; email: string }>();
+    expectTypeOf<{ _id: string; email: string }>().toExtend<AccountRow>();
     const member: MongoPrepareMember<Contract> = db;
-    const read = await member.prepare({ email: 'mongo/string@1' }, (p) =>
+    const runtime = await db.runtime();
+
+    const first = await member.prepare({ email: 'mongo/string@1' }, (p) =>
       db.orm.accounts.where({ email: p.email }).prepared.first(),
+    );
+    const all = await member.prepare({ email: 'mongo/string@1' }, (p) =>
+      db.orm.accounts.where({ email: p.email }).prepared.all(),
     );
     const plan = await member.prepare({ email: 'mongo/string@1' }, (p) =>
       db.query
@@ -166,20 +185,30 @@ describe('MongoPrepareMember', () => {
         .match((f) => f.email.eq(p.email))
         .build(),
     );
-    const viaClientRead = await db.prepare({ email: 'mongo/string@1' }, (p) =>
-      db.orm.accounts.where({ email: p.email }).prepared.first(),
-    );
-    const viaClientPlan = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+    const update = await member.prepare({ email: 'mongo/string@1' }, (p) =>
       db.query
         .from('accounts')
         .match((f) => f.email.eq(p.email))
-        .build(),
+        .updateMany((f) => [f.email.set(p.email)]),
     );
 
-    expectTypeOf(read).toEqualTypeOf(viaClientRead);
-    expectTypeOf(plan).toEqualTypeOf(viaClientPlan);
+    expectTypeOf(first).toEqualTypeOf<MongoPreparedRowQuery<Params, Promise<AccountRow | null>>>();
+    expectTypeOf(first.query(runtime, { email: 'a' })).toEqualTypeOf<Promise<AccountRow | null>>();
+    expectTypeOf(all.query(runtime, { email: 'a' })).toEqualTypeOf<
+      AsyncIterableResult<AccountRow>
+    >();
+    expectTypeOf(plan).toEqualTypeOf<MongoPreparedStatement<Params, PlanRow>>();
+    expectTypeOf(update).toEqualTypeOf<MongoPreparedExecution<Params, UpdateResult>>();
     // @ts-expect-error -- 'mongo/missing@1' is not one of the contract's codecs
     void member.prepare({ email: 'mongo/missing@1' }, () => db.query.from('accounts').build());
+  });
+
+  test('the upgrade note replacements type-check', async () => {
+    const clientPrepare: MongoPrepareMember<Contract> = db;
+    const runtimePrepare: Pick<MongoRuntime, 'prepare'> = await db.runtime();
+    // @ts-expect-error -- MongoRuntime['prepare'] is the method's function type, which a runtime is not
+    const notARuntime: MongoRuntime['prepare'] = await db.runtime();
+    void [clientPrepare, runtimePrepare, notARuntime];
   });
 });
 
