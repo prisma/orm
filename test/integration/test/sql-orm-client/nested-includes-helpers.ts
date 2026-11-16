@@ -38,13 +38,19 @@ export function collectionWithCapabilities<
 
 // Capability fixtures for the include suites. Include codegen always
 // emits correlated subqueries; the `lateral` flag is inert. These two
-// shapes — one advertising `lateral` + `jsonAgg`, one advertising only
-// `jsonAgg` — let the suites assert that both resolve includes in a
-// single correlated SQL execution, and that the lateral flag never
-// produces a lateral join for an include.
+// shapes — one advertising `lateral`, one without it — let the suites
+// assert that both resolve includes in a single correlated SQL
+// execution, and that the lateral flag never produces a lateral join
+// for an include.
+export const ONE_QUERY_INCLUDE_CAPABILITIES = {
+  jsonAgg: true,
+  outerReferencesInDerivedTables: true,
+  jsonAggWithoutTruncation: true,
+} as const;
 export const LATERAL_CAPABILITIES = {
+  sql: ONE_QUERY_INCLUDE_CAPABILITIES,
   postgres: { lateral: true, jsonAgg: true },
 } as const;
 export const CORRELATED_CAPABILITIES = {
-  sql: { jsonAgg: true },
+  sql: ONE_QUERY_INCLUDE_CAPABILITIES,
 } as const;

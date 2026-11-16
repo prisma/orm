@@ -15,6 +15,7 @@ import {
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
+import { ONE_QUERY_INCLUDE_CAPABILITIES } from './nested-includes-helpers';
 import { seedComments, seedPosts, seedProfiles, seedUsers } from './runtime-helpers';
 
 function expectSelectAst(ast: unknown): asserts ast is SelectAst {
@@ -51,7 +52,7 @@ function createUsersCollectionWithCapabilities(
   // test's intent is unambiguous. Merging with the base contract's
   // postgres namespace would leak `postgres.lateral` and `postgres.jsonAgg`
   // into the advertised capabilities — making it impossible to assert
-  // behaviour against a contract that advertises only `jsonAgg`.
+  // behaviour against a contract that does not advertise `lateral`.
   const contract = {
     ...base,
     capabilities,
@@ -559,6 +560,7 @@ describe('integration/include', () => {
         // The `lateral` capability flag is inert for include codegen:
         // every include lowers to a correlated subquery regardless.
         const users = createUsersCollectionWithCapabilities(runtime, {
+          sql: ONE_QUERY_INCLUDE_CAPABILITIES,
           postgres: { jsonAgg: true, lateral: true },
         });
 
@@ -635,6 +637,7 @@ describe('integration/include', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollectionWithCapabilities(runtime, {
+          sql: ONE_QUERY_INCLUDE_CAPABILITIES,
           postgres: { jsonAgg: true, lateral: true },
         });
 
@@ -721,12 +724,12 @@ describe('integration/include', () => {
   );
 
   it(
-    'single-query include uses correlated strategy when only jsonAgg is enabled',
+    'single-query include uses correlated strategy when lateral is not enabled',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollectionWithCapabilities(runtime, {
           // jsonAgg without lateral → correlated subquery strategy.
-          sql: { jsonAgg: true },
+          sql: ONE_QUERY_INCLUDE_CAPABILITIES,
         });
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
@@ -768,7 +771,7 @@ describe('integration/include', () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollectionWithCapabilities(runtime, {
           // jsonAgg without lateral → correlated subquery strategy.
-          sql: { jsonAgg: true },
+          sql: ONE_QUERY_INCLUDE_CAPABILITIES,
         });
 
         await seedUsers(runtime, [
@@ -937,14 +940,14 @@ describe('integration/include', () => {
   );
 
   it(
-    'depth-2 include uses correlated subqueries when only jsonAgg is enabled',
+    'depth-2 include uses correlated subqueries when lateral is not enabled',
     async () => {
-      // jsonAgg without lateral. Same acceptance criterion as the case
+      // No lateral. Same acceptance criterion as the case
       // above: one round-trip, regardless of depth or row count, when
       // the target advertises the capability.
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollectionWithCapabilities(runtime, {
-          sql: { jsonAgg: true },
+          sql: ONE_QUERY_INCLUDE_CAPABILITIES,
         });
 
         await seedUsers(runtime, [
