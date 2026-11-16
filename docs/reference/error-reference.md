@@ -1467,11 +1467,15 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
-`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
+`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time; nesting goes through `savepoint()` on the transaction. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
+
+`savepoint()` was called on a transaction or savepoint that already has an open savepoint. A level has at most one open savepoint, because a sibling's `ROLLBACK TO SAVEPOINT` would undo the other sibling's statements. The message names the open savepoint (`sp_<n>`). Nothing is sent to the database. Commit or roll back the open savepoint first. Payload: `savepointId`, the open savepoint's activity ID.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
 Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
+
+A savepoint refuses work with this code once it has been committed or rolled back, or once an enclosing level has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` invalidates every enclosing level up to the outer transaction: their statements, `savepoint()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
@@ -1480,6 +1484,10 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
 Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
+
+### RUNTIME.TRANSACTION_SUSPENDED
+
+A statement or `commit()` was sent on a transaction or savepoint while a savepoint opened on it is still open. Work sent on the parent while a savepoint is open would be undone by the savepoint's `ROLLBACK TO SAVEPOINT`. The message names the open savepoint. Nothing is sent to the database, and the level can be used again once the savepoint commits or rolls back. `rollback()` on the parent is allowed and closes the open savepoint. Payload: `savepointId`, the open savepoint's activity ID.
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 
