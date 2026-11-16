@@ -43,7 +43,9 @@ export class TransactionLevel {
 
   assertAcceptsWork(): void {
     this.assertOpen();
-    if (this.#openChild !== undefined) throw transactionSuspendedError(this.#openChild);
+    if (!this.closed && this.#openChild !== undefined) {
+      throw transactionSuspendedError(this.#openChild);
+    }
   }
 
   assertOpen(): void {

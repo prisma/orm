@@ -79,6 +79,7 @@ describe('RuntimeTransaction.savepoint()', () => {
       expect(finalized(events)).toBe(outcome === 'committed' ? '' : savepointWork);
       await transaction.execute(update);
       await transaction.commit();
+      await rejectsWith(savepoint.execute(update), 'TRANSACTION_CLOSED');
 
       const [outer, inner, statement] = events.filter((e) => e.name.startsWith('started:'));
       expect(inner?.ctx?.parent).toBe(outer?.ctx);
@@ -130,6 +131,24 @@ describe('RuntimeTransaction.savepoint()', () => {
     await run(outerChild);
   });
 
+  it('suspends statements on the connection while a savepoint is open on its transaction', async () => {
+    const { connection, transaction, events } = await begin();
+    const savepoint = await transaction.savepoint();
+    const before = events.length;
+
+    await rejectsWith(connection.execute(update), 'TRANSACTION_SUSPENDED');
+    await rejectsWith(connection.query(rawPlan('select 1')).toArray(), 'TRANSACTION_SUSPENDED');
+    expect(events.slice(before)).toEqual([]);
+    await savepoint.commit();
+    await connection.execute(update);
+    await transaction.commit();
+    await connection.execute(update);
+
+    const [outer, , inTransaction, after] = events.filter((e) => e.name.startsWith('started:'));
+    expect(inTransaction?.ctx?.parent).toBe(outer?.ctx);
+    expect(after?.ctx?.parent).toBeUndefined();
+  });
+
   it('closes the open savepoints innermost first when the outer transaction rolls back, and refuses work on them', async () => {
     const { connection, transaction, events } = await begin();
     const outerChild = await transaction.savepoint();
@@ -160,7 +179,7 @@ describe('RuntimeTransaction.savepoint()', () => {
     );
   });
 
-  it('refuses work on an open savepoint after the outer transaction timed out', async () => {
+  it('refuses work on an open savepoint after the outer transaction timed out, and reports the outer timeout ahead of the savepoint', async () => {
     const connection = await createSetup().runtime.connection();
     const transaction = await connection.transaction({ timeout: 1 });
     const savepoint = await transaction.savepoint();
@@ -168,6 +187,8 @@ describe('RuntimeTransaction.savepoint()', () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     await rejectsWith(savepoint.execute(update), 'TRANSACTION_CLOSED');
+    await rejectsWith(transaction.execute(update), 'ACTIVITY_NOT_ACCEPTING_CHILDREN');
+    await rejectsWith(transaction.commit(), 'TRANSACTION_TIMEOUT');
     expect(savepoint.signal).toBe(transaction.signal);
   });
 

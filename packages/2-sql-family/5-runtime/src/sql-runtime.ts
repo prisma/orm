@@ -1497,6 +1497,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           this.#openTransactions.delete(queryable);
         }
       }
+      if (this.#transactionLevels.get(connection) === level)
+        this.#transactionLevels.delete(connection);
     };
     let commitAttempted = false;
     const settlement = {
@@ -1526,6 +1528,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       activity,
     );
     this.#transactionLevels.set(driverTx, level);
+    this.#transactionLevels.set(connection, level);
     const deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     let closed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
