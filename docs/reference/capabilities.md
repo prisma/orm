@@ -15,7 +15,7 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 |------------|------|-------------|-----------|
 | `lateral` | boolean | Supports LATERAL joins | Stable |
 | `returning` | boolean | Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE) | Stable |
-| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM loads includes in one query only when the adapter reports this, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`; otherwise it runs one query per relation. | Stable |
+| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). | Stable |
 | `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. | Stable |
 | `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. | Stable |
 | `enums` | boolean | Supports native enum storage types | Stable |
@@ -31,6 +31,10 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 | `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
 | `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
 | `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
+
+### Capabilities that choose how includes load
+
+The ORM client loads includes with the one-query include, a correlated subquery per include that aggregates the related rows into JSON, only when the contract's `sql` group reports all three of `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. A key reported only in another group, such as `postgres.jsonAgg`, does not count. When any of the three is missing or `false`, the ORM client loads includes with one query per relation: it reads the parent rows, then the related rows of all those parents in one statement per include, and attaches them in memory. There is no user switch between the two ([ADR 164](../architecture%20docs/adrs/ADR%20164%20-%20Repository%20Layer.md)). The Postgres, SQLite and MySQL adapters report all three; the MariaDB adapter reports only `jsonAgg`.
 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
@@ -70,7 +74,7 @@ Postgres adapters should always report `sql.lateral: true` and `sql.returning: t
 Postgres (example):
 ```json
 {
-  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
+  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "outerReferencesInDerivedTables": true, "jsonAggWithoutTruncation": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
   "postgres": { "partialIndex": true, "transactionalDDL": true, "explainFormat": "json" }
 }
 ```

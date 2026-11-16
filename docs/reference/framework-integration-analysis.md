@@ -128,6 +128,8 @@ Next.js (11.2M downloads/week) and Remix (1.1M) use React Server Components. Thi
 
 - **Mutations** of more than one statement run in a transaction that the statement graph runner opens beneath the call's `orm-call` activity — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
 
+- **Reads** of more than one statement, such as a read whose includes load with one query per relation where the database cannot run the one-query include, open no transaction: each statement borrows and releases a connection like any read.
+
 ### How RSC exposes the statefulness
 
 In RSC, multiple Server Components render **concurrently within the same request**, each independently querying the database through the same shared runtime and ORM client instance.
