@@ -243,20 +243,22 @@ function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
   return `${problems.charAt(0).toUpperCase()}${problems.slice(1)}; ${signedText}`;
 }
 
-/** The `db sign` command that runs this one again, with the arguments that change what it signs or where. */
-function rerunCommand(
-  invocation: CliInvocation,
-  args: {
-    readonly contractRef: string | undefined;
-    readonly advanceRef: string | undefined;
-    readonly noAdvanceRef: boolean;
-  },
-): string {
-  return cliCommand(invocation, 'db sign', [
+/** The arguments of `db sign` that change what it signs or where, which a re-run repeats. */
+function signRerunArgs(args: {
+  readonly contractRef: string | undefined;
+  readonly advanceRef: string | undefined;
+  readonly noAdvanceRef: boolean;
+}): readonly string[] {
+  return [
     ...(args.contractRef === undefined ? [] : ['--contract', shellQuoted(args.contractRef)]),
     ...(args.advanceRef === undefined ? [] : ['--advance-ref', shellQuoted(args.advanceRef)]),
     ...(args.noAdvanceRef ? ['--no-advance-ref'] : []),
-  ]);
+  ];
+}
+
+/** The `db sign` command that runs this one again, with the arguments the user gave. */
+function rerunCommand(invocation: CliInvocation): string {
+  return cliCommand(invocation, 'db sign', invocation.rerunArgs ?? []);
 }
 
 function markerConflictDiagnostic(
@@ -591,11 +593,15 @@ export function createDbSignCommand(
         return notOk(connection.failure);
       }
       const dbConnection = connection.value;
-      const rerun = rerunCommand(cliInvocation(ctx, args.flags.db), {
-        contractRef,
-        advanceRef: args.flags.advanceRef,
-        noAdvanceRef: args.flags.noAdvanceRef,
-      });
+      const invocation: CliInvocation = {
+        ...cliInvocation(ctx, args.flags.db),
+        rerunArgs: signRerunArgs({
+          contractRef,
+          advanceRef: args.flags.advanceRef,
+          noAdvanceRef: args.flags.noAdvanceRef,
+        }),
+      };
+      const rerun = rerunCommand(invocation);
 
       const header = headerBlock({
         contract: contractRef ?? emitted.value.displayPath,
@@ -606,7 +612,7 @@ export function createDbSignCommand(
         const signed = await client.dbSign({
           contract,
           migrationsDir,
-          invocation: cliInvocation(ctx, args.flags.db),
+          invocation,
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });
