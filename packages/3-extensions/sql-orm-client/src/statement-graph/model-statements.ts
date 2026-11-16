@@ -21,6 +21,7 @@ import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
+import { addIncludeSteps, loadsIncludesPerRelation } from './include-steps';
 import { Insert } from './insert';
 import { JunctionFilterData } from './junction-filter-data';
 import type { JunctionWrite } from './junction-write';
@@ -193,7 +194,9 @@ export function readBack(
   const { graph, context } = b;
   const { contract } = context;
   const { root, variants } = model.tables;
-  const { selectedFields, includes, variantValue } = shape;
+  const { selectedFields, variantValue } = shape;
+  const perRelation = loadsIncludesPerRelation(contract, shape.includes);
+  const includes = perRelation ? [] : shape.includes;
   const variantJoins = variantValue === undefined ? variants.size > 0 : variants.has(variantValue);
   const ast =
     includes.length === 0 && !variantJoins
@@ -209,10 +212,19 @@ export function readBack(
   const mappings = projectTableColumns(contract, root, keyColumns).map(
     (column): ColumnMapping => [column, column],
   );
-  if (by === 'filter') {
-    return findRows(b, ast, { filter: [new FilterData(written, mappings)], requires: [] });
-  }
-  const found = new FindByKeys(ast, mappings, owner);
+  const found =
+    by === 'filter'
+      ? findRows(b, ast, { filter: [new FilterData(written, mappings)], requires: [] })
+      : addFindByKeys(graph, new FindByKeys(ast, mappings, owner), written, mappings);
+  return perRelation ? addIncludeSteps(b, found, model.tables, shape.includes) : found;
+}
+
+function addFindByKeys(
+  graph: Graph,
+  found: FindByKeys,
+  written: NodeId,
+  mappings: readonly ColumnMapping[],
+): NodeId {
   return graph.add(found, { keys: new Rows(written, mappings), state: graph.stateEdgesFor(found) });
 }
 

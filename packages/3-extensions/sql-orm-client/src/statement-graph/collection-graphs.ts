@@ -35,6 +35,7 @@ import { rowIdentity } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
 import { Graph } from './graph';
+import { addIncludeSteps, loadsIncludesPerRelation } from './include-steps';
 import { Insert } from './insert';
 import {
   type Builder,
@@ -76,7 +77,9 @@ export function updateAllGraph(
   const { context, state } = collection;
   const b = builderOf(collection);
   if (Object.keys(set).length === 0) {
-    b.graph.setResult(findRows(b, selectRowsAst(collection, state), noInputs));
+    b.graph.setResult(
+      withIncludeSteps(b, collection, findRows(b, selectRowsAst(collection, state), noInputs)),
+    );
     return b.graph;
   }
   if (returns === 'rows') {
@@ -133,7 +136,7 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     selectRowsAst(collection, state).withWhere(whereOf(collection)),
     noInputs,
   );
-  b.graph.setResult(find);
+  b.graph.setResult(withIncludeSteps(b, collection, find));
   addDeleteAll(b, collection, {
     filters:
       identityColumnsOf(collection).length > 0
@@ -170,7 +173,7 @@ export function updateFirstGraph(
     return b.graph;
   }
   if (bare) {
-    b.graph.setResult(find);
+    b.graph.setResult(withIncludeSteps(b, collection, find));
     return b.graph;
   }
 
@@ -216,12 +219,12 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   if (find === undefined) {
     return b.graph;
   }
+  b.graph.setResult(withIncludeSteps(b, collection, find));
   deleteRows(b, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
   });
-  b.graph.setResult(find);
   return b.graph;
 }
 
@@ -490,7 +493,23 @@ function selectRowsAst(
   collection: DescribeCollectionRowsOptions,
   state: CollectionState,
 ): SelectAst {
-  return selectAstOf(collection.context, modelOf(collection), state, 'selection');
+  const statementState = loadsIncludesPerRelation(collection.context.contract, state.includes)
+    ? { ...state, includes: [] }
+    : state;
+  return selectAstOf(collection.context, modelOf(collection), statementState, 'selection');
+}
+
+function withIncludeSteps(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  read: NodeId,
+): NodeId {
+  const { context, state } = collection;
+  if (!loadsIncludesPerRelation(context.contract, state.includes)) {
+    return read;
+  }
+  requireIdentityColumnsForIncludes(collection);
+  return addIncludeSteps(b, read, state.tables, state.includes);
 }
 
 function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly string[] {

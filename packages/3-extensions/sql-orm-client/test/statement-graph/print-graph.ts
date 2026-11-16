@@ -14,14 +14,17 @@ import {
 } from '../../src/statement-graph/edge';
 import { Find } from '../../src/statement-graph/find';
 import { FindByKeys } from '../../src/statement-graph/find-by-keys';
+import { FindRelated } from '../../src/statement-graph/find-related';
 import type { Graph } from '../../src/statement-graph/graph';
 import { Insert } from '../../src/statement-graph/insert';
 import { JunctionFilterData } from '../../src/statement-graph/junction-filter-data';
+import { NestJoin } from '../../src/statement-graph/nest-join';
 import type { Node } from '../../src/statement-graph/node';
 import { Requires } from '../../src/statement-graph/requires';
 import { Rows } from '../../src/statement-graph/rows';
 import { State, StateEdge } from '../../src/statement-graph/state';
 import { Update } from '../../src/statement-graph/update';
+import { WholeRows } from '../../src/statement-graph/whole-rows';
 import { printExpression } from './print-expression';
 
 type NodeNames = ReadonlyMap<NodeId, string>;
@@ -106,7 +109,22 @@ function printFindByKeys(node: FindByKeys): string {
   return `${find} by (${keys}) for ${node.owner.operation}`;
 }
 
+function printFindRelated(node: FindRelated): string {
+  const keys = node.keyColumns.map(([, target]) => target.alias).join(', ');
+  return `FindRelated ${sourceName(innermost(node.ast))} by (${keys})`;
+}
+
+function innermost(ast: SelectAst): SelectAst {
+  return ast.from?.kind === 'derived-table-source' ? innermost(ast.from.query) : ast;
+}
+
 function printNode(node: Node): string {
+  if (node instanceof FindRelated) {
+    return printFindRelated(node);
+  }
+  if (node instanceof NestJoin) {
+    return `NestJoin ${node.nests.map((nest) => nest.name).join(', ')}`;
+  }
   if (node instanceof FindByKeys) {
     return printFindByKeys(node);
   }
@@ -132,6 +150,9 @@ function printMappings(columns: readonly ColumnMapping[]): string {
 function printEdge(names: NodeNames, edge: Edge<unknown>): string {
   if (edge instanceof Rows) {
     return `Rows ${names.get(edge.from)}`;
+  }
+  if (edge instanceof WholeRows) {
+    return `WholeRows ${names.get(edge.from)}`;
   }
   if (edge instanceof Requires) {
     return `Requires ${names.get(edge.from)}`;
