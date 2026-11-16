@@ -1287,7 +1287,7 @@ export class MongoMigrationRunner {
       {
         why: [
           `${one ? 'It has' : 'One of them has'} _id ${mongoshValue(counted?.['documentId'])}. Find them all with ${query} in mongosh.`,
-          `To keep them, rename ${named} to a value the enum keeps instead of removing it, or change those documents to another value first.`,
+          `To keep them, add a new member to the enum and rename ${named} to it instead of removing it, or change those documents to another value first.`,
           'Nothing was removed. Once the documents are fixed, run the command again; operations that already ran are skipped.',
         ].join(' '),
         meta: {
