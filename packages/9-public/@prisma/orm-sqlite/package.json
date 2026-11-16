@@ -20,6 +20,7 @@
     "@prisma/orm-framework": "workspace:8.0.0-rc.24",
     "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.24",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:",
     "temporal-spec": "1.0.1"
