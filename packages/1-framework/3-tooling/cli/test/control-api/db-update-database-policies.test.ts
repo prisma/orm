@@ -336,4 +336,32 @@ describe('executeDbUpdate, database policies', () => {
     });
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it('with consent and a ref that declares no policies, applies the plan and records none', async () => {
+    const execute = vi.fn().mockResolvedValue(
+      ok({
+        perSpaceResults: [{ space: 'app', value: { operationsPlanned: 1, operationsExecuted: 1 } }],
+      }),
+    );
+    const result = await update({
+      mode: 'apply',
+      markers: new Map(),
+      ref: { name: 'dev', hash: 'dummy', invariants: [] },
+      permitPolicyChange: true,
+      executeSpy: execute,
+    });
+
+    expect(execute.mock.calls[0]?.[0].perSpaceOptions[0]).not.toHaveProperty('databasePolicies');
+    expect(
+      result.ok
+        ? {
+            summary: result.value.summary,
+            databasePoliciesUpdated: result.value.databasePoliciesUpdated,
+          }
+        : result.failure,
+    ).toEqual({
+      summary: 'Applied 1 operation(s) across 1 space(s), signature updated',
+      databasePoliciesUpdated: undefined,
+    });
+  });
 });

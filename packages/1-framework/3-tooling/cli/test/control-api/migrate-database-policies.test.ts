@@ -339,4 +339,29 @@ describe('executeMigrate, database policies', () => {
       expect(runnerCalls).toEqual([]);
     },
   );
+
+  it('with consent and a ref that declares no policies, applies the migrations and records none', async () => {
+    const { policies: _policies, ...withoutPolicies } = PRODUCTION;
+    const { result, runnerCalls } = await migrate({
+      markers: new Map(),
+      ref: withoutPolicies,
+      permitPolicyChange: true,
+    });
+
+    expect({
+      perSpace: runnerCalls.map((call) => call.map((o) => [o.space, o.databasePolicies])),
+      result: result.ok
+        ? {
+            summary: result.value.summary,
+            databasePoliciesUpdated: result.value.databasePoliciesUpdated,
+          }
+        : result.failure,
+    }).toEqual({
+      perSpace: [[['app', undefined]]],
+      result: {
+        summary: 'Applied 1 migration(s) (1 operation(s)) across 1 contract space(s)',
+        databasePoliciesUpdated: undefined,
+      },
+    });
+  });
 });

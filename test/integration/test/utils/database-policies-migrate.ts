@@ -253,9 +253,12 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
     timeout,
   );
 
-  it(
-    'applies a ref without policies to a database with none, and records none',
-    async (test) => {
+  it.for([
+    { flags: [], given: 'without --permit-policy-change' },
+    { flags: ['--permit-policy-change'], given: 'with --permit-policy-change' },
+  ])(
+    'applies a ref without policies to a database with none, $given, and records none',
+    async ({ flags }, test) => {
       await withProject(test, async (project) => {
         await planTo(project, 'base', 'initial');
         const migrated = await runMigrate(project.ctx);
@@ -263,7 +266,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         const next = await planTo(project, 'next', 'add-name');
         await writeRef(appRefsDir(project), 'production', { hash: next, invariants: [] });
 
-        const applied = await runMigrate(project.ctx, ['--to', 'production', '--json']);
+        const applied = await runMigrate(project.ctx, ['--to', 'production', ...flags, '--json']);
 
         expect(applied.exitCode, `db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
         const document = parseJsonOutput<MigrateJson>(applied);
