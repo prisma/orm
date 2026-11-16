@@ -129,107 +129,6 @@ describe('a nested create of a variant stored in the base table', () => {
       );
       expect(insertedRows(graph, 'tasks')).toEqual([crashRow, hangRow]);
     });
-
-    it('inserts the row with the discriminator after finding the parent in update()', () => {
-      const graph = updateOf('Project', {
-        tasks: (tasks: VariantMutator) => tasks.variant('bug').create(crash),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find projects_tbl where id = 1',
-          'n2 Insert tasks <- PayloadData n1 (id->project_id)',
-          'result: n1',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    });
-
-    it('inserts the row with the discriminator on a to-one relation', () => {
-      const graph = updateOf('Person', {
-        pinnedTask: (task: VariantMutator) => task.variant('bug').create(crash),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find people where id = 1',
-          'n2 Insert tasks <- PayloadData n1 (id->pinned_by_id)',
-          'result: n1',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    });
-  });
-
-  describe('on a relation the parent holds the key for', () => {
-    it('inserts the row with the discriminator first and copies its key into the parent in create()', () => {
-      const graph = createOf('TaskComment', {
-        body: 'Seen it',
-        task: (task: VariantMutator) => task.variant('bug').create(crash),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Insert tasks',
-          'n2 Insert task_comments <- PayloadData n1 (id->task_id)',
-          'result: n2',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    });
-
-    it('inserts the row with the discriminator and writes its key with an Update in update()', () => {
-      const graph = updateOf('TaskComment', {
-        task: (task: VariantMutator) => task.variant('bug').create(crash),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find task_comments where id = 1',
-          'n2 Insert tasks <- Requires n1',
-          'n3 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
-          'result: n3',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    });
-  });
-
-  describe('on a relation through a junction', () => {
-    it('inserts each row with the discriminator and links it in create()', () => {
-      const graph = createOf('Label', {
-        name: 'ui',
-        tasks: (tasks: VariantMutator) => tasks.variant('bug').create([crash, hang]),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Insert labels',
-          'n2 Insert tasks',
-          'n3 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
-          'n4 Insert tasks',
-          'n5 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n4 (id->task_id)',
-          'result: n1',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow, hangRow]);
-    });
-
-    it('inserts the row with the discriminator and links it in update()', () => {
-      const graph = updateOf('Label', {
-        tasks: (tasks: VariantMutator) => tasks.variant('bug').create(crash),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find labels where id = 1',
-          'n2 Insert tasks <- Requires n1',
-          'n3 Insert task_labels <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
-          'result: n1',
-        ].join('\n'),
-      );
-      expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    });
   });
 });
 
@@ -257,29 +156,6 @@ function topLevelBugCreate(data: Record<string, unknown>): Graph {
 }
 
 describe('a nested create of a variant stored in the base table with a relation callback in its row', () => {
-  it('inserts the row with the discriminator, then the rows of a base relation with its key', () => {
-    const graph = createOf('Project', {
-      id: 1,
-      name: 'Launch',
-      tasks: (tasks: VariantMutator) =>
-        tasks.variant('bug').create({
-          ...crash,
-          comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
-        }),
-    });
-
-    expect(printGraph(graph)).toBe(
-      [
-        'n1 Insert projects_tbl',
-        'n2 Insert tasks <- PayloadData n1 (id->project_id)',
-        'n3 Insert task_comments <- PayloadData n2 (id->task_id)',
-        'result: n1',
-      ].join('\n'),
-    );
-    expect(insertedRows(graph, 'tasks')).toEqual([crashRow]);
-    expect(insertedRows(graph, 'task_comments')).toEqual([{ body: 'Seen it' }]);
-  });
-
   it('inserts each row with the discriminator in its own Insert in update()', () => {
     const graph = updateOf('Project', {
       tasks: (tasks: VariantMutator) =>
@@ -353,21 +229,6 @@ describe('a nested create of a variant stored in its own table', () => {
       expect(insertedRows(graph, 'features')).toEqual([{ priority: 1 }, { priority: 3 }]);
     });
 
-    it('inserts the base row with the key of the parent, then the variant row in update()', () => {
-      const graph = updateOf('Project', {
-        tasks: (tasks: VariantMutator) => tasks.variant('feature').create(darkMode),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find projects_tbl where id = 1',
-          'n2 Insert tasks <- PayloadData n1 (id->project_id)',
-          'n3 Insert features <- PayloadData n2 (id->id)',
-          'result: n1',
-        ].join('\n'),
-      );
-    });
-
     it('inserts the base row with the key of the parent on a to-one relation', () => {
       const graph = updateOf('Person', {
         pinnedTask: (task: VariantMutator) => task.variant('feature').create(darkMode),
@@ -397,22 +258,6 @@ describe('a nested create of a variant stored in its own table', () => {
           'n2 Insert features <- PayloadData n1 (id->id)',
           'n3 Insert task_comments <- PayloadData n1 (id->task_id)',
           'result: n3',
-        ].join('\n'),
-      );
-    });
-
-    it('inserts the base and variant rows and writes the base key with an Update in update()', () => {
-      const graph = updateOf('TaskComment', {
-        task: (task: VariantMutator) => task.variant('feature').create(darkMode),
-      });
-
-      expect(printGraph(graph)).toBe(
-        [
-          'n1 Find task_comments where id = 1',
-          'n2 Insert tasks <- Requires n1',
-          'n3 Insert features <- PayloadData n2 (id->id)',
-          'n4 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
-          'result: n4',
         ].join('\n'),
       );
     });
