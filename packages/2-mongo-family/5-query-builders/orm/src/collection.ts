@@ -98,6 +98,8 @@ import {
   rejectPlaceholder,
   rejectPlaceholderList,
   rejectPreparedWrite,
+  rejectUnknownPathPlaceholder,
+  rejectValueObjectPlaceholder,
   type WherePlaceholderField,
   wherePlaceholder,
 } from './prepared-placeholders';
@@ -1141,7 +1143,7 @@ export class MongoCollectionImpl<
     const storedPath = this.#storedPath(filter.field);
     const field = this.#fieldAtPath(filter.field);
     if (field?.type.kind !== 'scalar') {
-      rejectPlaceholder(filter.value, filter.field);
+      this.#rejectNonScalarPlaceholder(filter.value, filter.field, field);
       return storedPath === filter.field
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
@@ -1197,6 +1199,19 @@ export class MongoCollectionImpl<
     };
   }
 
+  #rejectNonScalarPlaceholder(
+    value: unknown,
+    path: string,
+    field: ContractField | undefined,
+  ): void {
+    const [head = path] = path.split('.');
+    if (field === undefined && this.#modelFields()[head] !== undefined) {
+      rejectUnknownPathPlaceholder(value, path);
+    }
+    if (field?.type.kind === 'valueObject') rejectValueObjectPlaceholder(value, path);
+    rejectPlaceholder(value, path);
+  }
+
   #fieldAtPath(path: string): ContractField | undefined {
     const [head, ...rest] = path.split('.');
     let field: ContractField | undefined =
@@ -1230,7 +1245,7 @@ export class MongoCollectionImpl<
     }
 
     if (field.type.kind === 'valueObject') {
-      rejectPlaceholder(value, path);
+      rejectValueObjectPlaceholder(value, path);
       const voDef = this.#valueObjectAt(field.type);
       if (!voDef) return ormParam(value, path);
 

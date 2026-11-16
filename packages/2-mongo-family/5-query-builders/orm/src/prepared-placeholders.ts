@@ -7,7 +7,7 @@ import {
 import { ormError } from './orm-errors';
 
 const ALLOWED_POSITIONS =
-  'A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset. ORM writes run at once, and value objects are built with the query, so neither can take one.';
+  'A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset.';
 
 export function findPlaceholder(value: unknown): MongoPreparedParamRef | undefined {
   if (isMongoPreparedParamRef(value)) return value;
@@ -37,9 +37,35 @@ export function rejectPlaceholderList(value: readonly unknown[], path: string): 
   if (placeholder === undefined) return;
   throw ormError(
     'ORM.ARGUMENT_INVALID',
-    `The prepared parameter '${placeholder.name}' cannot be an item of a list for '${path}'. A declaration has no list form, so a list of prepared parameters is not possible; on a list field, one prepared parameter matches one item.`,
+    `The list given for '${path}' holds the prepared parameter '${placeholder.name}'. A declaration has no list form, so a prepared parameter cannot be part of a list; on a list field, one prepared parameter matches one item.`,
     { meta: { name: placeholder.name, field: path } },
   );
+}
+
+/** Refuses a prepared placeholder at a path the contract has no field for with `ORM.ARGUMENT_INVALID`: no codec can be checked there. */
+export function rejectUnknownPathPlaceholder(value: unknown, path: string): void {
+  const placeholder = findPlaceholder(value);
+  if (placeholder === undefined) return;
+  throw ormError(
+    'ORM.ARGUMENT_INVALID',
+    `The contract has no field at '${path}', so the prepared parameter '${placeholder.name}' cannot be checked against a codec there.`,
+    { meta: { name: placeholder.name, field: path } },
+  );
+}
+
+/** Refuses a prepared placeholder given as a whole value object, or as an item of a value-object list, with `ORM.ARGUMENT_INVALID`. */
+export function rejectValueObjectPlaceholder(value: unknown, path: string): void {
+  const items = Array.isArray(value)
+    ? value.map((item, index) => [item, `${path}.${index}`] as const)
+    : [[value, path] as const];
+  for (const [item, itemPath] of items) {
+    if (!isMongoPreparedParamRef(item)) continue;
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `A prepared parameter stands for one scalar value, so the prepared parameter '${item.name}' cannot stand for the value object at '${itemPath}'.`,
+      { meta: { name: item.name, field: itemPath } },
+    );
+  }
 }
 
 /** Refuses a write on a collection whose `where` holds a prepared placeholder with `ORM.ARGUMENT_INVALID`. */

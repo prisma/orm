@@ -219,7 +219,11 @@ describe('a placeholder in an object-form where', () => {
     const users = usersOf(executor);
 
     expect(() => users.where({ home: city as unknown as { city: string } })).toThrow(
-      expect.objectContaining(placeholderRefused(city, 'home')),
+      expect.objectContaining({
+        ...placeholderRefused(city, 'home'),
+        message:
+          "A prepared parameter stands for one scalar value, so the prepared parameter 'city' cannot stand for the value object at 'home'.",
+      }),
     );
   });
 });
@@ -280,16 +284,40 @@ describe('a placeholder in a filter-expression where', () => {
   });
 
   it.each([
-    ['a whole value object', 'home', city],
-    ['a path the contract does not know', 'home.planet', city],
-    ['a value nested in a value object', 'home', { city }],
-    ['a list on a value object', 'home', [city]],
-  ])('is refused on %s when the where is built', (_label, path, value) => {
+    [
+      'a whole value object',
+      'home',
+      city,
+      "A prepared parameter stands for one scalar value, so the prepared parameter 'city' cannot stand for the value object at 'home'.",
+      'home',
+    ],
+    [
+      'a path below a value object the contract does not know',
+      'home.planet',
+      city,
+      "The contract has no field at 'home.planet', so the prepared parameter 'city' cannot be checked against a codec there.",
+      'home.planet',
+    ],
+    [
+      'a value nested in a value object',
+      'home',
+      { city },
+      "The prepared parameter 'city' cannot be used for 'home'. A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset.",
+      'home',
+    ],
+    [
+      'an item of a value-object list',
+      'home',
+      [city],
+      "A prepared parameter stands for one scalar value, so the prepared parameter 'city' cannot stand for the value object at 'home.0'.",
+      'home.0',
+    ],
+  ])('is refused on %s when the where is built', (_label, path, value, message, field) => {
     const { executor } = recordingExecutor();
     const users = usersOf(executor);
 
     expect(() => users.where(MongoFieldFilter.eq(path, value))).toThrow(
-      expect.objectContaining(placeholderRefused(city, path)),
+      expect.objectContaining({ ...placeholderRefused(city, field), message }),
     );
   });
 });

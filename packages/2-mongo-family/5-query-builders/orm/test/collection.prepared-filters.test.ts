@@ -48,7 +48,7 @@ const refused = (placeholder: MongoPreparedParamRef, field: string) => ({
 
 const refusedInExpr = (placeholder: MongoPreparedParamRef) => ({
   code: 'ORM.ARGUMENT_INVALID',
-  message: `The prepared parameter '${placeholder.name}' cannot be used inside $expr. A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset. ORM writes run at once, and value objects are built with the query, so neither can take one.`,
+  message: `The prepared parameter '${placeholder.name}' cannot be used inside $expr. A prepared parameter stands for one value in a read: a value compared with a scalar field in a where (an equality, a comparison, or an item of $in or $nin), a limit or an offset.`,
   meta: { name: placeholder.name, operator: '$expr' },
 });
 
@@ -129,7 +129,11 @@ describe('a placeholder in a filter-expression where', () => {
 
   it('is refused with ORM.ARGUMENT_INVALID on a path below a value object that the contract does not know', () => {
     expect(() => users().where(MongoFieldFilter.eq('homeAddress.planet', text))).toThrow(
-      expect.objectContaining(refused(text, 'homeAddress.planet')),
+      expect.objectContaining({
+        ...refused(text, 'homeAddress.planet'),
+        message:
+          "The contract has no field at 'homeAddress.planet', so the prepared parameter 'text' cannot be checked against a codec there.",
+      }),
     );
   });
 });
@@ -137,7 +141,7 @@ describe('a placeholder in a filter-expression where', () => {
 describe('a list holding a placeholder', () => {
   const listRefused = (field: string) => ({
     code: 'ORM.ARGUMENT_INVALID',
-    message: `The prepared parameter 'text' cannot be an item of a list for '${field}'. A declaration has no list form, so a list of prepared parameters is not possible; on a list field, one prepared parameter matches one item.`,
+    message: `The list given for '${field}' holds the prepared parameter 'text'. A declaration has no list form, so a prepared parameter cannot be part of a list; on a list field, one prepared parameter matches one item.`,
     meta: { name: 'text', field },
   });
 
@@ -147,8 +151,8 @@ describe('a list holding a placeholder', () => {
     );
   });
 
-  it('is refused in a filter-expression equality, naming the list field', () => {
-    expect(() => users().where(MongoFieldFilter.eq('tags', [text]))).toThrow(
+  it('is refused in a mixed list in a filter-expression equality, naming the list field', () => {
+    expect(() => users().where(MongoFieldFilter.eq('tags', [text, 'x']))).toThrow(
       expect.objectContaining(listRefused('tags')),
     );
   });
