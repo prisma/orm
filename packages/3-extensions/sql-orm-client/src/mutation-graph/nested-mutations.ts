@@ -147,7 +147,7 @@ function ownTableVariantOf(
   if (mti === undefined) {
     return undefined;
   }
-  assertReturningCapability(t.context.contract, 'createAll()');
+  assertReturningCapability(t.context.contract, 'create()');
   return {
     collection,
     mti,

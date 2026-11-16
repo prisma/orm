@@ -383,7 +383,7 @@ await db.Project.where({ id: 1 }).update({
 });
 ```
 
-A variant stored in the base table is written as one row of that table. A variant stored in its own table is written as a row of the base table and a row of the variant table with the same key; the link to the record is on the base row. MTI variant collections need `returning` to create rows, and so does a nested create of such a variant: without it the call is refused with `ORM.CAPABILITY_MISSING`, as `createAll()` on the variant is.
+A variant stored in the base table is written as one row of that table. A variant stored in its own table is written as a row of the base table and a row of the variant table with the same key; the link to the record is on the base row. MTI variant collections need `returning` to create rows, and so does a nested create of such a variant: without it the call is refused with `ORM.CAPABILITY_MISSING`, as `create()` on the variant collection is.
 
 A relation callback inside the row behaves as it does in a collection's `variant(value).create(data)`. For a variant stored in the base table, a callback on a relation of the base model runs; a callback on a relation only the variant declares is refused with `ORM.FIELD_UNKNOWN`. For a variant stored in its own table, every relation callback in the row is refused with `ORM.FIELD_UNKNOWN`.
 
