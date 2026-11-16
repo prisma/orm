@@ -32,6 +32,7 @@
     "@internal/sql-runtime": "workspace:8.0.0-rc.24",
     "@internal/target-sqlite": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
