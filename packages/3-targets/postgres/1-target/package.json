@@ -100,6 +100,7 @@
     "./rls-canonicalize": "./dist/rls-canonicalize.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./schema-ir-annotations": "./dist/schema-ir-annotations.mjs",
+    "./server-version": "./dist/server-version.mjs",
     "./sql-utils": "./dist/sql-utils.mjs",
     "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
@@ -111,8 +112,5 @@
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
     "directory": "packages/3-targets/postgres/1-target"
-  },
-  "prismaNext": {
-    "minServerVersion": "15"
   }
 }

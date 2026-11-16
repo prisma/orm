@@ -1,6 +1,6 @@
 # ADR 248 — PostgreSQL floor lowered to 15
 
-**Status:** Accepted
+**Status:** Accepted — the "Enforcement" section is superseded by [ADR 320](ADR%20320%20-%20Each%20target%20package%20exports%20its%20minimum%20server%20version.md)
 **Date:** 2026-08-11
 **Amends:** [ADR 222 — Version support policy](ADR%20222%20-%20Version%20support%20policy.md)
 

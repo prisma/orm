@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); where the database server floors are declared superseded by [ADR 320](ADR%20320%20-%20Each%20target%20package%20exports%20its%20minimum%20server%20version.md)
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
