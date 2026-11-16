@@ -11,7 +11,7 @@ import {
 import { selectIncludeStrategy } from '../include-strategy';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { collectionSelectAst } from '../query-plan-select';
-import type { IncludeExpr } from '../types';
+import type { CollectionState, IncludeExpr, IncludeScalar } from '../types';
 import { requireIdentityColumnsForIncludes } from './collection-graphs';
 import { Graph } from './graph';
 import { addIncludeSteps } from './include-steps';
@@ -39,6 +39,7 @@ export function describeGraphRead<Row>(
   return {
     hashInput: async (source) => ({
       statements: await statementHashes(graphOf(), options.context.contract, source),
+      selection: options.state.selectedFields,
       includes: includeTree(options.state.includes),
     }),
     rows: (scope) => {
@@ -78,7 +79,7 @@ async function statementHashes(
   );
 }
 
-/** What a read's result depends on that no statement shows: a `limit(0)` include sends none, and `combine()` branch names exist only in the result. */
+/** What a read's result depends on that no statement shows: the statements also send the columns that identify rows, a `limit(0)` include sends none, and `combine()` branch names exist only in the result. */
 function includeTree(includes: readonly IncludeExpr[]): readonly unknown[] {
   return includes.map((include) => ({
     relation: include.relationName,
@@ -93,12 +94,17 @@ function includeKind(include: IncludeExpr): Record<string, unknown> {
       kind: 'combine',
       branches: Object.entries(include.combine).map(([name, branch]) => ({
         name,
-        kind: branch.kind,
-        includes: branch.kind === 'rows' ? includeTree(branch.state.includes) : [],
+        ...(branch.kind === 'rows' ? rowsKind(branch.state) : scalarKind(branch.selector)),
       })),
     };
   }
-  return include.scalar === undefined
-    ? { kind: 'rows', includes: includeTree(include.nested.includes) }
-    : { kind: 'scalar' };
+  return include.scalar === undefined ? rowsKind(include.nested) : scalarKind(include.scalar);
+}
+
+function rowsKind(state: CollectionState): Record<string, unknown> {
+  return { kind: 'rows', selection: state.selectedFields, includes: includeTree(state.includes) };
+}
+
+function scalarKind(scalar: IncludeScalar<unknown>): Record<string, unknown> {
+  return { kind: 'scalar', fn: scalar.fn, column: scalar.column };
 }

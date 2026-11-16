@@ -10,8 +10,7 @@ const perRelationContract = withoutCapabilityKeys(baseContract, [
 ]);
 
 const source = {
-  planContentHash: async (plan: { readonly ast: { readonly from?: unknown } }) =>
-    JSON.stringify(plan.ast.from),
+  planContentHash: async (plan: { readonly ast: unknown }) => JSON.stringify(plan.ast),
 } as unknown as ActivitySource;
 
 const { collection } = createCollectionFor('User', perRelationContract);
@@ -29,7 +28,16 @@ describe('the cache key of a read with includes, one query per relation', () => 
   it('holds the statements it sends, each without parent keys, and the include tree', async () => {
     expect(await hashInputOf(collection.include('posts').state)).toEqual({
       statements: [expect.stringContaining('"users"'), expect.stringContaining('"posts"')],
-      includes: [{ relation: 'posts', cardinality: 'many', kind: 'rows', includes: [] }],
+      selection: undefined,
+      includes: [
+        {
+          relation: 'posts',
+          cardinality: 'many',
+          kind: 'rows',
+          selection: undefined,
+          includes: [],
+        },
+      ],
     });
   });
 
@@ -64,5 +72,35 @@ describe('the cache key of a read with includes, one query per relation', () => 
         collection.include('posts', (posts) => posts.combine({ count: posts.count() })).state,
       ),
     );
+  });
+
+  it('differs by the fields the caller selected', async () => {
+    expect(await hashInputOf(collection.select('name').include('posts').state)).not.toEqual(
+      await hashInputOf(collection.select('name', 'id').include('posts').state),
+    );
+  });
+
+  it('differs by the fields the caller selected in an include', async () => {
+    expect(
+      await hashInputOf(collection.include('posts', (posts) => posts.select('title')).state),
+    ).not.toEqual(
+      await hashInputOf(collection.include('posts', (posts) => posts.select('title', 'id')).state),
+    );
+  });
+
+  it('differs by the aggregate of a scalar include that sends no statement', async () => {
+    expect(
+      await hashInputOf(collection.include('posts', (posts) => posts.limit(0).count()).state),
+    ).not.toEqual(
+      await hashInputOf(collection.include('posts', (posts) => posts.limit(0).sum('views')).state),
+    );
+  });
+
+  it('differs by the aggregate of a combine() branch that sends no statement', async () => {
+    const total = (sum: boolean) =>
+      collection.include('posts', (posts) =>
+        posts.combine({ total: sum ? posts.limit(0).sum('views') : posts.limit(0).count() }),
+      ).state;
+    expect(await hashInputOf(total(true))).not.toEqual(await hashInputOf(total(false)));
   });
 });
