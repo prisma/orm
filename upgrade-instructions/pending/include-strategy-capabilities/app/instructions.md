@@ -32,9 +32,9 @@ A MariaDB contract gains only `"jsonAgg": true`: MariaDB does not report the oth
 The ORM matches rows by their primary key, or else by a unique key. It now skips a unique key that has a nullable column, because two rows can both hold `NULL` in it. If such a key is the only one a table has, the table has no row identity, and these calls fail with `ORM.ROW_IDENTITY_MISSING`:
 
 - `update()` and `delete()`, on every database.
-- Any write that returns its rows with an include, such as `create()`, `update()` or `upsert()` after `.include(...)`.
-- On a database without `RETURNING`: `create()` and `updateAll()` that return rows, since they read their rows back by key.
-- On a database whose adapter does not report `sql.jsonAgg`, `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`: any read with an include of that table, at any level, since the included rows are matched to their parents by key.
+- `create()`, `createAll()`, `update()`, `updateAll()` and `upsert()` after `.include(...)`, on every database.
+- On a database without `RETURNING`: `create()`, `createAll()` and `updateAll()` that return rows, since they read their rows back by key.
+- On a database whose adapter does not report `sql.jsonAgg`, `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`: any read with an include of that table, at any level, and `deleteAll()` after `.include(...)`, since the included rows are matched to their parents by key.
 
 Find each model whose table has no `@id` and whose `@unique` or `@@unique` fields include an optional one. Then do one of these:
 

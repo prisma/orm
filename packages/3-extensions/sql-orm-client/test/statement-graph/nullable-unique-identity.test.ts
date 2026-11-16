@@ -99,6 +99,15 @@ describe('a table whose only unique key has a nullable column', () => {
       expect(runtime.executions).toEqual([]);
     });
 
+    it('refuses a createAll() that returns its rows', async () => {
+      const { collection, runtime } = logs(withoutReturning);
+
+      await expect(collection.createAll([ada, { ...ada, message: 'bye' }])).rejects.toThrow(
+        refusal('createAll()'),
+      );
+      expect(runtime.executions).toEqual([]);
+    });
+
     it('refuses an updateAll() that returns its rows', async () => {
       const { collection, runtime } = logs(withoutReturning);
 
@@ -106,6 +115,36 @@ describe('a table whose only unique key has a nullable column', () => {
         refusal('updateAll()'),
       );
       expect(runtime.executions).toEqual([]);
+    });
+  });
+
+  it('refuses a deleteAll() with includes when includes load with one query per relation', async () => {
+    const { collection, runtime } = logs(perRelationPostgresAdapter);
+
+    expect(() => collection.include('author').deleteAll()).toThrow(includeRefusal);
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('runs a deleteAll() with includes under the one-query include, deleting by the condition alone', async () => {
+    const { collection, runtime } = logs();
+    runtime.setNextResults([
+      [{ message: 'hello', code: null, user_id: 1, author: '{"id":1}' }],
+      [],
+    ]);
+
+    await collection.include('author').deleteAll();
+
+    const [find, remove] = runtime.executions.map(({ plan }) =>
+      'ast' in plan ? plan.ast : undefined,
+    );
+    expect({
+      find: find?.kind,
+      remove: remove?.kind,
+      sameCondition: remove?.where === find?.where,
+    }).toEqual({
+      find: 'select',
+      remove: 'delete',
+      sameCondition: true,
     });
   });
 });
