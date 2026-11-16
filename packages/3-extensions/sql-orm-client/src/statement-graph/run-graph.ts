@@ -12,6 +12,7 @@ import {
   consumeRelatedRows,
   type DescribeCollectionRowsOptions,
   type HiddenColumns,
+  relatedReadsOf,
 } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
 import { selectIncludeStrategy } from '../include-strategy';
@@ -208,11 +209,10 @@ function shapeRows<Row>(
   });
 }
 
-/** Walks the `NestJoin`s that attached each level's rows down to the node that read them, and takes from that node the columns other nodes read that the caller did not select. */
 function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState): HiddenColumns {
   const node = graph.nodeAt(id);
   if (!(node instanceof NestJoin)) {
-    return { columns: unselectedColumnsReadFrom(graph, id, state), includes: [] };
+    return { columns: unselectedColumnsReadFrom(graph, id, state), nested: new Map() };
   }
   const { left, children } = graph.inputsOf(id);
   const childEdges = [children ?? []].flat();
@@ -220,14 +220,20 @@ function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState): Hidd
   if (parentEdge === undefined) {
     throw new InternalError(`NestJoin ${id} has no parent rows`);
   }
+  const readStates = new Map(
+    state.includes.flatMap(relatedReadsOf).map(({ key, include }) => [key, include.nested]),
+  );
   return {
     columns: unselectedColumnsReadFrom(graph, parentEdge.from, state),
-    includes: state.includes.map((include, index) => {
-      const edge = childEdges[index];
-      return edge === undefined
-        ? { columns: [], includes: [] }
-        : hiddenColumnsOf(graph, edge.from, include.nested);
-    }),
+    nested: new Map(
+      node.nests.flatMap((nest, index) => {
+        const edge = childEdges[index];
+        const nestedState = readStates.get(nest.name);
+        return edge === undefined || nestedState === undefined
+          ? []
+          : [[nest.name, hiddenColumnsOf(graph, edge.from, nestedState)] as const];
+      }),
+    ),
   };
 }
 

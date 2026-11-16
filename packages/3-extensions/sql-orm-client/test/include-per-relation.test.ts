@@ -22,6 +22,14 @@ function selectedTables(runtime: MockRuntime): string[] {
   });
 }
 
+function projectedAliases(runtime: MockRuntime): string[][] {
+  return runtime.executions.map(({ plan }) =>
+    'ast' in plan && plan.ast.kind === 'select'
+      ? plan.ast.projection.map((item) => item.alias)
+      : [],
+  );
+}
+
 describe('a read with includes, one query per relation', () => {
   it('reads the parents, then the rows of each include, and attaches them to their parents', async () => {
     const { collection, runtime } = createCollectionFor('User', perRelationContract);
@@ -31,10 +39,10 @@ describe('a read with includes, one query per relation', () => {
         { id: 2, name: 'Bea' },
       ],
       [
-        { __prisma_parent_0: 1, id: 10, title: 'A' },
-        { __prisma_parent_0: 1, id: 11, title: 'B' },
+        { __prisma_parent_key_0: 1, id: 10, title: 'A' },
+        { __prisma_parent_key_0: 1, id: 11, title: 'B' },
       ],
-      [{ __prisma_parent_0: 2, id: 100, bio: 'Hi' }],
+      [{ __prisma_parent_key_0: 2, id: 100, bio: 'Hi' }],
     ]);
 
     const rows = await collection
@@ -64,8 +72,8 @@ describe('a read with includes, one query per relation', () => {
     const { collection, runtime } = createCollectionFor('User', perRelationContract);
     runtime.setNextResults([
       [{ id: 1, name: 'Ada' }],
-      [{ __prisma_parent_0: 1, id: 10, title: 'A' }],
-      [{ __prisma_parent_0: 10, body: 'Nice' }],
+      [{ __prisma_parent_key_0: 1, id: 10, title: 'A' }],
+      [{ __prisma_parent_key_0: 10, body: 'Nice' }],
     ]);
 
     const rows = await collection
@@ -75,7 +83,42 @@ describe('a read with includes, one query per relation', () => {
       )
       .all();
 
-    expect(rows).toEqual([{ name: 'Ada', posts: [{ title: 'A', comments: [{ body: 'Nice' }] }] }]);
+    expect({ rows, projections: projectedAliases(runtime) }).toEqual({
+      rows: [{ name: 'Ada', posts: [{ title: 'A', comments: [{ body: 'Nice' }] }] }],
+      projections: [
+        ['name', 'id'],
+        ['__prisma_parent_key_0', 'title', 'id'],
+        ['__prisma_parent_key_0', 'body'],
+      ],
+    });
+  });
+
+  it('carries the identity a nested include reads through the windows of a paged include', async () => {
+    const { collection, runtime } = createCollectionFor('User', perRelationContract);
+    runtime.setNextResults([
+      [{ id: 1, name: 'Ada' }],
+      [{ __prisma_parent_key_0: 1, id: 10, title: 'A', __prisma_row_number: 1 }],
+      [{ __prisma_parent_key_0: 10, body: 'Nice' }],
+    ]);
+
+    const rows = await collection
+      .select('name')
+      .include('posts', (posts) =>
+        posts
+          .select('title')
+          .limit(1)
+          .include('comments', (comments) => comments.select('body')),
+      )
+      .all();
+
+    expect({ rows, projections: projectedAliases(runtime) }).toEqual({
+      rows: [{ name: 'Ada', posts: [{ title: 'A', comments: [{ body: 'Nice' }] }] }],
+      projections: [
+        ['name', 'id'],
+        ['__prisma_parent_key_0', 'title', '__prisma_row_number', 'id'],
+        ['__prisma_parent_key_0', 'body'],
+      ],
+    });
   });
 
   it('shapes each occurrence of a child row matched to several parents into its own object', async () => {
@@ -86,8 +129,8 @@ describe('a read with includes, one query per relation', () => {
         { id: 11, title: 'B' },
       ],
       [
-        { __prisma_parent_0: 10, id: 1, name: 'Ada' },
-        { __prisma_parent_0: 11, id: 1, name: 'Ada' },
+        { __prisma_parent_key_0: 10, id: 1, name: 'Ada' },
+        { __prisma_parent_key_0: 11, id: 1, name: 'Ada' },
       ],
     ]);
 
@@ -162,7 +205,7 @@ describe('a read with includes, one query per relation', () => {
     const runtime = createMockRuntime();
     runtime.setNextResults([
       [{ id: 1 }],
-      [{ __prisma_parent_0: 1, id: 5, author_id: 1, parent_key: 'mine' }],
+      [{ __prisma_parent_key_0: 1, id: 5, author_id: 1, parent_key: 'mine' }],
     ]);
 
     const authors = new Collection({ runtime, context: perRelation }, 'Author', {

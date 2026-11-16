@@ -14,7 +14,7 @@ import {
   resolveRowIdentityColumns,
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
-import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
+import { type DescribeCollectionRowsOptions, relatedReadsOf } from '../collection-dispatch';
 import { selectIncludeStrategy } from '../include-strategy';
 import {
   countMutationWhere,
@@ -455,7 +455,7 @@ function requireIdentityAt(
   if (!nestedLevels) {
     return;
   }
-  for (const nested of state.includes) {
+  for (const { include: nested } of state.includes.flatMap(relatedReadsOf)) {
     requireIdentityAt(contract, nested.relatedModelName, nested.nested, nestedLevels);
   }
 }

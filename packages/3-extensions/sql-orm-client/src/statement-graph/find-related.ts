@@ -1,5 +1,11 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
+import {
+  type AnyExpression,
+  ColumnRef,
+  DerivedTableSource,
+  ProjectionItem,
+  type SelectAst,
+} from '@internal/sql-relational-core/ast';
 import { combineWhereExprs } from '../where-utils';
 import type { ColumnMapping, StorageRow } from './edge';
 import { keyCondition } from './filter-data';
@@ -17,9 +23,6 @@ type Keyed = { keys: Rows; state: StateEdge[]; requires: Requires[] };
 
 const KEY_LIMITS: ChunkLimits = { parameters: 10_000, bytes: 1024 * 1024 };
 
-/**
- * Reads the child rows of an include for every parent at once, by the parents' keys. It sends each key once, in chunks of at most 10 000 bound parameters and an estimated 1 MiB of key values, and concatenates the rows of the chunks in order.
- */
 export class FindRelated extends StatementNode<Keyed> {
   readonly slots = { keys: 'one', state: 'list', requires: 'list' } as const;
   readonly ast: SelectAst;
@@ -66,15 +69,34 @@ export class FindRelated extends StatementNode<Keyed> {
   }
 
   #statementFor(keys: readonly StorageRow[]): SelectAst {
-    const conditions = keys.map((key) => keyCondition(this.keyColumns, key));
-    const existing = this.ast.where === undefined ? [] : [this.ast.where];
-    return this.ast.withWhere(combineWhereExprs([...existing, anyOf(conditions)]));
+    return withParentFilter(this.ast, anyOf(keys.map((key) => keyCondition(this.keyColumns, key))));
   }
 
   override withReturning(columns: readonly ProjectionItem[]): FindRelated {
-    return new FindRelated(
-      this.ast.withProjection(withColumns(this.returns, columns)),
-      this.keyColumns,
-    );
+    return new FindRelated(withColumnsThroughLayers(this.ast, columns), this.keyColumns);
   }
+}
+
+/** Adds the filter on the parents' identity beside the join to the parent table: in the innermost select, below every derived table that pages or removes duplicates. */
+function withParentFilter(ast: SelectAst, filter: AnyExpression): SelectAst {
+  const { from } = ast;
+  if (from?.kind === 'derived-table-source') {
+    return ast.withFrom(DerivedTableSource.as(from.alias, withParentFilter(from.query, filter)));
+  }
+  return ast.withWhere(
+    combineWhereExprs([...(ast.where === undefined ? [] : [ast.where]), filter]),
+  );
+}
+
+function withColumnsThroughLayers(ast: SelectAst, columns: readonly ProjectionItem[]): SelectAst {
+  const { from } = ast;
+  if (from?.kind !== 'derived-table-source') {
+    return ast.withProjection(withColumns(ast.projection, columns));
+  }
+  const carried = columns.map((column) =>
+    ProjectionItem.of(column.alias, ColumnRef.of(from.alias, column.alias), column.codec),
+  );
+  return ast
+    .withFrom(DerivedTableSource.as(from.alias, withColumnsThroughLayers(from.query, columns)))
+    .withProjection(withColumns(ast.projection, carried));
 }

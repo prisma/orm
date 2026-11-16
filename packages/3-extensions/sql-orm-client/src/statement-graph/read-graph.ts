@@ -7,6 +7,8 @@ import {
   type CollectionQuery,
   type DescribeCollectionRowsOptions,
   describeCollectionQuery,
+  readsNoRows,
+  relatedReadsOf,
 } from '../collection-dispatch';
 import type { CollectionTables } from '../collection-tables';
 import { selectIncludeStrategy } from '../include-strategy';
@@ -25,7 +27,6 @@ import { queryGraph } from './run-graph';
 import { StatementNode } from './statement-node';
 import { WholeRows } from './whole-rows';
 
-/** The statements of a row-returning read: one statement when it has no includes or the database runs the one-query include, else a graph with one query per relation. */
 export function describeCollectionRead<Row>(
   options: DescribeCollectionRowsOptions,
 ): CollectionQuery<Row> {
@@ -35,9 +36,6 @@ export function describeCollectionRead<Row>(
     : describeCollectionQuery<Row>(options);
 }
 
-/**
- * A read whose includes are loaded with one query per relation: the parent rows, then for each include one statement for the child rows of all those parents, attached to their parents in memory.
- */
 export function describeGraphRead<Row>(
   options: DescribeCollectionRowsOptions,
 ): CollectionQuery<Row> {
@@ -76,7 +74,8 @@ function addIncludes(
   parentTables: CollectionTables,
   includes: readonly IncludeExpr[],
 ): NodeId {
-  if (includes.length === 0) {
+  const reads = includes.flatMap(relatedReadsOf).filter((read) => !readsNoRows(read));
+  if (reads.length === 0) {
     return parent;
   }
   const { graph, context } = b;
@@ -91,7 +90,7 @@ function addIncludes(
     const item = projectTableColumn(contract, root, column);
     return [item, item];
   });
-  const children = includes.map((include) => {
+  const children = reads.map(({ key, include }) => {
     const { ast, parentKeys } = relatedRowsSelect(
       contract,
       context.aggregateDescriptors,
@@ -103,12 +102,12 @@ function addIncludes(
       keys: new Rows(parent, keyColumns),
       state: graph.stateEdgesFor(found),
     });
-    const nest: Nest = {
-      name: include.relationName,
-      parentKey: identity,
-      childKey: parentKeys.map((key) => key.alias),
-    };
-    return { rows: addIncludes(b, read, include.nested.tables, include.nested.includes), nest };
+    const nest: Nest = { name: key, parentKey: identity, childKey: parentKeys };
+    const rows =
+      include.scalar === undefined
+        ? addIncludes(b, read, include.nested.tables, include.nested.includes)
+        : read;
+    return { rows, nest };
   });
   return graph.add(new NestJoin(children.map(({ nest }) => nest)), {
     left: new WholeRows(parent),
@@ -116,7 +115,6 @@ function addIncludes(
   });
 }
 
-/** The cache key of a graph read: the content hashes of the statements it sends, in graph order, each before any parent keys are added. */
 async function graphHashInput(
   graph: Graph,
   contract: Contract<SqlStorage>,

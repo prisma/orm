@@ -55,6 +55,7 @@ import { resolveColumn } from './column-codec';
 import { type CallHashInput, planHashInput } from './orm-call';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { RELATED_AGGREGATE_ALIAS } from './query-plan-select';
 import type {
   CollectionContext,
   CollectionState,
@@ -125,36 +126,64 @@ export function consumeCollectionRows<Row>(
   return mapResultRows(rows, mapper);
 }
 
-/** The columns of each level of an include tree that other statements read and the caller did not select, positionally matching `state.includes`. */
+/** The columns of each level of an include tree that other statements read and the caller did not select, and those of the levels below, by the key their rows are attached under. */
 export interface HiddenColumns {
   readonly columns: readonly string[];
-  readonly includes: readonly HiddenColumns[];
+  readonly nested: ReadonlyMap<string, HiddenColumns>;
 }
 
-/**
- * Shapes the rows of a read whose includes were loaded with one query per relation: each row carries, under each include's name, the child rows already decoded, and so on down the tree. Every occurrence of a child row is shaped into its own object.
- */
+const noHiddenColumns: HiddenColumns = { columns: [], nested: new Map() };
+
+/** One statement's worth of an include, read with one query per relation: the include itself, or one branch of a `combine()` as an include of its own. Its rows are attached to the parent row under `key`. */
+export interface RelatedRead {
+  readonly key: string;
+  readonly include: IncludeExpr;
+}
+
+export function relatedReadsOf(include: IncludeExpr): readonly RelatedRead[] {
+  if (include.combine === undefined) {
+    return [{ key: include.relationName, include }];
+  }
+  return Object.entries(include.combine).map(([branchName, branch]) => ({
+    key: `__prisma_combine__${include.relationName}__${branchName}`,
+    include: {
+      ...include,
+      nested: branch.kind === 'rows' ? branch.state : branch.selector.state,
+      scalar: branch.kind === 'rows' ? undefined : branch.selector,
+      combine: undefined,
+    },
+  }));
+}
+
+export function readsNoRows(read: RelatedRead): boolean {
+  return read.include.nested.limit === 0;
+}
+
 export function consumeRelatedRows<Row>(
   options: DescribeCollectionRowsOptions,
   rows: AsyncIterableResult<Record<string, unknown>>,
   hidden: HiddenColumns,
 ): AsyncIterableResult<Row> {
   const { context, state, modelName, namespaceId } = options;
-  return mapResultRows(rows, (row) =>
-    blindCast<Row, 'collection row generic matches the selected model shape'>(
-      shapeRelatedRow(context.contract, namespaceId, modelName, state, row, hidden),
-    ),
-  );
+  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    for await (const row of rows) {
+      yield blindCast<Row, 'collection row generic matches the selected model shape'>(
+        await shapeRelatedRow(context, namespaceId, modelName, state, row, hidden),
+      );
+    }
+  };
+  return new AsyncIterableResult(generator());
 }
 
-function shapeRelatedRow(
-  contract: Contract<SqlStorage>,
+async function shapeRelatedRow(
+  context: CodecExecutionContext,
   namespaceId: string,
   modelName: string,
   state: CollectionState,
   row: Record<string, unknown>,
   hidden: HiddenColumns,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
+  const { contract } = context;
   const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
   const mapped = polyInfo
     ? mapPolymorphicRow(
@@ -168,35 +197,72 @@ function shapeRelatedRow(
       )
     : mapStorageRowToModelFields(contract, namespaceId, modelName, row);
   stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
-  state.includes.forEach((include, index) => {
-    const children = relatedRowsOf(row, include).map((child) =>
-      shapeRelatedRow(
-        contract,
+  for (const include of state.includes) {
+    const reads = relatedReadsOf(include);
+    if (include.combine === undefined) {
+      mapped[include.relationName] = await shapeRelatedRead(context, reads[0], row, hidden);
+      continue;
+    }
+    const branches: Record<string, unknown> = {};
+    for (const [index, branchName] of Object.keys(include.combine).entries()) {
+      branches[branchName] = await shapeRelatedRead(context, reads[index], row, hidden);
+    }
+    mapped[include.relationName] = branches;
+  }
+  return mapped;
+}
+
+async function shapeRelatedRead(
+  context: CodecExecutionContext,
+  read: RelatedRead | undefined,
+  row: Record<string, unknown>,
+  hidden: HiddenColumns,
+): Promise<unknown> {
+  if (read === undefined) {
+    throw new InternalError('An include read with one query per relation has no statement');
+  }
+  const { include } = read;
+  const related = attachedRowsOf(row, read);
+  if (include.scalar !== undefined) {
+    const { resolved, codec } = resolveScalarIncludeMetadata(
+      context.contract,
+      context,
+      include,
+      include.scalar,
+    );
+    const value = related[0]?.[RELATED_AGGREGATE_ALIAS];
+    return value === null || value === undefined ? emptyAggregateResult(resolved, codec) : value;
+  }
+  const children: Record<string, unknown>[] = [];
+  for (const child of related) {
+    children.push(
+      await shapeRelatedRow(
+        context,
         include.relatedNamespaceId,
         include.relatedModelName,
         include.nested,
         child,
-        hidden.includes[index] ?? { columns: [], includes: [] },
+        hidden.nested.get(read.key) ?? noHiddenColumns,
       ),
     );
-    mapped[include.relationName] = isToOneCardinality(include.cardinality)
-      ? (children[0] ?? null)
-      : children;
-  });
-  return mapped;
+  }
+  return isToOneCardinality(include.cardinality) ? (children[0] ?? null) : children;
 }
 
-function relatedRowsOf(
+function attachedRowsOf(
   row: Record<string, unknown>,
-  include: IncludeExpr,
+  read: RelatedRead,
 ): readonly Record<string, unknown>[] {
-  const children = row[include.relationName];
-  if (!Array.isArray(children)) {
-    throw new InternalError(
-      `The rows of include "${include.relationName}" were not attached to their parent row`,
-    );
+  const related = row[read.key];
+  if (Array.isArray(related)) {
+    return related;
   }
-  return children;
+  if (related === undefined && readsNoRows(read)) {
+    return [];
+  }
+  throw new InternalError(
+    `The rows of include "${read.include.relationName}" were not attached to their parent row`,
+  );
 }
 
 function deferResolution<T>(resolve: () => T): () => T {

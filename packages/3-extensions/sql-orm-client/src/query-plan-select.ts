@@ -21,6 +21,7 @@ import {
   ProjectionItem,
   SelectAst,
   SubqueryExpr,
+  WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
@@ -38,6 +39,7 @@ import {
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
   resolvePolymorphismInfo,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
 } from './collection-contract';
 import {
@@ -52,6 +54,7 @@ import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import {
   buildDedupedTableSource,
   buildMtiJoins,
+  buildPrimaryKeyJoinOn,
   buildStateWhere,
   wrapWithRowNumberDedup,
 } from './query-plan-source';
@@ -515,7 +518,7 @@ function buildManyToManyJunctionArtifacts(
  */
 type IncludeTie = 'outerReference' | 'parentJoin';
 
-const PARENT_KEY_ALIAS_PREFIX = '__prisma_parent_';
+const PARENT_KEY_ALIAS_PREFIX = '__prisma_parent_key_';
 
 function buildIncludeChildRowsSelect(
   contract: Contract<SqlStorage>,
@@ -531,7 +534,6 @@ function buildIncludeChildRowsSelect(
   readonly documentAliases: ReadonlySet<string>;
   readonly rowsAlias: string;
   readonly aggregateOrderBy: ReadonlyArray<OrderByItem> | undefined;
-  /** The parent identity a joined child row returns, one item per identity column. */
   readonly parentKeys: ReadonlyArray<ProjectionItem>;
 } {
   const childState = include.nested;
@@ -539,33 +541,22 @@ function buildIncludeChildRowsSelect(
     assertDistinctOnCapability(contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(childState.orderBy, childState.distinctOn.length);
   }
-  if (tie === 'parentJoin') {
-    assertJoinTieSupports(include);
-  }
   const child = childState.tables.root;
   const parentLocalRefs = resolveParentLocalRefs(
     parent,
     include,
     localColumnsForRowInclude(include),
   );
-  if (tie === 'parentJoin') {
-    return buildJoinedChildRowsSelect(
-      contract,
-      parent,
-      include,
-      parentLocalRefs,
-      buildStateWhere(contract, childState),
-    );
-  }
+  const tied = tieToParent(contract, tie, parent, include, child);
   const rowsAlias = scope.alias(`${include.relationName}__rows`);
   const { childOrderBy, hiddenOrderProjection, aggregateOrderBy } = buildIncludeOrderArtifacts(
     include.relationName,
     rowsAlias,
-    childState.orderBy,
+    tied.ordered(childState.orderBy),
   );
   const childWhere = buildStateWhere(contract, childState);
 
-  let whereExpr: AnyExpression;
+  let relationExpr: AnyExpression;
   let junctionJoins: JoinAst[] = [];
 
   if (include.through !== undefined) {
@@ -576,12 +567,12 @@ function buildIncludeChildRowsSelect(
       requireJunction(include),
       include.through,
     );
-    whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
+    relationExpr = artifacts.whereExpr;
     junctionJoins = [artifacts.junctionJoin];
   } else {
-    const joinExpr = buildIncludeJoinExpr(include, child, parentLocalRefs);
-    whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
+    relationExpr = buildIncludeJoinExpr(include, child, parentLocalRefs);
   }
+  const { whereExpr, parentJoins } = tied.relate(relationExpr, childWhere);
 
   // `distinct()` on a non-leaf include cannot be lowered as
   // `SELECT DISTINCT <scalars>, json_agg(<grandchild>) FROM ...`:
@@ -594,11 +585,12 @@ function buildIncludeChildRowsSelect(
   // equivalent to the multi-query stitcher's output (which applies the
   // same force-include + strip-hidden pattern in JS).
   const isDistinctNonLeaf =
+    tied.nestsIncludes &&
     childState.distinct !== undefined &&
     childState.distinct.length > 0 &&
     childState.includes.length > 0;
 
-  if (isDistinctNonLeaf) {
+  if (isDistinctNonLeaf && whereExpr !== undefined) {
     return {
       ...buildDistinctNonLeafChildRowsSelect({
         contract,
@@ -632,19 +624,22 @@ function buildIncludeChildRowsSelect(
   // Recurse: each nested include produces a correlated subquery
   // projection. The nested aggregates are attached to *this* child
   // SELECT, so they correlate against the child's own aliased tables.
-  const nestedProjections = buildNestedIncludeProjections(
-    contract,
-    aggregates,
-    scope,
-    { tables: childState.tables },
-    childState.includes,
-  );
+  const nestedProjections = tied.nestsIncludes
+    ? buildNestedIncludeProjections(
+        contract,
+        aggregates,
+        scope,
+        { tables: childState.tables },
+        childState.includes,
+      )
+    : [];
 
   // Internal discriminator data participates in variant mapping but has no
   // model-field mapping, so it disappears before the row reaches the caller.
   // Hidden order-by projections stay separate because they must not enter the
   // JSON object at all.
   const childProjection: ReadonlyArray<ProjectionItem> = [
+    ...tied.parentKeys,
     ...scalarProjection,
     ...polyJoinsAndProjection.projection,
     ...polyJoinsAndProjection.hiddenProjection,
@@ -658,14 +653,20 @@ function buildIncludeChildRowsSelect(
     childRows = childRows.withJoins([...polyJoinsAndProjection.joins]);
   }
 
-  if (junctionJoins.length > 0) {
-    childRows = childRows.withJoins(junctionJoins);
+  if (junctionJoins.length > 0 || parentJoins.length > 0) {
+    childRows = childRows.withJoins([
+      ...(parentJoins.length > 0 ? polyJoinsAndProjection.joins : []),
+      ...junctionJoins,
+      ...parentJoins,
+    ]);
   }
 
+  const partitionByParent = tied.parentKeys.map((key) => key.expr);
   if (childState.distinctOn && childState.distinctOn.length > 0) {
-    childRows = childRows.withDistinctOn(
-      childState.distinctOn.map((column) => child.column(column)),
-    );
+    childRows = childRows.withDistinctOn([
+      ...partitionByParent,
+      ...childState.distinctOn.map((column) => child.column(column)),
+    ]);
     if (childOrderBy) {
       childRows = childRows.withOrderBy(childOrderBy);
     }
@@ -681,7 +682,10 @@ function buildIncludeChildRowsSelect(
     const rankedAlias = scope.alias(`${include.relationName}__distinct`);
     childRows = wrapWithRowNumberDedup({
       base: childRows,
-      distinctColumnRefs: childState.distinct.map((column) => child.column(column)),
+      distinctColumnRefs: [
+        ...partitionByParent,
+        ...childState.distinct.map((column) => child.column(column)),
+      ],
       rankingOrderBy: childOrderBy ?? [],
       rankedAlias,
     });
@@ -695,10 +699,10 @@ function buildIncludeChildRowsSelect(
   } else if (childOrderBy) {
     childRows = childRows.withOrderBy(childOrderBy);
   }
-  if (childState.limit !== undefined) {
+  if (tied.pagesInStatement && childState.limit !== undefined) {
     childRows = childRows.withLimit(childState.limit);
   }
-  if (childState.offset !== undefined) {
+  if (tied.pagesInStatement && childState.offset !== undefined) {
     childRows = childRows.withOffset(childState.offset);
   }
 
@@ -708,102 +712,219 @@ function buildIncludeChildRowsSelect(
     documentAliases: documentAliasesOf(nestedProjections),
     rowsAlias,
     aggregateOrderBy,
-    parentKeys: [],
+    parentKeys: tied.parentKeys,
   };
 }
 
-function assertJoinTieSupports(include: IncludeExpr): void {
-  const state = include.nested;
-  const unbuilt = [
-    ['many-to-many relations', include.through !== undefined],
-    ['relations declared on a variant', include.localVariantValue !== undefined],
-    ['limit()', state.limit !== undefined],
-    ['offset()', state.offset !== undefined],
-    ['distinct()', state.distinct !== undefined && state.distinct.length > 0],
-    ['distinctOn()', state.distinctOn !== undefined && state.distinctOn.length > 0],
-  ] as const;
-  const form = unbuilt.find(([, used]) => used)?.[0];
-  if (form !== undefined) {
-    throw new InternalError(
-      `Loading include '${include.relationName}' with one query per relation is not built yet for ${form}`,
-    );
-  }
+interface Tied {
+  readonly parentKeys: ReadonlyArray<ProjectionItem>;
+  /** Whether nested includes are subqueries of this statement, rather than statements of their own. */
+  readonly nestsIncludes: boolean;
+  /** Whether `limit` and `offset` apply to this statement's rows, rather than to each parent's rows. */
+  readonly pagesInStatement: boolean;
+  ordered(order: readonly OrderByItem[] | undefined): readonly OrderByItem[] | undefined;
+  relate(
+    relationExpr: AnyExpression,
+    childWhere: AnyExpression | undefined,
+  ): { readonly whereExpr: AnyExpression | undefined; readonly parentJoins: readonly JoinAst[] };
 }
 
-/**
- * The child rows of an include joined to the parent table rather than correlated with it: each row returns the parent's identity under reserved aliases, so rows of many parents can be read at once and attached to their parents afterwards. The caller filters the parent's identity beside the join. Rows are ordered by parent, then by the caller's order, then by the child's identity, so ties have one order.
- */
-function buildJoinedChildRowsSelect(
+function tieToParent(
   contract: Contract<SqlStorage>,
+  tie: IncludeTie,
   parent: IncludeParent,
   include: IncludeExpr,
-  parentLocalRefs: readonly ColumnRef[],
-  childWhere: AnyExpression | undefined,
-): ReturnType<typeof buildIncludeChildRowsSelect> {
-  const childState = include.nested;
-  const child = childState.tables.root;
-  const parentTable = parent.tables.root;
-  const parentKeys = resolveRowIdentityColumns(
-    contract,
-    parentTable.storage.namespaceId,
-    parentTable.storage.tableName,
-  ).map((column, index) =>
-    ProjectionItem.of(
-      `${PARENT_KEY_ALIAS_PREFIX}${index}`,
-      parentTable.column(column),
-      codecRefForStorageColumn(
-        contract.storage,
-        parentTable.storage.namespaceId,
-        parentTable.storage.tableName,
-        column,
-      ),
-    ),
-  );
-  const polyJoinsAndProjection = buildChildPolymorphismJoinsAndProjection(contract, include);
-  const scalarProjection = buildProjection(
-    contract,
-    addressedModel(
-      contract,
-      include.relatedNamespaceId,
-      include.relatedModelName,
-      include.nested.variantValue,
-    ),
-    child,
-    polyJoinsAndProjection.baseSelectedFields,
-  );
-  const childProjection: ReadonlyArray<ProjectionItem> = [
-    ...scalarProjection,
-    ...polyJoinsAndProjection.projection,
-    ...polyJoinsAndProjection.hiddenProjection,
-  ];
-  const parentJoin = JoinAst.inner(
-    parentTable.tableSource(contract),
-    buildIncludeJoinExpr(include, child, parentLocalRefs),
-  );
+  child: AliasedTable,
+): Tied {
+  if (tie === 'outerReference') {
+    return {
+      parentKeys: [],
+      nestsIncludes: true,
+      pagesInStatement: true,
+      ordered: (order) => order,
+      relate: (relationExpr, childWhere) => ({
+        whereExpr: childWhere ? AndExpr.of([relationExpr, childWhere]) : relationExpr,
+        parentJoins: [],
+      }),
+    };
+  }
+  const parentRoot = parent.tables.root;
+  const local = localTable(parent.tables, include);
+  const parentKeys = parentKeysOf(contract, parentRoot);
   const childIdentity = resolveRowIdentityColumns(
     contract,
     child.storage.namespaceId,
     child.storage.tableName,
   );
-  let childRows = SelectAst.from(child.tableSource(contract))
-    .withProjection([...parentKeys, ...childProjection])
-    .withJoins([...polyJoinsAndProjection.joins, parentJoin])
-    .withOrderBy([
-      ...parentKeys.map((key) => OrderByItem.asc(key.expr)),
-      ...(childState.orderBy ?? []),
-      ...childIdentity.map((column) => OrderByItem.asc(child.column(column))),
-    ]);
-  if (childWhere !== undefined) {
-    childRows = childRows.withWhere(childWhere);
-  }
+  const rootJoins =
+    local === parentRoot
+      ? []
+      : [
+          JoinAst.inner(
+            parentRoot.tableSource(contract),
+            buildPrimaryKeyJoinOn(
+              parentRoot,
+              local,
+              resolvePrimaryKeyColumns(
+                contract,
+                parentRoot.storage.namespaceId,
+                parentRoot.storage.tableName,
+              ),
+            ),
+          ),
+        ];
   return {
-    childRows,
-    childProjection,
-    documentAliases: new Set(),
-    rowsAlias: '',
-    aggregateOrderBy: undefined,
     parentKeys,
+    nestsIncludes: false,
+    pagesInStatement: false,
+    ordered: (order) => [
+      ...parentKeys.map((key) => OrderByItem.asc(key.expr)),
+      ...(order ?? []),
+      ...childIdentity.map((column) => OrderByItem.asc(child.column(column))),
+    ],
+    relate: (relationExpr, childWhere) => ({
+      whereExpr: childWhere,
+      parentJoins: [JoinAst.inner(local.tableSource(contract), relationExpr), ...rootJoins],
+    }),
   };
+}
+
+function parentKeysOf(
+  contract: Contract<SqlStorage>,
+  parentRoot: AliasedTable,
+): readonly ProjectionItem[] {
+  const { namespaceId, tableName } = parentRoot.storage;
+  return resolveRowIdentityColumns(contract, namespaceId, tableName).map((column, index) =>
+    ProjectionItem.of(
+      `${PARENT_KEY_ALIAS_PREFIX}${index}`,
+      parentRoot.column(column),
+      codecRefForStorageColumn(contract.storage, namespaceId, tableName, column),
+    ),
+  );
+}
+
+/**
+ * Pages each parent's rows: a `ROW_NUMBER` window partitioned by the parent's identity, over the child rows as a derived table, keeps the rows after `offset` up to `limit`. With both given as numbers one window does; when either is an expression a second window numbers the rows the offset kept, since the AST has no addition.
+ */
+function pagePerParent(
+  scope: TableScope,
+  rows: ReturnType<typeof buildIncludeChildRowsSelect>,
+  state: CollectionState,
+): SelectAst {
+  const { childRows, childProjection, rowsAlias, aggregateOrderBy, parentKeys } = rows;
+  const { limit, offset } = state;
+  if (limit === undefined && offset === undefined) {
+    return childRows.withProjection(
+      childRows.projection.filter((item) =>
+        childProjection.some((column) => column.alias === item.alias),
+      ),
+    );
+  }
+  const visible = childProjection.map((item) =>
+    ProjectionItem.of(item.alias, ColumnRef.of(rowsAlias, item.alias), item.codec),
+  );
+  const level: RowsLevel = {
+    select: SelectAst.from(DerivedTableSource.as(rowsAlias, childRows)).withProjection(visible),
+    keys: parentKeys.map((key) => ColumnRef.of(rowsAlias, key.alias)),
+    order: aggregateOrderBy ?? [],
+  };
+  const oneWindow =
+    offset === undefined ||
+    limit === undefined ||
+    (typeof offset === 'number' && typeof limit === 'number');
+  const kept = numberedRows(scope, `${rowsAlias}__page`, level, parentKeys, (rowNumber) =>
+    oneWindow
+      ? oneWindowCondition(rowNumber, offset, limit)
+      : BinaryExpr.gt(rowNumber, limitOffsetExpr(offset)),
+  );
+  if (oneWindow || limit === undefined) {
+    return kept.select;
+  }
+  return numberedRows(
+    scope,
+    `${rowsAlias}__limit`,
+    {
+      select: kept.select,
+      keys: parentKeys.map((key) => ColumnRef.of(kept.alias, key.alias)),
+      order: [OrderByItem.asc(ColumnRef.of(kept.alias, ROW_NUMBER_ALIAS))],
+    },
+    parentKeys,
+    (rowNumber) => BinaryExpr.lte(rowNumber, limitOffsetExpr(limit)),
+  ).select;
+}
+
+interface RowsLevel {
+  readonly select: SelectAst;
+  readonly keys: readonly AnyExpression[];
+  readonly order: readonly OrderByItem[];
+}
+
+const ROW_NUMBER_ALIAS = '__prisma_row_number';
+
+function pagesOrRemovesDuplicates(state: CollectionState): boolean {
+  return (
+    state.limit !== undefined ||
+    state.offset !== undefined ||
+    (state.distinct !== undefined && state.distinct.length > 0) ||
+    (state.distinctOn !== undefined && state.distinctOn.length > 0)
+  );
+}
+
+function oneWindowCondition(
+  rowNumber: AnyExpression,
+  offset: CollectionState['offset'],
+  limit: CollectionState['limit'],
+): AnyExpression {
+  const skipped = typeof offset === 'number' ? offset : 0;
+  const conditions = [
+    ...(offset === undefined ? [] : [BinaryExpr.gt(rowNumber, limitOffsetExpr(offset))]),
+    ...(limit === undefined
+      ? []
+      : [
+          BinaryExpr.lte(
+            rowNumber,
+            typeof limit === 'number' ? LiteralExpr.of(skipped + limit) : limitOffsetExpr(limit),
+          ),
+        ]),
+  ];
+  const [only, ...others] = conditions;
+  return only !== undefined && others.length === 0 ? only : AndExpr.of(conditions);
+}
+
+function limitOffsetExpr(value: NonNullable<CollectionState['limit']>): AnyExpression {
+  return typeof value === 'number' ? LiteralExpr.of(value) : value;
+}
+
+function numberedRows(
+  scope: TableScope,
+  preferredAlias: string,
+  level: RowsLevel,
+  parentKeys: readonly ProjectionItem[],
+  keep: (rowNumber: AnyExpression) => AnyExpression,
+): { readonly select: SelectAst; readonly alias: string } {
+  const alias = scope.alias(preferredAlias);
+  const visible = level.select.projection.filter((item) => item.alias !== ROW_NUMBER_ALIAS);
+  const numbered = level.select.withProjection([
+    ...visible,
+    ProjectionItem.of(
+      ROW_NUMBER_ALIAS,
+      WindowFuncExpr.rowNumber({ partitionBy: [...level.keys], orderBy: [...level.order] }),
+    ),
+  ]);
+  const rowNumber = ColumnRef.of(alias, ROW_NUMBER_ALIAS);
+  const select = SelectAst.from(DerivedTableSource.as(alias, numbered))
+    .withProjection([
+      ...visible.map((item) =>
+        ProjectionItem.of(item.alias, ColumnRef.of(alias, item.alias), item.codec),
+      ),
+      ProjectionItem.of(ROW_NUMBER_ALIAS, rowNumber),
+    ])
+    .withWhere(keep(rowNumber))
+    .withOrderBy([
+      ...parentKeys.map((key) => OrderByItem.asc(ColumnRef.of(alias, key.alias))),
+      OrderByItem.asc(rowNumber),
+    ]);
+  return { select, alias };
 }
 
 function buildDistinctNonLeafChildRowsSelect(options: {
@@ -1032,6 +1153,7 @@ function buildIncludeChildScalarSelect(
   parent: IncludeParent,
   include: IncludeExpr,
   scalar: IncludeScalar<unknown>,
+  tie: IncludeTie,
 ): SelectAst {
   // The reducer's result is a value in its own right, so it enters the JSON
   // envelope under the codec the target declares for it — without which a count
@@ -1049,17 +1171,68 @@ function buildIncludeChildScalarSelect(
     fn: scalar.fn,
     column: scalar.column,
   });
-  const parentLocalRefs = resolveParentLocalRefs(
-    parent,
-    include,
-    localColumnsForRowInclude(include),
-  );
   const state = scalar.state;
   const child = state.tables.root;
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
+  if (tie === 'parentJoin') {
+    const rows = buildIncludeChildRowsSelect(
+      contract,
+      aggregates,
+      scope,
+      parent,
+      {
+        ...include,
+        nested: {
+          ...state,
+          selectedFields: scalar.column === undefined ? [] : [scalar.column],
+          includes: [],
+        },
+        scalar: undefined,
+        combine: undefined,
+      },
+      'parentJoin',
+    );
+    const { parentKeys } = rows;
+    if (!pagesOrRemovesDuplicates(state)) {
+      const aggregate = buildIncludeAggregateExpr(
+        scalar,
+        scalar.column === undefined ? undefined : child.column(scalar.column),
+        resultLowering,
+        inputCodec,
+      );
+      return rows.childRows
+        .withProjection([
+          ...parentKeys,
+          ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
+        ])
+        .withGroupBy(parentKeys.map((key) => key.expr))
+        .withOrderBy([]);
+    }
+    const scalarAlias = scope.alias(`${include.relationName}__scalar`);
+    const groupKeys = parentKeys.map((key) =>
+      ProjectionItem.of(key.alias, ColumnRef.of(scalarAlias, key.alias), key.codec),
+    );
+    const aggregate = buildIncludeAggregateExpr(
+      scalar,
+      scalar.column === undefined ? undefined : ColumnRef.of(scalarAlias, scalar.column),
+      resultLowering,
+      inputCodec,
+    );
+    return SelectAst.from(DerivedTableSource.as(scalarAlias, pagePerParent(scope, rows, state)))
+      .withProjection([
+        ...groupKeys,
+        ProjectionItem.of(RELATED_AGGREGATE_ALIAS, aggregate, resultCodec),
+      ])
+      .withGroupBy(groupKeys.map((key) => key.expr));
+  }
+  const parentLocalRefs = resolveParentLocalRefs(
+    parent,
+    include,
+    localColumnsForRowInclude(include),
+  );
   const childWhere = buildStateWhere(contract, state);
 
   let whereExpr: AnyExpression;
@@ -1308,6 +1481,7 @@ function buildIncludeChildCombineBranchSelect(
       parent,
       include,
       branch.selector,
+      'outerReference',
     );
   }
   // Row branch: synthesize an IncludeExpr whose `nested` is the
@@ -1382,6 +1556,7 @@ function buildCorrelatedIncludeProjection(
       parent,
       include,
       include.scalar,
+      'outerReference',
     );
     return {
       projection: ProjectionItem.of(include.relationName, SubqueryExpr.of(scalarSelect)),
@@ -1597,32 +1772,42 @@ export function compileSelectWithIncludes(
 
 export interface RelatedRowsSelect {
   readonly ast: SelectAst;
-  /** The parent identity each row returns, one item per identity column, under reserved aliases. */
-  readonly parentKeys: ReadonlyArray<ProjectionItem>;
+  readonly parentKeys: readonly string[];
 }
 
-/** The statement that reads an include's child rows for many parents at once, without the filter on the parents' identity. */
+export const RELATED_AGGREGATE_ALIAS = '__prisma_aggregate';
+
 export function relatedRowsSelect(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
   parentTables: CollectionTables,
   include: IncludeExpr,
 ): RelatedRowsSelect {
-  if (include.scalar !== undefined || include.combine !== undefined) {
-    if (include.nested.distinctOn !== undefined && include.nested.distinctOn.length > 0) {
-      assertDistinctOnCapability(contract, 'distinctOn');
-    }
+  if (include.combine !== undefined) {
     throw new InternalError(
-      `Loading include '${include.relationName}' with one query per relation is not built yet for ${include.scalar !== undefined ? 'scalar includes' : 'combine()'}`,
+      `Include '${include.relationName}' is a combine(); each of its branches is read by a statement of its own`,
     );
   }
-  const { childRows, parentKeys } = buildIncludeChildRowsSelect(
-    contract,
-    aggregates,
-    include.nested.tables.scope.copy(),
-    { tables: parentTables },
-    include,
-    'parentJoin',
-  );
-  return { ast: childRows, parentKeys };
+  const scope = include.nested.tables.scope.copy();
+  const parent: IncludeParent = { tables: parentTables };
+  const ast =
+    include.scalar === undefined
+      ? pagePerParent(
+          scope,
+          buildIncludeChildRowsSelect(contract, aggregates, scope, parent, include, 'parentJoin'),
+          include.nested,
+        )
+      : buildIncludeChildScalarSelect(
+          contract,
+          aggregates,
+          scope,
+          parent,
+          include,
+          include.scalar,
+          'parentJoin',
+        );
+  return {
+    ast,
+    parentKeys: parentKeysOf(contract, parentTables.root).map((key) => key.alias),
+  };
 }
