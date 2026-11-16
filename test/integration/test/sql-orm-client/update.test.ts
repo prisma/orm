@@ -219,7 +219,7 @@ describe.each(includeStrategies)('integration/update (%s)', (strategy) => {
           .select('name')
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .update({ name: 'Alice Updated' });
-        expectPerRelationStatements(runtime, strategy, 3);
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(updated).toEqual({
           name: 'Alice Updated',

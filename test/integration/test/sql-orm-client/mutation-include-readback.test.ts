@@ -169,7 +169,7 @@ describe.each(includeStrategies)('integration/mutation-include-readback (%s)', (
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .update({ name: 'Alice Updated' });
-          expectPerRelationStatements(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(updated).toEqual({
             name: 'Alice Updated',
@@ -375,7 +375,7 @@ describe.each(includeStrategies)('integration/mutation-include-readback (%s)', (
                 ),
             )
             .update({ name: 'Alice Updated' });
-          expectPerRelationStatements(runtime, strategy, 4);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(updated).toEqual({
             name: 'Alice Updated',
@@ -489,7 +489,7 @@ describe.each(includeStrategies)('integration/mutation-include-readback (%s)', (
             .select('name')
             .include('profile', (profile) => profile.select('bio'))
             .update({ name: 'Alice Updated' });
-          expectPerRelationStatements(runtime, strategy, 3);
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(updated).toEqual({
             name: 'Alice Updated',

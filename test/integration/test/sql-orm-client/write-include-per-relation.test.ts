@@ -99,7 +99,7 @@ const statementsByCase: Record<
   Returning,
   Record<'create' | 'update' | 'upsert' | 'delete', number>
 > = {
-  'with returning': { create: 2, update: 3, upsert: 2, delete: 3 },
+  'with returning': { create: 2, update: 2, upsert: 2, delete: 3 },
   'without returning': { create: 3, update: 4, upsert: 3, delete: 3 },
 };
 
