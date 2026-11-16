@@ -1683,12 +1683,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       async commit(): Promise<void> {
         level.assertAcceptsWork();
         commitAttempted = true;
-        try {
-          await self.#inFlight.track(() => driverSavepoint.commit());
-        } catch (error) {
-          await activity.end({ by: 'release', outcome: 'failed' });
-          throw error;
-        }
+        await self.#inFlight.track(() => driverSavepoint.commit());
         level.settle();
         await activity.end({ by: 'release', outcome: 'succeeded' });
       },
