@@ -40,8 +40,8 @@ export function addIncludeNodes(
     const item = projectTableColumn(contract, root, column);
     return [item, item];
   });
-  const children = reads.map(({ key, include }) => {
-    const { ast, parentKeys } = relatedRowsSelect(
+  const children = reads.map(({ name, include }) => {
+    const { ast, parentKey } = relatedRowsSelect(
       contract,
       context.aggregateDescriptors,
       parentTables,
@@ -52,7 +52,7 @@ export function addIncludeNodes(
       keys: new Rows(parent, keyColumns),
       state: graph.stateEdgesFor(found),
     });
-    const nest: Nest = { name: key, parentKey: identity, childKey: parentKeys };
+    const nest: Nest = { name, identity, parentKey };
     const rows =
       include.scalar === undefined
         ? addIncludeNodes(
@@ -91,7 +91,7 @@ export function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState
     throw new InternalError(`NestJoin ${id} has no parent rows`);
   }
   const readStates = new Map(
-    state.includes.flatMap(relatedReadsOf).map(({ key, include }) => [key, include.nested]),
+    state.includes.flatMap(relatedReadsOf).map(({ name, include }) => [name, include.nested]),
   );
   return {
     columns: unselectedColumnsReadFrom(graph, parentEdge.from, state),

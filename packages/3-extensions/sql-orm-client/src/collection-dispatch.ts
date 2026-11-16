@@ -136,16 +136,16 @@ const noHiddenColumns: HiddenColumns = { columns: [], nested: new Map() };
 
 /** One statement's worth of an include, read with one query per relation: the include itself, or one branch of a `combine()` as an include of its own. Its rows are attached to the parent row under `key`. */
 export interface RelatedRead {
-  readonly key: string;
+  readonly name: string;
   readonly include: IncludeExpr;
 }
 
 export function relatedReadsOf(include: IncludeExpr): readonly RelatedRead[] {
   if (include.combine === undefined) {
-    return [{ key: include.relationName, include }];
+    return [{ name: include.relationName, include }];
   }
   return Object.entries(include.combine).map(([branchName, branch]) => ({
-    key: `__prisma_combine__${include.relationName}__${branchName}`,
+    name: `__prisma_combine__${include.relationName}__${branchName}`,
     include: {
       ...include,
       nested: branch.kind === 'rows' ? branch.state : branch.selector.state,
@@ -246,7 +246,7 @@ async function relatedReadShaper(
     include.relatedNamespaceId,
     include.relatedModelName,
     include.nested,
-    hidden.nested.get(read.key) ?? noHiddenColumns,
+    hidden.nested.get(read.name) ?? noHiddenColumns,
   );
   const toOne = isToOneCardinality(include.cardinality);
   return (row) => {
@@ -259,7 +259,7 @@ function attachedRowsOf(
   row: Record<string, unknown>,
   read: RelatedRead,
 ): readonly Record<string, unknown>[] {
-  const related = row[read.key];
+  const related = row[read.name];
   if (Array.isArray(related)) {
     return related;
   }

@@ -27,7 +27,7 @@ function selects(queried: readonly unknown[]): SelectAst[] {
 }
 
 describe('FindRelated', () => {
-  it('reads the rows of all parent keys in one statement, beside its own filter', async () => {
+  it('reads the rows of all parents in one statement, beside its own filter', async () => {
     const run = recordingRun([{ id: 7 }]);
     const find = new FindRelated(findUsers([nameIsAda]).ast, ids, RELATED_KEY_LIMITS);
 
@@ -109,7 +109,7 @@ describe('FindRelated', () => {
     expect(run.queried).toEqual([]);
   });
 
-  it('reports its statement without parent keys', () => {
+  it('reports its statement without the identities of its parents', () => {
     const find = new FindRelated(findUsers([nameIsAda]).ast, ids, RELATED_KEY_LIMITS);
 
     expect(find.statements.map((ast) => whereOf(ast as SelectAst))).toEqual(["name = 'Ada'"]);

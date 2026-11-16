@@ -4,8 +4,8 @@ import { NestJoin } from '../../src/statement-graph/nest-join';
 import { WholeRows } from '../../src/statement-graph/whole-rows';
 import { recordingRun } from './statements';
 
-const posts = { name: 'posts', parentKey: ['id'], childKey: ['__prisma_parent_key_0'] };
-const profile = { name: 'profile', parentKey: ['id'], childKey: ['__prisma_parent_key_0'] };
+const posts = { name: 'posts', identity: ['id'], parentKey: ['__prisma_parent_key_0'] };
+const profile = { name: 'profile', identity: ['id'], parentKey: ['__prisma_parent_key_0'] };
 
 async function joined(
   nest: NestJoin,
@@ -57,8 +57,8 @@ describe('NestJoin', () => {
   it('matches a composite identity on every part', async () => {
     const composite = {
       name: 'members',
-      parentKey: ['tenant', 'id'],
-      childKey: ['__prisma_parent_key_0', '__prisma_parent_key_1'],
+      identity: ['tenant', 'id'],
+      parentKey: ['__prisma_parent_key_0', '__prisma_parent_key_1'],
     };
     const parents = [
       { tenant: 'a', id: 1 },

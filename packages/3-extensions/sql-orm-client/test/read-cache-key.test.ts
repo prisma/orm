@@ -25,7 +25,7 @@ function hashInputOf(state: CollectionState): Promise<unknown> {
 }
 
 describe('the cache key of a read with includes, one query per relation', () => {
-  it('holds the statements it sends, each without parent keys, and the include tree', async () => {
+  it('holds the statements it sends, each without the identities of the parents, and the include tree', async () => {
     expect(await hashInputOf(collection.include('posts').state)).toEqual({
       statements: [expect.stringContaining('"users"'), expect.stringContaining('"posts"')],
       selection: undefined,
