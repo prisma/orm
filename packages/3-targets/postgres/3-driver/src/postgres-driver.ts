@@ -730,6 +730,64 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
       this.#settle();
     }
   }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openPostgresSavepoint(this.#connection, this.options, name);
+  }
+}
+
+class PostgresSavepointImpl extends PostgresQueryable implements SqlTransaction {
+  readonly #connection: PoolClient | Client;
+  readonly #name: string;
+
+  constructor(connection: PoolClient | Client, options: ConnectionOptions, name: string) {
+    super(options);
+    this.#connection = connection;
+    this.#name = name;
+  }
+
+  override acquireClient(): Promise<PoolClient | Client> {
+    return Promise.resolve(this.#connection);
+  }
+
+  override releaseClient(_client: PoolClient | Client): Promise<void> {
+    return Promise.resolve();
+  }
+
+  protected override inExplicitTransaction(): boolean {
+    return true;
+  }
+
+  async commit(): Promise<void> {
+    await sendSavepointStatement(this.#connection, `RELEASE SAVEPOINT ${this.#name}`);
+  }
+
+  async rollback(): Promise<void> {
+    await sendSavepointStatement(this.#connection, `ROLLBACK TO SAVEPOINT ${this.#name}`);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openPostgresSavepoint(this.#connection, this.options, name);
+  }
+}
+
+async function sendSavepointStatement(connection: PoolClient | Client, sql: string): Promise<void> {
+  const releaseLock = await acquireClientQueryLock(connection);
+  try {
+    assertClientUsable(connection);
+    await connection.query(sql).catch(rethrowClientError(connection));
+  } finally {
+    releaseLock();
+  }
+}
+
+async function openPostgresSavepoint(
+  connection: PoolClient | Client,
+  options: ConnectionOptions,
+  name: string,
+): Promise<PostgresSavepointImpl> {
+  await sendSavepointStatement(connection, `SAVEPOINT ${name}`);
+  return new PostgresSavepointImpl(connection, options, name);
 }
 
 class PostgresPoolDriverImpl
