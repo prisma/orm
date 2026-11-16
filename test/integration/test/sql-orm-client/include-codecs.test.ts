@@ -235,10 +235,11 @@ describe.each(includeStrategies)('integration/include codecs (%s)', (strategy) =
   );
 });
 
-describe('integration/include codecs, one-query include', () => {
-  const context = contextOf('join');
+describe.each(includeStrategies)('integration/include codecs, decode errors (%s)', (strategy) => {
+  const context = contextOf(strategy);
+  const previewsRawValue = { join: false, query: true }[strategy];
   it(
-    'omits raw database values from include decode errors',
+    'names the column of an included row that fails to decode, previewing the raw value only where the row is read as an ordinary row',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {
@@ -270,8 +271,15 @@ describe('integration/include codecs, one-query include', () => {
               codec: TEST_INCLUDED_TEXT_CODEC_ID,
             },
           });
-          expect(decodeError).not.toHaveProperty('details.wirePreview');
-          expect(JSON.stringify(decodeError)).not.toContain(SENSITIVE_DATABASE_VALUE);
+          expect({
+            wirePreview: (decodeError as { details: Record<string, unknown> }).details[
+              'wirePreview'
+            ],
+            rawValueInError: JSON.stringify(decodeError).includes(SENSITIVE_DATABASE_VALUE),
+          }).toEqual({
+            wirePreview: previewsRawValue ? SENSITIVE_DATABASE_VALUE : undefined,
+            rawValueInError: previewsRawValue,
+          });
         },
         contract,
         [includedTextExtension],

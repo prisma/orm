@@ -33,9 +33,9 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
   // hasMany non-leaf + hasMany leaf, hasMany non-leaf + belongsTo leaf.
   // ===========================================================================
 
-  describe('single execution under single-query capabilities', () => {
+  describe('statement counts and shapes under single-query capabilities', () => {
     it(
-      'lateral: depth-2 hasMany + hasMany leaf — single execution + canonical shape',
+      'lateral: depth-2 hasMany + hasMany leaf — statement count + canonical shape',
       async () => {
         // Two posts share the title 'A' so `.distinct('title')` collapses
         // them to one representative. With orderBy [title.asc, id.asc] the
@@ -98,7 +98,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
     );
 
     it(
-      'correlated: depth-2 hasMany + hasMany leaf — single execution + canonical shape',
+      'correlated: depth-2 hasMany + hasMany leaf — statement count + canonical shape',
       async () => {
         // Same setup as the lateral variant; only capabilities differ. The
         // correlated builder reaches into the same `buildIncludeChildRowsSelect`
@@ -166,7 +166,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
     );
 
     it(
-      'lateral: depth-2 hasMany + belongsTo leaf — single execution + canonical shape',
+      'lateral: depth-2 hasMany + belongsTo leaf — statement count + canonical shape',
       async () => {
         // Mixed cardinality at the leaf: the depth-2 grandchild is a
         // to-one belongsTo (post.author), which collapses to a single
@@ -222,7 +222,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
     );
 
     it(
-      'correlated: depth-2 hasMany + belongsTo leaf — single execution + canonical shape',
+      'correlated: depth-2 hasMany + belongsTo leaf — statement count + canonical shape',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [
@@ -402,7 +402,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
 
   describe('nested distinct shapes', () => {
     it(
-      'distinct at depth 2 (nested under a depth-1 row include) — single execution + shape',
+      'distinct at depth 2 (nested under a depth-1 row include) — statement count + shape',
       async () => {
         // Depth-3 tree, with `distinct()` on the depth-2 level rather than
         // depth 1. The dedup wrapper must compose recursively: the outer
@@ -473,7 +473,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
     );
 
     it(
-      'distinct on a self-relation non-leaf — single execution + shape',
+      'distinct on a self-relation non-leaf — statement count + shape',
       async () => {
         // Self-relation aliasing must propagate through the recursion or
         // the dedup wrapper will reference the wrong physical table at
@@ -528,7 +528,7 @@ describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (s
     );
 
     it(
-      'distinct at depth 1 inside a depth-3 tree — single execution + shape',
+      'distinct at depth 1 inside a depth-3 tree — statement count + shape',
       async () => {
         // The load-bearing recursion case for the dedup wrapper: the
         // depth-1 include is distinct AND has nested grandchildren that

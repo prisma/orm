@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Contract } from '../sql-builder/fixtures/generated/contract';
 import { type PlannedIndex, plannedExpressionIndexes } from '../sql-builder/full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from '../sql-builder/setup';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { withPlanRecording } from './runtime-helpers';
 
 const QUERY = 'zebra';
@@ -59,7 +60,7 @@ describe('contributed collection methods', {
     await client().query('SET enable_seqscan = off');
   }, timeouts.spinUpPpgDev);
 
-  function ormClient() {
+  function ormClient(strategy: IncludeStrategy = 'join') {
     const captured: SqlQueryPlan<unknown>[] = [];
     const real = runtime();
     const recording = withPlanRecording(real, (plan) => {
@@ -67,7 +68,7 @@ describe('contributed collection methods', {
     });
     const client = orm({
       runtime: recording,
-      context: context(),
+      context: withIncludeStrategy(context(), strategy),
       collections: { Document: DocumentCollection, Post: PostCollection },
     });
     return { db: client.public, captured };
@@ -169,23 +170,26 @@ describe('contributed collection methods', {
     expect(await explainedIndexes(captured[1])).toContain(searchIndex.name);
   });
 
-  it('searches the related rows inside an include refinement', async () => {
-    const { db, captured } = ormClient();
-    const q = websearchToTsquery(QUERY);
+  it.each(includeStrategies)(
+    'searches the related rows inside an include refinement (%s)',
+    async (strategy) => {
+      const { db, captured } = ormClient(strategy);
+      const q = websearchToTsquery(QUERY);
 
-    const rows = await db.Document.select('id')
-      .where((d) => d.id.in([56, 88, 89]))
-      .include('children', (children) => children.select('id').using.documents_search(q))
-      .orderBy((d) => d.id.asc())
-      .all();
+      const rows = await db.Document.select('id')
+        .where((d) => d.id.in([56, 88, 89]))
+        .include('children', (children) => children.select('id').using.documents_search(q))
+        .orderBy((d) => d.id.asc())
+        .all();
 
-    expect(rows).toEqual([
-      { id: 56, children: [{ id: 356 }] },
-      { id: 88, children: [{ id: 388 }] },
-      { id: 89, children: [] },
-    ]);
-    expect(await explainedIndexes(captured[0])).toContain(searchIndex.name);
-  });
+      expect(rows).toEqual([
+        { id: 56, children: [{ id: 356 }] },
+        { id: 88, children: [{ id: 388 }] },
+        { id: 89, children: [] },
+      ]);
+      expect(await explainedIndexes(captured.at(-1))).toContain(searchIndex.name);
+    },
+  );
 
   describe('pgvector nearest neighbour', () => {
     const near = [1, 0, 0];
@@ -252,19 +256,24 @@ describe('contributed collection methods', {
       });
     });
 
-    it('finds the nearest related rows inside an include refinement', async () => {
-      const { db } = ormClient();
+    it.each(includeStrategies)(
+      'finds the nearest related rows inside an include refinement (%s)',
+      async (strategy) => {
+        const { db } = ormClient(strategy);
 
-      const rows = await db.User.select('id')
-        .where((u) => u.id.in([1, 3]))
-        .include('posts', (posts) => posts.select('id').using.embedding_nearest([0, 1, 0]).limit(1))
-        .orderBy((u) => u.id.asc())
-        .all();
+        const rows = await db.User.select('id')
+          .where((u) => u.id.in([1, 3]))
+          .include('posts', (posts) =>
+            posts.select('id').using.embedding_nearest([0, 1, 0]).limit(1),
+          )
+          .orderBy((u) => u.id.asc())
+          .all();
 
-      expect(rows).toEqual([
-        { id: 1, posts: [{ id: 2 }] },
-        { id: 3, posts: [{ id: 4 }] },
-      ]);
-    });
+        expect(rows).toEqual([
+          { id: 1, posts: [{ id: 2 }] },
+          { id: 3, posts: [{ id: 4 }] },
+        ]);
+      },
+    );
   });
 });

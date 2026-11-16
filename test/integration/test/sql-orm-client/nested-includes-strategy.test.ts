@@ -169,9 +169,9 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
   // correlated execution at depth 2, depth 3, and across a self-relation.
   // ===========================================================================
 
-  describe('single SQL execution per include tree', () => {
+  describe('statements per include tree', () => {
     it(
-      'depth-2 runs a single SQL execution',
+      'depth-2 runs one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [
@@ -199,7 +199,7 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
     );
 
     it(
-      'depth-3 runs a single SQL execution',
+      'depth-3 runs one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [
@@ -228,7 +228,7 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
     );
 
     it(
-      'depth-2 self-relation runs a single SQL execution',
+      'depth-2 self-relation runs one statement, or one per relation',
       async () => {
         // Self-relation aliasing must propagate through the recursion or
         // the correlated subquery will fail to compile against the same
@@ -263,9 +263,9 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
   // multi-query.
   // ===========================================================================
 
-  describe('scalar / combine include descriptors resolve in a single execution', () => {
+  describe('scalar / combine include descriptors resolve in one statement, or one per relation', () => {
     it(
-      'top-level combine() resolves in a single execution',
+      'top-level combine() resolves in one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
@@ -317,7 +317,7 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
     );
 
     it(
-      'nested scalar at depth 2 resolves in a single execution',
+      'nested scalar at depth 2 resolves in one statement, or one per relation',
       async () => {
         // The correlated builder emits a nested subquery inside the
         // parent row's SELECT so the whole tree resolves in one
@@ -360,7 +360,7 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
     );
 
     it(
-      'scalar count() resolves in a single execution',
+      'scalar count() resolves in one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [
@@ -503,7 +503,7 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
     );
 
     it(
-      'combine({ rows, count }) resolves in a single execution',
+      'combine({ rows, count }) resolves in one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
@@ -567,9 +567,9 @@ describe.each(includeStrategies)('integration/nested-includes/strategy (%s)', (s
   //   - test/integration/nested-includes-distinct-refinements.test.ts
   // ===========================================================================
 
-  describe('non-leaf includes with distinct() resolve in a single SQL execution', () => {
+  describe('non-leaf includes with distinct() resolve in one statement, or one per relation', () => {
     it(
-      'distinct() on a non-leaf include resolves in 1 execution',
+      'distinct() on a non-leaf include resolves in one statement, or one per relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);

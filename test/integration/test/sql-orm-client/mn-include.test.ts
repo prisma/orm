@@ -88,7 +88,7 @@ describe.each(includeStrategies)('integration/mn-include (%s)', (strategy) => {
   );
 
   it(
-    'include("tags") resolves in a single SQL execution',
+    'include("tags") resolves in one statement, or one per relation',
     async () => {
       // The M:N correlated subquery through the junction must lower to a
       // single SQL execution — that is the only non-functional invariant worth
@@ -242,11 +242,11 @@ describe.each(includeStrategies)('integration/mn-include (%s)', (strategy) => {
   // ===========================================================================
 
   it(
-    'depth-2: M:N tags nested under 1:N invitedUsers resolves in a single execution',
+    'depth-2: M:N tags nested under 1:N invitedUsers resolves in one statement, or one per relation',
     async () => {
       // users -> invitedUsers (1:N self-relation) -> tags (N:M via junction).
       // The M:N subquery at depth 2 must still correlate correctly to the
-      // depth-1 invitedUsers alias and resolve in a single SQL execution.
+      // depth-1 invitedUsers alias and resolve in one statement, or one per relation.
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime, strategy);
 
@@ -294,7 +294,7 @@ describe.each(includeStrategies)('integration/mn-include (%s)', (strategy) => {
   );
 
   it(
-    'depth-2: sibling include("tags") and include("posts") on the same user resolves in one execution',
+    'depth-2: sibling include("tags") and include("posts") on the same user resolves in one statement, or one per relation',
     async () => {
       // Two sibling top-level includes: tags (N:M) and posts (1:N). Both must
       // pack into a single SQL execution and resolve to independent correct shapes.

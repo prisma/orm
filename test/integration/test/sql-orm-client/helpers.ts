@@ -163,20 +163,20 @@ const includeCapabilityKeys = [
 ] as const;
 
 /**
- * The shared context of `strategy` around a contract a test built itself. The contract keeps its own capabilities, except the three that choose the include strategy, which come from `postgresAdapterFor(strategy)` as the runtime would merge them.
+ * `context` with the three capabilities that choose the include strategy as `postgresAdapterFor(strategy)` reports them, as the runtime would merge them over the contract's.
  */
-export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
-  contract: TContract,
+export function withIncludeStrategy<TContract extends FrameworkContract<SqlStorage>>(
+  context: ExecutionContext<TContract>,
   strategy: IncludeStrategy,
 ): ExecutionContext<TContract> {
   const reported =
     (postgresAdapterFor(strategy).capabilities as Record<string, Record<string, boolean>>)['sql'] ??
     {};
-  const capabilities = contract.capabilities as Record<string, Record<string, boolean>>;
+  const capabilities = context.contract.capabilities as Record<string, Record<string, boolean>>;
   return {
-    ...getTestContext(strategy),
+    ...context,
     contract: {
-      ...contract,
+      ...context.contract,
       capabilities: {
         ...capabilities,
         sql: {
@@ -185,7 +185,18 @@ export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
         },
       },
     },
-  } as unknown as ExecutionContext<TContract>;
+  };
+}
+
+/** The shared context of `strategy` around a contract a test built itself. */
+export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  strategy: IncludeStrategy,
+): ExecutionContext<TContract> {
+  return withIncludeStrategy(
+    { ...getTestContext(strategy), contract } as unknown as ExecutionContext<TContract>,
+    strategy,
+  );
 }
 
 export type { PolyContract };
