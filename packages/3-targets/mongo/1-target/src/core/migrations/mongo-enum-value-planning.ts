@@ -23,6 +23,7 @@ import {
   type MongoContract,
   mongoModelsOf,
   ownStoredNamesOf,
+  type SelectedVariant,
   selectedVariantOf,
   valueObjectStoredNamesOf,
   variantFilter,
@@ -55,6 +56,10 @@ export interface EnumValueRewrite {
   readonly keepDataAdvice: string | undefined;
   /** How to make a change of this enum's stored values in two migrations, when one migration cannot make it safely. */
   readonly twoMigrationsAdvice: string;
+  /** The stored value a replacement writes; `undefined` for a removal. */
+  readonly writtenValue: StoredValue | undefined;
+  /** The variant whose documents the call selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
 }
 
 /** The stored value rewrites of a plan: replacements, run in the replacement step, and removals, run last. */
@@ -521,6 +526,8 @@ function planEnum(
           keepDataEdit: undefined,
           keepDataAdvice: undefined,
           twoMigrationsAdvice: advice,
+          writtenValue: change.to,
+          variant: enumPlace.place.variant,
         });
         continue;
       }
@@ -546,6 +553,8 @@ function planEnum(
             : undefined,
         keepDataAdvice: keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, change) : undefined,
         twoMigrationsAdvice: advice,
+        writtenValue: undefined,
+        variant: enumPlace.place.variant,
       });
     }
   }

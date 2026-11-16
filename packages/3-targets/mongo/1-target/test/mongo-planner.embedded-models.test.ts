@@ -153,6 +153,18 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     });
   });
 
+  it('removes the key the origin stores under the name a rename takes, and refuses the plan', () => {
+    const result = plan({
+      from: users('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+      to: users('to', { a: OPTIONAL_STRING }),
+      schema: live,
+      statements: [renameField('Address', 'b', 'Address', 'a')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot rename field "Address.b" to "Address.a": the migration writes a key that another of its operations reads (Rename key "b" to "a" at path "$[*]" in field addresses of collection users; Remove key "a" at path "$[*]" in field addresses of collection users)',
+    ]);
+  });
+
   it('refuses a rename of the embedded model', () => {
     const named = (seed: string, embedded: string) =>
       contract(

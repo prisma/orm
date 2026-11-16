@@ -273,3 +273,87 @@ describe('MongoMigrationPlanner, a new required field under the name a rename mo
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, a new required field under a stored name a rename moves away', () => {
+  it('refuses a fill of the field', () => {
+    const named = (
+      seed: string,
+      fields: Record<string, FieldTypeSpec>,
+      storedAs: Record<string, string>,
+    ) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', ...Object.keys(fields)],
+            types: { _id: OBJECT_ID, ...fields },
+            storedAs,
+          },
+        },
+        { users: {} },
+      );
+    expect(
+      refused(
+        plan({
+          from: named('from', { name: STRING }, { name: 'nm' }),
+          to: named('to', { fullName: STRING, code: STRING }, { fullName: 'fn', code: 'nm' }),
+          schema: live,
+          statements: [renameUser('name', 'fullName')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename field "User.name" to "User.fullName": the migration writes a field that another of its operations reads (${renameFieldLabel('nm', 'fn')}; Fill field nm in collection users where it is missing or null)`,
+        why: why('field', FILL_ADVICE),
+        leaveOut: [renameUser('name', 'fullName')],
+      },
+    ]);
+  });
+});
+
+const REMOVE_ADVICE = (noun: string) =>
+  `Make the change in two migrations: first remove the ${noun} whose name the rename takes and apply that; then make the rename.`;
+
+describe('MongoMigrationPlanner, a rename onto a name the origin also stores', () => {
+  it('removes the field the origin stores under that name, and refuses the plan', () => {
+    expect(
+      refused(
+        plan({
+          from: users('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+          to: users('to', { a: OPTIONAL_STRING }),
+          schema: live,
+          statements: [renameUser('b', 'a')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename field "User.b" to "User.a": the migration writes a field that another of its operations reads (${renameFieldLabel('b', 'a')}; Remove field a from collection users)`,
+        why: why('field', REMOVE_ADVICE('field')),
+        leaveOut: [renameUser('b', 'a')],
+      },
+    ]);
+  });
+
+  it('removes the key a value object stores under that name, and refuses the plan', () => {
+    expect(
+      refused(
+        plan({
+          from: addressUsers('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+          to: addressUsers('to', { a: OPTIONAL_STRING }),
+          schema: live,
+          statements: [renameAddress('b', 'a')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename value object field "Address.b" to "Address.a": the migration writes a key that another of its operations reads (${renameKeyLabel('b', 'a')}; Remove key "a" at path "$[*]" in field addresses of collection users)`,
+        why: why('key', REMOVE_ADVICE('key')),
+        leaveOut: [renameAddress('b', 'a')],
+      },
+    ]);
+  });
+});

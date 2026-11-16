@@ -259,7 +259,7 @@ describe('MongoMigrationPlanner, discriminator values one operation frees and an
     expect(refusal(result)).toEqual([
       {
         kind: 'statementRefused',
-        summary: `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')})`,
+        summary: `Cannot convert variant "Epic": the migration writes a value that another of its operations reads (${replaceLabel('epic', 'bug')}; ${deleteLabel('bug')})`,
         why: TWO_MIGRATIONS,
       },
     ]);
@@ -434,6 +434,48 @@ describe('MongoMigrationPlanner, a variant field renamed with its base discrimin
   });
 });
 
+describe('MongoMigrationPlanner, variants that use the same field name', () => {
+  it('plans a rename in one variant onto a name another variant renames away', () => {
+    expect(
+      planned(
+        plan({
+          from: tasks('from', { Bug: BUG, Epic: { value: 'epic', fields: ['level'] } }),
+          to: tasks('to', {
+            Bug: { value: 'bug', fields: ['level'] },
+            Epic: { value: 'epic', fields: ['priority'] },
+          }),
+          schema: live,
+          statements: [
+            renameField('Bug', 'severity', 'Bug', 'level'),
+            renameField('Epic', 'level', 'Epic', 'priority'),
+          ],
+        }),
+      ).labels,
+    ).toEqual([
+      'Rename field severity to level in collection tasks in documents whose type is "bug"',
+      'Rename field level to priority in collection tasks in documents whose type is "epic"',
+    ]);
+  });
+
+  it('plans a field removed from one variant and added, required, to another', () => {
+    expect(
+      planned(
+        plan({
+          from: tasks('from', { Bug: { value: 'bug', fields: ['x'] }, Epic: EPIC }),
+          to: tasks('to', {
+            Bug: { value: 'bug', fields: [] },
+            Epic: { value: 'epic', fields: ['scope', 'x'] },
+          }),
+          schema: live,
+        }),
+      ).labels,
+    ).toEqual([
+      'Fill field x in collection tasks where it is missing or null in documents whose type is "epic"',
+      'Remove field x from collection tasks in documents whose type is "bug"',
+    ]);
+  });
+});
+
 describe('MongoMigrationPlanner, variants folded back into their base', () => {
   it('deletes no documents when the base no longer has a discriminator', () => {
     const folded = contract(
@@ -572,7 +614,7 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
     ).toEqual([
       {
         kind: 'statementRefused',
-        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')}; Remove value "bug" from field type of collection tasks)`,
+        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${replaceLabel('epic', 'bug')}; ${deleteLabel('bug')}; Remove value "bug" from field type of collection tasks)`,
         why: TWO_MIGRATIONS,
         leaveOut: [renameEpic],
       },

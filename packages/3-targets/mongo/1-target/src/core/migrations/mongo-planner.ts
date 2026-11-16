@@ -48,7 +48,14 @@ import {
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
-import { overlapRefusal } from './mongo-rewrite-overlaps';
+import {
+  type DiscriminatorFilter,
+  inFilterOrder,
+  type OrderedRewrite,
+  overlapRefusal,
+  type RewriteCall,
+  variantDiscriminatorFilter,
+} from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
@@ -751,7 +758,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
-    const castCalls = casts.map(({ call }) => call);
     const callsOf = new Map<ResolvedMigrationStatement, readonly OpFactoryCall[]>([
       ...renames.map((statement, index) => {
         const call = callOfStatement[index];
@@ -777,27 +783,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         return calls.length === 0 ? [] : [[statement, calls] as const];
       }),
     ]);
-    const transformCalls = (kind: 'convert' | 'backfill') =>
-      transforms.flatMap(({ statement, outcome }) =>
-        statement.kind === kind && outcome.kind === 'transform' ? [outcome.call] : [],
-      );
-    const rewriteCalls = [
-      ...fieldRenames,
-      ...variantDeletes.map((rewrite) => rewrite.call),
-      ...variantReplacements.map((rewrite) => rewrite.call),
-      ...storedKeys.value.renames.map((rewrite) => rewrite.call),
-      ...valueReplacements.flatMap((rewrite) =>
-        variantCalls.has(rewrite.call) ? [] : [rewrite.call],
-      ),
-      ...castCalls,
-      ...transformCalls('convert'),
-      ...fills.map((fill) => fill.call),
-      ...storedKeyFills.value.map((fill) => fill.call),
-      ...transformCalls('backfill'),
-      ...removals.map((removal) => removal.call),
-      ...storedKeys.value.removals.map((rewrite) => rewrite.call),
-      ...valueRemovals.map((rewrite) => rewrite.call),
-    ];
     const twoMigrationsAdvice = new Map<OpFactoryCall, string>([
       ...[...valueReplacements, ...valueRemovals].map(
         (rewrite) => [rewrite.call, rewrite.twoMigrationsAdvice] as const,
@@ -806,31 +791,92 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         (rewrite) => [rewrite.call, VARIANT_TWO_MIGRATIONS] as const,
       ),
     ]);
-    const backfilledFields = new Map<OpFactoryCall, string>(
-      transforms.flatMap(({ statement, outcome }) =>
-        statement.kind === 'backfill' && outcome.kind === 'transform'
-          ? [[outcome.call, outcome.rewrite.field] as const]
-          : [],
+    const rewriteOf = (
+      call: RewriteCall,
+      facts: Pick<OrderedRewrite, 'writtenValue' | 'transformedField' | 'discriminatorFilter'>,
+    ): OrderedRewrite => ({
+      call,
+      statements: options.statements.filter((statement) =>
+        (callsOf.get(statement) ?? []).includes(call),
       ),
-    );
-    const overlap = overlapRefusal(
-      rewriteCalls.map((call) => ({
-        call,
-        statements: options.statements.filter((statement) =>
-          (callsOf.get(statement) ?? []).includes(call),
-        ),
-        twoMigrationsAdvice: twoMigrationsAdvice.get(call),
-        backfilledField: backfilledFields.get(call),
-      })),
-      contracts,
-    );
+      twoMigrationsAdvice: twoMigrationsAdvice.get(call),
+      ...facts,
+    });
+    const selecting = (discriminatorFilter: DiscriminatorFilter | undefined) => ({
+      writtenValue: undefined,
+      transformedField: undefined,
+      discriminatorFilter,
+    });
+    const transformRewrites = (kind: 'convert' | 'backfill') =>
+      transforms.flatMap(({ statement, outcome }) =>
+        statement.kind === kind && outcome.kind === 'transform'
+          ? [
+              rewriteOf(outcome.call, {
+                writtenValue: undefined,
+                transformedField: outcome.rewrite.field,
+                discriminatorFilter: variantDiscriminatorFilter(outcome.rewrite.variant),
+              }),
+            ]
+          : [],
+      );
+    const orderedRewrites = inFilterOrder([
+      ...fieldRenames.map(({ call, discriminatorFilter }) =>
+        rewriteOf(call, selecting(discriminatorFilter)),
+      ),
+      ...variantDeletes.map(({ call, field, from }) =>
+        rewriteOf(call, selecting({ kind: 'variant', field, value: from })),
+      ),
+      ...variantReplacements.map(({ call, to }) =>
+        rewriteOf(call, {
+          writtenValue:
+            valueReplacements.find((replacement) => replacement.call === call)?.writtenValue ?? to,
+          transformedField: undefined,
+          discriminatorFilter: undefined,
+        }),
+      ),
+      ...storedKeys.value.renames.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+      ...valueReplacements.flatMap(({ call, writtenValue, variant }) =>
+        variantCalls.has(call)
+          ? []
+          : [
+              rewriteOf(call, {
+                writtenValue,
+                transformedField: undefined,
+                discriminatorFilter: variantDiscriminatorFilter(variant),
+              }),
+            ],
+      ),
+      ...casts.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+      ...transformRewrites('convert'),
+      ...fills.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+      ...storedKeyFills.value.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+      ...transformRewrites('backfill'),
+      ...removals.map(({ call, discriminatorFilter }) =>
+        rewriteOf(call, selecting(discriminatorFilter)),
+      ),
+      ...storedKeys.value.removals.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+      ...valueRemovals.map(({ call, variant }) =>
+        rewriteOf(call, selecting(variantDiscriminatorFilter(variant))),
+      ),
+    ]);
+    const overlap = overlapRefusal(orderedRewrites, contracts);
     if (overlap !== undefined) return { kind: 'failure', conflicts: [overlap] };
     const result = this.planCalls({
       ...options,
       statementCalls: {
         schema,
         collectionRenames,
-        rewrites: rewriteCalls,
+        rewrites: orderedRewrites.map(({ call }) => call),
       },
     });
     if (result.kind === 'failure') return result;

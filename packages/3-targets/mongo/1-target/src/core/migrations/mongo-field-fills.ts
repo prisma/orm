@@ -29,7 +29,7 @@ import {
   modelCoordinates,
   originFieldOf,
   originModelOf,
-  storedFieldsOf,
+  storedFieldsKeptOf,
 } from './mongo-statement-planning';
 import { FillFieldCall } from './op-factory-call';
 
@@ -99,7 +99,7 @@ function inOrigin(
   return (
     !movedAway &&
     (Object.hasOwn(model.fields, originField) ||
-      storedFieldsOf(input.match.fromContract, origin).has(storedName))
+      storedFieldsKeptOf(input.match, origin).has(storedName))
   );
 }
 

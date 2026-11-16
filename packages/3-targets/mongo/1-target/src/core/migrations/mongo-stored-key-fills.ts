@@ -26,6 +26,7 @@ import {
   type MongoContract,
   ownStoredNameOf,
   ownStoredNamesOf,
+  type SelectedVariant,
   valueObjectStoredNamesOf,
   variantFilter,
 } from '@internal/mongo-contract';
@@ -58,6 +59,8 @@ export interface StoredKeyFill {
   /** The temporary value as the target writes it; `undefined` for a backfill. */
   readonly text: string | undefined;
   readonly statement: NestedBackfillStatement | undefined;
+  /** The variant whose documents the call selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
 }
 
 /** A field of a value object or an embedded model that the destination makes required, new or once optional. */
@@ -462,6 +465,7 @@ export function planStoredKeyFills(
         subject: each.subject,
         text: temporary?.text,
         statement: each.statement,
+        variant: fill.place.variant,
       });
     }
   }

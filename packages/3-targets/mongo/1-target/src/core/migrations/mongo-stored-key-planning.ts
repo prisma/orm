@@ -10,6 +10,7 @@ import {
   fieldStatementText,
   type MigrationPlannerConflict,
   type MigrationSubject,
+  type ModelCoordinate,
   type ResolvedFieldRenameStatement,
   type ResolvedRenameStatement,
   type ResolvedValueObjectFieldRenameStatement,
@@ -21,6 +22,7 @@ import {
   ownEmbedStoredNamesOf,
   ownStoredNameOf,
   ownStoredNamesOf,
+  type SelectedVariant,
   validatorDocumentShapesOf,
   variantFilter,
 } from '@internal/mongo-contract';
@@ -60,6 +62,8 @@ export interface StoredKeyRewrite {
   readonly call: RenameStoredKeyCall | RemoveStoredKeyCall;
   readonly subject: MigrationSubject;
   readonly statement: KeyChange['statement'];
+  /** The variant whose documents the call selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
 }
 
 /** The key rewrites of a plan: renames, run first in the rewrite step, and removals, run last. */
@@ -105,7 +109,15 @@ function valueObjectChanges(
         if (statement !== undefined) {
           return [{ type, subject, from: field, to: statement.to.field, statement }];
         }
-        return Object.hasOwn(destination.fields, field)
+        const takenByRename = statements.some(
+          (each) =>
+            each.entity === 'valueObjectField' &&
+            each.from.namespaceId === subject.namespaceId &&
+            each.from.valueObject === subject.valueObject &&
+            each.from.field !== field &&
+            each.to.field === field,
+        );
+        return Object.hasOwn(destination.fields, field) && !takenByRename
           ? []
           : [{ type, subject, from: field, to: undefined, statement: undefined }];
       });
@@ -113,8 +125,12 @@ function valueObjectChanges(
   );
 }
 
+function sameModelAs(a: ModelCoordinate, b: ModelCoordinate): boolean {
+  return a.namespaceId === b.namespaceId && a.model === b.model;
+}
+
 function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model && a.field === b.field;
+  return sameModelAs(a, b) && a.field === b.field;
 }
 
 function embeddedModelChanges(
@@ -133,6 +149,18 @@ function embeddedModelChanges(
       ...Object.values(ownEmbedStoredNamesOf(destination)),
     ]);
     const type: StoredType = { kind: 'embeddedModel', model: coordinate };
+    const takenByRename = new Set(
+      statements.flatMap((each) => {
+        if (each.entity !== 'field' || !sameModelAs(each.from, coordinate)) return [];
+        const from = Object.hasOwn(origin.fields, each.from.field)
+          ? ownStoredNameOf(origin, each.from.field)
+          : undefined;
+        const to = Object.hasOwn(destination.fields, each.to.field)
+          ? ownStoredNameOf(destination, each.to.field)
+          : undefined;
+        return to === undefined || to === from ? [] : [to];
+      }),
+    );
     return Object.entries(ownStoredNamesOf(origin)).flatMap(([field, from]): KeyChange[] => {
       const subject = { kind: 'field' as const, ...coordinate, field };
       const statement = statements.find(
@@ -145,7 +173,9 @@ function embeddedModelChanges(
           : undefined;
         return to === undefined || to === from ? [] : [{ type, subject, from, to, statement }];
       }
-      return kept.has(from) ? [] : [{ type, subject, from, to: undefined, statement: undefined }];
+      return kept.has(from) && !takenByRename.has(from)
+        ? []
+        : [{ type, subject, from, to: undefined, statement: undefined }];
     });
   });
 }
@@ -387,6 +417,7 @@ export function planStoredKeyRewrites(
       call: callOf(each),
       subject: each.change.subject,
       statement: each.change.statement,
+      variant: each.place.variant,
     }));
   return ok({
     renames: rewrites.filter((rewrite) => rewrite.call instanceof RenameStoredKeyCall),
@@ -483,6 +514,7 @@ function validatorKeyRemovals(
               name: [collection, field, ...members, key].join('.'),
             },
             statement: undefined,
+            variant: undefined,
             key,
           }));
       });
