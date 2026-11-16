@@ -74,6 +74,7 @@ The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm
 - `db.raw.sql` embeds a builder query, or a builder mutation after `.returning()`, as a statement, such as `INSERT INTO ... ${query} RETURNING ...`. ([#30991](https://github.com/prisma/orm/pull/30991))
 - A relation callback in `create()` or `update()` can return an array of operations, applied in order. ([#31013](https://github.com/prisma/orm/pull/31013))
 - Inside `update()`, a relation callback can update or delete the related rows a filter matches, with `where(...).updateAll(...)` and `where(...).deleteAll()`, on one-to-many relations ([#31014](https://github.com/prisma/orm/pull/31014)) and many-to-many relations ([#31016](https://github.com/prisma/orm/pull/31016)).
+- On a database with `RETURNING`, `update()` and `delete()` whose condition names one row by its primary key or a unique constraint send the write alone, without first selecting the row's key. Results are unchanged. ([#31026](https://github.com/prisma/orm/pull/31026))
 - Nested `create()` and `update()`, and every other SQL ORM write, run through one write graph on every database, so nested writes work the same with and without `RETURNING`. ([#30734](https://github.com/prisma/orm/pull/30734), [#31004](https://github.com/prisma/orm/pull/31004))
 - The `contract.d.ts` that a migration snapshot stores under `migrations/snapshots/` is now written on one line, instead of about 1,400. The `contract.d.ts` your code imports is unchanged. ([#30965](https://github.com/prisma/orm/pull/30965))
 
