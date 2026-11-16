@@ -98,3 +98,7 @@ A read with includes reads every row before returning any, under both include st
 ## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17)
 
 The MySQL target and adapter contribute no aggregate definitions. `db.orm.User.include('posts', (p) => p.count()).all()` fails with `p.count is not a function`, and so does `combine()` with an aggregate branch. This is true under both include strategies and predates slice 6b-1. Manual QA ran the per-relation `GROUP BY` statements on MySQL 8.4 and MariaDB 10.11 with stand-in aggregate definitions, and they returned the right values. Slice 6b-2's requirement that MariaDB runs every ORM read needs MySQL to contribute its aggregates first, as Postgres does.
+
+## `deleteAll()` on a table with no row identity deletes by the caller's condition after reading (slice 6b-1, 2026-11-17)
+
+Where `deleteAll()` must read the rows before deleting them (rows returned on a database without `RETURNING`, or with includes under the one-query include), and the table has no primary key and no unique key of `NOT NULL` columns, it runs a `SELECT` and then a `DELETE` on the same condition. A matching row committed between the two is deleted and not returned. This is `main`'s deliberate behaviour for such tables (`sql-orm-client/test/statement-graph/table-without-identity.test.ts`), and slice 6b-1 did not change it. Slice 6b-1 does widen who meets it: a unique key with a nullable column no longer counts as an identity. With an identity, the `DELETE` is keyed by the rows read.
