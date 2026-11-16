@@ -166,63 +166,68 @@ export function consumeRelatedRows<Row>(
 ): AsyncIterableResult<Row> {
   const { context, state, modelName, namespaceId } = options;
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    const shape = await relatedRowShaper(context, namespaceId, modelName, state, hidden);
     for await (const row of rows) {
-      yield blindCast<Row, 'collection row generic matches the selected model shape'>(
-        await shapeRelatedRow(context, namespaceId, modelName, state, row, hidden),
-      );
+      yield blindCast<Row, 'collection row generic matches the selected model shape'>(shape(row));
     }
   };
   return new AsyncIterableResult(generator());
 }
 
-async function shapeRelatedRow(
+type RowShaper = (row: Record<string, unknown>) => Record<string, unknown>;
+type ReadShaper = (row: Record<string, unknown>) => unknown;
+
+async function relatedRowShaper(
   context: CodecExecutionContext,
   namespaceId: string,
   modelName: string,
   state: CollectionState,
-  row: Record<string, unknown>,
   hidden: HiddenColumns,
-): Promise<Record<string, unknown>> {
+): Promise<RowShaper> {
   const { contract } = context;
-  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
-  const mapped = polyInfo
-    ? mapPolymorphicRow(
-        contract,
-        namespaceId,
-        modelName,
-        polyInfo,
-        state.tables,
-        row,
-        state.variantValue,
-      )
-    : mapStorageRowToModelFields(contract, namespaceId, modelName, row);
-  stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
+  const mapRow = createPreparedMapper(contract, namespaceId, modelName, state);
+  const includes: { readonly name: string; readonly shape: ReadShaper }[] = [];
   for (const include of state.includes) {
-    const reads = relatedReadsOf(include);
-    if (include.combine === undefined) {
-      mapped[include.relationName] = await shapeRelatedRead(context, reads[0], row, hidden);
-      continue;
-    }
-    const branches: Record<string, unknown> = {};
-    for (const [index, branchName] of Object.keys(include.combine).entries()) {
-      branches[branchName] = await shapeRelatedRead(context, reads[index], row, hidden);
-    }
-    mapped[include.relationName] = branches;
+    includes.push({
+      name: include.relationName,
+      shape: await relatedIncludeShaper(context, include, hidden),
+    });
   }
-  return mapped;
+  return (row) => {
+    const mapped = mapRow(row);
+    stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
+    for (const { name, shape } of includes) {
+      mapped[name] = shape(row);
+    }
+    return mapped;
+  };
 }
 
-async function shapeRelatedRead(
+async function relatedIncludeShaper(
   context: CodecExecutionContext,
-  read: RelatedRead | undefined,
-  row: Record<string, unknown>,
+  include: IncludeExpr,
   hidden: HiddenColumns,
-): Promise<unknown> {
-  if (read === undefined) {
-    throw new InternalError('An include read with one query per relation has no statement');
+): Promise<ReadShaper> {
+  const reads = relatedReadsOf(include);
+  const shapers: ReadShaper[] = [];
+  for (const read of reads) {
+    shapers.push(await relatedReadShaper(context, read, hidden));
   }
+  const [only] = shapers;
+  if (include.combine === undefined && only !== undefined) {
+    return only;
+  }
+  const branchNames = Object.keys(include.combine ?? {});
+  return (row) =>
+    Object.fromEntries(branchNames.map((name, index) => [name, shapers[index]?.(row)]));
+}
+
+async function relatedReadShaper(
+  context: CodecExecutionContext,
+  read: RelatedRead,
+  hidden: HiddenColumns,
+): Promise<ReadShaper> {
   const { include } = read;
-  const related = attachedRowsOf(row, read);
   if (include.scalar !== undefined) {
     const { resolved, codec } = resolveScalarIncludeMetadata(
       context.contract,
@@ -230,23 +235,24 @@ async function shapeRelatedRead(
       include,
       include.scalar,
     );
-    const value = related[0]?.[RELATED_AGGREGATE_ALIAS];
-    return value === null || value === undefined ? emptyAggregateResult(resolved, codec) : value;
+    const empty = await emptyAggregateResult(resolved, codec);
+    return (row) => {
+      const value = attachedRowsOf(row, read)[0]?.[RELATED_AGGREGATE_ALIAS];
+      return value === null || value === undefined ? empty : value;
+    };
   }
-  const children: Record<string, unknown>[] = [];
-  for (const child of related) {
-    children.push(
-      await shapeRelatedRow(
-        context,
-        include.relatedNamespaceId,
-        include.relatedModelName,
-        include.nested,
-        child,
-        hidden.nested.get(read.key) ?? noHiddenColumns,
-      ),
-    );
-  }
-  return isToOneCardinality(include.cardinality) ? (children[0] ?? null) : children;
+  const shapeChild = await relatedRowShaper(
+    context,
+    include.relatedNamespaceId,
+    include.relatedModelName,
+    include.nested,
+    hidden.nested.get(read.key) ?? noHiddenColumns,
+  );
+  const toOne = isToOneCardinality(include.cardinality);
+  return (row) => {
+    const children = attachedRowsOf(row, read).map(shapeChild);
+    return toOne ? (children[0] ?? null) : children;
+  };
 }
 
 function attachedRowsOf(
