@@ -973,7 +973,7 @@ function resolveFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${to.coordinate.field}" already exists on the origin model "${qualifiedModel(from.coordinate)}", so it cannot be the new name of a field.`,
-        CHECK_NAMES_FIX,
+        newNameTakenFix(statement, from.coordinate.field, to.coordinate.field),
       ),
     );
   }
@@ -982,7 +982,7 @@ function resolveFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${from.coordinate.field}" still exists on the destination model "${toModel}", so it was not renamed.`,
-        CHECK_NAMES_FIX,
+        oldNameReusedFix(statement, from.coordinate.field, to.coordinate.field),
       ),
     );
   }
@@ -1153,7 +1153,7 @@ function resolveValueObjectFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${newField}" already exists in the origin value object "${oldValueObject}", so it cannot be the new name of a field.`,
-        CHECK_NAMES_FIX,
+        newNameTakenFix(statement, oldField, newField),
       ),
     );
   }
@@ -1162,7 +1162,7 @@ function resolveValueObjectFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${oldField}" still exists in the destination value object "${newValueObject}", so it was not renamed.`,
-        CHECK_NAMES_FIX,
+        oldNameReusedFix(statement, oldField, newField),
       ),
     );
   }
@@ -1184,6 +1184,16 @@ function resolveValueObjectFieldRename(
  * Two names that trade places: each is an old name and a new name, which one plan cannot do.
  * Statements resolve against contracts, so the swap takes three plans through a temporary name.
  */
+/** How to rename a field onto a name another field of the origin holds: free the name in one migration, then rename. */
+function newNameTakenFix(statement: ParsedRename, oldName: string, newName: string): string {
+  return `${CHECK_NAMES_FIX} If another field holds the name "${newName}" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "${oldName}" the name "${newName}" and plan it with ${statementFlag(statement)}.`;
+}
+
+/** How to give a renamed field's old name to another field: rename in one migration, then add or rename the other. */
+function oldNameReusedFix(statement: ParsedRename, oldName: string, newName: string): string {
+  return `${CHECK_NAMES_FIX} If "${oldName}" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "${oldName}" is renamed to "${newName}" and no field has the name "${oldName}", and plan it with ${statementFlag(statement)}; then add or rename the field that takes the name "${oldName}" and plan that.`;
+}
+
 function swapRefusal(
   statement: ParsedRename,
   entity: 'model' | 'field' | 'enumValue' | 'valueObjectField',
