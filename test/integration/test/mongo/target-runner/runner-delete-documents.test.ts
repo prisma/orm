@@ -181,13 +181,13 @@ describe('MongoMigrationRunner, a discriminator value replaced before a later op
 
       const stopped = await run(operations);
       const afterStop = await documents();
-      await db.collection('tasks').updateOne({ name: 'a' }, { $set: { kind: 'x' } });
+      await db.collection('tasks').updateOne({ name: 'a' }, { $set: { kind: ['old', 'x'] } });
       const rerun = await run(operations);
 
       expect({
         stopped: stopped.ok ? 'applied' : stopped.failure.code,
         afterStop,
-        rerun: rerun.ok ? 'applied' : rerun.failure.code,
+        rerun: executed(rerun),
         documents: await documents(),
       }).toEqual({
         stopped: 'MIGRATION.PRECHECK_FAILED',
@@ -195,9 +195,9 @@ describe('MongoMigrationRunner, a discriminator value replaced before a later op
           { name: 'a', type: 'defect', kind: 'old' },
           { name: 'b', type: 'epic', kind: 'x' },
         ],
-        rerun: 'applied',
+        rerun: 1,
         documents: [
-          { name: 'a', type: 'defect', kind: 'x' },
+          { name: 'a', type: 'defect', kind: ['x'] },
           { name: 'b', type: 'epic', kind: 'x' },
         ],
       });
