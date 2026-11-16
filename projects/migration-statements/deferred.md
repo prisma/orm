@@ -309,3 +309,9 @@ When a value object loses a field and gains a required one, the question about t
 **Found:** slice 4b PR 2 review of dispatch 4 (2026-11-17).
 
 When `removeStoredValue` stops because a required field holds the value, the MongoDB runner writes the framework's `rowsHoldingValue` fact, and the CLI then advises renaming the enum value. The fact's `value` is typed `string | number` (`RowsHoldingValue` in `packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`), so for an enum whose stored values are booleans the runner leaves the fact out. What is missing is the CLI's `--rename` advice for that case. The failure's own text still counts the documents, names one `_id` and says to rename the value or change the documents. Widening the fact's type to `boolean` is a framework change, so it waits for a ruling.
+
+## MongoDB does not rewrite the fields of a variant of an embedded model
+
+**Found:** slice 4b PR 2 whole-branch review (2026-11-17).
+
+A path such as `$[*].url` in `renameStoredKey` reaches every element of an embedded model's list, whatever its variant, so the planner cannot rewrite only the elements of one variant. Today a statement on a field of such a variant (`--rename Photo.url:Photo.link`, `--backfill Photo.alt`), or on a value object or enum it holds, is refused with advice to write a `dataTransform`; a removed field, a new required field that would get a temporary value, and a removed enum value there are left out with a `documentsNotRewritten` warning (`isInsideVariant` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-stored-places.ts`). What is missing is rewriting them: the path walk in `stored-key-path.ts` would need a condition on each element's discriminator value, a `$cond` before it rewrites the element, and the operations a way to say which value that is.

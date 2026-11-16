@@ -34,6 +34,10 @@ import {
 } from './mongo-rewrite-refusals';
 import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
 import {
+  CANNOT_PICK_VARIANT_OBJECTS,
+  insideVariantText,
+  insideVariantWarning,
+  isInsideVariant,
   type StoredPlace,
   type StoredType,
   storedPlacesOf,
@@ -66,6 +70,8 @@ export interface StoredKeyRewrite {
 export interface StoredKeyRewrites {
   readonly renames: readonly StoredKeyRewrite[];
   readonly removals: readonly StoredKeyRewrite[];
+  /** One for each removal the plan leaves out because the key is inside a variant of an embedded model. */
+  readonly warnings: readonly MigrationPlannerConflict[];
 }
 
 interface StoredKeyInput {
@@ -194,6 +200,14 @@ function unlistedRefusal(
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
     `Rewrite ${placeText(place)} in a dataTransform operation of migration.ts, or ${advice}.`;
+  if (isInsideVariant(place)) {
+    return refused(
+      change,
+      contracts,
+      insideVariantText(place),
+      (advice) => `${CANNOT_PICK_VARIANT_OBJECTS} ${byHand(advice)}`,
+    );
+  }
   if (place.reach.kind === 'containsItself') {
     return refused(
       change,
@@ -324,7 +338,11 @@ export function planStoredKeyRewrites(
     );
     return refusals.length > 0
       ? notOk(dedupe(refusals))
-      : ok({ renames: [], removals: removals.map(({ key: _, ...removal }) => removal) });
+      : ok({
+          renames: [],
+          removals: removals.map(({ key: _, ...removal }) => removal),
+          warnings: [],
+        });
   }
   const contracts = { fromContract, contract };
   const changes = [
@@ -333,10 +351,17 @@ export function planStoredKeyRewrites(
   ];
   const placesOf = storedPlacesOf(contract);
   const conflicts: MigrationPlannerConflict[] = [];
+  const warnings: MigrationPlannerConflict[] = [];
   const planned = new Map<string, PlannedKeyRewrite>();
   for (const change of changes) {
     const places = placesOf(change.type);
     if (!places.ok) {
+      if (change.statement === undefined && isInsideVariant(places.failure)) {
+        warnings.push(
+          insideVariantWarning(`remove ${fieldText(change, contracts)}`, places.failure),
+        );
+        continue;
+      }
       conflicts.push(unlistedRefusal(change, places.failure, contracts));
       continue;
     }
@@ -391,6 +416,7 @@ export function planStoredKeyRewrites(
   return ok({
     renames: rewrites.filter((rewrite) => rewrite.call instanceof RenameStoredKeyCall),
     removals: rewrites.filter((rewrite) => rewrite.call instanceof RemoveStoredKeyCall),
+    warnings,
   });
 }
 

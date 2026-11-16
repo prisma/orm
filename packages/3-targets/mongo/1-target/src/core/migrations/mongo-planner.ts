@@ -771,7 +771,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         rewrite.statement?.kind === 'convert' ? [[rewrite.statement, [rewrite.call]] as const] : [],
       ),
       ...options.statements.flatMap((statement) => {
-        const calls = storedKeyFills.value.flatMap((fill) =>
+        const calls = storedKeyFills.value.fills.flatMap((fill) =>
           fill.statement === statement ? [fill.call] : [],
         );
         return calls.length === 0 ? [] : [[statement, calls] as const];
@@ -792,7 +792,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...castCalls,
       ...transformCalls('convert'),
       ...fills.map((fill) => fill.call),
-      ...storedKeyFills.value.map((fill) => fill.call),
+      ...storedKeyFills.value.fills.map((fill) => fill.call),
       ...transformCalls('backfill'),
       ...removals.map((removal) => removal.call),
       ...storedKeys.value.removals.map((rewrite) => rewrite.call),
@@ -837,6 +837,9 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const { calls, warnings } = result;
     const allWarnings = [
       ...warnings,
+      ...storedKeys.value.warnings,
+      ...enumValues.value.warnings,
+      ...storedKeyFills.value.warnings,
       ...(match === undefined ? [] : documentsNotRewrittenWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
@@ -911,7 +914,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           subject: fill.subject,
           value: fill.text,
         })),
-        ...storedKeyFills.value.flatMap(({ call, subject, text }) =>
+        ...storedKeyFills.value.fills.flatMap(({ call, subject, text }) =>
           text === undefined ? [] : [{ operationIndex: calls.indexOf(call), subject, value: text }],
         ),
       ],

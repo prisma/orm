@@ -188,3 +188,174 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, a field of a variant of an embedded model', () => {
+  /** Users embedding a list of `Item`, discriminated by `kind`, whose variant `Photo` has `photo`'s fields. */
+  const items = (
+    seed: string,
+    photo: Record<string, FieldTypeSpec>,
+    options: {
+      readonly valueObjects?: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>>;
+      readonly enums?: Readonly<Record<string, { readonly members: Record<string, string> }>>;
+    } = {},
+  ) =>
+    contract(
+      seed,
+      {
+        User: {
+          collection: 'users',
+          fields: ['_id'],
+          types: { _id: OBJECT_ID },
+          embeds: { items: { field: 'items', model: 'Item', cardinality: '1:N' } },
+        },
+        Item: {
+          owner: 'User',
+          fields: ['kind'],
+          discriminator: 'kind',
+          variants: { Photo: 'photo' },
+        },
+        Photo: { fields: Object.keys(photo), types: photo, base: 'Item' },
+      },
+      { users: {} },
+      options.valueObjects,
+      options.enums,
+    );
+  const INSIDE =
+    'field "items" of collection "users" holds it inside variant "Photo" of embedded model "Item"';
+  const CANNOT_PICK =
+    'The plan rewrites a key or value in every object a field holds, and cannot pick out the objects of one variant of an embedded model.';
+  const NOT_REWRITTEN = `${CANNOT_PICK} Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply.`;
+  const photoField = (field: string) => ({ namespaceId: NS, model: 'Photo', field });
+
+  it('refuses a rename of the field', () => {
+    expect(
+      refusal(
+        plan({
+          from: items('from', { url: STRING }),
+          to: items('to', { link: STRING }),
+          schema: live,
+          statements: [renameField('Photo', 'url', 'Photo', 'link')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename field "Photo.url" to "Photo.link": ${INSIDE}`,
+        why: `${CANNOT_PICK} Rewrite field "items" of collection "users" in a dataTransform operation of migration.ts, or leave out this statement.`,
+      },
+    ]);
+  });
+
+  it('plans nothing for a removed field, and warns', async () => {
+    expect(
+      await outcome(
+        plan({
+          from: items('from', { url: STRING, alt: STRING }),
+          to: items('to', { url: STRING }),
+          schema: live,
+        }),
+      ),
+    ).toEqual({
+      operations: [],
+      dataLoss: [],
+      warnings: [
+        {
+          kind: 'documentsNotRewritten',
+          summary: `The plan does not remove field "Photo.alt": ${INSIDE}`,
+          why: NOT_REWRITTEN,
+        },
+      ],
+    });
+  });
+
+  it('plans no fill for a new required field, and warns', async () => {
+    expect(
+      await outcome(
+        plan({
+          from: items('from', { url: STRING }),
+          to: items('to', { url: STRING, alt: STRING }),
+          schema: live,
+        }),
+      ),
+    ).toEqual({
+      operations: [],
+      dataLoss: [],
+      warnings: [
+        {
+          kind: 'documentsNotRewritten',
+          summary: `The plan does not fill field "Photo.alt": ${INSIDE}`,
+          why: NOT_REWRITTEN,
+        },
+      ],
+    });
+  });
+
+  it('refuses a backfill of a new required field', () => {
+    expect(
+      refusal(
+        plan({
+          from: items('from', { url: STRING }),
+          to: items('to', { url: STRING, alt: STRING }),
+          schema: live,
+          statements: [{ kind: 'backfill', entity: 'field', field: photoField('alt') }],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot backfill field "Photo.alt": ${INSIDE}`,
+        why: `${CANNOT_PICK} Fill the key in field "items" of collection "users" in a dataTransform operation of migration.ts, or leave out this statement.`,
+      },
+    ]);
+  });
+
+  it('refuses a rename of a field of a value object the variant holds', () => {
+    const holding = (seed: string, meta: Record<string, FieldTypeSpec>) =>
+      items(seed, { meta: { codecId: '', valueObject: 'Meta' } }, { valueObjects: { Meta: meta } });
+    expect(
+      refusal(
+        plan({
+          from: holding('from', { w: STRING }),
+          to: holding('to', { width: STRING }),
+          schema: live,
+          statements: [
+            {
+              kind: 'rename',
+              entity: 'valueObjectField',
+              from: { namespaceId: NS, valueObject: 'Meta', field: 'w' },
+              to: { namespaceId: NS, valueObject: 'Meta', field: 'width' },
+            },
+          ],
+        }),
+      ).map(({ summary }) => summary),
+    ).toEqual([`Cannot rename value object field "Meta.w" to "Meta.width": ${INSIDE}`]);
+  });
+
+  it('plans nothing for a removed value of an enum the variant holds, and warns', async () => {
+    const typed = (seed: string, members: Record<string, string>) =>
+      items(
+        seed,
+        { size: { codecId: 'mongo/string@1', valueSet: 'Size', nullable: true } },
+        { enums: { Size: { members } } },
+      );
+    expect(
+      await outcome(
+        plan({
+          from: typed('from', { S: 's', L: 'l' }),
+          to: typed('to', { S: 's' }),
+          schema: live,
+        }),
+      ),
+    ).toEqual({
+      operations: [],
+      dataLoss: [],
+      warnings: [
+        {
+          kind: 'documentsNotRewritten',
+          summary: `The plan does not remove enum value "Size.L": ${INSIDE}`,
+          why: NOT_REWRITTEN,
+        },
+      ],
+    });
+  });
+});

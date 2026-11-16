@@ -5,7 +5,10 @@ import {
   type EntityCoordinate,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import type { ModelCoordinate } from '@internal/framework-components/control';
+import type {
+  MigrationPlannerConflict,
+  ModelCoordinate,
+} from '@internal/framework-components/control';
 import {
   collectionOfModel,
   embeddingModelOf,
@@ -47,7 +50,8 @@ export interface StoredPlace {
 /** Why the plan cannot list the paths from a root field to a type's objects. */
 export type UnlistedReach =
   | { readonly kind: 'containsItself'; readonly type: string }
-  | { readonly kind: 'union' | 'dictionary' };
+  | { readonly kind: 'union' | 'dictionary' }
+  | { readonly kind: 'variant'; readonly variant: string; readonly base: string };
 
 /** A root field whose objects of a type the plan cannot list, and why. */
 export interface UnlistedPlace {
@@ -56,6 +60,35 @@ export interface UnlistedPlace {
   /** The stored name of the root field. */
   readonly field: string;
   readonly reach: UnlistedReach;
+}
+
+/** Where an unlisted place holds a type, in words: `field "items" of collection "users" holds it inside variant "Photo" of embedded model "Item"`. */
+export function insideVariantText(
+  place: UnlistedPlace & { readonly reach: { readonly kind: 'variant' } },
+): string {
+  return `field "${place.field}" of collection "${place.collection}" holds it inside variant "${place.reach.variant}" of embedded model "${place.reach.base}"`;
+}
+
+export const CANNOT_PICK_VARIANT_OBJECTS =
+  'The plan rewrites a key or value in every object a field holds, and cannot pick out the objects of one variant of an embedded model.';
+
+/** Whether a root field holds the type inside a variant of an embedded model. */
+export function isInsideVariant(
+  place: UnlistedPlace,
+): place is UnlistedPlace & { readonly reach: { readonly kind: 'variant' } } {
+  return place.reach.kind === 'variant';
+}
+
+/** The warning for a change inside a variant of an embedded model that the plan does not rewrite, such as `The plan does not remove field "Photo.alt"`. */
+export function insideVariantWarning(
+  change: string,
+  place: UnlistedPlace & { readonly reach: { readonly kind: 'variant' } },
+): MigrationPlannerConflict {
+  return {
+    kind: 'documentsNotRewritten',
+    summary: `The plan does not ${change}: ${insideVariantText(place)}`,
+    why: `${CANNOT_PICK_VARIANT_OBJECTS} Write a dataTransform in migration.ts, before the validator change, that rewrites them to fit; until they fit, the validator change checks the documents and fails the apply.`,
+  };
 }
 
 /** A field of an object, by its stored name: a value object, or a union or dictionary of them, or an embed relation. */
@@ -142,6 +175,8 @@ type Paths = Result<readonly (readonly JsonPathStep[])[], UnlistedReach>;
 /** The walk over one namespace's models and the value objects their documents hold. */
 class PlaceWalk {
   readonly #nodes = new Map<string, StoredTypeShape>();
+  /** The names of each model's variants, by the model's key. */
+  readonly #variants = new Map<string, readonly string[]>();
   readonly #groups: ReadonlyMap<string, number>;
   readonly #target: string;
 
@@ -160,6 +195,10 @@ class PlaceWalk {
     }
     for (const [name, model] of Object.entries(models)) {
       this.#nodes.set(modelKey(name), { name, members: modelMembers(model) });
+      if (model.base !== undefined) {
+        const base = modelKey(model.base.model);
+        this.#variants.set(base, [...(this.#variants.get(base) ?? []), name]);
+      }
     }
   }
 
@@ -175,6 +214,7 @@ class PlaceWalk {
         if (member.holds !== undefined) pending.push(member.holds);
         pending.push(...(member.unlisted?.types ?? []));
       }
+      pending.push(...(this.#variants.get(next) ?? []).map(modelKey));
     }
     return false;
   }
@@ -202,6 +242,10 @@ class PlaceWalk {
       return this.#reaches(holds)
         ? notOk({ kind: 'containsItself', type: this.#nodes.get(holds)?.name ?? holds })
         : ok([]);
+    }
+    const variant = this.#variants.get(holds)?.find((name) => this.#reaches(modelKey(name)));
+    if (variant !== undefined) {
+      return notOk({ kind: 'variant', variant, base: this.#nodes.get(holds)?.name ?? holds });
     }
     const memberSteps: readonly JsonPathStep[] = [
       ...steps,
@@ -241,7 +285,7 @@ function targetKey(type: StoredType): string {
 }
 
 /**
- * Finds every place a contract's documents hold objects of a value object or an embedded model: for each root field of a root model or variant, the steps from the field's value to each object, through value object fields, embed relations (a list step for a list) and variants, at any depth. Steps use stored names. A root field that holds the type through a value object or embedded model that contains itself, a union or a dictionary has no list of paths, and is the failure.
+ * Finds every place a contract's documents hold objects of a value object or an embedded model: for each root field of a root model or variant, the steps from the field's value to each object, through value object fields and embed relations (a list step for a list), at any depth. Steps use stored names. A root field that holds the type through a value object or embedded model that contains itself, a union or a dictionary has no list of paths, and is the failure. So is one that holds it inside a variant of an embedded model, or as that variant: a path reaches every object of the embedded model, not only the variant's.
  */
 export function storedPlacesOf(
   contract: MongoContract,
