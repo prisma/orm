@@ -649,16 +649,9 @@ function buildIncludeChildRowsSelect(
   let childRows = SelectAst.from(child.tableSource(contract))
     .withProjection([...childProjection, ...hiddenOrderProjection])
     .withWhere(whereExpr);
-  if (polyJoinsAndProjection.joins.length > 0) {
-    childRows = childRows.withJoins([...polyJoinsAndProjection.joins]);
-  }
-
-  if (junctionJoins.length > 0 || parentJoins.length > 0) {
-    childRows = childRows.withJoins([
-      ...(parentJoins.length > 0 ? polyJoinsAndProjection.joins : []),
-      ...junctionJoins,
-      ...parentJoins,
-    ]);
+  const joins = [...polyJoinsAndProjection.joins, ...junctionJoins, ...parentJoins];
+  if (joins.length > 0) {
+    childRows = childRows.withJoins(joins);
   }
 
   const partitionByParent = tied.parentKeys.map((key) => key.expr);
