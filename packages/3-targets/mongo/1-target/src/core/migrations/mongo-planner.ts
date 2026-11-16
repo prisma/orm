@@ -833,6 +833,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           loss: 'drop',
           label: removal.call.label,
           ...ifDefined('keepDataEdit', removal.keepDataEdit),
+          ...ifDefined('keepDataAdvice', removal.keepDataAdvice),
         }),
       ),
       ...casts.flatMap(({ call, subject }): MigrationDataLoss[] =>

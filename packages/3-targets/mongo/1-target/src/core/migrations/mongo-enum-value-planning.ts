@@ -51,6 +51,8 @@ export interface EnumValueRewrite {
   readonly statement: ResolvedEnumValueRenameStatement | undefined;
   /** For a removal the plan asks about, the edit to `migration.ts` that keeps its data instead. */
   readonly keepDataEdit: KeepDataEdit | undefined;
+  /** For a removal whose data no edit of this migration can keep safely, how to keep it instead. */
+  readonly keepDataAdvice: string | undefined;
 }
 
 /** The stored value rewrites of a plan: replacements, run in the replacement step, and removals, run last. */
@@ -75,11 +77,6 @@ interface ValueChange {
   readonly from: StoredValue;
   readonly to: StoredValue | undefined;
   readonly statement: ResolvedEnumValueRenameStatement | undefined;
-}
-
-interface Replacement {
-  readonly from: StoredValue;
-  readonly to: StoredValue;
 }
 
 interface EnumComparison {
@@ -228,79 +225,37 @@ function valueChanges(
   });
 }
 
-/** Orders the changes so each runs before the change that writes its old value; a cycle comes out as its changes from the first around. */
-function orderChanges(
-  changes: readonly ValueChange[],
-): readonly { readonly changes: readonly ValueChange[]; readonly cycle: boolean }[] {
-  const bySource = new Map(changes.map((change) => [JSON.stringify(change.from), change]));
-  const placed = new Set<ValueChange>();
-  const groups: { readonly changes: readonly ValueChange[]; readonly cycle: boolean }[] = [];
-  for (const start of changes) {
-    if (placed.has(start)) continue;
-    const path: ValueChange[] = [];
-    let cycle = false;
-    for (
-      let change: ValueChange | undefined = start;
-      change !== undefined && !placed.has(change);
-      change = change.to === undefined ? undefined : bySource.get(JSON.stringify(change.to))
-    ) {
-      if (path.includes(change)) {
-        cycle = true;
-        break;
-      }
-      path.push(change);
-    }
-    for (const change of path) placed.add(change);
-    groups.push(cycle ? { changes: path, cycle } : { changes: [...path].reverse(), cycle });
-  }
-  return groups;
-}
-
-/** A value no member of either enum stores, of the kind of `value`. */
-function temporaryValue(value: StoredValue, taken: readonly JsonValue[]): StoredValue {
-  if (typeof value === 'boolean') return value;
-  const numbers = taken.flatMap((stored) => (typeof stored === 'number' ? [stored] : []));
-  if (typeof value === 'number') {
-    return numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
-  }
-  let candidate = 'prisma_swap';
-  while (taken.some((stored) => sameValue(stored, candidate))) candidate = `${candidate}_`;
-  return candidate;
-}
-
 /**
- * Each change of a group, in the order it runs, with the replacements that keep the data of a change
- * the plan removes: its value replaced by its new value, unless another member keeps that value. In a
- * cycle, the first value moves to a temporary value, the rest move around, and the temporary value
- * moves last.
+ * The changes of an enum whose replacement reads a stored value another replacement of the same
+ * migration writes, or writes one another replacement reads: swaps and chains. Re-running such a
+ * migration after a later operation stops would apply the replacement a second time.
  */
-function keptData(
-  group: { readonly changes: readonly ValueChange[]; readonly cycle: boolean },
-  taken: readonly JsonValue[],
-  merging: (to: StoredValue) => unknown,
-): readonly (readonly [ValueChange, readonly Replacement[] | undefined])[] {
-  const moved = ({ from, to }: Pick<ValueChange, 'from' | 'to'>): readonly Replacement[] =>
-    to === undefined ? [] : [{ from, to }];
-  const [first, ...rest] = group.changes;
-  if (!group.cycle || first === undefined) {
-    return group.changes.map((change) => [
-      change,
-      change.statement === undefined && change.to !== undefined && merging(change.to) === undefined
-        ? moved(change)
-        : undefined,
-    ]);
-  }
-  const swap = temporaryValue(first.from, taken);
-  const reversed = [...rest].reverse();
-  return [
-    [first, [{ from: first.from, to: swap }]],
-    ...reversed.map((change, index): readonly [ValueChange, readonly Replacement[]] => [
-      change,
-      index === reversed.length - 1
-        ? [...moved(change), ...moved({ from: swap, to: first.to })]
-        : moved(change),
-    ]),
-  ];
+function overlappingChanges(changes: readonly ValueChange[]): readonly ValueChange[] {
+  const replacing = changes.filter((change) => change.to !== undefined);
+  return replacing.filter((change) =>
+    replacing.some(
+      (other) =>
+        other !== change &&
+        ((other.to !== undefined && sameValue(other.to, change.from)) ||
+          (change.to !== undefined && sameValue(change.to, other.from))),
+    ),
+  );
+}
+
+function overlapList(changes: readonly ValueChange[]): string {
+  const moves = changes.map(
+    ({ from, to }) => `${JSON.stringify(from)} with ${JSON.stringify(to ?? null)}`,
+  );
+  return moves.length === 1
+    ? (moves[0] ?? '')
+    : `${moves.slice(0, -1).join(', ')} and ${moves.at(-1)}`;
+}
+
+const ONE_AT_A_TIME =
+  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
+
+function twoMigrationsAdvice(enums: EnumComparison, change: ValueChange): string {
+  return `To keep that data, make the change in two migrations: first change the stored value of ${enumValueText(enums.fromContract, change.enumValue)} to one the enum does not use and apply it, then change it to ${JSON.stringify(change.to ?? null)}. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -395,23 +350,21 @@ function mergingRefusal(
   );
 }
 
-function cycleRefusal(
+function overlapRefusal(
   enums: EnumComparison,
   statement: ResolvedEnumValueRenameStatement,
-  cycle: readonly ValueChange[],
+  overlapping: readonly ValueChange[],
 ): MigrationPlannerConflict {
-  const moves = cycle.map(
-    ({ from, to }) => `${JSON.stringify(from)} to ${JSON.stringify(to ?? null)}`,
-  );
-  const listed = `${moves.slice(0, -1).join(', ')} and ${moves.at(-1)}`;
   return {
     ...refused(
       enums,
       { enumValue: statement.from, statement },
-      `the renames move stored values in a cycle, ${listed}, and a rewrite of one would overwrite the other before it is read`,
-      'Leave out the renames in the cycle, and write the rewrites by hand in the migration.ts a plan without them writes: replace the first value with a value no member stores, then each other value, then that value with its new value, with replaceStoredValue({ collection, field, from, to }) for each.',
+      `the migration replaces stored values that its other replacements write (${overlapList(overlapping)})`,
+      `${ONE_AT_A_TIME} If a later operation stops and the migration runs again, a replacement whose old value another replacement wrote would replace it a second time. Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.`,
     ),
-    leaveOut: cycle.flatMap((change) => (change.statement === undefined ? [] : [change.statement])),
+    leaveOut: overlapping.flatMap((change) =>
+      change.statement === undefined ? [] : [change.statement],
+    ),
   };
 }
 
@@ -530,12 +483,10 @@ function planEnum(
     }
   }
   if (checked.length === 0) return ok({ replacements: [], removals: [] });
-  const groups = orderChanges(checked);
-  for (const group of groups) {
-    const statement = group.cycle
-      ? group.changes.find((change) => change.statement !== undefined)?.statement
-      : undefined;
-    if (statement !== undefined) return notOk([cycleRefusal(enums, statement, group.changes)]);
+  const overlapping = overlappingChanges(checked);
+  const overlappingStatement = overlapping.find((change) => change.statement !== undefined);
+  if (overlappingStatement?.statement !== undefined) {
+    return notOk([overlapRefusal(enums, overlappingStatement.statement, overlapping)]);
   }
   const places = placesOfEnum(contract, namespaceId, enumName);
   if (!places.ok) {
@@ -556,63 +507,61 @@ function planEnum(
   const conflicts = placeRefusals(enums, checked, live, input);
   if (conflicts.length > 0) return notOk(conflicts);
   const bsonTypes = bsonTypesOfCodec(destinationEnum.codecId, input.lookups) ?? [];
-  const taken = [
-    ...originEnum.members.map(({ value }) => value),
-    ...destinationEnum.members.map(({ value }) => value),
-  ];
   const replacements: EnumValueRewrite[] = [];
   const removals: EnumValueRewrite[] = [];
-  for (const group of groups) {
-    for (const [change, keepData] of keptData(group, taken, merging)) {
-      const removed = change.statement === undefined;
-      for (const enumPlace of live) {
-        const policy = collectionControlPolicy(contract, enumPlace.place.collection);
-        if (policy !== 'managed') continue;
-        const at = {
-          collection: enumPlace.place.collection,
-          field: enumPlace.place.field,
-          ...(enumPlace.path === undefined ? {} : { path: enumPlace.path }),
-          ...(enumPlace.place.variant === undefined
-            ? {}
-            : { filter: variantFilter(enumPlace.place.variant) }),
-        };
-        const replacementCall = (replacement: Replacement) =>
-          new ReplaceStoredValueCall({
-            ...at,
-            from: replacement.from,
-            to: valueExpression(replacement.to, bsonTypes),
-          });
-        if (!removed && change.to !== undefined) {
-          replacements.push({
-            call: replacementCall({ from: change.from, to: change.to }),
-            enumValue: change.enumValue,
-            statement: change.statement,
-            keepDataEdit: undefined,
-          });
-          continue;
-        }
-        const call = new RemoveStoredValueCall({
+  for (const change of checked) {
+    const keepsDataBy =
+      change.statement !== undefined || change.to === undefined || merging(change.to) !== undefined
+        ? undefined
+        : overlapping.includes(change)
+          ? 'advice'
+          : 'edit';
+    for (const enumPlace of live) {
+      const policy = collectionControlPolicy(contract, enumPlace.place.collection);
+      if (policy !== 'managed') continue;
+      const at = {
+        collection: enumPlace.place.collection,
+        field: enumPlace.place.field,
+        ...(enumPlace.path === undefined ? {} : { path: enumPlace.path }),
+        ...(enumPlace.place.variant === undefined
+          ? {}
+          : { filter: variantFilter(enumPlace.place.variant) }),
+      };
+      const replacementCall = (to: StoredValue) =>
+        new ReplaceStoredValueCall({
+          ...at,
+          from: change.from,
+          to: valueExpression(to, bsonTypes),
+        });
+      if (change.statement !== undefined && change.to !== undefined) {
+        replacements.push({
+          call: replacementCall(change.to),
+          enumValue: change.enumValue,
+          statement: change.statement,
+          keepDataEdit: undefined,
+          keepDataAdvice: undefined,
+        });
+        continue;
+      }
+      const call = new RemoveStoredValueCall(
+        {
           ...at,
           value: change.from,
           ...(enumPlace.required ? { required: true } : {}),
           enumValue: enumValueCoordinateJson(change.enumValue),
-        });
-        removals.push({
-          call,
-          enumValue: change.enumValue,
-          statement: undefined,
-          keepDataEdit:
-            keepData === undefined
-              ? undefined
-              : {
-                  remove: oneLine(call),
-                  replaceWith: keepData
-                    .map((replacement) => oneLine(replacementCall(replacement)))
-                    .join(', '),
-                  ...(group.cycle ? { swapsValues: true } : {}),
-                },
-        });
-      }
+        },
+        { importsReplacement: keepsDataBy === 'edit' || enumPlace.required },
+      );
+      removals.push({
+        call,
+        enumValue: change.enumValue,
+        statement: undefined,
+        keepDataEdit:
+          keepsDataBy === 'edit' && change.to !== undefined
+            ? { remove: oneLine(call), replaceWith: oneLine(replacementCall(change.to)) }
+            : undefined,
+        keepDataAdvice: keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, change) : undefined,
+      });
     }
   }
   return ok({ replacements, removals });

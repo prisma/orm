@@ -549,15 +549,26 @@ export class ReplaceStoredValueCall extends OpFactoryCallNode {
   }
 }
 
+/** What `migration.ts` imports for a `removeStoredValue` call beside the call itself. */
+export interface RemoveStoredValueImports {
+  /** Whether an edit that keeps the data can replace the call with `replaceStoredValue` calls: the plan's own edit, or the one a failed check of a required field gives. */
+  readonly importsReplacement: boolean;
+}
+
 export class RemoveStoredValueCall extends OpFactoryCallNode {
   readonly factoryName = 'removeStoredValue' as const;
   readonly operationClass = 'destructive' as const;
   readonly options: RemoveStoredValueOptions;
+  readonly imports: RemoveStoredValueImports;
   readonly label: string;
 
-  constructor(options: RemoveStoredValueOptions) {
+  constructor(
+    options: RemoveStoredValueOptions,
+    imports: RemoveStoredValueImports = { importsReplacement: false },
+  ) {
     super();
     this.options = options;
+    this.imports = imports;
     this.label = this.toOp().label;
     this.freeze();
   }
@@ -570,11 +581,12 @@ export class RemoveStoredValueCall extends OpFactoryCallNode {
     return `removeStoredValue(${jsonToTsSource(this.options)})`;
   }
 
-  /** Imports `replaceStoredValue` too, so the edit that keeps the data, which replaces this call with replacements, needs no new import. */
   override importRequirements(): readonly ImportRequirement[] {
     return [
       ...super.importRequirements(),
-      { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'replaceStoredValue' },
+      ...(this.imports.importsReplacement
+        ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'replaceStoredValue' }]
+        : []),
     ];
   }
 }
