@@ -3,12 +3,12 @@
  *
  * `User` has an optional `status`, a list `tags` and an optional value object `home` whose `kind` is a `Status`. `Status.ARCHIVED` stores `archived`.
  *
- * E1 renames it to `RETIRED`, which stores `retired`, with `--rename Status.ARCHIVED:Status.RETIRED`: the scalar, the list and the nested key that held `archived` hold `retired`. E2 swaps the stored values of `ACTIVE` and `ARCHIVED`: both are asked about, and the printed edits swap the data through a temporary value. E3 removes `ARCHIVED` with `--delete Status.ARCHIVED`: the optional field and key lose it and the lists drop it. E4 makes `status` required: while a document holds `archived` there, the apply stops, counts the documents and advises a rename, and once the documents change it succeeds.
+ * E1 renames it to `RETIRED`, which stores `retired`, with `--rename Status.ARCHIVED:Status.RETIRED`: the scalar, the list and the nested key that held `archived` hold `retired`. E2 swaps the stored values of `ACTIVE` and `ARCHIVED`: both are asked about, the question advises two migrations, and two migrations that each keep the data through the printed edits swap them. E3 removes `ARCHIVED` with `--delete Status.ARCHIVED`: the optional field and key lose it and the lists drop it. E4 makes `status` required: while a document holds `archived` there, the apply stops, counts the documents and advises a rename, and once the documents change it succeeds. E5 removes `ARCHIVED` through `db update` with no snapshot of the origin contract: nothing is rewritten, and the validator's document check stops the apply.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { timeouts } from '@repo/test-utils';
@@ -238,6 +238,27 @@ describe('Journeys (MongoDB): enum value statements', {
     return after;
   }
 
+  /** Plans a change whose removals keep their data through the edits the question prints, makes those edits, runs the file, and applies it. */
+  async function planKeepingDataAndMigrate(
+    ctx: JourneyContext,
+    from: string,
+    name: string,
+    statements: readonly string[],
+    label: string,
+  ) {
+    const asked = await runMigrationPlan(ctx, ['--from', from, '--json']);
+    const question = (engineError(asked)?.nextActions ?? []).map(({ label }) => label).join('\n');
+    const planned = await runMigrationPlan(ctx, ['--name', name, '--from', from, ...statements]);
+    expect(planned.exitCode, `${label}: plan: ${planned.stdout}\n${planned.stderr}`).toBe(0);
+    const dirName = latestMigrationDirName(ctx);
+    const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
+    writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
+    const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
+    expect(reEmit.exitCode, `${label}: node migration.ts: ${reEmit.stderr}`).toBe(0);
+    const applied = await runMigrate(ctx);
+    expect(applied.exitCode, `${label}: migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+  }
+
   /** The stored value calls of a `migration.ts`, without white space. */
   function storedValueCalls(migrationTs: string): readonly string[] {
     return (
@@ -281,7 +302,7 @@ describe('Journeys (MongoDB): enum value statements', {
     expect(await throughDbUpdate('mongo_e1_update', journey, 'E1')).toEqual(renamed);
   });
 
-  it('E2: two values that trade places are asked about, and the printed edits swap them through a temporary value', async () => {
+  it('E2: two values that trade places are asked about with advice to use two migrations, and two migrations swap them', async () => {
     const journey: Journey = {
       before: BEFORE,
       after: SWAPPED,
@@ -291,26 +312,31 @@ describe('Journeys (MongoDB): enum value statements', {
     const dbName = 'mongo_e2_plan';
     const { ctx, origin } = await migratedThenChanged(dbName, journey, 'E2');
     const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-    expect(engineError(asked)?.code, 'E2.05: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-    const why = String(engineError(asked)?.why);
-    expect(why, 'E2.05: asks about both members').toContain('"Status.ACTIVE"');
-    expect(why, 'E2.05: asks about both members').toContain('"Status.ARCHIVED"');
-    const question = (engineError(asked)?.nextActions ?? []).map(({ label }) => label).join('\n');
-    const planned = await runMigrationPlan(ctx, [
-      '--name',
+    const question = JSON.stringify(engineError(asked));
+    expect({
+      code: engineError(asked)?.code,
+      asksActive: question.includes('Status.ACTIVE'),
+      asksArchived: question.includes('Status.ARCHIVED'),
+      twoMigrations: question.includes('make the change in two migrations'),
+      temporaryValue: question.includes('replaceStoredValue'),
+    }).toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      asksActive: true,
+      asksArchived: true,
+      twoMigrations: true,
+      temporaryValue: false,
+    });
+
+    await emit(ctx, usersPsl('  ACTIVE = "was_active"\n  ARCHIVED = "was_archived"'), 'E2.06');
+    await planKeepingDataAndMigrate(ctx, origin, 'away', journey.statements, 'E2.07');
+    await emit(ctx, SWAPPED, 'E2.08');
+    await planKeepingDataAndMigrate(
+      ctx,
+      latestMigrationDirName(ctx),
       'swap',
-      '--from',
-      origin,
-      ...journey.statements,
-    ]);
-    expect(planned.exitCode, `E2.06: plan: ${planned.stdout}\n${planned.stderr}`).toBe(0);
-    const dirName = latestMigrationDirName(ctx);
-    const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-    writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
-    const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-    expect(reEmit.exitCode, `E2.07: node migration.ts: ${reEmit.stderr}`).toBe(0);
-    const applied = await runMigrate(ctx);
-    expect(applied.exitCode, `E2.08: migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+      journey.statements,
+      'E2.09',
+    );
 
     expect(await documents(dbName)).toEqual([
       {
@@ -411,5 +437,29 @@ describe('Journeys (MongoDB): enum value statements', {
       { email: 'c@example.com', status: 'active', tags: [], home: null },
     ]);
     await verifiedAndSettled(ctx, dbName, 'E4', furtherMigrationPlan(ctx));
+  });
+
+  it('E5: without an origin contract nothing is rewritten, and the document check stops db update while documents hold the removed value', async () => {
+    const dbName = 'mongo_e5_update';
+    const ctx = setup(dbName);
+    await emit(ctx, BEFORE, 'E5.01');
+    expect((await runDbUpdate(ctx, ['--no-interactive'])).exitCode, 'E5.02').toBe(0);
+    await seed(dbName, DOCUMENTS);
+    rmSync(join(ctx.testDir, 'migrations'), { recursive: true, force: true });
+    await emit(ctx, REMOVED, 'E5.03');
+
+    const stopped = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+    const failure = engineError(stopped);
+    expect({
+      exitCode: stopped.exitCode === 0 ? 0 : 'failed',
+      code: failure?.code,
+      summary: failure?.summary,
+      documents: await documents(dbName),
+    }).toEqual({
+      exitCode: 'failed',
+      code: 'MIGRATION.PRECHECK_FAILED',
+      summary: expect.stringContaining('not fit the new validator'),
+      documents: DOCUMENTS,
+    });
   });
 });
