@@ -113,6 +113,7 @@ import type {
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
 import { validateTransactionTimeout } from './transaction-deadline';
+import { TransactionLevel, transactionClosedError } from './transaction-level';
 import {
   createTransactionStart,
   type SettledTransactionTarget,
@@ -194,6 +195,7 @@ export interface RuntimeTransaction extends RuntimeQueryable {
   readonly signal: AbortSignal;
   commit(): Promise<void>;
   rollback(): Promise<void>;
+  savepoint(): Promise<RuntimeTransaction>;
 }
 
 export interface RuntimeQueryable extends RuntimeScope {}
@@ -236,6 +238,8 @@ export interface ActivityRoute {
   readonly transaction:
     | ((parent: ActivityParent, options?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>)
     | undefined;
+  /** Opens a savepoint beneath `parent`; present only where the route is a transaction or a savepoint. */
+  readonly savepoint?: ((parent: ActivityParent) => Promise<RuntimeTransaction>) | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -295,6 +299,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Ends the open-transaction record of the transaction most recently begun on each connection.
   readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
   readonly #transactionChecks = new WeakMap<SqlQueryable, () => void>();
+  readonly #transactionLevels = new WeakMap<SqlQueryable, TransactionLevel>();
+  readonly #savepointCounts = new WeakMap<SqlQueryable, number>();
   #openActivityHandles = 0;
   #refusing = false;
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
@@ -577,7 +583,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     scope: ActivityRoute['scope'],
     parent: () => ActivityParent | undefined,
-    options: Pick<ActivityRoute, 'transaction' | 'runtimeWork'>,
+    options: Pick<ActivityRoute, 'transaction' | 'savepoint' | 'runtimeWork'>,
   ): ActivityRoute {
     return {
       scope,
@@ -744,7 +750,15 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const beginTransaction = route.transaction;
+    const { transaction: beginTransaction, savepoint: openSavepoint } = route;
+    if (openSavepoint !== undefined) {
+      return Object.assign(handle, {
+        savepoint: async (): Promise<RuntimeTransaction> => {
+          run.assertAcceptsChildren();
+          return openSavepoint(run);
+        },
+      });
+    }
     if (beginTransaction === undefined) return handle;
     return Object.assign(handle, {
       transaction: async (options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> => {
@@ -881,6 +895,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     options: ActivityExecuteOptions | undefined,
   ): ActivityParent | undefined {
+    this.#transactionLevels.get(queryable)?.assertAcceptsWork();
     const openTransaction = this.#openTransactions.get(queryable);
     const activityParent = options?.activityParent;
     if (activityParent === undefined) return openTransaction;
@@ -1497,6 +1512,20 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
     let commitEnding: Promise<void> | undefined;
     const controller = new AbortController();
+    const level = new TransactionLevel(
+      {
+        signal: controller.signal,
+        nextSavepointName: () => {
+          const count = (this.#savepointCounts.get(connection) ?? 0) + 1;
+          this.#savepointCounts.set(connection, count);
+          return `sp_${count}`;
+        },
+        logDroppedError: settlement.logDroppedError,
+      },
+      undefined,
+      activity,
+    );
+    this.#transactionLevels.set(driverTx, level);
     const deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     let closed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1504,6 +1533,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       clearTimeout(timer);
       timer = undefined;
       closed = true;
+      level.close();
     };
     const expire = () => {
       if (closed) return;
@@ -1527,9 +1557,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       this.#transactionWorkOn.set(connection, async () => {
         stopDeadline();
         stopAcceptingChildren();
+        const endSavepoints = level.closeOpenSavepoints();
         try {
           if (!settlement.committed && !settlement.rolledBack) {
             settlement.rolledBack = true;
+            await endSavepoints('failed');
             await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           }
         } catch (error) {
@@ -1540,15 +1572,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       });
     }
     const self = this;
-    const wrappedTransaction: RuntimeTransaction &
-      SettledTransactionTarget &
-      ActivitySourceTarget &
-      PreparedStatementQueryTarget &
-      PreparedStatementExecuteTarget = {
+    const wrappedTransaction: RuntimeTransaction & SettledTransactionTarget = {
+      ...this.transactionQueryable(driverTx, activity, level),
       [transactionSettlement]: settlement,
       signal: controller.signal,
       async commit(): Promise<void> {
         check();
+        level.assertAcceptsWork();
         stopDeadline();
         commitAttempted = true;
         stopAcceptingChildren();
@@ -1575,32 +1605,149 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           return;
         }
         if (settlement.rolledBack) return;
+        const endSavepoints = level.closeOpenSavepoints();
+        if (level.invalidated) {
+          endTransactionWork();
+          await endSavepoints('failed');
+          await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+          throw transactionClosedError();
+        }
         try {
           await self.#inFlight.track(() => driverTx.rollback());
         } catch (error) {
           endTransactionWork();
+          await endSavepoints('failed');
           await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           throw error;
         }
         settlement.rolledBack = true;
         try {
+          await endSavepoints('succeeded');
           await activity.end({ by: 'rollback', outcome: 'succeeded', commitAttempted });
         } finally {
           endTransactionWork();
         }
       },
+      savepoint: () => self.openSavepoint(level, driverTx, activity),
+    };
+    return wrappedTransaction;
+  }
+
+  private async openSavepoint(
+    enclosing: TransactionLevel,
+    enclosingTx: SqlTransaction,
+    parent: ActivityParent,
+  ): Promise<RuntimeTransaction> {
+    const { name, level } = enclosing.openSavepoint();
+    let activity: TransactionActivityRun<SqlMiddlewareContext>;
+    try {
+      activity = await startTransactionActivity<SqlMiddlewareContext>({
+        middleware: this.middleware,
+        context: { ...this.sqlCtx, scope: 'transaction' },
+        parent,
+        holdFinishedChildren: this.#holdFinishedChildren,
+      });
+    } catch (error) {
+      level.settle();
+      throw error;
+    }
+    level.activity = activity;
+    let driverSavepoint: SqlTransaction;
+    try {
+      level.assertOpen();
+      driverSavepoint = await this.#inFlight.track(() => enclosingTx.savepoint(name));
+    } catch (error) {
+      level.settle();
+      await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
+      throw error;
+    }
+    return this.wrapSavepoint(driverSavepoint, enclosingTx, level, activity);
+  }
+
+  private wrapSavepoint(
+    driverSavepoint: SqlTransaction,
+    enclosingTx: SqlTransaction,
+    level: TransactionLevel,
+    activity: TransactionActivityRun<SqlMiddlewareContext>,
+  ): RuntimeTransaction {
+    this.#openTransactions.set(driverSavepoint, activity);
+    this.#transactionLevels.set(driverSavepoint, level);
+    const check = this.#transactionChecks.get(enclosingTx);
+    if (check !== undefined) this.#transactionChecks.set(driverSavepoint, check);
+    if (this.#heldQueryables.has(enclosingTx)) this.#heldQueryables.add(driverSavepoint);
+    let commitAttempted = false;
+    const self = this;
+    return {
+      ...this.transactionQueryable(driverSavepoint, activity, level),
+      signal: level.shared.signal,
+      async commit(): Promise<void> {
+        level.assertAcceptsWork();
+        commitAttempted = true;
+        try {
+          await self.#inFlight.track(() => driverSavepoint.commit());
+        } catch (error) {
+          await activity.end({ by: 'release', outcome: 'failed' });
+          throw error;
+        }
+        level.settle();
+        await activity.end({ by: 'release', outcome: 'succeeded' });
+      },
+      async rollback(): Promise<void> {
+        if (level.settled) return;
+        const endSavepoints = level.closeOpenSavepoints();
+        if (level.closed) {
+          level.settle();
+          await endSavepoints('failed');
+          await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+          throw transactionClosedError();
+        }
+        level.close();
+        try {
+          await self.#inFlight.track(() => driverSavepoint.rollback());
+        } catch (error) {
+          level.settle();
+          level.invalidateEnclosing();
+          await endSavepoints('failed');
+          await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+          throw error;
+        }
+        level.settle();
+        await endSavepoints('succeeded');
+        await activity.end({ by: 'rollback', outcome: 'succeeded', commitAttempted });
+      },
+      savepoint: () => self.openSavepoint(level, driverSavepoint, activity),
+    };
+  }
+
+  private transactionQueryable(
+    queryable: SqlTransaction,
+    activity: TransactionActivityRun<SqlMiddlewareContext>,
+    level: TransactionLevel,
+  ): RuntimeQueryable &
+    ActivitySourceTarget &
+    PreparedStatementQueryTarget &
+    PreparedStatementExecuteTarget {
+    const self = this;
+    return {
       [activitySource]: {
         startActivity: <K extends ClientActivityKind>(
           clientActivity: StartActivity<K>,
-        ): Promise<ActivityHandle<K>> =>
-          self.startActivityOnRoute(
-            self.queryableRoute(driverTx, 'transaction', () => activity, {
+        ): Promise<ActivityHandle<K>> => {
+          try {
+            level.assertOpen();
+          } catch (error) {
+            return Promise.reject(error);
+          }
+          return self.startActivityOnRoute(
+            self.queryableRoute(queryable, 'transaction', () => activity, {
               transaction: undefined,
+              savepoint: (parent) => self.openSavepoint(level, queryable, parent),
               runtimeWork: false,
             }),
             clientActivity,
             undefined,
-          ),
+          );
+        },
         planContentHash: (plan: HashablePlan): Promise<string> =>
           self.planContentHashFor(plan, 'transaction', activity),
       },
@@ -1608,7 +1755,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
         options?: RuntimeExecuteOptions,
       ): AsyncIterableResult<Row> {
-        return self.queryAgainstQueryable<Row>(plan, driverTx, {
+        return self.queryAgainstQueryable<Row>(plan, queryable, {
           ...options,
           scope: 'transaction',
         });
@@ -1617,7 +1764,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        return self.executeStatisticsAgainstQueryable(plan, driverTx, {
+        return self.executeStatisticsAgainstQueryable(plan, queryable, {
           ...options,
           scope: 'transaction',
         });
@@ -1633,7 +1780,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          driverTx,
+          queryable,
           { ...options, scope: 'transaction' },
         );
       },
@@ -1648,12 +1795,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          driverTx,
+          queryable,
           { ...options, scope: 'transaction' },
         );
       },
     };
-    return wrappedTransaction;
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
@@ -1848,14 +1994,6 @@ class RowsBeneath<Row> implements AsyncGenerator<Row, void, unknown> {
   async [Symbol.asyncDispose](): Promise<void> {
     await this.return();
   }
-}
-
-function transactionClosedError(): Error {
-  return runtimeError(
-    'RUNTIME.TRANSACTION_CLOSED',
-    'Cannot use a transaction operation after the transaction has ended. Consume query results and await execute calls inside the transaction callback.',
-    {},
-  );
 }
 
 /**

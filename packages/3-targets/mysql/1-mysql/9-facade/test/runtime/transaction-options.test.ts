@@ -40,6 +40,9 @@ describe('MySQL callback isolation options', () => {
         execute: async () => ({ affectedRows: 0 }),
         commit: vi.fn(async () => {}),
         rollback: vi.fn(async () => {}),
+        savepoint: vi.fn(async (): Promise<never> => {
+          throw new Error('savepoint is not stubbed');
+        }),
       };
       const connection = {
         ...tx,
@@ -97,6 +100,9 @@ describe('MySQL callback isolation options', () => {
       execute: async () => ({ affectedRows: 0 }),
       commit: vi.fn(async () => undefined),
       rollback: vi.fn(async () => undefined),
+      savepoint: vi.fn(async (): Promise<never> => {
+        throw new Error('savepoint is not stubbed');
+      }),
     };
     const connection = {
       ...transaction,

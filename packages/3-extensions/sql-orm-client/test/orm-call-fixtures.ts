@@ -97,6 +97,9 @@ export function createActivityRuntime(options: ActivityRuntimeOptions = {}): {
           rollback: async () => {
             call.transactions[index] = 'rolled-back';
           },
+          savepoint: async (): Promise<never> => {
+            throw new Error('savepoint is not stubbed');
+          },
         };
       };
       const handle = {
