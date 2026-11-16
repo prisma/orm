@@ -528,3 +528,86 @@ Suggestion: give each command one function that returns the flags the user gave 
 
 - I did not run tests. The rendered terminal format in ADR 319's examples (`✘ [CODE] … why: … →`) is not compared with the CLI's real output. The spec's sketch uses a different format, and both are illustrations.
 - I read `f2dc1acced` (the handover) only for ADR numbers, not for its content.
+
+## Round 8
+
+Re-reviewed at `cfca33773e`. Range: the fourteen fix commits `4862e81d12..77186a181e` and the merge of `main` at `cfca33773e`. Persona: architect.
+
+### Verdicts on the seventh round
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| A33 | Fixed, with a wording gap (A39) and an ownership note (A40) | `a8831bae0d` moves the ref check out of `executeRun` into `executeDbUpdate` (`control-api/operations/db-update.ts` lines 85-99), before anything reads the database, and returns `CLI.INVALID_ARGUMENTS` with `refName`, `refHash`, `contractStorageHash`. `MIGRATION.DESTINATION_CONTRACT_MISMATCH` is again only a runner code, and its error reference entry says the `dbUpdate` case uses `CLI.INVALID_ARGUMENTS` instead. See below for the namespace question. |
+| A34 | Fixed | The spec's `TargetRef` row and the app upgrade note now say the call returns a failure result with `CLI.INVALID_ARGUMENTS`, and the note adds the `permitPolicyChange` without a ref case. |
+| A35 | Fixed | The `CONTRACT.MARKER_ROW_CORRUPT` entry drops `migration status --to <ref>` from the commands that raise it and says `migration status` never fails on it, with or without `--to` (`8fc9b65ec0`). |
+| A36 | Fixed | Renumbered to 320 (`e0d2ab3cfd`, `efba3678bb`). `main` now has ADR 319 for back-references (#30483 merged) and no ADR 32x. Outside the review files and `wip/`, the only "319" left for this decision is the handover's sentence that records the renumbering. I could not list open PRs (GitHub returned 504), so another open PR taking 320 is not ruled out. |
+| A37 | Fixed | `DeclaredDatabasePoliciesIssue` is `{ path, problem }` (`adc1b249e2`). The framework strips arktype's path prefix in one private function, `problemOf`, so the exported interface no longer depends on arktype's message format. `policiesIssueText` composes `policies.<path> <problem>` from the fields. The marker reader composes `<path> <problem>` after "The marker's meta.policies is not a valid policy declaration:", which reads correctly, so the `meta.policies.` prefix I suggested is not needed. |
+| A38 | Fixed | `rerunFlags` in `utils/printed-command.ts` is the one function that turns `--to`, `--advance-ref` and `--permit-policy-change` into flags. `db migrate` and `db update` use it for `rerunArgs`, for the dry run's apply command (`dbUpdateRerun`) and as `retryCommandFor`'s `rerunArgs`. `retryCommandFor` lost its `advanceRef`, `permitPolicyChange` and `statements` arguments. The tests in `test/utils/rerun-advice.test.ts` check the repeated flags across the advice functions. One list is still built by hand, in `errorChangePolicyForbids`, but it names a different command (`db update` after `db migrate`, or the reverse), so it is not a re-run and does not belong in `rerunFlags`. |
+
+### A33: is a `CLI.*` code right for a control API caller error?
+
+There is precedent for the control API returning `CLI.*` codes: `migration-new.ts` line 87 returns `CLI.FILE_NOT_FOUND`, and `format.ts` line 73 returns `CLI.FILE_WRITE_FAILED`. ADR 239 gives the `CLI` namespace "Invocation: flag parsing, output format, `init`, command usage", and says an error is named by what it is about, not which package raised it. A wrong combination of options is command usage, so `CLI` is the right namespace, and better than the runner's `MIGRATION` code it replaces. ADR 245 asks for the error to be structured where it is detected, which it is.
+
+There is no precedent for this repo raising `CLI.INVALID_ARGUMENTS` itself. ADR 239 lists it among the codes the CLI engine mints, and before this branch nothing in this repo raised it. See A40.
+
+### The printed-command changes
+
+- `CliInvocation.rerunArgs` now means the flags the user gave, other than statements, and `statementArgs` the statements. `dbUpdateRerun` joins the two; `dbMigrateRerun` uses `rerunArgs` alone, since `db migrate` has no statements. That split is clear, and both commands fill `rerunArgs` from the same `rerunFlags`, so the two are symmetric.
+- `runner-failure-advice.ts` has three names for printed `db migrate` commands: `dbMigrateCommand` (bare, for a different migration than the one the user ran), `dbMigrateAgain` (quoted re-run) and the exported `dbMigrateRerun`. The doc comments say which is which, and each use I read picks the right one: re-planning a migration keeps `--to`, and advice that leads to a new contract does not. No change needed.
+- `dbMigrateRerun` and `dbUpdateRerun` are correct only when the invocation came from the same command, and the type does not say so. Every caller I found is on its own command's path (`errorMigrationHasUnfilledPlaceholders` and `migrateAdvice` from `db migrate`; the `dbUpdate*` advice from `db update`). No change needed now.
+- `printed-command.ts` (in `utils/`) imports `shellQuoted` from `control-api/statements/`. That import was there before this round.
+
+### The policy issue plumbing
+
+`DeclaredDatabasePoliciesIssue` belongs in the framework: it is the failure type of the framework's parser, and both readers (the ref reader in migration-tools and `databasePoliciesOf` for the marker) use it. The framework builds no text that only the CLI needs: it keeps one line of text in `databasePoliciesOf`, whose `why` the runners need. `RefLoadProblem.policyIssues` and the `refUnreadable` violation's `policyIssues` carry the issues to `errorInvalidRefFile`, which migration-tools owns, and the CLI only passes them through in `mapIntegrityViolations`. The names say what the field holds. Layering is right. See A41 for one gap in the fix text.
+
+### The merge
+
+The only conflict was in `docs/architecture docs/ADR-INDEX.md`. Keeping both was right: the steering list has ADR 319 (back-references) and ADR 320 (this decision) in number order, and the Migration System table has the 320 row, while 319's row sits in Product scope. For the ADR 307 line, `main` had not changed it: `main`'s version is the line as it was before this branch. The branch's version adds "the database's change policy (ADR 320) says which", which matches ADR 307's status line on this branch. Keeping the branch's wording was right.
+
+### Agreement between the ADR, the docs and the code
+
+- No link to ADR 319 for this decision remains outside the review files, `wip/` and the handover's history sentence. ADR 021, ADR 218, ADR 307, the ADR index, the glossary, the Migration System doc, the framework's doc comment and the spec point at ADR 320.
+- ADR 320's example (line 37) prints `→ Author a migration with prisma migration plan, then apply it with prisma db migrate --db <url>.` `errorChangePolicyForbids` builds that with `cliCommand(invocation, 'db migrate')`, which adds `--db <url>` when `--db` was given. The QA transcript shows the same sentence. The example's `✔ Policies updated: change: migrate` matches `applySummaryText` for a run that only writes the policies.
+- The error reference (`CLI.INVALID_ARGUMENTS`, `MIGRATION.CHANGE_POLICY_FORBIDS`, `MIGRATION.INVALID_REF_FILE`, `MIGRATION.DESTINATION_CONTRACT_MISMATCH`), the glossary, the Migration System doc, the `prisma-8` skill (`debug.md`, `migrations.md`), the spec and the upgrade note agree with the code, including the rule that `--permit-policy-change` needs `--to <ref>` and the ref-named summary.
+- ADR 320 does not state that rule, and one of its sentences is now false. See A42.
+
+### New findings
+
+#### A39 — The control API's caller errors speak in CLI flags (low)
+
+Location: `packages/1-framework/3-tooling/cli/src/utils/policy-errors.ts` lines 99-120 (`errorPermitPolicyChangeNeedsRef`); callers `control-api/operations/migrate.ts` lines 149-156 and `control-api/operations/db-update.ts` lines 82-84; test `test/control-api/migrate-database-policies.test.ts` around line 331.
+
+Issue: The control API's `migrate` and `dbUpdate` take `permitPolicyChange` and `target`/`ref`, not flags. When they refuse `permitPolicyChange` without a ref, the result says "--permit-policy-change needs --to <ref>", the fix says "Name the ref ... with --to <ref>, or leave out --permit-policy-change", and `meta.command` is `db migrate` even for an API call. A Composer author reads advice about flags they never passed. The CLI commands raise the same check earlier with their own flags, so the control API's copy only ever reaches API callers.
+
+Suggestion: give `errorPermitPolicyChangeNeedsRef` the caller's vocabulary as an argument, as `errorChangePolicyForbids` already takes `invocation`: with an invocation, name the flags; without one, name the options (`permitPolicyChange needs a target of kind ref` / `a ref`). Keep the code and `meta` keys the same.
+
+#### A40 — This repo now raises the CLI engine's `CLI.INVALID_ARGUMENTS` with meanings of its own (low)
+
+Location: `packages/1-framework/3-tooling/cli/src/utils/policy-errors.ts` line 108; `packages/1-framework/3-tooling/cli/src/control-api/operations/db-update.ts` line 84; `docs/reference/error-reference.md` line 202; `docs/architecture docs/adrs/ADR 239 - Errors are structural envelopes with dotted namespace codes.md` line 145.
+
+Issue: ADR 239 says each namespace's codes are declared by the module that owns them, and lists `CLI.INVALID_ARGUMENTS` as a code the CLI engine mints, for arguments that cannot be parsed. This branch is the first place this repo raises it, with two meanings and two payloads of its own (`command`/`to`, and `refName`/`refHash`/`contractStorageHash`). The error reference entry handles this well: it links the engine's entry and documents both uses. But a consumer that reads the engine's documentation for the code will not find these cases, and ADR 239's table still says the engine owns it.
+
+Suggestion: keep the code, since the namespace is right and a new code would be one more for consumers to learn. Add a clause to ADR 239's `CLI` row that this repo also raises `CLI.INVALID_ARGUMENTS` for option combinations it checks after parsing, with its own payload. If Will prefers a repo-owned code instead, the name is his to pick.
+
+#### A41 — The ref file's fix text repeats the policy declaration's keys by hand (low)
+
+Location: `packages/1-framework/3-tooling/migration/src/errors.ts` lines 260-280 (`POLICY_VALUES`, `policyIssueFix`); `packages/1-framework/1-core/framework-components/src/control/database-policies.ts` (`DATABASE_POLICIES_KEYS`, `DATA_PROTECTION_KEYS`).
+
+Issue: `policyIssueFix` matches the issue's path against `'change'`, `/^change\[\d+\]$/`, `'dataProtection'` and the two keys of `POLICY_VALUES`. Any other path gets "Remove policies.<key>." The framework already exports the key lists, but this function does not use them. If a key is added to the declaration, a wrong value for it gets the advice to remove the key, and nothing fails to compile. This is the A28 problem (a second copy of the declaration's shape) in the error text.
+
+Suggestion: type `POLICY_VALUES` against the framework's key types, for example `Record<(typeof DATA_PROTECTION_KEYS)[number], readonly string[]>` keyed as `dataProtection.<key>`, so a new data protection key does not compile until it has its values. Do the same for the top-level keys with `DATABASE_POLICIES_KEYS`.
+
+#### A42 — ADR 320 says no error suggests `--permit-policy-change`, and does not say the flag needs a ref (low)
+
+Location: `docs/architecture docs/adrs/ADR 320 - Databases record a change policy and a data protection policy.md` lines 94 and 98; code: `packages/1-framework/3-tooling/cli/src/utils/policy-errors.ts` lines 74-95 (`errorChangePolicyForbids`, ref source), `utils/printed-command.ts` (`rerunFlags`), `utils/policy-errors.ts` lines 99-120 (`errorPermitPolicyChangeNeedsRef`).
+
+Issue: Line 98 says "No error ever suggests the flag." Since `ab00f5c256` and `84c01dc30d`, two kinds of advice print it: `MIGRATION.CHANGE_POLICY_FORBIDS` from the ref suggests `db update --to <ref> --permit-policy-change` or `db migrate --to <ref> --permit-policy-change`, and every re-run of `db migrate` or `db update` repeats it. Both only repeat a flag the user gave, which keeps the ADR's reason intact: no error offers consent the user did not give. But a reader who takes line 98 literally will think the code is wrong. Separately, the ADR does not say that the flag without a ref is refused. That is a decision, not a detail: the alternative was to accept the flag and write nothing, which is what the ADR's line 94 ("A command given no ref ... never changes a policy") would suggest. Composer callers of `permitPolicyChange` need to know it.
+
+Suggestion: change line 98 to "No error suggests the flag to a command that was not given it. Advice that repeats the user's command, or names the command the ref's policy permits, repeats the flag the user gave." Add to line 94: "Given `--permit-policy-change` (Composer: `permitPolicyChange`) without a ref, the command fails with `CLI.INVALID_ARGUMENTS` before it connects, because there is nothing it could write."
+
+### Not checked
+
+- I did not run tests or the CLI. I compared ADR 320's examples with the code and with `wip/qa/transcript.md`, not with fresh output.
+- I could not list open PRs (GitHub returned 504), so I did not check whether an open PR also takes ADR 320.
+- I read the e2e test helper changes and `4840c17e85` (MongoDB failure code) only for their effect on codes, not in detail.

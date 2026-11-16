@@ -701,3 +701,141 @@ Output under `wip/logs/`:
 - **Integration, PostgreSQL and SQLite:** `cli.database-policies.{migrate,enforcement,postgres}.e2e.test.ts`, `review8-e2e-sql.txt` (56 pass).
 - **Integration, MongoDB:** `cli.database-policies.mongo.e2e.test.ts`, `review8-e2e-mongo.txt`: 26 pass, 2 fail (F23).
 - **`pnpm check:error-reference`:** `review8-errref.txt`.
+
+## Round 9
+
+Reviews `4862e81d12..77186a181e` (fourteen fix commits) and the merge of `main` at `cfca33773e`. Persona: principal engineer.
+
+### The merge of main
+
+`cfca33773e^1..cfca33773e^2` brings two commits: `61ed0daa6f` (ADR 319 on back-references, docs and skill only) and `2d951d7076` (callback transaction timeouts in the SQL runtime, drivers and facades). Neither touches marker writes, refs, the migration runners or any CLI advice. The only conflict was the ADR index line; the branch renumbered its ADR to 320 (`e0d2ab3cfd`, `efba3678bb`) so the two no longer clash.
+
+### Re-run advice (`printed-command.ts` and its callers)
+
+`rerunFlags` builds `--to`, `--advance-ref` and `--permit-policy-change` from the flags exactly as given, and adds `--permit-policy-change` only when the flag was `true`. `CliInvocation.rerunArgs` now holds only these flags; statements moved to `statementArgs`. I checked every reader:
+
+- `dbMigrateRerun`: the migrate failure advice (`runner-failure-advice.ts`, `failed-precheck-advice.ts`) and `errorMigrationHasUnfilledPlaceholders`. All callers are `db migrate` paths (`control-api/operations/migrate.ts` 330, 353, 451), so the flags are always `db migrate` flags.
+- `dbUpdateRerun`: `db-update-failure.ts`, `dbUpdateFailedTypeChangeAdvice`, `dbUpdateRowsHoldingValueAdvice`, `dbUpdateRowsFailingCheckAdvice`, and the success next actions in `orm/db/update.ts`.
+- `retryCommandFor` now takes `rerunArgs`; both `db migrate` and `db update` pass `rerunFlags`, and `db update` adds its statements.
+- `errorDatabasePoliciesMovedDuringSign` reads `rerunArgs` for `db sign`, but `db sign` never sets it (F26).
+- Main added no new reader of `rerunArgs` or `statementArgs`.
+
+The sites that still print plain `db migrate` or `db update` are the ones whose advice changes the contract source or plans a new migration first (`runWrittenFile`, line 112, 130, 214, 520, 552, `keep-data-edit-advice.ts`). There, `--to <ref>` would name a ref at the old contract, and `db update` now refuses a ref for another contract, so leaving the flags out is right. No advice adds `--permit-policy-change` unless the user gave it: the only literal outside `rerunFlags` is in `errorChangePolicyForbids`, and its ref branch is reached only when the run consented to the ref's policies (`checkRunPolicies`: `toWrite` exists only with the flag or with no differences, and the ref branch needs `declaresChange && toWrite`, so with the flag).
+
+`rerun-advice.test.ts` is good evidence: for each failure kind it lists, per printed command, whether it repeats the run, and asserts the whole list of commands with both flags and with none. A site that drops the flags, or adds them where it should not, fails the test.
+
+### Findings
+
+#### F26 — `db sign`'s "Sign again" drops `--contract`, `--advance-ref` and `--no-advance-ref`
+
+Path: packages/1-framework/3-tooling/cli/src/orm/db/sign.ts 606–611; packages/1-framework/3-tooling/cli/src/utils/policy-errors.ts 129.
+
+`errorDatabasePoliciesMovedDuringSign` prints `cliCommand(invocation, 'db sign', invocation.rerunArgs ?? [])`. The CLI calls `client.dbSign` with `invocation: cliInvocation(ctx, args.flags.db)`, which has no `rerunArgs`. So when the policies move while `db sign --contract production` runs, the advice is plain `db sign`. That signs the emitted contract, not `production`: copying the advice puts a different hash in the marker than the user asked for. The race is rare, but the advice is wrong when it happens. `sign.ts` already has `rerunCommand` (lines 247–259) with the right flags for its own errors.
+
+Suggestion: pass `rerunArgs` built the same way as `rerunCommand` (the `--contract`, `--advance-ref`, `--no-advance-ref` flags) into the invocation `sign.ts` gives `dbSign`, and let `rerunCommand` reuse that list. Add a unit test that the `MARKER_CAS_FAILURE` for moved policies, under `--contract production`, says `db sign --contract production`.
+
+#### F27 — A change-policy refusal from the marker advises `--to <hash>` even when the user named a ref and consented
+
+Path: packages/1-framework/3-tooling/cli/src/utils/policy-errors.ts 73–76.
+
+When the marker's change policy refuses the run, `toTarget` is `['--to', targetHash]`. Case: the marker records `change: [reconcile]`, the ref `production` declares only `dataProtection`, and the user runs `db migrate --to production --permit-policy-change`. The advice is `db update --to <hash>`. That command works, but it records none of the ref's policies the user consented to, so the next `--to production` run fails with `POLICY_MISMATCH`. Round 7 changed `MARKER_MISMATCH` to name the ref the user gave for the same reason.
+
+Suggestion: when the run named a ref, print `--to <ref>` and repeat `--permit-policy-change` only if the user gave it (in this branch either there are no differences, so the ref alone works, or the flag was given). Pass the ref name and the flag into the source, or pass `rerunFlags`. Add a test with this case.
+
+#### F28 — No test shows that `--permit-policy-change` with a ref that declares no policies still runs
+
+Path: packages/1-framework/3-tooling/cli/test/orm/migrate-database-policies.test.ts (the new `without a ref` block); test/integration/test/utils/database-policies-migrate.ts 256–287.
+
+The new refusal must not block a pipeline that always runs `db migrate --to production --permit-policy-change` where `production` declares no policies. The code allows it (the CLI checks `refName`, the control API checks `target.kind === 'ref'`), and the error reference says so. I confirmed it live (below). But every new test is a refusal; the journey "applies a ref without policies" runs without the flag. A later change that tightens the check to "a ref with policies" would pass every test.
+
+Suggestion: add the flag to that journey, or add a sibling case that runs `--to production --permit-policy-change` against a policy-less ref and asserts exit 0, the migrations applied, and `meta` strictly `{}`.
+
+### Other checks
+
+- **New `CLI.INVALID_ARGUMENTS` refusals.** `db migrate` checks after loading migrations and before `client.connect`; `db migrate --show` before `onPreflightComplete` and any connection; `db update` after resolving `--to` offline and before `prepareMigrationRun` connects. The control API's `migrate` and `dbUpdate` check before anything is loaded from the database. Tests assert the whole envelope, exit code 2 and zero `connect` calls for hash, migration, `@db`, `@empty` and no `--to`. The code is the engine's code for bad arguments; reusing it for a flag that needs another flag is consistent, and the reference entry says so. Only `--permit-policy-change` can raise it this way, so nothing a user ran before can now fail.
+- **`dbUpdate` given a ref for another contract.** Moved from `db-run.ts` into `executeDbUpdate`, before `executeRun` reads the database; now `CLI.INVALID_ARGUMENTS` with a `user-choice` next action. The reference entries for both codes are updated. The CLI always passes the contract the ref names, so CLI users never hit it.
+- **`DeclaredDatabasePoliciesIssue { path, problem }`.** `problemOf` strips arktype's path prefix only when the problem starts with exactly `propString + ' '`; otherwise it keeps the problem whole. If arktype changes its text, the worst case is a repeated path in the message, never a crash or a lost issue. The parser test asserts the exact `problem` for the union case (`change[0]`) and the key case. The function returns structured issues that the parser needs anyway, so nothing that only builds text was added to `1-core` beyond what `databasePoliciesOf` already had.
+- **`INVALID_REF_FILE` advice.** `refEntryOf` returns `{ detail, policyIssues }`; `readRef`, `readRefs` and `readRefsTolerant` pass both on, and the `refUnreadable` violation carries `policyIssues` to `mapIntegrityViolations`. `policyIssueFix` keys only on the path, and falls back to "Remove" for unknown keys. A ref whose hash or invariants are wrong gets the file shape, since the policies are then not parsed. One wording nit, not a finding: "a non-empty list of \"migrate\" and \"reconcile\"" can read as "both are required".
+- **`migration status --to <ref>` headline** now suggests `db migrate --to <ref>`, shell-quoted; `status-summary.test.ts` covers it.
+- **Policy-only `db update` summary** now says `Policies updated: …`, and the signed-run summary keeps its full stop.
+
+### Verdicts on round 8 and the QA failures
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| F23 — MongoDB failed-run journey expected `CLI.UNEXPECTED` | Fixed in `4840c17e85` | The shared journey asserts `MIGRATION.EXECUTION_FAILED` with `failingSpace: 'app'` on every target; the MongoDB-only test now asserts the code. `cli.database-policies.mongo.e2e.test.ts`: 28 pass (`wip/logs/review9-e2e-mongo.txt`). |
+| F24 — re-run advice dropped `--to` and `--permit-policy-change` | Fixed in `84c01dc30d` | Every `db migrate`/`db update` repeat now goes through `dbMigrateRerun`/`dbUpdateRerun`; `rerun-advice.test.ts` asserts each printed command, with the flags and without. Live: scenario 7 below. The `db sign` equivalent is F26. |
+| F25 — reference said `migration status --to <ref>` raises `MARKER_ROW_CORRUPT` | Fixed in `8fc9b65ec0` | The entry now says `migration status` never fails on it, with or without `--to`. |
+| QA 5 — advice said "deploy it" | Fixed in `37ec1bca57` | Advice names `db migrate` with `--config`/`--db`; unit and enforcement journey assert it. |
+| QA 6 — ref-sourced refusal advised a command that failed | Fixed in `ab00f5c256` | Re-run below: both directions work when copied. The marker-sourced case still uses the hash (F27). |
+| QA 6 — policy-only `db update` did not say policies changed | Fixed in `b7652f46a5` | Re-run below prints `Policies updated: change: reconcile`. |
+| QA 7 — precheck advice dropped the flags | Fixed in `84c01dc30d` | Re-run below. |
+| QA 9 — `migration status --to <ref>` suggested the hash | Fixed in `6fdbf05801` | Unit test; implementer's re-run. |
+| QA 11 — bad ref file advice too long | Fixed in `69a6fa16aa` | `errors.test.ts` table of seven paths; implementer's re-run. |
+| QA 14 — flag with no ref | Fixed in `ae926805aa` | Tests listed above; implementer's re-run. |
+| A33–A38 (system-design round 7) | Code side checked as above | The architect pass judges its own findings. |
+
+### Independent re-runs (Postgres 15 on localhost:55432, project `wip/qa/pg`, fresh databases `qa11`–`qa13`)
+
+Refs added for the run and removed after: `r9-migrate` and `r9-reconcile` (head `1bdcd316…`, `change: ["migrate"]` / `["reconcile"]`), `r9-age` (`f48bfc87…`, `change: ["migrate"]`), `r9-dp` (head, `dataProtection` only). The refs directory matches its backup afterwards. The cluster is stopped. Raw output: `wip/logs/review9-qa6.txt`, `review9-qa6b.txt`, `review9-qa7.txt`, `review9-f27.txt`.
+
+Scenario 6 (`qa11`, marker records `migrate`): PASS.
+
+```
+$ prisma db migrate --to r9-migrate --permit-policy-change
+✔ Applied 5 migration(s) (6 operation(s)) across 1 contract space(s); policies updated: change: migrate   [exit 0]
+$ prisma db migrate --to r9-reconcile --permit-policy-change
+✘ [MIGRATION.CHANGE_POLICY_FORBIDS] r9-reconcile declares a change policy that permits only db update
+  why: r9-reconcile declares change: reconcile, so db migrate may not move it.
+→ Reconcile the database: prisma db update --to r9-reconcile --permit-policy-change   [exit 2]
+  (JSON nextActions: run-command "prisma db update --to r9-reconcile --permit-policy-change")
+$ prisma db update --to r9-reconcile --permit-policy-change      (copied exactly)
+✔ Policies updated: change: reconcile
+└─ marker 1bdcd316…   [exit 0]
+marker meta: {"policies": {"change": ["reconcile"], "dataProtection": {…with-consent…}}}; ledger unchanged (5 rows)
+```
+
+Reverse direction on the same database (now `reconcile`): PASS.
+
+```
+$ prisma db update --to r9-migrate --permit-policy-change
+✘ r9-migrate declares a change policy that permits only migrations
+→ Author a migration with prisma migration plan, then apply it with prisma db migrate --to r9-migrate --permit-policy-change.   [exit 2]
+$ prisma db migrate --to r9-migrate --permit-policy-change       (copied; nothing to author, the database is at the ref)
+✔ Policies updated: change: migrate   [exit 0]
+```
+
+Policy-less ref with the flag (`qa13`, the CI pipeline case): PASS. `db migrate --to staging --permit-policy-change` applied 5 migrations, exit 0, marker `meta` `{}`.
+
+Scenario 7 (`qa12` at `d241c1e5…`, column `age` added by hand): PASS.
+
+```
+$ prisma db migrate --to r9-age --permit-policy-change
+✘ [MIGRATION.PRECHECK_FAILED] Operation column.user.age failed during precheck: ensure column "age" is missing
+→ … change the database or the migration so they agree, and run `prisma db migrate --to r9-age --permit-policy-change` again   [exit 2]
+marker after: d241c1e545ce | {}   (unchanged; ledger 3 rows)
+(dropped the hand-added column, then ran the advised command exactly)
+$ prisma db migrate --to r9-age --permit-policy-change
+✔ Applied 1 migration(s) (1 operation(s)) across 1 contract space(s); policies updated: change: migrate   [exit 0]
+marker: f48bfc873691 | {"policies": {"change": ["migrate"], …}}; ledger 4 rows
+```
+
+F27 live (`qa13` set to `reconcile`, ref `r9-dp` declares only `dataProtection`):
+
+```
+$ prisma db migrate --to r9-dp --permit-policy-change
+✘ This database's change policy permits only db update
+→ Reconcile the database: prisma db update --to 1bdcd316a85c6955647d3a4948e69a7d30b63c51dbddf7ff725522860d0fbd74   [exit 2]
+```
+
+### Verification
+
+Output under `wip/logs/`:
+
+- **CLI, 13 files:** `review9-cli.txt` (176 pass). **Migration tools `errors`, `refs.policies`:** `review9-migration.txt` (42 pass). **Framework policies:** `review9-fw.txt` (26 pass).
+- **Integration, PostgreSQL and SQLite:** `cli.database-policies.{migrate,enforcement,postgres}.e2e.test.ts`, `review9-e2e-sql.txt` (56 pass). **MongoDB:** `review9-e2e-mongo.txt` (28 pass).
+- Not run: MySQL (needs a private `mysqld`; no MySQL code changed since round 4), `pnpm typecheck`, `pnpm check:error-reference`.
+
+### Summary
+
+Every round-8 finding and every QA failure is fixed, and both re-runs pass when the advice is copied. Three new findings: F26 (`db sign`'s "Sign again" drops `--contract` and the ref flags, so it can sign the wrong contract), F27 (a marker-sourced change-policy refusal advises `--to <hash>` and loses the ref's policies the user consented to), and F28 (no test of the flag with a policy-less ref). D1d is PASS again; the acceptance rows are otherwise as in round 8: 30 of 30 PASS.
