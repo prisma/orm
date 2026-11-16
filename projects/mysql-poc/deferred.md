@@ -94,3 +94,7 @@ A read with includes reads every row before returning any, under both include st
 ## `budgets` and `lints` see each per-relation statement as a bare `SELECT` (slice 6b-1, 2026-11-17)
 
 `lints` warns about a `SELECT` without a `LIMIT`, and `budgets`, where installed, fails it by default. Where includes load with one query per relation, each child statement is such a `SELECT`, so a read that passes on a database that runs the one-query include can fail with `BUDGET.ROWS_EXCEEDED` on MariaDB, as the ORM's read-backs after a write already can. Completing or removing the two middleware is stream 6, row 8 of the GA plan.
+
+## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17)
+
+The MySQL target and adapter contribute no aggregate definitions. `db.orm.User.include('posts', (p) => p.count()).all()` fails with `p.count is not a function`, and so does `combine()` with an aggregate branch. This is true under both include strategies and predates slice 6b-1. Manual QA ran the per-relation `GROUP BY` statements on MySQL 8.4 and MariaDB 10.11 with stand-in aggregate definitions, and they returned the right values. Slice 6b-2's requirement that MariaDB runs every ORM read needs MySQL to contribute its aggregates first, as Postgres does.
