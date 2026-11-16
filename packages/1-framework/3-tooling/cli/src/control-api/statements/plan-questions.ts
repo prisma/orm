@@ -822,6 +822,9 @@ export function dataLossQuestion(
     forms: renamable ? { rename: renameForm(loss.subject, subject, contracts) } : {},
     validate: (verb, text) => {
       if (verb !== 'rename') return deleteNames(text);
+      if (!text.includes(':')) {
+        return `rename needs the new name: type rename ${renameForm(loss.subject, subject, contracts)}.`;
+      }
       const resolved = resolvesWith({ verb: 'rename', text }, contracts);
       if (!resolved.ok) return resolved.failure;
       return resolved.value !== undefined && sameCoordinate(resolved.value, loss.subject)

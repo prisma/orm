@@ -133,6 +133,12 @@ describe('dataLossQuestion verbs', () => {
     expect(question.verbs).toEqual(['delete']);
   });
 
+  it('asks again for the new name when rename is typed with the old name only', () => {
+    expect(
+      questionFor('nickname', destinationWithoutNickname).validate('rename', 'User.nickname'),
+    ).toBe('rename needs the new name: type rename User.nickname:User.<new name>.');
+  });
+
   it('writes the rename form of a field with its model, as a field rename is written', () => {
     expect(questionFor('nickname', destinationWithoutNickname).forms).toEqual({
       rename: 'User.nickname:User.<new name>',
