@@ -654,10 +654,15 @@ function quotedList(fields: readonly string[]): string {
     : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
 }
 
-/** What a validator change touches, in words: `This validator change makes "plan" required.` */
-function touchedSentence(touched: TouchedFields): string {
+/**
+ * What a validator change touches, in words: `This validator change makes "plan" required.` Of the
+ * fields it makes required, only those the document shown lacks are named; a nested key is always
+ * named.
+ */
+function touchedSentence(touched: TouchedFields, shown: ReadonlyMap<string, unknown>): string {
+  const lacking = touched.requires.filter((field) => field.includes('.') || !shown.has(field));
   const parts = [
-    ...(touched.requires.length === 0 ? [] : [`makes ${quotedList(touched.requires)} required`]),
+    ...(lacking.length === 0 ? [] : [`makes ${quotedList(lacking)} required`]),
     ...(touched.retypes.length === 0
       ? []
       : [
@@ -1368,7 +1373,7 @@ export class MongoMigrationRunner {
           );
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
-      `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
+      `${touchedSentence(touched, fields)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
       ...(problems.length === 0
         ? []
         : [`That document ${joinedList(problems.map(({ text }) => text))}.`]),

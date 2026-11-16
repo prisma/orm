@@ -186,7 +186,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation validator.users.update stopped: 2 documents in collection users do not fit the new validator',
-        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `This validator change makes "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         meta: {
           databaseUnchanged: true,
           operationId: 'validator.users.update',
@@ -232,10 +232,51 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names only what the document lacks, not a newly required field it holds',
+    async () => {
+      const before = {
+        bsonType: 'object',
+        required: ['_id', 'nm'],
+        properties: { _id: { bsonType: 'objectId' }, nm: { bsonType: 'string' } },
+      };
+      const after = {
+        bsonType: 'object',
+        required: ['_id', 'fn', 'nm'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          fn: { bsonType: 'string' },
+          nm: { bsonType: 'string' },
+        },
+      };
+      await db.createCollection('users', { validator: { $jsonSchema: before } });
+      await db
+        .collection('users')
+        .insertOne(
+          { _id: new ObjectId('64b7f0c2a1b2c3d4e5f60718'), fn: 'Ann' },
+          { bypassDocumentValidation: true },
+        );
+
+      const result = await run([
+        setValidation('users', after, {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "nm".',
+      );
     },
     timeouts.spinUpMongoMemoryServer,
   );
