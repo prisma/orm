@@ -9,20 +9,19 @@ import {
   contractToMongoSchemaIR,
 } from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import {
-  describeMigrationStatement,
-  type MigrationDataLoss,
-  type MigrationOperationPolicy,
-  type MigrationPlanner,
-  type MigrationPlannerConflict,
-  type MigrationPlannerResult,
-  type MigrationPlanWithAuthoringSurface,
-  type MigrationScaffoldContext,
-  type MigrationSubject,
-  type ModelCoordinate,
-  type PlanOrigin,
-  type ResolvedMigrationStatement,
-  type ResolvedRenameStatement,
+import type {
+  MigrationDataLoss,
+  MigrationOperationPolicy,
+  MigrationPlanner,
+  MigrationPlannerConflict,
+  MigrationPlannerResult,
+  MigrationPlanWithAuthoringSurface,
+  MigrationScaffoldContext,
+  MigrationSubject,
+  ModelCoordinate,
+  PlanOrigin,
+  ResolvedMigrationStatement,
+  ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   canonicalize,
@@ -73,6 +72,7 @@ import {
   unrewritableTypeChangeRefusals,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
+import { planVariantDocumentRewrites } from './mongo-variant-planning';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -229,20 +229,6 @@ function modelStoredIn(
       }),
   );
   return (storing.find(({ isRoot }) => isRoot) ?? storing[0])?.coordinate;
-}
-
-/** A convert or backfill statement this release cannot carry out on MongoDB. */
-function unsupportedStatementConflict(
-  statement: ResolvedMigrationStatement,
-  fromContract: ContractWithDomain,
-  contract: ContractWithDomain,
-): MigrationPlannerConflict {
-  return {
-    kind: 'statementRefused',
-    summary: `MongoDB does not apply ${statement.kind} statements in this release, so nothing was planned: ${describeMigrationStatement(statement, fromContract, contract)}`,
-    why: `MongoDB cannot carry out ${statement.kind} statements in this release. Leave out the statement.`,
-    refusedStatement: statement,
-  };
 }
 
 /**
@@ -581,21 +567,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       'framework planner passes the inspected Mongo schema IR selected for the mongo target'
     >(options.schema);
     const fromContract = options.fromContract;
-    const unsupported = options.statements.find(
-      (statement) =>
-        statement.kind !== 'rename' &&
-        !(
-          (statement.kind === 'convert' || statement.kind === 'backfill') &&
-          statement.entity === 'field'
-        ) &&
-        !(statement.kind === 'backfill' && statement.entity === 'valueObjectField'),
-    );
-    if (unsupported !== undefined) {
-      return {
-        kind: 'failure',
-        conflicts: [unsupportedStatementConflict(unsupported, fromContract ?? contract, contract)],
-      };
-    }
     const renames = options.statements.filter(
       (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
     );
@@ -627,6 +598,18 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
     const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
+    const variants = planVariantDocumentRewrites({
+      statements: options.statements,
+      fromContract,
+      contract,
+      schema,
+      keptCollections: new Set(
+        schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
+      ),
+      collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+    });
+    if (!variants.ok) return { kind: 'failure', conflicts: [...variants.failure] };
+    const { deletes: variantDeletes, replacements: variantReplacements } = variants.value;
     const removals: readonly FieldRemoval[] =
       fromContract === null
         ? planValidatorFieldRemovals({ origin: schema, destination: destinationIR, contract })
@@ -766,15 +749,20 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const callsOf = new Map<ResolvedMigrationStatement, readonly OpFactoryCall[]>([
       ...renames.map((statement, index) => {
         const call = callOfStatement[index];
-        const keyCalls = [...storedKeyRewrites, ...valueReplacements].flatMap((rewrite) =>
-          rewrite.statement === statement ? [rewrite.call] : [],
-        );
+        const keyCalls = [
+          ...storedKeyRewrites,
+          ...variantReplacements,
+          ...valueReplacements,
+        ].flatMap((rewrite) => (rewrite.statement === statement ? [rewrite.call] : []));
         return [statement, call === undefined ? keyCalls : [call, ...keyCalls]] as const;
       }),
       ...transforms.map(({ statement, outcome }) =>
         outcome.kind === 'transform'
           ? ([statement, [outcome.call]] as const)
           : ([statement, []] as const),
+      ),
+      ...variantReplacements.flatMap((rewrite) =>
+        rewrite.statement?.kind === 'convert' ? [[rewrite.statement, [rewrite.call]] as const] : [],
       ),
       ...options.statements.flatMap((statement) => {
         const calls = storedKeyFills.value.flatMap((fill) =>
@@ -795,6 +783,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         rewrites: [
           ...fieldRenames,
           ...storedKeys.value.renames.map((rewrite) => rewrite.call),
+          ...variantDeletes.map((rewrite) => rewrite.call),
+          ...variantReplacements.map((rewrite) => rewrite.call),
           ...valueReplacements.map((rewrite) => rewrite.call),
           ...castCalls,
           ...transformCalls('convert'),
@@ -814,6 +804,14 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...(match === undefined ? [] : documentsNotRewrittenWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
+      ...variantDeletes.map(
+        (rewrite): MigrationDataLoss => ({
+          operationIndex: calls.indexOf(rewrite.call),
+          subject: { kind: 'model', ...rewrite.model },
+          loss: 'drop',
+          label: rewrite.call.label,
+        }),
+      ),
       ...removals.map((removal) => ({
         operationIndex: calls.indexOf(removal.call),
         subject: removal.subject,

@@ -52,6 +52,7 @@ import {
 import {
   type CastFieldCall,
   type DataTransformCall,
+  type DeleteDocumentsCall,
   type FillFieldCall,
   type FillStoredKeyCall,
   type OpFactoryCall,
@@ -206,6 +207,7 @@ export interface StatementCalls {
     | FillStoredKeyCall
     | ReplaceStoredValueCall
     | RemoveStoredValueCall
+    | DeleteDocumentsCall
   )[];
 }
 
@@ -347,29 +349,6 @@ function controlPolicyRefusal(
   };
 }
 
-/**
- * The reason and advice when a statement renames a variant whose discriminator value changes: its
- * documents keep the old value, which the new validator does not accept.
- */
-function discriminatorValueChange(
-  statement: ResolvedModelRenameStatement,
-  input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
-): readonly [reason: string, why: string] | undefined {
-  const before = selectedVariantOf(input.fromContract.domain, statement.from);
-  const after = selectedVariantOf(input.contract.domain, statement.to);
-  const base = modelAt(input.contract, statement.to)?.base;
-  if (before === undefined || after === undefined || base === undefined) return undefined;
-  const { field, value: oldValue } = before;
-  const newValue = after.value;
-  if (oldValue === newValue) return undefined;
-  const fromName = modelDisplayName(statement.from);
-  const toName = modelDisplayName(statement.to);
-  return [
-    `its discriminator value changes from ${JSON.stringify(oldValue)} to ${JSON.stringify(newValue)}`,
-    `The documents of "${fromName}" hold ${field} ${JSON.stringify(oldValue)}, and this release does not rewrite a discriminator value, so they would no longer match "${toName}" and would fail validation. Keep the value: declare "${toName}" with @@base(${base.model}, ${JSON.stringify(oldValue)}). A later release changes a stored value with --convert.`,
-  ];
-}
-
 function planModelStatement(
   statement: ResolvedModelRenameStatement,
   label: string,
@@ -389,10 +368,6 @@ function planModelStatement(
         `Embedded models are not renamed in this release. ${LEAVE_OUT}`,
       ),
     };
-  }
-  const discriminatorChange = discriminatorValueChange(statement, input);
-  if (discriminatorChange !== undefined) {
-    return { kind: 'refused', conflict: refused(statement, label, ...discriminatorChange) };
   }
   const from = collectionOfModel(input.fromContract.domain, statement.from);
   const to = collectionOfModel(input.contract.domain, statement.to);
@@ -754,7 +729,7 @@ function rootDocumentsLosing(
 /**
  * Each field an origin model stores that its destination model no longer stores, in a collection
  * the plan keeps: removing it is data loss, carried out by unsetting it from the documents that
- * hold it, in a collection whose control policy is `managed`. A variant's field is unset only from that variant's documents, unless its destination
+ * hold it, in a collection whose control policy is `managed`. A variant's field is unset only from that variant's documents, by the discriminator value they hold once the plan's replacements ran, unless its destination
  * base now stores it. A base field is unset from the documents of every variant that does not now
  * store it itself.
  */
@@ -770,7 +745,9 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
     if (destination === undefined) return [];
     const model = modelAt(input.fromContract, origin);
     if (model === undefined) return [];
-    const variant = selectedVariantOf(input.fromContract.domain, origin);
+    const variant =
+      selectedVariantOf(input.contract.domain, destination) ??
+      selectedVariantOf(input.fromContract.domain, origin);
     const losing = (storedName: string): { readonly filter: Document | undefined } | undefined => {
       if (variant !== undefined) {
         return storedFieldsOf(input.contract, destination).has(storedName)

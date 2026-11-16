@@ -1,14 +1,11 @@
-import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { MongoSchemaCollection, MongoSchemaCollectionOptions } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import {
   contract,
-  NS,
   plan,
   planned,
   profiles,
   profilesSchema,
-  refusal,
   renameModel,
   users,
 } from './mongo-statement-fixtures';
@@ -123,28 +120,5 @@ describe('MongoMigrationPlanner, time-series options the server fills in', () =>
         }),
       ).labels,
     ).toEqual([]);
-  });
-});
-
-describe('MongoMigrationPlanner, convert and backfill statements', () => {
-  it('refuses a convert of a variant, which it cannot carry out', () => {
-    const convert: ResolvedMigrationStatement = {
-      kind: 'convert',
-      entity: 'model',
-      model: { namespaceId: NS, model: 'Profile' },
-    };
-
-    expect(
-      refusal(
-        plan({ from: profiles, to: profiles, schema: profilesSchema, statements: [convert] }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Profile"',
-        why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
-      },
-    ]);
   });
 });

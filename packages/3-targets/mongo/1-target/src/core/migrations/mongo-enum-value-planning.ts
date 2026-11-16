@@ -251,7 +251,7 @@ function overlapList(changes: readonly ValueChange[]): string {
     : `${moves.slice(0, -1).join(', ')} and ${moves.at(-1)}`;
 }
 
-const ONE_AT_A_TIME =
+export const ONE_AT_A_TIME =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
 function twoMigrationsAdvice(enums: EnumComparison, change: ValueChange): string {

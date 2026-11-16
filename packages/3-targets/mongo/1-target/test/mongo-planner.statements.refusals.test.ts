@@ -40,29 +40,6 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it('refuses converting a variant', () => {
-    const app = asNamespaceId('app');
-    expect(
-      refusal(
-        plan({
-          from: profiles,
-          to: profiles,
-          schema: profilesSchema,
-          statements: [
-            { kind: 'convert', entity: 'model', model: { namespaceId: app, model: 'Bug' } },
-          ],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'MongoDB does not apply convert statements in this release, so nothing was planned: convert variant "Bug"',
-        why: 'MongoDB cannot carry out convert statements in this release. Leave out the statement.',
-      },
-    ]);
-  });
-
   it('refuses renaming _id', () => {
     const to = contract(
       'to',
@@ -255,7 +232,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
   });
 });
 
-describe('MongoMigrationPlanner, a variant rename whose discriminator value changes', () => {
+describe('MongoMigrationPlanner, a variant rename that keeps its discriminator value', () => {
   const tasks = (seed: string, variant: string, value: string) =>
     contract(
       seed,
@@ -271,26 +248,6 @@ describe('MongoMigrationPlanner, a variant rename whose discriminator value chan
       },
       { tasks: {} },
     );
-
-  it('is refused, and says to keep the value', () => {
-    expect(
-      refusal(
-        plan({
-          from: tasks('from', 'Bug', 'bug'),
-          to: tasks('to', 'Defect', 'defect'),
-          schema: [schemaCollection('tasks')],
-          statements: [renameModel('Bug', 'Defect')],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'Cannot rename model "Bug" to "Defect": its discriminator value changes from "bug" to "defect"',
-        why: 'The documents of "Bug" hold type "bug", and this release does not rewrite a discriminator value, so they would no longer match "Defect" and would fail validation. Keep the value: declare "Defect" with @@base(Task, "bug"). A later release changes a stored value with --convert.',
-      },
-    ]);
-  });
 
   it('plans nothing when the value is kept', () => {
     const keep = tasks('to', 'Defect', 'bug');
