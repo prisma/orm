@@ -23,6 +23,13 @@ await tx.commit()                              // COMMIT
 
 All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtime.ts`, `activity-handle.ts`, `transaction-state.ts`, and a new file if the savepoint code reads better on its own).
 
+**One wrapper for every level** (project spec decision 4). The driver gives a transaction and a savepoint the same shape, `SqlTransaction`, so the runtime wraps both with the same code. One function builds the `RuntimeTransaction` for a level from its driver `SqlTransaction`, and its `commit()`, `rollback()`, `savepoint()` and statement members serve the outer transaction and every savepoint. The guard state of a level (its open child, settled, invalidated) is kept in that wrapper, not in a separate copy beside it. Only the real differences between the outer transaction and a savepoint branch inside it:
+
+- the settlement of a successful `commit()`: `{ by: 'commit' }` on the outer transaction, `{ by: 'release' }` on a savepoint;
+- a failed `commit()`: the outer transaction ends its activity `failed`, a savepoint stays open (rule 8);
+- a failed `rollback()`: a savepoint invalidates every enclosing level (rule 7);
+- what only the outer transaction has: the deadline and timeout, the connection's open-transaction bookkeeping, and the settlement `withTransaction` reads.
+
 1. **`RuntimeTransaction.savepoint(): Promise<RuntimeTransaction>`** (project spec decision 8). Required, no options. The returned level is a `RuntimeTransaction` itself, so `savepoint()` on it stacks another savepoint.
    - It calls the driver's `SqlTransaction.savepoint(name)` (slice 1) on the level's driver transaction.
    - On the returned level, `commit()` calls the driver savepoint's `commit()` (`RELEASE SAVEPOINT`) and `rollback()` calls its `rollback()` (`ROLLBACK TO SAVEPOINT`).
@@ -118,6 +125,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 
 - **D1 R1 → R2: a failed `RELEASE` does not end the savepoint activity.** The first version of rule 2 ended it `{ by: 'release', outcome: 'failed' }`. That contradicts slice 2's rule 3: after a failed `RELEASE` and a successful `ROLLBACK TO`, the work was undone, so the savepoint must finalize `rolled-back`. Corrected by the orchestrator against slice 2's spec; the implementation followed the earlier text.
 - **D1 review R1: the connection is guarded too.** Rule 5 now covers statements sent on the connection while its transaction is open (reviewer F1), closed levels report their closed state ahead of `TRANSACTION_SUSPENDED` (F3), and § Errors states when `savepointId` is `undefined`. The orchestrator had first told the implementer to leave connection statements for slice 4; that was wrong, because the statement is finalized with the wrong outcome.
+- **After the PR opened: one wrapper for every level.** The first implementation had a separate savepoint wrapper with its own settle code, and a `TransactionLevel` class that kept a second copy of state the transaction wrapper already held. That did not use the single `SqlTransaction` shape decision 4 chose so the settle logic is written once. The operator asked for one wrapper; § Chosen design now requires it.
 
 ## References
 
