@@ -23,7 +23,7 @@ import {
 } from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
-import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
@@ -44,6 +44,7 @@ import {
   mapResultRows,
   mapStorageRowToModelFields,
   type RowEnvelope,
+  stripHiddenMappedFields,
 } from './collection-runtime';
 import {
   requireVariantTable,
@@ -51,6 +52,7 @@ import {
   variantColumnLabelPrefix,
 } from './collection-tables';
 import { resolveColumn } from './column-codec';
+import { type CallHashInput, planHashInput } from './orm-call';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import type {
@@ -121,6 +123,80 @@ export function consumeCollectionRows<Row>(
           'collection row generic is supplied by the caller and matched to the selected model shape'
         >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
   return mapResultRows(rows, mapper);
+}
+
+/** The columns of each level of an include tree that other statements read and the caller did not select, positionally matching `state.includes`. */
+export interface HiddenColumns {
+  readonly columns: readonly string[];
+  readonly includes: readonly HiddenColumns[];
+}
+
+/**
+ * Shapes the rows of a read whose includes were loaded with one query per relation: each row carries, under each include's name, the child rows already decoded, and so on down the tree. Every occurrence of a child row is shaped into its own object.
+ */
+export function consumeRelatedRows<Row>(
+  options: DescribeCollectionRowsOptions,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+  hidden: HiddenColumns,
+): AsyncIterableResult<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  return mapResultRows(rows, (row) =>
+    blindCast<Row, 'collection row generic matches the selected model shape'>(
+      shapeRelatedRow(context.contract, namespaceId, modelName, state, row, hidden),
+    ),
+  );
+}
+
+function shapeRelatedRow(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  state: CollectionState,
+  row: Record<string, unknown>,
+  hidden: HiddenColumns,
+): Record<string, unknown> {
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const mapped = polyInfo
+    ? mapPolymorphicRow(
+        contract,
+        namespaceId,
+        modelName,
+        polyInfo,
+        state.tables,
+        row,
+        state.variantValue,
+      )
+    : mapStorageRowToModelFields(contract, namespaceId, modelName, row);
+  stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
+  state.includes.forEach((include, index) => {
+    const children = relatedRowsOf(row, include).map((child) =>
+      shapeRelatedRow(
+        contract,
+        include.relatedNamespaceId,
+        include.relatedModelName,
+        include.nested,
+        child,
+        hidden.includes[index] ?? { columns: [], includes: [] },
+      ),
+    );
+    mapped[include.relationName] = isToOneCardinality(include.cardinality)
+      ? (children[0] ?? null)
+      : children;
+  });
+  return mapped;
+}
+
+function relatedRowsOf(
+  row: Record<string, unknown>,
+  include: IncludeExpr,
+): readonly Record<string, unknown>[] {
+  const children = row[include.relationName];
+  if (!Array.isArray(children)) {
+    throw new InternalError(
+      `The rows of include "${include.relationName}" were not attached to their parent row`,
+    );
+  }
+  return children;
 }
 
 function deferResolution<T>(resolve: () => T): () => T {
@@ -373,9 +449,10 @@ export function describeCollectionFirstOrThrow<Row>(
   };
 }
 
-/** The query a collection read sends. Without includes it is compiled now; with includes, on first use. */
+/** The statements a collection read sends. Without includes they are compiled now; with includes, on first use. */
 export interface CollectionQuery<Row> {
-  plan(): SqlQueryPlan<Record<string, unknown>>;
+  /** What the read's cache key digests. */
+  readonly hashInput: CallHashInput;
   rows(scope: RuntimeScope): AsyncIterableResult<Row>;
 }
 
@@ -385,7 +462,7 @@ export function describeCollectionQuery<Row>(
   const { context, state, modelName, namespaceId } = options;
   if (state.includes.length === 0) {
     const query = describeExecutionRows<Row>(options);
-    return { plan: () => query.plan, rows: (scope) => runQuery(scope, query) };
+    return { hashInput: planHashInput(() => query.plan), rows: (scope) => runQuery(scope, query) };
   }
   resolvePolymorphismInfo(context.contract, namespaceId, modelName);
   let compiled: Preparable<Record<string, unknown>, AsyncIterableResult<Row>> | undefined;
@@ -394,7 +471,7 @@ export function describeCollectionQuery<Row>(
     return compiled;
   };
   return {
-    plan: () => query().plan,
+    hashInput: planHashInput(() => query().plan),
     rows: (scope) => {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {
         yield* runQuery(scope, query());

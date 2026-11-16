@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -13,6 +15,7 @@ import {
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
+import { selectIncludeStrategy } from '../include-strategy';
 import {
   countMutationWhere,
   type InsertConflictSkip,
@@ -422,15 +425,38 @@ function requireOnlyCollidingKey(
   );
 }
 
-function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {
-  const { modelName, state } = collection;
-  const { tableName } = state.tables.root.storage;
-  if (state.includes.length > 0 && identityColumnsOf(collection).length === 0) {
+/**
+ * Refuses includes whose rows cannot be matched to their parents: the parent table of every include needs an identity. Under the one-query include only the rows a write reads back are matched, so only the top level is checked.
+ */
+export function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {
+  const { context, modelName, state } = collection;
+  const { contract } = context;
+  requireIdentityAt(contract, modelName, state, selectIncludeStrategy(contract) === 'query');
+}
+
+function requireIdentityAt(
+  contract: Contract<SqlStorage>,
+  modelName: string,
+  state: CollectionState,
+  nestedLevels: boolean,
+): void {
+  const [include] = state.includes;
+  if (include === undefined) {
+    return;
+  }
+  const { namespaceId, tableName } = state.tables.root.storage;
+  if (resolveRowIdentityColumns(contract, namespaceId, tableName).length === 0) {
     throw ormError(
       'ORM.ROW_IDENTITY_MISSING',
-      `Cannot load includes for the mutation result on model "${modelName}": table "${tableName}" has no primary key or unique constraint to key the include read-back on.`,
-      { meta: { model: modelName, table: tableName } },
+      `Cannot load include "${include.relationName}" of model "${modelName}": table "${tableName}" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.`,
+      { meta: { model: modelName, table: tableName, include: include.relationName } },
     );
+  }
+  if (!nestedLevels) {
+    return;
+  }
+  for (const nested of state.includes) {
+    requireIdentityAt(contract, nested.relatedModelName, nested.nested, nestedLevels);
   }
 }
 

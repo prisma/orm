@@ -5,15 +5,23 @@ import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { getColumnsReadOnTable } from '../collection-contract';
-import { consumeCollectionRows, type DescribeCollectionRowsOptions } from '../collection-dispatch';
+import {
+  consumeCollectionRows,
+  consumeRelatedRows,
+  type DescribeCollectionRowsOptions,
+  type HiddenColumns,
+} from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
+import { selectIncludeStrategy } from '../include-strategy';
 import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
-import type { CollectionContext, RuntimeTransaction } from '../types';
+import type { CollectionContext, CollectionState, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
+import { NestJoin } from './nest-join';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
@@ -76,7 +84,7 @@ async function runAllNodes<Row>(
 ): Promise<Outcome<Row>> {
   checkNodes(graph, ctx);
   const { runtime } = ctx;
-  if (statementCount(graph) > 1 && runtime.transaction !== undefined) {
+  if (statementCount(graph) > 1 && graph.writesAnyTable && runtime.transaction !== undefined) {
     return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
       runNodesInOrder<Row>(graph, ctx, scope, callerRows),
     );
@@ -183,6 +191,9 @@ function shapeRows<Row>(
 ): AsyncIterableResult<Row> {
   const { context, namespaceId, modelName, state } = callerRows;
   const { contract } = context;
+  if (state.includes.length > 0 && selectIncludeStrategy(contract) === 'query') {
+    return consumeRelatedRows<Row>(callerRows, storageRows, hiddenColumnsOf(graph, id, state));
+  }
   const { tableName } = state.tables.root.storage;
   const selected =
     state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
@@ -195,6 +206,41 @@ function shapeRows<Row>(
     stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
     return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
   });
+}
+
+/** Walks the `NestJoin`s that attached each level's rows down to the node that read them, and takes from that node the columns other nodes read that the caller did not select. */
+function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState): HiddenColumns {
+  const node = graph.nodeAt(id);
+  if (!(node instanceof NestJoin)) {
+    return { columns: unselectedColumnsReadFrom(graph, id, state), includes: [] };
+  }
+  const { left, children } = graph.inputsOf(id);
+  const childEdges = [children ?? []].flat();
+  const [parentEdge] = [left ?? []].flat();
+  if (parentEdge === undefined) {
+    throw new InternalError(`NestJoin ${id} has no parent rows`);
+  }
+  return {
+    columns: unselectedColumnsReadFrom(graph, parentEdge.from, state),
+    includes: state.includes.map((include, index) => {
+      const edge = childEdges[index];
+      return edge === undefined
+        ? { columns: [], includes: [] }
+        : hiddenColumnsOf(graph, edge.from, include.nested);
+    }),
+  };
+}
+
+function unselectedColumnsReadFrom(
+  graph: Graph,
+  id: NodeId,
+  state: CollectionState,
+): readonly string[] {
+  const { selectedFields } = state;
+  return graph
+    .columnsReadFrom(id)
+    .map((column) => column.alias)
+    .filter((column) => selectedFields !== undefined && !selectedFields.includes(column));
 }
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

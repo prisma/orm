@@ -79,7 +79,7 @@ describe('updateAllGraph', () => {
       expect.objectContaining({
         code: 'ORM.ROW_IDENTITY_MISSING',
         message:
-          'Cannot load includes for the mutation result on model "User": table "no_such_table" has no primary key or unique constraint to key the include read-back on.',
+          'Cannot load include "posts" of model "User": table "no_such_table" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.',
       }),
     );
   });

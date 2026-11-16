@@ -25,7 +25,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { CollectionMethodReceiver } from '@internal/sql-relational-core/collection-methods';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
-import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
@@ -59,7 +59,6 @@ import {
   consumeFirstRow,
   describeCollectionFirst,
   describeCollectionFirstOrThrow,
-  describeCollectionQuery,
   describeCollectionRows,
   runQuery,
 } from './collection-dispatch';
@@ -132,6 +131,7 @@ import { createModelAccessor, createModelCallbackTools } from './model-accessor'
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import {
   asPreparedOrmCall,
+  type CallHashInput,
   modelHashInput,
   type OrmCall,
   ormResults,
@@ -157,6 +157,7 @@ import {
   upsertGraph,
 } from './statement-graph/collection-graphs';
 import { Graph } from './statement-graph/graph';
+import { describeCollectionRead } from './statement-graph/read-graph';
 import { executeGraph, queryGraph } from './statement-graph/run-graph';
 import { mtiCreateContextOf, updateValuesOf } from './statement-graph/storage-rows';
 import {
@@ -1565,10 +1566,10 @@ export class CollectionBase<
   ): AsyncIterableResult<CollectionRowOf<this>>;
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
-    const query = describeCollectionQuery<Row>(this.#descriptionOptions());
+    const query = describeCollectionRead<Row>(this.#descriptionOptions());
     return streamOrmCall(
       this.ctx.runtime,
-      this.#readCall('all', annotations, query.plan, ormResults.rows),
+      this.#readCall('all', annotations, query.hashInput, ormResults.rows),
       query.rows,
     );
   }
@@ -1658,10 +1659,10 @@ export class CollectionBase<
   #readCall<Result>(
     method: string,
     annotations: Annotations | undefined,
-    plan: () => SqlQueryPlan,
+    hashInput: CallHashInput,
     accepts: (value: unknown) => value is Result,
   ): OrmCall<Result> {
-    return { method, annotations, hashInput: planHashInput(plan), accepts };
+    return { method, annotations, hashInput, accepts };
   }
 
   #writeCall<Result>(
@@ -1720,10 +1721,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('first', annotations, query.plan, ormResults.rowOrNull<Row>),
+      this.#readCall('first', annotations, query.hashInput, ormResults.rowOrNull<Row>),
       (queryable) => consumeFirstRow(query.rows(queryable)),
     );
   }
@@ -1743,10 +1744,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('firstOrThrow', annotations, query.plan, ormResults.row<Row>),
+      this.#readCall('firstOrThrow', annotations, query.hashInput, ormResults.row<Row>),
       (queryable) => query.rows(queryable).firstOrThrow(),
     );
   }
@@ -1787,7 +1788,7 @@ export class CollectionBase<
       this.#readCall(
         'aggregate',
         annotations,
-        () => description.plan,
+        planHashInput(() => description.plan),
         ormResults.row<AggregateResult<Spec>>,
       ),
       (queryable) => runQuery(queryable, description),
