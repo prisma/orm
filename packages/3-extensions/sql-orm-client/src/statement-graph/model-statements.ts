@@ -2,6 +2,7 @@ import { type AnyExpression, SelectAst, type TableSource } from '@internal/sql-r
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { resolveRowIdentityColumns, supportsDefaultInInsert } from '../collection-contract';
 import type { CollectionTables } from '../collection-tables';
+import { loadsIncludesPerRelation } from '../include-strategy';
 import {
   deleteAst,
   groupRowsByColumnSignature,
@@ -21,7 +22,7 @@ import { FilterData } from './filter-data';
 import { Find } from './find';
 import { FindByKeys } from './find-by-keys';
 import type { Graph } from './graph';
-import { addIncludeSteps, loadsIncludesPerRelation } from './include-steps';
+import { addIncludeNodes } from './include-nodes';
 import { Insert } from './insert';
 import { JunctionFilterData } from './junction-filter-data';
 import type { JunctionWrite } from './junction-write';
@@ -216,7 +217,7 @@ export function readBack(
     by === 'filter'
       ? findRows(b, ast, { filter: [new FilterData(written, mappings)], requires: [] })
       : addFindByKeys(graph, new FindByKeys(ast, mappings, owner), written, mappings);
-  return perRelation ? addIncludeSteps(b, found, model.tables, shape.includes) : found;
+  return perRelation ? addIncludeNodes(b, found, model, shape.includes) : found;
 }
 
 function addFindByKeys(

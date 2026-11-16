@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ormError } from './orm-errors';
-import type { CollectionState } from './types';
+import type { CollectionState, IncludeExpr } from './types';
 
 export type IncludeStrategy = 'join' | 'query';
 
@@ -18,6 +18,14 @@ export function selectIncludeStrategy(contract: Contract<SqlStorage>): IncludeSt
     : 'query';
 }
 
+/** Whether a read leaves its includes to statements of their own, one query per relation. */
+export function loadsIncludesPerRelation(
+  contract: Contract<SqlStorage>,
+  includes: readonly IncludeExpr[],
+): boolean {
+  return includes.length > 0 && selectIncludeStrategy(contract) === 'query';
+}
+
 /**
  * A prepared read is one statement, and includes that load with one query per relation take several.
  */
@@ -26,7 +34,7 @@ export function assertPreparableIncludes(
   state: CollectionState,
   method: string,
 ): void {
-  if (state.includes.length === 0 || selectIncludeStrategy(contract) === 'join') {
+  if (!loadsIncludesPerRelation(contract, state.includes)) {
     return;
   }
   const capabilities = oneQueryIncludeCapabilities.map((capability) => `sql.${capability}`);

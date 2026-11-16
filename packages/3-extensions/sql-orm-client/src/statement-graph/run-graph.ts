@@ -15,7 +15,7 @@ import {
   relatedReadsOf,
 } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
-import { selectIncludeStrategy } from '../include-strategy';
+import { loadsIncludesPerRelation } from '../include-strategy';
 import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
@@ -192,7 +192,7 @@ function shapeRows<Row>(
 ): AsyncIterableResult<Row> {
   const { context, namespaceId, modelName, state } = callerRows;
   const { contract } = context;
-  if (state.includes.length > 0 && selectIncludeStrategy(contract) === 'query') {
+  if (loadsIncludesPerRelation(contract, state.includes)) {
     return consumeRelatedRows<Row>(callerRows, storageRows, hiddenColumnsOf(graph, id, state));
   }
   const { tableName } = state.tables.root.storage;

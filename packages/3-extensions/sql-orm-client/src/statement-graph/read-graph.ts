@@ -8,13 +8,12 @@ import {
   type DescribeCollectionRowsOptions,
   describeCollectionQuery,
 } from '../collection-dispatch';
-import { selectIncludeStrategy } from '../include-strategy';
+import { loadsIncludesPerRelation } from '../include-strategy';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { collectionSelectAst } from '../query-plan-select';
 import type { CollectionState, IncludeExpr, IncludeScalar } from '../types';
-import { requireIdentityColumnsForIncludes } from './collection-graphs';
 import { Graph } from './graph';
-import { addIncludeSteps } from './include-steps';
+import { addIncludeNodes } from './include-nodes';
 import { type Builder, findRows } from './model-statements';
 import { queryGraph } from './run-graph';
 import { StatementNode } from './statement-node';
@@ -23,7 +22,7 @@ export function describeCollectionRead<Row>(
   options: DescribeCollectionRowsOptions,
 ): CollectionQuery<Row> {
   const { context, state } = options;
-  return state.includes.length > 0 && selectIncludeStrategy(context.contract) === 'query'
+  return loadsIncludesPerRelation(context.contract, state.includes)
     ? describeGraphRead<Row>(options)
     : describeCollectionQuery<Row>(options);
 }
@@ -52,7 +51,6 @@ export function describeGraphRead<Row>(
 }
 
 export function readGraph(options: DescribeCollectionRowsOptions): Graph {
-  requireIdentityColumnsForIncludes(options);
   const { context, modelName, state } = options;
   const b: Builder = { graph: new Graph(context.contract), context };
   const parent = findRows(
@@ -60,7 +58,9 @@ export function readGraph(options: DescribeCollectionRowsOptions): Graph {
     collectionSelectAst(context.contract, modelName, { ...state, includes: [] }),
     { filter: [], requires: [] },
   );
-  b.graph.setResult(addIncludeSteps(b, parent, state.tables, state.includes));
+  b.graph.setResult(
+    addIncludeNodes(b, parent, { modelName, tables: state.tables }, state.includes),
+  );
   return b.graph;
 }
 

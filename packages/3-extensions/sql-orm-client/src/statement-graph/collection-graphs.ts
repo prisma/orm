@@ -1,5 +1,3 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -14,8 +12,8 @@ import {
   resolveRowIdentityColumns,
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
-import { type DescribeCollectionRowsOptions, relatedReadsOf } from '../collection-dispatch';
-import { selectIncludeStrategy } from '../include-strategy';
+import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
+import { loadsIncludesPerRelation } from '../include-strategy';
 import {
   countMutationWhere,
   type InsertConflictSkip,
@@ -35,7 +33,7 @@ import { rowIdentity } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
 import { Graph } from './graph';
-import { addIncludeSteps, loadsIncludesPerRelation } from './include-steps';
+import { addIncludeNodes, identityMissing } from './include-nodes';
 import { Insert } from './insert';
 import {
   type Builder,
@@ -78,7 +76,7 @@ export function updateAllGraph(
   const b = builderOf(collection);
   if (Object.keys(set).length === 0) {
     b.graph.setResult(
-      withIncludeSteps(b, collection, findRows(b, selectRowsAst(collection, state), noInputs)),
+      withIncludeNodes(b, collection, findRows(b, selectRowsAst(collection, state), noInputs)),
     );
     return b.graph;
   }
@@ -136,7 +134,7 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     selectRowsAst(collection, state).withWhere(whereOf(collection)),
     noInputs,
   );
-  b.graph.setResult(withIncludeSteps(b, collection, find));
+  b.graph.setResult(withIncludeNodes(b, collection, find));
   addDeleteAll(b, collection, {
     filters:
       identityColumnsOf(collection).length > 0
@@ -173,7 +171,7 @@ export function updateFirstGraph(
     return b.graph;
   }
   if (bare) {
-    b.graph.setResult(withIncludeSteps(b, collection, find));
+    b.graph.setResult(withIncludeNodes(b, collection, find));
     return b.graph;
   }
 
@@ -219,7 +217,7 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   if (find === undefined) {
     return b.graph;
   }
-  b.graph.setResult(withIncludeSteps(b, collection, find));
+  b.graph.setResult(withIncludeNodes(b, collection, find));
   deleteRows(b, state.tables, {
     where: undefined,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
@@ -428,38 +426,12 @@ function requireOnlyCollidingKey(
   );
 }
 
-/**
- * Refuses includes whose rows cannot be matched to their parents: the parent table of every include needs an identity. Under the one-query include only the rows a write reads back are matched, so only the top level is checked.
- */
+/** Refuses includes on a table with no identity, by which a write reads its rows back. */
 export function requireIdentityColumnsForIncludes(collection: DescribeCollectionRowsOptions): void {
-  const { context, modelName, state } = collection;
-  const { contract } = context;
-  requireIdentityAt(contract, modelName, state, selectIncludeStrategy(contract) === 'query');
-}
-
-function requireIdentityAt(
-  contract: Contract<SqlStorage>,
-  modelName: string,
-  state: CollectionState,
-  nestedLevels: boolean,
-): void {
+  const { modelName, state } = collection;
   const [include] = state.includes;
-  if (include === undefined) {
-    return;
-  }
-  const { namespaceId, tableName } = state.tables.root.storage;
-  if (resolveRowIdentityColumns(contract, namespaceId, tableName).length === 0) {
-    throw ormError(
-      'ORM.ROW_IDENTITY_MISSING',
-      `Cannot load include "${include.relationName}" of model "${modelName}": table "${tableName}" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.`,
-      { meta: { model: modelName, table: tableName, include: include.relationName } },
-    );
-  }
-  if (!nestedLevels) {
-    return;
-  }
-  for (const { include: nested } of state.includes.flatMap(relatedReadsOf)) {
-    requireIdentityAt(contract, nested.relatedModelName, nested.nested, nestedLevels);
+  if (include !== undefined && identityColumnsOf(collection).length === 0) {
+    throw identityMissing(modelName, state.tables.root.storage.tableName, include.relationName);
   }
 }
 
@@ -499,7 +471,7 @@ function selectRowsAst(
   return selectAstOf(collection.context, modelOf(collection), statementState, 'selection');
 }
 
-function withIncludeSteps(
+function withIncludeNodes(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   read: NodeId,
@@ -508,8 +480,7 @@ function withIncludeSteps(
   if (!loadsIncludesPerRelation(context.contract, state.includes)) {
     return read;
   }
-  requireIdentityColumnsForIncludes(collection);
-  return addIncludeSteps(b, read, state.tables, state.includes);
+  return addIncludeNodes(b, read, modelOf(collection), state.includes);
 }
 
 function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly string[] {
