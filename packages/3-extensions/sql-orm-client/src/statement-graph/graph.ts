@@ -47,6 +47,13 @@ export class Graph {
     return this.#result;
   }
 
+  get writesAnyTable(): boolean {
+    return this.nodes().some(
+      ([, node]) =>
+        node instanceof StatementNode && this.#tablesWrittenBy(node.statements).length > 0,
+    );
+  }
+
   setResult(node: NodeId): void {
     this.#result = this.#present(node);
   }
