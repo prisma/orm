@@ -25,6 +25,20 @@ describe('integration: ilike (target operation)', { timeout: timeouts.databaseOp
     );
     expect(rows).toHaveLength(0);
   });
+
+  it('ilike takes a nullable column and skips the rows where it is null', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.users.outerLeftJoin(db().public.profiles, (f, fns) =>
+          fns.eq(f.users.id, f.profiles.user_id),
+        )
+        .select('name')
+        .where((f, fns) => fns.ilike(f.profiles.bio, '%BIO%'))
+        .orderBy('name')
+        .build(),
+    );
+    expect(rows).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
+  });
 });
 
 describe('integration: extension functions', { timeout: timeouts.databaseOperation }, () => {
@@ -118,6 +132,20 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
 
   it('fullTextMatches accepts a non-default language', async () => {
     expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
+  });
+
+  it('fullTextMatches takes a nullable column and skips the rows where it is null', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.users.outerLeftJoin(db().public.profiles, (f, fns) =>
+          fns.eq(f.users.id, f.profiles.user_id),
+        )
+        .select('name')
+        .where((f, fns) => fns.fullTextMatches(f.profiles.bio, fns.websearchToTsquery('bio')))
+        .orderBy('name')
+        .build(),
+    );
+    expect(rows).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
   });
 
   it('toTsquery takes a word:* prefix, which matches every word it starts', async () => {
