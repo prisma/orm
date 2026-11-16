@@ -1,13 +1,17 @@
 import { Collection } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
-import { getPolyTestContext } from './helpers';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { getPolyTestContext, type IncludeStrategy, includeStrategies } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
-const polyContext = getPolyTestContext();
-
-function tasksOf(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: polyContext }, 'Task', { namespaceId: 'public' });
+function tasksOf(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: getPolyTestContext(strategy) }, 'Task', {
+    namespaceId: 'public',
+  });
 }
 
 async function setupVariantAssigneeSchema(runtime: PgIntegrationRuntime): Promise<void> {
@@ -62,72 +66,79 @@ async function remainingTaskIds(runtime: PgIntegrationRuntime): Promise<unknown[
   return rows.map((row) => row['id']);
 }
 
-describe('integration/polymorphism-variant-delete-all-include', () => {
-  it(
-    'deleteAll on STI Bugs returns each deleted Bug with its variant-declared assignee',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupVariantAssigneeSchema(runtime);
+describe.each(includeStrategies)(
+  'integration/polymorphism-variant-delete-all-include (%s)',
+  (strategy) => {
+    it(
+      'deleteAll on STI Bugs returns each deleted Bug with its variant-declared assignee',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupVariantAssigneeSchema(runtime);
 
-        const rows = await tasksOf(runtime)
-          .variant('bug')
-          .select('id', 'title', 'type')
-          .orderBy((task) => task.id.desc())
-          .include('assignee', (person) => person.select('id', 'name'))
-          .where((task) => task.id.gt(0))
-          .deleteAll();
+          runtime.resetExecutions();
+          const rows = await tasksOf(runtime, strategy)
+            .variant('bug')
+            .select('id', 'title', 'type')
+            .orderBy((task) => task.id.desc())
+            .include('assignee', (person) => person.select('id', 'name'))
+            .where((task) => task.id.gt(0))
+            .deleteAll();
+          expectPerRelationStatements(runtime, strategy, 3);
 
-        expect(rows).toEqual([
-          {
-            id: 2,
-            title: 'Layout glitch',
-            type: 'bug',
-            assignee: null,
-          },
-          {
-            id: 1,
-            title: 'Crash',
-            type: 'bug',
-            assignee: { id: 101, name: 'Ada' },
-          },
-        ]);
-        expect(await remainingTaskIds(runtime)).toEqual([3, 4]);
-      }, polyContext.contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
+          expect(rows).toEqual([
+            {
+              id: 2,
+              title: 'Layout glitch',
+              type: 'bug',
+              assignee: null,
+            },
+            {
+              id: 1,
+              title: 'Crash',
+              type: 'bug',
+              assignee: { id: 101, name: 'Ada' },
+            },
+          ]);
+          expect(await remainingTaskIds(runtime)).toEqual([3, 4]);
+        }, getPolyTestContext().contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-  it(
-    'deleteAll on MTI Features returns each deleted Feature with its variant-declared assignee',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupVariantAssigneeSchema(runtime);
+    it(
+      'deleteAll on MTI Features returns each deleted Feature with its variant-declared assignee',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupVariantAssigneeSchema(runtime);
 
-        const rows = await tasksOf(runtime)
-          .variant('feature')
-          .select('id', 'title', 'type')
-          .orderBy((task) => task.id.desc())
-          .include('assignee', (person) => person.select('id', 'name'))
-          .where((task) => task.id.gt(0))
-          .deleteAll();
+          runtime.resetExecutions();
+          const rows = await tasksOf(runtime, strategy)
+            .variant('feature')
+            .select('id', 'title', 'type')
+            .orderBy((task) => task.id.desc())
+            .include('assignee', (person) => person.select('id', 'name'))
+            .where((task) => task.id.gt(0))
+            .deleteAll();
+          expectPerRelationStatements(runtime, strategy, 3);
 
-        expect(rows).toEqual([
-          {
-            id: 4,
-            title: 'Audit log',
-            type: 'feature',
-            assignee: null,
-          },
-          {
-            id: 3,
-            title: 'Dark mode',
-            type: 'feature',
-            assignee: { id: 102, name: 'Grace' },
-          },
-        ]);
-        expect(await remainingTaskIds(runtime)).toEqual([1, 2]);
-      }, polyContext.contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+          expect(rows).toEqual([
+            {
+              id: 4,
+              title: 'Audit log',
+              type: 'feature',
+              assignee: null,
+            },
+            {
+              id: 3,
+              title: 'Dark mode',
+              type: 'feature',
+              assignee: { id: 102, name: 'Grace' },
+            },
+          ]);
+          expect(await remainingTaskIds(runtime)).toEqual([1, 2]);
+        }, getPolyTestContext().contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

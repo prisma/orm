@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Graph } from '../../src/statement-graph/graph';
 import { executeGraph, queryGraph } from '../../src/statement-graph/run-graph';
-import { createCollectionFor } from '../collection-fixtures';
+import { baseContract, createCollectionFor, withoutCapabilityKeys } from '../collection-fixtures';
 import { createMockRuntime, type MockRuntime } from '../helpers';
 import {
   addFiltered,
@@ -88,5 +88,43 @@ describe('the transaction a graph runs in', () => {
       opened: transactional.open.mock.calls.length,
       statements: transactional.runtime.executions.length,
     }).toEqual({ opened: 0, statements: 2 });
+  });
+
+  it('runs an update with includes read one query per relation inside the transaction of the write', async () => {
+    const { collection, runtime } = createCollectionFor(
+      'User',
+      withoutCapabilityKeys(baseContract, [
+        'outerReferencesInDerivedTables',
+        'jsonAggWithoutTruncation',
+      ]),
+    );
+    const throughTransaction: string[] = [];
+    const commit = vi.fn(async () => undefined);
+    Object.assign(runtime, {
+      transaction: vi.fn(async () => ({
+        query: (...args: Parameters<MockRuntime['query']>) => {
+          throughTransaction.push('query');
+          return runtime.query(...args);
+        },
+        execute: (...args: Parameters<MockRuntime['execute']>) => {
+          throughTransaction.push('execute');
+          return runtime.execute(...args);
+        },
+        commit,
+        rollback: async () => undefined,
+      })),
+    });
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
+    const users = collection.include('posts').where({ id: 1 }) as unknown as {
+      update(data: unknown): Promise<unknown>;
+    };
+
+    await users.update({ name: 'Bea' });
+
+    expect({
+      statements: runtime.executions.length,
+      throughTransaction: throughTransaction.length,
+      committed: commit.mock.calls.length,
+    }).toEqual({ statements: 3, throughTransaction: 3, committed: 1 });
   });
 });
