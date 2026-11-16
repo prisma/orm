@@ -374,7 +374,7 @@ describe('a nested create of a variant stored in its own table', () => {
     const row = { ...darkMode, comments: () => 'not an operation' };
     const topLevel = topLevelFeatureCreate(row);
 
-    expect(topLevel).toMatchObject({ code: 'ORM.RELATION_MUTATION_INVALID' });
+    expect(topLevel).toMatchObject({ code: 'ORM.ARGUMENT_INVALID' });
     expect(nestedFeatureCreate(row)).toMatchObject({
       code: topLevel.code,
       message: topLevel.message,
@@ -612,7 +612,7 @@ describe('disconnect on a variant', () => {
         }),
       ),
     ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      code: 'ORM.OPERATION_UNSUPPORTED',
       message:
         'disconnect() nested mutation for relation "task" is not available on a variant, because the parent holds the key of the related row',
       meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },

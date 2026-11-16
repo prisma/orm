@@ -74,7 +74,7 @@ export function parseMutationInput(
 
     if (!isRelationMutationCallback(value)) {
       throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
+        'ORM.ARGUMENT_INVALID',
         `Relation field "${fieldName}" on model "${modelName}" expects a mutator callback`,
         { meta: { relation: fieldName, model: modelName, problem: 'missing-callback' } },
       );
@@ -96,7 +96,7 @@ export function parseMutationInput(
       (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
     ) {
       throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        'ORM.OPERATION_UNSUPPORTED',
         `Relation "${fieldName}" on model "${modelName}" is a to-one relation and takes one operation, not ${mutations.length}`,
         {
           meta: {
@@ -133,7 +133,7 @@ function assertCreateOptions(
 ): void {
   if (onConflict !== 'skip' && onConflict !== 'connect') {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `create() nested mutation for relation "${name}" takes onConflict "skip" or "connect"; received ${JSON.stringify(onConflict)}`,
       { meta: { kind: 'create', relation: name, problem: 'invalid-on-conflict' } },
     );
@@ -142,7 +142,7 @@ function assertCreateOptions(
   const unknownFields = (conflictOn ?? []).filter((field) => !Object.hasOwn(fields, field));
   if (unknownFields.length > 0) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `conflictOn of create() nested mutation for relation "${name}" names fields model "${relation.to}" does not have: ${unknownFields.map((field) => `"${field}"`).join(', ')}`,
       {
         meta: {
@@ -157,7 +157,7 @@ function assertCreateOptions(
   const ownTableVariant = ownTableVariantOf(contract, relation, variantValue);
   if (ownTableVariant !== undefined) {
     throw ormError(
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       `create() nested mutation for relation "${name}" does not support onConflict: its target, variant "${ownTableVariant}", is stored in its own table`,
       {
         meta: { kind: 'create', relation: name, reason: 'mti-variant', variant: ownTableVariant },
@@ -172,7 +172,7 @@ function assertCreateOptions(
         : undefined;
     if (reason !== undefined) {
       throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        'ORM.OPERATION_UNSUPPORTED',
         `create() nested mutation for relation "${name}" supports onConflict "skip" only on one-to-many relations`,
         { meta: { kind: 'create', relation: name, reason } },
       );
@@ -180,7 +180,7 @@ function assertCreateOptions(
     return;
   }
   throw ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    'ORM.OPERATION_UNSUPPORTED',
     `create() nested mutation for relation "${name}" does not support onConflict "connect"`,
     { meta: { kind: 'create', relation: name, reason: 'on-conflict-connect' } },
   );
@@ -222,7 +222,7 @@ function invalidRelationField(
 ) {
   const at = index === undefined ? '' : ` at index ${index}`;
   return ormError(
-    'ORM.RELATION_MUTATION_INVALID',
+    'ORM.ARGUMENT_INVALID',
     `Relation field "${fieldName}" on model "${modelName}" ${nested ? `returned a nested array${at}; return one flat array of mutations` : `returned an invalid mutation descriptor${at}`}`,
     {
       meta: {
@@ -282,7 +282,7 @@ export function assertJunctionPayloadWritable({
 
   const cols = through.requiredPayloadColumns.map((c) => `\`${c}\``).join(', ');
   throw ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    'ORM.OPERATION_UNSUPPORTED',
     `Cannot \`${mutation.kind}\` on relation \`${name}\`: its junction \`${through.table}\` has required column(s) ${cols} the relation API can't populate. Write the \`${through.table}\` junction directly or use the SQL builder.`,
     {
       meta: {

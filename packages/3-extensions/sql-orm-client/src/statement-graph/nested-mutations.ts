@@ -234,7 +234,7 @@ function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
   for (const { kind } of mutations) {
     if (kind === 'disconnect' || kind === 'updateAll' || kind === 'deleteAll') {
       throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        'ORM.OPERATION_UNSUPPORTED',
         `${kind}() is only supported in update() nested mutations`,
         { meta: { kind, relation: name } },
       );
@@ -250,7 +250,7 @@ function rejectVariantDisconnect(
     return;
   }
   throw ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    'ORM.OPERATION_UNSUPPORTED',
     `disconnect() nested mutation for relation "${name}" is not available on a variant, because the parent holds the key of the related row`,
     { meta: { kind: 'disconnect', relation: name, reason: 'variant-parent-owned' } },
   );
@@ -267,7 +267,7 @@ function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelatio
     (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
   ) {
     throw ormError(
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       `${filtered.kind}() nested mutation for relation "${name}" is only supported on to-many relations`,
       { meta: { kind: filtered.kind, relation: name, reason: 'to-one-relation' } },
     );
@@ -293,7 +293,7 @@ function addParentOwned(
     const [row] = mutation.data;
     if (row === undefined) {
       throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
+        'ORM.ARGUMENT_INVALID',
         `create() nested mutation for relation "${name}" requires data`,
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
@@ -328,7 +328,7 @@ function addParentOwned(
   const [criterion] = mutation.criteria;
   if (criterion === undefined) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `connect() nested mutation for relation "${name}" requires criterion`,
       { meta: { kind: 'connect', relation: name, problem: 'missing-criterion' } },
     );
@@ -518,7 +518,7 @@ function addJunctionOwned(
   const criteria = mutation.criteria ?? [];
   if (criteria.length === 0) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `disconnect() nested mutation for relation "${name}" requires criterion`,
       { meta: { kind: 'disconnect', relation: name, problem: 'missing-criterion' } },
     );
@@ -565,7 +565,7 @@ function addFilteredWrite(
   );
   if (linking.length > 0) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `updateAll() nested mutation for relation "${name}" cannot set ${linking.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
       {
         meta: { kind: 'updateAll', relation: name, problem: 'parent-link-column', fields: linking },
@@ -668,7 +668,7 @@ function conflictSkipOf(
   );
   if (index !== -1) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `create() nested mutation for relation "${name}" row ${index} gives no value for any conflict key: ${conflictKeys.map((key) => `(${key.join(', ')})`).join(', ')}`,
       {
         meta: {
@@ -741,7 +741,7 @@ function requiredCriterion(
   const where = criterionWhere(context, model, criterion);
   if (where === undefined) {
     throw ormError(
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       `${kind}() nested mutation for relation "${name}" requires non-empty criterion`,
       { meta: { kind, relation: name, problem: 'empty-criterion' } },
     );

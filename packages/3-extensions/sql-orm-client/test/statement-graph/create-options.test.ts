@@ -112,7 +112,7 @@ describe('create options on a relation', () => {
       {
         profile: (profile: Mutator) => profile.create({ id: 5, bio: 'Hi' }, { onConflict: 'skip' }),
       },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "profile" supports onConflict "skip" only on one-to-many relations',
       { kind: 'create', relation: 'profile', reason: 'to-one-relation' },
     ],
@@ -125,21 +125,21 @@ describe('create options on a relation', () => {
             { onConflict: 'skip' },
           ),
       },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "invitedBy" supports onConflict "skip" only on one-to-many relations',
       { kind: 'create', relation: 'invitedBy', reason: 'to-one-relation' },
     ],
     [
       'onConflict skip on the many-to-many relation User.tags',
       { tags: (tags: Mutator) => tags.create([{ id: 't', name: 'Go' }], { onConflict: 'skip' }) },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "tags" supports onConflict "skip" only on one-to-many relations',
       { kind: 'create', relation: 'tags', reason: 'many-to-many-relation' },
     ],
     [
       'an onConflict value other than skip or connect',
       { posts: (posts: Mutator) => posts.create([post], { onConflict: 'replace' } as never) },
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       'create() nested mutation for relation "posts" takes onConflict "skip" or "connect"; received "replace"',
       { kind: 'create', relation: 'posts', problem: 'invalid-on-conflict' },
     ],
@@ -152,7 +152,7 @@ describe('create options on a relation', () => {
             conflictOn: ['title', 'email', 'author'],
           } as never),
       },
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       'conflictOn of create() nested mutation for relation "posts" names fields model "Post" does not have: "email", "author"',
       {
         kind: 'create',
@@ -170,7 +170,7 @@ describe('create options on a relation', () => {
             conflictOn: ['embedding'],
           }),
       },
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       'create() nested mutation for relation "posts" row 1 gives no value for any conflict key: (embedding)',
       {
         kind: 'create',
@@ -183,7 +183,7 @@ describe('create options on a relation', () => {
     [
       'onConflict connect',
       { posts: (posts: Mutator) => posts.create(post, { onConflict: 'connect' }) },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "posts" does not support onConflict "connect"',
       { kind: 'create', relation: 'posts', reason: 'on-conflict-connect' },
     ],
@@ -197,7 +197,7 @@ describe('create options on a relation', () => {
               comments.create({ id: 3, body: 'Hi' }, { onConflict: 'connect' }),
           }),
       },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'create() nested mutation for relation "comments" does not support onConflict "connect"',
       { kind: 'create', relation: 'comments', reason: 'on-conflict-connect' },
     ],
@@ -290,7 +290,7 @@ describe('create options on a relation', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           message:
             'create() nested mutation for relation "features" does not support onConflict: its target, variant "Feature", is stored in its own table',
           meta: {
@@ -453,7 +453,7 @@ describe('onConflict on a create through variant()', () => {
       ),
     ).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        code: 'ORM.OPERATION_UNSUPPORTED',
         message:
           'create() nested mutation for relation "tasks" does not support onConflict: its target, variant "Feature", is stored in its own table',
         meta: { kind: 'create', relation: 'tasks', reason: 'mti-variant', variant: 'Feature' },
