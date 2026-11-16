@@ -122,8 +122,12 @@ describe.each(['pooled', 'direct'] as const)('%s savepoints', (transport) => {
         const tx = await connection.beginTransaction();
         await executeSql(tx, 'INSERT INTO items VALUES (1)');
         const sp = await tx.savepoint('sp_1');
-        await expect(executeSql(sp, 'INSERT INTO missing VALUES (1)')).rejects.toBeDefined();
-        await expect(executeSql(tx, 'INSERT INTO items VALUES (2)')).rejects.toBeDefined();
+        await expect(executeSql(sp, 'INSERT INTO missing VALUES (1)')).rejects.toMatchObject({
+          sqlState: '42P01',
+        });
+        await expect(executeSql(tx, 'INSERT INTO items VALUES (2)')).rejects.toMatchObject({
+          sqlState: '25P02',
+        });
         await sp.rollback();
         await executeSql(tx, 'INSERT INTO items VALUES (3)');
         await tx.commit();
