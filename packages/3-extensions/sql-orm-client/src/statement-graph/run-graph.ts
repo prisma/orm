@@ -5,24 +5,21 @@ import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
 import { getColumnsReadOnTable } from '../collection-contract';
 import {
   consumeCollectionRows,
   consumeRelatedRows,
   type DescribeCollectionRowsOptions,
-  type HiddenColumns,
-  relatedReadsOf,
 } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
 import { loadsIncludesPerRelation } from '../include-strategy';
 import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
-import type { CollectionContext, CollectionState, RuntimeTransaction } from '../types';
+import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
-import { NestJoin } from './nest-join';
+import { hiddenColumnsOf } from './include-nodes';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
@@ -207,46 +204,6 @@ function shapeRows<Row>(
     stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
     return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
   });
-}
-
-function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState): HiddenColumns {
-  const node = graph.nodeAt(id);
-  if (!(node instanceof NestJoin)) {
-    return { columns: unselectedColumnsReadFrom(graph, id, state), nested: new Map() };
-  }
-  const { left, children } = graph.inputsOf(id);
-  const childEdges = [children ?? []].flat();
-  const [parentEdge] = [left ?? []].flat();
-  if (parentEdge === undefined) {
-    throw new InternalError(`NestJoin ${id} has no parent rows`);
-  }
-  const readStates = new Map(
-    state.includes.flatMap(relatedReadsOf).map(({ key, include }) => [key, include.nested]),
-  );
-  return {
-    columns: unselectedColumnsReadFrom(graph, parentEdge.from, state),
-    nested: new Map(
-      node.nests.flatMap((nest, index) => {
-        const edge = childEdges[index];
-        const nestedState = readStates.get(nest.name);
-        return edge === undefined || nestedState === undefined
-          ? []
-          : [[nest.name, hiddenColumnsOf(graph, edge.from, nestedState)] as const];
-      }),
-    ),
-  };
-}
-
-function unselectedColumnsReadFrom(
-  graph: Graph,
-  id: NodeId,
-  state: CollectionState,
-): readonly string[] {
-  const { selectedFields } = state;
-  return graph
-    .columnsReadFrom(id)
-    .map((column) => column.alias)
-    .filter((column) => selectedFields !== undefined && !selectedFields.includes(column));
 }
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

@@ -1,11 +1,13 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { resolveRowIdentityColumns } from '../collection-contract';
-import { readsNoRows, relatedReadsOf } from '../collection-dispatch';
+import { type HiddenColumns, readsNoRows, relatedReadsOf } from '../collection-dispatch';
 import { projectTableColumn } from '../mutation-statements';
 import { ormError } from '../orm-errors';
 import { relatedRowsSelect } from '../query-plan-select';
-import type { IncludeExpr } from '../types';
+import type { CollectionState, IncludeExpr } from '../types';
 import type { ColumnMapping, NodeId } from './edge';
 import { FindRelated, RELATED_KEY_LIMITS } from './find-related';
+import type { Graph } from './graph';
 import type { Builder, Model } from './model-statements';
 import { type Nest, NestJoin } from './nest-join';
 import { Rows } from './rows';
@@ -74,4 +76,45 @@ export function identityMissing(modelName: string, tableName: string, include: s
     `Cannot load include "${include}" of model "${modelName}": table "${tableName}" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.`,
     { meta: { model: modelName, table: tableName, include } },
   );
+}
+
+/** The columns each level of a read with includes read only to match rows to their parents, which the caller did not select. */
+export function hiddenColumnsOf(graph: Graph, id: NodeId, state: CollectionState): HiddenColumns {
+  const node = graph.nodeAt(id);
+  if (!(node instanceof NestJoin)) {
+    return { columns: unselectedColumnsReadFrom(graph, id, state), nested: new Map() };
+  }
+  const { left, children } = graph.inputsOf(id);
+  const childEdges = [children ?? []].flat();
+  const [parentEdge] = [left ?? []].flat();
+  if (parentEdge === undefined) {
+    throw new InternalError(`NestJoin ${id} has no parent rows`);
+  }
+  const readStates = new Map(
+    state.includes.flatMap(relatedReadsOf).map(({ key, include }) => [key, include.nested]),
+  );
+  return {
+    columns: unselectedColumnsReadFrom(graph, parentEdge.from, state),
+    nested: new Map(
+      node.nests.flatMap((nest, index) => {
+        const edge = childEdges[index];
+        const nestedState = readStates.get(nest.name);
+        return edge === undefined || nestedState === undefined
+          ? []
+          : [[nest.name, hiddenColumnsOf(graph, edge.from, nestedState)] as const];
+      }),
+    ),
+  };
+}
+
+function unselectedColumnsReadFrom(
+  graph: Graph,
+  id: NodeId,
+  state: CollectionState,
+): readonly string[] {
+  const { selectedFields } = state;
+  return graph
+    .columnsReadFrom(id)
+    .map((column) => column.alias)
+    .filter((column) => selectedFields !== undefined && !selectedFields.includes(column));
 }
