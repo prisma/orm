@@ -83,15 +83,25 @@ SQLite's column types are `text`, `integer`, `real` and `blob`.
 
 ## MySQL
 
-MySQL is a proof of concept with three scalars. It gets convenience types for those three only.
+MySQL has codecs for `int`, `bigint`, `text` and `varchar` only. Every other row below needs a new codec, as the date and time project added MySQL's date and time codecs (ADR 315). The defaults are the columns Prisma 7 created for the same names.
 
-| Convenience type | `storage` | Becomes | Codec | Name today |
-| --- | --- | --- | --- | --- |
-| `Int(storage?)` | `int` | open | `mysql/int@1` | `Int` |
-| `BigInt(as?, storage?)` | `bigint` | open | `mysql/bigint@1` | `BigInt` |
-| `String(storage?, length?)` | `varchar` (default) | `Varchar`, length 191 unless written | `sql/varchar@1` | `String` |
+| Convenience type | `as` | `storage` | Becomes | Column | Codec |
+| --- | --- | --- | --- | --- | --- |
+| `Int(storage?)` | | `int` | open | `int` | `mysql/int@1` |
+| `BigInt(as?, storage?)` | `bigint` (default) | `bigint` | open | `bigint` | `mysql/bigint@1` |
+| | `number` | `bigint` | open | `bigint` | new |
+| `Float(storage?)` | | `double` (default) | `Double` | `double` | new |
+| | | `float` | open | `float` | new |
+| `Decimal(storage?, precision?, scale?)` | | `decimal` | open | `decimal(p,s)` | new |
+| `String(storage?, length?)` | | `varchar` (default) | `Varchar`, length 191 unless written | `varchar(n)` | `sql/varchar@1` |
+| | | `text` | `Text` | `text` | `mysql/text@1` |
+| `Boolean(storage?)` | | `tinyint` | open | `tinyint(1)` | new |
+| `Bytes(storage?)` | | `longblob` | `Longblob` | `longblob` | new |
+| `Json(storage?)` | | `json` | `PlainJson` (open) | `json` | new |
 
-MySQL's column types are named `int` and `bigint`, so rule 4 gives the explicit types the names the convenience types take. See the open questions.
+- MySQL's column types are named `int`, `bigint`, `float` and `decimal`, so rule 4 gives several explicit types the names the convenience types take. See the open questions.
+- `Boolean` is a `tinyint(1)` column, which is what MySQL's own `BOOLEAN` keyword creates.
+- MySQL's migration planner does not change a column's type yet, so changing a field between these types is refused by `migration plan`, as for the date and time types.
 
 ## MongoDB
 
@@ -125,7 +135,7 @@ Each is a name the rules do not give. I state what I would choose.
 
 1. **The explicit JSON type on SQLite and MongoDB.** I would use `PlainJson` on every target: one name for "a JSON value and nothing else", already approved for PostgreSQL. On MongoDB it reads correctly beside `Bson`, which holds any BSON value.
 2. **MongoDB's explicit string type.** The BSON type is `string`, so rule 4 gives `String`, which the convenience type takes. PostgreSQL and SQLite have `Text`, but BSON has no type of that name. I have no name to propose.
-3. **MySQL's explicit `int` and `bigint` types.** Rule 4 gives `Int` and `BigInt`. MySQL accepts `int4` and `int8` as other names for the same column types, so `Int4` and `Int8BigInt` would match PostgreSQL. I would use those.
+3. **MySQL's explicit types whose column name is a convenience name:** `int`, `bigint`, `float`, `decimal` and `tinyint(1)` for a boolean. For the integers, MySQL accepts `int4` and `int8` as other names for the same column types, so `Int4`, `Int8BigInt` and `Int8Number` would match PostgreSQL, and I would use those. For the others I would use `Float4` (MySQL accepts `float4`), `DecimalString` and `TinyintBoolean`, each the column type plus the value it reads.
 4. **SQLite's `integer` read as a `number` in the safe-integer range** (`sqlite/bigintnumber@1`). `sqlite/integer@1` also reads a `number`, so the suffix `Number` is taken. I wrote `IntegerSafeNumber`; I would like your name for it.
 5. **MongoDB's `Int64`.** Rule 4 says `Int64BigInt`. I would leave `Int64` alone: it is the BSON type's name, it is in released schemas, and renaming it buys only consistency.
 6. **The `storage` value for MongoDB's `Json`.** A JSON value is stored as several BSON types, so no single BSON type names it. I would use `bson`.
@@ -139,7 +149,7 @@ Also in scope, because main is wrong today: main has two ADRs numbered 316. The 
 Out of scope:
 
 - The type choice mechanism, and anything else under `packages/1-framework`.
-- New codecs: a SQLite decimal or boolean, a MongoDB JSON string, MySQL's missing scalars.
+- New codecs on SQLite and MongoDB: a SQLite decimal or boolean, a MongoDB JSON string. MySQL's missing codecs are in scope.
 - Convenience types for single-concept types such as `Uuid`, `ObjectId`, `Vector` and `Bson`.
 - Clearer errors for `json` limits on PostgreSQL.
 
