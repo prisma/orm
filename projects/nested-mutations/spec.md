@@ -6,7 +6,7 @@ Let a caller change the rows related to a record in the same `update()` call tha
 
 ## At a glance
 
-Today a relation callback inside `update()` data returns exactly one of `create`, `connect` or `disconnect`. After this project it can also return `upsert`, a filtered `updateAll` or `deleteAll`, or an array of several operations applied in order. Nested `create` also takes an `onConflict` option: `'skip'`, which top-level `createAll` already has, and `'connect'`, which links the existing row and takes the place of Prisma 7's `connectOrCreate`.
+Today a relation callback inside `update()` data returns exactly one of `create`, `connect` or `disconnect`. After this project it can also return `upsert`, a filtered `updateAll` or `deleteAll`, a single-row `update` or `delete`, or an array of several operations applied in order. Nested `create` also takes an `onConflict` option: `'skip'`, which top-level `createAll` already has, and `'connect'`, which links the existing row and takes the place of Prisma 7's `connectOrCreate`.
 
 Illustrative (re-verify names against shipped code before relying on them):
 
@@ -30,6 +30,8 @@ await db.User.where({ id: 1 }).update({
 | --- | --- | --- | --- |
 | `updateAll` | `r.where(w).updateAll(data)`; `where` optional | to-many | rows related to the parent that match the filter |
 | `deleteAll` | `r.where(w).deleteAll()`; `where` optional | to-many | rows related to the parent that match the filter |
+| `update` | `r.update(data)` on to-one; `r.where(w).update(data)` on any | to-one and to-many | the linked row, or the first related row that matches the filter |
+| `delete` | `r.delete()` on to-one; `r.where(w).delete()` on any | optional to-one and to-many | the linked row, or the first related row that matches the filter |
 | `upsert` | `r.upsert({ create, update, conflictOn? })` | to-one and to-many | one row related to the parent, or a newly created row |
 | `create` with skip | `r.create(rows, { onConflict: 'skip', conflictOn? })` | 1:N only | none that exist; a row that collides with a unique constraint is not inserted |
 | `create` with connect | `r.create(rows, { onConflict: 'connect', conflictOn? })` | any | a row that collides is linked to the parent; its other fields are not changed |
@@ -80,12 +82,14 @@ The project ports every upstream test, in both pinned suites (`prisma/prisma` an
 | --- | --- |
 | `updateMany` | `r.where(w).updateAll(data)` |
 | `deleteMany` | `r.where(w).deleteAll()` |
+| `update` | `r.update(data)` on to-one, `r.where(w).update(data)` on to-many |
+| `delete` | `r.delete()` on to-one, `r.where(w).delete()` on to-many |
 | `upsert` | `r.upsert({ create, update, conflictOn? })` |
 | `createMany` with `skipDuplicates` | `r.create(rows, { onConflict: 'skip' })` |
 | `connectOrCreate` | `r.create(row, { onConflict: 'connect', conflictOn })`, with the `where` value written into the row |
 | several operations on one relation | an array returned from the relation callback |
 
-A test that also needs something this project does not deliver stays unported, and its ledger entry is rewritten to name only what is still missing. That covers tests that need nested `set`, nested single-row `update` or `delete`, nested writes inside top-level `upsert`, composite-field operations, or the Mongo ORM. A ported test whose Prisma 8 result differs from Prisma 7's is kept as a failing port with a ledger entry, per the corpus rules; the known cases are the `ORM.NESTED_UPSERT_CONFLICT` error where Prisma 7 raises P2002, and a `connectOrCreate` whose `create` data contradicts its `where`.
+A test that also needs something this project does not deliver stays unported, and its ledger entry is rewritten to name only what is still missing. That covers tests that need nested `set`, nested writes inside top-level `upsert`, composite-field operations, or the Mongo ORM. A ported test whose Prisma 8 result differs from Prisma 7's is kept as a failing port with a ledger entry, per the corpus rules; the known cases are the `ORM.NESTED_UPSERT_CONFLICT` error where Prisma 7 raises P2002, and a `connectOrCreate` whose `create` data contradicts its `where`.
 
 ### Engine tests
 
@@ -117,20 +121,21 @@ The list below comes from the upstream sources, not from checklist descriptions:
 | `new/regressions/prisma_27452.rs` | 1 | `createMany` |
 | `sharding/relations.rs` | 1 | `upsert` |
 | `queries/filters/filter_unwrap.rs` | 1 | `deleteMany`; recorded non-portable today |
+| `writes/nested_mutations/not_using_schema_base/nested_update_inside_update.rs` | 16 | `update` |
+| `writes/nested_mutations/already_converted/nested_delete_inside_update.rs` | 22 | `delete` |
 
-That is 64 test functions in 22 files. Some of them also use an operation this project does not deliver, for example the nested single-row `delete` in the three relation-key files, and stay unported under the rule above; which ones is settled test by test in the slice that ports the file.
+That is 102 test functions in 24 files; the last two files were added with slice `single-row-writes` on 2026-11-13. Some of them also use an operation this project does not deliver and stay unported under the rule above; which ones is settled test by test in the slice that ports the file.
 
 Found by the same search and out by the rule above: `writes/composites/**` (composite-field operations), `writes/ids/byoid_mongo.rs` (Mongo), `writes/top_level_mutations/non_embedded_upsert.rs` (nested writes inside top-level `upsert`), and the top-level `skipDuplicates` tests in `create_many.rs` and `create_many_and_return.rs`, which are already ported. Not matched by the search, and out: `nested_delete_inside_upsert.rs`, `nested_disconnect_inside_upsert.rs`, `nested_connect_inside_upsert.rs`, `nested_set_inside_update.rs`, `nested_update_inside_update.rs`, `nested_delete_inside_update.rs`, `nested_atomic_number_ops.rs`.
 
 ### Client tests
 
-The pinned `prisma/prisma` functional suite uses these operations in very few tests. None uses `connectOrCreate`. The two that use nested `upsert` or `updateMany` and are not ported each need something else as well, so they stay unported with a rewritten ledger entry: `optimistic-concurrency-control` › `update with upsert relation` (needs `increment`) and `blog-update` (needs single-row `update`). The suites that use nested `createMany` are already ported with array `create`.
+The pinned `prisma/prisma` functional suite uses these operations in very few tests. None uses `connectOrCreate`. The two that use nested `upsert` or `updateMany` and are not ported each need something else as well, so they stay unported with a rewritten ledger entry: `optimistic-concurrency-control` › `update with upsert relation` (needs `increment`) and `blog-update`, ported by slice `single-row-writes`. The suites that use nested `createMany` are already ported with array `create`.
 
 ## Non-goals
 
 - Nested `set`.
 - A nested operation named `connectOrCreate`, and its separate `where` argument. `create` with `onConflict: 'connect'` covers the need.
-- Nested single-row `update` and `delete`. They will get their own design.
 - Nested writes inside top-level `upsert`, whose `create` and `update` inputs stay scalar-only.
 - Any option on nested `create` other than `onConflict` and `conflictOn`.
 - `onConflict: 'connect'` on top-level `createAll`.
@@ -170,7 +175,7 @@ Postgres, SQLite and MySQL adapters: they render the insert conflict clause and 
 - **Graph tests.** Each translation entry and each peephole rule has a unit test that asserts the graph it produces in a printed text form. Behaviour is asserted by integration tests on Postgres and SQLite, not by statement-level unit tests.
 - **Atomicity.** A nested update that fails at any operation leaves no partial changes, as nested writes behave today.
 - **`create()` context.** Array returns and `create` with either `onConflict` value are accepted in `create()`. `where`, `updateAll`, `deleteAll` and `upsert` are rejected there, by the types and at runtime, the way `disconnect` is rejected today.
-- **Relation kinds.** `updateAll` and `deleteAll` on a to-one relation are rejected by the types and at runtime. So is `onConflict: 'skip'` on to-one and many-to-many `create`. Both `onConflict` values are refused on multi-table-inheritance variants, as top-level `createAll` refuses the option.
+- **Relation kinds.** `updateAll` and `deleteAll` on a to-one relation are rejected by the types and at runtime. An operation that sets a required foreign key to null is rejected the same way: `delete` on a required N:1 relation, and `disconnect` on a required N:1, 1:N or 1:1 relation (added 2026-11-13; `disconnect` raised the database's NOT NULL error before). So is `onConflict: 'skip'` on to-one and many-to-many `create`. Both `onConflict` values are refused on multi-table-inheritance variants, as top-level `createAll` refuses the option.
 - **Vocabulary.** Nested operations use the collection's names. No Prisma 7 alias (`updateMany`, `deleteMany`) is added.
 - **Both SQL targets.** Each operation behaves the same on Postgres and SQLite; no branching on target in the ORM. Upstream tests are ported for the SQL targets only; their MongoDB connector variants stay unaddressed by this project.
 - **Docs.** The package README and the user-facing query docs describe each operation in the slice that ships it. They state the scoping rule and the array-order rule; no ADR is written, because the project changes one package's API behaviour and internals and no layer, boundary or shared pattern.
