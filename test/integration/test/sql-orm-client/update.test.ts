@@ -264,7 +264,7 @@ describe.each(includeStrategies)('integration/update (%s)', (strategy) => {
           await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
           events.length = 0;
 
-          await users.where({ id: 1 }).update({ name: 'Updated' });
+          await users.where({ name: 'Stale' }).update({ name: 'Updated' });
 
           const updateEvents = events.filter((event) =>
             event.sql.toLowerCase().startsWith('update'),

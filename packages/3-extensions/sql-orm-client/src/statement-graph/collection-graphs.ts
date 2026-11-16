@@ -40,6 +40,7 @@ import {
   deleteRows,
   findRows,
   insertRows,
+  type KeySource,
   type Returns,
   readBack,
   type Shape,
@@ -54,6 +55,7 @@ import {
   type Translation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
+import type { Requires } from './requires';
 import { Rows } from './rows';
 import {
   createRowOf,
@@ -66,6 +68,7 @@ import {
   withUpdateDefaults,
 } from './storage-rows';
 import { UnionAll } from './union-all';
+import { pinsUniqueKey } from './unique-condition';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
@@ -166,10 +169,11 @@ export function updateFirstGraph(
     requireIdentityColumns(collection, 'update()');
     requireIdentityColumnsForIncludes(collection);
   }
-  const find = addFindOfFirstRow(b, collection, bare ? selectRowsAst : selectIdentityAst);
-  if (find === undefined) {
+  const first = addFindOfFirstRow(b, collection, bare ? selectRowsAst : selectIdentityAst);
+  if (first === undefined) {
     return b.graph;
   }
+  const { find, where } = first;
   if (bare) {
     b.graph.setResult(withIncludeNodes(b, collection, find));
     return b.graph;
@@ -196,7 +200,7 @@ export function updateFirstGraph(
 
   b.graph.setResult(
     updateRows(b, model, values, {
-      where: undefined,
+      where,
       filters: [{ from: find, columns: sameRowColumns(collection) }],
       links: [],
       payloads: before.keys,
@@ -213,13 +217,14 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   const { state } = collection;
   const b = builderOf(collection);
   requireIdentityColumns(collection, 'delete()');
-  const find = addFindOfFirstRow(b, collection, selectRowsAst);
-  if (find === undefined) {
+  const first = addFindOfFirstRow(b, collection, selectRowsAst);
+  if (first === undefined) {
     return b.graph;
   }
+  const { find, where } = first;
   b.graph.setResult(withIncludeNodes(b, collection, find));
   deleteRows(b, state.tables, {
-    where: undefined,
+    where,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
   });
@@ -274,18 +279,26 @@ export function createGraph(
   return b.graph;
 }
 
+export interface NestedVariantCreate {
+  readonly graph: Graph;
+  readonly keys: readonly KeySource[];
+  readonly requires: readonly Requires[];
+  readonly added: (base: NodeId) => void;
+}
+
 export function createAllVariantGraph(
   collection: DescribeCollectionRowsOptions,
   variantTable: AliasedTable,
   mti: MtiCreateContext,
   data: readonly Readonly<Record<string, unknown>>[],
+  nested?: NestedVariantCreate,
 ): Graph {
   const { context, modelName, state } = collection;
   const variantModelName = mti.variant.modelName;
   const rows = variantCreateRowsOf(collection, mti, variantTable, data);
   const { contract } = context;
   const { root } = state.tables;
-  const graph = new Graph(contract);
+  const graph = nested?.graph ?? new Graph(contract);
   const keyColumns = resolvePrimaryKeyColumns(
     contract,
     root.storage.namespaceId,
@@ -301,12 +314,16 @@ export function createAllVariantGraph(
   const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
 
   const owner = { operation: 'createAll', modelName };
-  const joins = rows.map((row) => {
+  const joins = rows.flatMap((row) => {
     const baseInsert = new Insert(
       [insertAst(contract, root, [row.base], undefined).withReturning(baseColumns)],
       owner,
     );
-    const base = graph.add(baseInsert, { state: graph.stateEdgesFor(baseInsert) });
+    const base = graph.add(baseInsert, {
+      payload: (nested?.keys ?? []).map(({ from, columns }) => new PayloadData(from, columns)),
+      state: graph.stateEdgesFor(baseInsert),
+      requires: [...(nested?.requires ?? [])],
+    });
     const variantInsert = new Insert(
       [insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns)],
       { operation: 'createAll', modelName: variantModelName },
@@ -315,10 +332,16 @@ export function createAllVariantGraph(
       payload: [new PayloadData(base, keyMappings)],
       state: graph.stateEdgesFor(variantInsert),
     });
-    return graph.add(new CrossJoin(), {
-      left: new Rows(base, sameColumns(baseColumns)),
-      right: new Rows(variant, sameColumns(variantColumns)),
-    });
+    if (nested !== undefined) {
+      nested.added(base);
+      return [];
+    }
+    return [
+      graph.add(new CrossJoin(), {
+        left: new Rows(base, sameColumns(baseColumns)),
+        right: new Rows(variant, sameColumns(variantColumns)),
+      }),
+    ];
   });
 
   const [only, ...others] = joins;
@@ -439,13 +462,28 @@ function addFindOfFirstRow(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   select: typeof selectIdentityAst,
-): NodeId | undefined {
-  const { state } = collection;
+): { readonly find: NodeId; readonly where: AnyExpression | undefined } | undefined {
+  const { context, state } = collection;
   checkLimitOffset('limit', state.limit);
   if (state.limit === 0) {
     return undefined;
   }
-  return findRows(b, select(collection, { ...state, limit: 1 }), noInputs);
+  const where = whereOf(collection);
+  if (
+    state.offset === undefined &&
+    state.cursor === undefined &&
+    pinsUniqueKey(context.contract, state.tables.root, where)
+  ) {
+    const unordered = { ...state, limit: undefined, orderBy: undefined };
+    return {
+      find: findRows(b, select(collection, unordered).withWhere(where), noInputs),
+      where,
+    };
+  }
+  return {
+    find: findRows(b, select(collection, { ...state, limit: 1 }), noInputs),
+    where: undefined,
+  };
 }
 
 function requireIdentityColumns(collection: DescribeCollectionRowsOptions, method: string): void {

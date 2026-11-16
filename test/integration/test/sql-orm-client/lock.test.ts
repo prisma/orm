@@ -172,7 +172,7 @@ describe('integration: Postgres accepts each row-locking clause the ORM renders'
         await runtime.query('drop table if exists epics');
         await runtime.query('drop table if exists tasks');
         await runtime.query(
-          'create table tasks (id serial primary key, title text not null, type text not null, severity text, project_id integer, reporter_id integer, bug_assignee_person_id integer)',
+          'create table tasks (id serial primary key, title text not null, type text not null, severity text, project_id integer, reporter_id integer, pinned_by_id integer unique, bug_assignee_person_id integer)',
         );
         await runtime.query(
           'create table features (id integer primary key references tasks(id), priority integer not null, feature_assignee_person_id integer)',
@@ -193,7 +193,7 @@ describe('integration: Postgres accepts each row-locking clause the ORM renders'
         );
 
         expect(lastSql(runtime)).toBe(
-          'SELECT "tasks"."bug_assignee_person_id" AS "bug_assignee_person_id", "tasks"."id" AS "id", "tasks"."project_id" AS "project_id", "tasks"."reporter_id" AS "reporter_id", "tasks"."severity" AS "severity", "tasks"."title" AS "title", "tasks"."type" AS "type", "epics"."scope" AS "epics__scope", "features"."feature_assignee_person_id" AS "features__feature_assignee_person_id", "features"."priority" AS "features__priority" FROM "public"."tasks" LEFT JOIN "public"."epics" ON "tasks"."id" = "epics"."id" LEFT JOIN "public"."features" ON "tasks"."id" = "features"."id" FOR UPDATE OF "tasks"',
+          'SELECT "tasks"."bug_assignee_person_id" AS "bug_assignee_person_id", "tasks"."id" AS "id", "tasks"."pinned_by_id" AS "pinned_by_id", "tasks"."project_id" AS "project_id", "tasks"."reporter_id" AS "reporter_id", "tasks"."severity" AS "severity", "tasks"."title" AS "title", "tasks"."type" AS "type", "epics"."scope" AS "epics__scope", "features"."feature_assignee_person_id" AS "features__feature_assignee_person_id", "features"."priority" AS "features__priority" FROM "public"."tasks" LEFT JOIN "public"."epics" ON "tasks"."id" = "epics"."id" LEFT JOIN "public"."features" ON "tasks"."id" = "features"."id" FOR UPDATE OF "tasks"',
         );
         expect(rows).toEqual([
           {
@@ -202,6 +202,7 @@ describe('integration: Postgres accepts each row-locking clause the ORM renders'
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 1,
             assigneeId: null,
           },

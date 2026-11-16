@@ -13,7 +13,7 @@ import { activitySource } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import { withReturningCapability } from './collection-fixtures';
+import { withoutCapabilityKeys, withReturningCapability } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   buildStiPolyContract,
@@ -611,6 +611,27 @@ describe('MTI variant mutation guards', () => {
     const narrowed = collection.variant('feature' as never) as typeof collection;
     await expect(narrowed.createAndCount([{ title: 'X', priority: 1 } as never])).rejects.toThrow(
       /createAndCount\(\) is not supported for MTI variant/,
+    );
+  });
+
+  it('create() and createAll() of a variant stored in its own table name themselves without returning', async () => {
+    const contract = withoutCapabilityKeys(buildMixedPolyContract(), ['returning']);
+    const context = { ...getTestContext(), contract };
+    const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+      namespaceId: 'public',
+    }).variant('feature' as never);
+
+    await expect(features.create({ title: 'X', priority: 1 } as never)).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: 'create() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(() => features.createAll([{ title: 'X', priority: 1 } as never])).toThrow(
+      expect.objectContaining({
+        code: 'ORM.CAPABILITY_MISSING',
+        message: 'createAll() requires contract capability "returning"',
+        meta: { capability: 'returning', action: 'createAll()' },
+      }),
     );
   });
 

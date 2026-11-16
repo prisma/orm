@@ -259,16 +259,24 @@ type WriteConfigure = (meta: MetaBuilder<'write'>) => void;
 export interface CreateConflictOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly onConflict: 'skip';
-  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
+  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName, NsId> & string)[];
 }
 
-function splitCreateArguments<TContract extends Contract<SqlStorage>, ModelName extends string>(
-  optionsOrConfigure: CreateConflictOptions<TContract, ModelName> | WriteConfigure | undefined,
+function splitCreateArguments<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+>(
+  optionsOrConfigure:
+    | CreateConflictOptions<TContract, ModelName, NsId>
+    | WriteConfigure
+    | undefined,
   configure: WriteConfigure | undefined,
 ): {
-  options: CreateConflictOptions<TContract, ModelName> | undefined;
+  options: CreateConflictOptions<TContract, ModelName, NsId> | undefined;
   configureCallback: WriteConfigure | undefined;
 } {
   if (typeof optionsOrConfigure === 'function') {
@@ -533,9 +541,11 @@ export class CollectionBase<
 
   whereUnique<Self>(
     this: Self,
-    criterion: UniqueConstraintCriterion<TContract, ModelName>,
+    criterion: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>,
   ): UniquelyFiltered<Self>;
-  whereUnique(criterion: UniqueConstraintCriterion<TContract, ModelName>): UniquelyFiltered<this> {
+  whereUnique(
+    criterion: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>,
+  ): UniquelyFiltered<this> {
     if (this.includeRefinementMode) {
       throw ormError(
         'ORM.INCLUDE_INVALID',
@@ -1039,8 +1049,8 @@ export class CollectionBase<
    */
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     S extends CollectionTypeState = State,
     R = Row,
@@ -1051,15 +1061,15 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, R>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, R, State['nsId']>
     >,
     S
   >;
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: Fields
@@ -1067,15 +1077,15 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, Row>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
     >,
     State
   >;
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: Fields
@@ -1083,8 +1093,8 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, Row>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
     >,
     State
   > {
@@ -1098,8 +1108,8 @@ export class CollectionBase<
 
     return this.#cloneWithRow<
       SimplifyDeep<
-        Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-          IncludedRelationsForRow<TContract, ModelName, Row>
+        Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+          IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
       >,
       State
     >({
@@ -1298,14 +1308,20 @@ export class CollectionBase<
    */
   cursor<Self extends HasOrderBy & WithoutUniqueFilter<Self>>(
     this: Self,
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): Self;
   cursor<Self extends HasOrderBy>(
     this: Self & HasNoUniqueFilter,
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): Self;
   cursor(
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): this {
     assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
@@ -1334,22 +1350,22 @@ export class CollectionBase<
    */
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends WithoutUniqueFilter<Self>,
   >(this: Self, ...fields: Fields): Self;
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self,
   >(this: Self & HasNoUniqueFilter, ...fields: Fields): Self;
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(...fields: Fields): this {
     const distinctFields = mapFieldsToColumns(
@@ -1383,8 +1399,8 @@ export class CollectionBase<
    */
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends HasOrderBy & WithoutUniqueFilter<Self>,
   >(
@@ -1393,8 +1409,8 @@ export class CollectionBase<
   ): Self;
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends HasOrderBy,
   >(
@@ -1403,8 +1419,8 @@ export class CollectionBase<
   ): Self;
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
@@ -1965,12 +1981,20 @@ export class CollectionBase<
             this.#on(queryable),
             this.#descriptionOptions(),
           ).toArray()
-        : this.#createAllRows([
-            blindCast<
-              ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-              'a create on an MTI variant has no nested callbacks, which createAll() refuses'
-            >(data),
-          ])(queryable);
+        : this.#createAllRows(
+            [
+              blindCast<
+                ResolvedScalarCreateInput<
+                  TContract,
+                  ModelName,
+                  State['variantValue'],
+                  State['nsId']
+                >,
+                'a create on an MTI variant has no nested callbacks, which createAll() refuses'
+              >(data),
+            ],
+            'create()',
+          )(queryable);
     const [created] = await rows;
     if (created !== undefined) {
       return created;
@@ -2025,7 +2049,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<CollectionRowOf<Self>>;
   createAll(
@@ -2035,7 +2061,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<CollectionRowOf<this>>;
   createAll(
@@ -2045,7 +2073,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<unknown> {
     assertLockCompatible(this.state, 'mutation');
@@ -2055,7 +2085,7 @@ export class CollectionBase<
     return streamOrmCall(
       this.ctx.runtime,
       this.#writeCall('createAll', annotations, ormResults.rows<Row>),
-      this.#createAllRows(data, conflictSkip),
+      this.#createAllRows(data, 'createAll()', conflictSkip),
     );
   }
 
@@ -2066,6 +2096,7 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
+    method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
   ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -2079,7 +2110,7 @@ export class CollectionBase<
     >(data);
     const mtiContext = mtiCreateContextOf(this.#descriptionOptions());
     if (mtiContext) {
-      assertReturningCapability(this.contract, 'createAll()');
+      assertReturningCapability(this.contract, method);
       const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
       const graph = createAllVariantGraph(
         this.#descriptionWithoutIncludes(),
@@ -2096,7 +2127,7 @@ export class CollectionBase<
   }
 
   #resolveConflictSkip(
-    options: CreateConflictOptions<TContract, ModelName> | undefined,
+    options: CreateConflictOptions<TContract, ModelName, State['nsId']> | undefined,
     method: string,
   ): InsertConflictSkip | undefined {
     if (options === undefined) return undefined;
@@ -2195,7 +2226,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): Promise<number> {
     assertLockCompatible(this.state, 'mutation');
@@ -2267,7 +2300,7 @@ export class CollectionBase<
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
       update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<CollectionRowOf<Self>>;
@@ -2275,7 +2308,7 @@ export class CollectionBase<
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
       update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<CollectionRowOf<this>>;
@@ -2283,7 +2316,7 @@ export class CollectionBase<
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
       update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
