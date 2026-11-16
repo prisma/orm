@@ -25,7 +25,7 @@ A script that runs these commands with `--yes` and no statements now fails with 
 
 ## `mongo-nested-statements-are-planned`
 
-A script or test that expects these statements to fail with `MIGRATION.PLANNING_FAILED` on MongoDB now gets a plan. Enum value renames that trade stored values or form a chain, and variant changes where one variant takes a discriminator value another frees, are still refused, with advice to make the change in two migrations: MongoDB applies operations one at a time, so a re-run after a later operation stops would rewrite those documents twice.
+A script or test that expects these statements to fail with `MIGRATION.PLANNING_FAILED` on MongoDB now gets a plan. A plan in which one operation writes a field, key or value that another operation of the same plan reads is still refused, with advice to make the change in two migrations: field, key and enum value renames that trade names or values or form a chain, a new required field under the name a rename moves away, and variant changes where one variant takes a discriminator value another frees. MongoDB applies operations one at a time, so the later operation would act on what the earlier one wrote, or a re-run after a later operation stops would rewrite those documents twice. A statement on a field of a variant of an embedded model is refused, since the plan cannot rewrite only that variant's elements.
 
 If you rewrote such documents by hand in `mongosh` or in a `dataTransform` because the statement was refused, nothing changes for migrations you already applied.
 
