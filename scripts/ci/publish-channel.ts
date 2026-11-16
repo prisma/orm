@@ -1,13 +1,15 @@
 /**
- * npm dist-tag for dev builds from the `v7` branch. Not `dev`: prisma/prisma-cli publishes the Prisma 8 `prisma`
- * package under `dev`, and sharing the tag made `prisma@dev` switch between Prisma 7 and Prisma 8 builds.
+ * Two publishers share the npm package `prisma`. prisma/prisma-cli (Prisma 8) owns its `latest`, `dev` and `next`
+ * tags. This branch (Prisma 7) owns `prev`, `prev-dev`, `patch-dev` and `integration`.
+ *
+ * The `@prisma/*` packages still get stable releases on `latest` from this branch, so for them `prev-dev` means
+ * "Prisma 7 dev build", not "dev line of `prev`". Revisit these names when Prisma 9 ships and 8.x needs `prev`.
  */
 export const DEV_DIST_TAG = 'prev-dev'
 
-/**
- * npm dist-tag that holds the newest stable Prisma 7 release of `prisma`. `latest` belongs to prisma/prisma-cli.
- */
 export const PRISMA_STABLE_DIST_TAG = 'prev'
+
+const PRISMA_MAJOR = 7
 
 export type PublishChannelInput = {
   branch: string | undefined
@@ -17,9 +19,9 @@ export type PublishChannelInput = {
 }
 
 export type PublishChannel = {
-  version: 'integration' | 'patch-dev' | 'release' | 'dev'
+  kind: 'integration' | 'patch-dev' | 'release' | 'dev'
   tag: string
-  tagForEcosystemTestsCheck?: string
+  ecosystemTestsBranch?: string
 }
 
 export function getPublishChannel({
@@ -29,34 +31,47 @@ export function getPublishChannel({
   forceIntegrationRelease,
 }: PublishChannelInput): PublishChannel {
   if (branch && (forceIntegrationRelease || branch.startsWith('integration/'))) {
-    return { version: 'integration', tag: 'integration' }
+    return { kind: 'integration', tag: 'integration' }
   }
   if (patchBranch) {
     return releaseVersion
-      ? { version: 'release', tag: 'latest', tagForEcosystemTestsCheck: 'patch-dev' }
-      : { version: 'patch-dev', tag: 'patch-dev' }
+      ? { kind: 'release', tag: 'latest', ecosystemTestsBranch: 'patch-dev' }
+      : { kind: 'patch-dev', tag: 'patch-dev' }
   }
   if (releaseVersion) {
-    // Names the `dev` branch of prisma/ecosystem-tests, not an npm dist-tag.
-    return { version: 'release', tag: 'latest', tagForEcosystemTestsCheck: 'dev' }
+    return { kind: 'release', tag: 'latest', ecosystemTestsBranch: 'dev' }
   }
-  return { version: 'dev', tag: DEV_DIST_TAG }
-}
-
-export function getPackageDistTag(pkgName: string, tag: string): string {
-  return pkgName === 'prisma' && tag === 'latest' ? PRISMA_STABLE_DIST_TAG : tag
+  return { kind: 'dev', tag: DEV_DIST_TAG }
 }
 
 /**
- * Returns the next minor version after the newest stable Prisma 7 release, e.g. `7.10.1` -> `7.11.0`.
- * Throws for a prerelease, which means the dist-tag no longer points at a Prisma 7 stable release.
+ * Returns the npm dist-tag to publish `pkgName` under. Every publish goes through this, including a custom dist tag.
+ * Throws if `prisma` would land on `dev`, which prisma/prisma-cli owns.
  */
-export function getNextMinorStable(stableVersion: string): string {
-  const match = /^(\d+)\.(\d+)\.\d+$/.exec(stableVersion.trim())
-  if (!match) {
+export function getPackageDistTag(pkgName: string, tag: string): string {
+  if (pkgName !== 'prisma') return tag
+  if (tag === 'latest') return PRISMA_STABLE_DIST_TAG
+  if (tag === 'dev') {
     throw new Error(
-      `Expected prisma@${PRISMA_STABLE_DIST_TAG} to be a stable x.y.z version, got "${stableVersion}". Dev and integration versions are based on it.`,
+      `Refusing to publish prisma under the "dev" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 dev builds use "${DEV_DIST_TAG}".`,
     )
   }
-  return `${match[1]}.${Number(match[2]) + 1}.0`
+  return tag
+}
+
+/**
+ * Returns the next minor after the highest stable Prisma 7 version in `publishedVersions`, e.g. `7.10.1` -> `7.11.0`.
+ * Reads the version list rather than a dist-tag, because a release from an older patch branch moves `prev` back.
+ */
+export function getNextMinorStable(publishedVersions: readonly string[]): string {
+  const minors = publishedVersions.flatMap((version) => {
+    const match = /^(\d+)\.(\d+)\.\d+$/.exec(version.trim())
+    return match && Number(match[1]) === PRISMA_MAJOR ? [Number(match[2])] : []
+  })
+  if (minors.length === 0) {
+    throw new Error(
+      `Found no stable ${PRISMA_MAJOR}.x.y version of prisma on npm. Dev and integration versions are based on the highest one.`,
+    )
+  }
+  return `${PRISMA_MAJOR}.${Math.max(...minors) + 1}.0`
 }

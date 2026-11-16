@@ -618,6 +618,9 @@ jobs:
 
       - run: pnpm tsc -p tsconfig.utils.typecheck.json
 
+      - name: Test publish channel selection
+        run: pnpm tsx --test scripts/ci/publish-channel.test.ts
+
   #
   # INTEGRATION-TESTS
   #

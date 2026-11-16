@@ -12,7 +12,7 @@ import { blue, bold, cyan, dim, magenta, red, underline } from 'kleur/colors'
 import pRetry from 'p-retry'
 import semver from 'semver'
 
-import { getNextMinorStable, getPackageDistTag, getPublishChannel, PRISMA_STABLE_DIST_TAG } from './publish-channel'
+import { getNextMinorStable, getPackageDistTag, getPublishChannel } from './publish-channel'
 
 const onlyPackages = process.env.ONLY_PACKAGES ? process.env.ONLY_PACKAGES.split(',') : null
 const skipPackages = process.env.SKIP_PACKAGES ? process.env.SKIP_PACKAGES.split(',') : null
@@ -391,11 +391,15 @@ function getMaxPatchVersionIncrement(versions: string[]): number {
 
 /**
  * @param pkgs
- * @param channel
+ * @param prereleaseId
  * @param prefix
- * @returns All versions published on npm for a given channel and prefix
+ * @returns All versions published on npm that contain `prereleaseId` and start with `prefix`
  */
-export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string, prefix: string): Promise<string[]> {
+export async function getAllVersionsPublishedFor(
+  pkgs: Packages,
+  prereleaseId: string,
+  prefix: string,
+): Promise<string[]> {
   // We check the versions for the `@prisma/debug` package
   // Why?
   // Because `@prisma/debug` is the first package that will be published
@@ -425,7 +429,11 @@ export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string
     const remoteVersions: string = JSON.parse(remoteVersionsString)
 
     for (const remoteVersion of remoteVersions) {
-      if (remoteVersion.includes(channel) && remoteVersion.startsWith(prefix) && !pkgVersions.includes(remoteVersion)) {
+      if (
+        remoteVersion.includes(prereleaseId) &&
+        remoteVersion.startsWith(prefix) &&
+        !pkgVersions.includes(remoteVersion)
+      ) {
         pkgVersions.push(remoteVersion)
       }
     }
@@ -438,13 +446,12 @@ export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string
 
 /**
  * Only used for dev and integration versions (see `getNewDevVersion()` and `getNewIntegrationVersion()`)
- * @returns The next minor version after `prisma@prev`, e.g. `7.11.0` when `prev` is `7.10.1`
+ * @returns The next minor version after the highest stable Prisma 7 release, e.g. `7.11.0` when it is `7.10.1`
  */
 async function fetchNextMinorStable(): Promise<string> {
-  // `prisma@latest` is the Prisma 8 CLI from prisma/prisma-cli, so the newest Prisma 7 release is read from `prev`.
-  const remoteVersionString = await pRetry(
+  const remoteVersionsString = await pRetry(
     async () => {
-      return await runResult('.', `npm info prisma@${PRISMA_STABLE_DIST_TAG} version`)
+      return await runResult('.', `npm info prisma versions --json`)
     },
     {
       retries: 6,
@@ -453,7 +460,7 @@ async function fetchNextMinorStable(): Promise<string> {
       },
     },
   )
-  return getNextMinorStable(remoteVersionString)
+  return getNextMinorStable(JSON.parse(remoteVersionsString) as string[])
 }
 
 // TODO: could probably use the semver package
@@ -555,11 +562,11 @@ async function publish() {
     releaseVersion: args['--release'],
     forceIntegrationRelease: process.env.FORCE_INTEGRATION_RELEASE === 'true',
   })
-  const { tagForEcosystemTestsCheck } = channel
+  const { ecosystemTestsBranch } = channel
   let tag = channel.tag
 
   let prismaVersion: string
-  switch (channel.version) {
+  switch (channel.kind) {
     case 'integration':
       prismaVersion = await getNewIntegrationVersion(packages, branch!)
       break
@@ -578,18 +585,20 @@ async function publish() {
     console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
     tag = args['--custom-dist-tag']
   }
+  const prismaTag = getPackageDistTag('prisma', tag)
 
   console.log({
     patchBranch,
     tag,
-    tagForEcosystemTestsCheck,
+    prismaTag,
+    ecosystemTestsBranch,
     prismaVersion,
   })
 
   if (typeof process.env.GITHUB_OUTPUT == 'string' && process.env.GITHUB_OUTPUT.length > 0) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `patchBranch=${patchBranch}\n`)
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`)
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tagForEcosystemTestsCheck=${tagForEcosystemTestsCheck}\n`)
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tagForEcosystemTestsCheck=${ecosystemTestsBranch}\n`)
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `prismaVersion=${prismaVersion}\n`)
   }
 
@@ -604,13 +613,13 @@ async function publish() {
 
   if (args['--publish'] || dryRun) {
     if (args['--release']) {
-      if (!tagForEcosystemTestsCheck) {
-        throw new Error(`tagForEcosystemTestsCheck missing`)
+      if (!ecosystemTestsBranch) {
+        throw new Error(`ecosystemTestsBranch missing`)
       }
-      const passing = await areEcosystemTestsPassing(tagForEcosystemTestsCheck)
+      const passing = await areEcosystemTestsPassing(ecosystemTestsBranch)
       if (!passing && process.env.SKIP_ECOSYSTEMTESTS_CHECK !== 'true') {
-        throw new Error(`We can't release, as the ecosystem-tests are not passing for the ${tag} npm tag!
-Check them out at https://github.com/prisma/ecosystem-tests/actions?query=workflow%3Atest+branch%3A${tag}`)
+        throw new Error(`We can't release, as the ecosystem-tests are not passing on the ${ecosystemTestsBranch} branch!
+Check them out at https://github.com/prisma/ecosystem-tests/actions?query=workflow%3Atest+branch%3A${ecosystemTestsBranch}`)
       }
     }
 
@@ -892,11 +901,11 @@ async function getPrismaBranch(): Promise<string | undefined> {
   return undefined
 }
 
-async function areEcosystemTestsPassing(tag: string): Promise<boolean> {
+async function areEcosystemTestsPassing(branch: string): Promise<boolean> {
   let svgUrl = 'https://github.com/prisma/ecosystem-tests/workflows/test/badge.svg?branch='
 
-  if (tag === 'patch-dev') {
-    svgUrl += tag
+  if (branch === 'patch-dev') {
+    svgUrl += branch
   } else {
     svgUrl += 'dev'
   }
