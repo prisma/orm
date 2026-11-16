@@ -85,7 +85,7 @@ const search = { title: 'Search', priority: 2 };
 const crash = { title: 'Crash', severity: 'high' };
 const hang = { title: 'Hang', severity: 'low' };
 
-describe('integration/nested-variant-creates', () => {
+describe('integration/nested-variant-mutations', () => {
   describe('a variant stored in the base table', () => {
     it(
       'create() and update() on a relation the child holds the key for write each row with the discriminator and the key of the parent',
