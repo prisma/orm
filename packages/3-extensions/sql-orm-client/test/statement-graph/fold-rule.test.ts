@@ -66,6 +66,50 @@ describe('the fold rule, on a contract with returning', () => {
     );
   });
 
+  it('keeps the key edge from a Find whose rows another node reads', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+    addWithState(graph, findUsers(), { filter: [new FilterData(find, sameName)] });
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printGraph(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        'n2 Find users <- FilterData n1 (name->name)',
+        "n3 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('drops the key edge from a Find that another node only waits for', () => {
+    const graph = newGraph();
+    const found = findUsers([nameIsAda]);
+    const find = addWithState(graph, found);
+    addWithState(graph, findUsers(), { requires: [new Requires(find)] });
+
+    graph.setResult(
+      addWithState(graph, updateWithConditionOf(found), {
+        filter: [new FilterData(find, sameId)],
+      }),
+    );
+
+    expect(printGraph(graph)).toBe(
+      [
+        "n1 Find users where name = 'Ada'",
+        'n2 Find users <- Requires n1',
+        "n3 Update users set name = 'Grace' where name = 'Ada'",
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
   it('leaves an Update whose condition is another object than the condition of the Find as it is', () => {
     const graph = newGraph();
     const found = findUsers([nameIsAda]);
