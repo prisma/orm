@@ -134,9 +134,12 @@ describe('a table whose only unique key has a nullable column', () => {
 
     await collection.include('author').deleteAll();
 
-    const [find, remove] = runtime.executions.map(({ plan }) =>
-      'ast' in plan ? plan.ast : undefined,
-    );
+    const [find, remove] = runtime.executions.map(({ plan }) => {
+      const ast = 'ast' in plan ? plan.ast : undefined;
+      return ast?.kind === 'select' || ast?.kind === 'delete'
+        ? { kind: ast.kind, where: ast.where }
+        : undefined;
+    });
     expect({
       find: find?.kind,
       remove: remove?.kind,
