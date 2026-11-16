@@ -8,6 +8,8 @@ import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
+  enumValueCoordinateFromJson,
+  enumValueStatementText,
   expectAbsent,
   expectPresent,
   type FailedCheck,
@@ -1156,6 +1158,7 @@ export class MongoMigrationRunner {
           failure:
             renameOverwriteRefusal(op) ??
             storedKeyRenameRefusal(op) ??
+            (await this.documentsHoldingRemovedValueRefusal(op, position)) ??
             runnerFailure(
               'MIGRATION.PRECHECK_FAILED',
               `Operation ${op.id} failed during precheck`,
@@ -1206,6 +1209,83 @@ export class MongoMigrationRunner {
     }
 
     return { executed: true };
+  }
+
+  /**
+   * The failure when a stored value removal's precheck finds documents whose required field or key
+   * holds the value: how many, one `_id`, the query that finds them all, and how to keep them.
+   */
+  private async documentsHoldingRemovedValueRefusal(
+    op: MongoDmlOperation,
+    position: { readonly operationIndex: number; readonly contract: MongoContract },
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const rewrite = op.meta?.rewrite;
+    const [check] = op.precheck;
+    if (rewrite?.kind !== 'removeStoredValue' || check === undefined) return undefined;
+    const { command } = check.source;
+    if (!(command instanceof RawAggregateCommand)) return undefined;
+    const match: unknown = Reflect.get(command.pipeline[0] ?? {}, '$match');
+    if (typeof match !== 'object' || match === null) return undefined;
+    const counted = await this.firstRow({
+      ...check.source,
+      command: new RawAggregateCommand(command.collection, [
+        { $match: match },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
+    const one = documents === 1;
+    const { collection, field, path, value, enumValue } = rewrite;
+    const place =
+      path === undefined
+        ? `in field ${field}`
+        : `at path ${JSON.stringify(path)} in field ${field}`;
+    const query = `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(match)})`;
+    const coordinate =
+      enumValue === undefined
+        ? undefined
+        : {
+            ...ifDefined(
+              'namespaceId',
+              enumValue.namespaceId === undefined
+                ? undefined
+                : asNamespaceId(enumValue.namespaceId),
+            ),
+            enum: enumValue.enum,
+            member: enumValue.member,
+          };
+    const named =
+      coordinate === undefined
+        ? 'the enum value'
+        : `enum value "${enumValueStatementText(position.contract, enumValueCoordinateFromJson(coordinate))}"`;
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'holds' : 'hold'} value ${JSON.stringify(value)} ${place}, which is required`,
+      {
+        why: [
+          `${one ? 'It has' : 'One of them has'} _id ${mongoshValue(counted?.['documentId'])}. Find them all with ${query} in mongosh.`,
+          `To keep them, rename ${named} to a value the enum keeps instead of removing it, or change those documents to another value first.`,
+          'Nothing was removed. Once the documents are fixed, run the command again; operations that already ran are skipped.',
+        ].join(' '),
+        meta: {
+          operationId: op.id,
+          name: op.name,
+          ...(coordinate === undefined || typeof value === 'boolean'
+            ? {}
+            : {
+                rowsHoldingValue: [
+                  {
+                    enumValue: coordinate,
+                    value,
+                    rows: documents,
+                    operationIndex: position.operationIndex,
+                  },
+                ],
+              }),
+        },
+      },
+    );
   }
 
   /**

@@ -133,6 +133,28 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedChange: 'removing the key would remove it from the documents',
     sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
   },
+  replaceStoredValue: {
+    keyVerb: 'replace',
+    conflictKind: 'statementRefused',
+    verb: 'replace a value inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      "so the stored value cannot be replaced in the documents. Keep the enum value's stored value in the contract, then run this command again.",
+    sharedChange: 'replacing the value would replace it in the documents',
+    sharedGoal: (model) => `To replace it in ${model} documents only`,
+  },
+  removeStoredValue: {
+    keyVerb: 'remove',
+    conflictKind: 'fieldRemovalRefused',
+    verb: 'remove a value inside',
+    preposition: 'from',
+    reaches: 'holding',
+    timeSeries:
+      'so the stored value cannot be removed from the documents that hold it. Keep the enum value in the contract, then run this command again.',
+    sharedChange: 'removing the value would remove it from the documents',
+    sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
+  },
   fillStoredKey: {
     keyVerb: 'fill',
     conflictKind: 'fieldFillRefused',

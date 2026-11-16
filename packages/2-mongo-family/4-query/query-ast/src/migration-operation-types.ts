@@ -63,6 +63,28 @@ export type MongoFieldRewriteMeta =
       readonly field: string;
       /** The JSONPath from the field's value to the key. */
       readonly path: string;
+    }
+  | {
+      readonly kind: 'replaceStoredValue';
+      readonly collection: string;
+      readonly field: string;
+      /** The JSONPath from the field's value to the key that holds the value; absent for the field itself. */
+      readonly path?: string;
+    }
+  | {
+      readonly kind: 'removeStoredValue';
+      readonly collection: string;
+      readonly field: string;
+      /** The JSONPath from the field's value to the key that holds the value; absent for the field itself. */
+      readonly path?: string;
+      /** The value removed. */
+      readonly value: string | number | boolean;
+      /** The enum value whose stored value is removed, which a failed check names. */
+      readonly enumValue?: {
+        readonly namespaceId?: string;
+        readonly enum: string;
+        readonly member: string;
+      };
     };
 
 /**

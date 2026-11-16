@@ -7,6 +7,7 @@ import {
 import type {
   MongoDmlCheck,
   MongoDmlOperation,
+  MongoFieldRewriteMeta,
   MongoFilterExpr,
   MongoIndexKey,
   MongoMigrationCheck,
@@ -757,6 +758,279 @@ export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation 
         `no object ${keyPlace(options, keyPath)} lacks key ${JSON.stringify(key)} or holds null there`,
       ),
     ],
+  };
+}
+
+/** A value a stored value operation matches by equality: an enum's stored value. */
+export type StoredValue = string | number | boolean;
+
+export interface StoredValueOptions {
+  readonly collection: string;
+  /** The stored name of the root field that holds the value, or whose value holds it. */
+  readonly field: string;
+  /** A JSONPath from the field's value to the key that holds the value, such as `$[*].status`; absent for the field itself. */
+  readonly path?: string;
+  readonly filter?: Document;
+}
+
+export interface ReplaceStoredValueOptions extends StoredValueOptions {
+  readonly from: StoredValue;
+  /** An aggregation expression for the new value, so it is stored with its BSON type: `{ $toDouble: 2 }` stores a double. */
+  readonly to: JsonValue;
+}
+
+export interface RemoveStoredValueOptions extends StoredValueOptions {
+  readonly value: StoredValue;
+  /** Whether the field or key must hold a value, so the operation stops while a document holds the value there outside a list. */
+  readonly required?: boolean;
+  /** The enum value whose stored value is removed, which the failure names when a required place holds it. */
+  readonly enumValue?: Extract<MongoFieldRewriteMeta, { kind: 'removeStoredValue' }>['enumValue'];
+}
+
+/** Where a stored value operation acts: the root field, or the key path inside it. */
+interface StoredValuePlace {
+  readonly keyPath: StoredKeyPath | undefined;
+  /** As a label names it: `at path "$.status" in field profile of collection users`. */
+  readonly text: string;
+}
+
+function isStoredValue(value: unknown): value is StoredValue {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function storedValuePlace(
+  factory: string,
+  options: StoredValueOptions,
+  value: unknown,
+): StoredValuePlace {
+  const { collection: collectionName, field, path } = options;
+  if (!isStoredValue(value)) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `${factory} cannot match value ${JSON.stringify(value)} in field ${field} of collection ${collectionName}: it compares only strings, numbers and booleans.`,
+      {
+        meta: {
+          context: factory,
+          collection: collectionName,
+          field,
+          reason: 'the value is not a string, a number or a boolean',
+        },
+      },
+    );
+  }
+  if (path === undefined) {
+    assertRewritableField(collectionName, field);
+    return { keyPath: undefined, text: `in field ${field} of collection ${collectionName}` };
+  }
+  const at = { collection: collectionName, field, path };
+  return { keyPath: rewritableKeyPath(factory, at), text: placeAt(at, path) };
+}
+
+function equalsValue(held: Expression, value: StoredValue): Document {
+  return { $eq: [held, { $literal: value }] };
+}
+
+/** Whether a value is `value`, or a list with an element equal to it. */
+function holdsValue(held: Expression, value: StoredValue): Document {
+  return {
+    $cond: [{ $isArray: held }, { $in: [{ $literal: value }, held] }, equalsValue(held, value)],
+  };
+}
+
+/** The documents in which the value at the place satisfies `condition`. */
+function documentsWhereValue(
+  options: StoredValueOptions,
+  place: StoredValuePlace,
+  condition: (held: Expression) => Document,
+): Document {
+  const { keyPath } = place;
+  const match =
+    keyPath === undefined
+      ? { $expr: condition(`$${options.field}`) }
+      : documentsWithObject(keyPath, (object) => condition(keyOf(object, keyPath.key)));
+  return withFilter(options.filter, match);
+}
+
+/**
+ * The update pipeline that rewrites the value at the place: a list with `inList`, and a value equal
+ * to `matched` with `replacement`, or, when it is `undefined`, by removing the field or key.
+ */
+function storedValuePipeline(
+  options: StoredValueOptions,
+  place: StoredValuePlace,
+  matched: StoredValue,
+  inList: (list: Expression) => Document,
+  replacement: JsonValue | undefined,
+): readonly Document[] {
+  const { keyPath } = place;
+  if (keyPath === undefined) {
+    const held = `$${options.field}`;
+    return [
+      {
+        $set: {
+          [options.field]: {
+            $cond: [
+              { $isArray: held },
+              inList(held),
+              { $cond: [equalsValue(held, matched), replacement ?? '$$REMOVE', held] },
+            ],
+          },
+        },
+      },
+    ];
+  }
+  const key = literal(keyPath.key);
+  return objectsRewritePipeline(keyPath, (object) => {
+    const held = keyOf(object, keyPath.key);
+    const set = (value: Expression | JsonValue) => ({
+      $setField: { field: key, input: object, value },
+    });
+    return {
+      $cond: [
+        { $isArray: held },
+        set(inList(held)),
+        {
+          $cond: [
+            equalsValue(held, matched),
+            replacement === undefined
+              ? { $unsetField: { field: key, input: object } }
+              : set(replacement),
+            object,
+          ],
+        },
+      ],
+    };
+  });
+}
+
+function storedValueId(options: StoredValueOptions, action: string): string {
+  const path = options.path === undefined ? '' : `.${options.path}`;
+  return `storedValue.${options.collection}.${options.field}${path}.${action}${idSuffix(options.filter)}`;
+}
+
+const TYPED_CONSTANT = new Set(['$literal', '$toDouble', '$toLong', '$toInt', '$toDecimal']);
+
+/** The constant an expression writes, as a label shows it: unwrapped from `$literal` or a cast. */
+function expressionText(value: JsonValue): string {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const entries = Object.entries(value);
+    const [only] = entries;
+    if (entries.length === 1 && only !== undefined && TYPED_CONSTANT.has(only[0])) {
+      return expressionText(only[1] ?? null);
+    }
+  }
+  return JSON.stringify(value);
+}
+
+function holdingDescription(options: StoredValueOptions, value: StoredValue): string {
+  const at = options.path === undefined ? '' : ` at path ${JSON.stringify(options.path)}`;
+  return `no document in ${options.collection} holds value ${JSON.stringify(value)}${at} in field ${options.field}`;
+}
+
+/**
+ * Replaces the stored value `from` with `to` where the field, or the key at `path` inside it, holds
+ * it: the value itself, or each element of a list equal to it. Skips document validation.
+ */
+export function replaceStoredValue(options: ReplaceStoredValueOptions): MongoDmlOperation {
+  const { collection: collectionName, field, path, from, to, filter } = options;
+  const place = storedValuePlace('replaceStoredValue', options, from);
+  const holding = documentsWhereValue(options, place, (held) => holdsValue(held, from));
+  const id = storedValueId(options, `replace(${JSON.stringify(from)})`);
+  return {
+    id,
+    meta: {
+      rewrite: {
+        kind: 'replaceStoredValue',
+        collection: collectionName,
+        field,
+        ...ifDefined('path', path),
+      },
+    },
+    label: `Replace value ${JSON.stringify(from)} with ${expressionText(to)} ${place.text}${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      rawUpdateMany(
+        collectionName,
+        holding,
+        storedValuePipeline(
+          options,
+          place,
+          from,
+          (list) => ({
+            $map: {
+              input: list,
+              as: 'value',
+              in: { $cond: [equalsValue('$$value', from), to, '$$value'] },
+            },
+          }),
+          to,
+        ),
+        { bypassDocumentValidation: true },
+      ),
+    ],
+    postcheck: [noDocumentMatches(collectionName, holding, holdingDescription(options, from))],
+  };
+}
+
+/**
+ * Removes the stored value `value` where the field, or the key at `path` inside it, holds it: the
+ * field or key goes where it equals the value, and the value is pulled from a list. With
+ * `required`, the operation first checks that no document holds the value there outside a list.
+ * Skips document validation.
+ */
+export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOperation {
+  const { collection: collectionName, field, path, value, filter, required, enumValue } = options;
+  const place = storedValuePlace('removeStoredValue', options, value);
+  const holding = documentsWhereValue(options, place, (held) => holdsValue(held, value));
+  const id = storedValueId(options, `remove(${JSON.stringify(value)})`);
+  return {
+    id,
+    meta: {
+      rewrite: {
+        kind: 'removeStoredValue',
+        collection: collectionName,
+        field,
+        ...ifDefined('path', path),
+        value,
+        ...ifDefined('enumValue', enumValue),
+      },
+    },
+    label: `Remove value ${JSON.stringify(value)} ${path === undefined ? `from field ${field} of collection ${collectionName}` : place.text}${labelSuffix(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck:
+      required === true
+        ? [
+            noDocumentMatches(
+              collectionName,
+              documentsWhereValue(options, place, (held) => equalsValue(held, value)),
+              `${holdingDescription(options, value)}, which is required`,
+            ),
+          ]
+        : [],
+    run: [
+      rawUpdateMany(
+        collectionName,
+        holding,
+        storedValuePipeline(
+          options,
+          place,
+          value,
+          (list) => ({
+            $filter: {
+              input: list,
+              as: 'value',
+              cond: { $not: [equalsValue('$$value', value)] },
+            },
+          }),
+          undefined,
+        ),
+        { bypassDocumentValidation: true },
+      ),
+    ],
+    postcheck: [noDocumentMatches(collectionName, holding, holdingDescription(options, value))],
   };
 }
 

@@ -58,11 +58,15 @@ import {
   type FillFieldOptions,
   fillField,
   fillStoredKey,
+  type RemoveStoredValueOptions,
   type RenameStoredKeyOptions,
+  type ReplaceStoredValueOptions,
   removeStoredKey,
+  removeStoredValue,
   renameCollection,
   renameField,
   renameStoredKey,
+  replaceStoredValue,
   type StoredKeyOptions,
   unsetField,
 } from './migration-factories';
@@ -523,6 +527,50 @@ export class FillStoredKeyCall extends OpFactoryCallNode {
   }
 }
 
+export class ReplaceStoredValueCall extends OpFactoryCallNode {
+  readonly factoryName = 'replaceStoredValue' as const;
+  readonly operationClass = 'widening' as const;
+  readonly options: ReplaceStoredValueOptions;
+  readonly label: string;
+
+  constructor(options: ReplaceStoredValueOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return replaceStoredValue(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `replaceStoredValue(${jsonToTsSource(this.options)})`;
+  }
+}
+
+export class RemoveStoredValueCall extends OpFactoryCallNode {
+  readonly factoryName = 'removeStoredValue' as const;
+  readonly operationClass = 'destructive' as const;
+  readonly options: RemoveStoredValueOptions;
+  readonly label: string;
+
+  constructor(options: RemoveStoredValueOptions) {
+    super();
+    this.options = options;
+    this.label = this.toOp().label;
+    this.freeze();
+  }
+
+  toOp(): MongoDmlOperation {
+    return removeStoredValue(this.options);
+  }
+
+  renderTypeScript(): string {
+    return `removeStoredValue(${jsonToTsSource(this.options)})`;
+  }
+}
+
 export class CollModCall extends OpFactoryCallNode {
   readonly factoryName = 'collMod' as const;
   readonly collection: string;
@@ -566,6 +614,8 @@ export type OpFactoryCall =
   | RenameStoredKeyCall
   | RemoveStoredKeyCall
   | FillStoredKeyCall
+  | ReplaceStoredValueCall
+  | RemoveStoredValueCall
   | CollModCall;
 
 export function schemaIndexToCreateIndexOptions(index: MongoSchemaIndex): IndexCallOptions {

@@ -325,6 +325,20 @@ const OperationMetaJson = type({
       collection: 'string',
       field: 'string',
       path: 'string',
+    })
+    .or({
+      kind: '"replaceStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+    })
+    .or({
+      kind: '"removeStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+      value: 'string | number | boolean',
+      'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
     }),
 });
 
