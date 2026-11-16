@@ -220,7 +220,7 @@ A prepared read is a single plan (`relational-core/src/plan.ts`, `Preparable`). 
   - ADR 031 and ADR 065: a pointer to ADR 164 where they describe the ORM's includes, and ADR 065's MySQL example;
   - subsystem docs 3 (Query Lanes), 4 (Runtime & Middleware Framework) and 5 (Adapters & Targets), and `docs/reference/framework-integration-analysis.md`: where they describe includes as one statement, or name the "mutation graph runner";
   - `coupling.md` row 17 and `deferred.md`.
-- **Release notes:** the capability changes alter the profile hash of every emitted contract. The runtime logs `CONTRACT.MARKER_MISMATCH` as a warning until the database is signed again.
+- **Upgrade instructions:** emitted contracts gain the new capability keys, so apps and extensions re-emit their contracts. A contract that is not re-emitted keeps working, because the runtime merges the adapter's capabilities over it. The profile hash does not depend on capabilities, so no database needs signing again. An emitted contract leaves out a capability that is `false`; `selectIncludeStrategy` treats a missing key as not reported.
 - **No change:** the framework domain; the SQL runtime and its middleware; the SQL AST (`WindowFuncExpr` already exists); `Find`.
 
 ## Tests
