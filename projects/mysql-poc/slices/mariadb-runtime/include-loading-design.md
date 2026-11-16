@@ -120,7 +120,7 @@ How each include form is written:
 | To-many, no paging | `SELECT p.<identity> AS parent_key, c.<cols> FROM child c JOIN parent p ON <relation> WHERE p.<identity> IN (…) ORDER BY parent_key, <caller's order>, c.<identity>` |
 | `limit` / `offset` | The query above as a derived table with `ROW_NUMBER() OVER (PARTITION BY parent_key ORDER BY <caller's order>, c.<identity>) AS rn`, filtered by `rn > offset AND rn <= offset + limit` and ordered by `parent_key, rn`. `limit(0)` adds no `FindRelated`. |
 | `distinct(cols)` | A first window `ROW_NUMBER() OVER (PARTITION BY parent_key, <cols> ORDER BY <caller's order>, c.<identity>)` keeps the row numbered 1 of each group, which is what `distinct` returns today; the paging window, if any, runs over those rows. |
-| `distinctOn(cols)` | The same first window. It equals `DISTINCT ON` here, because `assertDistinctOnCompatibleOrder` already requires the order to start with the `distinctOn` columns. |
+| `distinctOn(cols)` | `DISTINCT ON (parent_key, <cols>)`, ordered by the parent key first. `distinctOn` is only reachable where the database reports it, so no window is needed. |
 | To-one | As to-many, without paging. |
 | Many-to-many | The junction table joins child to parent: `FROM child c JOIN junction j ON j.<child fk> = c.<key> JOIN parent p ON j.<parent fk> = p.<key>`. |
 | Relation declared on a variant | The variant's table is joined to reach the relation's columns, as the one-query include does. The parent key returned is the root table's identity, so both sides of the match come from one column. |
@@ -194,6 +194,7 @@ A prepared read is a single plan (`relational-core/src/plan.ts`, `Preparable`). 
 - **Consistency.** The queries of one read run one after another. At READ COMMITTED, which MariaDB and MySQL sessions use, each statement sees the latest committed data. A row committed between two queries can therefore appear in a later level: a child added to a parent already read is returned, and a child whose parent was deleted in between finds no parent and is dropped. A to-one child can also disagree with its parent's foreign-key column, when the foreign key changed between the two statements. ActiveRecord, Django and Prisma 7 load relations with the same behaviour.
 - **`budgets` and `lints`.** `lints` warns about any `SELECT` without a `LIMIT`. `budgets`, where an application installs it, fails such a `SELECT` by default (`severities.rowCount` defaults to `'error'`). So with `budgets` installed, a read with includes that passes where the database runs the one-query include fails with `BUDGET.ROWS_EXCEEDED` where it loads per relation, as the ORM's read-backs after a write already do. This design does not change either middleware. Completing or removing them is a row in the GA plan (stream 6, row 8).
 - **Keys a codec cannot reproduce.** A key is read, decoded, and sent back encoded. If the codec loses part of the stored value, the key sent back matches nothing and that parent gets no children, without an error. The known case is a `timestamptz(6)` or `datetime(6)` identity column read with a `Date` codec, which drops the digits below a millisecond. The write graphs already send decoded keys back this way. The defect is the codec's, and a fix belongs with the codecs; the framework's codec traits cannot be extended in this project. It is recorded in `deferred.md`.
+- **Decode errors of included rows.** Under the per-relation strategy an included row is an ordinary row, so a value its codec cannot decode raises the SQL runtime's ordinary decode error, as a read without includes does. The one-query include raises its own error, without the raw value, because its raw value is a whole JSON payload. Tests state each strategy's error.
 - **Order of tied rows.** The per-relation strategy breaks ties with the child's identity; the one-query strategy leaves them undefined. Tests that run under both strategies must not depend on the order of tied rows.
 
 ## Requirements met
@@ -232,13 +233,17 @@ The ORM reads capabilities from the execution context's contract, and the includ
 - the value-parity suites build their own context (`include-codecs`, `include-codec-canonical-json`, `char-padding-include`, `float-non-finite-include`);
 - the ported Prisma suites go through the public `postgres({…})` facade.
 
-So the tests get one helper that returns the Postgres adapter descriptor for a given strategy, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` set to `false` for `'query'`. Every include suite builds its context through it and runs under both strategies with `describe.each`. Under `'query'` each suite asserts that it sent at least one statement per include, so a suite that stayed on `'join'` fails. The ported suites are covered where their harness can take the adapter without a new facade option; a facade option added only for tests is not acceptable.
+So the tests get one helper that returns the Postgres adapter descriptor for a given strategy, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` set to `false` for `'query'`. Every include suite builds its context through it and runs under both strategies with `describe.each`. Under `'query'` each suite asserts that it sent at least one statement per include, so a suite that stayed on `'join'` fails. The ported Prisma suites are not run under `'query'`: their harness goes through the public `postgres({…})` facade, which cannot take another adapter, and a facade option added only for tests is not acceptable.
 
 Hand-written capability literals that would otherwise change strategy while asserting one-query SQL gain the two new capabilities: `nested-includes-helpers.ts`, and the unit tests `collection-dispatch.test.ts` and `orm-namespace-relation.test.ts`.
 
 New tests cover: the identity check, and a nullable unique key not counting as an identity; `stitchKey` for each key type; duplicate keys under a to-one read from the foreign-key side, with more parents than one chunk holds; chunk boundaries by parameter count, including a composite identity, and by size; a parent with no children, and an all-`NULL` aggregate, for each scalar aggregate; `distinctOn`; a child table with a column named `parent_key`; a self-relation; hidden identity columns removed at every level; the cache key differing by include, by `limit(0)` and by `combine` branch name; a read with includes opening no transaction; the prepared-read refusal; each write with includes, including `create` through `FindByKeys`; and a delete with an include whose children are removed by `ON DELETE CASCADE`.
 
 MySQL's ORM live tests run against MariaDB in slice 6b-2.
+
+## A defect found in the one-query include
+
+A many-to-many include whose target model has multi-table-inheritance variants failed on Postgres with `missing FROM-clause entry`: the junction join replaced the variant joins. Found while giving both ties one join list, and fixed in the one-query path in a commit of its own, with a test (`mn-polymorphic-include.test.ts`). No other one-query SQL changed.
 
 ## To probe on MariaDB 10.11 during the build
 
