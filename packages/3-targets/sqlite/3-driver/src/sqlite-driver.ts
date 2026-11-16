@@ -151,6 +151,44 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openSqliteSavepoint(this.db, name);
+  }
+}
+
+class SqliteSavepointImpl extends SqliteQueryable implements SqlTransaction {
+  constructor(
+    db: DatabaseSync,
+    private readonly name: string,
+  ) {
+    super(db);
+  }
+
+  async commit(): Promise<void> {
+    execSavepointStatement(this.db, `RELEASE SAVEPOINT ${this.name}`);
+  }
+
+  async rollback(): Promise<void> {
+    execSavepointStatement(this.db, `ROLLBACK TO SAVEPOINT ${this.name}`);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openSqliteSavepoint(this.db, name);
+  }
+}
+
+function execSavepointStatement(db: DatabaseSync, sql: string): void {
+  try {
+    db.exec(sql);
+  } catch (error) {
+    throw normalizeSqliteError(error, wasClosedByDriver(db));
+  }
+}
+
+function openSqliteSavepoint(db: DatabaseSync, name: string): SqliteSavepointImpl {
+  execSavepointStatement(db, `SAVEPOINT ${name}`);
+  return new SqliteSavepointImpl(db, name);
 }
 
 interface ConnectedState {
