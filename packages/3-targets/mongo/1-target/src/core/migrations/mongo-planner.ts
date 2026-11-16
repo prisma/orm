@@ -782,9 +782,9 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         collectionRenames,
         rewrites: [
           ...fieldRenames,
-          ...storedKeys.value.renames.map((rewrite) => rewrite.call),
           ...variantDeletes.map((rewrite) => rewrite.call),
           ...variantReplacements.map((rewrite) => rewrite.call),
+          ...storedKeys.value.renames.map((rewrite) => rewrite.call),
           ...valueReplacements.map((rewrite) => rewrite.call),
           ...castCalls,
           ...transformCalls('convert'),

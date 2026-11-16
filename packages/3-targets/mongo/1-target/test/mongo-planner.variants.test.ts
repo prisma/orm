@@ -139,6 +139,47 @@ describe('MongoMigrationPlanner, a variant whose discriminator value changes', (
     ]);
   });
 
+  it("renames a key inside the variant's value objects after the rewrite, selecting its documents by the new value", () => {
+    const withAddress = (seed: string, value: string, key: string) =>
+      contract(
+        seed,
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'type'],
+            discriminator: 'type',
+            variants: { Bug: value },
+          },
+          Bug: {
+            collection: 'tasks',
+            fields: ['address'],
+            types: { address: { codecId: '', valueObject: 'Address' } },
+            base: 'Task',
+          },
+        },
+        { tasks: {} },
+        { Address: { [key]: { codecId: 'mongo/string@1' } } },
+      );
+    const result = plan({
+      from: withAddress('from', 'bug', 'street'),
+      to: withAddress('to', 'defect', 'line1'),
+      schema: live,
+      statements: [
+        convert('Bug'),
+        {
+          kind: 'rename',
+          entity: 'valueObjectField',
+          from: { namespaceId: NS, valueObject: 'Address', field: 'street' },
+          to: { namespaceId: NS, valueObject: 'Address', field: 'line1' },
+        },
+      ],
+    });
+    expect(planned(result).labels).toEqual([
+      'Replace value "bug" with "defect" in field type of collection tasks',
+      'Rename key "street" to "line1" at path "$" in field address of collection tasks in documents whose type is "defect"',
+    ]);
+  });
+
   it('plans nothing without an origin contract', () => {
     expect(planned(plan({ from: null, to: changed, schema: live }))).toEqual({
       labels: [],
