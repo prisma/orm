@@ -18,7 +18,7 @@ model Event {
   id      ObjectId @id @map("_id")
   visits  Int                    // exactly Int32
   total   BigInt(as: number)     // exactly Int64Number
-  payload Json                   // a JSON value stored as BSON
+  payload Json                   // exactly PlainJson: a JSON value stored as BSON
 }
 ```
 
@@ -64,65 +64,67 @@ Out of scope here: clearer errors where a `json` field hits one of those limits.
 
 ## SQLite
 
-SQLite's column types are `text`, `integer`, `real` and `blob`.
+SQLite's column types are `text`, `integer`, `real` and `blob`. An explicit type is the column type, plus the value it reads where the column type has more than one codec.
 
 | Convenience type | `as` | `storage` | Becomes | Codec | Name today |
 | --- | --- | --- | --- | --- | --- |
 | `Int(storage?)` | | `integer` | `IntegerNumber` | `sqlite/integer@1` | `Int` |
 | `BigInt(as?, storage?)` | `bigint` (default) | `integer` | `IntegerBigInt` | `sqlite/bigint@1` | `BigInt` |
-| | `number` | `integer` | `IntegerSafeNumber` (open) | `sqlite/bigintnumber@1` | `BigIntNumber` |
+| | `number` | `integer` | `IntegerNumber` | `sqlite/integer@1` | |
 | `Float(storage?)` | | `real` | `Real` | `sqlite/real@1` | `Float` |
 | `Decimal(storage?)` | | `text` | `DecimalString` | new, `sqlite/decimal@1` | `Decimal`, as `sqlite/text@1` |
 | `String(storage?)` | | `text` | `Text` | `sqlite/text@1` | `String` |
 | `Boolean(storage?)` | | `integer` | `IntegerBoolean` | new | none |
 | `Bytes(storage?)` | | `blob` | `Blob` | `sqlite/blob@1` | `Bytes` |
-| `Json(storage?)` | | `text` | `PlainJson` (open) | `sqlite/json@1` | `Json` |
+| `Json(storage?)` | | `text` | `PlainJson` | `sqlite/json@1` | `Json` |
 
 - **`Decimal` gets its own data type, `sqlite/decimal`, stored as text.** Today it is the same codec as `String`, so nothing in the contract says the column holds a decimal, and a new required `Decimal` field is filled with `''`. This is TML-3562, which this slice closes. It is the one place where rule 3 is broken: the contract of every SQLite project with a `Decimal` field changes, with an upgrade instruction. The stored text does not change, so no data moves.
+- **`DecimalString` is named after its data type, not its column.** SQLite has no decimal column type, so the name follows ADR 315's rule for that case, as `DateString` and `DurationString` do. `TextString` would say nothing.
 - **`Boolean` is new on SQLite,** stored as `integer` 0 or 1, which is what SQLite's own `TRUE` and `FALSE` are.
-- `BigIntNumber` stays as a deprecated alias of its new name.
+- **`BigInt(as: number)` and `Int` are the same explicit type.** `sqlite/integer@1` and `sqlite/bigintnumber@1` both store an `integer` and both read a `number` checked against the safe-integer range. `BigIntNumber` stays for one release line as a deprecated name with its own codec; its upgrade instruction says to write `Int`.
 
 ## MySQL
 
-MySQL has codecs for `int`, `bigint`, `text` and `varchar` only. Every other row below needs a new codec, as the date and time project added MySQL's date and time codecs (ADR 315). The defaults are the columns Prisma 7 created for the same names.
+MySQL has codecs for `int`, `bigint`, `text` and `varchar` only. Every other row below needs a new codec, as the date and time project added MySQL's date and time codecs (ADR 315). The defaults are the columns Prisma 7 created for the same names; check them against Prisma 7's documentation before building.
 
-| Convenience type | `as` | `storage` | Becomes | Column | Codec |
-| --- | --- | --- | --- | --- | --- |
-| `Int(storage?)` | | `int` | open | `int` | `mysql/int@1` |
-| `BigInt(as?, storage?)` | `bigint` (default) | `bigint` | open | `bigint` | `mysql/bigint@1` |
-| | `number` | `bigint` | open | `bigint` | new |
-| `Float(storage?)` | | `double` (default) | `Double` | `double` | new |
-| | | `float` | open | `float` | new |
-| `Decimal(storage?, precision?, scale?)` | | `decimal` | open | `decimal(p,s)` | new |
-| `String(storage?, length?)` | | `varchar` (default) | `Varchar`, length 191 unless written | `varchar(n)` | `sql/varchar@1` |
-| | | `text` | `Text` | `text` | `mysql/text@1` |
-| `Boolean(storage?)` | | `tinyint` | open | `tinyint(1)` | new |
-| `Bytes(storage?)` | | `longblob` | `Longblob` | `longblob` | new |
-| `Json(storage?)` | | `json` | `PlainJson` (open) | `json` | new |
+MySQL's usual names for these columns are convenience names. MySQL accepts a second name for each, and those are the names PostgreSQL's explicit types already have, so MySQL uses the same explicit names.
 
-- MySQL's column types are named `int`, `bigint`, `float` and `decimal`, so rule 4 gives several explicit types the names the convenience types take. See the open questions.
-- `Boolean` is a `tinyint(1)` column, which is what MySQL's own `BOOLEAN` keyword creates.
+| Convenience type | `as` | `storage` | Becomes | Column | MySQL also calls it | Codec |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Int(storage?)` | | `int` | `Int4` | `int` | `INT4` | `mysql/int@1` |
+| `BigInt(as?, storage?)` | `bigint` (default) | `bigint` | `Int8BigInt` | `bigint` | `INT8` | `mysql/bigint@1` |
+| | `number` | `bigint` | `Int8Number` | `bigint` | `INT8` | new |
+| `Float(storage?)` | | `double` (default) | `Float8` | `double` | `FLOAT8` | new |
+| | | `float` | `Float4` | `float` | `FLOAT4` | new |
+| `Decimal(storage?, precision?, scale?)` | | `decimal` | `NumericString` | `decimal(p,s)` | `NUMERIC` | new |
+| `String(storage?, length?)` | | `varchar` (default) | `Varchar`, length 191 unless written | `varchar(n)` | | `sql/varchar@1` |
+| | | `text` | `Text` | `text` | | `mysql/text@1` |
+| `Boolean(storage?)` | | `tinyint` | `Bool` | `tinyint(1)` | `BOOL` | new |
+| `Bytes(storage?)` | | `longblob` | `Longblob` | `longblob` | | new |
+| `Json(storage?)` | | `json` | `PlainJson` | `json` | | new |
+
 - MySQL's migration planner does not change a column's type yet, so changing a field between these types is refused by `migration plan`, as for the date and time types.
 
 ## MongoDB
 
-MongoDB's explicit types are already named after BSON types, so most rows only add the convenience type.
+MongoDB's explicit types are already named after BSON types, so most rows only add the convenience type. The `storage` values are BSON's own type names, as `storage: date` and `storage: string` already are for the date and time types.
 
 | Convenience type | `as` | `storage` | Becomes | Codec | Change |
 | --- | --- | --- | --- | --- | --- |
-| `Int(storage?)` | | `int32` | `Int32` | `mongo/int32@1` | `Int` stops being a deprecated alias |
-| `BigInt(as?, storage?)` | `bigint` (default) | `int64` | `Int64` | `mongo/int64@1` | new |
-| | `number` | `int64` | `Int64Number` | `mongo/int64Number@1` | |
+| `Int(storage?)` | | `int` | `Int32` | `mongo/int32@1` | `Int` stops being a deprecated alias |
+| `BigInt(as?, storage?)` | `bigint` (default) | `long` | `Int64BigInt` | `mongo/int64@1` | explicit `Int64` renamed |
+| | `number` | `long` | `Int64Number` | `mongo/int64Number@1` | |
 | `Float(storage?)` | | `double` | `Double` | `mongo/double@1` | `Float` stops being a deprecated alias |
-| `Decimal(storage?)` | | `decimal128` | `Decimal128` | `mongo/decimal128@1` | new |
+| `Decimal(storage?)` | | `decimal` | `Decimal128` | `mongo/decimal128@1` | new |
 | `Boolean(storage?)` | | `bool` | `Bool` | `mongo/bool@1` | `Boolean` stops being a deprecated alias |
 | `Bytes(storage?)` | | `binData` | `Binary` | `mongo/binary@1` | new |
-| `String(storage?)` | | `string` | open | `mongo/string@1` | explicit `String` needs a name |
-| `Json(storage?)` | | `bson` (open) | `PlainJson` (open) | `mongo/json@1` | explicit `Json` needs a name |
+| `String(storage?)` | | `string` | `BsonString` | `mongo/string@1` | explicit `String` renamed |
+| `Json(storage?)` | | `bson` | `PlainJson` | `mongo/json@1` | explicit `Json` renamed |
 
-- **`Json` has one storage, BSON.** MongoDB stores a JSON value as native BSON values, which is its idiomatic form, so that is the default and the only value. A JSON string storage would need a new codec and is not part of this project.
+- **`Json` has one storage, `bson`.** MongoDB stores a JSON value as whichever BSON value fits it, which is its idiomatic form. A JSON string storage would need a new codec and is not part of this project.
 - **`Int`, `Float` and `Boolean` stop warning.** Today they warn and point to `Int32`, `Double` and `Bool`. As convenience types they are the names a user is meant to write. Their codecs do not change.
-- **`Int64` keeps its name.** Rule 4 would rename it `Int64BigInt`, because `int64` has two codecs. See the open questions.
+- **`Int64` becomes `Int64BigInt`,** with `Int64` kept for one release line as a deprecated alias. BSON's `long` has two codecs, so both carry a suffix for the value they read, as PostgreSQL's `Int8BigInt` and `Int8Number` do.
+- **`BsonString` is the name MongoDB's C# and Java drivers give the type.** The explicit `String` and `Json` need no deprecated alias: the bare convenience names give the same codecs.
 - **The deprecation warning fires wherever a deprecated name is written,** as the SQL family's does: with or without arguments, in a field, a value object member or a `types {}` alias. Today MongoDB's fires only for a bare name in a field.
 - The Prisma 6 schema reader keeps its bindings; it names codecs, not PSL names.
 
@@ -140,16 +142,9 @@ Each slice that adds a codec applies that rule, and records what it found:
 
 `sql.String(n)` is a `varchar(n)` column on every SQL target. It now shares a name with the `String` convenience type and means something else. It is renamed `sql.Varchar(n)`, and `sql.String` stays for one release line as a deprecated alias. `sql.Char(n)` keeps its name.
 
-## Open questions for Will
+## Names
 
-Each is a name the rules do not give. I state what I would choose.
-
-1. **The explicit JSON type on SQLite and MongoDB.** I would use `PlainJson` on every target: one name for "a JSON value and nothing else", already approved for PostgreSQL. On MongoDB it reads correctly beside `Bson`, which holds any BSON value.
-2. **MongoDB's explicit string type.** The BSON type is `string`, so rule 4 gives `String`, which the convenience type takes. PostgreSQL and SQLite have `Text`, but BSON has no type of that name. I have no name to propose.
-3. **MySQL's explicit types whose column name is a convenience name:** `int`, `bigint`, `float`, `decimal` and `tinyint(1)` for a boolean. For the integers, MySQL accepts `int4` and `int8` as other names for the same column types, so `Int4`, `Int8BigInt` and `Int8Number` would match PostgreSQL, and I would use those. For the others I would use `Float4` (MySQL accepts `float4`), `DecimalString` and `TinyintBoolean`, each the column type plus the value it reads.
-4. **SQLite's `integer` read as a `number` in the safe-integer range** (`sqlite/bigintnumber@1`). `sqlite/integer@1` also reads a `number`, so the suffix `Number` is taken. I wrote `IntegerSafeNumber`; I would like your name for it.
-5. **MongoDB's `Int64`.** Rule 4 says `Int64BigInt`. I would leave `Int64` alone: it is the BSON type's name, it is in released schemas, and renaming it buys only consistency.
-6. **The `storage` value for MongoDB's `Json`.** A JSON value is stored as several BSON types, so no single BSON type names it. I would use `bson`.
+Will accepted every explicit name and `storage` value in the tables above on 2026-11-17. No name is open.
 
 ## Scope
 
