@@ -818,7 +818,7 @@ function pagePerParent(
   );
   const level: RowsLevel = {
     select: SelectAst.from(
-      DerivedTableSource.as(rowsAlias, childRows.withOrderBy([])),
+      DerivedTableSource.as(rowsAlias, withoutOrderUnlessDistinctOn(childRows, state)),
     ).withProjection(visible),
     keys: parentKeys.map((key) => ColumnRef.of(rowsAlias, key.alias)),
     order: aggregateOrderBy ?? [],
@@ -846,6 +846,13 @@ function pagePerParent(
     parentKeys,
     (rowNumber) => BinaryExpr.lte(rowNumber, limitOffsetExpr(limit)),
   ).select;
+}
+
+/** `DISTINCT ON` keeps the first row of each group in its statement's own order, so that order stays. */
+function withoutOrderUnlessDistinctOn(select: SelectAst, state: CollectionState): SelectAst {
+  return state.distinctOn !== undefined && state.distinctOn.length > 0
+    ? select
+    : select.withOrderBy([]);
 }
 
 interface RowsLevel {
@@ -1217,7 +1224,10 @@ function buildIncludeChildScalarSelect(
       inputCodec,
     );
     return SelectAst.from(
-      DerivedTableSource.as(scalarAlias, pagePerParent(scope, rows, state).withOrderBy([])),
+      DerivedTableSource.as(
+        scalarAlias,
+        withoutOrderUnlessDistinctOn(pagePerParent(scope, rows, state), state),
+      ),
     )
       .withProjection([
         ...groupKeys,
