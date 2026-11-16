@@ -446,32 +446,24 @@ function onlyNewValueObjectField(
   return added.length === 1 ? added[0] : undefined;
 }
 
-/** The value object fields the plan's backfill statements name, resolved; empty when they do not resolve. */
-function backfilledValueObjectFields(
+/** The plan's backfill statements, resolved; empty when they do not resolve. */
+function resolvedBackfills(
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly ValueObjectFieldCoordinate[] {
+): readonly ResolvedMigrationStatement[] {
   if (!contracts.statements.some((statement) => statement.verb === 'backfill')) return [];
   const resolved = resolveStatements({
     statements: contracts.statements,
     origin: { kind: 'contract', contract: contracts.origin },
     destination: contracts.destination,
   });
-  if (!resolved.ok) return [];
-  return resolved.value.flatMap((statement) =>
-    statement.kind === 'backfill' && statement.entity === 'valueObjectField'
-      ? [statement.field]
-      : [],
-  );
+  return resolved.ok ? resolved.value.filter((statement) => statement.kind === 'backfill') : [];
 }
 
-/**
- * The field a model's field can only have been renamed to: the one field of the destination model
- * that the origin model does not have and no rename of the plan names.
- */
-function onlyNewModelField(
+/** The fields of a model's field's destination model that the origin model does not have and no rename of the plan names. */
+function newModelFields(
   subject: FieldCoordinate,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): string | undefined {
+): readonly string[] {
   const model = renamedModel(subject, contracts) ?? subject;
   const originFields = Object.keys(
     contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model]?.fields ?? {},
@@ -483,9 +475,20 @@ function onlyNewModelField(
         : [],
     ),
   );
-  const added = Object.keys(
+  return Object.keys(
     contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {},
   ).filter((name) => !renamedTo.has(name) && !originFields.includes(name));
+}
+
+/**
+ * The field a model's field can only have been renamed to: the one field of the destination model
+ * that the origin model does not have and no rename of the plan names.
+ */
+function onlyNewModelField(
+  subject: FieldCoordinate,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  const added = newModelFields(subject, contracts);
   return added.length === 1 ? added[0] : undefined;
 }
 
@@ -646,39 +649,72 @@ function changedVariant(
 }
 
 /**
- * What `--delete` of a value object field leaves in the required fields the value object gained
- * that the run does not backfill: the plan fills each with a temporary value, or the field needs a
- * backfill statement, which only `migration plan` takes.
+ * The new required fields beside a removed field of a value object or of a model another model
+ * embeds, as statements name them, without those the run backfills: the fields of its value object
+ * or model that the origin does not have and no rename of the plan names.
+ */
+function newRequiredFieldsBeside(
+  subject: MigrationSubject,
+  contracts: DataLossContracts,
+): readonly string[] {
+  if (inDestination(subject, contracts)) return [];
+  const backfills = contracts.canConvert ? resolvedBackfills(contracts) : [];
+  if (subject.kind === 'valueObjectField') {
+    const field = renamedValueObjectField(subject, contracts) ?? subject;
+    const valueObject = valueObjectAt(contracts.destination.storage, {
+      plane: 'storage',
+      namespaceId: field.namespaceId,
+      entityKind: 'valueObject',
+      entityName: field.valueObject,
+    });
+    return newValueObjectFields(subject, contracts)
+      .filter(
+        (name) =>
+          valueObject?.fields[name]?.nullable === false &&
+          !backfills.some(
+            (backfill) =>
+              backfill.kind === 'backfill' &&
+              backfill.entity === 'valueObjectField' &&
+              backfill.field.namespaceId === field.namespaceId &&
+              backfill.field.valueObject === field.valueObject &&
+              backfill.field.field === name,
+          ),
+      )
+      .map((name) =>
+        valueObjectFieldStatementText(contracts.destination, { ...field, field: name }),
+      );
+  }
+  if (subject.kind !== 'field') return [];
+  const origin = contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model];
+  if (origin?.owner === undefined) return [];
+  const model = renamedModel(subject, contracts) ?? subject;
+  const fields =
+    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {};
+  return newModelFields(subject, contracts)
+    .filter(
+      (name) =>
+        fields[name]?.nullable === false &&
+        !backfills.some(
+          (backfill) =>
+            backfill.kind === 'backfill' &&
+            backfill.entity === 'field' &&
+            sameModel(backfill.field, model) &&
+            backfill.field.field === name,
+        ),
+    )
+    .map((name) => `${modelStatementText(contracts.destination, model)}.${name}`);
+}
+
+/**
+ * What a delete leaves in the new required fields beside a removed field of a value object or an
+ * embedded model: a temporary value the plan gives, or none, which a backfill writes.
  */
 function newRequiredFieldNote(
   subject: MigrationSubject,
-  text: string,
   contracts: DataLossContracts,
 ): readonly string[] {
-  if (subject.kind !== 'valueObjectField' || inDestination(subject, contracts)) return [];
-  const field = renamedValueObjectField(subject, contracts) ?? subject;
-  const valueObject = valueObjectAt(contracts.destination.storage, {
-    plane: 'storage',
-    namespaceId: field.namespaceId,
-    entityKind: 'valueObject',
-    entityName: field.valueObject,
-  });
-  const backfilled = contracts.canConvert ? backfilledValueObjectFields(contracts) : [];
-  const unfilled = newValueObjectFields(subject, contracts).filter(
-    (name) =>
-      valueObject?.fields[name]?.nullable === false &&
-      !backfilled.some(
-        (backfill) =>
-          backfill.namespaceId === field.namespaceId &&
-          backfill.valueObject === field.valueObject &&
-          backfill.field === name,
-      ),
-  );
-  if (unfilled.length === 0) return [];
-  const deleted = statementFlag({ verb: 'delete', text });
-  const added = unfilled.map((name) =>
-    valueObjectFieldStatementText(contracts.destination, { ...field, field: name }),
-  );
+  const added = newRequiredFieldsBeside(subject, contracts);
+  if (added.length === 0) return [];
   const filled = (each: string) => contracts.temporaryValues.some((value) => value.field === each);
   const temporary = added.filter(filled);
   const needed = added.filter((each) => !filled(each));
@@ -689,20 +725,20 @@ function newRequiredFieldNote(
     ...(temporary.length === 0
       ? []
       : [
-          `With ${deleted}, the existing objects get a temporary value in the new required ${named(temporary)}.`,
+          `If you answer delete, the existing objects get a temporary value in the new required ${named(temporary)}.`,
         ]),
     ...(needed.length === 0
       ? []
       : !contracts.canConvert
         ? [
-            `With ${deleted}, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
+            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
           ]
         : needed.length === 1
           ? [
-              `With ${deleted}, the new required ${named(needed)} still needs a value: add ${backfills} to write it in migration.ts.`,
+              `If you answer delete, the new required ${named(needed)} still needs a value: add ${backfills} to write it in migration.ts.`,
             ]
           : [
-              `With ${deleted}, the new required ${named(needed)} still need a value: add ${backfills} to write them in migration.ts.`,
+              `If you answer delete, the new required ${named(needed)} still need a value: add ${backfills} to write them in migration.ts.`,
             ]),
   ];
 }
@@ -751,7 +787,7 @@ export function dataLossQuestion(
     ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
-    ...newRequiredFieldNote(loss.subject, subject, contracts),
+    ...newRequiredFieldNote(loss.subject, contracts),
   ];
   const question =
     operations.length > 1

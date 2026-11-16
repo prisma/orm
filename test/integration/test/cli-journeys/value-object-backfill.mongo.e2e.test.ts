@@ -379,7 +379,7 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
         'These operations would lose the values of value object field "Address.zip":',
         '- Remove key "zip" at path "$" in field home of collection users',
         '- Remove key "zip" at path "$[*]" in field addresses of collection users',
-        'With --delete Address.zip, the existing objects get a temporary value in the new required field "Address.country".',
+        'If you answer delete, the existing objects get a temporary value in the new required field "Address.country".',
       ].join('\n'),
       answers: [
         'Run the command again with --rename Address.zip:Address.country',
@@ -429,7 +429,7 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
       ]),
     );
     expect(seen?.why, 'B3.11: a field with no temporary value still needs --backfill').toContain(
-      'With --delete Address.country, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
+      'If you answer delete, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
     );
   });
 
