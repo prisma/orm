@@ -484,33 +484,43 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
 }
 
 class MysqlTransactionImpl extends MysqlHeldQueryable implements SqlTransaction {
+  async commit(): Promise<void> {
+    await this.underLock(() => this.client.commit());
+  }
+
+  async rollback(): Promise<void> {
+    await this.underLock(() => this.client.rollback());
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    const validated = validateSavepointName(name);
+    await this.underLock(() => this.client.query(`SAVEPOINT ${validated}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, validated);
+  }
+}
+
+class MysqlSavepointImpl extends MysqlHeldQueryable implements SqlTransaction {
   constructor(
     client: PoolConnection,
     held: HeldState,
     streams: boolean,
-    private readonly settle: {
-      readonly commit: () => Promise<unknown>;
-      readonly rollback: () => Promise<unknown>;
-    } = { commit: () => client.commit(), rollback: () => client.rollback() },
+    private readonly name: string,
   ) {
     super(client, held, streams);
   }
 
   async commit(): Promise<void> {
-    await this.underLock(() => this.settle.commit().then(() => undefined));
+    await this.underLock(() => this.client.query(`RELEASE SAVEPOINT ${this.name}`));
   }
 
   async rollback(): Promise<void> {
-    await this.underLock(() => this.settle.rollback().then(() => undefined));
+    await this.underLock(() => this.client.query(`ROLLBACK TO SAVEPOINT ${this.name}`));
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
     const validated = validateSavepointName(name);
-    await this.underLock(() => this.client.query(`SAVEPOINT ${validated}`).then(() => undefined));
-    return new MysqlTransactionImpl(this.client, this.held, this.streams, {
-      commit: () => this.client.query(`RELEASE SAVEPOINT ${validated}`),
-      rollback: () => this.client.query(`ROLLBACK TO SAVEPOINT ${validated}`),
-    });
+    await this.underLock(() => this.client.query(`SAVEPOINT ${validated}`));
+    return new MysqlSavepointImpl(this.client, this.held, this.streams, validated);
   }
 }
 

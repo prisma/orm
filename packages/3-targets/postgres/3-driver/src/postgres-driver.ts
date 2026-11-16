@@ -619,7 +619,6 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     return new PostgresTransactionImpl(
       this.#connection,
       this.options,
-      { commit: 'COMMIT', rollback: 'ROLLBACK' },
       () => {
         this.#txState.open = false;
       },
@@ -671,20 +670,17 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
 
 class PostgresTransactionImpl extends PostgresQueryable implements SqlTransaction {
   #connection: PoolClient | Client;
-  readonly #statements: { readonly commit: string; readonly rollback: string };
   #onSettled: (() => void) | undefined;
   readonly #onEnded: () => void;
 
   constructor(
     connection: PoolClient | Client,
     options: ConnectionOptions,
-    statements: { readonly commit: string; readonly rollback: string },
     onSettled: () => void,
     onEnded: () => void,
   ) {
     super(options);
     this.#connection = connection;
-    this.#statements = statements;
     this.#onSettled = onSettled;
     this.#onEnded = onEnded;
   }
@@ -716,9 +712,7 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
       assertClientUsable(this.#connection);
-      await this.#connection
-        .query(this.#statements.commit)
-        .catch(rethrowClientError(this.#connection));
+      await this.#connection.query('COMMIT').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
       releaseLock();
@@ -730,9 +724,7 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
       assertClientUsable(this.#connection);
-      await this.#connection
-        .query(this.#statements.rollback)
-        .catch(rethrowClientError(this.#connection));
+      await this.#connection.query('ROLLBACK').catch(rethrowClientError(this.#connection));
       this.#onEnded();
     } finally {
       releaseLock();
@@ -741,27 +733,63 @@ class PostgresTransactionImpl extends PostgresQueryable implements SqlTransactio
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    const validated = validateSavepointName(name);
-    const releaseLock = await acquireClientQueryLock(this.#connection);
-    try {
-      assertClientUsable(this.#connection);
-      await this.#connection
-        .query(`SAVEPOINT ${validated}`)
-        .catch(rethrowClientError(this.#connection));
-    } finally {
-      releaseLock();
-    }
-    return new PostgresTransactionImpl(
-      this.#connection,
-      this.options,
-      {
-        commit: `RELEASE SAVEPOINT ${validated}`,
-        rollback: `ROLLBACK TO SAVEPOINT ${validated}`,
-      },
-      () => undefined,
-      () => undefined,
-    );
+    return openPostgresSavepoint(this.#connection, this.options, name);
   }
+}
+
+class PostgresSavepointImpl extends PostgresQueryable implements SqlTransaction {
+  readonly #connection: PoolClient | Client;
+  readonly #name: string;
+
+  constructor(connection: PoolClient | Client, options: ConnectionOptions, name: string) {
+    super(options);
+    this.#connection = connection;
+    this.#name = name;
+  }
+
+  override acquireClient(): Promise<PoolClient | Client> {
+    return Promise.resolve(this.#connection);
+  }
+
+  override releaseClient(_client: PoolClient | Client): Promise<void> {
+    return Promise.resolve();
+  }
+
+  protected override inExplicitTransaction(): boolean {
+    return true;
+  }
+
+  async commit(): Promise<void> {
+    await sendSavepointStatement(this.#connection, `RELEASE SAVEPOINT ${this.#name}`);
+  }
+
+  async rollback(): Promise<void> {
+    await sendSavepointStatement(this.#connection, `ROLLBACK TO SAVEPOINT ${this.#name}`);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openPostgresSavepoint(this.#connection, this.options, name);
+  }
+}
+
+async function sendSavepointStatement(connection: PoolClient | Client, sql: string): Promise<void> {
+  const releaseLock = await acquireClientQueryLock(connection);
+  try {
+    assertClientUsable(connection);
+    await connection.query(sql).catch(rethrowClientError(connection));
+  } finally {
+    releaseLock();
+  }
+}
+
+async function openPostgresSavepoint(
+  connection: PoolClient | Client,
+  options: ConnectionOptions,
+  name: string,
+): Promise<PostgresSavepointImpl> {
+  const validated = validateSavepointName(name);
+  await sendSavepointStatement(connection, `SAVEPOINT ${validated}`);
+  return new PostgresSavepointImpl(connection, options, validated);
 }
 
 class PostgresPoolDriverImpl

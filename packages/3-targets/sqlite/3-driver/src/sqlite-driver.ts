@@ -137,40 +137,60 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 }
 
 class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
-  readonly #commitSql: string;
-  readonly #rollbackSql: string;
-
-  constructor(db: DatabaseSync, commitSql = 'COMMIT', rollbackSql = 'ROLLBACK') {
-    super(db);
-    this.#commitSql = commitSql;
-    this.#rollbackSql = rollbackSql;
-  }
-
-  #exec(sql: string): void {
+  async commit(): Promise<void> {
     try {
-      this.db.exec(sql);
+      this.db.exec('COMMIT');
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
-  async commit(): Promise<void> {
-    this.#exec(this.#commitSql);
-  }
-
   async rollback(): Promise<void> {
-    this.#exec(this.#rollbackSql);
+    try {
+      this.db.exec('ROLLBACK');
+    } catch (error) {
+      throw normalizeSqliteError(error, wasClosedByDriver(this.db));
+    }
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    const validated = validateSavepointName(name);
-    this.#exec(`SAVEPOINT ${validated}`);
-    return new SqliteTransactionImpl(
-      this.db,
-      `RELEASE SAVEPOINT ${validated}`,
-      `ROLLBACK TO SAVEPOINT ${validated}`,
-    );
+    return openSqliteSavepoint(this.db, name);
   }
+}
+
+class SqliteSavepointImpl extends SqliteQueryable implements SqlTransaction {
+  constructor(
+    db: DatabaseSync,
+    private readonly name: string,
+  ) {
+    super(db);
+  }
+
+  async commit(): Promise<void> {
+    execSavepointStatement(this.db, `RELEASE SAVEPOINT ${this.name}`);
+  }
+
+  async rollback(): Promise<void> {
+    execSavepointStatement(this.db, `ROLLBACK TO SAVEPOINT ${this.name}`);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openSqliteSavepoint(this.db, name);
+  }
+}
+
+function execSavepointStatement(db: DatabaseSync, sql: string): void {
+  try {
+    db.exec(sql);
+  } catch (error) {
+    throw normalizeSqliteError(error, wasClosedByDriver(db));
+  }
+}
+
+function openSqliteSavepoint(db: DatabaseSync, name: string): SqliteSavepointImpl {
+  const validated = validateSavepointName(name);
+  execSavepointStatement(db, `SAVEPOINT ${validated}`);
+  return new SqliteSavepointImpl(db, validated);
 }
 
 interface ConnectedState {
