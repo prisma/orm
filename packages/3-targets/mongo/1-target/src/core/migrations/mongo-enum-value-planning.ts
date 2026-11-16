@@ -259,18 +259,25 @@ const NO_THIRD_BOOLEAN =
 const SWAP_IN_ONE_UPDATE =
   'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
 
-function twoMigrationsAdvice(enums: EnumComparison, change: ValueChange): string {
+function twoMigrationsAdvice(enums: EnumComparison, changes: readonly ValueChange[]): string {
   if (isBooleanEnum(enums)) {
     return `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
   }
-  return `To keep that data, make the change in two migrations: first change the stored value of ${enumValueText(enums.fromContract, change.enumValue)} to one the enum does not use and apply it, then change it to ${JSON.stringify(change.to ?? null)}. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
+  const names = changes.map(
+    ({ enumValue }) => `"${enumValueStatementText(enums.fromContract, enumValue)}"`,
+  );
+  const named =
+    names.length === 1
+      ? `enum value ${names.join('')}`
+      : `enum values ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `To keep that data, make the change in two migrations: first move the stored values of ${named} to values the enum does not use, all in one migration, and apply it; then move them to their final values in a second. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
 }
 
 /** How to make a change of the enum's stored values that one migration cannot make safely. */
 function enumTwoMigrationsAdvice(enums: EnumComparison): string {
   return isBooleanEnum(enums)
     ? `${NO_THIRD_BOOLEAN} Leave out these statements, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from the migration.ts that migration plan writes before you apply it.`
-    : 'Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.';
+    : 'Make the change in two migrations: first move every value they swap or chain to a stored value the enum does not use, all in one migration, and apply it; then move them to their final values in a second.';
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -551,7 +558,8 @@ function planEnum(
                 replaceWith: callInSentence(replacementCall(change.to)),
               }
             : undefined,
-        keepDataAdvice: keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, change) : undefined,
+        keepDataAdvice:
+          keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, overlapping) : undefined,
         twoMigrationsAdvice: advice,
         writtenValue: undefined,
         variant: enumPlace.place.variant,

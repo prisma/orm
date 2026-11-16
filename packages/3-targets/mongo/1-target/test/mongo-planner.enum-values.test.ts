@@ -73,7 +73,7 @@ const OVERLAP_WHY = (advice: string) =>
   `MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${advice}`;
 
 const ENUM_TWO_MIGRATIONS =
-  'Make the change in two migrations: first move the values to stored values the enum does not use, then to their final values.';
+  'Make the change in two migrations: first move every value they swap or chain to a stored value the enum does not use, all in one migration, and apply it; then move them to their final values in a second.';
 
 const NO_THIRD_BOOLEAN =
   'A boolean enum has no third value to move a stored value to, so the change cannot be split into two migrations.';
@@ -91,8 +91,8 @@ const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
     )
     .join('; ');
 
-const TWO_MIGRATIONS = (member: string, value: string) =>
-  `To keep that data, make the change in two migrations: first change the stored value of enum value "${member}" to one the enum does not use and apply it, then change it to ${value}. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
+const TWO_MIGRATIONS = (members: string) =>
+  `To keep that data, make the change in two migrations: first move the stored values of ${members} to values the enum does not use, all in one migration, and apply it; then move them to their final values in a second. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
 
 /** A call as `migration.ts` writes it, without white space or trailing commas. */
 const compact = (text: string | undefined) => text?.replace(/\s+/g, '').replace(/,(?=[)}\]])/g, '');
@@ -329,12 +329,12 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
       {
         subject: enumValue('ACTIVE'),
         keepDataEdit: undefined,
-        keepDataAdvice: TWO_MIGRATIONS('Status.ACTIVE', '"archived"'),
+        keepDataAdvice: TWO_MIGRATIONS('enum values "Status.ACTIVE" and "Status.ARCHIVED"'),
       },
       {
         subject: enumValue('ARCHIVED'),
         keepDataEdit: undefined,
-        keepDataAdvice: TWO_MIGRATIONS('Status.ARCHIVED', '"active"'),
+        keepDataAdvice: TWO_MIGRATIONS('enum values "Status.ACTIVE" and "Status.ARCHIVED"'),
       },
     ]);
   });
