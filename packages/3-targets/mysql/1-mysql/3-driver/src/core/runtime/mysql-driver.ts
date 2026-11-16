@@ -67,7 +67,7 @@ function startStream(
     const { sql, values } = statementFor(client, request.sql, request.params ?? []);
     return client.queryStream(sql, values);
   } catch (error) {
-    throw settle(error, outcome);
+    settle(error, outcome);
   }
 }
 
@@ -90,16 +90,16 @@ interface Outcome {
 }
 
 /** The error to report for `error`, after noting in `outcome` whether it left the client unusable. */
-function settle(error: unknown, outcome: Outcome): unknown {
+function settle(error: unknown, outcome: Outcome): never {
   if (isFatal(error)) outcome.destroy = true;
-  return normalizeMysqlError(error);
+  throw normalizeMysqlError(error);
 }
 
 /**
  * Whether the package has received the end of the result, so that any rows the caller has not read are already in the stream's buffer. The package pushes the end of the stream when MySQL's last packet arrives; Node records that in `_readableState.ended`, and its public API reports the end only after the caller has read every row.
  */
 function resultReceived(rows: Readable): boolean {
-  const state: unknown = Reflect.get(rows, '_readableState');
+  const state: unknown = '_readableState' in rows ? rows._readableState : undefined;
   return typeof state === 'object' && state !== null && 'ended' in state && state.ended === true;
 }
 
@@ -208,7 +208,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         releaseLock();
       }
     } catch (error) {
-      throw settle(error, outcome);
+      settle(error, outcome);
     } finally {
       await this.releaseClient(client, outcome);
     }
@@ -242,7 +242,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
       } catch (error) {
         settled = true;
-        throw settle(error, outcome);
+        settle(error, outcome);
       } finally {
         if (!settled && !this.handedBack) await this.#stopEarly(client, rows, outcome);
         if (outcome.destroy) rows.destroy();

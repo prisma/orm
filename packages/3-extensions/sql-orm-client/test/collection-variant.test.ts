@@ -1,4 +1,5 @@
 import {
+  AndExpr,
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
@@ -516,7 +517,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
   it('deleteAll with includes after variant("feature") scopes MTI predicates through the write subquery', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[], []]);
+    runtime.setNextResults([[{ id: 1 }], []]);
 
     const mixedPoly = blindCast<
       MixedPolyCountCollection,
@@ -529,7 +530,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([]);
+    expect(rows).toEqual([{ id: 1, assignee: null }]);
     expect(runtime.executions).toHaveLength(2);
     expectSelectWithFeatureJoin(runtime.executions[0]!.plan.ast);
 
@@ -538,12 +539,16 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     if (writeAst.kind !== 'delete') {
       throw new Error('Expected a DELETE plan');
     }
-    const exists = expectExistsWithFeatureJoin(writeAst.where);
+    const { where } = writeAst;
+    expect(where).toBeInstanceOf(AndExpr);
+    const [condition, keys] = where instanceof AndExpr ? where.exprs : [];
+    const exists = expectExistsWithFeatureJoin(condition);
     expect(
       collectColumnRefs(exists.subquery.where).filter(
         (ref) => ref.table === 'features' && ref.column === 'priority',
       ),
     ).toHaveLength(1);
+    expect(keys).toBeDefined();
   });
 });
 

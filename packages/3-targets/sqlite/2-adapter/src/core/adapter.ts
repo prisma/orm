@@ -530,11 +530,13 @@ function renderOperation(expr: OperationExpr, ctx: SqliteRenderContext): string 
   );
 }
 
-function renderSubqueryExpr(expr: SubqueryExpr, ctx: SqliteRenderContext): string {
-  if (expr.query.projection.length !== 1) {
+function renderSubqueryExpr(expr: SubqueryExpr, ctx: SqliteRenderContext, columns = 1): string {
+  if (expr.query.projection.length !== columns) {
     throw structuredError(
       'RUNTIME.AST_INVALID',
-      'Subquery expressions must project exactly one column',
+      columns === 1
+        ? 'Subquery expressions must project exactly one column'
+        : `A subquery compared with a row value of ${columns} columns must project ${columns} columns`,
       { meta: { node: 'subquery' } },
     );
   }
@@ -599,6 +601,13 @@ function renderBinary(expr: BinaryExpr, ctx: SqliteRenderContext): string {
   switch (rightNode.kind) {
     case 'list':
       right = renderListLiteral(rightNode, ctx);
+      break;
+    case 'subquery':
+      right = renderSubqueryExpr(
+        rightNode,
+        ctx,
+        leftExpr.kind === 'list' ? leftExpr.values.length : 1,
+      );
       break;
     case 'literal':
       right = renderLiteral(rightNode);

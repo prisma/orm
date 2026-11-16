@@ -68,6 +68,9 @@ test('role callback options use PostgreSQL levels and preserve result inference'
   expectTypeOf<SupabaseOptions<Contract>['transactionOptions']>().toEqualTypeOf<
     PostgresTransactionOptions | undefined
   >();
+  expectTypeOf<PostgresTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: true } satisfies PostgresTransactionOptions);
   expectTypeOf<null>().not.toExtend<PostgresTransactionOptions>();
   expectTypeOf<{ isolationLevel: null }>().not.toExtend<PostgresTransactionOptions>();
   expectTypeOf<{ isolationLevel: 'Snapshot' }>().not.toExtend<PostgresTransactionOptions>();
@@ -75,7 +78,7 @@ test('role callback options use PostgreSQL levels and preserve result inference'
     Extract<keyof SupabaseInternalDb, 'transaction' | 'transactionOptions'>
   >().toBeNever();
   const check = (db: Client) =>
-    db.transaction(async () => ({ value: 42 }), { isolationLevel: 'Serializable' });
+    db.transaction(async () => ({ value: 42 }), { isolationLevel: 'Serializable', timeout: null });
   expectTypeOf(check).returns.toEqualTypeOf<Promise<{ value: number }>>();
 });
 

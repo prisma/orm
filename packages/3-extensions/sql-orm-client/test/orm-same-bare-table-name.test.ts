@@ -172,6 +172,11 @@ function lastWriteAst(runtime: MockRuntime): WriteAst {
   return blindCast<WriteAst, 'write plan ast'>((plan as { ast: unknown }).ast);
 }
 
+function findAst(runtime: MockRuntime, fromEnd: number): SelectAst {
+  const plan = runtime.executions[runtime.executions.length - fromEnd]?.plan;
+  return blindCast<SelectAst, 'find plan ast'>((plan as { ast: unknown }).ast);
+}
+
 function returningCodecByColumn(ast: WriteAst): Record<string, string | undefined> {
   return codecByColumnOfProjection(ast.returning ?? []);
 }
@@ -279,19 +284,20 @@ describe('orm same bare table name across namespaces', () => {
   it('resolves identity columns within the namespace for singular delete, discriminating by namespace', async () => {
     const { db, runtime } = setup();
 
-    runtime.setNextResults([[{ id: 1 }], [{ id: 1, email_addr: 'a@example.com' }]]);
+    runtime.setNextResults([[{ id: 1, email_addr: 'a@example.com' }], []]);
     const publicDeleted = await db.public.User.where({ id: 1 }).delete();
     expect(publicDeleted).toEqual({ id: 1, email: 'a@example.com' });
-    const publicAst = lastWriteAst(runtime);
-    expect(publicAst.table.namespaceId).toBe('public');
-    expect(returningCodecByColumn(publicAst)).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
+    expect(codecByAlias(findAst(runtime, 2))).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
+    expect(lastWriteAst(runtime).table.namespaceId).toBe('public');
 
-    runtime.setNextResults([[{ id: 2 }], [{ id: 2, token_col: 'tok' }]]);
+    runtime.setNextResults([[{ id: 2, token_col: 'tok' }], []]);
     const authDeleted = await db.auth.User.where({ id: 2 }).delete();
     expect(authDeleted).toEqual({ id: 2, token: 'tok' });
-    const authAst = lastWriteAst(runtime);
-    expect(authAst.table.namespaceId).toBe('auth');
-    expect(returningCodecByColumn(authAst)).toEqual({ id: 'pg/int4@1', token_col: 'pg/varchar@1' });
+    expect(codecByAlias(findAst(runtime, 2))).toEqual({
+      id: 'pg/int4@1',
+      token_col: 'pg/varchar@1',
+    });
+    expect(lastWriteAst(runtime).table.namespaceId).toBe('auth');
   });
 
   it('resolves the PK-default conflict target within the namespace for upsert, discriminating by namespace', async () => {
