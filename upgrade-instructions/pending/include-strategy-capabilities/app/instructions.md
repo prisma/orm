@@ -36,6 +36,8 @@ The ORM matches rows by their primary key, or else by a unique key. It now skips
 - On a database without `RETURNING`: `create()`, `createAll()` and `updateAll()` that return rows, since they read their rows back by key.
 - On a database whose adapter does not report `sql.jsonAgg`, `sql.outerReferencesInDerivedTables` and `sql.jsonAggWithoutTruncation`: any read with an include of that table, at any level, and `deleteAll()` after `.include(...)`, since the included rows are matched to their parents by key.
 
+`deleteAll()` on such a table, where it must read the rows before deleting them, deletes by the caller's condition, as it does on any table with no primary key or unique constraint.
+
 Find each model whose table has no `@id` and whose `@unique` or `@@unique` fields include an optional one. Then do one of these:
 
 - Add a primary key to the table (`@id` or `@@id`), and create a migration for it.
