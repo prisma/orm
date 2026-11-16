@@ -408,6 +408,32 @@ describe('MongoMigrationPlanner, a removed variant whose base renames its discri
   });
 });
 
+describe('MongoMigrationPlanner, a variant field renamed with its base discriminator', () => {
+  const renameType = renameField('Task', 'type', 'Task', 'kind');
+  const renameSeverity = renameField('Bug', 'severity', 'Bug', 'level');
+  const after = tasks(
+    'to',
+    { Bug: { ...BUG, fields: ['level'] }, Epic: EPIC },
+    {},
+    {
+      discriminator: 'kind',
+    },
+  );
+
+  it('renames the variant field first, while its filter still finds the documents, in either order of the statements', () => {
+    const labels = (statements: readonly ResolvedMigrationStatement[]) =>
+      planned(plan({ from: BEFORE, to: after, schema: live, statements })).labels;
+    const expected = [
+      'Rename field severity to level in collection tasks in documents whose type is "bug"',
+      'Rename field type to kind in collection tasks',
+    ];
+    expect({
+      typeFirst: labels([renameType, renameSeverity]),
+      severityFirst: labels([renameSeverity, renameType]),
+    }).toEqual({ typeFirst: expected, severityFirst: expected });
+  });
+});
+
 describe('MongoMigrationPlanner, variants folded back into their base', () => {
   it('deletes no documents when the base no longer has a discriminator', () => {
     const folded = contract(

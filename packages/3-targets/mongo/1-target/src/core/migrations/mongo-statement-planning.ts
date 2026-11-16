@@ -215,6 +215,7 @@ export interface StatementPlan {
   /** The origin schema with each renamed collection under its new name, for the diff to compare. */
   readonly schema: MongoSchemaIR;
   readonly collectionRenames: readonly RenameCollectionCall[];
+  /** In statement order, except that a rename whose filter names a field runs before the rename of that field. */
   readonly fieldRenames: readonly RenameFieldCall[];
   /** For each statement, in order, the call that carries it out, or `undefined` when storage does not change. */
   readonly callOfStatement: readonly (OpFactoryCall | undefined)[];
@@ -295,7 +296,41 @@ export function planStatements(input: {
 
   return conflicts.length > 0
     ? notOk(conflicts)
-    : ok({ schema, collectionRenames, fieldRenames, callOfStatement });
+    : ok({
+        schema,
+        collectionRenames,
+        fieldRenames: filtersFirst(fieldRenames),
+        callOfStatement,
+      });
+}
+
+/** Whether `rename` filters on the field `other` renames, so it must run before `other`. */
+function filtersOnRenamed(rename: RenameFieldCall, other: RenameFieldCall): boolean {
+  return (
+    rename !== other &&
+    rename.collection === other.collection &&
+    rename.filter !== undefined &&
+    Object.hasOwn(rename.filter, other.from)
+  );
+}
+
+/**
+ * The field renames in statement order, except that a rename whose filter names a field runs before
+ * the rename of that field, so the filter still selects its documents. Run again after a later
+ * operation stops, a rename that already ran finds no documents left to rename.
+ */
+function filtersFirst(renames: readonly RenameFieldCall[]): readonly RenameFieldCall[] {
+  const pending = [...renames];
+  const ordered: RenameFieldCall[] = [];
+  while (pending.length > 0) {
+    const next =
+      pending.find((rename) => !pending.some((other) => filtersOnRenamed(other, rename))) ??
+      pending[0];
+    if (next === undefined) break;
+    ordered.push(next);
+    pending.splice(pending.indexOf(next), 1);
+  }
+  return ordered;
 }
 
 /** Whether two field renames rewrite the same documents the same way, as when every root model of a shared collection renames a field together. */

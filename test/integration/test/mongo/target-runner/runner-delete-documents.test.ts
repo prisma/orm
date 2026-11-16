@@ -11,6 +11,7 @@ import { MongoMigrationRunner, serializeMongoOps } from '@internal/target-mongo/
 import {
   deleteDocuments,
   removeStoredValue,
+  renameField,
   replaceStoredValue,
 } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
@@ -199,6 +200,47 @@ describe('MongoMigrationRunner, a discriminator value replaced before a later op
         documents: [
           { name: 'a', type: 'defect', kind: ['x'] },
           { name: 'b', type: 'epic', kind: 'x' },
+        ],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a variant field renamed before the rename of the discriminator its filter names', () => {
+  it(
+    'renames the field in the variant documents, and on a re-run after a later stop skips both renames',
+    async () => {
+      await db.collection('tasks').insertMany([
+        { name: 'a', type: 'bug', severity: 1, status: 'old' },
+        { name: 'b', type: 'epic', severity: 2, status: 'open' },
+      ]);
+      const operations = [
+        renameField('tasks', 'severity', 'level', { filter: { type: 'bug' } }),
+        renameField('tasks', 'type', 'kind'),
+        removeStoredValue({ collection: 'tasks', field: 'status', value: 'old', required: true }),
+      ];
+
+      const stopped = await run(operations);
+      const afterStop = await documents();
+      await db.collection('tasks').updateOne({ name: 'a' }, { $set: { status: 'open' } });
+      const rerun = await run(operations);
+
+      expect({
+        stopped: stopped.ok ? 'applied' : stopped.failure.code,
+        afterStop,
+        rerun: executed(rerun),
+        documents: await documents(),
+      }).toEqual({
+        stopped: 'MIGRATION.PRECHECK_FAILED',
+        afterStop: [
+          { name: 'a', kind: 'bug', level: 1, status: 'old' },
+          { name: 'b', kind: 'epic', severity: 2, status: 'open' },
+        ],
+        rerun: 0,
+        documents: [
+          { name: 'a', kind: 'bug', level: 1, status: 'open' },
+          { name: 'b', kind: 'epic', severity: 2, status: 'open' },
         ],
       });
     },
