@@ -69,26 +69,26 @@ changes:
     summary: Forward resolved isolation options through SQL transaction wrappers and configure ORM-owned transactions separately.
   - id: create-extension-not-exported
     summary: |
-      `@internal/target-postgres/migration` no longer exports the free function `createExtension`, which a `migration.ts` could not call correctly since 8.0.0-rc.22. A `migration.ts` that imports it now fails at once with `does not provide an export named 'createExtension'`. Call the method on the migration class instead: `createExtension('btree_gist')` becomes `this.createExtension({ extension: 'btree_gist' })`. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
+      `@internal/target-postgres/migration` and its public entrypoint `@prisma/orm-postgres/migration` no longer export the free function `createExtension`, which a `migration.ts` could not call correctly since 8.0.0-rc.22. A `migration.ts` that imports it now fails at once with `does not provide an export named 'createExtension'`. Call the method on the migration class instead: `createExtension('btree_gist')` becomes `this.createExtension({ extension: 'btree_gist' })`. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
     detection:
       glob: "**/migration.{ts,mts}"
       matches:
         - '(?<![\w$.])createExtension\s*\('
-        - '\bimport\s*\{[^}]*(?<![\w$])createExtension(?![\w$])[^}]*\}\s*from\s*[\x27"]@internal/target-postgres/migration[\x27"]'
+        - '\bimport\s*\{[^}]*(?<![\w$])createExtension(?![\w$])[^}]*\}\s*from\s*[\x27"](?:@internal/target-postgres|@prisma/orm-postgres)/migration[\x27"]'
   - id: data-transform-not-exported
     summary: |
-      `@internal/target-postgres/migration` no longer exports the free function `dataTransform`, which took an internal fourth argument a `migration.ts` cannot pass. A `migration.ts` that imports it now fails at once with `does not provide an export named 'dataTransform'`. Call the method on the migration class instead: `this.dataTransform(endContract, name, { check, run })`. The planner writes the method. The types `DataTransformClosure` and `DataTransformOptions` are still exported.
+      `@internal/target-postgres/migration` and its public entrypoint `@prisma/orm-postgres/migration` no longer export the free function `dataTransform`, which took an internal fourth argument a `migration.ts` cannot pass. A `migration.ts` that imports it now fails at once with `does not provide an export named 'dataTransform'`. Call the method on the migration class instead: `this.dataTransform(endContract, name, { check, run })`. The planner writes the method. The types `DataTransformClosure` and `DataTransformOptions` are still exported.
     detection:
       glob: "**/migration.{ts,mts}"
       matches:
-        - '\bimport\s*\{[^}]*(?<![\w$])dataTransform(?![\w$])[^}]*\}\s*from\s*[\x27"]@internal/target-postgres/migration[\x27"]'
+        - '\bimport\s*\{[^}]*(?<![\w$])dataTransform(?![\w$])[^}]*\}\s*from\s*[\x27"](?:@internal/target-postgres|@prisma/orm-postgres)/migration[\x27"]'
   - id: raw-parts-hold-statement-asts
     summary: |
-      The `parts` of `RawExpr` and `RawQueryAst` (from `@internal/sql-relational-core/ast`) are now `ReadonlyArray<RawPart>`, where `RawPart = string | AnyExpression | SelectAst | InsertAst | UpdateAst | DeleteAst`. A raw template places a builder query, or a builder mutation after `.returning()`, as one statement part. Code that walks `parts` and treats every non-string part as an expression must handle the four statement kinds. The detection matches files that import these nodes and read `.parts`.
+      The `parts` of `RawExpr` and `RawQueryAst` (from `@internal/sql-relational-core/ast`, published as `@prisma/orm-family-sql/relational-core/ast`) are now `ReadonlyArray<RawPart>`, where `RawPart = string | AnyExpression | SelectAst | InsertAst | UpdateAst | DeleteAst`. A raw template places a builder query, or a builder mutation after `.returning()`, as one statement part. Code that walks `parts` and treats every non-string part as an expression must handle the four statement kinds. The detection matches files that import these nodes and read `.parts`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*@internal/sql-relational-core/(?:ast|expression)[\x27"])(?=[\s\S]*(?<![\w$])(?:RawExpr|RawQueryAst|RawPart)(?![\w$]))[\s\S]*\.parts(?![\w$])'
+        - '(?<![\s\S])(?=[\s\S]*(?:@internal/sql-relational-core|@prisma/orm-family-sql/relational-core)/(?:ast|expression)[\x27"])(?=[\s\S]*(?<![\w$])(?:RawExpr|RawQueryAst|RawPart)(?![\w$]))[\s\S]*\.parts(?![\w$])'
 ---
 
 # 8.0.0-rc.23 → 8.0.0-rc.24 — Extension author upgrade instructions
@@ -262,7 +262,7 @@ Without `schema`, the method creates the extension where the old function did: i
 
 ### `data-transform-not-exported`
 
-`@internal/target-postgres/migration` no longer exports the free function `dataTransform`. It took an internal fourth argument that only the migration class can supply, so a `migration.ts` could not call it correctly. Remove `dataTransform` from the import and call `this.dataTransform(endContract, name, { check, run })`, as the planner writes it. The types `DataTransformClosure` and `DataTransformOptions` are still exported.
+`@internal/target-postgres/migration` and its public entrypoint `@prisma/orm-postgres/migration` no longer export the free function `dataTransform`. It took an internal fourth argument that only the migration class can supply, so a `migration.ts` could not call it correctly. Remove `dataTransform` from the import and call `this.dataTransform(endContract, name, { check, run })`, as the planner writes it. The types `DataTransformClosure` and `DataTransformOptions` are still exported.
 
 
 ## Raw parts can hold a statement AST
