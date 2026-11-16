@@ -511,9 +511,9 @@ function buildManyToManyJunctionArtifacts(
 }
 
 /**
- * How an include's child rows are tied to their parent: by a correlated reference to the outer parent row, which the one-query include aggregates into JSON, or by a join to the parent table that returns the parent's identity, which a query per relation filters on.
+ * How an include's child rows are tied to their parent: by a reference to the outer parent row, which the one-query include aggregates into JSON, or by a join to the parent table that returns the parent's identity, which a query per relation filters on.
  */
-type IncludeTie = 'correlated' | 'join';
+type IncludeTie = 'outerReference' | 'parentJoin';
 
 const PARENT_KEY_ALIAS_PREFIX = '__prisma_parent_';
 
@@ -539,7 +539,7 @@ function buildIncludeChildRowsSelect(
     assertDistinctOnCapability(contract, 'distinctOn');
     assertDistinctOnCompatibleOrder(childState.orderBy, childState.distinctOn.length);
   }
-  if (tie === 'join') {
+  if (tie === 'parentJoin') {
     assertJoinTieSupports(include);
   }
   const child = childState.tables.root;
@@ -548,7 +548,7 @@ function buildIncludeChildRowsSelect(
     include,
     localColumnsForRowInclude(include),
   );
-  if (tie === 'join') {
+  if (tie === 'parentJoin') {
     return buildJoinedChildRowsSelect(
       contract,
       parent,
@@ -1341,7 +1341,7 @@ function buildIncludeChildRowsAggregateSelect(
   include: IncludeExpr,
 ): SelectAst {
   const { childRows, childProjection, documentAliases, rowsAlias, aggregateOrderBy } =
-    buildIncludeChildRowsSelect(contract, aggregates, scope, parent, include, 'correlated');
+    buildIncludeChildRowsSelect(contract, aggregates, scope, parent, include, 'outerReference');
   const jsonObjectExpr = JsonObjectExpr.fromEntries(
     childProjection.map((item) =>
       JsonObjectExpr.entry(
@@ -1622,7 +1622,7 @@ export function relatedRowsSelect(
     include.nested.tables.scope.copy(),
     { tables: parentTables },
     include,
-    'join',
+    'parentJoin',
   );
   return { ast: childRows, parentKeys };
 }
