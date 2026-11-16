@@ -129,19 +129,6 @@ import {
 } from './include-descriptors';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
-import {
-  createAllGraph,
-  createAllVariantGraph,
-  createGraph,
-  deleteAllGraph,
-  deleteFirstGraph,
-  updateAllGraph,
-  updateFirstGraph,
-  upsertGraph,
-} from './mutation-graph/collection-graphs';
-import { Graph } from './mutation-graph/graph';
-import { executeGraph, queryGraph } from './mutation-graph/run-graph';
-import { mtiCreateContextOf, updateValuesOf } from './mutation-graph/storage-rows';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import {
   asPreparedOrmCall,
@@ -159,6 +146,19 @@ import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import { parseMutationInput } from './relation-mutations';
 import type { RelationCollection } from './relation-mutator';
+import {
+  createAllGraph,
+  createAllVariantGraph,
+  createGraph,
+  deleteAllGraph,
+  deleteFirstGraph,
+  updateAllGraph,
+  updateFirstGraph,
+  upsertGraph,
+} from './statement-graph/collection-graphs';
+import { Graph } from './statement-graph/graph';
+import { executeGraph, queryGraph } from './statement-graph/run-graph';
+import { mtiCreateContextOf, updateValuesOf } from './statement-graph/storage-rows';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
