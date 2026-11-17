@@ -4,14 +4,18 @@ import { UniqueConstraint } from '../src/ir/unique-constraint';
 describe('UniqueConstraint', () => {
   it('constructs with columns and no name', () => {
     const uc = new UniqueConstraint({ columns: ['email'] });
-    expect(uc.columns).toEqual(['email']);
-    expect(uc.name).toBeUndefined();
+    expect({ columns: uc.columns, hasName: Object.hasOwn(uc, 'name') }).toEqual({
+      columns: ['email'],
+      hasName: false,
+    });
   });
 
   it('constructs with columns and a name', () => {
     const uc = new UniqueConstraint({ columns: ['email'], name: 'users_email_key' });
-    expect(uc.columns).toEqual(['email']);
-    expect(uc.name).toBe('users_email_key');
+    expect({ columns: uc.columns, name: uc.name }).toEqual({
+      columns: ['email'],
+      name: 'users_email_key',
+    });
   });
 
   it('is frozen', () => {
