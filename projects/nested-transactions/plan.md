@@ -55,8 +55,7 @@ Line counts are estimates, measured against the existing code. For example:
    - **Outcome:** the SQL runtime opens savepoints on an open transaction, enforces the fail-fast guard, and settles them with the error behaviour of spec decisions 3 and 9.
    - **Builds on:** slice 1's driver `savepoint()` and slice 2's nested transaction activity.
    - **Hands to:**
-     - `RuntimeTransaction.savepoint()`.
-     - `savepoint()` on an activity handle opened on a transaction.
+     - `transaction()` on a `RuntimeTransaction`, opening a savepoint.
      - The savepoint-name counter per transaction, and tracking of the innermost open level per connection.
      - `RUNTIME.TRANSACTION_SUSPENDED`, and savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN`.
      - Every level invalidated after a failed `ROLLBACK TO`.
@@ -68,7 +67,7 @@ Line counts are estimates, measured against the existing code. For example:
 
 3b. **Slice `handle-transaction-callback`** (~300–500, estimate to be measured at slice spec time): `projects/nested-transactions/slices/handle-transaction-callback/`
    - **Outcome:** a transaction started from an activity handle on the runtime goes through `withTransaction`, and the owned transaction is removed.
-   - **Builds on:** slice 3 (`OuterTransaction`, `RuntimeTransaction.savepoint()`).
+   - **Builds on:** slice 3 (`OuterTransaction`, `transaction()` on a `RuntimeTransaction`).
    - **Hands to:**
      - `ActivityHandle.transaction(fn, options)`, a callback form built on `withTransaction`, in place of the method that returns a `RuntimeTransaction` on a connection the transaction owns.
      - `withTransaction` taking a parent activity, so the transaction activity stays beneath the activity that started it.
@@ -83,7 +82,7 @@ Line counts are estimates, measured against the existing code. For example:
 
 4. **Slice `postgres-nested-transactions`** (~540: ~180 production, ~330 tests, ~30 docs): `projects/nested-transactions/slices/postgres-nested-transactions/`
    - **Outcome:** Postgres users can call `tx.transaction(cb)`, with every behaviour in the spec.
-   - **Builds on:** slice 3's `RuntimeTransaction.savepoint()` and guard, and slice 3b's `withTransaction` with a parent activity.
+   - **Builds on:** slice 3's `transaction()` on a `RuntimeTransaction` and guard, and slice 3b's `withTransaction` with a parent activity.
    - **Hands to:** `withSavepoint(txCtx, fn, buildMembers)` exported from the SQL runtime, with the Postgres facade using it.
    - **Focus:**
      - `withSavepoint`, sharing the guarded queryable and settle code with `withTransaction`.
@@ -105,10 +104,11 @@ Line counts are estimates, measured against the existing code. For example:
 
 - **Slice `orm-writes-in-savepoints`** (~300: ~30 production, ~250 tests, ~15 docs): `projects/nested-transactions/slices/orm-writes-in-savepoints/`
   - **Outcome:** a multi-statement ORM write inside a transaction runs in its own savepoint.
-  - **Builds on:** slice 3's `savepoint()` on `RuntimeTransaction` and on the activity handle, and slice 3b's callback `transaction(fn, options)` on the handle. It does not need slice 4: its tests open the transaction through the runtime.
+  - **Builds on:** slice 3's `transaction()` opening a savepoint on a `RuntimeTransaction`, and slice 3b's callback `transaction(fn, options)` on the handle. It does not need slice 4: its tests open the transaction through the runtime.
   - **Hands to:** project close.
   - **Focus:**
-    - `sql-orm-client`: `savepoint?()` on the structural `RuntimeQueryable`, and `run-graph`'s choice between the handle's `transaction(fn, options)`, `savepoint()` and running flattened.
+    - `sql-runtime`: `transaction()` on an activity handle opened on a transaction or savepoint, opening a savepoint beneath the handle's activity and rejecting options with a new `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED` (slice 3 left handles as on main).
+    - `sql-orm-client`: `run-graph` calling the handle's `transaction(fn)` inside a transaction too, without options there.
     - ORM integration tests on Postgres, MySQL and SQLite.
     - The subsystem doc's paragraph on ORM writes.
 
@@ -123,5 +123,5 @@ Line counts are estimates, measured against the existing code. For example:
 - **Six slices, more than the usual four.** This follows from the size limit, not from two projects bundled into one. There is one purpose, and every slice serves it.
 - **Slices 1 and 2 run in parallel.** Drivers and the framework activity share no code.
 - **Slice 3b follows slice 3 directly.** It came out of slice 3's review: the owned transaction kept a second copy of `withTransaction`'s connection rules, and its `Object.create` wrapper constrained the transaction classes. It changes the handle's `transaction()` and the ORM's implicit transaction, so it lands before slices 4 and 6 build on either.
-- **Slice 6 starts as soon as slice 3b merges, in parallel with slice 4.** It needs only the runtime's `savepoint()` and the handle's callback `transaction()`, not `withSavepoint` or a facade.
+- **Slice 6 starts as soon as slice 3b merges, in parallel with slice 4.** It needs only the runtime's `transaction()` opening a savepoint and the handle's callback `transaction()`, not `withSavepoint` or a facade.
 - **Slice 5 waits for slice 4.** It reuses `withSavepoint`, and it is where the helper's shape is reviewed.

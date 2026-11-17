@@ -31,8 +31,8 @@ Layers, from the database up:
 flowchart BT
   D["Driver: SqlTransaction.savepoint(name) → SqlTransaction<br/>commit() = RELEASE, rollback() = ROLLBACK TO"]
   F["Framework: a savepoint is a 'transaction' activity<br/>beneath the outer transaction activity"]
-  R["SQL runtime: RuntimeTransaction.savepoint(), name counter,<br/>suspend guard, withSavepoint(txCtx, fn, buildMembers)"]
-  O["ORM: run-graph uses savepoint() inside a transaction"]
+  R["SQL runtime: transaction() on a transaction opens a savepoint, name counter,<br/>suspend guard, withSavepoint(txCtx, fn, buildMembers)"]
+  O["ORM: run-graph calls transaction() inside a transaction too, without options"]
   P["Facades (Postgres, MySQL, SQLite, Supabase):<br/>tx.transaction(cb) wired to withSavepoint"]
   D --> R
   F --> R
@@ -71,11 +71,12 @@ Each decision was reached in a design discussion with the operator. The research
    - **No new field on `TransactionActivity`.** A middleware tells a savepoint apart with `activity.kind === 'transaction' && ctx.inTransaction()`.
    - Why: without this, writes undone by a savepoint would be finalized `committed`, and one recovered failure would make every statement in the outer transaction `unknown`.
    - Rejected: savepoints invisible to middleware. That needs no framework change but gives the two inaccurate outcomes above.
-7. **ORM multi-statement writes run in a savepoint inside a transaction.** `run-graph` uses `transaction(implicitTransactionOptions)` when the queryable has it, otherwise `savepoint()`, otherwise runs flattened. This applies wherever a transaction is open on the connection, whichever API opened it.
-8. **The runtime-level member is `savepoint()`, separate from `transaction(options)`.**
-   - It goes on `RuntimeTransaction`, on the activity handle opened on a transaction, and on the ORM's structural `RuntimeQueryable`. These runtime types are internal, not public API.
-   - Why: the MySQL facade sets `implicitTransactionOptions: { isolationLevel: 'ReadCommitted' }` (`mysql.ts:326`). With one `transaction(options)` name, the ORM would pass an isolation level to a savepoint.
-   - The user-facing call stays `tx.transaction(cb)`.
+7. **ORM multi-statement writes run in a savepoint inside a transaction.** `run-graph` calls `transaction()` on its scope wherever it runs: outside a transaction it passes `implicitTransactionOptions` and gets a transaction, inside one it passes no options and gets a savepoint. It tells the two apart from its activity (`ctx.inTransaction()`). This applies wherever a transaction is open on the connection, whichever API opened it.
+8. **The runtime-level member is `transaction()` on every scope that can open one.** A connection's `transaction(options)` begins a transaction; a transaction's or savepoint's `transaction()` opens a savepoint; an activity handle's `transaction()` does whichever its scope does.
+   - On a transaction or savepoint, `transaction()` takes no parameters (decision 2). An activity handle's `transaction(options)` keeps its options parameter, because a handle on the runtime takes them; inside a transaction it rejects them with `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED` and sends nothing, so a caller never gets an isolation level or timeout other than the one it asked for. The handle change lands in slice 6.
+   - The MySQL facade's `implicitTransactionOptions: { isolationLevel: 'ReadCommitted' }` (`mysql.ts:326`) is why the ORM leaves options out inside a transaction (decision 7).
+   - These runtime types are internal, not public API. The user-facing call is `tx.transaction(cb)` as well.
+   - Amended after slice 3's PR opened, at the operator's request: the first version named the member `savepoint()`, separate from `transaction(options)`, so that the ORM chose between two methods instead of passing or omitting options.
 9. **Settle failures reuse `RUNTIME.TRANSACTION_COMMIT_FAILED` and `RUNTIME.TRANSACTION_ROLLBACK_FAILED`.**
    - **Callback throws:** `ROLLBACK TO`, then the callback's error is rethrown, and the outer transaction stays usable.
    - **`RELEASE` fails:** try `ROLLBACK TO`. If it succeeds, the outer transaction stays usable and the nested call throws `TRANSACTION_COMMIT_FAILED`.
