@@ -1471,7 +1471,7 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_CLOSED
 
-Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
+Transaction work or a lazy result was used after callback completion or deadline invalidation, or a statement started on a transaction had not reached the driver when the transaction's `commit()` or `rollback()` was called. The statement is not sent. Consume results inside the callback and do not retain its transaction for later work.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
